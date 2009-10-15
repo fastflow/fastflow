@@ -1,0 +1,13 @@
+FastFlow
+^^^^^^^^
+
+See tests directory for some simple runnable examples (just type 'make').
+
+FastFlow has been tested on:
+ Intel: i386 x86_64
+ Apple: PowerPC i386
+
+
+Please report tips, improvements or bug to:
+ Massimo Torquati <torquati@di.unipi.it> or <massimotor@gmail.com>
+ Marco Aldinucci  <aldinuc@di.unito.it>
