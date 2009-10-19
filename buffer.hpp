@@ -40,7 +40,7 @@
 #include <string.h>
 #include <vector>
 
-
+#include <sysdep.h>
 
 class SWSR_Ptr_Buffer {
 private:
@@ -87,6 +87,14 @@ public:
         if (!data) return false;
         
         if (available()) {
+            /* Write Memory Barrier: ensure all previous memory write 
+             * are visible to the other processors before any later
+             * writes are executed.  This is an "expensive" memory fence
+             * operation needed in all the architectures with a weak-ordering 
+             * memory model where stores can be executed out-or-order 
+             * (e.g. Powerpc). This is a no-op on Intel x86/x86-64 CPUs.
+             */
+            WMB(); 
             buf[pwrite] = data;
             pwrite += (pwrite+1 >= size) ? (1-size): 1;
             return true;

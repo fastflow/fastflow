@@ -1,0 +1,46 @@
+# make the Smith-Watherman for Linux on Cell/B.E.
+#
+
+CFLAGS   ?= -Wall -Wextra -ansi -O666 -D__PS3 -DUNROLL -funroll-all-loops
+DEFS     ?= -DHAVE_MALLOC_H
+PPUFLAGS ?= -g3 -maltivec -fPIC -fvisibility=hidden
+SPUFLAGS ?= -msmall-mem -mbranch-hints
+LDFLAGS   = -lspe -lspe2
+CC       ?= gcc
+CXX      ?= g++
+SPUCC    ?= spu-elf-gcc
+SPUCXX   ?= spu-elf-g++
+SSEOBJS   = sse_byte.o sse_short.o
+SPEOBJS   = DynProgr_SPE.o
+OBJS      = debug.o DynProgr_PPU.o DynProgr_scalar.o DynProgr_altivec.o matrix.o fasta.o
+
+all: swps3 dblen libswps3.a libswps3.so
+
+.c.o:
+	$(CC) $(CFLAGS) $(DEFS) $(PPUFLAGS) -c $<
+
+.cc.o:
+	$(CC) $(CFLAGS) $(DEFS) $(PPUFLAGS) -c $<
+
+swps3: libswps3.a swps3.o
+	$(CXX) $(CFLAGS) $(PPUFLAGS) swps3.o $(LDFLAGS) libswps3.a -o $@
+
+dblen: libswps3.a dblen.o
+	$(CXX) $(CFLAGS) $(PPUFLAGS) dblen.o $(LDFLAGS) libswps3.a -o $@
+
+libswps3.a: $(OBJS) $(SPEOBJS)
+	$(LD) -E -r -x $(OBJS) $(SPEOBJS) -o $@
+
+libswps3.so: $(OBJS) $(SPEOBJS)
+	$(LD) -shared -E -x $(OBJS) $(SPEOBJS) -o $@
+
+DynProgr_SPE_functions.oo: DynProgr_SPE_functions.cc
+	$(SPUCXX) $(CFLAGS) $(DEFS) $(SPUFLAGS) $^ -c -o $@
+DynProgr_SPE.o DynProgr_SPE_main.oo DynProgr_SPE: DynProgr_SPE_main.c DynProgr_SPE_functions.oo
+	$(SPUCC) $(CFLAGS) $(DEFS) $(SPUFLAGS) DynProgr_SPE_main.c -c -o DynProgr_SPE_main.oo
+	$(SPUCXX) $(CFLAGS) $(SPUFLAGS) DynProgr_SPE_functions.oo DynProgr_SPE_main.oo -o DynProgr_SPE
+	embedspu spe_dynprogr_handle DynProgr_SPE DynProgr_SPE.o
+
+clean:
+	rm -f $(OBJS) $(SPEOBJS) $(SSEOBJS) swps3.o dblen.o DynProgr_SPE_functions.oo DynProgr_SPE_main.oo swps3 dblen DynProgr_SPE libswps3.a libswps3.so
+

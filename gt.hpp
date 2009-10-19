@@ -94,10 +94,11 @@ public:
         return filter->svc_init(NULL);
     }
 
-    virtual void svc_end(void * result) {
-        filter->svc_end(result);
-        double t = farmTime(STOP_TIME);
-        std::cerr << "Collector  time= " << t << "\n";
+    virtual void svc_end() {
+        filter->svc_end();
+        //double t = 
+        farmTime(STOP_TIME);
+        //std::cerr << "Collector  time= " << t << "\n";
     }
 
     int run() {  

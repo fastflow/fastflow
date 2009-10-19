@@ -1,0 +1,28 @@
+# make the Smith-Watherman for SSE2 using FastFlow
+#
+
+ifndef FF_HOME
+FF_HOME=../..
+endif
+
+CFLAGS  ?= -DFAST_FLOW -Wall  -O666 -msse3 -ansi -g3 -fPIC  -fvisibility=hidden
+DEFS    ?= -DHAVE_SYSCONF_NPROCESSORS #-DUSE_LIBC_ALLOCATOR 
+LDFLAGS  = 
+CXX     ?= g++
+OBJS     = DynProgr_sse_byte.o DynProgr_sse_short.o DynProgr_scalar.o matrix.o fasta.o debug.o
+INCS     = -I. -I${FF_HOME} -I${FF_HOME}/atomic
+
+
+all: swps3_ff
+
+.c.o:
+	$(CXX) $(CFLAGS) $(INCS) $(DEFS) -c $<
+
+swps3_ff: ${OBJS}
+	$(CXX) $(CFLAGS) $(DEFS) $(INCS) swps3_ff.c -o $@ ${OBJS} $(LDFLAGS) -lpthread
+
+clean:
+	rm -f $(OBJS) swps3_ff.o
+
+cleanall: clean
+	rm -f swps3_ff   	

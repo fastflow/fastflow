@@ -1,0 +1,18 @@
+<area shape="rect" href="$fasta_8h.html" title="Routines for reading FASTA databases." alt="" coords="148,84,217,111">
+<area shape="rect" href="$fasta_8c.html" title="Routines for reading FASTA databases." alt="" coords="5,161,75,188">
+<area shape="rect" href="$swps3_8c.html" title="Main procedure and multi&#45;threading code." alt="" coords="621,239,696,265">
+<area shape="rect" href="$matrix_8h.html" title="Routines for reading matrix files and converting matrices." alt="" coords="952,84,1029,111">
+<area shape="rect" href="$DynProgr__PPU_8c.html" title="PPU frontend to the alignment routines on the SPU." alt="" coords="1580,239,1711,265">
+<area shape="rect" href="$DynProgr__PPU_8h.html" title="PPU frontend to the alignment routines on the SPU." alt="" coords="1360,161,1491,188">
+<area shape="rect" href="$DynProgr__scalar_8c.html" title="Scalar alignment routine." alt="" coords="672,161,813,188">
+<area shape="rect" href="$DynProgr__sse__byte_8h.html" title="Profile generation and alignment for packed byte vectors on SSE2." alt="" coords="243,161,405,188">
+<area shape="rect" href="$DynProgr__sse__short_8h.html" title="Profile generation and alignment for packed short vectors on SSE2." alt="" coords="429,161,597,188">
+<area shape="rect" href="$matrix_8c.html" title="Routines for reading matrix files and converting matrices." alt="" coords="1515,161,1592,188">
+<area shape="rect" href="$DynProgr__altivec_8h.html" title="Profile generation and alignment on IBM Altivec^TM instruction set." alt="" coords="1388,84,1535,111">
+<area shape="rect" href="$DynProgr__scalar_8h.html" title="Scalar platform independent alignment routine." alt="" coords="1795,161,1936,188">
+<area shape="rect" href="$dblen_8c.html" title="dblen.c" alt="" coords="99,161,168,188">
+<area shape="rect" href="$DynProgr__altivec_8cc.html" title="Profile generation and alignment on IBM Altivec^TM instruction set." alt="" coords="1616,161,1771,188">
+<area shape="rect" href="$DynProgr__SPE__functions_8cc.html" title="Profile generation and alignment on Cell/BE SPE." alt="" coords="888,161,1093,188">
+<area shape="rect" href="$DynProgr__SPE__main_8c.html" title="Main routine and message handling on the SPE." alt="" coords="1117,161,1285,188">
+<area shape="rect" href="$DynProgr__sse__byte_8c.html" title="Profile generation and alignment for packed byte vectors on SSE2." alt="" coords="243,239,405,265">
+<area shape="rect" href="$DynProgr__sse__short_8c.html" title="Profile generation and alignment for packed short vectors on SSE2." alt="" coords="429,239,597,265">

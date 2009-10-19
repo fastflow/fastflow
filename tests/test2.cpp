@@ -64,10 +64,11 @@ public:
     void * svc(void * task) {
         ffalloc.free(task);
         std::cout << "Worker " << get_my_id() << " freed task\n";
-        return NULL; // we don't have the collector so any task to send out
+        // we don't have the collector so we have any task to send out
+        return NULL; 
     }
     // I don't need the following 
-    //void  svc_end(void * result)  {}
+    //void  svc_end()  {}
 };
 
 

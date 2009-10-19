@@ -1,0 +1,404 @@
+changeset:   73:c4c255594c9f
+tag:         tip
+user:        sadam
+date:        Thu Jun 05 12:41:32 2008 +0200
+summary:     cleanup of program parameters and return values
+
+changeset:   72:26295a62c39b
+user:        sadam
+date:        Tue Jun 03 18:27:17 2008 +0200
+summary:     added support for MAC OS X
+
+changeset:   71:b653dd0daf47
+user:        sadam
+date:        Wed May 21 16:22:15 2008 +0200
+summary:     moved matrix and fastadb routines to library
+
+changeset:   70:9a9abaf52d18
+parent:      69:4bbf810a0b18
+parent:      68:fcacbbb42257
+user:        sadam
+date:        Thu May 08 15:12:33 2008 +0200
+summary:     merged with PS3 version
+
+changeset:   69:4bbf810a0b18
+parent:      67:45e66c83bf53
+user:        sadam
+date:        Thu May 08 15:11:29 2008 +0200
+summary:     updated README
+
+changeset:   68:fcacbbb42257
+user:        celldev@ps3.inf.ethz.ch
+date:        Thu May 08 16:07:21 2008 +0200
+summary:     fixed building of libraries on Cell and AltiVec
+
+changeset:   67:45e66c83bf53
+user:        sadam
+date:        Thu May 08 14:23:18 2008 +0200
+summary:     Makefile for ppc altivec
+
+changeset:   66:76b6ba0e89dd
+user:        sadam
+date:        Thu May 08 13:57:04 2008 +0200
+summary:     * adjusted SSE makefile to build libswps3 and tested with icc-10.0
+
+changeset:   65:13cb44221326
+user:        sadam
+date:        Thu May 08 13:46:09 2008 +0200
+summary:     "all" as default target in Makefile and verified it works with icc-10
+
+changeset:   64:d02500a1cd9b
+parent:      63:dc3c5680bac0
+parent:      61:8924018cc0ef
+user:        celldev@ps3.inf.ethz.ch
+date:        Thu May 08 14:36:18 2008 +0200
+summary:     merged with SSE version
+
+changeset:   63:dc3c5680bac0
+user:        celldev@ps3.inf.ethz.ch
+date:        Thu May 08 14:35:03 2008 +0200
+summary:     adapting CMakeLists for ps3. not yet complete.
+
+changeset:   62:7f68a0514344
+parent:      58:4a9954231ae5
+user:        celldev@ps3.inf.ethz.ch
+date:        Wed Apr 02 13:26:59 2008 +0200
+summary:     tried to fix SPU compiler support
+
+changeset:   61:8924018cc0ef
+user:        sadam
+date:        Thu May 08 13:28:38 2008 +0200
+summary:     minor changes
+
+changeset:   60:bbbb10df2545
+user:        sadam
+date:        Thu Apr 24 16:36:00 2008 +0200
+summary:     More careful about exported symbols (for library version)
+
+changeset:   59:efa5fcf8f82f
+user:        sadam
+date:        Thu Apr 24 16:34:57 2008 +0200
+summary:     Added Doxygen documentation
+
+changeset:   58:4a9954231ae5
+user:        sadam
+date:        Wed Apr 02 10:30:51 2008 +0200
+summary:     working on SPU compiler support
+
+changeset:   57:3d12b6f5a0e8
+user:        sadam
+date:        Wed Apr 02 09:09:32 2008 +0200
+summary:     SPU compiler as language
+
+changeset:   56:91ee42b800c0
+parent:      55:a74c9e51507c
+parent:      54:11b84787f0e1
+user:        celldev@ps3.inf.ethz.ch
+date:        Mon Mar 31 11:16:14 2008 +0200
+summary:     merged SSE and PS3 versions
+
+changeset:   55:a74c9e51507c
+parent:      49:1a9f56c50f92
+user:        celldev@ps3.inf.ethz.ch
+date:        Mon Mar 31 10:52:53 2008 +0200
+summary:     PS3: no precomputation of column deletion scores
+
+changeset:   54:11b84787f0e1
+user:        sadam
+date:        Thu Mar 27 13:11:12 2008 +0100
+summary:     added lots of documentation
+
+changeset:   53:b8aa2e10c226
+user:        sadam
+date:        Wed Mar 19 16:55:55 2008 +0100
+summary:     fixed a few multithreading issues
+
+changeset:   52:1461772bb686
+user:        sadam
+date:        Mon Mar 17 11:09:56 2008 +0100
+summary:     no RD precomputation
+
+changeset:   51:49f33f2cbdd4
+user:        sadam
+date:        Mon Mar 10 09:44:15 2008 +0100
+summary:     aligning profile to page boundaries to reduce L2 thrashing in multithreaded mode
+
+changeset:   50:efb519302f6e
+user:        sadam
+date:        Thu Feb 21 11:50:16 2008 +0100
+summary:     merged PS3 version
+
+changeset:   49:1a9f56c50f92
+parent:      48:74105c7ab0d6
+parent:      46:fab2b80b4d72
+user:        celldev@ps3.inf.ethz.ch
+date:        Thu Feb 21 12:20:07 2008 +0100
+summary:     merged with SSE version
+
+changeset:   48:74105c7ab0d6
+user:        celldev@ps3.inf.ethz.ch
+date:        Thu Feb 21 12:19:00 2008 +0100
+summary:     PS3: bugfixes in float version
+
+changeset:   47:8b9b2f18c145
+parent:      45:da5fc721eeca
+user:        celldev@ps3.inf.ethz.ch
+date:        Mon Feb 11 14:29:54 2008 +0100
+summary:     new row fixing seems to be faster on SPU
+
+changeset:   46:fab2b80b4d72
+user:        sadam
+date:        Mon Feb 11 10:44:25 2008 +0100
+summary:     verfied my assumption that we can compare H-delFixed,F-DelInc
+
+changeset:   45:da5fc721eeca
+user:        celldev@ps3.inf.ethz.ch
+date:        Fri Feb 08 12:32:58 2008 +0100
+summary:     probably more correct but slower
+
+changeset:   44:ea816d1fe0a3
+parent:      42:8bbe36222431
+parent:      43:4de3d1d82916
+user:        sadam
+date:        Thu Feb 07 19:16:18 2008 +0100
+summary:     merged with PS3 version
+
+changeset:   43:4de3d1d82916
+parent:      41:8412f4b0e696
+user:        celldev@ps3.inf.ethz.ch
+date:        Thu Feb 07 19:41:22 2008 +0100
+summary:     * bugfix (hopefully) in CD fixup loop
+
+changeset:   42:8bbe36222431
+user:        sadam
+date:        Thu Feb 07 18:51:21 2008 +0100
+summary:     * license cleanup
+
+changeset:   41:8412f4b0e696
+user:        celldev@ps3.inf.ethz.ch
+date:        Mon Jan 28 17:20:45 2008 +0100
+summary:     multithreaded version seems to work now
+
+changeset:   40:6a195a1f5d4a
+user:        celldev@ps3.inf.ethz.ch
+date:        Thu Jan 24 17:45:20 2008 +0100
+summary:     multicore seems to work somehow but far from perfect
+
+changeset:   39:abf511e333df
+user:        celldev@ps3.inf.ethz.ch
+date:        Thu Jan 24 16:09:38 2008 +0100
+summary:     first version of multicore code
+
+changeset:   38:16e3dea1a2c9
+user:        celldev@ps3.inf.ethz.ch
+date:        Thu Jan 24 11:31:20 2008 +0100
+summary:     PS3: applied changes from unrolled version to non-unrolled
+
+changeset:   37:dafbc63aa4a2
+parent:      36:ae24337238b7
+parent:      32:844304c0181a
+user:        celldev@ps3.inf.ethz.ch
+date:        Thu Jan 24 10:05:35 2008 +0100
+summary:     merged with SSE2 version
+
+changeset:   36:ae24337238b7
+user:        celldev@ps3.inf.ethz.ch
+date:        Wed Jan 23 20:59:04 2008 +0100
+summary:     PS3: unbearably fast now
+
+changeset:   35:ed58f2feb665
+user:        celldev@ps3.inf.ethz.ch
+date:        Wed Jan 23 18:25:38 2008 +0100
+summary:     - renamed files
+
+changeset:   34:f827c6874500
+user:        celldev@ps3.inf.ethz.ch
+date:        Tue Jan 22 18:03:01 2008 +0100
+summary:     forgot to add header for altivec version
+
+changeset:   33:0f550d397e75
+parent:      29:f31dc786c203
+user:        celldev@ps3.inf.ethz.ch
+date:        Tue Jan 22 18:01:50 2008 +0100
+summary:     renamed files and added C++ altivec version
+
+changeset:   32:844304c0181a
+user:        sadam
+date:        Thu Jan 24 09:01:16 2008 +0100
+summary:     reverted sse2 makefile
+
+changeset:   31:80c6223f6fe0
+user:        sadam
+date:        Wed Jan 23 15:46:11 2008 +0100
+summary:     nothing special
+
+changeset:   30:5cd1824a6fbf
+user:        sadam
+date:        Mon Jan 21 18:15:58 2008 +0100
+summary:     SSE: applied changes from PS3 version
+
+changeset:   29:f31dc786c203
+user:        celldev@ps3.inf.ethz.ch
+date:        Mon Jan 21 18:51:19 2008 +0100
+summary:     moved the static branch prediction macros to main header file
+
+changeset:   28:9cbabdbc267f
+parent:      27:3392537815e3
+parent:      23:7b5e46a87381
+user:        celldev@ps3.inf.ethz.ch
+date:        Mon Jan 21 17:12:50 2008 +0100
+summary:     merge with sse version
+
+changeset:   27:3392537815e3
+user:        celldev@ps3.inf.ethz.ch
+date:        Mon Jan 21 17:12:14 2008 +0100
+summary:     PS3: fixed bug in unrolled version
+
+changeset:   26:57702f4e6680
+user:        celldev@ps3.inf.ethz.ch
+date:        Fri Jan 18 15:56:35 2008 +0100
+summary:     PS3: make code more readable (for human and compiler) -> speed improvement
+
+changeset:   25:889518d305d1
+parent:      22:13b74dc52b24
+user:        celldev@ps3.inf.ethz.ch
+date:        Fri Jan 18 14:26:19 2008 +0100
+summary:     PS3: fastest version
+
+changeset:   24:971068be76da
+branch:      dual_profile_mode
+parent:      22:13b74dc52b24
+user:        celldev@ps3.inf.ethz.ch
+date:        Wed Jan 16 17:59:08 2008 +0100
+summary:     experimental dual profile mode
+
+changeset:   23:7b5e46a87381
+user:        sadam
+date:        Fri Jan 18 14:48:56 2008 +0100
+summary:     SSE: made code more readable (for human and compiler)
+
+changeset:   22:13b74dc52b24
+user:        celldev@ps3.inf.ethz.ch
+date:        Wed Jan 16 15:00:34 2008 +0100
+summary:     using float profile by default, before implementing two-profile-mode
+
+changeset:   21:eb17b4bd3d85
+user:        celldev@ps3.inf.ethz.ch
+date:        Wed Jan 16 11:34:19 2008 +0100
+summary:     PS3: fixed UNROLLed version and generation of profile on SPU
+
+changeset:   20:f2ee5b25ed40
+user:        celldev@ps3.inf.ethz.ch
+date:        Mon Jan 14 17:14:28 2008 +0100
+summary:     profile was fetched unnecessarily
+
+changeset:   19:a086b79008a4
+user:        celldev@ps3.inf.ethz.ch
+date:        Mon Jan 14 15:41:51 2008 +0100
+summary:     debugging
+
+changeset:   18:bbc0110dea9e
+user:        celldev@ps3.inf.ethz.ch
+date:        Mon Jan 14 15:03:39 2008 +0100
+summary:     periodic save before compiling new code
+
+changeset:   17:54b31aca233a
+user:        celldev@ps3.inf.ethz.ch
+date:        Wed Jan 09 18:21:39 2008 +0100
+summary:     PS3: fixed matrix transmission to SPE
+
+changeset:   16:5eb90ffc7d4a
+user:        celldev@ps3.inf.ethz.ch
+date:        Wed Jan 09 17:11:31 2008 +0100
+summary:     PS3: computing profile only once
+
+changeset:   15:6d4bce4eec9f
+user:        celldev@ps3.inf.ethz.ch
+date:        Wed Jan 09 15:06:56 2008 +0100
+summary:     fixed to conform more to ansi c/c++
+
+changeset:   14:dcddc0251480
+user:        sadam
+date:        Wed Jan 09 13:34:54 2008 +0100
+summary:     bug fixed: removed undef SSE2 remaining form debugging
+
+changeset:   13:d468cb5b6116
+user:        celldev@ps3.inf.ethz.ch
+date:        Wed Jan 09 14:30:31 2008 +0100
+summary:     scalar version selectable
+
+changeset:   12:cc83c6efc61e
+user:        sadam
+date:        Wed Jan 09 10:21:00 2008 +0100
+summary:     merging with changes from other machine
+
+changeset:   11:d82966fc25b9
+user:        celldev@ps3.inf.ethz.ch
+date:        Wed Jan 09 11:15:34 2008 +0100
+summary:     merged PS3 and SSE2 branches
+
+changeset:   10:a50615b33abd
+branch:      playstation
+user:        celldev@ps3.inf.ethz.ch
+date:        Wed Jan 09 11:11:26 2008 +0100
+summary:     produces sensible results now
+
+changeset:   9:bb6129e74a04
+branch:      playstation
+user:        celldev@ps3.inf.ethz.ch
+date:        Mon Jan 07 14:14:10 2008 +0100
+summary:     builds now
+
+changeset:   8:bd08303245c0
+branch:      playstation
+user:        celldev@ps3.inf.ethz.ch
+date:        Thu Dec 20 16:27:56 2007 +0100
+summary:     horrible bug fixed in makefile
+
+changeset:   7:4bada0589d19
+branch:      playstation
+user:        celldev@ps3.inf.ethz.ch
+date:        Thu Dec 20 15:44:45 2007 +0100
+summary:     ps3 version
+
+changeset:   6:919917a9ece4
+branch:      playstation
+user:        celldev@ps3.inf.ethz.ch
+date:        Wed Dec 12 16:18:19 2007 +0100
+summary:     imported SPE code from darwin
+
+changeset:   5:e9fadd2c4f89
+parent:      4:c25c440114dc
+parent:      3:31cf5cf15601
+user:        sadam
+date:        Wed Dec 12 15:06:03 2007 +0100
+summary:     merged branch with alternate short porfile
+
+changeset:   4:c25c440114dc
+parent:      1:c968fcdff4fc
+user:        sadam
+date:        Wed Dec 12 15:04:50 2007 +0100
+summary:     reverted swps3.c to original version
+
+changeset:   3:31cf5cf15601
+branch:      shortprofile
+user:        sadam
+date:        Wed Dec 12 13:26:26 2007 +0100
+summary:     minor speed improvement
+
+changeset:   2:73b1c5c465db
+branch:      shortprofile
+user:        sadam
+date:        Tue Dec 11 19:15:25 2007 +0100
+summary:     profile for short version as bytes
+
+changeset:   1:c968fcdff4fc
+user:        sadam
+date:        Tue Dec 11 19:13:52 2007 +0100
+summary:     new makefile for cmake
+
+changeset:   0:44fac6265290
+user:        sadam
+date:        Tue Dec 11 16:14:21 2007 +0100
+summary:     initial checkin
+

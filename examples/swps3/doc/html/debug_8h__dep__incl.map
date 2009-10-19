@@ -1,0 +1,5 @@
+<area shape="rect" href="$DynProgr__PPU_8c.html" title="PPU frontend to the alignment routines on the SPU." alt="" coords="5,84,136,110">
+<area shape="rect" href="$DynProgr__scalar_8c.html" title="Scalar alignment routine." alt="" coords="160,84,301,110">
+<area shape="rect" href="$DynProgr__sse__byte_8c.html" title="Profile generation and alignment for packed byte vectors on SSE2." alt="" coords="325,84,488,110">
+<area shape="rect" href="$fasta_8c.html" title="Routines for reading FASTA databases." alt="" coords="512,84,581,110">
+<area shape="rect" href="$matrix_8c.html" title="Routines for reading matrix files and converting matrices." alt="" coords="605,84,683,110">

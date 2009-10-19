@@ -45,24 +45,23 @@ protected:
 
     static void * thread_routine(void * arg) {
         ff_thread & obj = *(ff_thread *)arg;
-        void * r = NULL;
         
         Barrier();        
 
         if (obj.svc_init(obj.get_args())<0)
             error("ff_thread, svc_init failed, thread exit!!!\n");
-        else  r= obj.svc(NULL);
-        obj.svc_end(r);
+        else  obj.svc(NULL);
+        obj.svc_end();
 
-        pthread_exit(r);
+        pthread_exit(NULL);
     }
 
     virtual void * get_args() const { return NULL;}
 
 public:
     virtual void* svc(void * task) = 0;
-    virtual int   svc_init(void * args) { return 0; };
-    virtual void  svc_end(void * result)  {}
+    virtual int   svc_init(void * ) { return 0; };
+    virtual void  svc_end()  {}
 
     int spawn() {
         if (pthread_create(&th_handle, NULL, // FIX: attr management !
@@ -95,8 +94,8 @@ class ff_node: public ff_thread {
 
 public:
     virtual void* svc(void * task) = 0;
-    virtual int   svc_init(void * args) { return 0; }
-    virtual void  svc_end(void * result) {}
+    virtual int   svc_init(void *) { return 0; }
+    virtual void  svc_end() {}
 
     int get_my_id() { return myid; };
     
@@ -190,10 +189,11 @@ public:
         return NULL;
     }
 
-    virtual void svc_end(void * result) {
-        T::svc_end(result);
-        double t= farmTime(STOP_TIME);
-        std::cerr << "Worker " << T::get_my_id() << " time= " << t << "\n";
+    virtual void svc_end() {
+        T::svc_end();
+        //double t= 
+        farmTime(STOP_TIME);
+        //std::cerr << "Worker " << T::get_my_id() << " time= " << t << "\n";
     }
 
 protected:    
