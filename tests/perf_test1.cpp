@@ -78,7 +78,8 @@ public:
         do_work(&task[1],itemsize,nticks);
 
         ffalloc.free(task);
-        return NULL; // we don't have the collector so any task to send out
+        // we don't have the collector so we have any task to send out
+        return NULL; 
     }
 
 private:

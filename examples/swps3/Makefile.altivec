@@ -1,0 +1,33 @@
+# make the Smith-Watherman for Linux on Altivec
+#
+
+CFLAGS  ?= -Wall -Wextra -O666 -maltivec -ansi -g3 -fPIC -fvisibility=hidden
+#CFLAGS  ?= -Wall -Wextra -Werror -O666 -maltivec -ansi -g3 -fPIC -fvisibility=hidden
+DEFS    ?= -DHAVE_SYSCONF_NPROCESSORS -DHAVE_MALLOC_H
+LDFLAGS  =
+CC      ?= gcc
+CXX     ?= g++
+OBJS     = DynProgr_altivec.o DynProgr_scalar.o matrix.o fasta.o debug.o
+
+all: swps3 dblen libswps3.a libswps3.so
+
+.c.o:
+	$(CC) $(CFLAGS) $(DEFS) -c $<
+
+.cc.o:
+	$(CXX) $(CFLAGS) $(DEFS) -c $<
+
+swps3: libswps3.a swps3.o
+	$(CXX) $(CFLAGS) swps3.o $(LDFLAGS) libswps3.a -o $@
+
+dblen: libswps3.a dblen.o
+	$(CXX) $(CFLAGS) dblen.o $(LDFLAGS) libswps3.a -o $@
+
+libswps3.a: $(OBJS)
+	$(LD) -E -r -x $(OBJS) $(LDFLAGS) -o $@
+
+libswps3.so: $(OBJS)
+	$(LD) -shared -E -x $(OBJS) -o $@
+
+clean:
+	rm -f $(OBJS) swps3.o dblen.o swps3 dblen libswps3.a libswps3.so

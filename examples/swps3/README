@@ -1,0 +1,79 @@
+Instructions for building swps3_ff for Linux on x86/x86_64/SSE2:
+   # rename Makefile.sse2 to Makefile
+   ln -s Makefile.sse2_ff Makefile
+
+   # build swps3_ff using g++
+   make
+
+Instructions for building swps3 for Linux on x86/x86_64/SSE2:
+   # rename Makefile.sse2 to Makefile
+   ln -s Makefile.sse2 Makefile
+
+   # build swps3 and libswps3 using gcc
+   make CC=gcc
+   OR
+   # build swps3 and libswps3 using icc
+   make CC=icc
+
+   # build API documentation
+   doxygen Doxyfile
+
+Instructions for building swps3 for Linux on Cell/B.E.:
+   # rename Makefile.cell to Makefile
+   ln -s Makefile.cell Makefile
+
+   # build swps3 and libswps3 using the gcc toolchain for linux
+   # see http://www.bsc.es/plantillaH.php?cat_id=461
+   make
+
+   # build API documentation
+   doxygen Doxyfile
+
+Instructions for building swps3 for Linux on PPC/AltiVec:
+   # rename Makefile.altivec to Makefile
+   ln -s Makefile.altivec Makefile
+
+   # build swps3 and libswps3 using gcc
+   make
+
+   # build API documentation
+   doxygen Doxyfile
+
+Instructions for building swps3 for MacOS X on x86/x86_64/SSE2:
+   # rename Makefile.macsse2 to Makefile
+   ln -s Makefile.macsse2 Makefile
+
+   # build swps3 and libswps3 using gcc
+   make CC=gcc
+   # (compilation with icc was not tested on this platform)
+
+   # build API documentation
+   doxygen Doxyfile
+
+Command line parameters:
+   Usage: swps3 [-h] [-s] [-j num] [-i num] [-e num] [-t num] matrix query db
+      -h:	print help
+      -s:	run scalar version (without vectorized instructions)
+      -j num:	start num worker threads (if parameter not specified try to find out number of processors via sysconf)
+      -i:	gap insertion score (default: 12)
+      -e:	gap extension score (default: 2)
+      -t:	score limit (default: DBL_MAX)
+
+Scoring matrices and a test set are available from:
+   http://people.inf.ethz.ch/sadam/swps3/files/matrices.tar.bz2 
+   http://people.inf.ethz.ch/sadam/swps3/files/test.tar.bz2 
+
+Example:
+   ./swps3 matrices/blosum50.mat test/query1.fasta test/db.fasta
+
+   This command runs swps3 with default settings (using vectorized instructions
+   and multiple CPU cores, if available) and computes alignment scores of
+   'test/query1.fasta' with each sequence in 'test/db.fasta'. Here, the BLOSUM50
+   scoring matrix is read from the file 'matrices/blosum50.mat'. By setting the
+   score limit to a high value we prevent early termination from the computation
+   so that all alignments are computed exactly.
+
+   Optionally, you can sort the results and retrieve top scoring sequences by
+   simply piping the output through the unix commands 'sort' and 'head'. e.g.
+   ./swps3 -s blosum50.mat query1.fasta db.fasta | sort -nr | head -n 20
+

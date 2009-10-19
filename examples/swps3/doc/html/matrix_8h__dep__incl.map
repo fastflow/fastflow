@@ -1,0 +1,12 @@
+<area shape="rect" href="$DynProgr__altivec_8cc.html" title="Profile generation and alignment on IBM Altivec^TM instruction set." alt="" coords="5,84,160,111">
+<area shape="rect" href="$DynProgr__PPU_8c.html" title="PPU frontend to the alignment routines on the SPU." alt="" coords="165,162,296,188">
+<area shape="rect" href="$DynProgr__PPU_8h.html" title="PPU frontend to the alignment routines on the SPU." alt="" coords="235,84,365,111">
+<area shape="rect" href="$swps3_8c.html" title="Main procedure and multi&#45;threading code." alt="" coords="353,162,428,188">
+<area shape="rect" href="$DynProgr__scalar_8c.html" title="Scalar alignment routine." alt="" coords="819,84,960,111">
+<area shape="rect" href="$DynProgr__SPE__functions_8cc.html" title="Profile generation and alignment on Cell/BE SPE." alt="" coords="984,84,1189,111">
+<area shape="rect" href="$DynProgr__SPE__main_8c.html" title="Main routine and message handling on the SPE." alt="" coords="1213,84,1381,111">
+<area shape="rect" href="$DynProgr__sse__byte_8h.html" title="Profile generation and alignment for packed byte vectors on SSE2." alt="" coords="440,84,603,111">
+<area shape="rect" href="$DynProgr__sse__short_8h.html" title="Profile generation and alignment for packed short vectors on SSE2." alt="" coords="627,84,795,111">
+<area shape="rect" href="$matrix_8c.html" title="Routines for reading matrix files and converting matrices." alt="" coords="1405,84,1483,111">
+<area shape="rect" href="$DynProgr__sse__byte_8c.html" title="Profile generation and alignment for packed byte vectors on SSE2." alt="" coords="452,162,615,188">
+<area shape="rect" href="$DynProgr__sse__short_8c.html" title="Profile generation and alignment for packed short vectors on SSE2." alt="" coords="639,162,807,188">

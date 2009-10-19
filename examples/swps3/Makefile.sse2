@@ -1,0 +1,29 @@
+# make the Smith-Watherman for SSE2
+#
+
+CFLAGS  ?= -Wall -Wextra -O666 -msse3 -ansi -g3 -fPIC -fvisibility=hidden
+#CFLAGS  ?= -Wall -Wextra -Werror -O666 -msse2 -ansi -g3 -fPIC -fvisibility=hidden
+DEFS    ?= -DHAVE_SYSCONF_NPROCESSORS -DHAVE_MALLOC_H
+LDFLAGS  = 
+CC      ?= gcc
+OBJS     = DynProgr_sse_byte.o DynProgr_sse_short.o DynProgr_scalar.o matrix.o fasta.o debug.o
+
+all: swps3 dblen libswps3.a libswps3.so
+
+.c.o:
+	$(CC) $(CFLAGS) $(DEFS) -c $<
+
+swps3: libswps3.a swps3.o
+	$(CC) $(CFLAGS) swps3.o $(LDFLAGS) libswps3.a -o $@
+
+dblen: libswps3.a dblen.o
+	$(CC) $(CFLAGS) dblen.o $(LDFLAGS) libswps3.a -o $@
+
+libswps3.a: $(OBJS)
+	$(LD) -E -r -x $(OBJS) $(LDFLAGS) -o $@
+
+libswps3.so: $(OBJS)
+	$(LD) -shared -E -x $(OBJS) $(LDFLAGS) -o $@
+
+clean:
+	rm -f $(OBJS) swps3.o dblen.o swps3 dblen libswps3.a libswps3.so

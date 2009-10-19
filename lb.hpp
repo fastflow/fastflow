@@ -138,9 +138,9 @@ public:
     }
 
     virtual int svc_init(void *) { 
-        double t = farmTime(START_TIME);
-
-        std::cerr << "Emitter  time= " << t << "\n";
+        //double t = 
+        farmTime(START_TIME);
+        //std::cerr << "Emitter  time= " << t << "\n";
 
         if (filter->svc_init(NULL) <0) return -1;
         
@@ -150,8 +150,9 @@ public:
         return 0;
     }
 
-    virtual void svc_end(void * result) {
-        filter->svc_end(result);
+    virtual void svc_end() {
+        filter->svc_end();
+        if (fallback) fallback->svc_end();
     }
 
     int run() {

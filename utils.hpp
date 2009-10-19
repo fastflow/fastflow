@@ -48,7 +48,6 @@ static inline ticks ticks_wait(ticks t1) {
     return delta-t1;
 }
 
-
 static inline void Barrier(int init = -1) {
     static int barrier = 0;
     static pthread_mutex_t bLock = PTHREAD_MUTEX_INITIALIZER;

@@ -1,0 +1,32 @@
+APPLICATIONS:
+=============
+
+------------------------
+swps3 (release 20080605)
+------------------------
+swps3 is an optimised version of the striped Smith-Waterman local 
+alignment algorith for both the Cell/BE and ×86/x86_64 CPUs
+with SSE2 instructions. swps3 has been developed at the Computer Science 
+Department of the ETH Zürich.
+The project website is : http://www.inf.ethz.ch/personal/sadam/swps3/
+
+We modified the original code in order to use the FastFlow framework.
+The new version (swps3_ff) can be compiled this way: 
+ #cd swps3
+ #make -f Makefile.sse2_ff
+
+Command line parameters are:
+swps3_ff [-h] [-s] [-j num] [-i num] [-e num] [-t num] matrix query db
+  matrix: scoring matrix file
+  query : query amino acid sequence in FASTA format
+  db    : amino acid sequence data base in FASTA format
+  -h    : print help
+  -s    : run the scalar version (without vectorized SSE instructions)
+  -j num: start num worker threads 
+  -i num: gap insertion score (default: 12)
+  -e num: gap extension score (default: 2)
+  -t num: score limit (default: DBL_MAX)
+
+You can find the Swiss-Prot protein DB in FASTA format here:
+http://www.uniprot.org/downloads
+  

@@ -57,7 +57,7 @@ public:
     }
     // I don't need the following for this test
     //int   svc_init(void * args) { return 0; }
-    //void  svc_end(void * result) {}
+    //void  svc_end() {}
 
 };
 
