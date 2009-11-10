@@ -1,0 +1,58 @@
+
+@manual{fastflow-web,
+	Author = {Marco Aldinucci and Massimo Torquati},
+	Date-Added = {2009-10-22 17:57:29 +0200},
+	Date-Modified = {2009-10-22 17:58:05 +0200},
+	Note = {\url{http://mc-fastflow.sourceforge.net/}},
+	Title = {FastFlow website},
+	Year = {2009}}
+
+@techreport{fastflow:tr-09-12,
+	Abstract = {Shared memory multiprocessors come back to popularity thanks to rapid spreading of commodity multi-core architectures. As ever, shared 
+memory programs are fairly easy to write and quite hard to optimise;  providing multi-core programmers with optimising tools and programming frameworks is a nowadays challenge. Few efforts have been done to support effective streaming applications on these architectures. In this paper we introduce FastFlow, a low-level programming framework based on lock-free queues explicitly designed to support high-level languages for streaming applications. We compare FastFlow with state-of-the-art programming frameworks such as Cilk, OpenMP, and Intel TBB. We experimentally demonstrate that FastFlow is always more efficient than all of them in a set of micro-benchmarks and on a real world application; the speedup edge of FastFlow over other solutions might be bold for fine grain tasks, as an example +35\% on OpenMP, +226\% on Cilk, +96\% on TBB for the alignment of protein P01111 against UniProt DB using Smith-Waterman algorithm. 
+},
+	Author = {Marco Aldinucci and Massimo Torquati and Massimiliano Meneghin},
+	Date-Added = {2009-09-08 16:14:34 +0200},
+	Date-Modified = {2009-11-10 16:06:55 +0100},
+	Institution = {Universit{\`a} di Pisa, Dipartimento di Informatica, Italy},
+	Month = sep,
+	Number = {TR-09-12},
+	Title = {{FastFlow}: Efficient Parallel Streaming Applications on Multi-core},
+	Url = {http://arxiv.org/abs/0909.1187},
+	Year = {2009},
+	Bdsk-Url-1 = {http://www.di.unipi.it/~aldinuc/paper_files/TR-09-12.pdf}}
+
+@inproceedings{fastflow:parco:09,
+	Abstract = {Shared memory multiprocessors have returned to popularity thanks to rapid spreading of commodity multi-core architectures. However, little attention has been 
+paid to supporting effective streaming applications on these architectures. In this paper we describe FastFlow, a low-level programming framework based on lock-free queues explicitly designed to support high-level languages for streaming applications. We compare FastFlow with state-of-the-art programming frameworks such as Cilk, OpenMP, and Intel TBB. We experimentally demonstrate that FastFlow is always more efficient than them on a given real world application: the speedup of FastFlow over other solutions may be substantial for fine grain tasks, for example +35\% over OpenMP, +226\% over Cilk, +96\% over TBB for the alignment of protein P01111 against UniProt DB using the Smith-Waterman algorithm.},
+	Address = {Lyon, France},
+	Author = {Marco Aldinucci and Marco Danelutto and Massimiliano Meneghin and Peter Kilpatrick and Massimo Torquati},
+	Booktitle = {Proc. of Intl. Parallel Computing (PARCO)},
+	Date-Added = {2009-06-06 01:38:30 +0200},
+	Date-Modified = {2009-11-10 16:07:57 +0100},
+	Keywords = {incomplete},
+	Month = sep,
+	Note = {To appear},
+	Title = {Efficient streaming applications on multi-core with {FastFlow}: the biosequence alignment test-bed},
+	Url = {http://www.di.unipi.it/~aldinuc/paper_files/2009_fastflow_parco.pdf},
+	Year = {2009},
+	Bdsk-Url-1 = {http://www.di.unipi.it/~aldinuc/paper_files/2009_fastflow_parco.pdf}}
+
+@inproceedings{fastflow:pdp:10,
+	Abstract = {Shared-memory multi-core architectures are becoming increasingly popular. While their parallelism and peak performance is ever increasing, their effi- 
+ciency is often disappointing due to memory fence overheads. In this paper we present FastFlow, a programming methodology based on lock-free queues explicitly designed for programming streaming applications on multi-cores. The potential of FastFlow is evaluated on micro-benchmarks and on the Smith-Waterman 
+sequence alignment application, which exhibits a substantial speedup against the state-of-the-art multi-threaded implementation (SWPS3 x86/SSE2). },
+	Address = {Pisa, Italy},
+	Author = {Marco Aldinucci and Massimiliano Meneghin and Massimo Torquati},
+	Booktitle = {Proc. of Intl. Euromicro PDP 2010: Parallel Distributed and network-based Processing},
+	Date-Added = {2007-10-26 01:02:32 +0200},
+	Date-Modified = {2009-11-10 16:08:51 +0100},
+	Editor = {Marco Danelutto and Tom Gross and Julien Bourgeois},
+	Keywords = {incomplete},
+	Month = feb,
+	Note = {To appear},
+	Publisher = {IEEE},
+	Title = {Efficient Smith-Waterman on multi-core with FastFlow},
+	Url = {http://www.di.unipi.it/~aldinuc/paper_files/2010_fastflow_SW_PDP.pdf},
+	Year = {2010},
+	Bdsk-Url-1 = {http://www.di.unipi.it/~aldinuc/paper_files/2010_fastflow_SW_PDP.pdf}}
