@@ -28,14 +28,15 @@
  */
 
 
-/* The ff_allocator allocates only large chunks of memory, slicing them up into little chunks 
- * all with the same size. 
- * Only one thread can perform malloc operations while any number of threads may perform frees.
+/* The ff_allocator allocates only large chunks of memory, slicing them up 
+ * into little chunks all with the same size. 
+ * Only one thread can perform malloc operations while any number of threads 
+ * may perform frees.
  *
- * This is based on the idea of Slab Allocator, for more details about Slab Allocator 
- * please see:
- *  Bonwick, Jeff. "The Slab Allocator: An Object-Caching Kernel Memory Allocator." 
- *  Boston USENIX Proceedings, 1994.
+ * This is based on the idea of Slab Allocator, for more details about Slab 
+ * Allocator please see:
+ *  Bonwick, Jeff. "The Slab Allocator: An Object-Caching Kernel Memory 
+ *  Allocator." Boston USENIX Proceedings, 1994.
  *
  */
 
@@ -56,7 +57,7 @@
 
 
 
-#define DEBUG_ALLOCATOR 1
+//#define DEBUG_ALLOCATOR 1
 #if defined(DEBUG_ALLOCATOR)
 #define DBG(X) X
 #else
@@ -200,7 +201,6 @@ struct xThreadData {
     }
 
     ~xThreadData() { 
-        abort(); // TOGLIERE
         if (b) delete b; 
     }
     
@@ -259,8 +259,19 @@ private:
         return -1;
     }
 
-    inline void freeslab(void * ptr) { 
+    inline void freeslab(void * ptr, bool seglist_rem=true) { 
         alloc->freesegment(ptr, size*nslabs +  sizeof(Seg_ctl) + nslabs*BUFFER_OVERHEAD); 
+
+        /* remove ptr from seglist */
+        if (seglist_rem) {
+            std::vector<void *>::iterator b(seglist.begin()), e(seglist.end());
+            for(;b!=e;++b) 
+                if ((*b)==ptr) {
+                    seglist.erase(b);
+                    return;
+                }
+            DBG(assert(1==0));
+        }
     }
 
     inline void * getfrom_fb() {
@@ -287,7 +298,8 @@ private:
     
     inline void checkReclaim(Seg_ctl  * seg) {
         atomic_long_inc(&seg->availbuffers);
-        if (atomic_long_read(&seg->availbuffers) == (long)nslabs) freeslab(seg); /* reclaim allocated memory */
+        if (atomic_long_read(&seg->availbuffers) == (long)nslabs) 
+            freeslab(seg); /* reclaim allocated memory */
     }
 
 
@@ -303,14 +315,17 @@ public:
     
     ~SlabCache() { 
         std::vector<void *>::iterator b(seglist.begin()), e(seglist.end());
-        for(;b!=e;++b) freeslab(*b);
+        for(;b!=e;++b) {
+            freeslab(*b,false);
+        }
+        seglist.clear();
     }
 
     int init() {
         atomic_long_set(&nomoremalloc,0);
         pthread_mutex_init(&fb_mutex,NULL);
 
-        fb = (xThreadData**)malloc(MIN_FB_CAPACITY*sizeof(xThreadData*));
+        fb = (xThreadData**)::malloc(MIN_FB_CAPACITY*sizeof(xThreadData*));
         if (!fb) return -1;
         fb_capacity = MIN_FB_CAPACITY;
 
@@ -327,7 +342,7 @@ public:
 
             pthread_mutex_lock(&fb_mutex);
             if (fb_size==fb_capacity) {
-                xThreadData ** fb_new = (xThreadData**)realloc(fb,fb_capacity+MIN_FB_CAPACITY);
+                xThreadData ** fb_new = (xThreadData**)::realloc(fb,(fb_capacity+MIN_FB_CAPACITY)*sizeof(xThreadData*));
                 if (!fb_new) return -1; 
                 fb = fb_new;
                 fb_capacity += MIN_FB_CAPACITY;
@@ -347,16 +362,18 @@ public:
         char * buf = 0;
         SWSR_Ptr_Buffer * b = 0;
         for(register unsigned i=0;i<fb_size;++i) {
+            DBG(assert(fb[i]));
             b = fb[i]->b;
-            DBG(assert(b));
-            if (reclaim) 
-                while(b->pop((void **)&buf)) {
-                    DBG(assert(buf));
-                    Seg_ctl  * seg = *(Seg_ctl **)buf;
-                    checkReclaim(seg);
-                }
-            else  /* NOTE: free at least some buffer rooms to avoid race conditions for buffer full */
-                for(register int i=0;i<5;++i) b->pop((void**)&buf);
+            if (b) {
+                if (reclaim) 
+                    while(b->pop((void **)&buf)) {
+                        DBG(assert(buf));
+                        Seg_ctl  * seg = *(Seg_ctl **)buf;
+                        checkReclaim(seg);
+                    }
+                else  /* NOTE: free at least some buffer rooms to avoid race conditions for buffer full */
+                    for(register int i=0;i<5;++i) b->pop((void**)&buf);
+            }
         }
     }
                                                
@@ -403,6 +420,9 @@ public:
         }
 
         xThreadData * const   xtd = (xThreadData*)pthread_getspecific(fb_key);
+
+        // if it aborts here probably you don't have called 
+        // the register function
         DBG(if (!xtd) abort());
             
         SWSR_Ptr_Buffer * const b = xtd->b;
@@ -495,8 +515,13 @@ public:
     ff_allocator(size_t max_size=0):alloc(0),max_size(max_size) {}
 
     ~ff_allocator() {
-        for(size_t i=0;i<slabcache.size(); ++i) delete slabcache[i];
-        if (alloc) delete alloc;
+        for(size_t i=0;i<slabcache.size(); ++i) {
+            if (slabcache[i]) { 
+                delete slabcache[i];
+                slabcache[i] = NULL;
+            }
+        }
+        if (alloc) { delete alloc; alloc=NULL;}
     }
     
     // initialize the allocator

@@ -1,6 +1,29 @@
 FastFlow
 ^^^^^^^^
 
+FastFlow is a multi-cores programmin framework implemented as a C++ template 
+library that offers a set of mechanisms to support low-latency and 
+high-bandwidth data flows in a network of threads running on
+a cache-coherent multi-core architectures. On these architectures, one of the 
+key performance issues concern memory fences, which are required to keep the 
+various caches coherent. 
+FastFlow provides the programmer with two basic mechanisms:
+  1. efficient point-to-pint communication channels;
+  2. a memory allocator.
+
+Communication channels, as typical is in streaming applications, are 
+unidirectional and asynchronous. They are implemented via fence-free FIFO
+queues. The memory allocator is built on top of these queues, thus taking 
+advantage of their efficiency.
+On top of these basic machnisms FastFlow provides a library of explicitly 
+parallel constructs (a.k.a. skeletons) such as pipeline and farm.
+The farm skeleton, exploits functional replication and abstracts out the 
+parallel filtering of successive independent items of the stream under the 
+control of a scheduler.
+
+
+-----------------
+
 See tests directory for some simple runnable examples (just type 'make').
 
 FastFlow has been tested on:

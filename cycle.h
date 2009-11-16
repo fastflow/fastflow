@@ -174,7 +174,7 @@ typedef unsigned long long ticks;
 static __inline__ ticks getticks(void)
 {
      ticks ret;
-
+	 
      __asm__ __volatile__("rdtsc": "=A" (ret));
      /* no input, nothing else clobbered */
      return ret;
@@ -195,7 +195,7 @@ typedef LARGE_INTEGER ticks;
 static __inline ticks getticks(void)
 {
      ticks retval;
-
+	 
      __asm {
 	  RDTSC
 	  mov retval.HighPart, edx

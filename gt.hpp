@@ -33,17 +33,17 @@
 
 namespace ff {
 
-class ff_gatherer: public ff_node {
+class ff_gatherer: public ff_thread {
 
     enum {TICKS2WAIT=1000};
 
 protected:
 
-    void gather_task(void ** result) {
+    virtual void gather_task(void ** result) {
         //register int cnt=0;
         do {
             for(register int nextr=0;nextr<nworkers;++nextr) 
-                if (workers[nextr]->pop(result)) return;
+                if (workers[nextr]->get(result)) return;
             // FIX!!!!
             //if (sched_collector  && ++cnt>POP_CNT_COLL) { cnt=0; sched_yield();}
             //else 
@@ -51,59 +51,84 @@ protected:
         } while(1);
 	}
 
+    void push(void * task) {
+         while (! buffer->push(task)) {
+                // if (ch->thxcore>1) {
+             // if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
+             //    else ticks_wait(TICKS2WAIT);
+             //} else 
+             ticks_wait(TICKS2WAIT);
+         }     
+    }
+
+
 public:
     ff_gatherer(int max_num_workers):
         nworkers(0),max_nworkers(max_num_workers),
-        filter(NULL),workers(new ff_node*[max_num_workers]) {}
+        filter(NULL),workers(new ff_node*[max_num_workers]),buffer(NULL) {}
 
-    int set_filter(ff_node & f) { 
+    int set_filter(ff_node * f) { 
         if (filter) {
             error("GT, setting collector filter\n");
             return -1;
         }
-        filter = &f;
+        filter = f;
         return 0;
     }
+
+    void set_out_buffer(SWSR_Ptr_Buffer * const buff) { buffer=buff;}
+
+    SWSR_Ptr_Buffer * const get_out_buffer() const { return buffer;}
 
     int  register_worker(ff_node * w) {
         if (nworkers>=max_nworkers) {
             error("GT, max number of workers reached (max=%d)\n",max_nworkers);
             return -1;
         }
-        workers[nworkers++]=w;
+        workers[nworkers++]= w;
         return 0;
     }
 
     virtual void * svc(void *) {
         int stop=0;
-        void * task;
+        void * task = NULL;
+        bool outpresent  = (get_out_buffer() != NULL);
         do {
             task = NULL;
             gather_task(&task);
             if (task == (void *)FF_EOS) ++stop;
             else {
-                void * result = filter->svc(task);
-                if (!result) ++stop;
+                if (filter)  task = filter->svc(task);
+
+                if (!task) break; // if the filter return NULL we exit immediatly
+                else if (outpresent && (task != GO_ON)) push(task);
             }
         } while(stop<nworkers);
+
+        if (outpresent) {
+            // push EOS
+            task = (void *)FF_EOS;
+            push(task);
+        }
 
         return NULL;
     }
 
-    virtual int svc_init(void *) { 
-        return filter->svc_init(NULL);
+    virtual int svc_init() { 
+        if (filter) return filter->svc_init(); 
+        return 0;
     }
 
     virtual void svc_end() {
-        filter->svc_end();
+        if (filter) filter->svc_end();
         //double t = 
         farmTime(STOP_TIME);
         //std::cerr << "Collector  time= " << t << "\n";
     }
 
-    int run() {  
+    int run(bool=false) {  
         if (this->spawn()<0) {
-            error("GT, waiting GT thread, id = %d\n",get_my_id());
+            error("GT, waiting GT thread\n");
             return -1; 
         }
         return 0;
@@ -111,10 +136,11 @@ public:
 
 
 private:
-    int        nworkers;
-    int        max_nworkers;
-    ff_node *  filter;
-    ff_node ** workers;
+    int               nworkers;
+    int               max_nworkers;
+    ff_node         * filter;
+    ff_node        ** workers;
+    SWSR_Ptr_Buffer * buffer;
 };
 
 } // namespace ff

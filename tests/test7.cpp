@@ -26,122 +26,144 @@
  */
 
 /*
- * Simple Farm without collector. Tasks are allocated dinamically using 
- * ff_allocator. 
+ * This program tests ff_send_out function in a farm with 
+ * a feedback channel.
  *
  */
 
-#include <sys/types.h>
-#include <unistd.h>
-#include <stdlib.h>
-
-#include <vector>
 #include <iostream>
+#include <vector>
 #include <farm.hpp>
 #include <allocator.hpp>
 
+
 using namespace ff;
 
-typedef int task_t;
-
-static ff_allocator ffalloc;
-
-enum { MIN_TASK_SIZE=32, MAX_TASK_SIZE=16384 };
+//static ff_allocator ffalloc;
 
 
-// generic worker
 class Worker: public ff_node {
 public:
-    // called just one time at the very beginning
-    int svc_init() {
-        std::cout << "Worker << " << pthread_self() << " svc_init called\n";
-        if (ffalloc.register4free()<0) {
-            error("Worker, register4free fails\n");
-            return -1;
-        }
-        return 0;
-    }
-
     void * svc(void * task) {
-        ffalloc.free(task);
-        std::cout << "Worker " << get_my_id() << " freed task\n";
-        // we don't have the collector so we have any task to send out
-        return GO_ON; 
-    }
-    // I don't need the following 
-    //void  svc_end()  {}
-};
+        int * t = (int *)task;
+        std::cout << "Worker id= " << get_my_id() 
+                  << " got task " << *t << "\n";
+        
 
+        if (*t>0) {
+            *t = *t -1;
+            task = t;
+            ff_send_out(task);
+            return GO_ON;
+        } 
+        *t = -1;
+        task = t;
+        return task;
+    }
+};
 
 // the load-balancer filter
 class Emitter: public ff_node {
 public:
-    Emitter(int max_task):ntask(max_task) {
+    Emitter(int streamlen):streamlen(streamlen) {
         srandom(::getpid()+(getusec()%4999));
-        ffalloc.init();
     };
 
     // called just one time at the very beginning
     int svc_init() {
-        std::cout << "Emitter svc_init called\n";
+#if 0
         if (ffalloc.registerAllocator()<0) {
             error("Emitter, registerAllocator fails\n");
             return -1;
         }
+#endif
         return 0;
     }
 
-    void * svc(void *) {
-        size_t size = random() % MAX_TASK_SIZE;
-        if (!size) size=MIN_TASK_SIZE;
-        task_t * task = (task_t*)ffalloc.malloc(size);
-        if (!task) abort();
-        std::cout << "Emitter allocated task size= " << size << "\n";
+    void * svc(void * task) {
+        int * t = (int *)task;
 
-        --ntask;
-        if (ntask<0) return NULL;
+        if (!t) {
+            // start generating the stream...
+            for(int i=0;i<streamlen;++i) {
+                //t = (int *)ffalloc.malloc(sizeof(int));
+                t = (int *)malloc(sizeof(int));
+                *t = i;
+                ff_send_out(t);
+            }
+            task = GO_ON; // we want to go on
+        }
+
         return task;
     }
-
-    // I don't need the following 
-    //void  svc_end()  {}
 private:
-    int ntask;
+    int streamlen;
 };
 
 
-int main(int argc, 
-         char * argv[]) {
-    
-    if (argc<3) {
-        std::cerr << "use: " 
-                  << argv[0] 
-                  << " nworkers streamlen\n";
+// the gatherer filter
+class Collector: public ff_node {
+public:
+    Collector(int streamlen):streamlen(streamlen),cnt(0) {}
+    int svc_init() {
+#if 0
+        if (ffalloc.register4free()<0) {
+            error("Collector, register4free fails\n");
+            return -1;
+        }
+#endif
+        return 0;
+    }
+    void * svc(void * task) {
+        int * t = (int*)task;
+        if (*t != -1) {
+            std::cout << "Collector got task " << *t << " cnt= " << cnt << "\n";
+            return task;
+        }
+
+        if (++cnt == streamlen) {
+            return NULL;
+        }
+        std::cout << "Collector got -1 cnt= " << cnt << "\n";
+        return GO_ON;
+    }
+private:
+    int streamlen;
+    int cnt;
+};
+
+
+
+int main(int argc, char * argv[]) {
+    if (argc!=2) {
+        std::cerr << "use: "  << argv[0] << " streamlen\n";
         return -1;
     }
-    
-    int nworkers=atoi(argv[1]);
-    int streamlen=atoi(argv[2]);
-    
-    if (!nworkers || !streamlen) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
-    }
-    
+
+    int streamlen=atoi(argv[1]);
+
+    // init allocator
+    //ffalloc.init();
+
     ff_farm<> farm;
 
+    Emitter e(streamlen);
+    Collector c(streamlen);
+    farm.add_emitter(&e);
+    farm.add_collector(&c);
+
     std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
+    w.push_back(new Worker);
+    w.push_back(new Worker);
+    w.push_back(new Worker);
     farm.add_workers(w);
-    
-    Emitter E(streamlen);
-    farm.add_emitter(&E);
-    
+
+    farm.wrap_around();
+
     if (farm.run_and_wait_end()<0) {
-        error("running farm\n");
+        error("running pipeline\n");
         return -1;
     }
-    
-    std::cerr << "DONE, time= " << farmTime(GET_TIME) << " (ms)\n";
+
     return 0;
 }

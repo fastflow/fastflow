@@ -26,92 +26,64 @@
  */
 
 /*
- * Very basic test for the FastFlow farm.
+ * Very basic test for the FastFlow pipeline (actually a 2-stage torus).
  *
  */
-#include <vector>
-#include <iostream>
-#include <farm.hpp>
 
+#include <iostream>
+#include <pipeline.hpp>
 
 using namespace ff;
 
-// generic worker
-class Worker: public ff_node {
+
+// generic stage
+class Stage: public ff_node {
 public:
+    Stage(unsigned int streamlen):streamlen(streamlen),sum(0)  {}
+
     void * svc(void * task) {
-        int * t = (int *)task;
-        std::cout << "Worker " << ff_node::get_my_id() 
-                  << " received task " << *t << "\n";
+        unsigned int * t = (unsigned int *)task;
+        
+        if (!t) {
+            t = (unsigned int*)malloc(sizeof(int));
+            if (!t) abort();
+            
+            *t=0;
+            task = t;
+        } else { sum+=*t; *t+=1;}
+
+        if (*t == streamlen) return NULL;
+        task = t;
         return task;
     }
-    // I don't need the following for this test
-    //int   svc_init() { return 0; }
-    //void  svc_end() {}
-
-};
-
-// the gatherer filter
-class Collector: public ff_node {
-public:
-    void * svc(void * task) {
-        int * t = (int *)task;
-        if (*t == -1) return NULL;
-        return task;
+    void  svc_end() {
+        if (ff_node::get_my_id()) 
+            std::cout << "Sum: " << sum << "\n";
     }
-};
 
-// the load-balancer filter
-class Emitter: public ff_node {
-public:
-    Emitter(int max_task):ntask(max_task) {};
-
-    void * svc(void *) {	
-        int * task = new int(ntask);
-        --ntask;
-        if (ntask<0) return NULL;
-        return task;
-    }
 private:
-    int ntask;
+    unsigned int streamlen;
+    unsigned int sum;
 };
 
 
-int main(int argc, 
-         char * argv[]) {
-
-    if (argc<3) {
-        std::cerr << "use: " 
-                  << argv[0] 
-                  << " nworkers streamlen\n";
+int main(int argc, char * argv[]) {
+    if (argc!=2) {
+        std::cerr << "use: "  << argv[0] << " streamlen\n";
         return -1;
     }
     
-    int nworkers=atoi(argv[1]);
-    int streamlen=atoi(argv[2]);
+    // bild a 2-stage pipeline
+    ff_pipeline pipe;
+    pipe.add_stage(new Stage(atoi(argv[1])));
+    pipe.add_stage(new Stage(atoi(argv[1])));
 
-    if (!nworkers || !streamlen) {
-        std::cerr << "Wrong parameters values\n";
+    pipe.wrap_around();
+
+    if (pipe.run_and_wait_end()<0) {
+        error("running pipeline\n");
         return -1;
     }
-    
-    ff_farm<> farm;
-    
-    Emitter E(streamlen);
-    farm.add_emitter(&E);
 
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
-    farm.add_workers(w);
-
-    Collector C;
-    farm.add_collector(&C);
-    
-    if (farm.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
-    }
-    
-    std::cerr << "DONE, time= " << farmTime(GET_TIME) << " (ms)\n";
     return 0;
 }
