@@ -30,3 +30,33 @@ swps3_ff [-h] [-s] [-j num] [-i num] [-e num] [-t num] matrix query db
 You can find the Swiss-Prot protein DB in FASTA format here:
 http://www.uniprot.org/downloads
   
+
+------------------------
+simple_mandelbrot		
+------------------------
+Simple Mandelbrot computes and displays the Mandelbrot set. The application 
+is tougth as a naive example of an embarassingly parallel application on a 
+stream. The mandebrot set is represented as a matrix of pixels. 
+The coordinates of the lines of the complex plane are dispatched by a 
+scheduler thread, which "create a stream" and send its items (lines) to workers
+in a round robin fashion. Workers allocate a raw of pixels, computes the 
+Mandelbrot set for line and then send the raw of pixel to a collector, 
+which gather the lines from all workers and display them on the screen.
+
+The application has been realised in different version: sequential (mandel_seq),
+pthread-based (mandel_pt), using fastflow (mandel_ff), using fastflow 
+with advanced allocator (mandel_ff_mem_all). All applications used the same 
+sequential code, which has been manually copy&pasted.  
+
+This is not a performance test. Performances are very dependent on the graphic 
+subsystem. All versions exploit the same farm paradigm on a stream (notice that this 
+is not necessarily the best way to write the Mandelbrot application with pthreads). 
+
+Command line parameters are:
+mandel_<ver> size niterations retries nworkers
+  size         : size of the pixel matrix
+  niterations  : max number of iterations to compute each point of the set
+  retries      : number of times the experiment is run
+  nworkers     : number of workers used in the computation (threads = nworkers+1)
+
+default values are: 800 2048 1 2

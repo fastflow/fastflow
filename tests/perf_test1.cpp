@@ -58,13 +58,10 @@ protected:
 
 
 public:
+    Worker(int itemsize, int nticks):itemsize(itemsize),nticks(nticks) {}
+
     // called just one time at the very beginning
-    int svc_init(void * args) {
-        if (!args) return -1;
-
-        itemsize=((int*)args)[0];
-        nticks=((int*)args)[1];
-
+    int svc_init() {
         if (ffalloc.register4free()<0) {
             error("Worker, register4free fails\n");
             return -1;
@@ -79,7 +76,7 @@ public:
 
         ffalloc.free(task);
         // we don't have the collector so we have any task to send out
-        return NULL; 
+        return GO_ON; 
     }
 
 private:
@@ -106,7 +103,7 @@ public:
     };
 
     // called just one time at the very beginning
-    int svc_init(void *) {
+    int svc_init() {
         if (ffalloc.registerAllocator()<0) {
             error("Emitter, registerAllocator fails\n");
             return -1;
@@ -152,19 +149,18 @@ int main(int argc, char * argv[]) {
         return -1;
     }
 
-    // here we prepare the arguments that we want to pass to each 
-    // worker thread
-    int * args = (int*)malloc(2*sizeof(int));
-    args[0] = itemsize;
-    args[1] = nticks;
 
     // create the farm object
-    ff_farm<Worker> farm(nworkers, buffer_entries);
-    farm.set_worker_args(args);
+    ff_farm<> farm(buffer_entries);
+    std::vector<ff_node *> w;
+    for(unsigned int i=0;i<nworkers;++i) 
+        w.push_back(new Worker(itemsize,nticks));
+    farm.add_workers(w);
+    
     
     // create and add to the farm the emitter object
     Emitter E(streamlen, itemsize);
-    farm.add_emitter(E);
+    farm.add_emitter(&E);
     
     // let's start
     if (farm.run_and_wait_end()<0) {

@@ -27,7 +27,7 @@
  ****************************************************************************
  */
 
-
+#include <string.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -65,12 +65,16 @@ static inline void Barrier(int init = -1) {
 }
 
 static inline void error(const char * str, ...) {
+    const char err[]="ERROR: ";
     va_list argp;
-
-    //    fprintf(stderr, "%s, line %d: error: ", filename, lineno);
+    char * p=(char *)malloc(strlen(str)+strlen(err)+10);
+    if (!p) abort();
+    strcpy(p,err);
+    strcpy(p+strlen(err), str);
     va_start(argp, str);
-    vfprintf(stderr, str, argp);
+    vfprintf(stderr, p, argp);
     va_end(argp);
+    free(p);
 }
 
 // return current time in usec 

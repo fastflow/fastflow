@@ -1,8 +1,7 @@
 - configure
-- pipeline template
 - ordered farm
 - threads mapper
-- some mini applications (mandelbrot set ? network packet inspection ?)
+- some mini applications (network packet inspection ?)
 
 
 Massimo Torquati

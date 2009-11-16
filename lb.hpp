@@ -34,17 +34,17 @@
 
 namespace ff {
 
-class ff_loadbalancer: public ff_node {
+class ff_loadbalancer: public ff_thread {
     
     enum {TICKS2WAIT=500};
 
 protected:
     
-    void push_eof() {
+    void push_eos() {
         //register int cnt=0;
-        void * eof = (void *)FF_EOS;
+        void * eos = (void *)FF_EOS;
         for(register int i=0;i<nworkers;++i) {
-            while(!workers[i]->push(eof)) {
+            while(!workers[i]->put(eos)) {
                 //if (sched_emitter && (++cnt>PUSH_CNT_EMIT)) { 
                 // cnt=0;sched_yield();}
                 //else 
@@ -59,7 +59,7 @@ protected:
             cnt=0,cnt2=0;
             do {
                 nextw = ++nextw % nworkers;
-                if(workers[nextw]->push(task)) goto out;
+                if(workers[nextw]->put(task)) goto out;
                 else if (++cnt == nworkers) break; 
             } while(1);
             if (fallback) {
@@ -80,36 +80,60 @@ protected:
     }
 
 
+    bool pop(void ** task) {
+        //register int cnt = 0;       
+        while (! buffer->pop(task)) {
+            //    if (ch->thxcore>1) {
+            //if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
+            //else ticks_wait(TICKS2WAIT);
+            //} else 
+            ticks_wait(TICKS2WAIT);
+        } 
+        return true;
+    }
+
+    static bool ff_send_out_emitter(void * task,unsigned int retry,unsigned int ticks, void *obj) {
+        ((ff_loadbalancer *)obj)->schedule_task(task);
+        return true;
+    }
+
 public:
 
-    ff_loadbalancer(int max_num_workers):
+    ff_loadbalancer(int max_num_workers): 
         nworkers(0),max_nworkers(max_num_workers),nextw(0),
         filter(NULL),workers(new ff_node*[max_num_workers]),
-        fallback(NULL),fallback_args(NULL) {}
+        fallback(NULL),buffer(NULL),skip1pop(false) {}
 
     ~ff_loadbalancer() {
         if (workers) delete [] workers;
     }
 
-    int set_filter(ff_node & f) { 
+    int set_filter(ff_node * f) { 
         if (filter) {
             error("LB, setting collector filter\n");
             return -1;
         }
-        filter = &f;
+        filter = f;
+        filter->registerCallback(ff_send_out_emitter, this);
+
         return 0;
     }
 
-    int set_fallback(ff_node * fb, void * args) {
+    int set_fallback(ff_node * fb) {
         if (fallback) {
             error("LB, setting fallback\n");
             return -1;
         }
         fallback = fb;
-        fallback_args = args;
 
         return 0;
     }
+
+    void set_in_buffer(SWSR_Ptr_Buffer * const buff) { buffer=buff;}
+
+    SWSR_Ptr_Buffer * const get_in_buffer() const { return buffer;}
+    
+    void skipfirstpop() { skip1pop=true;}
 
     int  register_worker(ff_node * w) {
         if (nworkers>=max_nworkers) {
@@ -125,39 +149,51 @@ public:
         return -1;
     }
 
+
     virtual void * svc(void *) {
-        do {
-            void * task = filter->svc(NULL);
-            if (!task) break;
+        void * task = NULL;
+        bool inpresent  = (get_in_buffer() != NULL);
+        bool skipfirstpop = skip1pop;
+         do {
+            if (inpresent) {
+                if (!skipfirstpop) pop(&task);
+                else skipfirstpop=false;
+                                      
+                if (task == (void*)FF_EOS)  break;
+            }
+
+            if (filter) {
+                task = filter->svc(task);
+                if (!task) break;
+                if (task == GO_ON) continue;
+            }            
             schedule_task(task);
         } while(true);
 
-        push_eof();
+        push_eos();
            
         return NULL;
     }
 
-    virtual int svc_init(void *) { 
+    virtual int svc_init() { 
         //double t = 
         farmTime(START_TIME);
         //std::cerr << "Emitter  time= " << t << "\n";
 
-        if (filter->svc_init(NULL) <0) return -1;
-        
-        if (fallback) 
-            fallback->svc_init(fallback_args);
+        if (filter && filter->svc_init() <0) return -1;        
+        if (fallback && fallback->svc_init()<0) return -1;
 
         return 0;
     }
 
     virtual void svc_end() {
-        filter->svc_end();
+        if (filter) filter->svc_end();
         if (fallback) fallback->svc_end();
     }
 
-    int run() {
+    int run(bool=false) {
         for(int i=0;i<nworkers;++i) {
-            if (workers[i]->spawn()<0) {
+            if (workers[i]->run(true)<0) {
                 error("LB, spawning worker thread\n");
                 return -1;
             }
@@ -177,7 +213,7 @@ public:
                 ret = -1;
             }
         if (ff_thread::wait()<0) {
-            error("LB, waiting LB thread, id = %d\n",get_my_id());
+            error("LB, waiting LB thread\n");
             ret = -1;
         }
 
@@ -186,13 +222,14 @@ public:
 
 
 private:
-    int         nworkers;
-    int         max_nworkers;
-    int         nextw;
-    ff_node  *  filter;
-    ff_node **  workers;
-    ff_node  *  fallback;
-    void     *  fallback_args;
+    int                nworkers;
+    int                max_nworkers;
+    int                nextw;
+    ff_node         *  filter;
+    ff_node        **  workers;
+    ff_node         *  fallback;
+    SWSR_Ptr_Buffer *  buffer;
+    bool               skip1pop;
 };
 
 } // namespace ff
