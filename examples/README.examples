@@ -5,7 +5,7 @@ APPLICATIONS:
 swps3 (release 20080605)
 ------------------------
 swps3 is an optimised version of the striped Smith-Waterman local 
-alignment algorith for both the Cell/BE and ×86/x86_64 CPUs
+alignment algorithm for both the Cell/BE and ×86/x86_64 CPUs
 with SSE2 instructions. swps3 has been developed at the Computer Science 
 Department of the ETH Zürich.
 The project website is : http://www.inf.ethz.ch/personal/sadam/swps3/
@@ -21,7 +21,7 @@ swps3_ff [-h] [-s] [-j num] [-i num] [-e num] [-t num] matrix query db
   query : query amino acid sequence in FASTA format
   db    : amino acid sequence data base in FASTA format
   -h    : print help
-  -s    : run the scalar version (without vectorized SSE instructions)
+  -s    : run the scalar version (without vectorised SSE instructions)
   -j num: start num worker threads 
   -i num: gap insertion score (default: 12)
   -e num: gap extension score (default: 2)
@@ -35,8 +35,8 @@ http://www.uniprot.org/downloads
 simple_mandelbrot		
 ------------------------
 Simple Mandelbrot computes and displays the Mandelbrot set. The application 
-is tougth as a naive example of an embarassingly parallel application on a 
-stream. The mandebrot set is represented as a matrix of pixels. 
+has been thought as a naive example of an embarrassingly parallel application
+on a stream. The mandebrot set is represented as a matrix of pixels. 
 The coordinates of the lines of the complex plane are dispatched by a 
 scheduler thread, which "create a stream" and send its items (lines) to workers
 in a round robin fashion. Workers allocate a raw of pixels, computes the 
@@ -45,18 +45,55 @@ which gather the lines from all workers and display them on the screen.
 
 The application has been realised in different version: sequential (mandel_seq),
 pthread-based (mandel_pt), using fastflow (mandel_ff), using fastflow 
-with advanced allocator (mandel_ff_mem_all). All applications used the same 
-sequential code, which has been manually copy&pasted.  
+with FastFlow's memory allocator (mandel_ff_mem_all). 
+All applications use the same sequential code, which has been manually 
+copy&pasted.  
 
-This is not a performance test. Performances are very dependent on the graphic 
-subsystem. All versions exploit the same farm paradigm on a stream (notice that this 
-is not necessarily the best way to write the Mandelbrot application with pthreads). 
+Performances are very dependent on the graphic subsystem. So if you want to test
+performance, please compile all versions with MANDEL_NO_DISPLAY environment 
+variable set (see Makefile). In our tests, the lesser the number of iterations,
+the higher the FastFlow performance is with respect to the mandel_pt version.
 
 Command line parameters are:
-mandel_<ver> size niterations retries nworkers
-  size         : size of the pixel matrix
-  niterations  : max number of iterations to compute each point of the set
-  retries      : number of times the experiment is run
-  nworkers     : number of workers used in the computation (threads = nworkers+1)
+mandel_<ver> size niterations retries nworkers [template-type]
+ size         : size of the pixel matrix
+ niterations  : max number of iterations to compute each point of the set
+ retries      : number of times the experiment is run
+ nworkers     : number of workers used in the computation (threads = nworkers+1)
+ template-type: 0 force not to use the Collector, 1 force to use the Collector
 
-default values are: 800 2048 1 2
+Default values are: 800 1024 1 2 1
+Note that with less than 4 cores, the template-type parameter is set to 0 if 
+not differently specified in the command line.
+
+
+------------------------
+nqueens
+------------------------
+Th N-queens is a problem in which you have to place N queens on an NxN 
+board-size chess such that no queen can attach the others.
+
+The proposed solution is based on a heavily optimised sequential C program
+written by Jeff Somers (the original version is in the file nq.c) 
+using the FastFlow farm template without the Collector module.
+
+The FastFlow version produces a stream of independent tasks corresponding 
+to the initial placement of a number of queens on the board (that initial 
+value correspond to the depth command line parameter). The placement
+of the remaining queens, starting from the initial placement received, 
+is handled by a worker threads.
+
+Performance:
+On a duad quad-cores Xeon E54020 @2.5 GHz we obtained a 7x speedup
+with respect to the very fast Somers's sequential version.
+
+Some numbers:
+board-size problem   sequential time(nq)   FastFlow time (nq_ff)
+    20x20                  7:16:27              1:02:50 
+
+
+Command line parameters of the FastFlow version are:
+nq_ff <width of board> [<num-workers> <depth>]
+ width of board: problem size 
+ num-workers   : number of workers thread used in the computation
+ depth         : initial values of queens to place
