@@ -45,14 +45,25 @@ public:
     typedef lb_t LoadBalancer_t;
     typedef gt_t Gatherer_t;
 
-    ff_farm(int buffer_entries=DEF_BUFF_ENTRIES, 
+    ff_farm(bool input_ch=false,
+            int buffer_entries=DEF_BUFF_ENTRIES, 
             int max_num_workers=DEF_MAX_NUM_WORKERS):
+        has_input_channel(input_ch),
         nworkers(0),
         buffer_entries(buffer_entries),
         max_nworkers(max_num_workers),
         emitter(NULL),collector(NULL),fallback(NULL),
         lb(new LoadBalancer_t(max_num_workers)),gt(NULL),
-        workers(new ff_node*[max_num_workers]) {
+        workers(new ff_node*[max_num_workers]) {      
+  
+        if (has_input_channel) 
+            if (create_input_buffer(buffer_entries)<0) {
+                error("FARM, creating input buffer\n");
+            }
+            else {
+                std::cerr << "Farm: Accelator configuration set\n";
+                inbuffer = lb->get_in_buffer();
+            }
     }
     
     ~ff_farm() { 
@@ -174,6 +185,23 @@ public:
         return (card + 1 + (gt?1:0));
     }
     
+    inline bool offload(void * task,
+                        unsigned int retry=((unsigned int)-1),
+                        unsigned int ticks=ff_loadbalancer::TICKS2WAIT) { 
+        if (inbuffer) {
+            while (! inbuffer->push(task)) {
+                ticks_wait(ff_loadbalancer::TICKS2WAIT);
+            }     
+            return true;
+        }
+        else {
+            if (!has_input_channel) 
+                error("Farm: accelerator is not set, offload not available");
+            else
+                error("Farm: input buffer creation failed");
+            return false;
+        }
+    }    
 protected:
 
     // ff_node interface
@@ -216,6 +244,7 @@ protected:
     }
 
 protected:
+    bool has_input_channel; // for accelerator
     int nworkers;
     int buffer_entries;
     int max_nworkers;
@@ -227,6 +256,9 @@ protected:
     ff_loadbalancer  * lb;
     ff_gatherer      * gt;
     ff_node         ** workers;
+    
+    SWSR_Ptr_Buffer * inbuffer; // for accelerator
+
 };
  
 

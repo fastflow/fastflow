@@ -36,7 +36,7 @@ INCS                 = -I../ -I../atomic
 LIBS                 = -lpthread
 
 INCLUDES             = -I. $(INCS)
-TARGET               = test1 test2 test3 test4 test5 test6 test7 perf_test1 perf_test2
+TARGET               = test1 test2 test3 test4 test5 test6 test7 perf_test1 perf_test2 test_acc_1
 
 
 .PHONY: all clean cleanall distclean install uninstall
@@ -69,6 +69,7 @@ test6:test6.o
 test7:test7.o
 perf_test1:perf_test1.o
 perf_test2:perf_test2.o
+test_acc_1:test_acc_1.o
 
 clean: 
 	-rm -fr *.o *~
