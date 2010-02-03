@@ -37,6 +37,9 @@ class ff_gatherer: public ff_thread {
 
     enum {TICKS2WAIT=1000};
 
+    template <typename T1, typename T2>  friend class ff_farm;
+    friend class ff_pipeline;
+
 protected:
 
     virtual void gather_task(void ** result) {
@@ -47,6 +50,7 @@ protected:
             // FIX!!!!
             //if (sched_collector  && ++cnt>POP_CNT_COLL) { cnt=0; sched_yield();}
             //else 
+            FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
             ticks_wait(TICKS2WAIT);
         } while(1);
 	}
@@ -57,15 +61,32 @@ protected:
              // if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
              //    else ticks_wait(TICKS2WAIT);
              //} else 
+             FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
              ticks_wait(TICKS2WAIT);
          }     
     }
+
+    bool pop(void ** task) {
+        //register int cnt = 0;       
+        if (!get_out_buffer()) return false;
+        while (! buffer->pop(task)) {
+            ticks_wait(TICKS2WAIT);
+        } 
+        return true;
+    }
+
+    bool pop_nb(void ** task) {
+        if (!get_out_buffer()) return false;
+        return buffer->pop(task);
+    }  
+
 
 
 public:
     ff_gatherer(int max_num_workers):
         nworkers(0),max_nworkers(max_num_workers),
-        filter(NULL),workers(new ff_node*[max_num_workers]),buffer(NULL) {}
+        filter(NULL),workers(new ff_node*[max_num_workers]),
+        buffer(NULL) {}
 
     int set_filter(ff_node * f) { 
         if (filter) {
@@ -93,6 +114,8 @@ public:
         int stop=0;
         void * task = NULL;
         bool outpresent  = (get_out_buffer() != NULL);
+
+        gettimeofday(&wtstart,NULL);
         do {
             task = NULL;
             gather_task(&task);
@@ -100,7 +123,7 @@ public:
             else {
                 if (filter)  task = filter->svc(task);
 
-                if (!task) break; // if the filter return NULL we exit immediatly
+                if (!task) break; // if the filter returns NULL we exit immediatly
                 else if (outpresent && (task != GO_ON)) push(task);
             }
         } while(stop<nworkers);
@@ -111,19 +134,19 @@ public:
             push(task);
         }
 
+        gettimeofday(&wtstop,NULL);
         return NULL;
     }
 
     virtual int svc_init() { 
+        gettimeofday(&tstart,NULL);
         if (filter) return filter->svc_init(); 
         return 0;
     }
 
     virtual void svc_end() {
         if (filter) filter->svc_end();
-        //double t = 
-        farmTime(STOP_TIME);
-        //std::cerr << "Collector  time= " << t << "\n";
+        gettimeofday(&tstop,NULL);
     }
 
     int run(bool=false) {  
@@ -134,6 +157,28 @@ public:
         return 0;
     }
 
+    virtual double ffTime() {
+        return diffmsec(tstop,tstart);
+    }
+
+    virtual double wffTime() {
+        return diffmsec(wtstop,wtstart);
+    }
+
+    virtual const struct timeval & getstarttime() const { return tstart;}
+    virtual const struct timeval & getstoptime()  const { return tstop;}
+    virtual const struct timeval & getwstartime() const { return wtstart;}
+    virtual const struct timeval & getwstoptime() const { return wtstop;}
+
+#if defined(TRACE_FASTFLOW)    
+    virtual void ffStats(std::ostream & out) { 
+        out << "Collector: "
+            << "  work-time   : " << wffTime() << "\n"
+            << "  n. tasks    : " << taskcnt   << "\n"
+            << "  n. push lost: " << pushwait  << " (ticks=" << lostpushticks << ")" << "\n"
+            << "  n. pop lost : " << popwait   << " (ticks=" << lostpopticks  << ")" << "\n";
+    }
+#endif
 
 private:
     int               nworkers;
@@ -141,6 +186,19 @@ private:
     ff_node         * filter;
     ff_node        ** workers;
     SWSR_Ptr_Buffer * buffer;
+
+    struct timeval tstart;
+    struct timeval tstop;
+    struct timeval wtstart;
+    struct timeval wtstop;
+
+#if defined(TRACE_FASTFLOW)
+    unsigned long taskcnt;
+    unsigned long lostpushticks;
+    unsigned long pushwait;
+    unsigned long lostpopticks;
+    unsigned long popwait;
+#endif
 };
 
 } // namespace ff

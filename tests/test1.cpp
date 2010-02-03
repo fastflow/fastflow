@@ -45,7 +45,7 @@ public:
                   << " received task " << *t << "\n";
         return task;
     }
-    // I don't need the following for this test
+    // I don't need the following functions for this test
     //int   svc_init() { return 0; }
     //void  svc_end() {}
 
@@ -77,8 +77,7 @@ private:
 };
 
 
-int main(int argc, 
-         char * argv[]) {
+int main(int argc, char * argv[]) {
 
     if (argc<3) {
         std::cerr << "use: " 
@@ -95,14 +94,14 @@ int main(int argc,
         return -1;
     }
     
-    ff_farm<> farm;
+    ff_farm<> farm; // farm object
     
     Emitter E(streamlen);
     farm.add_emitter(&E);
 
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker);
-    farm.add_workers(w);
+    farm.add_workers(w); // add all workers to the farm
 
     Collector C;
     farm.add_collector(&C);
@@ -111,7 +110,8 @@ int main(int argc,
         error("running farm\n");
         return -1;
     }
-    
-    std::cerr << "DONE, time= " << farmTime(GET_TIME) << " (ms)\n";
+    std::cerr << "DONE, time= " << farm.ffTime() << " (ms)\n";
+    farm.ffStats(std::cerr);
+
     return 0;
 }

@@ -469,11 +469,12 @@ private:
 int main(int argc, char** argv) {
     time_t t1, t2;
     int boardsize;
-    int nworkers=1;  // FIX
-    int depth=2;
+    int nworkers=2;  // FIX
+    int depth=2;     // FIX
 
     if (argc == 1 || argc > 4) {
-        printf("FastFlow version by Massimo Torquati of the sequential N Queens program by Jeff Somers.\n");
+        printf("FastFlow version by Massimo Torquati of the sequential\n");
+        printf("N Queens program by Jeff Somers.\n");
         printf("\tallagash98@yahoo.com or jsomers@alumni.williams.edu\n");
         printf("\ttorquati@di.unipi.it or massimotor@gmail.com\n");
         printf("This program calculates the total number of solutions to the N Queens problem.\n");
@@ -500,7 +501,7 @@ int main(int argc, char** argv) {
 
     // init allocator
     ffalloc.init();
-    ff_farm<> farm;    
+    ff_farm<> farm(false, 8192);    
     Emitter E(boardsize, depth);
     farm.add_emitter(&E);
 
@@ -537,6 +538,7 @@ int main(int argc, char** argv) {
         printf("Worker id=%d, nsol=%lld\n", 
                i, ((Worker *)w[i])->getSolutions());
     printf("Stream Len= %ld\n", streamlen);
-    printf("Time: %g (ms)\n", farmTime(GET_TIME));
+    printf("Time: %g (ms)\n", farm.ffTime());
+    farm.ffStats(std::cout);
     return 0;
 }

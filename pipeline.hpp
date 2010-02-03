@@ -34,10 +34,12 @@ namespace ff {
 
 class ff_pipeline: public ff_node {
 public:
-    enum { DEF_BUFF_ENTRIES=256};
+    enum { DEF_IN_BUFF_ENTRIES=512, DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+128)};
 
-    ff_pipeline(int buffer_entries=DEF_BUFF_ENTRIES):
-        buffer_entries(buffer_entries) {}
+    ff_pipeline(int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
+                int out_buffer_entries=DEF_OUT_BUFF_ENTRIES):
+        in_buffer_entries(in_buffer_entries),
+        out_buffer_entries(out_buffer_entries) {}
 
     int add_stage(ff_node * s) {        
         nodes_list.push_back(s);
@@ -51,7 +53,7 @@ public:
             error("PIPE, too few pipeline nodes\n");
             return -1;
         }
-        if (create_input_buffer(buffer_entries)<0)
+        if (create_input_buffer(out_buffer_entries)<0)
             return -1;
         
         if (set_output_buffer(get_in_buffer())<0)
@@ -67,11 +69,11 @@ public:
 
         if (!skip_init) {            
             // set the initial value for the barrier 
-            Barrier(cardinality());        
+            Barrier::instance()->barrier(cardinality());        
         }
         
         for(int i=1;i<nstages;++i) {
-            if (nodes_list[i]->create_input_buffer(buffer_entries)<0) {
+            if (nodes_list[i]->create_input_buffer(in_buffer_entries)<0) {
                 error("PIPE, creating input buffer for node %d\n", i);
                 return -1;
             }
@@ -87,7 +89,7 @@ public:
         for(int i=0;i<nstages;++i) {
             nodes_list[i]->set_id(i);
             if (nodes_list[i]->run(true)<0) {
-                error("ERRO: PIPE, running stage %d\n", i);
+                error("ERROR: PIPE, running stage %d\n", i);
                 return -1;
             }
         }
@@ -120,6 +122,12 @@ public:
         return card;
     }
 
+    double ffTime() {
+        return diffmsec(nodes_list[nodes_list.size()-1]->getstoptime(),
+                        nodes_list[0]->getstarttime());
+    }
+    
+
 protected:
 
     // ff_node interface
@@ -141,7 +149,7 @@ protected:
         int last = nodes_list.size()-1;
         if (!last) return -1;
 
-        if (nodes_list[last]->create_output_buffer(buffer_entries)<0) {
+        if (nodes_list[last]->create_output_buffer(nentries)<0) {
             error("PIPE, creating output buffer for node %d\n",last);
             return -1;
         }
@@ -161,7 +169,8 @@ protected:
     }
 
 private:
-    int buffer_entries;
+    int in_buffer_entries;
+    int out_buffer_entries;
     std::vector<ff_node *> nodes_list;
 };
 

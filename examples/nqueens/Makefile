@@ -28,14 +28,14 @@ CC                   = g++
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O3 -finline-functions
-CXXFLAGS             = -Wall
+CXXFLAGS             = -Wall -DTRACE_FASTFLOW
 CFLAGS               =
 LDFLAGS              = 
 INCS                 = -I$(FF_HOME) -I$(FF_HOME)/atomic
 LIBS                 = -lpthread
 
 INCLUDES             = -I. $(INCS)
-TARGET               = nq_ff nq
+TARGET               = nq_ff nq_ff_acc nq
 
 
 .PHONY: all clean cleanall distclean
@@ -47,6 +47,9 @@ TARGET               = nq_ff nq
 all: $(TARGET)
 
 nq_ff: nq_ff.cpp
+	$(CXX) $(INCS) $(CXXFLAGS) $(OPTIMIZE_FLAGS) $< -o $@ $(LIBS)
+
+nq_ff_acc: nq_ff_acc.cpp
 	$(CXX) $(INCS) $(CXXFLAGS) $(OPTIMIZE_FLAGS) $< -o $@ $(LIBS)
 
 nq: nq.c

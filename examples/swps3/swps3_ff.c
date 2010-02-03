@@ -54,6 +54,7 @@
 #include <farm.hpp>
 #include <spin-lock.hpp>
 
+#include <vector>
 #include <fastflow.h>
 
 using namespace ff; // FastFlow namespace
@@ -79,16 +80,13 @@ unsigned int qCount,dCount,qResidues,dResidues;
 // generic worker
 class Worker: public ff_node {
 public:
-    Worker():oldquery(NULL),profileByte(NULL),profileShort(NULL) {}
+    Worker(SWType  type, Options options, SBMatrix matrix):
+        oldquery(NULL),profileByte(NULL),profileShort(NULL),
+        type(type),options(options),matrix(matrix) {}
 
 
     // called just one time at the very beginning
-    int svc_init(void * _args) {
-        if (!_args) return -1;
-        args_t * args = (args_t *)_args;
-        type = args->type;
-        options = args->options;
-        matrix = args->matrix;
+    int svc_init() {
         ldCount=0; ldResidues=0;
 
         if (ALLOCATOR && ALLOCATOR_REGISTER4FREE) {
@@ -155,7 +153,7 @@ public:
         FREE((char*)task);
 
         // we don't use a collector thread so we have any task to send out
-        return NULL; 
+        return GO_ON; 
     }
 
     void  svc_end()  { 
@@ -188,7 +186,7 @@ public:
         tofree(NULL),oldquery(NULL) {};
     
     // called just one time at the very beginning
-    int svc_init(void *) {
+    int svc_init() {
         if (ALLOCATOR && ALLOCATOR_REGISTER) {
             error("Emitter, registerAllocator fails\n");
             return -1;
@@ -323,8 +321,12 @@ int main( int argc, char * argv[] ){
     qCount=0;qResidues=0;dCount=0;dResidues=0;
 
 	// create the farm object
-	ff_farm<Worker> farm(threads, INPUT_CHANNEL_SLOTS);
-	farm.set_worker_args(&args);
+	ff_farm<> farm(false, INPUT_CHANNEL_SLOTS);
+    std::vector<ff_node *> w;
+    for(int i=0;i<threads;++i) 
+        w.push_back(new Worker(type,options, matrix));
+    farm.add_workers(w);
+    
 	
 	// create and add to the farm the emitter object
 	Emitter E(queryFile,dbFile);
@@ -333,9 +335,9 @@ int main( int argc, char * argv[] ){
     /* If you don't want to use a fallback function in the
      * emitter thread, just comment the following line
      */
-    fallback = new Worker;
+    fallback = new Worker(type,options,matrix);
 
-	farm.add_emitter(E, fallback, &args);
+	farm.add_emitter(&E, fallback);
     
 	// let's start
 	if (farm.run_and_wait_end()<0) {
@@ -343,10 +345,11 @@ int main( int argc, char * argv[] ){
 	    return -1;
 	}
     
-    double time = farmTime(GET_TIME);
+    double time = farm.ffTime();
     
     fprintf(stderr,"%d[%d] x %d[%d]\n", qCount, qResidues, dCount, dResidues );	
     fprintf(stderr,"TIME (ms) = %lf  GCUPS= %lf\n", time, (dResidues/1e6)*(qResidues/time));
+    farm.ffStats(std::cerr);
     fprintf(stderr,"\nDONE\n");
             
 	return 0;

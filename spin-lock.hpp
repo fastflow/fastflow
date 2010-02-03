@@ -34,6 +34,9 @@ namespace ff {
 typedef volatile int lock_t[1];
 enum { UNLOCKED=0 };
 
+static inline void init_unlocked(lock_t l) { l[0]=UNLOCKED;}
+static inline void init_locked(lock_t l)   { l[0]=!UNLOCKED;}
+
 /*
  * NOTE: 
  *  The following 2 functions has been taken from Cilk (version 5.4.6). 

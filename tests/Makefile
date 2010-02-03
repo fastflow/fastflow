@@ -23,20 +23,32 @@
 #
 # ---------------------------------------------------------------------------
 
+ifdef ALLOCATOR
+ALLOC=-D$(shell echo ${ALLOCATOR})
+else
+ALLOC=
+endif
+
+ifeq ($(ALLOC),-DUSE_TBB)
+INCS    += -I. -I${TBB_HOME}/include
+LDFLAGS  = -L ${TBB_HOME}/build/release/
+LIBS    +=  -ltbbmalloc -ltbb
+endif
+
 
 CC                   = gcc 
 CXX 		     = g++ 
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O3 -finline-functions
-CXXFLAGS             = -Wall
+CXXFLAGS             = -Wall -DTRACE_FASTFLOW
 CFLAGS               =
 LDFLAGS              = 
 INCS                 = -I../ -I../atomic
 LIBS                 = -lpthread
 
 INCLUDES             = -I. $(INCS)
-TARGET               = test1 test2 test3 test4 test5 test6 test7 perf_test1 perf_test2 test_acc_1
+TARGET               = test1 test2 test3 test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_freeze test_masterworker test_scheduling test_dt perf_test_alloc1 perf_test_alloc2 perf_test_alloc3
 
 
 .PHONY: all clean cleanall distclean install uninstall
@@ -69,7 +81,19 @@ test6:test6.o
 test7:test7.o
 perf_test1:perf_test1.o
 perf_test2:perf_test2.o
-test_acc_1:test_acc_1.o
+perf_test3:perf_test3.o
+test_accelerator:test_accelerator.o
+test_accelerator2:test_accelerator2.o
+test_freeze:test_freeze.o
+test_masterworker:test_masterworker.o
+test_dt:test_dt.o
+test_scheduling:test_scheduling.o
+perf_test_alloc1:perf_test_alloc1.cpp
+	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+perf_test_alloc2:perf_test_alloc2.cpp
+	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+perf_test_alloc3:perf_test_alloc3.cpp
+	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 clean: 
 	-rm -fr *.o *~

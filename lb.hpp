@@ -28,7 +28,10 @@
  */
 
 
+
 #include <iostream>
+#include <deque>
+
 #include <utils.hpp>
 #include <node.hpp>
 
@@ -39,8 +42,10 @@ class ff_loadbalancer: public ff_thread {
     enum {TICKS2WAIT=500};
 
 protected:
-    
-    void push_eos() {
+    inline bool push_task(void * task, int idx) {
+        return workers[idx]->put(task);
+    }    
+    inline void push_eos() {
         //register int cnt=0;
         void * eos = (void *)FF_EOS;
         for(register int i=0;i<nworkers;++i) {
@@ -48,35 +53,85 @@ protected:
                 //if (sched_emitter && (++cnt>PUSH_CNT_EMIT)) { 
                 // cnt=0;sched_yield();}
                 //else 
-                ticks_wait(TICKS2WAIT);
+                losetime_out();
             }
         }	
     }
 
+    inline int getnworkers() const { return nworkers;}
+    inline ff_node * const getfallback() { return fallback;}
+
+    /* The following functions can be redefined to implement new
+     * scheduling policy.
+     */
+
+    /* return values: -1 no worker selected
+     *                [0..numworkers[ the number of worker selected
+     */
+    virtual inline int selectworker() { return (++nextw % nworkers); }
+
+    /* number of tentative before wasting some times and than retry */
+    virtual inline int ntentative() { return nworkers;}
+
+    virtual inline void losetime_out() { 
+        FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
+        ticks_wait(TICKS2WAIT); 
+    }
+
+    virtual inline void losetime_in() { 
+        FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
+        ticks_wait(TICKS2WAIT); 
+    }
+
+    /* main scheduling function also called by ff_send_out! */
     virtual int schedule_task(void * task) {
         register int cnt,cnt2;
         do {
             cnt=0,cnt2=0;
             do {
-                nextw = ++nextw % nworkers;
-                if(workers[nextw]->put(task)) goto out;
-                else if (++cnt == nworkers) break; 
+                nextw = selectworker();
+                if(workers[nextw]->put(task)) {
+                    FFTRACE(++taskcnt);
+                    return nextw;
+                }
+                else {
+                    //std::cerr << ".";
+                    if (++cnt == ntentative()) break; 
+                }
             } while(1);
             if (fallback) {
                 nextw=-1;
-                //std::cerr << "exec fallback task= " << ((int*)task)[0] << "\n";
+                //std::cerr << "exec fallback\n";
                 fallback->svc(task);
-                goto out;
+                return nextw;
             }
-            else {
-                // FIX!!!
-                //if (sched_emitter && (++cnt2>PUSH_CNT_EMIT)) { cnt2=0; sched_yield();}
-                //else 
-                ticks_wait(TICKS2WAIT);
-            }
+            else losetime_out();
+            //std::cerr << "-";
         } while(1);
-    out: ;
         return nextw;
+    }
+
+    
+    virtual std::deque<ff_node *>::iterator  collect_task(void ** task, 
+                                                           std::deque<ff_node *> & availworkers,
+                                                           std::deque<ff_node *>::iterator & start) {
+        register int cnt, nw=(availworkers.end()-availworkers.begin());
+        const std::deque<ff_node *>::iterator & ite(availworkers.end());
+        do {
+            cnt=0;
+            do {
+                if (++start == ite) start=availworkers.begin();
+                if((*start)->get(task)) return start;
+                else if (++cnt == nw) {
+                    if (buffer && buffer->pop(task)) {
+                        return ite;
+                    }
+                    break;
+                }
+            } while(1);
+            losetime_in();
+        } while(1);
+        return ite;
     }
 
 
@@ -87,7 +142,7 @@ protected:
             //if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
             //else ticks_wait(TICKS2WAIT);
             //} else 
-            ticks_wait(TICKS2WAIT);
+            losetime_in();
         } 
         return true;
     }
@@ -100,9 +155,11 @@ protected:
 public:
 
     ff_loadbalancer(int max_num_workers): 
-        nworkers(0),max_nworkers(max_num_workers),nextw(0),
+        nworkers(0),max_nworkers(max_num_workers),nextw(0),nextINw(0),
         filter(NULL),workers(new ff_node*[max_num_workers]),
-        fallback(NULL),buffer(NULL),skip1pop(false) {}
+        fallback(NULL),buffer(NULL),skip1pop(false),master_worker(false) {
+        FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0);
+    }
 
     ~ff_loadbalancer() {
         if (workers) delete [] workers;
@@ -134,7 +191,18 @@ public:
     SWSR_Ptr_Buffer * const get_in_buffer() const { return buffer;}
     
     void skipfirstpop() { skip1pop=true;}
+    
+    int  set_masterworker() {
+        if (master_worker) {
+            error("LB, master_worker flag already set\n");
+            return -1;
+        }
+        master_worker=true;
+        return 0;
+    }
 
+    const bool masterworker() const { return master_worker;}
+    
     int  register_worker(ff_node * w) {
         if (nworkers>=max_nworkers) {
             error("LB, max number of workers reached (max=%d)\n",max_nworkers);
@@ -154,31 +222,83 @@ public:
         void * task = NULL;
         bool inpresent  = (get_in_buffer() != NULL);
         bool skipfirstpop = skip1pop;
-         do {
-            if (inpresent) {
-                if (!skipfirstpop) pop(&task);
-                else skipfirstpop=false;
-                                      
-                if (task == (void*)FF_EOS)  break;
-            }
 
-            if (filter) {
-                task = filter->svc(task);
-                if (!task) break;
-                if (task == GO_ON) continue;
-            }            
-            schedule_task(task);
-        } while(true);
+        gettimeofday(&wtstart,NULL);
+        if (!master_worker) {
+            do {
+                if (inpresent) {
+                    if (!skipfirstpop) pop(&task);
+                    else skipfirstpop=false;
+                    
+                    if (task == (void*)FF_EOS)  break;
+                }
+                
+                if (filter) {
+                    task = filter->svc(task);
+                    if (!task) break; // if the filter returns NULL we exit immediatly
+                    if (task == GO_ON) continue;
+                } 
+                
+                schedule_task(task);
+            } while(true);
 
-        push_eos();
-           
+            push_eos();
+        } else {
+            int nw=nworkers;
+
+            // contains current worker
+            std::deque<ff_node *> availworkers; 
+            for(int i=0;i<nworkers;++i)
+                availworkers.push_back(workers[i]);
+
+            std::deque<ff_node *>::iterator start(availworkers.begin());
+            std::deque<ff_node *>::iterator victim(availworkers.begin());
+            do {
+                if (!skipfirstpop) {  
+                    victim=collect_task(&task, availworkers, start);                    
+                } else skipfirstpop=false;
+                
+                if (task == (void*)FF_EOS) {
+                    if (victim == availworkers.end())  push_eos();
+                    else {
+                        availworkers.erase(victim);
+                        start=availworkers.begin(); // restart iterator
+                        --nw;
+                    }
+                    if (!nw) break; // received all EOS, exit
+                } else {
+                    if (filter) {
+#if 0
+                    bho:
+#endif
+                        task = filter->svc(task);
+                        if (!task) {
+                            push_eos();
+                            break; // if the filter returns NULL we exit immediatly
+                        }
+                        if (task == GO_ON) continue;
+
+#if 0
+                        // RIVEDERE
+                        //-----------------------
+                        task = fallback->svc(task);
+                        if (task == GO_ON) continue;
+
+                        goto bho;
+                        //---------------------------
+#endif                        
+
+                    }
+                    schedule_task(task);
+                }
+            } while(1);
+        }
+        gettimeofday(&wtstop,NULL);
         return NULL;
     }
 
     virtual int svc_init() { 
-        //double t = 
-        farmTime(START_TIME);
-        //std::cerr << "Emitter  time= " << t << "\n";
+        gettimeofday(&tstart,NULL);
 
         if (filter && filter->svc_init() <0) return -1;        
         if (fallback && fallback->svc_init()<0) return -1;
@@ -189,6 +309,7 @@ public:
     virtual void svc_end() {
         if (filter) filter->svc_end();
         if (fallback) fallback->svc_end();
+        gettimeofday(&tstop,NULL);
     }
 
     int run(bool=false) {
@@ -198,6 +319,10 @@ public:
                 return -1;
             }
         }
+        if (isfrozen()) 
+            for(int i=0;i<nworkers;++i) workers[i]->freeze();
+        
+
         if (this->spawn()<0) {
             error("LB, spawning LB thread\n");
             return -1;
@@ -220,16 +345,76 @@ public:
         return ret;
     }
 
+    int wait_freezing() {
+        int ret=0;
+        for(int i=0;i<nworkers;++i)
+            if (workers[i]->wait_freezing()<0) {
+                error("LB, waiting freezing of worker thread, id = %d\n",workers[i]->get_my_id());
+                ret = -1;
+            }
+        if (ff_thread::wait_freezing()<0) {
+            error("LB, waiting LB thread freezing\n");
+            ret = -1;
+        }
+        return ret;
+    }
+
+    void freeze() {
+        for(int i=0;i<nworkers;++i) workers[i]->freeze();
+        ff_thread::freeze();
+    }
+
+    void thaw() {
+        for(int i=0;i<nworkers;++i) workers[i]->thaw();
+        ff_thread::thaw();
+    }
+
+    virtual double ffTime() {
+        return diffmsec(tstop,tstart);
+    }
+
+    virtual double wffTime() {
+        return diffmsec(wtstop,wtstart);
+    }
+    virtual const struct timeval & getstarttime() const { return tstart;}
+    virtual const struct timeval & getstoptime()  const { return tstop;}
+    virtual const struct timeval & getwstartime() const { return wtstart;}
+    virtual const struct timeval & getwstoptime() const { return wtstop;}
+    
+#if defined(TRACE_FASTFLOW)    
+    virtual void ffStats(std::ostream & out) { 
+        out << "Emitter: "
+            << "  work-time   : " << wffTime() << "\n"
+            << "  n. tasks    : " << taskcnt   << "\n"
+            << "  n. push lost: " << pushwait  << " (ticks=" << lostpushticks << ")" << "\n"
+            << "  n. pop lost : " << popwait   << " (ticks=" << lostpopticks  << ")" << "\n";
+    }
+#endif
 
 private:
     int                nworkers;
     int                max_nworkers;
-    int                nextw;
+    int                nextw;   // out index
+    int                nextINw; // in index, used only in master-worker mode
     ff_node         *  filter;
     ff_node        **  workers;
     ff_node         *  fallback;
     SWSR_Ptr_Buffer *  buffer;
     bool               skip1pop;
+    bool               master_worker;
+
+    struct timeval tstart;
+    struct timeval tstop;
+    struct timeval wtstart;
+    struct timeval wtstop;
+
+#if defined(TRACE_FASTFLOW)
+    unsigned long taskcnt;
+    unsigned long lostpushticks;
+    unsigned long pushwait;
+    unsigned long lostpopticks;
+    unsigned long popwait;
+#endif
 };
 
 } // namespace ff

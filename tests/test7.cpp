@@ -39,7 +39,7 @@
 
 using namespace ff;
 
-//static ff_allocator ffalloc;
+static ff_allocator ffalloc;
 
 
 class Worker: public ff_node {
@@ -48,7 +48,6 @@ public:
         int * t = (int *)task;
         std::cout << "Worker id= " << get_my_id() 
                   << " got task " << *t << "\n";
-        
 
         if (*t>0) {
             *t = *t -1;
@@ -71,12 +70,11 @@ public:
 
     // called just one time at the very beginning
     int svc_init() {
-#if 0
         if (ffalloc.registerAllocator()<0) {
             error("Emitter, registerAllocator fails\n");
             return -1;
         }
-#endif
+
         return 0;
     }
 
@@ -106,12 +104,10 @@ class Collector: public ff_node {
 public:
     Collector(int streamlen):streamlen(streamlen),cnt(0) {}
     int svc_init() {
-#if 0
         if (ffalloc.register4free()<0) {
             error("Collector, register4free fails\n");
             return -1;
         }
-#endif
         return 0;
     }
     void * svc(void * task) {
@@ -142,8 +138,8 @@ int main(int argc, char * argv[]) {
 
     int streamlen=atoi(argv[1]);
 
-    // init allocator
-    //ffalloc.init();
+    // init FastFlow allocator
+    ffalloc.init();
 
     ff_farm<> farm;
 

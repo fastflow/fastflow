@@ -68,32 +68,75 @@ not differently specified in the command line.
 
 
 ------------------------
+qt_mandelbrot
+------------------------
+The "QT Mandelbrot"  is an interactive application that computes the 
+Mandelbrot set.  It is part of the Trolltech QT examples and it consists 
+of two classes: RenderThread.cpp, i.e. a QThread subclass that renders the
+Mandelbrot set, and MandelbrotWidget.cpp class, i.e  a QWidget
+subclass that shows the Mandelbrot set on screen and lets the user
+zoom and scroll. During the time where the worker thread is
+recomputing the fractal to reflect the new zoom factor position, the
+main thread simply scales the previously rendered pixmap to provide
+immediate feedback. The result does not look as good as what the worker
+thread eventually ends up providing, but at least it makes the
+application more responsive.
+
+These two instances of the classes are run as QT threads; it shows how
+to use a worker thread to perform heavy computations without blocking
+the main thread's event loop. The application is multithreaded
+(exploiting QT threads) but threads are not used to boost heavy
+computations since the whole computation is done within a single
+thread, but to decouple two or more activities and to enhance
+responsiveness.
+
+Despite it an easy application, the full-fledged parallelization of
+the whole application is not trivial. The two threads synchronise one
+each other via QT events; to guarantee responsiveness the
+MandelbrotWidget thread may start, restart, and abort the
+activity of RenderThread. This kind of behavior, as well as the
+integration with other threading libraries, makes non trivial the
+porting to frameworks such as TBB and OpenMP.
+
+The Fastflow accelerated version just make parallel the
+RenderThread by using a farm accelerator on the outer
+loop that traverse the pixmap of the Mandelbrot set. The farm
+accelerator is created once, then run and frozen each time an interrupt 
+signal is raised from MandelbrotWidget. 
+
+------------------------
 nqueens
 ------------------------
 Th N-queens is a problem in which you have to place N queens on an NxN 
 board-size chess such that no queen can attach the others.
 
 The proposed solution is based on a heavily optimised sequential C program
-written by Jeff Somers (the original version is in the file nq.c) 
-using the FastFlow farm template without the Collector module.
+written by Jeff Somers (the original version is implemented in the file nq.c) 
+using the FastFlow farm skeleton without the Collector module.
 
 The FastFlow version produces a stream of independent tasks corresponding 
-to the initial placement of a number of queens on the board (that initial 
-value correspond to the depth command line parameter). The placement
-of the remaining queens, starting from the initial placement received, 
-is handled by a worker threads.
+to the initial placement of a number of queens on the board (such number
+corresponds to the command line argument 'depth'). The placement of the 
+remaining queens, starting from the initial placement received as a task 
+from the input stream, is handled by one of the worker threads.
 
 Performance:
-On a duad quad-cores Xeon E54020 @2.5 GHz we obtained a 7x speedup
+On a duad quad-cores Xeon E54020 @2.5 GHz we obtained a good speedup
 with respect to the very fast Somers's sequential version.
 
-Some numbers:
-board-size problem   sequential time(nq)   FastFlow time (nq_ff)
-    20x20                  7:16:27              1:02:50 
+Some numbers (command: nq_ff_acc <board-size> 8 4)
+
+board-size  # solutions   seq. time   FastFlow Acc.  Speedup 
+                	     (nq)      (nq_ff_acc)
+18x18        666,090,624     6:52          1:06        6.24
+19x19      4,968,057,848    53:28          8:26        6.34
+20x20     39,029,188,884  7:16:27        1:8:56        6.52
+21x21    314,666,222,712  2.7days        9:48:28       6.69
+
 
 
 Command line parameters of the FastFlow version are:
-nq_ff <width of board> [<num-workers> <depth>]
+nq_ff_acc <width of board> [<num-workers> <depth>]
  width of board: problem size 
- num-workers   : number of workers thread used in the computation
- depth         : initial values of queens to place
+ num-workers   : number of workers thread used in the computation (default: 2)
+ depth         : initial values of queens to place (default: 1)
