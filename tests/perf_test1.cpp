@@ -27,7 +27,7 @@
 
 /*
  * Simple Farm without collector. Tasks are allocated dinamically by the 
- * ff_allocator and all tasks have a fixed size (itemsize*sizeof(int)).
+ * ff_allocator and all tasks have a fixed size (itemsize*sizeof(task_t)).
  *
  */
 
@@ -35,6 +35,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 
+#include <vector>
 #include <iostream>
 #include <farm.hpp>
 #include <allocator.hpp>
@@ -72,7 +73,7 @@ public:
     void * svc(void * t) {
         task_t * task = (task_t *)t;
 
-        do_work(&task[1],itemsize,nticks);
+        do_work(task,itemsize,nticks);
 
         ffalloc.free(task);
         // we don't have the collector so we have any task to send out
@@ -91,14 +92,12 @@ protected:
 
     inline void filltask(int * task, size_t size) {
         static int val = 0;
-        ++val;
         for(register unsigned int i=0;i<size;++i)
-            task[i]=val;
+            task[i]=val++;
     }
 
 public:
     Emitter(int max_task, int itemsize):ntask(max_task),itemsize(itemsize) {
-        srandom(::getpid()+(getusec()%4999));
         ffalloc.init();
     };
 
@@ -112,10 +111,11 @@ public:
     }
 
     void * svc(void *) {
-        task_t * task = (task_t*)ffalloc.malloc(itemsize*sizeof(int));
+        static int n=0;
+        task_t * task = (task_t*)ffalloc.malloc(itemsize*sizeof(task_t));
         if (!task) abort();
         filltask(&task[1], itemsize-1);
-        task[0] = 0;
+        task[0] = n++;
         --ntask;
         if (ntask<0) return NULL;
         return task;
@@ -130,7 +130,7 @@ private:
 
 
 int main(int argc, char * argv[]) {    
-    if (argc<3) {
+    if (argc<6) {
         std::cerr 
             << "use: "  << argv[0] 
             << " num-buffer-entries streamlen num-integer-x-item #n nticks\n";
@@ -149,9 +149,8 @@ int main(int argc, char * argv[]) {
         return -1;
     }
 
-
     // create the farm object
-    ff_farm<> farm(buffer_entries);
+    ff_farm<> farm(false, buffer_entries);
     std::vector<ff_node *> w;
     for(unsigned int i=0;i<nworkers;++i) 
         w.push_back(new Worker(itemsize,nticks));
@@ -168,6 +167,6 @@ int main(int argc, char * argv[]) {
         return -1;
     }
     
-    std::cerr << "DONE, time= " << farmTime(GET_TIME) << " (ms)\n";
+    std::cerr << "DONE, time= " << farm.ffTime() << " (ms)\n";
     return 0;
 }

@@ -1,7 +1,7 @@
 FastFlow
 ^^^^^^^^
 
-FastFlow is a multi-cores programmin framework implemented as a C++ template 
+FastFlow is a multi-cores programming framework implemented as a C++ template 
 library that offers a set of mechanisms to support low-latency and 
 high-bandwidth data flows in a network of threads running on
 a cache-coherent multi-core architectures. On these architectures, one of the 

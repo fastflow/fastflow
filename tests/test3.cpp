@@ -80,10 +80,14 @@ int main(int argc, char * argv[]) {
 
     pipe.wrap_around();
 
+    ffTime(START_TIME);
     if (pipe.run_and_wait_end()<0) {
         error("running pipeline\n");
         return -1;
     }
+    ffTime(STOP_TIME);
 
+    std::cerr << "DONE, pipe  time= " << pipe.ffTime() << " (ms)\n";
+    std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
     return 0;
 }

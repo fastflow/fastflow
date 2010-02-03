@@ -136,12 +136,14 @@ int main(int argc,
     
     Emitter E(streamlen);
     farm.add_emitter(&E);
-    
+
+    ffTime(START_TIME);
     if (farm.run_and_wait_end()<0) {
         error("running farm\n");
         return -1;
     }
-    
-    std::cerr << "DONE, time= " << farmTime(GET_TIME) << " (ms)\n";
+    ffTime(STOP_TIME);
+    std::cerr << "DONE, farm  time= " << farm.ffTime() << " (ms)\n";
+    std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
     return 0;
 }

@@ -48,22 +48,6 @@ static inline ticks ticks_wait(ticks t1) {
     return delta-t1;
 }
 
-static inline void Barrier(int init = -1) {
-    static int barrier = 0;
-    static pthread_mutex_t bLock = PTHREAD_MUTEX_INITIALIZER;
-    static pthread_cond_t  bCond = PTHREAD_COND_INITIALIZER;
-
-    if (!barrier && init>0) { barrier = init; return; }
-
-    pthread_mutex_lock(&bLock);
-    if (!--barrier) pthread_cond_broadcast(&bCond);
-    else {
-        pthread_cond_wait(&bCond, &bLock);
-        assert(barrier==0);
-    }
-    pthread_mutex_unlock(&bLock);
-}
-
 static inline void error(const char * str, ...) {
     const char err[]="ERROR: ";
     va_list argp;
@@ -97,8 +81,14 @@ static inline const double diffmsec(const struct timeval & a,
     return ((double)(sec*1000)+ (double)usec/1000.0);
 }
 
+static inline bool time_compare(struct timeval & a, struct timeval & b) {
+    double t1= a.tv_sec*1000 + (double)(a.tv_usec)/1000.0;
+    double t2= b.tv_sec*1000 + (double)(b.tv_usec)/1000.0;        
+    return (t1<t2);
+}
 
-static inline double farmTime(int tag) {
+
+static inline double ffTime(int tag) {
     static struct timeval tv_start = {0,0};
     static struct timeval tv_stop  = {0,0};
 

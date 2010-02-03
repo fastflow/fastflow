@@ -74,9 +74,7 @@ protected:
 
 
 public:
-
     Worker(int itemsize, int nticks):itemsize(itemsize),nticks(nticks) {}
-
 
     // called just one time at the very beginning
     int svc_init() {
@@ -129,7 +127,7 @@ public:
 
     void * svc(void *) {
         static int n=0;
-        task_t * task = (task_t*)ffalloc.malloc(itemsize*sizeof(int));
+        task_t * task = (task_t*)ffalloc.malloc(itemsize*sizeof(task_t));
         if (!task) abort();
         filltask(&task[1], itemsize-1);
         task[0] = n++;
@@ -153,7 +151,7 @@ private:
 
 
 int main(int argc, char * argv[]) {    
-    if (argc<3) {
+    if (argc<6) {
         std::cerr 
             << "use: "  << argv[0] 
             << " num-buffer-entries streamlen num-integer-x-item #n nticks\n";
@@ -173,7 +171,7 @@ int main(int argc, char * argv[]) {
     }
 
     // create the farm object
-    ff_farm<> farm(buffer_entries);
+    ff_farm<> farm(false, buffer_entries);
     std::vector<ff_node *> w;
     for(unsigned int i=0;i<nworkers;++i) 
         w.push_back(new Worker(itemsize,nticks));
@@ -190,7 +188,7 @@ int main(int argc, char * argv[]) {
         error("running farm\n");
         return -1;
     }
-        
-    std::cerr << "DONE, time= " << farmTime(GET_TIME) << " (ms)\n";
+    
+    std::cerr << "DONE, time= " << farm.ffTime() << " (ms)\n";
     return 0;
 }
