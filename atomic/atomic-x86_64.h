@@ -58,6 +58,20 @@ static __inline__ void atomic_inc(atomic_t *v)
 		:"m" (v->counter));
 }
 
+/**
+ * atomic64_dec - decrement atomic64 variable
+ * @v: pointer to type atomic64_t
+ *
+ * Atomically decrements @v by 1.
+ */
+static __inline__ void atomic_dec(atomic_t *v)
+{
+	__asm__ __volatile__(
+		LOCK_PREFIX "decq %0"
+		: "=m" (v->counter)
+		: "m" (v->counter));
+}
+
 #define atomic_dec_return(v)  (atomic_sub_return(1,v))
 
 /* An 64bit atomic type */
@@ -98,4 +112,19 @@ static __inline__ void atomic64_inc(atomic64_t *v)
 		:"=m" (v->counter)
 		:"m" (v->counter));
 }
+
+/**
+ * atomic64_dec - decrement atomic64 variable
+ * @v: pointer to type atomic64_t
+ *
+ * Atomically decrements @v by 1.
+ */
+static __inline__ void atomic64_dec(atomic64_t *v)
+{
+	__asm__ __volatile__(
+		LOCK_PREFIX "decq %0"
+		: "=m" (v->counter)
+		: "m" (v->counter));
+}
+
 #endif

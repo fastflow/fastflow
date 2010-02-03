@@ -9,8 +9,7 @@
 
 
 #define DIM 800
-#define MAXCOL 2048
-#define ITERATION 2048
+#define ITERATION 1024
 
 using namespace std;
 

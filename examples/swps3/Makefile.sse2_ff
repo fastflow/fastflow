@@ -5,7 +5,7 @@ ifndef FF_HOME
 FF_HOME=../..
 endif
 
-CFLAGS  ?= -DFAST_FLOW -Wall  -O666 -msse3 -ansi -g3 -fPIC  -fvisibility=hidden
+CFLAGS  ?= -DFAST_FLOW -DTRACE_FASTFLOW -Wall  -O666 -msse3 -ansi -g3 -fPIC  -fvisibility=hidden
 DEFS    ?= -DHAVE_SYSCONF_NPROCESSORS #-DUSE_LIBC_ALLOCATOR 
 LDFLAGS  = 
 CXX     ?= g++

@@ -39,8 +39,7 @@
 #include <math.h>
 
 #define DIM 800
-#define MAXCOL 2048
-#define ITERATION 2048
+#define ITERATION 1024
 
 inline  double diffmsec(struct timeval  a,  struct timeval  b) {
   long sec  = (a.tv_sec  - b.tv_sec);

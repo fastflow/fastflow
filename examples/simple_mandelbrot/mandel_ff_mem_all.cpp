@@ -36,21 +36,22 @@
 
 //#define ALLOCATOR_STATS 1 
 
+#include <unistd.h>
+#include <stdio.h>
 #include <allocator.hpp>
 #include <iostream>
 #include <farm.hpp>
+#include <spin-lock.hpp>
 #include "marX2.h"
 
 
 #define DIM 800
-#define MAXCOL 2048
-#define ITERATION 2048
-
-
+#define ITERATION 1024
 
 using namespace ff;
 
 static ff_allocator * ffalloc = NULL;
+static lock_t lock;
 
 typedef struct item {
   unsigned char * M;
@@ -99,30 +100,56 @@ public:
   }
 };
 
-// the gatherer filter
-class Collector: public ff_node {
+class Worker2: public ff_node {
 public:
-  Collector() {};
-  
-  int svc_init() {
-	if (ffalloc->register4free()<0) {
-	  error("Worker, register4free fails\n");
-	  return -1;
-	}
-	return 0;
-  }
-  
-  void * svc(void * intask) {	  
-	ostream_t * t = (ostream_t *)intask;
-#if !defined(NO_DISPLAY)
-	ShowLine(t->M,dim,t->line); 
-#endif
-	ffalloc->free(t->M);
-	ffalloc->free(t);
+  ~Worker2() {}
 
-	return t;
+  int svc_init() {
+      if (ffalloc->register4free()<0) {
+	  error("Worker2, register4free fails\n");
+	  return -1;
+      }
+      return 0;
+  }
+
+  void * svc(void * intask) {
+	ostream_t * item = (ostream_t *) intask;
+	{
+	  // this is just alpha renamining
+	  int i = 	item->line;
+	  //
+	  int j,k;
+	  double im,a,b,a2,b2,cr;
+	  
+	  im=init_b+(step*i);
+	  for (j=0;j<dim;j++)   {         
+		a=cr=init_a+step*j;
+		b=im;
+		k=0;
+		for (k=0;k<niter;k++)
+		  {
+			a2=a*a;
+			b2=b*b;
+			if ((a2+b2)>4.0) break;
+			b=2*a*b+im;
+			a=a2-b2+cr;
+		  }
+		item->M[j] =  (unsigned char) 255-((k*255/niter)); 
+	  } 
+	}
+	
+#if !defined(NO_DISPLAY)
+	spin_lock(lock);
+	ShowLine(item->M,dim,item->line); 
+	spin_unlock(lock);
+#endif
+	ffalloc->free(item->M);
+	ffalloc->free(item);
+
+	return GO_ON;
   }
 };
+
 
 // the load-balancer filter
 class Emitter: public ff_node {
@@ -159,26 +186,63 @@ private:
 };
 
 
+// the gatherer filter, used only with sufficient number of cores...
+class Collector: public ff_node {
+public:
+  Collector() {};
+  
+  int svc_init() {
+	if (ffalloc->register4free()<0) {
+	  error("Worker, register4free fails\n");
+	  return -1;
+	}
+	return 0;
+  }
+  
+  void * svc(void * intask) {	  
+	ostream_t * t = (ostream_t *)intask;
+#if !defined(NO_DISPLAY)
+	ShowLine(t->M,dim,t->line); 
+#endif
+	ffalloc->free(t->M);
+	ffalloc->free(t);
+
+	return t;
+  }
+};
+
+
 int main(int argc, char ** argv) {
+  int ncores = sysconf(_SC_NPROCESSORS_ONLN);
   int r,retries=1,workers=2;
   double avg=0, var, * runs;
 
   if (argc<5) {
-	printf("Usage: mandel_seq size niterations retries nworkers\n\n\n");
+      printf("Usage: mandel_seq size niterations retries nworkers [0|1]\n\n\n");
+      
   }
   else {
-	dim = atoi(argv[1]);
-	niter = atoi(argv[2]);
-	step = range/((double) dim);
-	retries = atoi(argv[3]);
-	workers = atoi(argv[4]);
+      dim = atoi(argv[1]);
+      niter = atoi(argv[2]);
+      step = range/((double) dim);
+      retries = atoi(argv[3]);
+      workers = atoi(argv[4]);
+      if (argc==6) {
+	  if (atoi(argv[5])) ncores=99;// force to use template with collector
+	  else ncores=2;               // force to use template without collector
+      }	  
   }
 
   runs = (double *) malloc(retries*sizeof(double));
 
   printf("Mandebroot set from (%g+I %g) to (%g+I %g)\n",
 		 init_a,init_b,init_a+range,init_b+range);
-  printf("resolution %d pixel, Max. n. of iterations %d\n",dim*dim,niter);	
+  printf("resolution %d pixel, Max. n. of iterations %d\n",dim*dim,niter);
+
+  if (ncores>=4) 
+      printf("\nNOTE: using farm template WITH the collector module!\n\n");
+  else
+      printf("\nNOTE: using farm template WITHOUT the collector module!\n\n");
 
 #if !defined(NO_DISPLAY)
   SetupXWindows(dim,dim,1,NULL,"FF Mandelbroot");
@@ -192,27 +256,28 @@ int main(int argc, char ** argv) {
   
   for (r=0;r<retries;r++) {
   
-        ff_farm<> farm(dim);
+      ff_farm<> farm(false, dim);
 	std::vector<ff_node *>w;
 	for (int k=0;k<workers;k++)
-	  w.push_back(new Worker);
+	    w.push_back((ncores>=4)? ((ff_node*)new Worker) : ((ff_node*)new Worker2));
 	
 	farm.add_workers(w);
 	
 	Emitter E(dim);	
 	farm.add_emitter(&E);
-	
+
 	Collector C;
-	farm.add_collector(&C);
+	if (ncores>=4) 
+	    farm.add_collector(&C);	
 
 	if (farm.run_and_wait_end()<0) {
 	    error("running farm\n");
 	    return -1;
 	}
   
-	avg += runs[r] = (farmTime(GET_TIME));
+	avg += runs[r] = farm.ffTime();
 	for (int k=0;k<workers;k++)
-	    delete (Worker*)(w[k]);
+	    delete (Worker2*)(w[k]);
 
 	std::cerr << "Run [" << r << "] DONE, time= " <<  runs[r] << " (ms)\n";
   }
