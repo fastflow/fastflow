@@ -1,0 +1,165 @@
+.TH pbzip2 1
+.SH NAME
+pbzip2  \-  parallel bzip2 file compressor, v1.0.5
+.SH SYNOPSIS
+.B pbzip2 
+.RB [ " \-123456789 " ]
+.RB [ " \-b#cdfhklp#qrtvVz " ]
+[
+.I "filenames \&..."
+]
+.SH DESCRIPTION
+.I pbzip2
+is a parallel implementation of the bzip2 block-sorting file
+compressor that uses pthreads and achieves near-linear speedup on SMP
+machines. The output of this version is fully compatible with bzip2 
+v1.0.2 or newer (ie: anything compressed with 
+.I pbzip2
+can be decompressed with bzip2).
+.PP
+.I pbzip2
+should work on any system that has a pthreads compatible C++
+compiler (such as gcc). It has been tested on: Linux, Windows (cygwin),
+Solaris, Tru64/OSF1, HP-UX, and Irix.
+.PP
+The default settings for
+.I pbzip2
+will work well in most cases. The only switch you will likely need to
+use is -d to decompress files and -p to set the # of processors for 
+.I pbzip2
+to use if autodetect is not supported
+on your system, or you want to use a specific # of CPUs.
+.SH OPTIONS
+.TP
+.B \-b#
+Where # is the file block size in 100k (default 9 = 900k)
+.TP
+.B \-c
+Output to standard out (stdout)
+.TP
+.B \-d
+Decompress file
+.TP
+.B \-f
+Force, overwrite existing output file
+.TP
+.B \-h
+Print this help message
+.TP
+.B \-k
+Keep input file, do not delete
+.TP
+.B \-l
+Load average determines max number processors to use
+.TP
+.B \-p#
+Where # is the number of processors (default: autodetect)
+.TP
+.B \-q
+Quiet mode (default)
+.TP
+.B \-r
+Read entire input file into RAM and split between processors
+.TP
+.B \-t
+Test compressed file integrity
+.TP
+.B \-v
+Verbose mode
+.TP
+.B \-V
+Display version info for 
+.I pbzip2 
+then exit
+.TP
+.B \-z
+Compress file (default)
+.TP
+.B \-1..9
+Set BWT block size to 100k .. 900k (default 900k)
+.SH FILE SIZES
+You should be able to compress files larger than 4GB with 
+.I pbzip2.
+.PP
+Files that are compressed with 
+.I pbzip2 
+are broken up into pieces and
+each individual piece is compressed.  This is how 
+.I pbzip2 
+runs faster
+on multiple CPUs since the pieces can be compressed simultaneously.
+The final .bz2 file may be slightly larger than if it was compressed
+with the regular bzip2 program due to this file splitting (usually
+less than 0.2% larger).  Files that are compressed with 
+.I pbzip2 
+will also gain considerable speedup when decompressed using 
+.I pbzip2.
+.PP
+Files that were compressed using bzip2 will not see speedup since
+bzip2 packages the data into a single chunk that cannot be split
+between processors.  If you have a large file that was created with
+bzip2 (say 1.5GB for example) you will likely not be able to
+decompress the file with 
+.I pbzip2 
+since 
+.I pbzip2 
+will try to allocate
+1.5GB of memory to decompress it, and that call might fail depending
+on your system resources.  If the same 1.5GB file had of been
+compressed with 
+.I pbzip2,
+it would decompress fine with 
+.I pbzip2.  
+If you are unable to decompress a file with 
+.I pbzip2 
+due to its size, use the regular bzip2 instead.
+.SH EXAMPLES
+Example 1: pbzip2 myfile.tar
+.PP
+This example will compress the file "myfile.tar" into the compressed file
+"myfile.tar.bz2". It will use the autodetected # of processors (or 2
+processors if autodetect not supported) with the default file block size 
+of 900k and default BWT block size of 900k.
+.PP
+Example 2: pbzip2 -b15k myfile.tar
+.PP
+This example will compress the file "myfile.tar" into the compressed file 
+"myfile.tar.bz2". It will use the autodetected # of processors (or 2 
+processors if autodetect not supported) with a file block size of 1500k 
+and a BWT block size of 900k. The file "myfile.tar" will not be deleted 
+after compression is finished.
+.PP
+Example 3: pbzip2 -p4 -r -5 myfile.tar second*.txt
+.PP
+This example will compress the file "myfile.tar" into the compressed file 
+"myfile.tar.bz2". It will use 4 processors with a BWT block size of 500k. 
+The file block size will be the size of "myfile.tar" divided by 4 (# of 
+processors) so that the data will be split evenly among each processor. 
+This requires you have enough RAM for pbzip2 to read the entire file into 
+memory for compression. Pbzip2 will then use the same options to compress 
+all other files that match the wildcard "second*.txt" in that directory.
+.PP
+Example 4: tar cf myfile.tar.bz2 --use-compress-prog=pbzip2 dir_to_compress/
+.br
+Example 4: tar -c directory_to_compress/ | pbzip2 -c > myfile.tar.bz2
+.PP
+These examples will compress the data being given to pbzip2 via pipe 
+from TAR into the compressed file "myfile.tar.bz2".  It will use the
+autodetected # of processors (or 2 processors if autodetect not
+supported) with the default file block size of 900k and default BWT
+block size of 900k.  TAR is collecting all of the files from the
+"directory_to_compress/" directory and passing the data to pbzip2 as
+it works.
+.PP
+Example 5: pbzip2 -d myfile.tar.bz2
+.PP
+This example will decompress the file "myfile.tar.bz2" into the decompressed 
+file "myfile.tar". It will use the autodetected # of processors (or 2 
+processors if autodetect not supported). The switches -b, -r, and -1..-9 are 
+not valid for decompression.
+.SH "SEE ALSO"
+bzip2(1)
+.SH AUTHOR
+Jeff Gilchrist
+
+http://compression.ca

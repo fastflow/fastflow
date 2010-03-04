@@ -127,4 +127,28 @@ static __inline__ void atomic64_dec(atomic64_t *v)
 		: "m" (v->counter));
 }
 
+static __inline__ void atomic64_add(long i, atomic64_t *v)
+{
+       __asm__ __volatile__(
+	       LOCK_PREFIX "addq %1,%0"
+	       : "=m" (v->counter)
+	       : "ir" (i), "m" (v->counter));
+}
+
+/**
+ * atomic64_sub - subtract the atomic64 variable
+ * @i: integer value to subtract
+ * @v: pointer to type atomic64_t
+ *
+ * Atomically subtracts @i from @v.
+ */
+static __inline__ void atomic64_sub(long i, atomic64_t *v)
+{
+	__asm__ __volatile__(
+		LOCK_PREFIX "subq %1,%0"
+		: "=m" (v->counter)
+		: "ir" (i), "m" (v->counter));
+}
+
+
 #endif

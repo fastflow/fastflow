@@ -52,7 +52,7 @@ protected:
 
     inline int prepare() {
         for(int i=0;i<nworkers;++i) {
-            if (workers[i]->create_input_buffer(in_buffer_entries/nworkers + 1)<0) return -1;
+            if (workers[i]->create_input_buffer((ondemand?1:(in_buffer_entries/nworkers + 1)))<0) return -1;
             if (gt || lb->masterworker()) 
                 if (workers[i]->create_output_buffer(out_buffer_entries/nworkers + DEF_IN_OUT_DIFF)<0) 
                     return -1;
@@ -78,7 +78,7 @@ public:
             int in_buffer_entries=DEF_IN_BUFF_ENTRIES, 
             int out_buffer_entries=DEF_OUT_BUFF_ENTRIES, 
             int max_num_workers=DEF_MAX_NUM_WORKERS):
-        has_input_channel(input_ch),prepared(false),
+        has_input_channel(input_ch),prepared(false),ondemand(false),
         nworkers(0),
         in_buffer_entries(in_buffer_entries),
         out_buffer_entries(out_buffer_entries),
@@ -116,6 +116,19 @@ public:
         if (lb->set_filter(emitter)) return -1;
         return lb->set_fallback(fallback);
     }
+
+    /* The default scheduling policy is round-robin,
+     * When there is a great computational difference among tasks
+     * the round-robin scheduling policy could lead to load imbalance
+     * in worker's workload (expecially with short stream length).
+     * The on-demand scheduling policy can guarantee a near optimal
+     * load balancing in lots of cases.
+     *
+     * Alternatively it is always possible to define a complete 
+     * application-level scheduling by redefining the ff_loadbalancer class.
+     */
+    void set_scheduling_ondemand() { ondemand=true;}
+
 
     int add_workers(std::vector<ff_node *> & w) { 
         if ((nworkers+w.size())> (unsigned int)max_nworkers) {
@@ -296,6 +309,7 @@ public:
 
 #if defined(TRACE_FASTFLOW)
     void ffStats(std::ostream & out) { 
+        out << "--- farm:\n";
         lb->ffStats(out);
         for(int i=0;i<nworkers;++i) workers[i]->ffStats(out);
         if (gt) gt->ffStats(out);
@@ -305,6 +319,7 @@ public:
         out << "FastFlow trace not enabled\n";
     }
 #endif
+    
 protected:
 
     // ff_node interface
@@ -350,6 +365,7 @@ protected:
 protected:
     bool has_input_channel; // for accelerator
     bool prepared;
+    bool ondemand;          // if true, emulate on-demand scheduling
     int nworkers;
     int in_buffer_entries;
     int out_buffer_entries;

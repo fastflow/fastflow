@@ -89,5 +89,6 @@ int main(int argc, char * argv[]) {
 
     std::cerr << "DONE, pipe  time= " << pipe.ffTime() << " (ms)\n";
     std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
+    pipe.ffStats(std::cerr);
     return 0;
 }

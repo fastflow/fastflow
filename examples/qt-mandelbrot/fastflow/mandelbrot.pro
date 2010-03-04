@@ -1,4 +1,5 @@
 INCLUDEPATH +=  ../../..
+INCLUDEPATH +=  ../../../atomic
 VPATH +=  ../../..
 SOURCES += main.cpp
 SOURCES += mandelbrotwidget.cpp

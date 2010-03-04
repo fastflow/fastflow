@@ -1,1 +1,0 @@
-This the QT-mandelbrot example http://doc.trolltech.com/4.1/threads-mandelbrot.html modified to use Fastflow accelerator with the fastflow memory allocator.

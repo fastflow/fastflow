@@ -1,0 +1,65 @@
+Authors of pbzip2
+-----------------
+Jeff Gilchrist (http://gilchrist.ca/jeff/)
+
+- Using modified producer/consumer threading code from
+  Andrae Muys <andrae@humbug.org.au.au>
+- Uses libbzip2 by Julian Seward (http://www.bzip.org/)
+
+
+Contributions
+-------------
+Bryan Stillwell <bryan@bokeoa.com> - code cleanup, RPM spec, and prep work for inclusion in Fedora Extras
+
+Dru Lemley [http://lemley.net/smp.html] - help with large file support
+
+Kir Kolyshkin <kir@sacred.ru> - autodetection for # of CPUs
+
+Joergen Ramskov <joergen@ramskov.org> - initial version of man page
+
+Peter Cordes <peter@cordes.ca> - code cleanup
+
+Kurt Fitzner <kfitzner@excelcia.org> - port to Windows compilers and decompression throttling
+
+Oliver Falk <oliver@linux-kernel.at> - RPM spec update
+
+Jindrich Novy <jnovy@redhat.com> - code cleanup and bug fixes
+
+Benjamin Reed <ranger@befunk.com> - autodetection for # of CPUs in OSX
+
+Chris Dearman <chris@mips.com> - fixed pthreads race condition that led to pthread resources issues when processing large numbers of files and random segfaults
+
+Richard Russon <ntfs@flatcap.org> - help fix decompression bug
+
+Paul Pluzhnikov <paul@parasoft.com> - fixed minor memory leak
+
+Aníbal Monsalve Salazar <anibal@debian.org> - creates and maintains Debian packages
+
+Steve Christensen - creates and maintains Solaris packages (sunfreeware.com)
+
+Alessio Cervellin - creates and maintains Solaris packages (blastwave.org)
+
+Ying-Chieh Liao <ijliao@FreeBSD.org> - created the FreeBSD port
+
+Andrew Pantyukhin <sat@FreeBSD.org> - maintains the FreeBSD ports and willing to resolve any FreeBSD-related problems
+
+Roland Illig <rillig@NetBSD.org> - creates and maintains NetBSD packages
+
+Matt Turner <mattst88@gmail.com> - code cleanup
+
+Álvaro Reguly <alvaro@reguly.com> - RPM spec update to support SUSE Linux
+
+Ivan Voras <ivoras@freebsd.org> - support for stdin and pipes during compression and CPU detect changes
+
+John Dalton <john@johndalton.info> - code cleanup and bug fix for stdin support
+
+Rene Georgi <rene.georgi@online.de> - code and Makefile cleanup, support for direct decompress and bzcat
+
+René Rhéaume & Jeroen Roovers <jer@xs4all.nl> - patch to support uclibc's lack of a getloadavg function
+
+Reinhard Schiedermeier <rs@cs.hm.edu> - support for tar --use-compress-prog=pbzip2
+
+
+Specials thanks for suggestions and testing
+-------------------------------------------
+Phillippe Welsh, James Terhune, Dru Lemley, Bryan Stillwell, George Chalissery, Kir Kolyshkin, Madhu Kangara, Mike Furr, Joergen Ramskov, Kurt Fitzner, Peter Cordes, Oliver Falk, Jindrich Novy, Benjamin Reed, Chris Dearman, Richard Russon, Aníbal Monsalve Salazar, Jim Leonard, Paul Pluzhniko, Robert Archard, Coran Fisher, Ken Takusagawa, David Pyke, Matt Turner, Damien Ancelin, Álvaro Reguly, Ivan Voras, John Dalton, Sami Liedes, Rene Georgi, René Rhéaume, Jeroen Roovers, Reinhard Schiedermeier, Kari Pahula, Elbert Pol.

@@ -39,7 +39,7 @@ namespace ff {
 
 class ff_loadbalancer: public ff_thread {
     
-    enum {TICKS2WAIT=500};
+    enum {TICKS2WAIT=1000};
 
 protected:
     inline bool push_task(void * task, int idx) {
@@ -74,13 +74,21 @@ protected:
     virtual inline int ntentative() { return nworkers;}
 
     virtual inline void losetime_out() { 
-        FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
-        ticks_wait(TICKS2WAIT); 
+        //FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
+        //ticks_wait(TICKS2WAIT); 
+        FFTRACE(register ticks t0 = getticks());
+        usleep(TICKS2WAIT);
+        FFTRACE(register ticks diff=(getticks()-t0));
+        FFTRACE(lostpushticks+=diff;++pushwait);
     }
 
     virtual inline void losetime_in() { 
-        FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
-        ticks_wait(TICKS2WAIT); 
+        //FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
+        //ticks_wait(TICKS2WAIT); 
+        FFTRACE(register ticks t0 = getticks());
+        usleep(TICKS2WAIT);
+        FFTRACE(register ticks diff=(getticks()-t0));
+        FFTRACE(lostpopticks+=diff;++popwait);
     }
 
     /* main scheduling function also called by ff_send_out! */
@@ -134,7 +142,23 @@ protected:
         return ite;
     }
 
+    /* it sends the same task to all workers    
+     *
+     */
+    virtual void broadcast_task(void * task) {
+        std::vector<int> retry;
 
+        for(register int i=0;i<nworkers;++i) {
+            if(!workers[i]->put(task))
+                retry.push_back(i);
+        }
+        while(retry.size()) {
+            if(workers[retry.back()]->put(task))
+                retry.pop_back();
+            else losetime_out();
+        }
+    }
+    
     bool pop(void ** task) {
         //register int cnt = 0;       
         while (! buffer->pop(task)) {
@@ -146,11 +170,12 @@ protected:
         } 
         return true;
     }
-
+    
     static bool ff_send_out_emitter(void * task,unsigned int retry,unsigned int ticks, void *obj) {
         ((ff_loadbalancer *)obj)->schedule_task(task);
         return true;
     }
+
 
 public:
 
@@ -158,7 +183,7 @@ public:
         nworkers(0),max_nworkers(max_num_workers),nextw(0),nextINw(0),
         filter(NULL),workers(new ff_node*[max_num_workers]),
         fallback(NULL),buffer(NULL),skip1pop(false),master_worker(false) {
-        FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0);
+        FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
     }
 
     ~ff_loadbalancer() {
@@ -234,7 +259,17 @@ public:
                 }
                 
                 if (filter) {
+                    FFTRACE(register ticks t0 = getticks());
+
                     task = filter->svc(task);
+
+#if defined(TRACE_FASTFLOW)
+                    register ticks diff=(getticks()-t0);
+                    tickstot +=diff;
+                    ticksmin=std::min(ticksmin,diff);
+                    ticksmax=std::max(ticksmax,diff);
+#endif  
+
                     if (!task) break; // if the filter returns NULL we exit immediatly
                     if (task == GO_ON) continue;
                 } 
@@ -271,7 +306,17 @@ public:
 #if 0
                     bho:
 #endif
+                        FFTRACE(register ticks t0 = getticks());
+
                         task = filter->svc(task);
+
+#if defined(TRACE_FASTFLOW)
+                        register ticks diff=(getticks()-t0);
+                        tickstot +=diff;
+                        ticksmin=std::min(ticksmin,diff);
+                        ticksmax=std::max(ticksmax,diff);
+#endif  
+
                         if (!task) {
                             push_eos();
                             break; // if the filter returns NULL we exit immediatly
@@ -384,10 +429,11 @@ public:
 #if defined(TRACE_FASTFLOW)    
     virtual void ffStats(std::ostream & out) { 
         out << "Emitter: "
-            << "  work-time   : " << wffTime() << "\n"
-            << "  n. tasks    : " << taskcnt   << "\n"
-            << "  n. push lost: " << pushwait  << " (ticks=" << lostpushticks << ")" << "\n"
-            << "  n. pop lost : " << popwait   << " (ticks=" << lostpopticks  << ")" << "\n";
+            << "  work-time (ms): " << wffTime() << "\n"
+            << "  n. tasks      : " << taskcnt   << "\n"
+            << "  svc ticks     : " << tickstot  << " (min= " << (filter?ticksmin:0) << " max= " << ticksmax << ")\n"
+            << "  n. push lost  : " << pushwait  << " (ticks=" << lostpushticks << ")" << "\n"
+            << "  n. pop lost   : " << popwait   << " (ticks=" << lostpopticks  << ")" << "\n";
     }
 #endif
 
@@ -410,10 +456,13 @@ private:
 
 #if defined(TRACE_FASTFLOW)
     unsigned long taskcnt;
-    unsigned long lostpushticks;
+    ticks         lostpushticks;
     unsigned long pushwait;
-    unsigned long lostpopticks;
+    ticks         lostpopticks;
     unsigned long popwait;
+    ticks         ticksmin;
+    ticks         ticksmax;
+    ticks         tickstot;
 #endif
 };
 

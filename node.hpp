@@ -30,7 +30,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <pthread.h>
-
+#include <cycle.h>
 #include <iostream>
 #include <utils.hpp>
 #include <buffer.hpp>
@@ -95,7 +95,9 @@ class ff_thread {
 
 protected:
     ff_thread():stop(true), // only one shot by default
-                freezing(false), frozen(false),thawed(false) {
+                spawned(false),
+                freezing(false), frozen(false),thawed(false),
+                init_error(false) {
         if (pthread_mutex_init(&mutex,NULL)!=0) {
             error("ERROR: ff_thread: pthread_mutex_init fails!\n");
             abort();
@@ -115,8 +117,10 @@ protected:
         Barrier::instance()->barrier();
 
         do {
+            init_error=false;
             if (svc_init()<0) {
                 error("ff_thread, svc_init failed, thread exit!!!\n");
+                init_error=true;
                 break;
             } else  svc(NULL);
             svc_end();
@@ -134,6 +138,13 @@ protected:
 
          
         } while(!stop);
+
+        if (init_error && freezing) {
+            pthread_mutex_lock(&mutex);
+            frozen=true;
+            pthread_cond_signal(&cond_frozen);
+            pthread_mutex_unlock(&mutex);
+        }            
     }
 
 public:
@@ -142,27 +153,32 @@ public:
     virtual void  svc_end()  {}
 
     int spawn() {
+        if (spawned) return -1;
         if (pthread_create(&th_handle, NULL, // FIX: attr management !
                            proxy_thread_routine, this) != 0) {
             perror("pthread_create");
             return -1;
         }
-
+        spawned = true;
         return 0;
     }
    
     int wait() {
         stop=true;
-        if (frozen) thaw();           
+        if (isfrozen()) {
+            wait_freezing();
+            thaw();           
+        }
         pthread_join(th_handle, NULL);
+        spawned=false;
         return 0;
     }
 
     int wait_freezing() {
         pthread_mutex_lock(&mutex);
         while(!frozen) pthread_cond_wait(&cond_frozen,&mutex);
-        pthread_mutex_unlock(&mutex);
-        return 0;
+        pthread_mutex_unlock(&mutex);        
+        return (init_error?-1:0);
     }
 
     void freeze() {  
@@ -189,9 +205,11 @@ public:
 
 private:
     bool            stop;
+    bool            spawned;
     bool            freezing;
     bool            frozen;
     bool            thawed;
+    bool            init_error;
     pthread_t       th_handle;
     pthread_attr_t  attr; // TODO
     pthread_mutex_t mutex; 
@@ -311,10 +329,11 @@ public:
 #if defined(TRACE_FASTFLOW)    
     virtual void ffStats(std::ostream & out) { 
         out << "ID: " << get_my_id()
-            << "  work-time   : " << wffTime() << "\n"
-            << "  n. tasks    : " << taskcnt   << "\n"
-            << "  n. push lost: " << pushwait  << " (ticks=" << lostpushticks << ")" << "\n"
-            << "  n. pop lost : " << popwait   << " (ticks=" << lostpopticks  << ")" << "\n";
+            << "  work-time (ms): " << wffTime() << "\n"
+            << "  n. tasks      : " << taskcnt   << "\n"
+            << "  svc ticks     : " << tickstot  << " (min= " << ticksmin << " max= " << ticksmax << ")\n"
+            << "  n. push lost  : " << pushwait  << " (ticks=" << lostpushticks << ")" << "\n"
+            << "  n. pop lost   : " << popwait   << " (ticks=" << lostpopticks  << ")" << "\n";
     }
 #endif
 
@@ -327,14 +346,15 @@ protected:
         tstop.tv_sec=0;   tstop.tv_usec=0;
         wtstart.tv_sec=0; wtstart.tv_usec=0;
         wtstop.tv_sec=0;  wtstop.tv_usec=0;
-        FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0);
+        FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
     };
-
+    
     virtual  ~ff_node() {
         if (in && myinbuffer)  delete in;
         if (out && myoutbuffer) delete out;
+        if (thread) delete thread;
     };
-
+    
     virtual bool ff_send_out(void * task, 
                              unsigned int retry=((unsigned int)-1),
                              unsigned int ticks=thWorker::TICKS2WAIT) {
@@ -409,9 +429,18 @@ private:
                         break;
                     }
                 }
-
                 FFTRACE(++filter->taskcnt);
+                FFTRACE(register ticks t0 = getticks());
+
                 void * result = filter->svc(task);
+
+#if defined(TRACE_FASTFLOW)
+                register ticks diff=(getticks()-t0);
+                filter->tickstot +=diff;
+                filter->ticksmin=std::min(filter->ticksmin,diff);
+                filter->ticksmax=std::max(filter->ticksmax,diff);
+#endif                
+
                 if (!result) {
                     // NOTE: The EOS is gonna be produced in the output queue
                     // and the thread is exiting even if there might be some tasks
@@ -466,10 +495,13 @@ private:
 
 #if defined(TRACE_FASTFLOW)
     unsigned long taskcnt;
-    unsigned long lostpushticks;
+    ticks         lostpushticks;
     unsigned long pushwait;
-    unsigned long lostpopticks;
+    ticks         lostpopticks;
     unsigned long popwait;
+    ticks         ticksmin;
+    ticks         ticksmax;
+    ticks         tickstot;
 #endif
 
 };

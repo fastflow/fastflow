@@ -5,9 +5,9 @@ APPLICATIONS:
 swps3 (release 20080605)
 ------------------------
 swps3 is an optimised version of the striped Smith-Waterman local 
-alignment algorithm for both the Cell/BE and √ó86/x86_64 CPUs
+alignment algorithm for both the Cell/BE and Å◊86/x86_64 CPUs
 with SSE2 instructions. swps3 has been developed at the Computer Science 
-Department of the ETH Z√ºrich.
+Department of the ETH ZÅ¸rich.
 The project website is : http://www.inf.ethz.ch/personal/sadam/swps3/
 
 We modified the original code in order to use the FastFlow framework.
@@ -121,18 +121,25 @@ remaining queens, starting from the initial placement received as a task
 from the input stream, is handled by one of the worker threads.
 
 Performance:
-On a duad quad-cores Xeon E54020 @2.5 GHz we obtained a good speedup
-with respect to the very fast Somers's sequential version.
 
-Some numbers (command: nq_ff_acc <board-size> 8 4)
+Machine: Duad quad-cores Xeon E5420 @2.5 GHz (8-cores).
+Command: nq_ff_acc <board-size> 8 4
 
 board-size  # solutions   seq. time   FastFlow Acc.  Speedup 
                 	     (nq)      (nq_ff_acc)
 18x18        666,090,624     6:52          1:06        6.24
 19x19      4,968,057,848    53:28          8:26        6.34
-20x20     39,029,188,884  7:16:27        1:8:56        6.52
-21x21    314,666,222,712  2.7days        9:48:28       6.69
+20x20     39,029,188,884  7:16:27       1:08:56        6.52
+21x21    314,666,222,712 ~2.7days       9:48:28        6.69
 
+
+Machine: Dual quad-core Xeon E5520 Nehalem @2.26GHz (8-cores 16-contexts)
+Command: nq_ff_acc <board-size> 16 4
+
+18x18&       666,090,624&      5:53	     34        10.4
+19x19&	   4,968,057,848&     44:56	   4:23        10.2
+20x20&	  39,029,188,884&   6:07:21       35:41        10.3
+21x21&	 314,666,222,712&  ~2.2days     5:07:19        10.3
 
 
 Command line parameters of the FastFlow version are:
@@ -140,3 +147,118 @@ nq_ff_acc <width of board> [<num-workers> <depth>]
  width of board: problem size 
  num-workers   : number of workers thread used in the computation (default: 2)
  depth         : initial values of queens to place (default: 1)
+
+
+------------------------
+cholesky
+------------------------
+The cholesky application performs the Cholesky decomposition on a stream 
+of complex hermitian matrices.
+
+Cholesky factorization, or Cholesky decomposition, is a way to decompose a 
+symmetric, positive-definite hermitian matrix into the product of a lower 
+triangular matrix and its conjugate transpose.
+If a complex matrix A is Hermitian and positive definite, then A can be 
+decomposed as A = LL*, where L is a lower triangular matrix with strictly 
+positive diagonal entries, and L* denotes the conjugate transpose of L.
+The Cholesky decomposition is mainly used for the numerical solution of 
+linear equations Ax = b. We can solve Ax = b by first computing the Cholesky 
+decomposition A = LLT, then solving Ly = b for y, and finally solving LTx = y 
+for x.
+
+There are various methods for calculating the Cholesky decomposition. 
+We have implemented two of them. The first one is the standard version 
+deeply explained in http://en.wikipedia.org/wiki/Cholesky_decomposition. 
+The second one is the block version, which considers the matrix as divided 
+in sub-matrices: the algorithm procedes working on these sub-matrices instead 
+of single elements. A deep explanation of the block variant of Cholesky 
+decomposition can be found in "Programming Matrix Algorithms-by-Blocks for 
+Thread-Level Parallelism" by Gregorio Quintana-OrtÅÏ et al.
+
+We implemented a farm parallelization of both these versions. The emitter 
+distributes the tasks to the workers. Each task is represented by a pointer 
+to an input matrix A and a pointer to a result matrix L. There is no collector 
+filter process: each worker reads inputs and saves results directly on main 
+memory.
+
+.......to be completed.....
+
+------------------------
+matmul
+------------------------
+Simple NxN integer matrix multiplication (A=BxC). 
+The FastFlow version proposed splits the computation in NxN tasks in order to 
+compute the C[i][j] element. Better performance could be obtained splitting 
+the computation in N tasks allowing each worker threads to compute an
+entire row of the C matrix.
+
+Performance for N=1024.
+Machine: Dual quad-core Xeon E5520 Nehalem @2.26GHz (8-cores 16-contexts)
+Command: ff_matmul <nworkers>
+
+Sequential time 10780.9 (ms)
+
+<nworkers>  FastFlow time (ms)   OpenMP time (ms) (gcc 4.4.3)
+     4           3072.01              2767.48
+     8           1495.87              1455.73
+    12           1496.01              1492.87
+    16           1495.74              1433.31
+
+
+------------------------
+pbzip2
+------------------------
+
+PBZIP2 is a parallel implementation by Jeff Gilchrist, of the bzip2 
+block-sorting file compressor that uses pthreads and achieves near-linear 
+speedup on SMP machines. You can find PBZIP2 at http://compression.ca/pbzip2/.
+
+We ported the PBZIP2 code under the FastFlow framework; the source code 
+of the new version can be found in pbzip2_ff.cpp. 
+Our main objective in rewriting the application, were to show how to rewrite  
+a pthread-based task-farm application using FastFlow's task-farm schema. 
+A detailed description of the PBZIP2 algorithm can be found in the paper:
+"Parallel Data Compression with BZIP2" by Jeff Gilchrist available at
+http://gilchrist.ca/jeff/papers/Parallel_BZIP2.pdf
+
+Observe, the main focus of the FastFlow porting is not improving the
+performance of Gilchrist's PBZIP2, which is already very efficient; it
+exhibits nearly optimal speedup. The FastFlow porting rather aims to 
+demonstrate that:
+- FastFlow makes it possible to achieve the parallelisation of the
+problem exploiting high-level parallel patterns instead of a hand-tuned 
+design with almost no performance penalty and productivity gain.
+- Fastflow non-blocking synchronizations exibit reasonable
+performances against traditional blocking synchronizations also in
+worst case scenarios, such as coarse grain elaborations.
+ 
+In this latter respect, imagine a farm schema where you need the collector filter 
+in order to perform some post elaboration (i.e. writing data into files, 
+buffering tasks for maintaining data ordering, etc.). In this case, the 
+non-blocking collector thread might not have anything to compute for long 
+periods of time because worker threads are slow in producing output tasks.
+So, it would be better to stop the collector thread letting it wait to be 
+awoken by one of the workers as soon as there are some tasks to post-elaborate. 
+In these situations, non-blocking behaviour might waste CPU cycles, 
+preventing other threads to do something useful (obviously this 
+could happen mainly in those cases where one have more threads than cores).
+
+We proved that by carefully using FastFlow mechanisms you can obtain almost
+the same linear speedup of the hand-tuned mutex-based version of the same 
+code even in the non optimal case of farm schema with collector filter 
+and coarse grained computation.  
+
+Performance
+Machine: Dual quad-core Xeon E5520 Nehalem @2.26GHz (8-cores 16-contexts)
+Commands: 
+	 pbzip2_ff -k -v -f linux-2.6.32.8.tar           (Compression)
+	 pbzip2_ff -k -v -f -d linux-2.6.32.8.tar.bz2    (Decompression)
+
+
+                 bzip2(v.1.0.3)   pbzip2     pbzip2_ff
+
+Compression          64.25         7.083      7.064
+Decompression        14.67         3.291      3.921
+
+* We executed 10-runs, removed the min and the max values obtained, and 
+  than computed the mean.

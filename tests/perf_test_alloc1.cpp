@@ -27,7 +27,7 @@
 
 /*
  * This test give the possibility to test different memory allocator
- * (libc, TBB, FastFlow, Hoard (compiling for libc and preloading the 
+ * (libc, TBB, FastFlow, Hoard (compiling with USE_STANDARD and preloading the 
  *  Hoard library) )
  */
 
@@ -41,7 +41,7 @@
 
 using namespace ff;
 
-typedef int task_t;
+typedef unsigned long task_t;
 
 
 #if defined(USE_TBB)
@@ -84,7 +84,7 @@ static ff_allocator * ffalloc = 0;
 // generic worker
 class Worker: public ff_node {
 protected:
-    void do_work(int * task, int size, unsigned int nticks) {
+    void do_work(task_t * task, int size, unsigned int nticks) {
         for(register int i=0;i<size;++i)
             task[i]+=1;
         
@@ -124,7 +124,7 @@ class Emitter: public ff_node {
     int val;
 protected:
 
-    inline void filltask(int * task, size_t size) {
+    inline void filltask(task_t * task, size_t size) {
         ++val;
         for(register unsigned int i=0;i<size;++i)
             task[i]=val;
@@ -200,7 +200,7 @@ int main(int argc, char * argv[]) {
         return 0;
     } 
     // create the farm object
-    ff_farm<> farm(false, buffer_entries);
+    ff_farm<> farm(false, buffer_entries*nworkers);
     std::vector<ff_node *> w;
     for(unsigned int i=0;i<nworkers;++i) 
         w.push_back(new Worker(itemsize,nticks));
@@ -217,5 +217,10 @@ int main(int argc, char * argv[]) {
     }
 
     std::cerr << "DONE, time= " << farm.ffTime() << " (ms)\n";
+    farm.ffStats(std::cout);
+#if defined(FF_ALLOCATOR) && defined(ALLOCATOR_STATS)
+    ffalloc->printstats();
+#endif
+
     return 0;
 }
