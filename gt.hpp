@@ -35,23 +35,42 @@ namespace ff {
 
 class ff_gatherer: public ff_thread {
 
-    enum {TICKS2WAIT=1000};
+    enum {TICKS2WAIT=5000};
 
     template <typename T1, typename T2>  friend class ff_farm;
     friend class ff_pipeline;
 
 protected:
 
+    inline int getnworkers() const { return nworkers;}
+
+    /* return values: -1 no worker selected
+     *                [0..numworkers[ the number of worker selected
+     */
+    virtual inline int selectworker() { return (++nextr % nworkers); }
+
+
+    virtual inline void losetime_in() { 
+        //FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
+        //ticks_wait(TICKS2WAIT);
+        
+        FFTRACE(register ticks t0 = getticks());
+        usleep(TICKS2WAIT);
+        FFTRACE(register ticks diff=(getticks()-t0));
+        FFTRACE(lostpopticks+=diff;++popwait);
+    }
+
+    /* try to collect one task from the pool of workers */
     virtual void gather_task(void ** result) {
-        //register int cnt=0;
+        register int i=0;
         do {
-            for(register int nextr=0;nextr<nworkers;++nextr) 
+            do {
+                nextr=selectworker();
                 if (workers[nextr]->get(result)) return;
-            // FIX!!!!
-            //if (sched_collector  && ++cnt>POP_CNT_COLL) { cnt=0; sched_yield();}
-            //else 
-            FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
-            ticks_wait(TICKS2WAIT);
+            } while(i++<nworkers);
+
+            losetime_in();
+            i=0;
         } while(1);
 	}
 
@@ -61,8 +80,12 @@ protected:
              // if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
              //    else ticks_wait(TICKS2WAIT);
              //} else 
-             FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
-             ticks_wait(TICKS2WAIT);
+             //FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
+             //ticks_wait(TICKS2WAIT);
+             FFTRACE(register ticks t0 = getticks());
+             usleep(TICKS2WAIT);
+             FFTRACE(register ticks diff=(getticks()-t0));
+             FFTRACE(lostpushticks+=diff;++pushwait);
          }     
     }
 
@@ -70,7 +93,8 @@ protected:
         //register int cnt = 0;       
         if (!get_out_buffer()) return false;
         while (! buffer->pop(task)) {
-            ticks_wait(TICKS2WAIT);
+            //ticks_wait(TICKS2WAIT);
+            usleep(TICKS2WAIT);
         } 
         return true;
     }
@@ -84,9 +108,11 @@ protected:
 
 public:
     ff_gatherer(int max_num_workers):
-        nworkers(0),max_nworkers(max_num_workers),
+        nworkers(0),max_nworkers(max_num_workers),nextr(0),
         filter(NULL),workers(new ff_node*[max_num_workers]),
-        buffer(NULL) {}
+        buffer(NULL) {
+        FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
+    }
 
     int set_filter(ff_node * f) { 
         if (filter) {
@@ -118,10 +144,23 @@ public:
         gettimeofday(&wtstart,NULL);
         do {
             task = NULL;
-            gather_task(&task);
+            gather_task(&task);            
             if (task == (void *)FF_EOS) ++stop;
             else {
-                if (filter)  task = filter->svc(task);
+                FFTRACE(++taskcnt);
+                if (filter)  {
+                    FFTRACE(register ticks t0 = getticks());
+
+                    task = filter->svc(task);
+
+#if defined(TRACE_FASTFLOW)
+                    register ticks diff=(getticks()-t0);
+                    tickstot +=diff;
+                    ticksmin=std::min(ticksmin,diff);
+                    ticksmax=std::max(ticksmax,diff);
+#endif    
+
+                }
 
                 if (!task) break; // if the filter returns NULL we exit immediatly
                 else if (outpresent && (task != GO_ON)) push(task);
@@ -173,16 +212,18 @@ public:
 #if defined(TRACE_FASTFLOW)    
     virtual void ffStats(std::ostream & out) { 
         out << "Collector: "
-            << "  work-time   : " << wffTime() << "\n"
-            << "  n. tasks    : " << taskcnt   << "\n"
-            << "  n. push lost: " << pushwait  << " (ticks=" << lostpushticks << ")" << "\n"
-            << "  n. pop lost : " << popwait   << " (ticks=" << lostpopticks  << ")" << "\n";
+            << "  work-time (ms): " << wffTime() << "\n"
+            << "  n. tasks      : " << taskcnt   << "\n"
+            << "  svc ticks     : " << tickstot  << " (min= " << (filter?ticksmin:0) << " max= " << ticksmax << ")\n"
+            << "  n. push lost  : " << pushwait  << " (ticks=" << lostpushticks << ")" << "\n"
+            << "  n. pop lost   : " << popwait   << " (ticks=" << lostpopticks  << ")" << "\n";
     }
 #endif
 
 private:
     int               nworkers;
     int               max_nworkers;
+    int               nextr;
     ff_node         * filter;
     ff_node        ** workers;
     SWSR_Ptr_Buffer * buffer;
@@ -194,10 +235,13 @@ private:
 
 #if defined(TRACE_FASTFLOW)
     unsigned long taskcnt;
-    unsigned long lostpushticks;
+    ticks         lostpushticks;
     unsigned long pushwait;
-    unsigned long lostpopticks;
+    ticks         lostpopticks;
     unsigned long popwait;
+    ticks         ticksmin;
+    ticks         ticksmax;
+    ticks         tickstot;
 #endif
 };
 

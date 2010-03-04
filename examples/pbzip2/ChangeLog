@@ -1,0 +1,139 @@
+Changes in 1.0.5 (Jan 08, 2009)
+- Now properly complains about trying to read or write compressed
+  data to terminal, and exits
+- Further fixed CPU detection crash
+- Updated Makefile to force deletion when cleaning
+
+Changes in 1.0.4 (Dec 21, 2008)
+- Added support to use pbzip2 with tar (--use-compress-prog=pbzip2).
+- Added support for all remaining bzip2 command line options so
+  pbzip2 can be used as a drop-in replacement for bzip2.
+- Fixed bug that would cause pbzip2 to crash if detection of the
+  number of processors failed.
+- Now prevents uclibc from being exposed to its lack of a
+  getloadavg function.
+
+Changes in 1.0.3 (Oct 31, 2008)
+- Added support for compression using stdin and pipes!  Thanks
+  to Ivan Voras for supplying the patch to enable this feature.
+- Added support for decompression using stdin and pipes but
+  currently limited to only a single thread
+- Added support for testing bzip2 files using stdin and pipes
+- Added support to directly decompress files without using
+  threads when files are small or the system only has 1 CPU.
+  This mode is also used if the .bz2 file contains only 1
+  bzip2 stream.
+- Added support to compress 0 byte files like bzip2
+- Added support for pbzcat symlink to automatically specify
+  decompression mode to stdout, just like bzcat
+- Increased max supported path and filename from 255 to 2048
+  characters
+- Updated RPM spec to support SUSE Linux
+- Updated help display to show how many CPUs autodetect has found
+- Code cleanup
+
+Changes in 1.0.2 (Jul 25, 2007)
+- Added support to directly compress files without using threads
+  when files are smaller than the specified block size or the
+  system only has 1 CPU.  This will speed things up considerably
+  if you are compressing many small files.  You can also force
+  this behaviour by using -p1
+- Added support for pbunzip2 symlink to automatically specify
+  decompression mode
+- Changed pbzip2 exit code behaviour to match bzip2 for all error
+  states (ie: trying to compress a file that already has a .bz2
+  extension)
+
+Changes in 1.0.1 (Mar 20, 2007)
+- Added #ifdef PBZIP_NO_LOADAVG to remove load average code for
+  UNIX systems that do not support it such as HP-UX and OSF1
+
+Changes in 1.0 (Mar 14, 2007)
+- Official non-beta release!
+- Fixed minor memory leak in queueDelete()
+- Added support for UNIX systems to modify max number of CPUs used
+  based on load average 
+
+Changes in 0.9.6 (Feb 05, 2006)
+- Fixed bug that caused blocks to be missed by decompression
+  routine under certain conditions
+
+Changes in 0.9.5 (Dec 31, 2005)
+- Changed default output to silent like bzip2 and added -v switch
+  to make verbose
+- Added support to autodetect number of CPUs on OSX
+- Added support to compile on Borland and other Windows compilers
+  using pthreads-win32 open source library
+- Added decompression throttling in case too much backlog in filewriter
+- Fixed bug from patch in 0.9.4 that limited file block size to 900k
+- Fixed bug that caused file output to fail with some large files
+- Fixed pthreads race condition that could cause random segfaults
+- Fixed pthreads resource issue that prevented pbzip2 from compressing
+  a large number of files at once
+
+Changes in 0.9.4 (Aug 30, 2005)
+- Fixed major bug that prevented pbzip2 from uncompressing files
+  created with a BWT block size other than default 900k (oops!)
+- Fixed some bugs in the command line parser
+- Code cleanup
+- Updated RPM spec to match Fedora Extras policy
+
+Changes in 0.9.3 (Aug 22, 2005)
+- Added sanity check to ensure integers are the size we expect
+- Ported code to compile under MinGW in Windows
+- Small code cleanup
+- Added ChangeLog
+- Added man page
+- Added AUTHORS file
+- Renamed LICENCE.txt to COPYING
+- Renamed README.txt to README
+- Updated RPM spec file in preparation for inclusion into Fedora Extras
+- Moved ChangeLog info from pbzip2.cpp into this file
+- Removed extra spaces/tabs in pbzip2.cpp
+
+Changes in 0.9.2 (Mar 12, 2005)
+- Created workaround for a major pthreads problem (on Linux at least)
+  that would cause segfaults and missed signals in the pthreads
+- Increased size of BZIP2 header match from 56 bits to 72 bits for more
+  accurate detection
+- Modified some buffers to use the vector class for easier memory
+  management and to eliminate one read pass of the input data for
+  decompression so should be slightly faster
+- Now checks if input file exists before checking if output file
+  already exists (when not using -f)
+- Now checks to ensure input is regular file and not a directory before
+  processing
+- Now deletes input file only if output file exists and is greater than
+  0 bytes (-k will always preserve input file)
+- Now checks input file for bzip2 header before trying to decompress
+  file
+- Minor code cleanup
+
+Changes in 0.9.1 (Jan 29, 2005)
+- Fixed bug: -c switch now implies -k so input file is not deleted when
+  data is output to stdout
+
+Changes in 0.9 (Jan 24, 2005)
+- Added -c switch for data output to stdout
+- Added -t switch to test integrity of compressed data
+- Added autodetection for # of CPUs on supported platforms and made
+  detected value default # CPUs to use
+- Fixed bug where pbzip2 processed 0 byte files
+- Tried to make program exit codes the same as bzip2
+
+Changes in 0.8.3 (Jan 9, 2005)
+- Added support to maintain file metadata
+- Added signal handling to cleanup partial files
+- Added support to process multiple files
+
+Changes in 0.8.2 (Nov 30, 2004)
+- Added support for large (2GB+) files
+- Added version info
+- Made command line input more like bzip2
+- Now checks if file is already .bz2 first
+
+Changes in 0.8.1 (Nov 27, 2004)
+- Fix pthread bug, now works on OSF1, code cleanup
+
+Changes in 0.8 (Sep 6, 2004)
+- Initial public release
