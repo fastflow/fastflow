@@ -143,19 +143,32 @@ private:
 #endif 
 
 
-// it just starts all workers.....
+/* 
+ * You have to extend the ff_loadbalancer....
+ */
+class my_loadbalancer: public ff_loadbalancer {
+public:
+    // this is necessary because ff_loadbalancer has non default parameters....
+    my_loadbalancer(int max_num_workers):ff_loadbalancer(max_num_workers) {}
+
+    void broadcast(void * task) {
+        ff_loadbalancer::broadcast_task(task);
+    }   
+};
+
+
+
+// it just starts all workers than it exits
 class Emitter: public ff_node {
 public:
-    Emitter(int nworkers):nworkers(nworkers) {}
-    void * svc(void * task) {
-        task = GO_ON;
-        for(int i=0;i<nworkers;++i)
-            ff_send_out(task);
-
+    Emitter(my_loadbalancer * const lb):lb(lb) {}
+    void * svc(void * ) {
+        std::cerr << "Emitter received task\n";
+        lb->broadcast(GO_ON);
         return NULL; 
     }
 private:
-    int nworkers;
+    my_loadbalancer * lb;
 };
 
 class Collector: public ff_node {
@@ -201,17 +214,18 @@ int main(int argc, char * argv[]) {
         std::cerr << "DONE, time= " << ffTime(GET_TIME) << " (ms)\n";
         return 0;
     } 
+
     // create the farm object
-    ff_farm<> farm;
+    ff_farm<my_loadbalancer> farm;
+    // create and add emitter object to the farm
+    Emitter E(farm.getlb());
+    farm.add_emitter(&E);
+    
     std::vector<ff_node *> w;
     for(unsigned int i=0;i<nworkers;++i) 
         w.push_back(new Worker(itemsize,ntasks/nworkers));
     farm.add_workers(w);
     
-    
-    // create and add emitter object to the farm
-    Emitter E(nworkers);
-    farm.add_emitter(&E);
     
     Collector C(itemsize);
     farm.add_collector(&C);

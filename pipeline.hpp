@@ -108,6 +108,26 @@ public:
         return ret;
     }
 
+    int wait_freezing(/* timeval */ ) {
+        int ret=0;
+        for(unsigned int i=0;i<nodes_list.size();++i)
+            if (nodes_list[i]->wait_freezing()<0) {
+                error("PIPE, waiting freezing of stage thread, id = %d\n",
+                      nodes_list[i]->get_my_id());
+                ret = -1;
+            } 
+        
+        return ret;
+    } 
+
+    void freeze() {
+        for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->freeze();
+    }
+
+    void thaw() {
+        for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->thaw();
+    }
+    
     int run_and_wait_end() {
         if (run()<0) return -1;           
         wait();
@@ -127,6 +147,17 @@ public:
                         nodes_list[0]->getstarttime());
     }
     
+#if defined(TRACE_FASTFLOW)
+    void ffStats(std::ostream & out) { 
+        out << "--- pipeline:\n";
+        for(unsigned int i=0;i<nodes_list.size();++i)
+            nodes_list[i]->ffStats(out);
+    }
+#else
+    void ffStats(std::ostream & out) { 
+        out << "FastFlow trace not enabled\n";
+    }
+#endif
 
 protected:
 

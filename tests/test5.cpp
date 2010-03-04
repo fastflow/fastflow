@@ -153,5 +153,7 @@ int main(int argc, char * argv[]) {
         return -1;
     }
 
+    pipe.ffStats(std::cout);
+
     return 0;
 }

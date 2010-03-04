@@ -72,7 +72,7 @@ protected:
     inline int selectworker() { return victim; }
 
 public:
-    // this is necessary because of ff_loadbalancer has non default parameters....
+    // this is necessary because ff_loadbalancer has non default parameters....
     my_loadbalancer(int max_num_workers):ff_loadbalancer(max_num_workers) {}
 
     void set_victim(int v) { victim=v;}

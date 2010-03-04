@@ -37,7 +37,21 @@ Note: creato come un sequenziale, si vede da coem viene attraversata la matrice
 #include <farm.hpp>
 #include <node.hpp>
 #include <utils.hpp>
+#include <allocator.hpp>
+
 using namespace ff;
+
+/* Uncomment the following define if you want to test the 
+ * FastFlow memory allocator 
+ */
+//#define USE_FFA
+
+#if defined(USE_FFA)
+static ff_allocator * ffalloc = NULL;
+#endif
+
+
+
 // ----------------------
 
 // Additional classes ---
@@ -56,6 +70,16 @@ typedef struct accelerator_closure {
 class Worker: public ff_node {
 public:
   Worker(RenderThread * const caller):rt(caller){}
+
+#if defined(USE_FFA)
+  int svc_init() {
+      if (ffalloc->register4free()<0) {
+	  error("Worker, register4free fails\n");
+	  return -1;
+      }
+      return 0;
+  }
+#endif
 
   void * svc(void * task) {
 	accelerator_closure_t * t = (accelerator_closure_t *)task;
@@ -94,8 +118,12 @@ public:
 	  }
 	}
 	// -----
-	free(task);
-	return task;
+#if defined(USE_FFA)
+	ffalloc->free(t);
+#else
+	delete t;
+#endif
+	return GO_ON;
   }
 private:
   RenderThread *  rt;
@@ -111,6 +139,23 @@ RenderThread::RenderThread(QObject *parent)
 
   for (int i = 0; i < ColormapSize; ++i)
 	colormap[i] = rgbFromWaveLength(380.0 + (i * 400.0 / ColormapSize));
+
+#if defined(USE_FFA)
+  // register FF allocator
+  std::cout << "Allocator registering \n";
+  ffalloc = new ff_allocator;
+  if (ffalloc && ffalloc->init()<0) {
+	error("cannot build ff_allocator\n");
+	return;
+  }
+  if (ffalloc->registerAllocator()<0) {
+	error("Emitter, registerAllocator fails\n");
+	return;
+  }
+  std::cout << "Allocator registered \n";
+  // ---------  
+#endif
+
 }
 
 RenderThread::~RenderThread()
@@ -146,8 +191,8 @@ void RenderThread::run()
   struct timeval t0,t1;
 
    // FF-additional code - Create and start the accelerator
-  int nworkers = 2;
-  ff_farm<> farm(true /* accelerator set */);
+  int nworkers = sysconf(_SC_NPROCESSORS_ONLN);
+  ff_farm<> farm(true /* accelerator set */, 256*nworkers);
   std::vector<ff_node *> w;
   for(int i=0;i<nworkers;++i) w.push_back(new Worker(this));
   farm.add_workers(w);
@@ -172,9 +217,12 @@ void RenderThread::run()
 	const int NumPasses = 8;
 	int pass = 0;
 	while (pass < NumPasses) {
+
+	  farm.run_then_freeze();
+
 	  gettimeofday(&t0,NULL);
 	 
-	  farm.run_then_freeze();
+	  //farm.run_then_freeze();
 	  //std::cout << "[Renderthread] Farm accelerator started on pass " << pass << "\n";
 	  // -------
 	  
@@ -192,7 +240,11 @@ void RenderThread::run()
 		  reinterpret_cast<uint *>(image.scanLine(y + halfHeight));
 		double ay = centerY + (y * scaleFactor);
 		// --- parameter passing of cycle variables
+#if defined(USE_FFA)
+		accelerator_closure_t * ac = (accelerator_closure_t *)ffalloc->malloc(sizeof(accelerator_closure_t));
+#else
 		accelerator_closure_t * ac = new accelerator_closure_t();
+#endif
 		ac->ay = ay;
 		ac->halfWidth = halfWidth;
 		ac->Limit = Limit;

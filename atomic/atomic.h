@@ -23,6 +23,9 @@
 #include <atomic-i386.h>
 #elif __x86_64__
 #include <atomic-x86_64.h>
+#if !defined(BITS_PER_LONG)
+#define BITS_PER_LONG 64
+#endif
 #elif __ia64__
 #error "IA64 not yet supported"
 #endif
@@ -33,6 +36,9 @@
 #include <atomic-i386.h>
 #elif __x86_64__
 #include <atomic-x86_64.h>
+#if !defined(BITS_PER_LONG)
+#define BITS_PER_LONG 64
+#endif
 #elif __POWERPC__
 #include <atomic-ppc.h>
 #endif
@@ -81,11 +87,27 @@ static inline void atomic_long_dec(atomic_long_t *l)
 	atomic64_dec(v);
 }
 
+static inline void atomic_long_add(long i, atomic_long_t *l)
+{
+        atomic64_t *v = (atomic64_t *)l;
+
+        atomic64_add(i, v);
+}
+
+static inline void atomic_long_sub(long i, atomic_long_t *l)
+{
+        atomic64_t *v = (atomic64_t *)l;
+
+        atomic64_sub(i, v);
+}
+
+
 #else
 
 typedef atomic_t atomic_long_t;
 
 #define ATOMIC_LONG_INIT(i)	ATOMIC_INIT(i)
+
 static inline long atomic_long_read(atomic_long_t *l)
 {
 	atomic_t *v = (atomic_t *)l;
@@ -112,6 +134,21 @@ static inline void atomic_long_dec(atomic_long_t *l)
 	atomic_t *v = (atomic_t *)l;
 
 	atomic_dec(v);
+}
+
+
+static inline void atomic_long_add(long i, atomic_long_t *l)
+{
+        atomic_t *v = (atomic_t *)l;
+
+        atomic_add(i, v);
+}
+
+static inline void atomic_long_sub(long i, atomic_long_t *l)
+{
+        atomic_t *v = (atomic_t *)l;
+
+        atomic_sub(i, v);
 }
 
 #endif

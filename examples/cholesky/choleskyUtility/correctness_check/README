@@ -1,0 +1,18 @@
+This is a simple utility to check a Cholesky decomposition correctness.
+
+It takes in input two matrices saved in two files and print on screen the differences between the two matrices.
+
+Start the program as following:
+
+./check <dim> <file1> <file2> <threshold exp>
+
+Where the arguments are:
+
+dim: size of the matrix
+file1: name (with absolute or relative path) of the first file
+file2: name (with absolute or relative path) of	the second file
+threshold exp: threshold of error expressed as an exponent of 10 power
+
+In example you can check the correctness of a 10x10 matrix factorization with 0.001 precision in the following way:
+
+./check 10 ./matrix1.txt ./matrix2.txt -3

@@ -126,7 +126,9 @@ int main(int argc,
     
     ffalloc.init();
 
-    ff_farm<> farm(false,1,8192);
+    ff_farm<> farm(false,8192,8192);
+    farm.set_scheduling_ondemand(); // set on-demand scheduling policy
+
     Emitter emitter(ntask);
     farm.add_emitter(&emitter);
 
@@ -137,9 +139,8 @@ int main(int argc,
     // set master_worker mode 
     farm.wrap_around();
 
-    farm.run_and_wait_end();
-
-
+    if (farm.run_and_wait_end()<0)
+        abort();
 
     std::cerr << "DONE\n";
     return 0;
