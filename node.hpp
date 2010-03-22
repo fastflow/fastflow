@@ -34,9 +34,17 @@
 #include <iostream>
 #include <utils.hpp>
 #include <buffer.hpp>
+#include <ubuffer.hpp>
 
 
 namespace ff {
+
+#if defined(FF_BOUNDED_BUFFER)
+#define FFBUFFER SWSR_Ptr_Buffer
+#else  // unbounded buffer
+#define FFBUFFER uSWSR_Ptr_Buffer
+#endif
+
 
 enum { FF_EOS=0xffffffff, FF_GO_ON=0x1};
 
@@ -241,7 +249,7 @@ private:
     
     virtual int create_input_buffer(int nentries) {
         if (in) return -1;
-        in = new SWSR_Ptr_Buffer(nentries);        
+        in = new FFBUFFER(nentries);        
         if (!in) return -1;
         myinbuffer=true;
         return (in->init()?0:-1);
@@ -249,19 +257,19 @@ private:
     
     virtual int create_output_buffer(int nentries) {
         if (out) return -1;
-        out = new SWSR_Ptr_Buffer(nentries);        
+        out = new FFBUFFER(nentries);        
         if (!out) return -1;
         myoutbuffer=true;
         return (out->init()?0:-1);
     }
 
-    virtual int set_output_buffer(SWSR_Ptr_Buffer * const o) {
+    virtual int set_output_buffer(FFBUFFER * const o) {
         if (myoutbuffer) return -1;
         out = o;
         return 0;
     }
 
-    virtual int set_input_buffer(SWSR_Ptr_Buffer * const i) {
+    virtual int set_input_buffer(FFBUFFER * const i) {
         if (myinbuffer) return -1;
         in = i;
         return 0;
@@ -296,12 +304,6 @@ private:
     }
     virtual int  cardinality() const { return 1;}
 
-    virtual size_t queuesize(int inout) const {
-        SWSR_Ptr_Buffer * const q = (inout)?get_in_buffer():get_out_buffer();
-        if (q) return q->buffersize();
-        return 0;
-    }
-    
     virtual double ffTime() {
         return diffmsec(tstop,tstart);
     }
@@ -319,8 +321,8 @@ public:
     virtual int   get_my_id() const { return myid; };
     virtual bool  put(void * ptr) { return in->push(ptr);}
     virtual bool  get(void **ptr) { return ((out->pop(ptr)>0)?true:false);}
-    virtual SWSR_Ptr_Buffer * const get_in_buffer() const { return in;}
-    virtual SWSR_Ptr_Buffer * const get_out_buffer() const { return out;}
+    virtual FFBUFFER * const get_in_buffer() const { return in;}
+    virtual FFBUFFER * const get_out_buffer() const { return out;}
 
     virtual const struct timeval & getstarttime() const { return tstart;}
     virtual const struct timeval & getstoptime()  const { return tstop;}
@@ -478,8 +480,8 @@ private:
     };
 
 private:
-    SWSR_Ptr_Buffer * in;
-    SWSR_Ptr_Buffer * out;
+    FFBUFFER         * in;
+    FFBUFFER         * out;
     int               myid;
     bool              myoutbuffer;
     bool              myinbuffer;

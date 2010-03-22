@@ -30,6 +30,9 @@
 /* Simple yet efficient dynamic vector */
 
 #include <stdlib.h>
+#include <new>
+
+namespace ff {
 
 template <typename T>
 class svector {
@@ -40,10 +43,10 @@ public:
     typedef T vector_type;
     
     svector(size_t chunk=SVECTOR_CHUNK):first(0),len(0),cap(0),chunk(chunk) {
-        //npushback=0;npopback=0;nback=0;nreserve=0;
+        reserve(chunk);
     }
     svector(const svector & v):first(0),len(0),cap(0),chunk(v.chunk) {
-        if(v.l) {
+        if(v.len) {
             const_iterator i1=v.begin();
             const_iterator i2=v.end();
             first=(vector_type*)::malloc((i2-i1)*sizeof(vector_type));
@@ -55,7 +58,9 @@ public:
         while(i1!=i2) push_back(*(i1++));
     }
     
-    ~svector() { if(first) {  clear(); ::free(first); }  }
+    ~svector() { 
+        if(first) {  clear(); ::free(first); }  
+    }
     
     svector& operator=(const svector & v) {
         len=0;
@@ -70,7 +75,10 @@ public:
     }
     inline void reserve(size_t newcapacity) {
         if(newcapacity<=cap) return;
-        first=(vector_type*)::realloc(first,sizeof(vector_type)*newcapacity);
+        if (!first)
+            first=(vector_type*)::malloc(sizeof(vector_type)*newcapacity);
+        else 
+            first=(vector_type*)::realloc(first,sizeof(vector_type)*newcapacity);
         cap = newcapacity;
     }
     
@@ -113,6 +121,7 @@ public:
     const_iterator end() const { return first+len; }
     
     vector_type& operator[](size_t n) { 
+        reserve(n+1);
         return first[n]; 
     }
     
@@ -124,5 +133,7 @@ private:
     size_t        cap;   
     size_t        chunk;
 };
+
+}
 
 #endif /* _FF_SVECTOR_HPP_ */

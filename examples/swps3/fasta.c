@@ -127,7 +127,7 @@ EXPORT  FastaLib_ff * ff_openLib( char * filename, ALLOCATOR_T * allocator ) {
     return lib;
 }
 
-
+#if 0
 EXPORT char * ff_readNextSequenceB( FastaLib_ff * lib, char ** db, char ** data, int * len ) {
     if ( feof( lib->fp ) ) {
 	if (len)  *len  = 0;
@@ -187,10 +187,62 @@ EXPORT char * ff_readNextSequenceB( FastaLib_ff * lib, char ** db, char ** data,
     if (data) *data = _data;
     return _db;
 }
+#endif
 
-EXPORT void ff_readNextSequenceA( FastaLib_ff * lib, task_t * const task ){
-    ff_readNextSequenceB(lib, &task->db, &task->dbdata, &task->dbLen);
+EXPORT char * ff_readNextSequence( FastaLib_ff * lib, task_t *& task) {
+    if ( feof( lib->fp ) ) {
+	task->dbLen = 0;
+	task->dbdata = NULL;
+	return NULL;
+    }
+    int sz = MIN_ALLOC-sizeof(task_t);
+    char * pres = task->db;
+    char * _data;
+    
+    if( (*pres = fgetc(lib->fp)) != '>' ) {
+	warning("Missing comment line, trying to continue anyway\n");
+	_data = pres++;
+	goto readseq;
+    } else {
+	fgets( pres, sz, lib->fp );
+	for ( ; *pres && *pres!='\n'; pres++) ;
+	*pres++ = '\0';
+	while ((long)pres&0xf) *pres++ = '\0';
+	_data = pres;
+    }
+
+    int size;
+    while ( ( (*pres = fgetc( lib->fp) ) != '>')  && ( *pres != '\n') ){
+ readseq:
+	size = sz-(pres+1-task->db);
+	if (!size) {
+	    int dataoffset=_data-task->db;
+#if defined(FF_ALLOCATOR)
+	    task = (task_t *)lib->allocator->realloc(task,sz+sizeof(task_t)+STEP_ALLOC);
+#else
+	    task = (task_t *)REALLOC(task,sz+sizeof(task_t)+STEP_ALLOC);
+#endif
+	    task->db = ((char *)task)+sizeof(task_t);
+	    pres = task->db+sz-1;
+	    _data = task->db+dataoffset;
+	    size = STEP_ALLOC;
+	    sz   += size;
+	}	    
+	if( fgets( pres+1, size, lib->fp ) == 0 ) goto finish;
+	for (;*pres && *pres!='\n';pres++)
+	    if ('A'>*pres || *pres>'Z'){
+		error("Invalid character in input sequence '%c'\n", *pres);
+	    }
+    }
+    if (*pres == '>') ungetc( '>', lib->fp );
+    *pres = '\0';
+ finish:
+    task->dbLen  = pres - _data;
+    swps3_translateSequence(_data,task->dbLen,NULL);
+    task->dbdata = _data;
+    return (char *)task;
 }
+
 
 
 EXPORT  void ff_closeLib( FastaLib_ff * lib ){

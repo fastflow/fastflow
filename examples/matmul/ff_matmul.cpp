@@ -114,20 +114,20 @@ int main(int argc,
     ffTime(START_TIME);
 
 #if defined(USE_FFA)
-	const struct { int nslab; int mincachedseg; } _nslabs[N_SLABBUFFER] = { 
-	    { 16384, 8}, { 1, 0}, { 1, 0}, { 1, 0},{ 1, 0}, { 1, 0}, { 1, 0}, { 1, 0}, { 1, 0}}; 
-	std::pair<int,int> nslabs[N_SLABBUFFER];                            
-	for (int i=0;i<N_SLABBUFFER; ++i)                                   
-	    nslabs[i]=std::make_pair(_nslabs[i].nslab, _nslabs[i].mincachedseg); 
+	int nslabs[N_SLABBUFFER] = { N,0,0,0,0,0,0,0,0}; 
     if (ffa.init(nslabs)<0) return -1;
     if (ffa.registerAllocator()<0) return -1;
 #endif
-    ff_farm<> farm(true /* accelerator set */, N*N+nworkers);    
+#if defined(FF_BOUNDED_BUFFER)
+    ff_farm<> farm(true, N*N+nworkers);    
+#else
+    ff_farm<> farm(true, N);    
+#endif
 
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker);
     farm.add_workers(w);    
-    //farm.add_collector(new Collector);
+
     // Now run the accelator asynchronusly
     farm.run_then_freeze();
     for (int i=0;i<N;i++) {
@@ -143,6 +143,10 @@ int main(int argc,
     }
     std::cout << "[Main] EOS arrived\n";
     farm.offload((void *)FF_EOS);
+
+#if defined(USE_FFA)
+    ffa.deregisterAllocator();
+#endif    
     
     // Here join
     farm.wait();  
@@ -152,7 +156,7 @@ int main(int argc,
     std::cerr << "DONE, farm time= " << farm.ffTime() << " (ms)\n";
     std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
     farm.ffStats(std::cerr);
-#if defined(USE_FFA)
+#if defined(USE_FFA) && defined(ALLOCATOR_STATS)
     ffa.printstats();
 #endif
 

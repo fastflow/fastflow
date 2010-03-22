@@ -23,12 +23,13 @@
 #
 # ---------------------------------------------------------------------------
 
-CC                   = gcc 
-CXX 		     = g++ 
+CC                   = gcc
+CXX 		     = g++
 LINK_OPT             = 
 VERSION              = 
-OPTIMIZE_FLAGS       = -O3 -finline-functions
-CXXFLAGS             = -Wall -DALLOCATOR_STATS #-DTRACE_FASTFLOW
+OPTIMIZE_FLAGS       = -O3 -finline-functions 
+OMP_FLAGS 	     = -fopenmp
+CXXFLAGS             = -Wall #-DALLOCATOR_STATS #-DTRACE_FASTFLOW
 CFLAGS               =
 LDFLAGS              = 
 INCS                 = -I../../ -I../../atomic
@@ -43,7 +44,7 @@ ff_matmul:ff_matmul.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 matmul:matmul.cpp
-	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS)
+	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OMP_FLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS)
 
 clean: 
 	-rm -fr *.o *~
