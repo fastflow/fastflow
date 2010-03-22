@@ -123,9 +123,9 @@ public:
         return 0;
     }
 
-    void set_out_buffer(SWSR_Ptr_Buffer * const buff) { buffer=buff;}
+    void set_out_buffer(FFBUFFER * const buff) { buffer=buff;}
 
-    SWSR_Ptr_Buffer * const get_out_buffer() const { return buffer;}
+    FFBUFFER * const get_out_buffer() const { return buffer;}
 
     int  register_worker(ff_node * w) {
         if (nworkers>=max_nworkers) {
@@ -226,7 +226,7 @@ private:
     int               nextr;
     ff_node         * filter;
     ff_node        ** workers;
-    SWSR_Ptr_Buffer * buffer;
+    FFBUFFER        * buffer;
 
     struct timeval tstart;
     struct timeval tstop;

@@ -211,9 +211,9 @@ public:
         return 0;
     }
 
-    void set_in_buffer(SWSR_Ptr_Buffer * const buff) { buffer=buff;}
+    void set_in_buffer(FFBUFFER * const buff) { buffer=buff;}
 
-    SWSR_Ptr_Buffer * const get_in_buffer() const { return buffer;}
+    FFBUFFER * const get_in_buffer() const { return buffer;}
     
     void skipfirstpop() { skip1pop=true;}
     
@@ -445,7 +445,7 @@ private:
     ff_node         *  filter;
     ff_node        **  workers;
     ff_node         *  fallback;
-    SWSR_Ptr_Buffer *  buffer;
+    FFBUFFER        *  buffer;
     bool               skip1pop;
     bool               master_worker;
 

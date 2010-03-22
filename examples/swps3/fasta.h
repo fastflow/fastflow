@@ -52,7 +52,7 @@ void swps3_translateSequence(char *sequence, int seqLen, char table[256]);
 
 typedef struct {
     FILE *fp;
-#if !defined USE_LIBC_ALLOCATOR
+#if defined(FF_ALLOCATOR)
     ff::ff_allocator * allocator;
 #else
     void * allocator;
@@ -60,8 +60,7 @@ typedef struct {
 } FastaLib_ff;
 FastaLib_ff * ff_openLib( char * filename, ALLOCATOR_T * allocator);
 
-void          ff_readNextSequenceA( FastaLib_ff * lib, task_t * const task );
-char        * ff_readNextSequenceB( FastaLib_ff * lib, char ** db, char ** data, int * len );
+char *        ff_readNextSequence( FastaLib_ff * lib, task_t *& task );
 
 void          ff_closeLib( FastaLib_ff * lib );
 

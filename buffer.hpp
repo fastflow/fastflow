@@ -42,16 +42,21 @@
 
 #include <sysdep.h>
 
+namespace ff {
+// 64bytes is the common size of a cache line
+static const int longxCacheLine = (64/sizeof(long));
+
 class SWSR_Ptr_Buffer {
 private:
     // Padding is required to avoid false-sharing between 
     // core's private cache
     volatile unsigned long    pread;
-    long                      padding[15];
+    long padding1[longxCacheLine-1];
     volatile unsigned long    pwrite;
-    long                      padding2[15];
+    long padding2[longxCacheLine-1];
     const    size_t           size;
     void                   ** buf;
+    
 public:
     SWSR_Ptr_Buffer(size_t n):
         pread(0),pwrite(0),size(n),buf(0) {
@@ -103,15 +108,15 @@ public:
     }
 
     /* like pop but doesn't copy any data */
-    inline size_t  inc() {
+    inline bool  inc() {
         buf[pread]=NULL;
         pread += (pread+1 >= size) ? (1-size): 1;        
-        return 1;
+        return true;
     }    
     
     /* modify only pread pointer */
-    inline size_t  pop(void ** data) {
-        if (!data || empty()) return 0;
+    inline bool  pop(void ** data) {
+        if (!data || empty()) return false;
         
         *data = buf[pread];
         return inc();
@@ -120,8 +125,10 @@ public:
     inline void * const top() const { 
         return buf[pread];  
     }    
+
+    inline void reset() { pread=pwrite=0; bzero(buf,size*sizeof(void*));}
 };
 
-
+} // namespace
 
 #endif /* __SWSR_PTR_BUFFER_HPP_ */

@@ -44,11 +44,11 @@ OPTIMIZE_FLAGS       = -O6 -finline-functions
 CXXFLAGS             = -Wall #-DTRACE_FASTFLOW
 CFLAGS               =
 LDFLAGS              = 
-INCS                 = -I../ -I../atomic
+INCS                 = -I../ #-I../atomic
 LIBS                 = -lpthread
 
 INCLUDES             = -I. $(INCS)
-TARGET               = test1 test2 test3 test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator_farm+pipe test_freeze test_masterworker test_scheduling test_dt perf_test_alloc1 perf_test_alloc2 perf_test_alloc3
+TARGET               = test1 test2 test3 test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator_farm+pipe test_freeze test_masterworker test_scheduling test_dt perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 test_uBuffer
 
 
 .PHONY: all clean cleanall distclean install uninstall
@@ -89,6 +89,7 @@ test_freeze:test_freeze.o
 test_masterworker:test_masterworker.o
 test_dt:test_dt.o
 test_scheduling:test_scheduling.o
+test_uBuffer:test_uBuffer.o
 perf_test_alloc1:perf_test_alloc1.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 perf_test_alloc2:perf_test_alloc2.cpp

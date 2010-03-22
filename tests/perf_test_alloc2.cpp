@@ -76,21 +76,30 @@ static tbb::cache_aligned_allocator<char> * tbballocator=0;
 
 #endif
 
-// comment the following line to use a different
-// implementation
-#define TEST_FFA_MALLOC
+// uncomment the following line to test FFAllocator
+//#define TEST_FFA_MALLOC 1
 
 #if defined(TEST_FFA_MALLOC)
 class Worker: public ff_node {
+private:
+      void do_work(task_t * task, int size, unsigned int nticks) {
+        for(register int i=0;i<size;++i)
+            task[i]=i;
+        
+        ticks_wait(nticks);
+    }
 public:
-    Worker(int itemsize, int ntasks):
-        itemsize(itemsize),ntasks(ntasks) {}
+    Worker(int itemsize, int ntasks, unsigned int nticks):
+        itemsize(itemsize),ntasks(ntasks),nticks(nticks) {}
 
-    void * svc(void * task) {
+    void * svc(void *) {
+        task_t * task;
         for(int i=0;i<ntasks;++i) {
             // allocates memory
-            task= MALLOC(itemsize*sizeof(task_t));
+            task= (task_t*)MALLOC(itemsize*sizeof(task_t));
             bzero(task,itemsize*sizeof(task_t));
+
+            do_work(&task[0],itemsize,nticks);
 
             ff_send_out(task);
         }
@@ -99,14 +108,75 @@ public:
 private:
     int            itemsize;
     int            ntasks;
+    int            nticks;
 };
+
 
 #else  // in this case we test only FFA's frees
 
+// you have 2 possibilities:
+#if 1 //this one ...
+class Worker: public ff_node  {
+private:
+      void do_work(task_t * task, int size, unsigned int nticks) {
+        for(register int i=0;i<size;++i)
+            task[i]=i;
+        
+        ticks_wait(nticks);
+    }
+public:
+    Worker(int itemsize, int ntasks, int nticks):
+        myalloc(NULL),itemsize(itemsize),ntasks(ntasks) {
+
+        myalloc = new ff_allocator();
+        myalloc->init();
+    }
+
+    ~Worker() {
+        if (myalloc) delete myalloc;
+    }
+    
+    // called just one time at the very beginning
+    int svc_init() {
+        // create a per-thread allocator
+#if defined(FF_ALLOCATOR)
+        myalloc->registerAllocator();
+#endif
+        return 0;
+    }
+
+    void * svc(void *) {
+        task_t * task;
+        for(int i=0;i<ntasks;++i) {
+            // allocates memory
+#if defined(FF_ALLOCATOR)
+            task= (task_t*)myalloc->malloc(itemsize*sizeof(task_t));
+#else
+            task = (task_t*)MALLOC(itemsize*sizeof(task_t));
+#endif
+            bzero(task,itemsize*sizeof(task_t));
+
+            do_work(&task[0],itemsize,nticks);            
+
+            ff_send_out(task);
+        }
+        return NULL; 
+    }
+
+private:
+    ff_allocator   * myalloc;
+    int              itemsize;
+    int              ntasks;
+    int              nticks;
+};
+
+#else  // and this one.
+
 class Worker: public ff_node {
 public:
-    Worker(int itemsize, int ntasks):
-        myalloc(NULL),itemsize(itemsize),ntasks(ntasks) {}
+    Worker(int itemsize, int ntasks,int nticks):
+        myalloc(NULL),itemsize(itemsize),ntasks(ntasks),nticks(nticks) {
+    }
 
     ~Worker() {
         if (myalloc)
@@ -115,20 +185,29 @@ public:
     
     // called just one time at the very beginning
     int svc_init() {
-        // get a per-thread allocator
+        // create a per-thread allocator
+#if defined(FF_ALLOCATOR)
         myalloc= FFAllocator::instance()->newAllocator();
         if (!myalloc) {
             error("Worker, newAllocator fails\n");
             return -1;
         }
+#endif
         return 0;
     }
 
-    void * svc(void * task) {
+    void * svc(void *) {
+        task_t * task;
         for(int i=0;i<ntasks;++i) {
             // allocates memory
-            task= myalloc->malloc(itemsize*sizeof(task_t));
+#if defined(FF_ALLOCATOR)
+            task= (task_t*)myalloc->malloc(itemsize*sizeof(task_t));
+#else
+            task = (task_t*)MALLOC(itemsize*sizeof(task_t));
+#endif
             bzero(task,itemsize*sizeof(task_t));
+
+            do_work(&task[0],itemsize,nticks);
 
             ff_send_out(task);
         }
@@ -136,10 +215,13 @@ public:
     }
 
 private:
-    ffa_wrapper  * myalloc;
-    int            itemsize;
-    int            ntasks;
+    ffa_wrapper     * myalloc;
+    int              itemsize;
+    int              ntasks;
+    int              nticks;
 };
+
+#endif
 #endif 
 
 
@@ -183,16 +265,17 @@ private:
 };
 
 int main(int argc, char * argv[]) {    
-    if (argc<4) {
+    if (argc<5) {
         std::cerr 
             << "use: "  << argv[0] 
-            << " ntasks num-integer-x-item #n\n";
+            << " ntasks num-integer-x-item #n nticks\n";
         return -1;
     }
     
     unsigned int ntasks         = atoi(argv[1]);
     unsigned int itemsize       = atoi(argv[2]);
     unsigned int nworkers       = atoi(argv[3]);    
+    unsigned int nticks         = atoi(argv[4]);
 
     // arguments check
     if (nworkers<0 || !ntasks) {
@@ -223,7 +306,7 @@ int main(int argc, char * argv[]) {
     
     std::vector<ff_node *> w;
     for(unsigned int i=0;i<nworkers;++i) 
-        w.push_back(new Worker(itemsize,ntasks/nworkers));
+        w.push_back(new Worker(itemsize,ntasks/nworkers,nticks));
     farm.add_workers(w);
     
     

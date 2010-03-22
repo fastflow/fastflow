@@ -60,7 +60,7 @@
 using namespace ff; // FastFlow namespace
 
 enum {EMITTER_CORE=0, EMITTER_PRIORITY=-10};
-enum {INPUT_CHANNEL_SLOTS=512, OUTPUT_CHANNEL_SLOTS=600};
+enum {INPUT_CHANNEL_SLOTS=512};
 
 typedef struct {
     SWType  type;
@@ -149,7 +149,6 @@ public:
 
         ldCount++; ldResidues+=task->dbLen;
 
-        FREE(task->db);
         FREE((char*)task);
 
         // we don't use a collector thread so we have any task to send out
@@ -193,35 +192,49 @@ public:
         }
         lqCount=0; lqResidues=0;
         queryLib = ff_openLib( queryFile, ALLOCATOR );
-        tofree= ff_readNextSequenceB( queryLib, NULL, &query, &queryLen);
+
+        // allocate only one chunk to improve spatial locality
+        task_t * task = (task_t*)MALLOC(MIN_ALLOC);
+        task->db = ((char *)task)+sizeof(task_t);
+
+        tofree= ff_readNextSequence( queryLib, task); 
         if (tofree) {
+            query=task->dbdata;   queryLen=task->dbLen;
+
             dbLib = ff_openLib( dbFile, ALLOCATOR );
-            lqCount++; lqResidues+=queryLen;
+            lqCount++; lqResidues+=queryLen;            
+            return 0;
         }
-        return 0;
+        return -1;
     }
     
     void * svc(void *) {
         if (!tofree) return NULL; // EOS
         
-        task_t * task = (task_t*)MALLOC(sizeof(task_t));
-        ff_readNextSequenceA( dbLib, task); 
-        if (!getdb(task)) {
+        // allocate only one chunk to improve spatial locality
+        task_t * task = (task_t*)MALLOC(MIN_ALLOC);
+        task->db = ((char *)task)+sizeof(task_t);
+
+        if (!ff_readNextSequence( dbLib, task) ) {
             ff_closeLib(dbLib);
+
             if (oldquery) FREE(oldquery);
             oldquery=tofree;
             
-            tofree= ff_readNextSequenceB( queryLib, NULL, &query, &queryLen);
-            if (tofree) {
-                dbLib = ff_openLib( dbFile, ALLOCATOR );
-                lqCount++; lqResidues+=queryLen;
-            } else return NULL;  // EOS
+            //FIX
+            tofree= ff_readNextSequence( queryLib, task);
 
-            task->db    = NULL;
-            // dbLen==0 && query!=NULL is the end of current sequence
-            task->dbLen =0;    
+            if (tofree) {
+                query=task->query;   queryLen=task->querylen;
+                dbLib = ff_openLib( dbFile, ALLOCATOR );
+                lqCount++; 
+                return GO_ON;
+            }
+            FREE((char*)task);
+            if (oldquery) FREE(oldquery);
+            return NULL;  // EOS
         }
-        task->query = query;
+        task->query    = query;
         task->querylen = queryLen;
 
         return task;
@@ -311,7 +324,8 @@ int main( int argc, char * argv[] ){
     
 	SBMatrix matrix   = swps3_readSBMatrix( matrixFile );
     
-    ALLOCATOR_INIT();
+    //ALLOCATOR_INIT();
+    ALLOCATOR_INIT1();
 
     // worker's args
     args_t args;
@@ -351,6 +365,6 @@ int main( int argc, char * argv[] ){
     fprintf(stderr,"TIME (ms) = %lf  GCUPS= %lf\n", time, (dResidues/1e6)*(qResidues/time));
     farm.ffStats(std::cerr);
     fprintf(stderr,"\nDONE\n");
-            
+    ALLOCATOR_ST;            
 	return 0;
 }

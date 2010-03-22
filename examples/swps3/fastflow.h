@@ -24,18 +24,15 @@ typedef struct {
 } task_t;
 
 #if !defined(USE_LIBC_ALLOCATOR)
+#define FF_ALLOCATOR 1
 static ff::ff_allocator * allocator = 0;
 #define MALLOC(size)         (allocator->malloc(size))
 #define FREE(ptr)            (allocator->free(ptr))
 #define REALLOC(ptr,newsize) (allocator->realloc(ptr,newsize))
 #define ALLOCATOR_INIT1() {						\
-	const struct { int nslab; int mincachedseg; } _nslabs[N_SLABBUFFER] = {	\
-	    { 1024, 4}, { 4, 1}, { 4, 1}, { 4, 1},{ 4, 1}, { 4, 1}, { 4, 1}, { 512, 8}, { 128, 4}}; \
-	std::pair<int,int> nslabs[N_SLABBUFFER];			\
-	for (int i=0;i<N_SLABBUFFER; ++i)				\
-	    nslabs[i]=std::make_pair(_nslabs[i].nslab, _nslabs[i].mincachedseg); \
+    int nslabs[N_SLABBUFFER] = {0,0,0,0,0,512,512,128,32};		\
 	allocator=new ff_allocator();					\
-	allocator->init(nslabs);					\
+	allocator->init(nslabs,false);					\
     }
 #define ALLOCATOR_INIT() {						\
 	allocator=new ff_allocator();					\
@@ -46,6 +43,12 @@ static ff::ff_allocator * allocator = 0;
 #define ALLOCATOR_REGISTER      (allocator->registerAllocator())
 #define ALLOCATOR_REGISTER4FREE (allocator->register4free())
 
+#if defined(ALLOCATOR_STATS)
+#define ALLOCATOR_ST            allocator->printstats(std::cerr)
+#else
+#define ALLOCATOR_ST
+#endif
+
 #else 
 
 /* standard libc malloc/free */
@@ -53,10 +56,12 @@ static ff::ff_allocator * allocator = 0;
 #define FREE(ptr)               free(ptr)
 #define REALLOC(ptr,newsize)    realloc(ptr,newsize)
 #define ALLOCATOR_INIT()
+#define ALLOCATOR_INIT1()
 #define ALLOCATOR_T             void
 #define ALLOCATOR               NULL
 #define ALLOCATOR_REGISTER      (false)
 #define ALLOCATOR_REGISTER4FREE (false)
+#define ALLOCATOR_ST
 #endif /* USE_LIBC_ALLOCATOR */
 
 
