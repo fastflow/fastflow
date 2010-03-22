@@ -258,7 +258,7 @@ Commands:
                  bzip2(v.1.0.3)   pbzip2     pbzip2_ff
 
 Compression          64.25         7.083      7.064
-Decompression        14.67         3.291      3.921
+Decompression        14.67         1.8060     1.8728
 
 * We executed 10-runs, removed the min and the max values obtained, and 
   than computed the mean.

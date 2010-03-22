@@ -188,7 +188,7 @@ protected:
         return 0;
     }
 
-    int set_output_buffer(SWSR_Ptr_Buffer * const o) {
+    int set_output_buffer(FFBUFFER * const o) {
         int last = nodes_list.size()-1;
         if (!last) return -1;
 

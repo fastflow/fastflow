@@ -248,13 +248,15 @@ int main(int argc, char ** argv) {
   SetupXWindows(dim,dim,1,NULL,"FF Mandelbroot");
 #endif
 
-  ffalloc = new ff_allocator;
-  if (ffalloc && ffalloc->init()<0) {
-      error("cannot build ff_allocator\n");
-      return -1;
-  }
   
   for (r=0;r<retries;r++) {
+
+      ffalloc = new ff_allocator;
+      if (ffalloc && ffalloc->init()<0) {
+	  error("cannot build ff_allocator\n");
+	  return -1;
+      }
+      
   
       ff_farm<> farm(false, dim);
 	std::vector<ff_node *>w;
@@ -280,6 +282,8 @@ int main(int argc, char ** argv) {
 	    delete (Worker2*)(w[k]);
 
 	std::cerr << "Run [" << r << "] DONE, time= " <<  runs[r] << " (ms)\n";
+	
+	delete ffalloc;
   }
   // stats
   avg = avg / (double) retries;
@@ -290,11 +294,6 @@ int main(int argc, char ** argv) {
   var /= retries;
   std::cerr << "Average on " << retries << " experiments = " << avg << " (ms) Std. Dev. " << sqrt(var) << "\n\nPress a key\n" << std::endl;
   
-#if defined(ALLOCATOR_STATS)
-  ffalloc->printstats();
-#endif
-  getchar();
-
 #if !defined(NO_DISPLAY)  
   CloseXWindows();
 #endif

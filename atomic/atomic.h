@@ -20,9 +20,9 @@
 #if __linux__ || __FreeBSD__
 
 #ifdef __i386__
-#include <atomic-i386.h>
+#include "atomic-i386.h"
 #elif __x86_64__
-#include <atomic-x86_64.h>
+#include "atomic-x86_64.h"
 #if !defined(BITS_PER_LONG)
 #define BITS_PER_LONG 64
 #endif
@@ -33,14 +33,14 @@
 #elif __APPLE__
 
 #ifdef __i386__
-#include <atomic-i386.h>
+#include "atomic-i386.h"
 #elif __x86_64__
-#include <atomic-x86_64.h>
+#include "atomic-x86_64.h"
 #if !defined(BITS_PER_LONG)
 #define BITS_PER_LONG 64
 #endif
 #elif __POWERPC__
-#include <atomic-ppc.h>
+#include "atomic-ppc.h"
 #endif
 
 #endif

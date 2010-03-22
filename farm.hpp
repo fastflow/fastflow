@@ -256,7 +256,7 @@ public:
     inline bool offload(void * task,
                         unsigned int retry=((unsigned int)-1),
                         unsigned int ticks=ff_loadbalancer::TICKS2WAIT) { 
-        SWSR_Ptr_Buffer * inbuffer = get_in_buffer();
+        FFBUFFER * inbuffer = get_in_buffer();
 
         if (inbuffer) {
             while (! inbuffer->push(task)) {
@@ -318,6 +318,7 @@ public:
     void ffStats(std::ostream & out) { 
         out << "FastFlow trace not enabled\n";
     }
+
 #endif
     
 protected:
@@ -352,7 +353,7 @@ protected:
     }
 
 
-    int set_output_buffer(SWSR_Ptr_Buffer * const o) {
+    int set_output_buffer(FFBUFFER * const o) {
         if (!gt) {
             error("FARM with no collector, cannot set output buffer\n");
             return -1;

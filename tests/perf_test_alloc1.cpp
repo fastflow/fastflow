@@ -47,7 +47,7 @@ typedef unsigned long task_t;
 #if defined(USE_TBB)
 #include <tbb/scalable_allocator.h>
 static tbb::scalable_allocator<char> * tbballocator=0;
-#define ALLOCATOR_INIT() {tbballocator=new tbb::scalable_allocator<char>();}
+#define ALLOCATOR_INIT(size) {tbballocator=new tbb::scalable_allocator<char>();}
 #define MALLOC(size)   (tbballocator->allocate(size))
 #define FREE(ptr,size) (tbballocator->deallocate((char *)ptr,size))
 
@@ -55,13 +55,13 @@ static tbb::scalable_allocator<char> * tbballocator=0;
 #include <tbb/cache_aligned_allocator.h>
 static tbb::cache_aligned_allocator<char> * tbballocator=0;
 #include <tbb/cache_aligned_allocator.h>
-#define ALLOCATOR_INIT() {tbballocator=new tbb::cache_aligned_allocator<char>();}
+#define ALLOCATOR_INIT(size) {tbballocator=new tbb::cache_aligned_allocator<char>();}
 #define MALLOC(size)   (tbballocator->allocate(size))
 #define FREE(ptr,size) (tbballocator->deallocate((char*)ptr,size))
 
 #elif defined(USE_STANDARD)
 /* standard libc malloc/free */
-#define ALLOCATOR_INIT()
+#define ALLOCATOR_INIT(size)
 #define MALLOC(size)    malloc(size)
 #define FREE(ptr,size)  free(ptr)
 
@@ -69,10 +69,28 @@ static tbb::cache_aligned_allocator<char> * tbballocator=0;
 #define FF_ALLOCATOR 1
 #include <allocator.hpp>
 static ff_allocator * ffalloc = 0;
-#define ALLOCATOR_INIT() {						\
-        ffalloc=new ff_allocator();				\
-        if (ffalloc->init()<0) abort();         \
-    }
+
+/* default init 
+#define ALLOCATOR_INIT(size)  {    \
+ ffalloc=new ff_allocator();	   \
+ if (ffalloc->init()<0) abort();   \
+}
+*/
+#define ALLOCATOR_INIT(size) {					\
+        ffalloc=new ff_allocator();		        \
+        int slab = ffalloc->getslabs(size);     \
+        int nslabs[N_SLABBUFFER];               \
+        if (slab<0) {                           \
+            if (ffalloc->init()<0) abort();     \
+        } else {                                \
+          for(int i=0;i<N_SLABBUFFER;++i) {     \
+              if (i==slab) nslabs[i]=1024;      \
+              else nslabs[i]=0;                 \
+          }                                     \
+          if (ffalloc->init(nslabs)<0) abort(); \
+        }                                       \
+     }
+
 #define MALLOC(size)   (ffalloc->malloc(size))
 #define FREE(ptr,size) (ffalloc->free(ptr))
 
@@ -132,7 +150,7 @@ protected:
 
 public:
     Emitter(int max_task, int itemsize):ntask(max_task),itemsize(itemsize) {
-        ALLOCATOR_INIT();
+        ALLOCATOR_INIT(itemsize*sizeof(task_t));
         val=0;
     };
 
@@ -153,7 +171,10 @@ public:
         filltask(&task[1], itemsize-1);
         task[0] = 0;
         --ntask;
-        if (ntask<0) return NULL;
+        if (ntask<0) {
+            FREE(task,itemsize);
+            return NULL;
+        }
         return task;
     }
 private:
@@ -219,6 +240,7 @@ int main(int argc, char * argv[]) {
     std::cerr << "DONE, time= " << farm.ffTime() << " (ms)\n";
     farm.ffStats(std::cout);
 #if defined(FF_ALLOCATOR) && defined(ALLOCATOR_STATS)
+    ffalloc->deregisterAllocator();
     ffalloc->printstats();
 #endif
 

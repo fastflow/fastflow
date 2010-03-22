@@ -5,8 +5,8 @@ ifndef FF_HOME
 FF_HOME=../..
 endif
 
-CFLAGS  ?= -DFAST_FLOW -DTRACE_FASTFLOW -Wall  -O666 -msse3 -ansi -g3 -fPIC  -fvisibility=hidden
-DEFS    ?= -DHAVE_SYSCONF_NPROCESSORS #-DUSE_LIBC_ALLOCATOR 
+CFLAGS  ?= -DFAST_FLOW  -Wall -msse3 -O6 # -O666 -msse3 -ansi -g3 -fPIC  -fvisibility=hidden
+DEFS    ?= -DHAVE_SYSCONF_NPROCESSORS #-DUSE_LIBC_ALLOCATOR #-DTRACE_FASTFLOW
 LDFLAGS  = 
 CXX     ?= g++
 OBJS     = DynProgr_sse_byte.o DynProgr_sse_short.o DynProgr_scalar.o matrix.o fasta.o debug.o

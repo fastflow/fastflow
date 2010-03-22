@@ -29,7 +29,48 @@
 
 #include <sysdep.h>
 
+
 namespace ff {
+
+#if defined(USE_TICKETLOCK)
+
+/* Ticket-Lock, courtesy of Fabrizio Petrini <fpetrin@us.ibm.com> */
+
+union ticketlock
+{
+  unsigned u;
+  struct
+  {
+    unsigned short ticket;
+    unsigned short users;
+  } s;
+};
+
+/* simple interface to the gcc atomics */
+#define atomic_xadd(P, V)       __sync_fetch_and_add((P), (V))
+
+/* pause instruction to prevent excess processor bus usage */ 
+#define cpu_relax() asm volatile("pause\n": : :"memory")
+
+typedef ticketlock lock_t[1];
+enum { UNLOCKED=0 };
+
+static inline void init_unlocked(lock_t l) { l[0].u=UNLOCKED;}
+
+static inline void spin_lock( lock_t l ) {
+    unsigned short me = atomic_xadd( &(l[0].s.users), 1 );
+  
+    while ( l[0].s.ticket != me ) 
+        cpu_relax();
+}
+
+
+static inline void spin_unlock( lock_t l ) {
+  l[0].s.ticket++;
+}
+
+#else /* xchg-based spin-lock */
+    
 
 typedef volatile int lock_t[1];
 enum { UNLOCKED=0 };
@@ -57,6 +98,7 @@ static inline void spin_unlock(lock_t l) {
     WMB();
     l[0]=UNLOCKED;
 }
+#endif
 
 
 } // namespace ff
