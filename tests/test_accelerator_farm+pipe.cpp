@@ -143,7 +143,7 @@ private:
 
 
 int main(int argc, char * argv[]) {
-    task_t * result = NULL;
+    void * result = NULL;
 
     int mstreamlen= 0;
     int nworkers  = 0;
@@ -197,7 +197,7 @@ int main(int argc, char * argv[]) {
         error("waiting farm freezing\n");
         return -1;
     }
-    farm.load_result((void **)&result); // pop out the EOS
+    farm.load_result(&result); // pop out the EOS
     /* ---------------------------------------------------- */
 
     for(int i=0;i<iterations;++i) {
@@ -223,7 +223,7 @@ int main(int argc, char * argv[]) {
             // If there aren't any deadlock problems, the following piece 
             // of code can be moved outside the for-j loop using 
             // the synchronous load_result method.
-            if (farm.load_result_nb((void **)&result)) {
+            if (farm.load_result_nb(&result)) {
                 std::cout << "result= " << *((int*)result) << "\n";
 
                 /* do something useful, probably using another thread */
@@ -240,7 +240,7 @@ int main(int argc, char * argv[]) {
 
         // asynchronously wait results
         do {
-            if (farm.load_result_nb((void **)&result)) {
+            if (farm.load_result_nb(&result)) {
                 if (result==(void*)FF_EOS) break;
 
                 /* do something useful, probably using onother thread */
