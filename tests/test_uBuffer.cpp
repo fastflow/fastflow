@@ -150,7 +150,7 @@ void * C(void *) {
     Barrier::instance()->barrier();
 
     bool end=false;
-    int * task;
+    void * task=NULL;
     int k=0;
     while(!end) {
     retry:
@@ -159,28 +159,30 @@ void * C(void *) {
 	int result;
 	do { 
 	    result = 
-		dequeue_multi( b, (void**)&task);
+		dequeue_multi( b, &task);
 	} while ( result == 0 );
 	if (1) {
 #else
-	if (b->pop((void **)&task)) {
+	if (b->pop(&task)) {
 #endif
 #else // USE_DEQUE
 	LOCK(block);
 	if (b->size()) {
-	    task = (int *)(b->front());
+	    task = (b->front();
 	    b->pop_front();
 	    UNLOCK(block);
 #endif
 
 	
-	    if ((void*)task == (void*)FF_EOS) { 
+	    if (task == (void*)FF_EOS) { 
 		end=true;
 	    } else {
-		for(register int j=0;j<8;++j) 
-		    if (task[j]!=(k+j)) {
-			std::cout << " ERROR, value is " << task[j] << " should be " << k+j << "\n";
-		    } else task[j]++; // just write in the array
+        for(register int j=0;j<8;++j) {
+            int * t = (int *)task;
+		    if (t[j]!=(k+j)) {
+			std::cout << " ERROR, value is " << t[j] << " should be " << k+j << "\n";
+		    } else t[j]++; // just write in the array
+        }
 		++k;
 		
 		free(task);
