@@ -131,8 +131,9 @@ class uSWSR_Ptr_Buffer {
     enum {POOL_CHUNK=4096, MAX_POOL_SIZE=4};
 
 public:
-    uSWSR_Ptr_Buffer(size_t n):buf_r(0),buf_w(0),size(n),
-                               pool(POOL_CHUNK,MAX_POOL_SIZE) {}
+    uSWSR_Ptr_Buffer(size_t n, const bool fixedsize=false):
+        buf_r(0),buf_w(0),size(n),fixedsize(fixedsize),
+        pool(POOL_CHUNK,MAX_POOL_SIZE) {}
     
     ~uSWSR_Ptr_Buffer() {
         if (buf_r) {
@@ -167,7 +168,10 @@ public:
         if (!data || !buf_w) return false;
         
         if (!available()) {
-            buf_w = pool.next_w(size); // getting new buffer             
+
+            if (fixedsize) return false;
+
+            buf_w = pool.next_w(size); // get a new buffer             
             //DBG(assert(buf_w));
         }
         //DBG(assert(buf_w->push(data)); return true;);
@@ -184,8 +188,7 @@ public:
                 if (tmp) {
                     // there is another buffer, release the current one 
                     pool.release(buf_r); 
-                    buf_r = tmp;
-                    
+                    buf_r = tmp;                    
                 }
                 if (buf_r->empty()) return false;
             }
@@ -205,6 +208,7 @@ private:
     long padding2[longxCacheLine-1];
     //long              padding2[15];
     size_t            size;
+    const bool        fixedsize;
     BufferPool        pool;
 };
     

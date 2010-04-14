@@ -3,18 +3,26 @@
 #define _FF_ALLOCATOR_HPP_
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU Lesser General Public License version 3 as 
+ *  it under the terms of the GNU General Public License version 2 as 
  *  published by the Free Software Foundation.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU Lesser General Public License for more details.
+ *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU Lesser General Public License
+ *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
+ *  As a special exception, you may use this file as part of a free software
+ *  library without restriction.  Specifically, if other files instantiate
+ *  templates or use macros or inline functions from this file, or you compile
+ *  this file and link it with other files to produce an executable, this
+ *  file does not by itself cause the resulting executable to be covered by
+ *  the GNU General Public License.  This exception does not however
+ *  invalidate any other reasons why the executable file might be covered by
+ *  the GNU General Public License.
  *
  ****************************************************************************
  */
@@ -52,6 +60,11 @@
 #else
 #include <atomic/atomic.h>
 #endif
+
+#if defined(__APPLE__)
+#include <Availability.h>
+#endif
+
 
 #include <pthread.h>
 #include <cycle.h>
@@ -172,8 +185,13 @@ public:
     void * newsegment(size_t segment_size) { 
         //void * ptr = ::malloc(segment_size);
         void * ptr=NULL;
-        if (posix_memalign(&ptr,sysconf(_SC_PAGESIZE),segment_size)!=0) 
+
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_6
+        ptr = ::malloc(segment_size);
+#else
+        if (posix_memalign(&ptr,sysconf(_SC_PAGESIZE),segment_size)!=1)
             return NULL;
+#endif
         memory_allocated += segment_size;
 
         ALLSTATS(atomic_long_inc(&all_stats::instance()->segmalloc); atomic_long_add(segment_size, &all_stats::instance()->memallocated));
@@ -445,7 +463,7 @@ public:
         for(register unsigned i=0;i<fb_size;++i) {
             DBG(assert(fb[i]));
 #if defined(FF_BOUNDED_BUFFER)
-            char * buf = 0;
+            void * buf = 0;
             SWSR_Ptr_Buffer * b = fb[i]->b;
             if (b) {
                 if (reclaim) {
@@ -455,9 +473,9 @@ public:
                         checkReclaim(seg);
                         ALLSTATS(atomic_long_inc(&all_stats::instance()->leakremoved));
                     }
-                    Buf_ctl * buf2;
-                    while(fb[i]->leak->pop((void **)&buf2)) { 
-                        checkReclaim(getsegctl(buf2));                        
+                    union { Buf_ctl * buf2; void * ptr;} b;
+                    while(fb[i]->leak->pop(&b.ptr)) { 
+                        checkReclaim(getsegctl(b.buf2));                        
                         ALLSTATS(atomic_long_inc(&all_stats::instance()->leakremoved));
                     }
                 } else  {
@@ -470,9 +488,9 @@ public:
 #endif
             {
                 if (reclaim) {
-                    Buf_ctl * buf2;
-                    while(fb[i]->leak->pop((void**)&buf2)) {
-                        checkReclaim(getsegctl(buf2));                        
+                    union { Buf_ctl * buf2; void * ptr; } b;
+                    while(fb[i]->leak->pop(&b.ptr)) {
+                        checkReclaim(getsegctl(b.buf2));                        
                     }
                 }
             }

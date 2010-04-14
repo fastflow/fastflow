@@ -241,7 +241,7 @@ private:
     
     virtual int create_input_buffer(int nentries) {
         if (in) return -1;
-        in = new FFBUFFER(nentries);        
+        in = new FFBUFFER(nentries,true);        
         if (!in) return -1;
         myinbuffer=true;
         return (in->init()?0:-1);
@@ -249,7 +249,7 @@ private:
     
     virtual int create_output_buffer(int nentries) {
         if (out) return -1;
-        out = new FFBUFFER(nentries);        
+        out = new FFBUFFER(nentries,false);        
         if (!out) return -1;
         myoutbuffer=true;
         return (out->init()?0:-1);
