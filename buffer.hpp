@@ -50,7 +50,7 @@ private:
     void                   ** buf;
     
 public:
-    SWSR_Ptr_Buffer(size_t n):
+    SWSR_Ptr_Buffer(size_t n, const bool=true):
         pread(0),pwrite(0),size(n),buf(0) {
     }
     
