@@ -189,7 +189,7 @@ public:
 #if __MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_6
         ptr = ::malloc(segment_size);
 #else
-        if (posix_memalign(&ptr,sysconf(_SC_PAGESIZE),segment_size)!=1)
+        if (posix_memalign(&ptr,sysconf(_SC_PAGESIZE),segment_size)!=0)
             return NULL;
 #endif
         memory_allocated += segment_size;
