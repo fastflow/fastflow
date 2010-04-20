@@ -76,8 +76,9 @@ public:
         max_nworkers(max_num_workers),
         emitter(NULL),collector(NULL),fallback(NULL),
         lb(new LoadBalancer_t(max_num_workers)),gt(NULL),
-        workers(new ff_node*[max_num_workers]) {      
-  
+        workers(new ff_node*[max_num_workers]) {
+        for(int i=0;i<max_num_workers;++i) workers[i]=NULL;
+
         if (has_input_channel) { 
             if (create_input_buffer(in_buffer_entries)<0) {
                 error("FARM, creating input buffer\n");
@@ -88,7 +89,11 @@ public:
     ~ff_farm() { 
         if (lb) delete lb; 
         if (gt) delete(gt); 
-        if (workers) delete [] workers;
+        if (workers) {
+            for(int i=0;i<max_nworkers; ++i) 
+                if (workers[i]) delete workers[i];
+            delete [] workers;
+        }
     }
     
     int add_emitter(ff_node * e, ff_node * fb=NULL) { 
