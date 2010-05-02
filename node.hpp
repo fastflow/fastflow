@@ -323,7 +323,7 @@ public:
 #if defined(TRACE_FASTFLOW)    
     virtual void ffStats(std::ostream & out) { 
         out << "ID: " << get_my_id()
-            << "  work-time (ms): " << wffTime() << "\n"
+            << "  work-time (ms): " << wttime    << "\n"
             << "  n. tasks      : " << taskcnt   << "\n"
             << "  svc ticks     : " << tickstot  << " (min= " << ticksmin << " max= " << ticksmax << ")\n"
             << "  n. push lost  : " << pushwait  << " (ticks=" << lostpushticks << ")" << "\n"
@@ -336,10 +336,9 @@ protected:
     ff_node():in(0),out(0),myid(-1),
               myoutbuffer(false),myinbuffer(false),
               skip1pop(false), thread(NULL),callback(NULL) {
-        tstart.tv_sec=0;  tstart.tv_usec=0;
-        tstop.tv_sec=0;   tstop.tv_usec=0;
-        wtstart.tv_sec=0; wtstart.tv_usec=0;
-        wtstop.tv_sec=0;  wtstop.tv_usec=0;
+        time_setzero(tstart);time_setzero(tstop);
+        time_setzero(wtstart);time_setzero(wtstop);
+        wttime=0;
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
     };
     
@@ -411,7 +410,7 @@ private:
             bool inpresent  = (filter->get_in_buffer() != NULL);
             bool outpresent = (filter->get_out_buffer() != NULL);
             bool skipfirstpop = filter->skipfirstpop(); 
-            bool exit=false;
+            bool exit=false;            
 
             gettimeofday(&filter->wtstart,NULL);
             do {
@@ -446,6 +445,7 @@ private:
             } while(!exit);
             
             gettimeofday(&filter->wtstop,NULL);
+            filter->wttime+=diffmsec(filter->wtstop,filter->wtstart);
             return NULL;
         }
         
@@ -486,6 +486,7 @@ private:
     struct timeval tstop;
     struct timeval wtstart;
     struct timeval wtstop;
+    double wttime;
 
 #if defined(TRACE_FASTFLOW)
     unsigned long taskcnt;

@@ -102,8 +102,8 @@ public:
         /* NOTE: if there is a collector filter then no 
          * fallback execution is possible 
          */
-        if (collector && fb) {
-            error("FARM, cannot add fallback function if the collector is present\n");
+        if ((collector || lb->masterworker()) && fb) {
+            error("FARM, cannot add fallback function if the collector is present or master-worker configuration has been set\n");
             return -1;
         }
 
@@ -163,6 +163,10 @@ public:
      * skeleton).
      */
     int wrap_around() {
+        if (fallback) {
+            error("FARM, cannot add feedback channels if the fallback function has been set in the Emitter\n");
+            return -1;
+        }
         if (!gt) {
             if (lb->set_masterworker()<0) return -1;
             if (!has_input_channel) lb->skipfirstpop();
