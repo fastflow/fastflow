@@ -79,6 +79,15 @@ static inline bool time_compare(struct timeval & a, struct timeval & b) {
     return (t1<t2);
 }
 
+static inline const bool time_iszero(const struct timeval & a) {
+    if ((a.tv_sec==0) && (a.tv_usec==0)) return true;
+    return false;
+}
+
+static inline void time_setzero(struct timeval & a) {
+    a.tv_sec=0;  
+    a.tv_usec=0;
+}
 
 static inline double ffTime(int tag) {
     static struct timeval tv_start = {0,0};

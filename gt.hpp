@@ -103,7 +103,15 @@ public:
         nworkers(0),max_nworkers(max_num_workers),nextr(0),
         filter(NULL),workers(new ff_node*[max_num_workers]),
         buffer(NULL) {
+        time_setzero(tstart);time_setzero(tstop);
+        time_setzero(wtstart);time_setzero(wtstop);
+        wttime=0;
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
+        for(int i=0;i<max_num_workers;++i) workers[i]=NULL;
+    }
+
+    ~ff_gatherer() { 
+        if (workers) delete [] workers;
     }
 
     int set_filter(ff_node * f) { 
@@ -166,6 +174,7 @@ public:
         }
 
         gettimeofday(&wtstop,NULL);
+        wttime+=diffmsec(wtstop,wtstart);
         return NULL;
     }
 
@@ -204,7 +213,7 @@ public:
 #if defined(TRACE_FASTFLOW)    
     virtual void ffStats(std::ostream & out) { 
         out << "Collector: "
-            << "  work-time (ms): " << wffTime() << "\n"
+            << "  work-time (ms): " << wttime    << "\n"
             << "  n. tasks      : " << taskcnt   << "\n"
             << "  svc ticks     : " << tickstot  << " (min= " << (filter?ticksmin:0) << " max= " << ticksmax << ")\n"
             << "  n. push lost  : " << pushwait  << " (ticks=" << lostpushticks << ")" << "\n"
@@ -224,6 +233,7 @@ private:
     struct timeval tstop;
     struct timeval wtstart;
     struct timeval wtstop;
+    double wttime;
 
 #if defined(TRACE_FASTFLOW)
     unsigned long taskcnt;

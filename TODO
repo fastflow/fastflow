@@ -3,5 +3,8 @@
 - threads mapper
 - more applications 
 - deadlock avoidance for skeleton with cycles
+- add the possibility to define fallback function
+  even if there are feedback channels due to 
+  master-worker configuration
 
 Massimo Torquati

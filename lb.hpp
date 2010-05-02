@@ -173,6 +173,9 @@ public:
         nworkers(0),max_nworkers(max_num_workers),nextw(0),nextINw(0),
         filter(NULL),workers(new ff_node*[max_num_workers]),
         fallback(NULL),buffer(NULL),skip1pop(false),master_worker(false) {
+        time_setzero(tstart);time_setzero(tstop);
+        time_setzero(wtstart);time_setzero(wtstop);
+        wttime=0;
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
     }
 
@@ -329,6 +332,7 @@ public:
             } while(1);
         }
         gettimeofday(&wtstop,NULL);
+        wttime+=diffmsec(wtstop,wtstart);
         return NULL;
     }
 
@@ -419,7 +423,7 @@ public:
 #if defined(TRACE_FASTFLOW)    
     virtual void ffStats(std::ostream & out) { 
         out << "Emitter: "
-            << "  work-time (ms): " << wffTime() << "\n"
+            << "  work-time (ms): " << wttime    << "\n"
             << "  n. tasks      : " << taskcnt   << "\n"
             << "  svc ticks     : " << tickstot  << " (min= " << (filter?ticksmin:0) << " max= " << ticksmax << ")\n"
             << "  n. push lost  : " << pushwait  << " (ticks=" << lostpushticks << ")" << "\n"
@@ -443,6 +447,7 @@ private:
     struct timeval tstop;
     struct timeval wtstart;
     struct timeval wtstop;
+    double wttime;
 
 #if defined(TRACE_FASTFLOW)
     unsigned long taskcnt;
