@@ -32,7 +32,12 @@
 #include <string.h>
 #include <vector>
 
-#include <sysdep.h>
+#include <ff/sysdep.h>
+
+#if defined(__APPLE__)
+#include <available.h>
+#include <Availability.h>
+#endif
 
 namespace ff {
 // 64bytes is the common size of a cache line
@@ -60,8 +65,16 @@ public:
     bool init() {
         if (buf) return false;
 
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_6
         buf = (void **)::malloc(size*sizeof(void*));
         if (!buf) return false;
+#else
+        void * ptr;
+        if (posix_memalign(&ptr,longxCacheLine*sizeof(long),size*sizeof(void*))!=0)
+            return false;
+        buf=(void **)ptr;
+#endif
+
         bzero(buf,size*sizeof(void*));
 
         return true;
@@ -98,6 +111,34 @@ public:
         }
         return false;
     }
+
+#if 1
+    // massimo: experimental code
+    // NOTE: len should be a multiple of  longxCacheLine/sizeof(void*)
+    //
+    inline bool multipush(void * const data[], int len) {
+        
+        register unsigned long last = pwrite + ((pwrite+ --len >= size) ? (len-size): len);
+        register unsigned long r    = len-(last+1), l=last, i;
+        if (buf[last]==NULL) {
+            
+            if (last < pwrite) {
+                for(i=len;i>r;--i,--l) 
+                    buf[l] = data[i];
+                for(i=(size-1);i>=pwrite;--i,--r)
+                    buf[i] = data[r];
+                
+            } else 
+                for(register int i=len;i>=0;--i) 
+                    buf[pwrite+i] = data[i];
+            
+            WMB();
+            pwrite = (last+1 >= size) ? 0 : (last+1);
+            return true;
+        }
+        return false;
+    }
+#endif
 
     /* like pop but doesn't copy any data */
     inline bool  inc() {

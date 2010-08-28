@@ -25,9 +25,11 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <sys/time.h>
-#include <cycle.h>
 #include <iostream>
 #include <pthread.h>
+
+#include <ff/cycle.h>
+
 
 namespace ff {
 

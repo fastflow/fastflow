@@ -44,44 +44,22 @@ static unsigned long A[N][N];
 static unsigned long B[N][N];
 static unsigned long C[N][N];
 
-//#define USE_FFA
-#if defined(USE_FFA)
-static ff_allocator ffa;
-#endif
-
-struct task_t {
-    task_t(int i,int j):i(i),j(j) {}
-    int i;
-    int j;
-};
-
-
 // generic worker
 class Worker: public ff_node {
 public:
-#if defined(USE_FFA)
-    int svc_init() {
-        if (ffa.register4free()<0) {
-            error("Worker, register4free fails\n");
-            return -1;
-        }
-        return 0;
-    }
-#endif
-
     void * svc(void * task) {
-        task_t * t = (task_t *)task;
+        int i = *(int *)task;
         
         register unsigned int _C=0;
-        for(register int k=0;k<N;++k)
-            _C += A[t->i][k]*B[k][t->j];
+        for(register int j=0;j<N;++j) {
+            for(register int k=0;k<N;++k)
+                _C += A[i][k]*B[k][j];
 
-        C[t->i][t->j] = _C;
-#if defined(USE_FFA)        
-        ffa.free(t);
-#else
-        delete t;
-#endif
+            C[i][j] = _C;
+            _C=0;
+        }
+
+        delete ((int *)task);
         return GO_ON;
     }
 };
@@ -113,12 +91,7 @@ int main(int argc,
         
     ffTime(START_TIME);
 
-#if defined(USE_FFA)
-	int nslabs[N_SLABBUFFER] = { N,0,0,0,0,0,0,0,0}; 
-    if (ffa.init(nslabs)<0) return -1;
-    if (ffa.registerAllocator()<0) return -1;
-#endif
-    ff_farm<> farm(true, N*N+nworkers);    
+    ff_farm<> farm(true, N+nworkers);    
 
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker);
@@ -127,22 +100,11 @@ int main(int argc,
     // Now run the accelator asynchronusly
     farm.run_then_freeze();
     for (int i=0;i<N;i++) {
-        for(int j=0;j<N;++j) {
-#if defined(USE_FFA)
-            void * t = ffa.malloc(sizeof(task_t));
-            task_t * task = new (t) task_t(i,j);
-#else
-            task_t * task = new task_t(i,j);
-#endif
-            farm.offload(task); 
-        }
+        int * task = new int(i);
+        farm.offload(task); 
     }
     std::cout << "[Main] EOS arrived\n";
     farm.offload((void *)FF_EOS);
-
-#if defined(USE_FFA)
-    ffa.deregisterAllocator();
-#endif    
     
     // Here join
     farm.wait();  
@@ -152,9 +114,6 @@ int main(int argc,
     std::cerr << "DONE, farm time= " << farm.ffTime() << " (ms)\n";
     std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
     farm.ffStats(std::cerr);
-#if defined(USE_FFA) && defined(ALLOCATOR_STATS)
-    ffa.printstats();
-#endif
 
 #if 0
     for(int i=0;i<N;++i)  {

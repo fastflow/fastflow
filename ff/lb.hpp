@@ -22,8 +22,8 @@
 #include <iostream>
 #include <deque>
 
-#include <utils.hpp>
-#include <node.hpp>
+#include <ff/utils.hpp>
+#include <ff/node.hpp>
 
 namespace ff {
 
@@ -35,9 +35,9 @@ protected:
     inline bool push_task(void * task, int idx) {
         return workers[idx]->put(task);
     }    
-    inline void push_eos() {
+    inline void push_eos(bool nofreeze=false) {
         //register int cnt=0;
-        void * eos = (void *)FF_EOS;
+        void * eos = (void *)(nofreeze?FF_EOS_NOFREEZE:FF_EOS);
         for(register int i=0;i<nworkers;++i) {
             while(!workers[i]->put(eos)) {
                 //if (sched_emitter && (++cnt>PUSH_CNT_EMIT)) { 
@@ -238,6 +238,7 @@ public:
 
     virtual void * svc(void *) {
         void * task = NULL;
+        void * ret  = (void *)FF_EOS;
         bool inpresent  = (get_in_buffer() != NULL);
         bool skipfirstpop = skip1pop;
 
@@ -248,7 +249,14 @@ public:
                     if (!skipfirstpop) pop(&task);
                     else skipfirstpop=false;
                     
-                    if (task == (void*)FF_EOS)  break;
+                    if (task == (void*)FF_EOS) {
+                        push_eos(); 
+                        break;
+                    } else if (task == (void*)FF_EOS_NOFREEZE) {
+                        push_eos(true);
+                        ret = task;
+                        break;
+                    }
                 }
                 
                 if (filter) {
@@ -262,15 +270,23 @@ public:
                     ticksmin=std::min(ticksmin,diff);
                     ticksmax=std::max(ticksmax,diff);
 #endif  
-
-                    if (!task) break; // if the filter returns NULL we exit immediatly
                     if (task == GO_ON) continue;
+
+                    // if the filter returns NULL we exit immediatly
+                    if (task ==(void*)FF_EOS_NOFREEZE) { 
+                        push_eos(true); 
+                        ret = task;
+                        break; 
+                    }
+                    if (!task || task==(void*)FF_EOS) {
+                        push_eos();
+                        ret = (void*)FF_EOS;
+                        break;
+                    }
                 } 
                 
                 schedule_task(task);
             } while(true);
-
-            push_eos();
         } else {
             int nw=nworkers;
 
@@ -286,14 +302,18 @@ public:
                     victim=collect_task(&task, availworkers, start);                    
                 } else skipfirstpop=false;
                 
-                if (task == (void*)FF_EOS) {
-                    if (victim == availworkers.end())  push_eos();
+                if ((task == (void*)FF_EOS) || 
+                    (task == (void*)FF_EOS_NOFREEZE)) {
+                    if (victim == availworkers.end())  push_eos((task==(void*)FF_EOS_NOFREEZE));
                     else {
                         availworkers.erase(victim);
                         start=availworkers.begin(); // restart iterator
                         --nw;
                     }
-                    if (!nw) break; // received all EOS, exit
+                    if (!nw) {
+                        ret = task;
+                        break; // received all EOS, exit
+                    }
                 } else {
                     if (filter) {
 #if 0
@@ -310,11 +330,19 @@ public:
                         ticksmax=std::max(ticksmax,diff);
 #endif  
 
-                        if (!task) {
-                            push_eos();
-                            break; // if the filter returns NULL we exit immediatly
-                        }
                         if (task == GO_ON) continue;
+                        
+                        // if the filter returns NULL we exit immediatly
+                        if (!task || (task ==(void*)FF_EOS_NOFREEZE)) { 
+                            push_eos(true); 
+                            ret = task;
+                            break; 
+                        }
+                        if (!task || (task==(void*)FF_EOS)) {
+                            push_eos();
+                            ret = (void*)FF_EOS;
+                            break;
+                        }
 
 #if 0
                         // RIVEDERE
@@ -333,7 +361,8 @@ public:
         }
         gettimeofday(&wtstop,NULL);
         wttime+=diffmsec(wtstop,wtstart);
-        return NULL;
+
+        return ret;
     }
 
     virtual int svc_init() { 
@@ -376,6 +405,7 @@ public:
                 error("LB, waiting worker thread, id = %d\n",workers[i]->get_my_id());
                 ret = -1;
             }
+
         if (ff_thread::wait()<0) {
             error("LB, waiting LB thread\n");
             ret = -1;
@@ -396,6 +426,11 @@ public:
             ret = -1;
         }
         return ret;
+    }
+
+    void stop() {
+        for(int i=0;i<nworkers;++i) workers[i]->stop();
+        ff_thread::stop();
     }
 
     void freeze() {

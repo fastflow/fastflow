@@ -1,7 +1,7 @@
 #ifndef __FF_TASK_
 #define __FF_TASK_
 
-#include <allocator.hpp>
+#include <ff/allocator.hpp>
 
 enum { MIN_ALLOC=4096, STEP_ALLOC=2048 };
 

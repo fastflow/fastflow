@@ -38,9 +38,9 @@
 
 #include <vector>
 #include <iostream>
-#include <farm.hpp>
-#include <allocator.hpp>
-#include <cycle.h>
+#include <ff/farm.hpp>
+#include <ff/allocator.hpp>
+#include <ff/cycle.h>
 
 using namespace ff;
 

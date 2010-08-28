@@ -2,9 +2,18 @@
 - ordered farm
 - threads mapper
 - more applications 
-DONE  deadlock avoidance for skeleton with cycles
+- deadlock avoidance for skeleton with cycles (DONE)
+     The channels are now implemented using by default unbounded queue 
+     (ubuffer.hpp)
+     Bounded queue can be used by defining FF_BOUNDED_BUFFER in node.hpp.
+
 - add the possibility to define fallback function
   even if there are feedback channels due to 
   master-worker configuration
+- give the possibility to define a user-level 
+  collection policy (in the same way as in the scheduling
+  policy)
+- dynamic reconfiguration of the number of workers in the farm pattern
+
 
 Massimo Torquati
