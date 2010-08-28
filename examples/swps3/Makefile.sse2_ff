@@ -10,7 +10,7 @@ DEFS    ?= -DHAVE_SYSCONF_NPROCESSORS #-DUSE_LIBC_ALLOCATOR #-DTRACE_FASTFLOW
 LDFLAGS  = 
 CXX     ?= g++
 OBJS     = DynProgr_sse_byte.o DynProgr_sse_short.o DynProgr_scalar.o matrix.o fasta.o debug.o
-INCS     = -I. -I${FF_HOME} -I${FF_HOME}/atomic
+INCS     = -I. -I${FF_HOME}
 
 
 all: swps3_ff

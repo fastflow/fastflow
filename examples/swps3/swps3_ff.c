@@ -51,8 +51,8 @@
 #include <assert.h>
 #include <float.h>
 
-#include <farm.hpp>
-#include <spin-lock.hpp>
+#include <ff/farm.hpp>
+#include <ff/spin-lock.hpp>
 
 #include <vector>
 #include <fastflow.h>

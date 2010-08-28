@@ -58,7 +58,7 @@
 #if defined(HAVE_ATOMIC_H)
 #include <asm/atomic.h>
 #else
-#include <atomic/atomic.h>
+#include <ff/atomic/atomic.h>
 #endif
 
 #if defined(__APPLE__)
@@ -67,13 +67,13 @@
 
 
 #include <pthread.h>
-#include <cycle.h>
-#include <buffer.hpp>
-#include <ubuffer.hpp>
-#include <spin-lock.hpp>
-#include <svector.hpp>
-#include <squeue.hpp>
-#include <utils.hpp>
+#include <ff/cycle.h>
+#include <ff/buffer.hpp>
+#include <ff/ubuffer.hpp>
+#include <ff/spin-lock.hpp>
+#include <ff/svector.hpp>
+#include <ff/squeue.hpp>
+#include <ff/utils.hpp>
 
 //#define DEBUG_ALLOCATOR 1
 #if defined(DEBUG_ALLOCATOR)
@@ -190,7 +190,7 @@ public:
         ptr = ::malloc(segment_size);
 #else
         if (posix_memalign(&ptr,sysconf(_SC_PAGESIZE),segment_size)!=0)
-            return NULL;
+            return NULL; 
 #endif
         memory_allocated += segment_size;
 

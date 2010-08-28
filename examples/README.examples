@@ -123,6 +123,7 @@ from the input stream, is handled by one of the worker threads.
 Performance:
 
 Machine: Duad quad-cores Xeon E5420 @2.5 GHz (8-cores).
+^^^^^^^
 Command: nq_ff_acc <board-size> 8 4
 
 board-size  # solutions   seq. time   FastFlow Acc.  Speedup 
@@ -134,12 +135,24 @@ board-size  # solutions   seq. time   FastFlow Acc.  Speedup
 
 
 Machine: Dual quad-core Xeon E5520 Nehalem @2.26GHz (8-cores 16-contexts)
+^^^^^^^
 Command: nq_ff_acc <board-size> 16 4
 
 18x18&       666,090,624&      5:53	     34        10.4
 19x19&	   4,968,057,848&     44:56	   4:23        10.2
 20x20&	  39,029,188,884&   6:07:21       35:41        10.3
 21x21&	 314,666,222,712&  ~2.2days     5:07:19        10.3
+
+
+Machine: Dual D12-cores Opteron 6174 @ 2.2GHz (12-cores 2-CPUs)
+^^^^^^^
+Command: nq_ff_acc <board-size> 24 4
+
+18x18&       666,090,624&      5:32	     18        
+19x19&	   4,968,057,848&     43:06	   1:13      
+20x20&	  39,029,188,884&   5:50:32       17:46      
+21x21&	 314,666,222,712&      ---      2:31:58         --
+
 
 
 Command line parameters of the FastFlow version are:
@@ -193,16 +206,45 @@ the computation in N tasks allowing each worker threads to compute an
 entire row of the C matrix.
 
 Performance for N=1024.
-Machine: Dual quad-core Xeon E5520 Nehalem @2.26GHz (8-cores 16-contexts)
 Command: ff_matmul <nworkers>
 
+Machine: Dual quad-core Xeon E5520 Nehalem @2.26GHz (8-cores 16-contexts)
+^^^^^^^
 Sequential time 10780.9 (ms)
 
 <nworkers>  FastFlow time (ms)   OpenMP time (ms) (gcc 4.4.3)
-     4           3072.01              2767.48
+     4           2982.24              2767.48
      8           1495.87              1455.73
     12           1496.01              1492.87
     16           1495.74              1433.31
+
+
+Machine: 32-cores AMD machine (4 CPUs 8 cores x CPU)
+^^^^^^^
+Sequential time 22324.1 (ms)
+
+<nworkers>  FastFlow time (ms)   OpenMP time (ms) (gcc 4.3.2)
+     4           12173.5  	 15286.4
+     8		 11116.2 	 13725.2
+    12            9844.62 	  8607.82
+    16            5890.27 	  7621.7
+    20		  5518.41 	  7490.09
+    24		  5516.41 	  6420.61
+    28		  5194.5	  6327.92
+    32		  5161.4  	  6043.53
+
+
+Machine: Dual D12-cores Opteron 6174 @ 2.2GHz (12-cores 2-CPUs)
+^^^^^^^
+Sequential time 21967.9 (ms)
+
+<nworkers>  FastFlow time (ms)   OpenMP time (ms) (gcc 4.3.2)
+     4         10448.3              8892.13 
+     8		6111.95             5138.76
+    12          4530.39             4336.8
+    16          4771.28             4145.57
+    20		4621.81             4284.28
+    24	        5318.03	            4346.22
 
 
 ------------------------
@@ -248,17 +290,37 @@ the same linear speedup of the hand-tuned mutex-based version of the same
 code even in the non optimal case of farm schema with collector filter 
 and coarse grained computation.  
 
-Performance
-Machine: Dual quad-core Xeon E5520 Nehalem @2.26GHz (8-cores 16-contexts)
-Commands: 
+Performance (*)
+Commands used:
 	 pbzip2_ff -k -v -f linux-2.6.32.8.tar           (Compression)
 	 pbzip2_ff -k -v -f -d linux-2.6.32.8.tar.bz2    (Decompression)
 
 
+Machine: Dual quad-core Xeon E5520 Nehalem @2.26GHz (8-cores 16-contexts)
+^^^^^^^
                  bzip2(v.1.0.3)   pbzip2     pbzip2_ff
 
 Compression          64.25         7.083      7.064
 Decompression        14.67         1.8060     1.8728
+
+
+Machine: 32-cores AMD machine (4 CPUs 8 cores x CPU)
+^^^^^^^^
+                 bzip2(v.1.0.5)   pbzip2     pbzip2_ff
+
+Compression          61.13         3.446733     3.432033
+Decompression        13.02         1.311154     1.8728
+
+
+Machine: Dual 12-cores Opteron 6174 @ 2.2GHz (12-cores 2-CPUs)
+^^^^^^^
+
+                 bzip2(v.1.0.5)   pbzip2(v.1.1.1)   pbzip2_ff
+
+Compression          69.15           4.334679         4.354582
+Decompression        16.92           1.453813         1.931218
+
+
 
 * We executed 10-runs, removed the min and the max values obtained, and 
   than computed the mean.

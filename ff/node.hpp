@@ -22,11 +22,12 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <pthread.h>
-#include <cycle.h>
 #include <iostream>
-#include <utils.hpp>
-#include <buffer.hpp>
-#include <ubuffer.hpp>
+
+#include <ff/cycle.h>
+#include <ff/utils.hpp>
+#include <ff/buffer.hpp>
+#include <ff/ubuffer.hpp>
 
 
 namespace ff {
@@ -38,9 +39,11 @@ namespace ff {
 #endif
 
 
-enum { FF_EOS=0xffffffff, FF_GO_ON=0x1};
+enum { FF_EOS=0xffffffff, FF_EOS_NOFREEZE=(FF_EOS-0x1) , FF_GO_ON=0x1};
 
-#define GO_ON (void*)ff::FF_GO_ON
+#define GO_ON         (void*)ff::FF_GO_ON
+#define EOS_NOFREEZE  (void*)ff::FF_EOS_NOFREEZE
+#define EOS           (void*)ff::FF_EOS
 
 #if defined(TRACE_FASTFLOW)
 #define FFTRACE(x) x
@@ -79,6 +82,7 @@ public:
         pthread_mutex_unlock(&bLock);
     }
    
+
 private:
     int _barrier;
     pthread_mutex_t bLock;
@@ -94,7 +98,7 @@ class ff_thread {
     friend void * proxy_thread_routine(void *arg);
 
 protected:
-    ff_thread():stop(true), // only one shot by default
+    ff_thread():stp(true), // only one shot by default
                 spawned(false),
                 freezing(false), frozen(false),thawed(false),
                 init_error(false) {
@@ -111,42 +115,78 @@ protected:
             abort();
         }
     }
-    virtual ~ff_thread() {}
+
+    virtual ~ff_thread() {
+        if (pthread_attr_destroy(&attr)) {
+            error("ERROR: ~ff_thread: pthread_attr_destroy fails!");
+        }
+    }
 
     void thread_routine() {
         Barrier::instance()->barrier();
-
+        void * ret;
         do {
             init_error=false;
             if (svc_init()<0) {
                 error("ff_thread, svc_init failed, thread exit!!!\n");
                 init_error=true;
                 break;
-            } else  svc(NULL);
+            } else  ret = svc(NULL);
             svc_end();
             
-            pthread_mutex_lock(&mutex);
-            while(freezing) {
-                frozen=true; 
-                pthread_cond_signal(&cond_frozen);
-                pthread_cond_wait(&cond,&mutex);
+            if (disable_cancelability()) {
+                error("ff_thread, thread_routine, could not change thread cancelability");
+                return;
             }
+
+            pthread_mutex_lock(&mutex);
+            if (ret != (void*)FF_EOS_NOFREEZE) {
+                while(freezing) {
+                    frozen=true; 
+                    pthread_cond_signal(&cond_frozen);
+                    pthread_cond_wait(&cond,&mutex);
+                }
+            }
+
             thawed=frozen;
             pthread_cond_signal(&cond);
-            frozen=false;
+            frozen=false;            
             pthread_mutex_unlock(&mutex);
 
+            if (enable_cancelability()) {
+                error("ff_thread, thread_routine, could not change thread cancelability");
+                return;
+            }
+
          
-        } while(!stop);
+        } while(!stp);
 
         if (init_error && freezing) {
             pthread_mutex_lock(&mutex);
             frozen=true;
             pthread_cond_signal(&cond_frozen);
             pthread_mutex_unlock(&mutex);
-        }            
+        } 
     }
 
+    int disable_cancelability()
+    {
+        if (pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancelstate)) {
+            perror("pthread_setcanceltype");
+            return -1;
+        }
+        return 0;
+    }
+
+    int enable_cancelability()
+    {
+        if (pthread_setcancelstate(old_cancelstate, 0)) {
+            perror("pthread_setcanceltype");
+            return -1;
+        }
+        return 0;
+    }
+    
 public:
     virtual void* svc(void * task) = 0;
     virtual int   svc_init() { return 0; };
@@ -154,7 +194,12 @@ public:
 
     int spawn() {
         if (spawned) return -1;
-        if (pthread_create(&th_handle, NULL, // FIX: attr management !
+        
+        if (pthread_attr_init(&attr)) {
+                perror("pthread_attr_init");
+                return -1;
+        }
+        if (pthread_create(&th_handle, &attr,
                            proxy_thread_routine, this) != 0) {
             perror("pthread_create");
             return -1;
@@ -163,8 +208,9 @@ public:
         return 0;
     }
    
+    // wait thread termination
     int wait() {
-        stop=true;
+        stp=true;
         if (isfrozen()) {
             wait_freezing();
             thaw();           
@@ -174,6 +220,7 @@ public:
         return 0;
     }
 
+    // wait thread freezing
     int wait_freezing() {
         pthread_mutex_lock(&mutex);
         while(!frozen) pthread_cond_wait(&cond_frozen,&mutex);
@@ -181,11 +228,16 @@ public:
         return (init_error?-1:0);
     }
 
+    // force the thread to stop at next EOS or next thawing
+    void stop() { stp = true; };
+
+    // force the thread to freeze himself
     void freeze() {  
-        stop=false;
+        stp=false;
         freezing=true; 
     }
     
+    // if the thread is frozen then thaw it
     void thaw() {
         pthread_mutex_lock(&mutex);
         freezing=false;
@@ -199,22 +251,25 @@ public:
         pthread_mutex_unlock(&mutex);
     }
 
-    bool isfrozen() { return freezing;} // tell if freezing has been set
+    // tell if the thread is going to be frozen
+    bool isfrozen() { return freezing;} 
 
     pthread_t get_handle() const { return th_handle;}
 
 private:
-    bool            stop;
+
+    bool            stp;
     bool            spawned;
     bool            freezing;
     bool            frozen;
     bool            thawed;
     bool            init_error;
     pthread_t       th_handle;
-    pthread_attr_t  attr; // TODO
+    pthread_attr_t  attr;
     pthread_mutex_t mutex; 
     pthread_cond_t  cond;
     pthread_cond_t  cond_frozen;
+    int             old_cancelstate;
 };
     
 static void * proxy_thread_routine(void * arg) {
@@ -280,6 +335,10 @@ private:
     virtual int  wait_freezing() { 
         if (!thread) return -1;
         return thread->wait_freezing(); 
+    }
+    virtual void stop() {
+        if (!thread) return; 
+        thread->stop(); 
     }
     virtual void freeze() { 
         if (!thread) return; 
@@ -407,6 +466,7 @@ private:
         
         void* svc(void * ) {
             void * task = NULL;
+            void * ret = (void*)FF_EOS;
             bool inpresent  = (filter->get_in_buffer() != NULL);
             bool outpresent = (filter->get_out_buffer() != NULL);
             bool skipfirstpop = filter->skipfirstpop(); 
@@ -417,7 +477,9 @@ private:
                 if (inpresent) {
                     if (!skipfirstpop) pop(&task); 
                     else skipfirstpop=false;
-                    if (task == (void*)FF_EOS) { 
+                    if ((task == (void*)FF_EOS) || 
+                        (task == (void*)FF_EOS_NOFREEZE)) {
+                        ret = task;
                         if (outpresent)  push(task); 
                         break;
                     }
@@ -425,7 +487,7 @@ private:
                 FFTRACE(++filter->taskcnt);
                 FFTRACE(register ticks t0 = getticks());
 
-                void * result = filter->svc(task);
+                ret = filter->svc(task);
 
 #if defined(TRACE_FASTFLOW)
                 register ticks diff=(getticks()-t0);
@@ -433,20 +495,20 @@ private:
                 filter->ticksmin=std::min(filter->ticksmin,diff);
                 filter->ticksmax=std::max(filter->ticksmax,diff);
 #endif                
-
-                if (!result) {
+                if (!ret || (ret == (void*)FF_EOS) || (ret == (void*)FF_EOS_NOFREEZE)) {
                     // NOTE: The EOS is gonna be produced in the output queue
-                    // and the thread is exiting even if there might be some tasks
+                    // and the thread exits even if there might be some tasks
                     // in the input queue !!!
-                    result = (void *)FF_EOS; 
+                    if (!ret) ret = (void *)FF_EOS;
                     exit=true;
                 }
-                if (outpresent && (result != GO_ON)) push(result);
+                if (outpresent && (ret != GO_ON)) push(ret);
             } while(!exit);
             
             gettimeofday(&filter->wtstop,NULL);
             filter->wttime+=diffmsec(filter->wtstop,filter->wtstart);
-            return NULL;
+
+            return ret;
         }
         
         int svc_init() { 

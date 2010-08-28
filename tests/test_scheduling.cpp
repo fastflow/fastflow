@@ -31,11 +31,11 @@
  */
 #include <vector>
 #include <iostream>
-#include <farm.hpp>
-#include <node.hpp>
-#include <allocator.hpp>
-#include <utils.hpp>  
 #include <algorithm> // for min_element
+#include <ff/farm.hpp>
+#include <ff/node.hpp>
+#include <ff/allocator.hpp>
+#include <ff/utils.hpp>  
 
 using namespace ff;
 

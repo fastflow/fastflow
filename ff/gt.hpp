@@ -20,8 +20,9 @@
  */
 
 #include <iostream>
-#include <utils.hpp>
-#include <node.hpp>
+
+#include <ff/utils.hpp>
+#include <ff/node.hpp>
 
 namespace ff {
 
@@ -52,6 +53,28 @@ protected:
         FFTRACE(lostpopticks+=diff;++popwait);
     }
 
+
+    // FIX: we have to find a way to use selectworker !!!
+    virtual std::deque<ff_node *>::iterator  gather_task(void ** task, 
+                                                         std::deque<ff_node *> & availworkers,
+                                                         std::deque<ff_node *>::iterator & start) {
+        register int cnt, nw=(availworkers.end()-availworkers.begin());
+        const std::deque<ff_node *>::iterator & ite(availworkers.end());
+        do {
+            cnt=0;
+            do {
+                if (++start == ite) start=availworkers.begin();
+                if((*start)->get(task)) return start;
+                else if (++cnt == nw) break;
+            } while(1);
+            losetime_in();
+        } while(1);
+        return ite;
+    }
+
+
+
+#if 0
     /* try to collect one task from the pool of workers */
     virtual void gather_task(void ** result) {
         register int i=0;
@@ -65,10 +88,11 @@ protected:
             i=0;
         } while(1);
 	}
+#endif
 
     void push(void * task) {
          while (! buffer->push(task)) {
-                // if (ch->thxcore>1) {
+             // if (ch->thxcore>1) {
              // if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
              //    else ticks_wait(TICKS2WAIT);
              //} else 
@@ -101,6 +125,7 @@ protected:
 public:
     ff_gatherer(int max_num_workers):
         nworkers(0),max_nworkers(max_num_workers),nextr(0),
+        neos(0),neosnofreeze(0),
         filter(NULL),workers(new ff_node*[max_num_workers]),
         buffer(NULL) {
         time_setzero(tstart);time_setzero(tstop);
@@ -137,16 +162,36 @@ public:
     }
 
     virtual void * svc(void *) {
-        int stop=0;
+        void * ret  = (void*)FF_EOS;
         void * task = NULL;
         bool outpresent  = (get_out_buffer() != NULL);
+
+        // contains current worker
+        std::deque<ff_node *> availworkers; 
+        for(int i=0;i<nworkers;++i)
+            availworkers.push_back(workers[i]);
+        std::deque<ff_node *>::iterator start(availworkers.begin());
+        std::deque<ff_node *>::iterator victim(availworkers.begin());
 
         gettimeofday(&wtstart,NULL);
         do {
             task = NULL;
-            gather_task(&task);            
-            if (task == (void *)FF_EOS) ++stop;
-            else {
+            
+            victim=gather_task(&task, availworkers, start);
+
+
+            //gather_task(&task);            
+            if (task == (void *)FF_EOS) {
+                availworkers.erase(victim);
+                start=availworkers.begin(); // restart iterator
+                ++neos;
+                ret=task;
+            } else if (task == (void *)FF_EOS_NOFREEZE) {
+                availworkers.erase(victim);
+                start=availworkers.begin(); // restart iterator
+                ++neosnofreeze;
+                ret = task;
+            } else {
                 FFTRACE(++taskcnt);
                 if (filter)  {
                     FFTRACE(register ticks t0 = getticks());
@@ -162,20 +207,35 @@ public:
 
                 }
 
-                if (!task) break; // if the filter returns NULL we exit immediatly
-                else if (outpresent && (task != GO_ON)) push(task);
+                // if the filter returns NULL we exit immediatly
+                if (task == GO_ON) continue;
+                
+                // if the filter returns NULL we exit immediatly
+                if (task ==(void*)FF_EOS_NOFREEZE) { 
+                    ret = task;
+                    break; 
+                }
+                if (!task || task==(void*)FF_EOS) {
+                    ret = (void*)FF_EOS;
+                    break;
+                }                
+                if (outpresent) push(task);
             }
-        } while(stop<nworkers);
+        } while((neos<nworkers) && (neosnofreeze<nworkers));
 
         if (outpresent) {
             // push EOS
-            task = (void *)FF_EOS;
+            task = ret;
             push(task);
         }
 
         gettimeofday(&wtstop,NULL);
         wttime+=diffmsec(wtstop,wtstart);
-        return NULL;
+
+        if (neos>=nworkers) neos=0;
+        if (neosnofreeze>=nworkers) neosnofreeze=0;
+
+        return ret;
     }
 
     virtual int svc_init() { 
@@ -225,6 +285,10 @@ private:
     int               nworkers;
     int               max_nworkers;
     int               nextr;
+
+    int               neos;
+    int               neosnofreeze;
+
     ff_node         * filter;
     ff_node        ** workers;
     FFBUFFER        * buffer;

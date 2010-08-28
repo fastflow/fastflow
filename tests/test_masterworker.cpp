@@ -31,8 +31,8 @@
  */
 #include <vector>
 #include <iostream>
-#include <farm.hpp>
-#include <node.hpp>
+#include <ff/farm.hpp>
+#include <ff/node.hpp>
   
 
 using namespace ff;
@@ -41,8 +41,8 @@ using namespace ff;
 class Worker: public ff_node {
 public:
     void * svc(void * task) {
-        std::cerr << "sleep1\n";
-        sleep(1);
+        std::cerr << "sleeping....\n";
+        usleep(10000);
         return task;
     }
 };
@@ -113,5 +113,6 @@ int main(int argc,
     std::cout << "[Main] Farm accelerator stopped\n";
 
     std::cerr << "[Main] DONE\n";
+    farm.ffStats(std::cerr);
     return 0;
 }

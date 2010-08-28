@@ -31,7 +31,7 @@
  */
 
 #include <iostream>
-#include <pipeline.hpp>
+#include <ff/pipeline.hpp>
 
 using namespace ff;
 

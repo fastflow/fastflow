@@ -1,0 +1,7 @@
+add_subdirectory( cholesky )
+add_subdirectory( matmul )
+add_subdirectory( qt-mandelbrot )
+add_subdirectory( pbzip2 )
+add_subdirectory( nqueens )
+add_subdirectory( simple_mandelbrot )
+# add_subdirectory( swps3 )

@@ -42,9 +42,9 @@
  */
 
 #include <iostream>
-#include <pipeline.hpp>
-#include <farm.hpp>
-#include <allocator.hpp>
+#include <ff/pipeline.hpp>
+#include <ff/farm.hpp>
+#include <ff/allocator.hpp>
 
 
 using namespace ff;

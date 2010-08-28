@@ -7,7 +7,7 @@ OPTIMIZE_FLAGS       = -O3 -finline-functions
 CXXFLAGS             = -Wall
 CFLAGS               =
 LDFLAGS              = 
-INCS                 = -I$(FF_ROOT) -I$(FF_ROOT)/atomic
+INCS                 = -I../../
 LIBS                 = -lpthread
 
 INCLUDES             = -I. -I./include $(INCS)
