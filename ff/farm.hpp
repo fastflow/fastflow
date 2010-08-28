@@ -21,11 +21,11 @@
 
 #include <iostream>
 #include <vector>
-#include <lb.hpp>
-#include <gt.hpp>
-#include <node.hpp>
-
 #include <algorithm>
+#include <ff/lb.hpp>
+#include <ff/gt.hpp>
+#include <ff/node.hpp>
+
 
 namespace ff {
 
@@ -64,15 +64,18 @@ public:
      * in_buffer_entries = input queue length
      * out_buffer_entries = output queue length
      * max_num_workers = highest number of farm's worker
+     * worker_cleanup = true deallocate worker object at exit
      */
     ff_farm(bool input_ch=false,
             int in_buffer_entries=DEF_IN_BUFF_ENTRIES, 
-            int out_buffer_entries=DEF_OUT_BUFF_ENTRIES, 
+            int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
+            int worker_cleanup=false,
             int max_num_workers=DEF_MAX_NUM_WORKERS):
         has_input_channel(input_ch),prepared(false),ondemand(false),
         nworkers(0),
         in_buffer_entries(in_buffer_entries),
         out_buffer_entries(out_buffer_entries),
+        worker_cleanup(worker_cleanup),
         max_nworkers(max_num_workers),
         emitter(NULL),collector(NULL),fallback(NULL),
         lb(new LoadBalancer_t(max_num_workers)),gt(NULL),
@@ -90,8 +93,10 @@ public:
         if (lb) delete lb; 
         if (gt) delete(gt); 
         if (workers) {
-            for(int i=0;i<max_nworkers; ++i) 
-                if (workers[i]) delete workers[i];
+            if (worker_cleanup) {
+                for(int i=0;i<max_nworkers; ++i) 
+                    if (workers[i]) delete workers[i];
+            }
             delete [] workers;
         }
     }
@@ -209,6 +214,7 @@ public:
     int run_and_wait_end() {
         if (isfrozen()) return -1; // FIX !!!!
 
+        stop();
         if (run()<0) return -1;           
         if (wait()<0) return -1;
         return 0;
@@ -237,6 +243,11 @@ public:
         if (gt) if (gt->wait_freezing()<0) ret=-1;
         return ret; 
     } 
+
+    void stop() {
+        lb->stop();
+        if (gt) gt->stop();
+    }
 
     void freeze() {
         lb->freeze();
@@ -370,6 +381,7 @@ protected:
     int nworkers;
     int in_buffer_entries;
     int out_buffer_entries;
+    bool worker_cleanup;
     int max_nworkers;
 
     ff_node          *  emitter;

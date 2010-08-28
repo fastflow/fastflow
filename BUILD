@@ -1,0 +1,17 @@
+Compiling instructions using Cmake:
+
+cd <FASTFLOW_ROOT>
+mkdir ./build
+cd ./build
+cmake ../
+make
+make test
+sudo make install DESTDIR=<YOUR_INSTALL_DIR>
+
+It is possible to configure the build by setting the following
+build variables:
+- BUILD_TESTS (on by default)
+- BUILD_EXAMPLES (on by default)
+
+Example:
+cmake ../ -DBUILD_TESTS=ON -DBUILD_EXAMPLES=OFF

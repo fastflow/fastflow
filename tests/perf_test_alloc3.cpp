@@ -37,9 +37,9 @@
 
 #include <vector>
 #include <iostream>
-#include <farm.hpp>
-#include <allocator.hpp>
-#include <cycle.h>
+#include <ff/farm.hpp>
+#include <ff/allocator.hpp>
+#include <ff/cycle.h>
 
 using namespace ff;
 
@@ -69,7 +69,7 @@ static tbb::cache_aligned_allocator<char> * tbballocator=0;
 
 #else  /* FastFlow's allocator */
 #define FF_ALLOCATOR 1
-#include <allocator.hpp>
+#include <ff/allocator.hpp>
 #define ALLOCATOR_INIT() 
 #define MALLOC(size)   (FFAllocator::instance()->malloc(size))
 #define FREE(ptr,size) (FFAllocator::instance()->free(ptr))

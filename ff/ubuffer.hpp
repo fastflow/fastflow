@@ -22,118 +22,77 @@
  * No lock is needed around pop and push methods.
  */
 
-#include <buffer.hpp>
-#include <squeue.hpp>
-#include <spin-lock.hpp>
+#include <ff/dynqueue.hpp>
+#include <ff/buffer.hpp>
+#include <ff/spin-lock.hpp>
 #if defined(HAVE_ATOMIC_H)
 #include <asm/atomic.h>
 #else
-#include <atomic/atomic.h>
+#include <ff/atomic/atomic.h>
 #endif
 
 namespace ff {
 
 class BufferPool {
 public:
-    BufferPool(int resizeChunk, int maxpoolsz)
-        :inuse(resizeChunk),freepool(resizeChunk) {
-        
-        init_unlocked(freepool_lock);
-        init_unlocked(inuse_lock);
-        poolsize=0; maxpoolsize=maxpoolsz;
+    BufferPool(int cachesize)
+        :inuse(cachesize),bufcache(cachesize) {
+        bufcache.init();
     }
     
     ~BufferPool() {
-        SWSR_Ptr_Buffer * p;
-        while(inuse.size()) {
-            p = inuse.back();
-            p->~SWSR_Ptr_Buffer();
-            free(p);
-            inuse.pop_back();
+        union { SWSR_Ptr_Buffer * b1; void * b2;} p;
+
+        while(inuse.pop(&p.b2)) {
+            p.b1->~SWSR_Ptr_Buffer();
+            free(p.b2);
         }
-        while(freepool.size()) {
-            p = freepool.back();
-            p->~SWSR_Ptr_Buffer();	    
-            free(p);
-            freepool.pop_back();
+        while(bufcache.pop(&p.b2)) {
+            p.b1->~SWSR_Ptr_Buffer();	    
+            free(p.b2);
         }
     }
     
     inline SWSR_Ptr_Buffer * const next_w(size_t size)  { 
-        SWSR_Ptr_Buffer * buf = NULL;
-        spin_lock(freepool_lock);
-        if (!freepool.size()) {
-            spin_unlock(freepool_lock);
-            
-            buf = (SWSR_Ptr_Buffer*)malloc(sizeof(SWSR_Ptr_Buffer));
-            new (buf) SWSR_Ptr_Buffer(size);
-            if (buf->init()<0) return NULL;
-            
-            spin_lock(inuse_lock);
-            inuse.push_back(buf);
-            spin_unlock(inuse_lock);
-            
-            return buf;
+        union { SWSR_Ptr_Buffer * buf; void * buf2;} p;
+        if (!bufcache.pop(&p.buf2)) {
+            p.buf = (SWSR_Ptr_Buffer*)malloc(sizeof(SWSR_Ptr_Buffer));
+            new (p.buf) SWSR_Ptr_Buffer(size);
+            if (p.buf->init()<0) return NULL;
         }
         
-        buf = freepool.back();
-        freepool.pop_back();
-        --poolsize;
-        spin_unlock(freepool_lock);
-        
-        spin_lock(inuse_lock);
-        inuse.push_back(buf);
-        spin_unlock(inuse_lock);
-        
-        return buf;
+        inuse.push(p.buf);
+        return p.buf;
     }
     
     inline SWSR_Ptr_Buffer * const next_r()  { 
-        SWSR_Ptr_Buffer * buf = NULL;
-        spin_lock(inuse_lock);
-        if (inuse.size()) {
-            buf = inuse.front();
-            inuse.pop_front();
-        }
-        spin_unlock(inuse_lock);
-        
-        return buf;
+        union { SWSR_Ptr_Buffer * buf; void * buf2;} p;
+        return (inuse.pop(&p.buf2)? p.buf : NULL);
     }
     
     inline void release(SWSR_Ptr_Buffer * const buf) {
-        if (poolsize == maxpoolsize) {
+        buf->reset();
+        if (!bufcache.push(buf)) {
             buf->~SWSR_Ptr_Buffer();	    
             free(buf);
-            return;
         }
-        buf->reset();
-        spin_lock(freepool_lock);
-        freepool.push_back(buf);
-        ++poolsize;
-        spin_unlock(freepool_lock);
     }
     
-    
 private:
-    squeue<SWSR_Ptr_Buffer *>  inuse;
-    //svector<SWSR_Ptr_Buffer *> freepool;
-    squeue<SWSR_Ptr_Buffer *>  freepool;
-    lock_t                     inuse_lock;
-    lock_t                     freepool_lock;
-    int                        poolsize;
-    int                        maxpoolsize;
+    dynqueue           inuse;
+    SWSR_Ptr_Buffer    bufcache;
 };
-
+    
 
 // unbounded buffer based on the SWSR_Ptr_Buffer 
 class uSWSR_Ptr_Buffer {
 
-    enum {POOL_CHUNK=4096, MAX_POOL_SIZE=4};
+    enum {CACHE_SIZE=32};
 
 public:
     uSWSR_Ptr_Buffer(size_t n, const bool fixedsize=false):
         buf_r(0),buf_w(0),size(n),fixedsize(fixedsize),
-        pool(POOL_CHUNK,MAX_POOL_SIZE) {}
+        pool(CACHE_SIZE) {}
     
     ~uSWSR_Ptr_Buffer() {
         if (buf_r) {
@@ -142,7 +101,6 @@ public:
         }
         // buf_w either is equal to buf_w or is freed by BufferPool destructor
     }
-    
     
     bool init() {
         buf_r = (SWSR_Ptr_Buffer*)malloc(sizeof(SWSR_Ptr_Buffer));
@@ -162,17 +120,24 @@ public:
     inline bool available()   { 
         return buf_w->available();
     }
-    
-    /* modify only pwrite pointer */
+ 
+    /* push the input value into the queue. 
+     * If fixedsize has been set, this method may
+     * returns false, this means EWOULDBLOCK 
+     * and the call should be retried.  
+     */
     inline bool push(void * const data) {
+        /* NULL values cannot be pushed in the queue */
         if (!data || !buf_w) return false;
         
         if (!available()) {
 
             if (fixedsize) return false;
 
-            buf_w = pool.next_w(size); // get a new buffer             
-            //DBG(assert(buf_w));
+            // try to get a new buffer             
+            SWSR_Ptr_Buffer * t = pool.next_w(size);
+            if (!t) return false; // EWOULDBLOCK
+            buf_w = t;
         }
         //DBG(assert(buf_w->push(data)); return true;);
         buf_w->push(data);
@@ -183,30 +148,26 @@ public:
         if (!data || !buf_r) return false;
         if (buf_r->empty()) { // current buffer is empty
             if (buf_r == buf_w) return false;
-            if (buf_r->empty()) {
+            if (buf_r->empty()) { // we have to check again
                 SWSR_Ptr_Buffer * tmp = pool.next_r();
                 if (tmp) {
                     // there is another buffer, release the current one 
                     pool.release(buf_r); 
                     buf_r = tmp;                    
                 }
-                if (buf_r->empty()) return false;
             }
         }
         //DBG(assert(buf_r->pop(data)); return true;);
-        buf_r->pop(data);
-        return true;
+        return buf_r->pop(data);
     }    
-    
+
 private:
     // Padding is required to avoid false-sharing between 
     // core's private cache
     SWSR_Ptr_Buffer * buf_r;
     long padding1[longxCacheLine-1];
-    //long              padding[15];
     SWSR_Ptr_Buffer * buf_w;
     long padding2[longxCacheLine-1];
-    //long              padding2[15];
     size_t            size;
     const bool        fixedsize;
     BufferPool        pool;

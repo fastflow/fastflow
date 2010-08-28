@@ -108,8 +108,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include <allocator.hpp>
-#include <farm.hpp>
+#include <ff/allocator.hpp>
+#include <ff/farm.hpp>
 
 /* 
    Notes on MAX_BOARDSIZE:

@@ -33,8 +33,8 @@
 
 #include <iostream>
 #include <vector>
-#include <farm.hpp>
-#include <allocator.hpp>
+#include <ff/farm.hpp>
+#include <ff/allocator.hpp>
 
 
 using namespace ff;

@@ -20,7 +20,7 @@
  */
 
 #include <vector>
-#include <node.hpp>
+#include <ff/node.hpp>
 
 namespace ff {
 
@@ -111,6 +111,10 @@ public:
         
         return ret;
     } 
+
+    void stop() {
+        for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->stop();
+    }
 
     void freeze() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->freeze();

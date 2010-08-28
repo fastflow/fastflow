@@ -38,10 +38,10 @@
 
 #include <unistd.h>
 #include <stdio.h>
-#include <allocator.hpp>
+#include <ff/allocator.hpp>
 #include <iostream>
-#include <farm.hpp>
-#include <spin-lock.hpp>
+#include <ff/farm.hpp>
+#include <ff/spin-lock.hpp>
 #include "marX2.h"
 
 

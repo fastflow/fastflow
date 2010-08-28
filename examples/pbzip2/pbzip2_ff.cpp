@@ -178,7 +178,7 @@ inline void operator delete[] (void * ptr) {
 }
 #endif
 
-#include <farm.hpp>
+#include <ff/farm.hpp>
 
 
 // FastFlow's task type 

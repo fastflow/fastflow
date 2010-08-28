@@ -17,20 +17,25 @@ queues. The memory allocator is built on top of these queues, thus taking
 advantage of their efficiency.
 On top of these basic machnisms FastFlow provides a library of explicitly 
 parallel constructs (a.k.a. skeletons) such as pipeline and farm.
-The farm skeleton, exploits functional replication and abstracts out the 
+The farm skeleton, exploits functional replication and abstracts the 
 parallel filtering of successive independent items of the stream under the 
 control of a scheduler.
 
 
 -----------------
 
-See tests directory for some simple runnable examples (just type 'make').
+See the BUILD file for instructions about Cmake build and testing.
+
+See tests directory for some simple runnable examples.
+
+-----------------
 
 FastFlow has been tested on:
  Intel: i386 x86_64
  Apple: PowerPC i386
 
 
-Please report tips, improvements or bug to:
+Please report tips, improvements or bug to the FastFlow mailing list
+(see http://calvados.di.unipi.it/fastflow) or directly to:
  Massimo Torquati <torquati@di.unipi.it> or <massimotor@gmail.com>
  Marco Aldinucci  <aldinuc@di.unito.it>

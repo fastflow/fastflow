@@ -110,7 +110,7 @@ EXPORT void swps3_translateSequence(char *sequence, int seqLen, char table[256])
 
 #if defined(FAST_FLOW)
 #include <fastflow.h>
-#include <allocator.hpp>
+#include <ff/allocator.hpp>
 
 EXPORT  FastaLib_ff * ff_openLib( char * filename, ALLOCATOR_T * allocator ) {
     FILE * fp;

@@ -31,9 +31,9 @@
  */
 #include <vector>
 #include <iostream>
-#include <farm.hpp>
-#include <node.hpp>
-#include <allocator.hpp>  
+#include <ff/farm.hpp>
+#include <ff/node.hpp>
+#include <ff/allocator.hpp>  
 
 using namespace ff;
 

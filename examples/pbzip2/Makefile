@@ -23,7 +23,11 @@ all: pbzip2 pbzip2_ff
 
 # FastFlow version
 pbzip2_ff: pbzip2_ff.cpp
-	$(CC) $(CFLAGS) -I$(FF_HOME) -I$(FF_HOME)/atomic $< -o $@ -pthread -lpthread -lbz2
+	$(CC) $(CFLAGS) -I$(FF_HOME) $< -o $@ -pthread -lpthread -lbz2
+
+# FastFlow version
+streamzip: streamzip.cpp
+	$(CC) $(CFLAGS) -I$(FF_HOME) $< -o $@ -pthread -lpthread -lbz2
 
 # Standard pbzip2 compile
 pbzip2: pbzip2.cpp
@@ -46,6 +50,6 @@ install: pbzip2
 	chmod a+r $(PREFIX)/man/man1/pbzip2.1
 
 clean:
-	rm -f *.o pbzip2 pbzip2_ff
+	rm -f *.o pbzip2 pbzip2_ff streamzip
 
 cleanall: clean

@@ -24,7 +24,9 @@
 # ---------------------------------------------------------------------------
 
 CC                   = gcc
+#/usr/local/bin/gcc-4.5.1
 CXX 		     = g++
+#/usr/local/bin/g++-4.5.1
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O3 -finline-functions 
@@ -32,15 +34,18 @@ OMP_FLAGS 	     = -fopenmp
 CXXFLAGS             = -Wall #-DALLOCATOR_STATS #-DTRACE_FASTFLOW
 CFLAGS               =
 LDFLAGS              = 
-INCS                 = -I../../ -I../../atomic
+INCS                 = -I../../
 LIBS                 = -lpthread
 
 INCLUDES             = -I. $(INCS)
-TARGET               = ff_matmul matmul
+TARGET               = ff_matmul ff_matmul_v2 matmul
 
 all: $(TARGET)
 
 ff_matmul:ff_matmul.cpp
+	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+ff_matmul_v2:ff_matmul_v2.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 matmul:matmul.cpp

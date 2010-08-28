@@ -28,10 +28,10 @@ CC                   = g++
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O3 -finline-functions
-CXXFLAGS             = -Wall -DTRACE_FASTFLOW
+CXXFLAGS             = -Wall #-DTRACE_FASTFLOW
 CFLAGS               =
 LDFLAGS              = 
-INCS                 = -I$(FF_HOME) -I$(FF_HOME)/atomic
+INCS                 = -I$(FF_HOME)
 LIBS                 = -lpthread
 
 INCLUDES             = -I. $(INCS)

@@ -48,7 +48,7 @@ void swps3_translateSequence(char *sequence, int seqLen, char table[256]);
 
 #if defined(FAST_FLOW)
 #include <fastflow.h>   // define task_t
-#include <allocator.hpp>
+#include <ff/allocator.hpp>
 
 typedef struct {
     FILE *fp;
