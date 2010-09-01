@@ -262,8 +262,8 @@ void MandelbrotWidget::shutdown() {
 
    // Exit procedure should be re-defined to properly shutdown the accelerator
    exitAct = new QAction(tr("&Quit"), this);
-   exitAct->setShortcuts(QKeySequence::Quit);
-   exitAct->setStatusTip(tr("Exit the application"));
+   // exitAct->setShortcuts(QKeySequence::Quit);            // requires QT 4.6
+   // exitAct->setStatusTip(tr("Exit the application"));
    connect(exitAct, SIGNAL(triggered()), this, SLOT(close_acc()));
   
  }
