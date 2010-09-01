@@ -72,7 +72,6 @@
 #include <ff/ubuffer.hpp>
 #include <ff/spin-lock.hpp>
 #include <ff/svector.hpp>
-#include <ff/squeue.hpp>
 #include <ff/utils.hpp>
 
 //#define DEBUG_ALLOCATOR 1

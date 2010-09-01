@@ -21,6 +21,11 @@
     **
     ****************************************************************************/
 
+// Author: Marco Aldinucci - aldinuc@di.unito.it
+// Note: Porting to FF or the QT Mandelbrot example
+// Date: Dec 2009
+ 
+
 #include <QtGui>
 
 #include <math.h>
@@ -51,7 +56,7 @@ MandelbrotWidget::MandelbrotWidget(QWidget *parent)
   qRegisterMetaType<QImage>("QImage");
   connect(&thread, SIGNAL(renderedImage(const QImage &, double)),
 		  this, SLOT(updatePixmap(const QImage &, double)));
-  
+  connect(&thread, SIGNAL(stopped()),this, SLOT(shutdown())); // ff
   setWindowTitle(tr("Mandelbrot"));
   setCursor(Qt::CrossCursor);
   resize(550, 400);
@@ -230,6 +235,17 @@ void MandelbrotWidget::testact3() {
   thread.render(centerX, centerY, curScale, size()); 
 }
 
+void MandelbrotWidget::close_acc() {
+  // Ask shutdown to renderthread
+  thread.stop_acc(); 
+}
+
+//receive signal from renderthread: accelerator is off 
+void MandelbrotWidget::shutdown() { 
+  // now exit
+  close();
+}
+
  void MandelbrotWidget::createActions()
  {
    ZeroAct = new QAction(tr("Default"), this);
@@ -243,6 +259,12 @@ void MandelbrotWidget::testact3() {
    
    ThreeAct = new QAction(tr("Double Helix"), this);
    connect(ThreeAct, SIGNAL(triggered()), this, SLOT(testact3()));
+
+   // Exit procedure should be re-defined to properly shutdown the accelerator
+   exitAct = new QAction(tr("&Quit"), this);
+   exitAct->setShortcuts(QKeySequence::Quit);
+   exitAct->setStatusTip(tr("Exit the application"));
+   connect(exitAct, SIGNAL(triggered()), this, SLOT(close_acc()));
   
  }
 
@@ -254,5 +276,9 @@ void MandelbrotWidget::createMenus()
      testMenu->addAction(ThreeAct);
 	 testMenu->addSeparator();
 	 testMenu->addAction(ZeroAct);
+	 testMenu->addSeparator();
+	 testMenu->addAction(exitAct); // Quit -> accelerator shutdown
      menuBar()->addMenu(testMenu);
  }
+
+

@@ -1,10 +1,16 @@
+find_package (X11 REQUIRED)
+
 set( MANSRC         mandel_ff.cpp )
 set( MANSEQSRC      mandel_seq.c )
 set( MANMEMALLSRC   mandel_ff_mem_all.cpp )
 set( MANPTSRC       mandel_pt.cpp )
 
 set( MARX2SRC       marX2.c )
-set( LINKS          marX2 pthread X11 m )
+
+# ${X11_LIBRARIES} has been used instead of X11 to prevent a bug on
+# MacOS in the linking of -lx11 that requires -L ...
+ 
+set( LINKS          ${X11_LIBRARIES} marX2 pthread  m )
 set( TARGETS        mandel_ff mandel_seq mandel_ff_mem_all mandel_pt )
 
 include_directories( 
@@ -23,5 +29,5 @@ add_executable( mandel_pt           ${MANPTSRC} )
 
 
 foreach( f ${TARGETS} )
-    target_link_libraries( ${f} ${LINKS} )
+    target_link_libraries( ${f} ${LINKS}  )
 endforeach(f)

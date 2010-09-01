@@ -21,6 +21,11 @@
     **
     ****************************************************************************/
 
+// Author: Marco Aldinucci - aldinuc@di.unito.it
+// Note: Porting to FF or the QT Mandelbrot example
+// Date: Dec 2009
+ 
+
 #ifndef MANDELBROTWIDGET_H
 #define MANDELBROTWIDGET_H
 
@@ -56,6 +61,8 @@ class MandelbrotWidget : public QMainWindow
   void testact1();
   void testact2();
   void testact3();
+  void close_acc(); // ff
+  void shutdown(); // ff
   
  private:
   void zoom(double zoomFactor);
@@ -72,6 +79,7 @@ class MandelbrotWidget : public QMainWindow
 
   void createMenus();
   void createActions();
+  QAction *exitAct; //
   QAction *ZeroAct;
   QAction *OneAct;
   QAction *TwoAct;

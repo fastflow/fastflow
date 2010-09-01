@@ -21,5 +21,5 @@ include_directories(
 
 QT4_WRAP_CPP( MOC_SRCS ${MANDHDRS} )
  
-add_executable ( mandelbroth ${MANDSRCS} ${MOC_SRCS} )
-target_link_libraries ( mandelbroth ${QT_LIBRARIES} )
+add_executable ( mandelbrot ${MANDSRCS} ${MOC_SRCS} )
+target_link_libraries ( mandelbrot ${QT_LIBRARIES} )

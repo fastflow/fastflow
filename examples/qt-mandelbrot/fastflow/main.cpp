@@ -21,6 +21,11 @@
     **
     ****************************************************************************/
 
+// Author: Marco Aldinucci - aldinuc@di.unito.it
+// Note: Porting to FF or the QT Mandelbrot example
+// Date: Dec 2009
+
+
 #include <QApplication>
 
 #include "mandelbrotwidget.h"
