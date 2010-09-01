@@ -1,0 +1,36 @@
+* 01/09/10 - v.1.0.0
+   - New release
+   - some bugs fixed
+   - unbounded SWSR queue improved (removed all locks)
+   - added dynqueue (dynamic list-based queue)
+   - all .hpp files moved into the ff directory
+   - more tests added
+   - cmake compilation support (thanks to Fedor Sakharov)
+   - improved the accelerator sturcture (added FF_EOS_NOFREEZE tag)
+   - added the management of second level streams
+   - added the 'stop' method in the farm and pipeline skeleton
+   - fixed ffStats method when run_then_freeze is called multiple times
+   - one memory leak removed
+   - removed some warnings related to strict-aliasing 
+* 22/03/10 - v.1.0.0rc2
+   - Moved to LGPLv3 license. 
+   - More tests and applications (including pbzip2). 
+   - FastFlow Allocator improved. 
+   - Fixed some minor bugs. 
+   - Added the broadcast_task method.
+* 03/02/10 - v.1.0.0rc1 
+   - Minor API revision. 
+   - Improved FastFlow accelerator support. 
+   - More tests and applications,(Nokia QT Mandelbrot and NQueens)
+   - Simple execution trace support.
+   - Allocator improved. 
+* 16/11/09 - v.0.9.7
+   - Major API revision: patterns are no longer object factories but objects. 
+   - Support for arbitrary nesting of pipe, farm, and loop at high-level layer.
+   - First version of the Divide&Conquer pattern (no examples yet).
+   - First version of the FastFlow's Accelerator.
+* 19/10/09 - v.0.6.1
+   - FastFlow-swps3 Smith-Waterman application added.
+* 15/10/09 - v.0.5.0
+   - First release. 
+   - Support for farm skeleton/pattern.

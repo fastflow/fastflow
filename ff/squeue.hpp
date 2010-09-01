@@ -22,6 +22,11 @@
 
 /* Simple yet efficient unbounded FIFO queue.
  *
+ * This queue have to be used by one single thread at a time,
+ * or, each method call have to be protected by a mutex lock. 
+ * For an unbounded producer-consumer queue implementation
+ * see ubuffer.hpp
+ *
  */
 #include <stdlib.h>
 
