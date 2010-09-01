@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
   }
   runs = (double *) malloc(retries*sizeof(double));
 
-  M = (char *) malloc(dim);
+  M = (unsigned char *) malloc(dim);
 
   printf("Mandebroot set from (%g+I %g) to (%g+I %g)\n",
 		 init_a,init_b,init_a+range,init_b+range);
