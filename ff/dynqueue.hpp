@@ -43,10 +43,10 @@ private:
     SWSR_Ptr_Buffer    cache;
 private:
     inline Node * allocnode() {
-        Node * n = NULL;
-        if (cache.pop((void **)&n)) return n;
-        n = (Node *)::malloc(sizeof(Node));
-        return n;
+        union { Node * n; void * n2; } p;
+        if (cache.pop(&p.n2)) return p.n;
+        p.n = (Node *)::malloc(sizeof(Node));
+        return p.n;
     }
 
 public:
@@ -66,12 +66,12 @@ public:
     }
 
     ~dynqueue() {
-        Node * n = NULL;
-        while(cache.pop((void**)&n)) free(n);
+        union { Node * n; void * n2; } p;
+        while(cache.pop(&p.n2)) free(p.n);
         while(head != tail) {
-            n = (Node*)head;
+            p.n = (Node*)head;
             head = head->next;
-            free(n);
+            free(p.n);
         }
         if (head) free((void*)head);
     }

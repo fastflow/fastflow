@@ -44,7 +44,7 @@ OPTIMIZE_FLAGS       = -O6 -finline-functions
 CXXFLAGS             = -Wall #-DTRACE_FASTFLOW
 CFLAGS               =
 LDFLAGS              = 
-INCS                 = -I../ #-I../atomic
+INCS                 = -I../ 
 LIBS                 = -lpthread
 
 INCLUDES             = -I. $(INCS)
@@ -71,6 +71,13 @@ TARGET               = test1 test2 test3 test4 test5 test6 test7 perf_test1 perf
 
 
 all: $(TARGET)
+
+test: all
+	@echo "*****************************************************"
+	@echo "*                                                   *"
+	@echo "* TODO: 'make test' is not being implemented. Sorry!*"
+	@echo "*                                                   *"
+	@echo "*****************************************************"
 
 test1:test1.o
 test2:test2.o

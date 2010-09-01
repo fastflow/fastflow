@@ -35,7 +35,7 @@
 #include <ff/sysdep.h>
 
 #if defined(__APPLE__)
-#include <available.h>
+//#include <available.h>
 #include <Availability.h>
 #endif
 
