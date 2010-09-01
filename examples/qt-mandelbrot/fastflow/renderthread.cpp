@@ -21,10 +21,10 @@
  **
  ****************************************************************************/
 
-/*
-Note: creato come un sequenziale, si vede da coem viene attraversata la matrice 
- */
-
+// Author: Marco Aldinucci - aldinuc@di.unito.it
+// Note: Porting to FF or the QT Mandelbrot example
+// Date: Dec 2009
+ 
 #include <QtGui>
 
 #include <math.h>
@@ -136,7 +136,8 @@ RenderThread::RenderThread(QObject *parent)
 {
   restart = false;
   abort = false;
-
+  cancel = false; // ff
+  
   for (int i = 0; i < ColormapSize; ++i)
 	colormap[i] = rgbFromWaveLength(380.0 + (i * 400.0 / ColormapSize));
 
@@ -184,6 +185,14 @@ void RenderThread::render(double centerX, double centerY, double scaleFactor,
 	restart = true;
 	condition.wakeOne();
   }
+}
+
+// stop the accelerator - wake renderthread up in the case it if sleeping
+void RenderThread::stop_acc() {
+  cancel = true;
+  mutex.lock();
+  condition.wakeOne();
+  mutex.unlock();
 }
 
 void RenderThread::run()
@@ -252,6 +261,12 @@ void RenderThread::run()
 		ac->scanLine = scanLine;
 		ac->allBlack_p =  &allBlack;
 		
+		// check shutdown
+		if (cancel) {
+		  //farm.offload((void *)FF_EOS);
+		  break;
+		}
+
 		farm.offload(ac);
 		// --------------
 		// parallelized code, see worker
@@ -306,7 +321,12 @@ void RenderThread::run()
 	//std::cout << "[Renderthread] EOS arrived\n";
 	//void * eos = (void *)FF_EOS;
 	//farm.offload(eos);
-	farm.wait();  
+	farm.wait();
+	if (cancel) {
+	  std::cout << "[Renderthread] Accelerator is now off \n";
+	  emit stopped();
+	  return;
+	}
 	// ---------------
 	
 	std::cout << "[Renderthread] work completed, going on wait state\n";

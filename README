@@ -24,7 +24,7 @@ control of a scheduler.
 
 -----------------
 
-See the BUILD file for instructions about Cmake build and testing.
+See the BUILD.ME file for instructions about Cmake builds and testing.
 
 See tests directory for some simple runnable examples.
 

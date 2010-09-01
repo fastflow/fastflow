@@ -21,6 +21,11 @@
  **
  ****************************************************************************/
 
+// Author: Marco Aldinucci - aldinuc@di.unito.it
+// Note: Porting to FF or the QT Mandelbrot example
+// Date: Dec 2009
+ 
+
 #ifndef RENDERTHREAD_H
 #define RENDERTHREAD_H
 
@@ -44,8 +49,11 @@ class RenderThread : public QThread
   void render(double centerX, double centerY, double scaleFactor,
 			  QSize resultSize);
 
+  void stop_acc(); //ff shutdown
+
  signals:
   void renderedImage(const QImage &image, double scaleFactor);
+  void stopped(); // ff shutdown
 
  protected:
   void run();
@@ -64,6 +72,8 @@ class RenderThread : public QThread
 
   enum { ColormapSize = 512 };
   uint colormap[ColormapSize];
+
+  bool cancel; // ff shutdown
 };
 
 #endif
