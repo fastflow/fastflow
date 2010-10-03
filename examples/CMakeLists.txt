@@ -1,6 +1,7 @@
 add_subdirectory( cholesky )
 add_subdirectory( matmul )
 add_subdirectory( fibonacci )
+add_subdirectory( quicksort )
 find_package( Qt4 )
 if( QT4_FOUND )
 add_subdirectory( qt-mandelbrot )
