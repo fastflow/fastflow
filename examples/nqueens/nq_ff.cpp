@@ -468,12 +468,13 @@ private:
 
 /* main routine for N Queens program.*/
 int main(int argc, char** argv) {
+    bool check=false;
     time_t t1, t2;
     int boardsize;
     int nworkers=2;  // FIX
     int depth=2;     // FIX
 
-    if (argc == 1 || argc > 4) {
+    if (argc == 1 || argc > 5) {
         printf("FastFlow version by Massimo Torquati of the sequential\n");
         printf("N Queens program by Jeff Somers.\n");
         printf("\tallagash98@yahoo.com or jsomers@alumni.williams.edu\n");
@@ -483,6 +484,8 @@ int main(int argc, char** argv) {
         printf("Usage: nq_ff <width of board> [<num-workers> <depth>]\n"); 
         return 0;
     }
+
+    if (argc==5) check=true;
 
     boardsize = atoi(argv[1]);
     if (argv[2]) 
@@ -541,5 +544,19 @@ int main(int argc, char** argv) {
     printf("Stream Len= %ld\n", streamlen);
     printf("Time: %g (ms)\n", farm.ffTime());
     farm.ffStats(std::cout);
+
+    if (check && boardsize<=18) {
+        const SOLUTIONTYPE R[] = {1,0,0,2,10,4,40,92,352,724,2680,
+                                  14200,73712, 365596, 2279184, 14772512,
+                                  95815104, 666090624}; 
+        
+        if (g_numsolutions != R[boardsize-1]) {
+            printf("Wrong result\n");
+            return -1;
+        }
+        printf("OK\n");
+    }
+
+
     return 0;
 }

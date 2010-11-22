@@ -35,15 +35,19 @@
 #include <ff/sysdep.h>
 
 #if defined(__APPLE__)
-//#include <available.h>
 #include <Availability.h>
 #endif
 
 namespace ff {
+
 // 64bytes is the common size of a cache line
 static const int longxCacheLine = (64/sizeof(long));
 
 class SWSR_Ptr_Buffer {
+    // experimentally we found that a good values is between 
+    // 2 and 6 cache lines (16 tp 48 entries respectively)
+    enum {MULTIPUSH_BUFFER_SIZE=32};
+
 private:
     // Padding is required to avoid false-sharing between 
     // core's private cache
@@ -54,6 +58,16 @@ private:
     const    size_t           size;
     void                   ** buf;
     
+#if defined(SWSR_MULTIPUSH)
+    /* massimot: experimental code (see multipush)
+     *
+     */
+    long padding3[longxCacheLine-2];    
+    // local multipush buffer used by the mpush method
+    void  * multipush_buf[MULTIPUSH_BUFFER_SIZE];
+    int     mcnt;
+#endif
+
 public:
     SWSR_Ptr_Buffer(size_t n, const bool=true):
         pread(0),pwrite(0),size(n),buf(0) {
@@ -62,8 +76,12 @@ public:
     ~SWSR_Ptr_Buffer() { if (buf)::free(buf); }
     
     /* initialize the circular buffer. */
-    bool init() {
+    bool init(const bool startatlineend=false) {
         if (buf) return false;
+
+#if defined(SWSR_MULTIPUSH)
+        if (size<MULTIPUSH_BUFFER_SIZE) return false;
+#endif
 
 #if __MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_6
         buf = (void **)::malloc(size*sizeof(void*));
@@ -75,8 +93,7 @@ public:
         buf=(void **)ptr;
 #endif
 
-        bzero(buf,size*sizeof(void*));
-
+        reset(startatlineend);
         return true;
     }
 
@@ -95,7 +112,7 @@ public:
     /* modify only pwrite pointer */
     inline bool push(void * const data) {
         if (!data) return false;
-        
+
         if (available()) {
             /* Write Memory Barrier: ensure all previous memory write 
              * are visible to the other processors before any later
@@ -112,12 +129,13 @@ public:
         return false;
     }
 
-#if 1
-    // massimo: experimental code
-    // NOTE: len should be a multiple of  longxCacheLine/sizeof(void*)
-    //
+    /*
+     *
+     * NOTE: len should be a multiple of  longxCacheLine/sizeof(void*)
+     *
+     */
     inline bool multipush(void * const data[], int len) {
-        
+        if ((unsigned)len>=size) return false;
         register unsigned long last = pwrite + ((pwrite+ --len >= size) ? (len-size): len);
         register unsigned long r    = len-(last+1), l=last, i;
         if (buf[last]==NULL) {
@@ -134,11 +152,41 @@ public:
             
             WMB();
             pwrite = (last+1 >= size) ? 0 : (last+1);
+#if defined(SWSR_MULTIPUSH)
+            mcnt = 0; // reset mpush counter
+#endif
             return true;
         }
         return false;
     }
-#endif
+
+
+#if defined(SWSR_MULTIPUSH)
+    /* massimot: experimental code
+     *
+     * This method provides the same interface of the push one but 
+     * uses the multipush method to provide a batch of items to
+     * the consumer thus ensuring better cache locality and 
+     * lowering the cache trashing.
+     */
+    inline bool mpush(void * const data) {
+        if (!data) return false;
+        
+        if (mcnt==MULTIPUSH_BUFFER_SIZE)
+            return multipush(multipush_buf,MULTIPUSH_BUFFER_SIZE);
+
+        multipush_buf[mcnt++]=data;
+
+        if (mcnt==MULTIPUSH_BUFFER_SIZE)
+            return multipush(multipush_buf,MULTIPUSH_BUFFER_SIZE);
+
+        return true;
+    }
+
+    inline bool flush() {
+        return (mcnt ? multipush(multipush_buf,mcnt) : true);
+    }
+#endif /* SWSR_MULTIPUSH */
 
     /* like pop but doesn't copy any data */
     inline bool  inc() {
@@ -159,7 +207,24 @@ public:
         return buf[pread];  
     }    
 
-    inline void reset() { pread=pwrite=0; bzero(buf,size*sizeof(void*));}
+    inline void reset(const bool startatlineend=false) { 
+        if (startatlineend) {
+            /*
+             *  This is a good starting point if the multipush method 
+             *  will be used in order to reduce cache trashing.
+             */
+            pwrite = longxCacheLine-1;
+            pread  = longxCacheLine-1;
+        } else {
+            pread=pwrite=0; 
+        }
+#if defined(SWSR_MULTIPUSH)        
+        mcnt   = 0;
+#endif        
+        bzero(buf,size*sizeof(void*));
+    }
+
+
 };
 
 } // namespace
