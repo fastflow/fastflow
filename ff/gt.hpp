@@ -125,7 +125,7 @@ protected:
 public:
     ff_gatherer(int max_num_workers):
         nworkers(0),max_nworkers(max_num_workers),nextr(0),
-        neos(0),neosnofreeze(0),
+        neos(0),neosnofreeze(0),channelid(-1),
         filter(NULL),workers(new ff_node*[max_num_workers]),
         buffer(NULL) {
         time_setzero(tstart);time_setzero(tstop);
@@ -149,6 +149,11 @@ public:
     }
 
     void set_out_buffer(FFBUFFER * const buff) { buffer=buff;}
+
+    /* return the channel id of the last pop 
+     *  
+     */
+    const int get_channel_id() const { return channelid;}
 
     FFBUFFER * const get_out_buffer() const { return buffer;}
 
@@ -288,6 +293,7 @@ private:
 
     int               neos;
     int               neosnofreeze;
+    int               channelid;
 
     ff_node         * filter;
     ff_node        ** workers;

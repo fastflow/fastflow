@@ -58,7 +58,11 @@ public:
         if (!bufcache.pop(&p.buf2)) {
             p.buf = (SWSR_Ptr_Buffer*)malloc(sizeof(SWSR_Ptr_Buffer));
             new (p.buf) SWSR_Ptr_Buffer(size);
+#if defined(uSWSR_MULTIPUSH)        
+            if (p.buf->init(true)<0) return NULL;
+#else
             if (p.buf->init()<0) return NULL;
+#endif
         }
         
         inuse.push(p.buf);
@@ -86,8 +90,27 @@ private:
 
 // unbounded buffer based on the SWSR_Ptr_Buffer 
 class uSWSR_Ptr_Buffer {
-
+private:
     enum {CACHE_SIZE=32};
+#if defined(uSWSR_MULTIPUSH)
+    enum { MULTIPUSH_BUFFER_SIZE=16};
+
+    inline bool multipush() {
+        if (buf_w->multipush(multipush_buf,MULTIPUSH_BUFFER_SIZE)) {
+            mcnt=0; 
+            return true;
+        }
+
+        if (fixedsize) return false;
+        // try to get a new buffer             
+        SWSR_Ptr_Buffer * t = pool.next_w(size);
+        if (!t) return false; // EWOULDBLOCK
+        buf_w = t;
+        buf_w->multipush(multipush_buf,MULTIPUSH_BUFFER_SIZE);
+        mcnt=0;
+        return true;
+    }
+#endif
 
 public:
     uSWSR_Ptr_Buffer(size_t n, const bool fixedsize=false):
@@ -103,10 +126,18 @@ public:
     }
     
     bool init() {
-        buf_r = (SWSR_Ptr_Buffer*)malloc(sizeof(SWSR_Ptr_Buffer));
+        if (buf_w || buf_r) return false;
+#if defined(uSWSR_MULTIPUSH)
+        if (size<=MULTIPUSH_BUFFER_SIZE) return false;
+#endif
+        buf_r = (SWSR_Ptr_Buffer*)::malloc(sizeof(SWSR_Ptr_Buffer));
         if (!buf_r) return false;
         new ((void *)buf_r) SWSR_Ptr_Buffer(size);
+#if defined(uSWSR_MULTIPUSH)        
+        if (buf_r->init(true)<0) return false;
+#else
         if (buf_r->init()<0) return false;
+#endif
         buf_w = buf_r;
         return true;
     }
@@ -143,6 +174,32 @@ public:
         buf_w->push(data);
         return true;
     }
+
+#if defined(uSWSR_MULTIPUSH)
+    /* massimot: experimental code
+     *
+     * This method provides the same interface of the push one but 
+     * uses the multipush method to provide a batch of items to
+     * the consumer thus ensuring better cache locality and 
+     * lowering the cache trashing.
+     */
+    inline bool mpush(void * const data) {
+        if (!data) return false;
+        
+        if (mcnt==MULTIPUSH_BUFFER_SIZE) 
+            return multipush();        
+
+        multipush_buf[mcnt++]=data;
+
+        if (mcnt==MULTIPUSH_BUFFER_SIZE) return multipush();
+
+        return true;
+    }
+
+    inline bool flush() {
+        return (mcnt ? multipush() : true);
+    }
+#endif /* uSWSR_MULTIPUSH */
     
     inline bool  pop(void ** data) {
         if (!data || !buf_r) return false;
@@ -168,7 +225,15 @@ private:
     long padding1[longxCacheLine-1];
     SWSR_Ptr_Buffer * buf_w;
     long padding2[longxCacheLine-1];
-    size_t            size;
+#if defined(uSWSR_MULTIPUSH)
+    /* massimot: experimental code (see multipush)
+     *
+     */
+    // local multipush buffer used by the mpush method
+    void  * multipush_buf[MULTIPUSH_BUFFER_SIZE];
+    int     mcnt;
+#endif
+    const size_t      size;
     const bool        fixedsize;
     BufferPool        pool;
 };
