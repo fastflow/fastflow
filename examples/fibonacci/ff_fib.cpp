@@ -89,6 +89,7 @@ void usage(char * name) {
 }
 
 int main(int argc, char * argv[]) {
+    bool check=false;
     int n,b=20; 
 #ifdef HAVE_SYSCONF_NPROCESSORS
     int nworkers = sysconf(_SC_NPROCESSORS_ONLN);
@@ -97,25 +98,26 @@ int main(int argc, char * argv[]) {
 #endif
 
     if (argc>=3) {	
-	n = atoi(argv[1]); b = atoi(argv[2]);
-	if (argc==4)  nworkers = atoi(argv[3]);
-	if (b>=n) {
-	    std::cerr << "ERROR: n-stop should be less than n\n";
-	    usage(argv[0]);
-	    return -1;
-	}
+        n = atoi(argv[1]); b = atoi(argv[2]);
+        if (argc==4)  nworkers = atoi(argv[3]);
+        if (argc==5)  check=true;
+        if (b>=n) {
+            std::cerr << "ERROR: n-stop should be less than n\n";
+            usage(argv[0]);
+            return -1;
+        }
     } else if (argc == 2) {
-	n = atoi(argv[1]);			
+        n = atoi(argv[1]);			
     } else {
-	usage(argv[0]);
-	return -1;
+        usage(argv[0]);
+        return -1;
     }
-
+    
     if (n<=30) {
-	std::cout << "**SEQUENTIAL** fib(" << n << ")= " << fib(n) << "\n";
-	return 0;
+        std::cout << "**SEQUENTIAL** fib(" << n << ")= " << fib(n) << "\n";
+        return 0;
     }
-
+    
     ff_farm<> farm;    
     Emitter E(n, b);
     farm.add_emitter(&E);
@@ -130,5 +132,14 @@ int main(int argc, char * argv[]) {
 
     std::cout << "fib(" << n << ")= " << E.get_result() << "\n";
     printf("Time: %g (ms)\n", farm.ffTime());
+
+    if (check && n>30) {
+        if (fib(n) != E.get_result()) {
+            std::cerr << "Wrong result\n";
+            return -1;
+        }
+        std::cout << "Ok\n";
+    }
+
     return 0;
 }

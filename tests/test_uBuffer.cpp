@@ -28,7 +28,8 @@
  * Author: Massimo Torquati
  *  March   2010
  *  August  2010 (improved)
- *
+ *  October 2010 (added mpush)
+ * 
  * Simple test for the unbounded SWSR buffer. 
  * It tests also the memory allocator and bounded buffer.
  *
@@ -42,6 +43,7 @@
 #include <ff/spin-lock.hpp>
 #include <ff/atomic/atomic.h>
 #include <ff/cycle.h>
+#include <ff/mapping_utils.hpp>
 
 #if defined(PAPI_PERF)
 #include "papiStdEventDefs.h"
@@ -98,98 +100,49 @@ static pthread_mutex_t block = PTHREAD_MUTEX_INITIALIZER;
 std::deque<void*> * b;
 #endif // USE_DEQUE
 
-int WARMUP=0;           // number of tasks for the warm-up
+int WARMUP=0;            // number of tasks for the warm-up
 int ntasks=0;            // total number of tasks
 int cpu_P=-1, cpu_C=-1;  // cpu's number
 #if defined(PAPI_PERF)
 static int EventSet = PAPI_NULL;
 #endif
 
-
-#if defined(__linux__)
-
-#include <asm/unistd.h>
-#define gettid() syscall(__NR_gettid)
-#include <sys/resource.h>
-
-static inline const int numCores() {
-    FILE       *f;
-    int         n;
-    
-    f = popen("cat /proc/cpuinfo |grep processor | wc -l", "r");
-    fscanf(f, "%d", &n);
-    pclose(f);
-    return n;
-}
-
-static inline unsigned long getCpuFreq() {
-    FILE       *f;
-    unsigned long long t;
-    float       mhz;
-
-    f = popen("cat /proc/cpuinfo |grep MHz |head -1|sed 's/^.*: //'", "r");
-    fscanf(f, "%f", &mhz);
-    t = (unsigned long)(mhz * 1000000);
-    pclose(f);
-    return (t);
-}
-
-
-/*
- * priority_level is a value in the range -20 to 19.
- * The default priority is 0, lower priorities cause more favorable scheduling.
- *
- */
-static inline int mapThreadToCpu(int cpu_id, int priority_level=0) {
-#ifdef CPU_SET
-    cpu_set_t mask;
-    CPU_ZERO(&mask);
-    CPU_SET(cpu_id, &mask);
-    if (sched_setaffinity(gettid(), sizeof(mask), &mask) != 0) 
-        return -1;
-
-    if (priority_level) 
-        if (setpriority(PRIO_PROCESS, gettid(),priority_level) != 0) {
-            perror("setpriority:");
-            return -2;
-        }
-#else
-#warning "CPU_SET not defined, cannot map thread to specific CPU"
+#if defined(uSWSR_MULTIPUSH) || defined(SWSR_MULTIPUSH)
+#define MULTIPUSH 1
 #endif
 
-    return 0;
-}
-
-#else // __linux__
-
-static inline int mapThreadToCpu(int cpu_id, int priority_level=0) {
-    return -1;
-}
+#if defined(COMPUTES)
+#include <math.h>
+inline double f(double x) { return sin(x); }
+inline double g(double x) { return cos(x); }
 #endif
 
-
+#if defined(COMPUTES)
+static union {double a; void *b;} x;
+static double y=0.65432012;
+#endif
 
 static inline void PUSH(const int i) {
 #if defined(NO_ALLOC) 
-    int * p = (int *)(0x1234+i);
+    long * p = (long *)(0x1234+i);
     if (1) {
 #else       
-    int * p = (int*)malloc(8*sizeof(int));
+    long * p = (long *)malloc(8*sizeof(int));
+
     if (p) {
         for(register int j=0;j<8;++j) p[j]=i+j;
 #endif
 
+#if defined(COMPUTES)
+        x.a = 3.1415*f(x.a);
+        p= (long *)(x.b);
+#endif
+
 #if !defined(USE_DEQUE)
 
-#if defined(FF_BOUNDED) && defined(MULTIPUSH)
-        static void * data[32];
-        static int cdata=0;
-        data[cdata++]=p;
-        if (cdata==32) {
-            do ; while(!( b->multipush(data,32)));
-            cdata=0;
-        }
-#else
+#if defined(MULTIPUSH)
+        do ; while(!(b->mpush(p)));
+#else 
 	    do ; while(!(b->push(p)));
 #endif
 
@@ -215,9 +168,12 @@ void * P(void *) {
 #endif
 
     if (cpu_P != -1) 
-        if (mapThreadToCpu(cpu_P)!=0)
+        if (ff_mapThreadToCpu(cpu_P)!=0)
             std::cerr << "Cannot map producer thread to cpu " << cpu_P << ", going on...\n";
 
+#if defined(COMPUTES)
+    x.a=0.12345678;
+#endif
     for(int i=0;i<WARMUP;++i) PUSH(i);
 
     Barrier::instance()->barrier();
@@ -227,11 +183,21 @@ void * P(void *) {
  
 #if !defined(USE_DEQUE)
     bool result; 
-    do { result = b->push((void*)FF_EOS); } while(!result);
+    do { 
+#if defined(MULTIPUSH)
+        result = b->mpush((void*)FF_EOS); 
+#else        
+        result = b->push((void*)FF_EOS); 
+#endif
+    } while(!result);
 #else
     LOCK(block);
     b->push_back((void*)FF_EOS);
     UNLOCK(block);
+#endif
+
+#if defined(MULTIPUSH)
+    while(!b->flush());
 #endif
 
     pthread_exit(NULL);
@@ -243,11 +209,14 @@ void * C(void *) {
     ffa.register4free();
 #endif
 
-
-
     bool end=false;
-    void * task=NULL;
+    union {double a; void *b;} task;
     int k=0;
+
+    if (cpu_C != -1) 
+        if (ff_mapThreadToCpu(cpu_C)!=0)
+            std::cerr << "Cannot map consumer thread to cpu " << cpu_C << ", going on...\n";
+    
 #if defined(PAPI_PERF)
     int retval; 
 	if ( ( retval = PAPI_create_eventset( &EventSet ) ) != PAPI_OK ) {
@@ -255,12 +224,20 @@ void * C(void *) {
         exit(-1);
     }
 
-    const int event = PAPI_L2_DCM;
-    if ( PAPI_add_event( EventSet, event ) != PAPI_OK ) {
-        std::cerr << "PAPI_add_event error\n";
-        exit(-1);
-    }
+    const int eventlist[] = {
+		PAPI_L1_DCM,
+		PAPI_L2_DCM,
+		0
+	};
 
+    int i=0;
+    while(eventlist[i]!=0) {
+        if ( PAPI_add_event( EventSet, eventlist[i] ) != PAPI_OK ) {
+            std::cerr << "PAPI_add_event error " << i << "\n";
+            exit(-1);
+        }
+        ++i;
+    }
 
     if ( (retval=PAPI_start( EventSet ))  != PAPI_OK ) {
         std::cerr << "PAPI_start error\n";
@@ -270,17 +247,12 @@ void * C(void *) {
     }
 #endif // PAPI_PERF
 
-
-    if (cpu_C != -1) 
-        if (mapThreadToCpu(cpu_C)!=0)
-            std::cerr << "Cannot map consumer thread to cpu " << cpu_C << ", going on...\n";
-
     Barrier::instance()->barrier();
    
     while(!end) {
     retry:
 #if !defined(USE_DEQUE)
-	if (b->pop(&task)) {
+	if (b->pop(&task.b)) {
 #else 
 	LOCK(block);
 	if (b->size()) {
@@ -290,24 +262,29 @@ void * C(void *) {
 #endif
 
 	
-	    if (task == (void*)FF_EOS) { 
+	    if (task.b == (void*)FF_EOS) { 
 		end=true;
 	    } else {
+#if defined(COMPUTES)
+        y+= task.a - g(y);
+#else
 #if defined(NO_ALLOC)
-            if (task != (void *)(0x1234+k))
-                std::cerr << " ERROR, wrong task received\n";
+            if (task.b != (void *)(0x1234+k))
+                std::cerr << " ERROR, wrong task received " << task.b << " expected " << (void *)(0x1234+k) << " \n";
 #else
         for(register int j=0;j<8;++j) {
-            int * t = (int *)task;
+            long * t = (long *)task.b;
 		    if (t[j]!=(k+j)) {
 			std::cerr << " ERROR, value is " << t[j] << " should be " << k+j << "\n";
 		    } else t[j]++; // just write in the array
         }
 #endif
+#endif
+
 		++k;
 
 #if !defined(NO_ALLOC)		
-		free(task);
+		free(task.b);
 #endif
 	    }
 	} else {
@@ -320,15 +297,23 @@ void * C(void *) {
     ffTime(STOP_TIME);	
 
 #if defined(PAPI_PERF)
-    if ( PAPI_stop( EventSet, NULL )  != PAPI_OK )
-        std::cerr << "PAPI_stop error\n";
+    long long int values[4];
+    char descr[PAPI_MAX_STR_LEN];
     
-    long long int value=0;
-    if ( ( retval = PAPI_read( EventSet, &value ) ) != PAPI_OK )
-        std::cerr << "PAPI_read error\n";
-    else
-        std::cout << "L2 miss: " << value << "\n";
+    if ( PAPI_stop( EventSet, values )  != PAPI_OK )
+        std::cerr << "PAPI_stop error event " << i << "\n";
+
+    i=0;
+    while(eventlist[i]!=0) {
+        PAPI_event_code_to_name( eventlist[i], descr );
+        std::cout << descr << " " << values[i] << "\n";
+        ++i;
+    }
 #endif  
+
+#if defined(COMPUTES)
+    printf("result y=%f\n", y);
+#endif
 
     pthread_exit(NULL);
 }
@@ -336,12 +321,13 @@ void * C(void *) {
 
 
 int main(int argc, char * argv[]) {
+    std::cout << "Num of cores " <<  ff_numCores() << "\n";
+    std::cout << "Frequency " <<  ff_getCpuFreq() << "\n";
     if (argc!=3) {
         if (argc == 5) {
             cpu_P = atoi(argv[3]);
             cpu_C = atoi(argv[4]);
-#if defined(__linux__)
-            int nc = numCores();
+            int nc = ff_numCores();
             if (cpu_P < 0 || cpu_P >= nc) {
                 std::cerr << "Wrong producer thread CPU number, range is [0-" << nc << "[\n";
                 return -1;
@@ -350,8 +336,6 @@ int main(int argc, char * argv[]) {
                 std::cerr << "Wrong consumer thread CPU number, range is [0-" << nc << "[\n";
                 return -1;
             }
-#endif            
-            ;
         } else {        
             std::cerr << "use: " << argv[0] << " (base-)buffer-size ntasks [#P-core] [#C-core]\n";
             return -1;
@@ -359,6 +343,13 @@ int main(int argc, char * argv[]) {
     }
     int  size = atoi(argv[1]);
     ntasks= atoi(argv[2]);
+
+#if defined(COMPUTES)
+    if (sizeof(double) != sizeof(long)) {
+        std::cerr << "cannot execute the \"COMPUTES\" code on this architecture\n";
+        return -1;
+    }
+#endif
 
 
 #if defined(PAPI_PERF)
@@ -482,7 +473,6 @@ int main(int argc, char * argv[]) {
     pthread_join(P_handle,NULL);
 
 
-    ffTime(STOP_TIME);
     std::cout << "DONE, time= " << ffTime(GET_TIME) << " (ms)\n";
 #if !defined(USE_DEQUE)
     delete b;

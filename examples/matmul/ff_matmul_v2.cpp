@@ -50,7 +50,7 @@ public:
     void * svc(void * task) {
         int i = *(int *)task;
         
-        register unsigned int _C=0;
+        register unsigned long _C=0;
         for(register int j=0;j<N;++j) {
             for(register int k=0;k<N;++k)
                 _C += A[i][k]*B[k][j];
@@ -66,6 +66,7 @@ public:
 
 int main(int argc, 
          char * argv[]) {
+    bool check=false;
     
     if (argc<2) {
         std::cerr << "use: " 
@@ -74,6 +75,8 @@ int main(int argc,
         return -1;
     }
     
+    if (argc==3) check=true;
+
     int nworkers=atoi(argv[1]);
     
     if (nworkers<=0) {
@@ -123,6 +126,23 @@ int main(int argc,
         printf("\n");
     }
 #endif
+
+    if (check) {
+        unsigned long R=0;
+        
+        for(int i=0;i<N;++i) 
+            for(int j=0;j<N;++j) {
+                for(int k=0;k<N;++k)
+                    R += A[i][k]*B[k][j];
+                
+                if (C[i][j]!=R) {
+                    std::cerr << "Wrong result\n";
+                    return -1;
+                }
+                R=0;
+            }
+        std::cout << "OK\n";
+    }
 
 
     return 0;

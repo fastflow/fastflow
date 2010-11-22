@@ -50,6 +50,6 @@ add_test( perf_test_alloc1 ${CMAKE_CURRENT_BINARY_DIR}/perf_test_alloc1 3 100 1 
 add_test( perf_test_alloc2 ${CMAKE_CURRENT_BINARY_DIR}/perf_test_alloc2 3 100 1 10 1000 )
 add_test( test_freeze ${CMAKE_CURRENT_BINARY_DIR}/test_freeze 3 1000 10 )
 add_test( test_dt ${CMAKE_CURRENT_BINARY_DIR}/test_dt 3 50 )
-add_test( test_uBuffer ${CMAKE_CURRENT_BINARY_DIR}/test_uBuffer 1024 3 )
+add_test( test_uBuffer ${CMAKE_CURRENT_BINARY_DIR}/test_uBuffer 1024 1000000 0 0)
 add_test( test_scheduling ${CMAKE_CURRENT_BINARY_DIR}/test_scheduling 3 10 )
 add_test( test_masterworker ${CMAKE_CURRENT_BINARY_DIR}/test_masterworker 3 1000 10 )

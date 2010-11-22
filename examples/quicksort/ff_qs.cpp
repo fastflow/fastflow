@@ -255,6 +255,7 @@ int main(int argc, char *argv[]) {
                 error("wrong result\n");
                 return -1;
             }
+        printf("Ok\n");
     }
 
     delete [] A;

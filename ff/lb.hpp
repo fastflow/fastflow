@@ -73,12 +73,14 @@ protected:
     }
 
     virtual inline void losetime_in() { 
-        //FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
-        //ticks_wait(TICKS2WAIT); 
+        FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
+        ticks_wait(TICKS2WAIT); 
+#if 0
         FFTRACE(register ticks t0 = getticks());
         usleep(TICKS2WAIT);
         FFTRACE(register ticks diff=(getticks()-t0));
         FFTRACE(lostpopticks+=diff;++popwait);
+#endif
     }
 
     /* main scheduling function also called by ff_send_out! */
@@ -119,9 +121,14 @@ protected:
             cnt=0;
             do {
                 if (++start == ite) start=availworkers.begin();
-                if((*start)->get(task)) return start;
+                if((*start)->get(task)) {
+                    channelid = (*start)->get_my_id();
+                    return start;
+                }
                 else if (++cnt == nw) {
+                    // FIX: check!
                     if (buffer && buffer->pop(task)) {
+                        channelid = -1;
                         return ite;
                     }
                     break;
@@ -170,7 +177,7 @@ protected:
 public:
 
     ff_loadbalancer(int max_num_workers): 
-        nworkers(0),max_nworkers(max_num_workers),nextw(0),nextINw(0),
+        nworkers(0),max_nworkers(max_num_workers),nextw(0),nextINw(0),channelid(-1),
         filter(NULL),workers(new ff_node*[max_num_workers]),
         fallback(NULL),buffer(NULL),skip1pop(false),master_worker(false) {
         time_setzero(tstart);time_setzero(tstop);
@@ -208,6 +215,12 @@ public:
 
     FFBUFFER * const get_in_buffer() const { return buffer;}
     
+    /* return the channel id of the last pop 
+     *  -1 is the emitter input buffer
+     */
+    const int get_channel_id() const { return channelid;}
+    void reset_channel_id() { channelid=-1;}
+
     void skipfirstpop() { skip1pop=true;}
     
     int  set_masterworker() {
@@ -471,6 +484,7 @@ private:
     int                max_nworkers;
     int                nextw;   // out index
     int                nextINw; // in index, used only in master-worker mode
+    int                channelid; 
     ff_node         *  filter;
     ff_node        **  workers;
     ff_node         *  fallback;
