@@ -170,6 +170,12 @@ struct all_stats {
 #endif /* ALLOCATOR_STATS */
 
 
+static inline bool isPowerOfTwoMultiple(size_t alignment, size_t multiple) {
+    return alignment && ((alignment & (alignment-multiple))==0);
+}
+    
+
+
 /*
  * This simple allocator uses standard libc allocator to 
  * allocate large chunk of memory.
@@ -590,7 +596,7 @@ public:
     inline const size_t getsize() const { return size; }
     inline const size_t getnslabs() const { return nslabs;}
     inline const size_t allocatedsize() const { 
-        return alloc->getallocated();
+        return (alloc?alloc->getallocated():0);
     }
     
 protected:
@@ -655,7 +661,7 @@ protected:
         size_t s=0;
         svector<SlabCache *>::iterator b(slabcache.begin()), e(slabcache.end());
         for(;b!=e;++b) {
-            if ((*b)->getnslabs())
+            if ((*b) && (*b)->getnslabs())
                 s+=(*b)->allocatedsize();
         }
         return s;
@@ -758,14 +764,50 @@ public:
         return buf;
     }
 
+    inline int posix_memalign(void **memptr, size_t alignment, size_t size) {
+        if (!isPowerOfTwoMultiple(alignment, sizeof(void *))) return -1;
+        
+        size_t realsize = size+alignment;
+
+        if (realsize > MAX_SLABBUFFER_SIZE ||
+            (slabcache[getslabs(realsize)]->getnslabs()==0)) {
+             ALLSTATS(atomic_long_inc(&all_stats::instance()->sysmalloc));
+            void * ptr = ::malloc(realsize+sizeof(Buf_ctl));          
+            if (!ptr) return -1;
+            ((Buf_ctl *)ptr)->ptr = 0;
+            void * ptraligned = (void *)(((long)((char*)ptr+sizeof(Buf_ctl)) + alignment) & ~(alignment-1));
+            ((Buf_ctl *)((char *)ptraligned - sizeof(Buf_ctl)))->ptr = 0;
+            *memptr = ptraligned;
+            return 0;
+        }
+        int entry = getslabs(realsize);
+        DBG(if (entry<0) abort());
+        ALLSTATS(atomic_long_inc(&all_stats::instance()->nmalloc));
+        void * buf = slabcache[entry]->getitem();
+        Buf_ctl * backptr = (Buf_ctl *)((char *)buf - sizeof(Buf_ctl));
+        DBG(assert(backptr)); 
+        void * ptraligned = (void *)(((long)((char*)buf) + alignment) & ~(alignment-1));
+        for(Buf_ctl *p=(Buf_ctl*)buf;p!=(Buf_ctl*)ptraligned;p++)
+            p->ptr = backptr->ptr;
+
+
+        *memptr = ptraligned;
+        return 0;
+    }
+
     inline void   free(void * ptr) {
         if (!ptr) return;
         Buf_ctl  * buf = (Buf_ctl *)((char *)ptr - sizeof(Buf_ctl));
-        
+
         if (!buf->ptr) { 
             ALLSTATS(atomic_long_inc(&all_stats::instance()->sysfree));
             ::free(buf); 
             return; 
+        }
+        Buf_ctl  * buf2 = (Buf_ctl *)((char *)buf - sizeof(Buf_ctl));
+        while(buf->ptr == buf2->ptr) {
+            buf = buf2;
+            buf2 = (Buf_ctl *)((char *)buf - sizeof(Buf_ctl));
         }
         free(buf);
     }
@@ -868,6 +910,10 @@ public:
         return ff_allocator::malloc(size);
     }
 
+    inline int posix_memalign(void **memptr, size_t alignment, size_t size) {
+        return ff_allocator::posix_memalign(memptr,alignment,size);
+    }
+
     // just to be safe.... 
     inline void   free(void * ptr) {  abort();  }
 
@@ -891,7 +937,7 @@ private:
 struct FFAxThreadData {
     FFAxThreadData(ffa_wrapper * f):f(f) {}
     ffa_wrapper * f;
-    long padding[longxCacheLine-1];
+    long padding[longxCacheLine-sizeof(ffa_wrapper*)];
 };
 
 
@@ -947,7 +993,7 @@ private:
         spin_lock(lock);
         if (A_size == A_capacity) {
             FFAxThreadData ** A_new = (FFAxThreadData**)::realloc(A,(A_capacity+MIN_A_CAPACITY)*sizeof(FFAxThreadData*));
-            if (!A_new) return NULL;
+            if (!A_new) { spin_unlock(lock); return NULL;}
             A=A_new;
             A_capacity += MIN_A_CAPACITY;
         }
@@ -1031,12 +1077,48 @@ public:
             spin_lock(lock);
             if (pthread_setspecific(A_key, ffaxtd)!=0) {
                 deleteAllocator(ffaxtd->f);
+                spin_unlock(lock);
                 return NULL;
             }
             spin_unlock(lock);
         }
 
         return ffaxtd->f->malloc(size);
+    }
+
+    inline int posix_memalign(void **memptr, size_t alignment, size_t size) {
+        if (!isPowerOfTwoMultiple(alignment, sizeof(void *))) return -1;
+        
+        size_t realsize = size+alignment;
+
+        if (realsize > MAX_SLABBUFFER_SIZE) {
+            ALLSTATS(atomic_long_inc(&all_stats::instance()->sysmalloc));
+            void * ptr = ::malloc(realsize+sizeof(Buf_ctl));          
+            if (!ptr) return -1;
+            ((Buf_ctl *)ptr)->ptr = 0;
+            void * ptraligned = (void *)(((long)((char*)ptr+sizeof(Buf_ctl)) + alignment) & ~(alignment-1));
+            ((Buf_ctl *)((char *)ptraligned - sizeof(Buf_ctl)))->ptr = 0;
+            *memptr = ptraligned;
+            return 0;
+        }
+        FFAxThreadData * ffaxtd = (FFAxThreadData*)pthread_getspecific(A_key);
+        if (!ffaxtd) {
+            ffaxtd = newAllocator(false,0,0);
+
+            if (!ffaxtd) {
+                error("FFAllocator:posix_memalign: newAllocator fails!\n");
+                return -1;
+            }
+
+            spin_lock(lock);
+            if (pthread_setspecific(A_key, ffaxtd)!=0) {
+                deleteAllocator(ffaxtd->f);
+                spin_unlock(lock);
+                return -1;
+            }
+            spin_unlock(lock);
+        }
+        return ffaxtd->f->posix_memalign(memptr,alignment,size);
     }
 
     inline void   free(void * ptr) {
@@ -1046,6 +1128,11 @@ public:
             ALLSTATS(atomic_long_inc(&all_stats::instance()->sysfree));
             ::free(buf); 
             return; 
+        }
+        Buf_ctl  * buf2 = (Buf_ctl *)((char *)buf - sizeof(Buf_ctl));
+        while(buf->ptr == buf2->ptr) {
+            buf = buf2;
+            buf2 = (Buf_ctl *)((char *)buf - sizeof(Buf_ctl));
         }
         DBG(if (!getsegctl(buf)->allocator) abort());
         (getsegctl(buf)->allocator)->free(buf);

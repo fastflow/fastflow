@@ -19,8 +19,11 @@
  ****************************************************************************
  */
 
-/* Dynamic Single-Writer Single-Reader unbounded queue.
+/* Dynamic (list-based) Single-Writer Single-Reader unbounded queue.
  * No lock is needed around pop and push methods.
+ *
+ * See also ubuffer.hpp for a SWSR unbounded queue.
+ *
  */
 
 #include <stdlib.h>
@@ -37,9 +40,9 @@ private:
     };
 
     volatile Node *    head;
-    long padding1[longxCacheLine-sizeof(Node *)];
+    long padding1[longxCacheLine-(sizeof(Node *)/sizeof(long))];
     volatile Node *    tail;
-    long padding2[longxCacheLine-sizeof(Node*)];
+    long padding2[longxCacheLine-(sizeof(Node*)/sizeof(long))];
     SWSR_Ptr_Buffer    cache;
 private:
     inline Node * allocnode() {
@@ -77,6 +80,7 @@ public:
     }
 
     inline bool push(void * const data) {
+        if (!data) return false;
         Node * n = allocnode();
         n->data = data; n->next = NULL;
         WMB();
@@ -87,6 +91,7 @@ public:
     }
 
     inline bool  pop(void ** data) {        
+        if (!data) return false;
         if (head->next) {
             Node * n = (Node *)head;
             *data    = (head->next)->data;

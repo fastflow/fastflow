@@ -1,3 +1,21 @@
+* ??/??/?? - v.1.0.1
+   - added the method get_channel_id() in the emitter and collector class
+     the method returns the id of the worker thread from which an input task
+     is coming from
+   - added the fibonacci and the quicksort examples
+   - added basic interface for pinning threads to CPUs
+   - added multipush and mpush to SWSR buffer (experimental code)
+   - added mpush to uSWSR queue (experimental code)
+   - more tests
+   - improved cmake test
+   - improved performance for fine grain D&C computation (farm+feedback)
+     by changing the losetime_in method in the lb class.
+   - added Multi-Producers/Multi-Consumers queue (MSqueue by Michael and Scott)
+   - added abstraction_dcas from liblfds (www.liblfds.org), no powerpc support yet!
+   - fixed some bugs in the allocator
+   - posix_memalign implemented in the allocator
+   - ticket-spinlock from Linux kernel (experimental code only for Linux)
+   - added two lock-based methods in uSWSR queue (mp_push and mc_pop)
 * 01/09/10 - v.1.0.0
    - New release
    - some bugs fixed

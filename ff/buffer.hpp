@@ -22,8 +22,17 @@
 /* Single-Writer Single-Reader circular buffer.
  * No lock is needed around pop and push methods.
  * 
- * A NULL value is used to indicate buffer full and 
+ * A single NULL value is used to indicate buffer full and 
  * buffer empty conditions.
+ * 
+ * More details about the SWSR_Ptr_Buffer implementation 
+ * can be found in the following report:
+ *
+ * Massimo Torquati, "Single-Producer/Single-Consumer Queue on Shared Cache 
+ * Multi-Core Systems", TR-10-20, Computer Science Department, University
+ * of Pisa Italy,2010
+ * ( http://compass2.di.unipi.it/TR/Files/TR-10-20.pdf.gz )
+ *
  *
  */
 
@@ -45,16 +54,23 @@ static const int longxCacheLine = (64/sizeof(long));
 
 class SWSR_Ptr_Buffer {
     // experimentally we found that a good values is between 
-    // 2 and 6 cache lines (16 tp 48 entries respectively)
-    enum {MULTIPUSH_BUFFER_SIZE=32};
+    // 2 and 6 cache lines (16 to 48 entries respectively)
+    enum {MULTIPUSH_BUFFER_SIZE=16};
 
 private:
     // Padding is required to avoid false-sharing between 
     // core's private cache
+#if defined(NO_VOLATILE_POINTERS)
+    unsigned long    pread;
+    long padding1[longxCacheLine-1];
+    unsigned long    pwrite;
+    long padding2[longxCacheLine-1];
+#else
     volatile unsigned long    pread;
     long padding1[longxCacheLine-1];
     volatile unsigned long    pwrite;
     long padding2[longxCacheLine-1];
+#endif
     const    size_t           size;
     void                   ** buf;
     
@@ -99,12 +115,20 @@ public:
 
     /* return true if the buffer is empty */
     inline bool empty() {
+#if defined(NO_VOLATILE_POINTERS)
+        return ((*(volatile unsigned long *)(&buf[pread]))==0);
+#else
         return (buf[pread]==NULL);
+#endif
     }
     
     /* return true if there is at least one room in the buffer */
     inline bool available()   { 
+#if defined(NO_VOLATILE_POINTERS)
+        return ((*(volatile unsigned long *)(&buf[pwrite]))==0);
+#else
         return (buf[pwrite]==NULL);
+#endif
     }
 
     inline size_t buffersize() const { return size; };

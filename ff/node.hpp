@@ -370,8 +370,23 @@ public:
     virtual int   svc_init() { return 0; }
     virtual void  svc_end() {}
     virtual int   get_my_id() const { return myid; };
+#if defined(TEST_QUEUE_SPIN_LOCK)
+    virtual bool  put(void * ptr) { 
+        spin_lock(lock);
+        bool r= in->push(ptr);
+        spin_unlock(lock);
+        return r;
+    }
+    virtual bool  get(void **ptr) { 
+        spin_lock(lock);
+        register int r = out->pop(ptr);
+        spin_unlock(lock);
+        return ((r>0)?true:false);
+    }
+#else
     virtual bool  put(void * ptr) { return in->push(ptr);}
     virtual bool  get(void **ptr) { return ((out->pop(ptr)>0)?true:false);}
+#endif
     virtual FFBUFFER * const get_in_buffer() const { return in;}
     virtual FFBUFFER * const get_out_buffer() const { return out;}
 
@@ -399,6 +414,9 @@ protected:
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
+#if defined(TEST_QUEUE_SPIN_LOCK)
+        init_unlocked(lock);
+#endif
     };
     
     virtual  ~ff_node() {
@@ -549,6 +567,10 @@ private:
     struct timeval wtstart;
     struct timeval wtstop;
     double wttime;
+
+#if defined(TEST_QUEUE_SPIN_LOCK)
+    lock_t lock;
+#endif
 
 #if defined(TRACE_FASTFLOW)
     unsigned long taskcnt;
