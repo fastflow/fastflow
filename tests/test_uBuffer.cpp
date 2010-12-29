@@ -40,6 +40,7 @@
 #include <ff/buffer.hpp>
 #include <ff/ubuffer.hpp>
 #include <ff/dynqueue.hpp>
+#include <ff/staticlinkedlist.hpp>
 #include <ff/spin-lock.hpp>
 #include <ff/atomic/atomic.h>
 #include <ff/cycle.h>
@@ -77,6 +78,13 @@ static ff_allocator ffa;
 
 // queue
 #if !defined(USE_DEQUE)
+#if defined(FF_MPMC)
+#include <ff/MPMCqueues.hpp>
+MSqueue * b;
+#else
+#if defined(FF_STATIC_LINKED_LIST)
+staticlinkedlist * b;
+#else
 #if defined(FF_BOUNDED) // try circular SWSR buffer
 SWSR_Ptr_Buffer   * b;
 #else
@@ -86,6 +94,8 @@ dynqueue * b;
 uSWSR_Ptr_Buffer  * b;  // try unbounded SWSR buffer
 #endif // FF_DYNAMIC
 #endif // FF_BOUNDED
+#endif // FF_STATIC_LINKED_LIST
+#endif // FF_MPMC
 #else  // try deque
 #if defined(USE_SPINLOCK) // with spin-lock
 lock_t block;
@@ -127,7 +137,7 @@ static inline void PUSH(const int i) {
     long * p = (long *)(0x1234+i);
     if (1) {
 #else       
-    long * p = (long *)malloc(8*sizeof(int));
+    long * p = (long *)malloc(8*sizeof(long));
 
     if (p) {
         for(register int j=0;j<8;++j) p[j]=i+j;
@@ -439,7 +449,14 @@ int main(int argc, char * argv[]) {
 
     pthread_t P_handle, C_handle;
 #if !defined(USE_DEQUE)
-
+#if defined(FF_MPMC)
+    b = new MSqueue;
+    if (!b) abort();
+    if (!b->init()) abort();
+#else
+#if defined(FF_STATIC_LINKED_LIST)
+    b = new staticlinkedlist(size, true);
+#else
 #if defined(FF_BOUNDED)
     b = new SWSR_Ptr_Buffer(size);
     if (b->init()<0) abort();
@@ -450,7 +467,9 @@ int main(int argc, char * argv[]) {
     b = new uSWSR_Ptr_Buffer(size);
     if (b->init()<0) abort();
 #endif // FF_DYNAMIC
-#endif
+#endif // FF_BOUNDED 
+#endif // FF_STATIC_LINKED_LIST
+#endif // FF_MPMC
 
 #else // USE_DEQUE
     b = new std::deque<void*>;

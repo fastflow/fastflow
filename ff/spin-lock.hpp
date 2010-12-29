@@ -26,16 +26,64 @@ namespace ff {
 
 #if defined(USE_TICKETLOCK)
 
-/* Ticket-Lock, courtesy of Fabrizio Petrini <fpetrin@us.ibm.com> */
+// NOTE: ticket lock implementation is experimental and for Linux only!
 
+#if !defined(__linux__)
+#error "Ticket-lock implementation only for Linux!"
+#endif
+
+
+#if !defined(LOCK_PREFIX)
+#define LOCK_PREFIX "lock ; "
+#endif
+
+typedef  struct {unsigned int slock;}  lock_t[1];
+enum { UNLOCKED=0 };
+
+static inline void init_unlocked(lock_t l) { l[0].slock=UNLOCKED;}
+
+
+/* Ticket-Lock from Linux kernel 2.6.37 */
+static __always_inline void spin_lock(lock_t lock)
+{
+	int inc = 0x00010000;
+	int tmp;
+
+	asm volatile(LOCK_PREFIX "xaddl %0, %1\n"
+		     "movzwl %w0, %2\n\t"
+		     "shrl $16, %0\n\t"
+		     "1:\t"
+		     "cmpl %0, %2\n\t"
+		     "je 2f\n\t"
+		     "rep ; nop\n\t"
+		     "movzwl %1, %2\n\t"
+		     /* don't need lfence here, because loads are in-order */
+		     "jmp 1b\n"
+		     "2:"
+		     : "+r" (inc), "+m" (lock->slock), "=&r" (tmp)
+		     :
+		     : "memory", "cc");
+}
+
+static __always_inline void spin_unlock(lock_t lock)
+{
+	asm volatile(LOCK_PREFIX "incw %0"
+		     : "+m" (lock->slock)
+		     :
+		     : "memory", "cc");
+}
+
+#if 0
+/* The following, courtesy of Fabrizio Petrini <fpetrin@us.ibm.com> */
+    
 union ticketlock
 {
-  unsigned u;
-  struct
-  {
-    unsigned short ticket;
-    unsigned short users;
-  } s;
+    uint32_t u;
+    struct
+    {
+        uint16_t ticket;
+        uint16_t users;
+    } s;
 };
 
 /* simple interface to the gcc atomics */
@@ -44,22 +92,23 @@ union ticketlock
 /* pause instruction to prevent excess processor bus usage */ 
 #define cpu_relax() asm volatile("pause\n": : :"memory")
 
-typedef ticketlock lock_t[1];
+typedef volatile ticketlock lock_t[1];
 enum { UNLOCKED=0 };
 
 static inline void init_unlocked(lock_t l) { l[0].u=UNLOCKED;}
 
 static inline void spin_lock( lock_t l ) {
-    unsigned short me = atomic_xadd( &(l[0].s.users), 1 );
-  
-    while ( l[0].s.ticket != me ) 
-        cpu_relax();
+    uint16_t me = atomic_xadd( &(l[0].s.users), 1 );
+    
+    while ( l[0].s.ticket != me ) ; //cpu_relax();
 }
-
-
+    
 static inline void spin_unlock( lock_t l ) {
-  l[0].s.ticket++;
+    WMB();
+    l[0].s.ticket++;
 }
+#endif
+
 
 #else /* xchg-based spin-lock */
     

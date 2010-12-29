@@ -80,6 +80,13 @@ static inline void atomic_long_inc(atomic_long_t *l)
 	atomic64_inc(v);
 }
 
+static inline long atomic_long_inc_return(atomic_long_t *l)
+{
+	atomic64_t *v = (atomic64_t *)l;
+
+	return (long)atomic64_inc_return(v);
+}
+
 static inline void atomic_long_dec(atomic_long_t *l)
 {
 	atomic64_t *v = (atomic64_t *)l;
@@ -127,6 +134,13 @@ static inline void atomic_long_inc(atomic_long_t *l)
 	atomic_t *v = (atomic_t *)l;
 
 	atomic_inc(v);
+}
+
+static inline long atomic_long_inc_return(atomic_long_t *l)
+{
+	atomic_t *v = (atomic_t *)l;
+
+	return (long)atomic_inc_return(v);
 }
 
 static inline void atomic_long_dec(atomic_long_t *l)

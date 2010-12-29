@@ -53,7 +53,7 @@ static inline u_int64_t ff_getCpuFreq() {
     float       mhz;
 
     f = popen("cat /proc/cpuinfo |grep MHz |head -1|sed 's/^.*: //'", "r");
-    fscanf(f, "%f", &mhz);
+    if (fscanf(f, "%f", &mhz) == EOF) {pclose(f); return t;}
     t = (unsigned long)(mhz * 1000000);
     pclose(f);
 #elif defined(__APPLE__)
@@ -72,7 +72,7 @@ static inline const int ff_numCores() {
 #if defined(__linux__)
     FILE       *f;    
     f = popen("cat /proc/cpuinfo |grep processor | wc -l", "r");
-    fscanf(f, "%d", &n);
+    if (fscanf(f, "%d", &n) == EOF) { pclose(f); return n;}
     pclose(f);
 #elif defined(__APPLE__) // BSD
 	size_t len = 4;

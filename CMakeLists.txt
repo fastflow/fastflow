@@ -44,6 +44,7 @@ install( FILES ${FFHEADERS} DESTINATION /include/ff/ )
 install( FILES ${FFHEADERS_AT} DESTINATION /include/ff/atomic )
 
 if( BUILD_EXAMPLES )
+    enable_testing()
     add_subdirectory( examples )
 endif( BUILD_EXAMPLES )
 
