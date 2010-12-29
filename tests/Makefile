@@ -32,7 +32,7 @@ endif
 ifeq ($(ALLOC),-DUSE_TBB)
 INCS    += -I. -I${TBB_HOME}/include
 LDFLAGS  = -L ${TBB_HOME}/build/release/
-LIBS    +=  -ltbbmalloc -ltbb
+LIBS    +=  -ltbbmalloc -ltbb 
 endif
 
 
@@ -41,14 +41,17 @@ CXX 		     = g++
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O6 -finline-functions
-CXXFLAGS             = -Wall #-DTRACE_FASTFLOW
+CXXFLAGS             = -Wall  #-DTRACE_FASTFLOW
 CFLAGS               =
 LDFLAGS              = 
 INCS                 = -I../ 
 LIBS                 = -lpthread
-
+ARCH                 = -march=$(shell uname -m)
+ifeq ($(ARCH),x86_64)
+  ARCH = core2
+endif
 INCLUDES             = -I. $(INCS)
-TARGET               = test1 test2 test3 test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator_farm+pipe test_freeze test_masterworker test_scheduling test_dt perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 test_uBuffer
+TARGET               = test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator_farm+pipe test_freeze test_masterworker test_scheduling test_dt perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_mpmc
 
 
 .PHONY: all clean cleanall distclean install uninstall
@@ -82,6 +85,7 @@ test: all
 test1:test1.o
 test2:test2.o
 test3:test3.o
+test3b:test3b.o
 test4:test4.o
 test5:test5.o
 test6:test6.o
@@ -96,13 +100,18 @@ test_freeze:test_freeze.o
 test_masterworker:test_masterworker.o
 test_dt:test_dt.o
 test_scheduling:test_scheduling.o
-test_uBuffer:test_uBuffer.o
+test_uBuffer:test_uBuffer.cpp
+	$(CXX) $(ARCH) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+test_mpmc:test_mpmc.cpp
+	$(CXX) $(ARCH) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 perf_test_alloc1:perf_test_alloc1.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 perf_test_alloc2:perf_test_alloc2.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 perf_test_alloc3:perf_test_alloc3.cpp
+	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+perf_test_noalloc:perf_test_noalloc.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 clean: 

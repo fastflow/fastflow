@@ -72,7 +72,6 @@ static __inline__ void atomic_dec(atomic_t *v)
 		: "m" (v->counter));
 }
 
-#define atomic_dec_return(v)  (atomic_sub_return(1,v))
 
 /* An 64bit atomic type */
 
@@ -113,6 +112,9 @@ static __inline__ void atomic64_inc(atomic64_t *v)
 		:"m" (v->counter));
 }
 
+#define atomic64_inc_return(v)  (atomic64_add_return(1, (v)))
+
+
 /**
  * atomic64_dec - decrement atomic64 variable
  * @v: pointer to type atomic64_t
@@ -133,6 +135,23 @@ static __inline__ void atomic64_add(long i, atomic64_t *v)
 	       LOCK_PREFIX "addq %1,%0"
 	       : "=m" (v->counter)
 	       : "ir" (i), "m" (v->counter));
+}
+
+
+/**
+ * atomic64_add_return - add and return
+ * @i: integer value to add
+ * @v: pointer to type atomic64_t
+ *
+ * Atomically adds @i to @v and returns @i + @v
+ */
+static inline long atomic64_add_return(long i, atomic64_t *v)
+{
+	long __i = i;
+	asm volatile(LOCK_PREFIX "xaddq %0, %1;"
+		     : "+r" (i), "+m" (v->counter)
+		     : : "memory");
+	return i + __i;
 }
 
 /**

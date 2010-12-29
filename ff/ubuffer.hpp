@@ -18,8 +18,41 @@
  *
  ****************************************************************************
  */
-/* Single-Writer Single-Reader unbounded buffer.
- * No lock is needed around pop and push methods.
+
+/* 
+ * Single-Writer/Single-Reader (SWSR) lock-free (wait-free) unbounded 
+ * FIFO queue.  No lock is needed around pop and push methods!!
+ * 
+ * The key idea underneath the implementation is quite simple: 
+ * the unbounded queue is based on a pool of wait-free 
+ * SWSR circular buffers (see buffer.hpp).  The pool of buffers 
+ * automatically grows and shrinks on demand. The implementation 
+ * of the pool of buffers carefully try to minimize the impact of 
+ * dynamic memory allocation/deallocation by using caching strategies. 
+ *
+ * More information about the uSWSR_Ptr_Buffer implementation and 
+ * correctness proof can be found in the following report:
+ *
+ * Massimo Torquati, "Single-Producer/Single-Consumer Queue on Shared Cache 
+ * Multi-Core Systems", TR-10-20, Computer Science Department, University
+ * of Pisa Italy,2010
+ * ( http://compass2.di.unipi.it/TR/Files/TR-10-20.pdf.gz )
+ *
+ *
+ *
+ * IMPORTANT:
+ *
+ * This implementation has been optimized for 1 producer and 1 consumer. 
+ * If you need to use more producers and/or more consumers you have 
+ * several possibilities (top-down order):
+ *  1. to use an high level construct like the farm skeleton and compositions 
+ *     of multiple farms (in other words, use FastFlow ;-) ).
+ *  2. to use one of the implementations in the MPMCqueues.hpp file
+ *  3. to use the SWSR_Ptr_Buffer but with the mp_push and the mc_pop methods 
+ *     both protected by (spin-)locks in order to protect the internal data 
+ *     structures.
+ *
+ *  
  */
 
 #include <ff/dynqueue.hpp>
@@ -115,7 +148,9 @@ private:
 public:
     uSWSR_Ptr_Buffer(size_t n, const bool fixedsize=false):
         buf_r(0),buf_w(0),size(n),fixedsize(fixedsize),
-        pool(CACHE_SIZE) {}
+        pool(CACHE_SIZE) {
+        init_unlocked(P_lock); init_unlocked(C_lock);
+    }
     
     ~uSWSR_Ptr_Buffer() {
         if (buf_r) {
@@ -175,6 +210,16 @@ public:
         return true;
     }
 
+    /* multi-producers method. lock protected.
+     *
+     */
+    inline bool mp_push(void *const data) {
+        spin_lock(P_lock);
+        bool r=push(data);
+        spin_unlock(P_lock);
+        return r;
+    }
+
 #if defined(uSWSR_MULTIPUSH)
     /* massimot: experimental code
      *
@@ -218,6 +263,17 @@ public:
         return buf_r->pop(data);
     }    
 
+  /* multi-consumers method. lock protected.
+     *
+     */
+    inline bool mc_pop(void ** data) {
+        spin_lock(C_lock);
+        bool r=pop(data);
+        spin_unlock(C_lock);
+        return r;
+    }
+
+
 private:
     // Padding is required to avoid false-sharing between 
     // core's private cache
@@ -225,6 +281,14 @@ private:
     long padding1[longxCacheLine-1];
     SWSR_Ptr_Buffer * buf_w;
     long padding2[longxCacheLine-1];
+
+    /* ----- two-lock used only in the mp_push and mp_pop methods ------- */
+    lock_t P_lock;
+    long padding3[longxCacheLine-sizeof(lock_t)];
+           lock_t C_lock;
+    long padding4[longxCacheLine-sizeof(lock_t)];
+    /* -------------------------------------------------------------- */
+
 #if defined(uSWSR_MULTIPUSH)
     /* massimot: experimental code (see multipush)
      *

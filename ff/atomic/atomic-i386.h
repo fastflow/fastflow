@@ -103,6 +103,9 @@ static __inline__ void atomic_inc(atomic_t *v)
 		:"+m" (v->counter));
 }
 
+
+#define atomic_inc_return(v)  (atomic_add_return(1, v))
+
 /**
  * atomic_dec - decrement atomic variable
  * @v: pointer of type atomic_t
