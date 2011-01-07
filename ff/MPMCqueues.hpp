@@ -18,9 +18,8 @@
 namespace ff {
 
 
-
 /* 
- * This is an implementation of the lock-free FIFO MPMC queue by
+ * MSqueue is an implementation of the lock-free FIFO MPMC queue by
  * Maged M. Michael and Michael L. Scott described in the paper:
  * "Simple, Fast, and Practical Non-Blocking and Blocking
  * Concurrent Queue Algorithms", PODC 1996.
@@ -30,8 +29,8 @@ namespace ff {
  * lock-free data structure library written in C. 
  * More info about liblfds can be found at http://www.liblfds.org
  *
+ *
  */
-
 class MSqueue {
 private:
     enum {MSQUEUE_PTR=0,MSQUEUE_CNT=1 };
@@ -43,7 +42,7 @@ private:
         inline bool operator !() {
             return (ptr[MSQUEUE_PTR]==0);
         }
-        inline Pointer& operator=(Pointer & p) {
+        inline Pointer& operator=(const Pointer & p) {
             ptr[MSQUEUE_PTR]=p.ptr[MSQUEUE_PTR], ptr[MSQUEUE_CNT]=p.ptr[MSQUEUE_CNT];
             return *this;
         }
@@ -149,6 +148,13 @@ private:
 
 public:
 
+    MSqueue& operator=(const MSqueue& v) { 
+        head=v.head;
+        tail=v.tail;
+        atomic_long_set(&aba_counter, atomic_long_read((atomic_long_t*)&v.aba_counter));
+        return *this;
+    }
+
     /* initialize the MSqueue */
     bool init() {
         // reset the ABA counter
@@ -195,7 +201,7 @@ public:
         DCAS((volatile atom_t *)tail, (atom_t *)node, (atom_t *) tailptr);
         return true;
     }
-
+    
     // extract method, it returns false if the queue is empty
     inline bool  pop(void ** data) {        
         if (!data) return false;
@@ -226,7 +232,80 @@ public:
         deallocnode(headptr.getNode());
         return true;
     } 
+
+    // return true if the queue is empty 
+    inline bool empty() { 
+        if ((head.getNode() == tail.getNode()) && !(head.getNodeNext()))
+            return true;
+        return false;            
+    }
 };
+
+
+
+/*
+ * Simple and scalable Multi-Producer/Multi-Consumer queue.
+ *
+ *
+ */
+template <typename Q=MSqueue>
+class scalableMPMCqueue {
+public:
+    enum {DEFAULT_POOL_SIZE=4};
+
+    scalableMPMCqueue(size_t poolsize=DEFAULT_POOL_SIZE):pool(poolsize),stop(true) {
+        atomic_long_set(&enqueue,0);
+        atomic_long_set(&dequeue,0);
+    }
+    
+    bool init(size_t poolsize = DEFAULT_POOL_SIZE) {
+        if (poolsize > pool.size()) {
+            pool.resize(poolsize);
+        }
+
+        for(size_t i=0;i<pool.size();++i)
+            if (!pool[i].init()) return false;
+
+        stop=false;
+
+        return true;
+    }
+
+    inline void stop_producing() { 
+        for(size_t i=0;i<pool.size();++i)
+            pool[i].push((void*)FF_EOS);        
+        stop=true;
+    }
+
+    // insert method, it never fails if data is not NULL
+    inline bool push(void * const data) {
+        if (!data || stop) return false;
+        register long q = atomic_long_inc_return(&enqueue) % pool.size();
+        return pool[q].push(data);
+    }
+
+    // extract method, it returns false if the queue is empty
+    inline bool  pop(void ** data) {      
+        if (!data) return false;
+        register long q = atomic_long_inc_return(&dequeue) % pool.size();
+        bool r = pool[q].pop(data);
+        if (stop && !r) { *data = (void*)FF_EOS;   return true; }
+        return r;
+    }
+
+    inline bool empty() {
+         for(size_t i=0;i<pool.size();++i)
+             if (!pool[i].empty()) return false;
+         return true;
+    }
+private:
+    std::vector<Q> pool;
+    atomic_long_t enqueue;
+    atomic_long_t dequeue;
+    bool          stop;
+};
+
+
 
 } // namespace
 

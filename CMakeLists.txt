@@ -19,6 +19,9 @@ set(FFHEADERS
     ${FF}/ubuffer.hpp
     ${FF}/utils.hpp
     ${FF}/version.h
+    ${FF}/dynqueue.hpp
+    ${FF}/mapping_utils.hpp
+    ${FF}/MPMCqueues.hpp
    ) 
 
 set(FFHEADERS_AT
@@ -26,6 +29,7 @@ set(FFHEADERS_AT
     ${FF}/atomic/atomic-i386.h
     ${FF}/atomic/atomic-ppc.h
     ${FF}/atomic/atomic-x86_64.h
+    ${FF}/atomic/abstraction_dcas.h
    )
 
 #       NAME                "Description"           DEFAULT
