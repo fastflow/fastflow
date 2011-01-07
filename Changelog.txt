@@ -16,6 +16,7 @@
    - posix_memalign implemented in the allocator
    - ticket-spinlock from Linux kernel (experimental code only for Linux)
    - added two lock-based methods in uSWSR queue (mp_push and mc_pop)
+   - fixed missing files in CMakeLists.txt
 * 01/09/10 - v.1.0.0
    - New release
    - some bugs fixed

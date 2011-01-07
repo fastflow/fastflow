@@ -46,7 +46,7 @@ CFLAGS               =
 LDFLAGS              = 
 INCS                 = -I../ 
 LIBS                 = -lpthread
-ARCH                 = -march=$(shell uname -m)
+ARCH                 = $(shell uname -m)
 ifeq ($(ARCH),x86_64)
   ARCH = core2
 endif
@@ -101,9 +101,9 @@ test_masterworker:test_masterworker.o
 test_dt:test_dt.o
 test_scheduling:test_scheduling.o
 test_uBuffer:test_uBuffer.cpp
-	$(CXX) $(ARCH) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+	$(CXX) -march=$(ARCH) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_mpmc:test_mpmc.cpp
-	$(CXX) $(ARCH) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+	$(CXX) -march=$(ARCH) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 perf_test_alloc1:perf_test_alloc1.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 perf_test_alloc2:perf_test_alloc2.cpp

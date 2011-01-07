@@ -52,6 +52,12 @@
  *
  */
 
+/* - June 2008 first version
+ *   Author: Massimo Torquati <torquati@di.unipi.it> <massimotor@gmail.com>
+ *    
+ */
+
+
 #include <assert.h>
 #include <algorithm>
 

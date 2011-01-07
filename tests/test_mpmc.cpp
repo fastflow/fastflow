@@ -49,16 +49,27 @@ extern "C" {
 struct queue_state *msq;
 #else
 #include <ff/MPMCqueues.hpp>
+
+#if defined(SCALABLE_QUEUE)
+scalableMPMCqueue<> msq;
+#else
 MSqueue msq;
 #endif
 
+#endif
 
-int ntasks=0;            // total number of tasks
-bool end = false;
-atomic_long_t counter;
+const int MAX_NUM_THREADS=128;  // just an upper bound, it can be increased
+
+int ntasks=0;                   // total number of tasks
+bool end = false;               // termination flag
+atomic_long_t counter;           
 std::vector<long> results;
 
-static inline bool PUSH() {
+// for statistics
+long taskC[MAX_NUM_THREADS]={0};
+long taskP[MAX_NUM_THREADS]={0};
+
+static inline bool PUSH(int myid) {
     long * p = (long *)(atomic_long_inc_return(&counter));
 
     if ((long)p > ntasks) return false;
@@ -69,24 +80,29 @@ static inline bool PUSH() {
     do ; while(!(msq.push(p)));
 #endif
 
+    ++taskP[myid];
+
     return true;
 }   
 
 // producer function
-void * P(void *) {
+void * P(void * arg) {
+    int myid = *(int*)arg;
     Barrier::instance()->barrier();
     ffTime(START_TIME);
 
-    do; while(PUSH());
+    do; while(PUSH(myid));
 
     pthread_exit(NULL);
 }
     
 // consumer function
-void * C(void *) {
+void * C(void * arg) {
+    int myid= *(int*)arg;
 
     union {long a; void *b;} task;
-    
+    task.b=NULL;
+
     Barrier::instance()->barrier();
 
     while(!end) {
@@ -104,6 +120,7 @@ void * C(void *) {
                     abort();
                 }
                 results[task.a-1] = task.a;
+                ++taskC[myid];
             }
         } 
     }
@@ -123,8 +140,12 @@ int main(int argc, char * argv[]) {
     int numP  = atoi(argv[2]);
     int numC  = atoi(argv[3]);
 
-    results.resize(ntasks,-1);
+    if (numP+numC > MAX_NUM_THREADS) {
+        std::cerr << "too many threads, please increase MAX_NUM_THREADS\n";
+        return -1;
+    }
 
+    results.resize(ntasks,-1);
 
 #if defined(USE_LFDS)
     queue_new( &msq, 1000000 );
@@ -140,21 +161,30 @@ int main(int argc, char * argv[]) {
 
     ffTime(START_TIME);
 
-    for(int i=0;i<numC;++i)        
-        if (pthread_create(&C_handle[i], NULL,C,NULL) != 0) {
+    int idC[numC];
+    for(int i=0;i<numC;++i) {
+        idC[i]=i;
+        if (pthread_create(&C_handle[i], NULL,C,&idC[i]) != 0) {
             abort();
         }
-
-    for(int i=0;i<numP;++i) 
-        if (pthread_create(&P_handle[i], NULL,P,NULL) != 0) {
+    }
+    int idP[numP];
+    for(int i=0;i<numP;++i)  {
+        idP[i]=i;
+        if (pthread_create(&P_handle[i], NULL,P,&idP[i]) != 0) {
             abort();
         }
+    }
     
     // wait all producers
     for(int i=0;i<numP;++i) 
         pthread_join(P_handle[i],NULL);
 
+    sleep(1);
     // send EOS to stop the consumers
+#if defined(SCALABLE_QUEUE)
+    msq.stop_producing();
+#else
     for(int i=0;i<numC;++i) {
 #if defined(USE_LFDS)
         do ; while(! queue_enqueue(msq, (void*)FF_EOS));
@@ -162,6 +192,8 @@ int main(int argc, char * argv[]) {
         do ; while(! msq.push((void*)FF_EOS)); 
 #endif
     }
+#endif
+
     // wait all consumers
     for(int i=0;i<numC;++i) 
         pthread_join(C_handle[i],NULL);
@@ -176,5 +208,12 @@ int main(int argc, char * argv[]) {
             wrong = true;
         }
     if (!wrong)  std::cout << "Ok. Done!\n";
+
+    // stats
+    for(int i=0;i<numP;++i)
+        std::cout << "P " << i << " got " << taskP[i] << " tasks\n";
+    for(int i=0;i<numC;++i)
+        std::cout << "C " << i << " got " << taskC[i] << " tasks\n";
+
     return 0;
 }

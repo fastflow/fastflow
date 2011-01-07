@@ -136,6 +136,10 @@ public:
             error("FARM, try to add too many workers, please increase max_nworkers\n");
             return -1; 
         }
+        if ((nworkers+w.size())==0) {
+            error("FARM, try to add zero workers!\n");
+            return -1; 
+        }        
         for(unsigned int i=nworkers;i<(nworkers+w.size());++i) {
             workers[i] = w[i];
             workers[i]->set_id(i);
