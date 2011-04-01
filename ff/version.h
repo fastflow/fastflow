@@ -1,4 +1,4 @@
 #define FF_MAJOR_VERSION 1
 #define FF_MINOR_VERSION 0
-#define FF_BETA_VERSION  0
-#define FF_VERSION "1.0.0"
+#define FF_BETA_VERSION  9
+#define FF_VERSION "1.0.9"

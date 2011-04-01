@@ -20,10 +20,10 @@
  */
 
 #include <stdlib.h>
-#include <sys/time.h>
-#include <pthread.h>
+//#include <sys/time.h>
+//#include <pthread.h>
 #include <iostream>
-
+#include "ff/platforms/platform.h"
 #include <ff/cycle.h>
 #include <ff/utils.hpp>
 #include <ff/buffer.hpp>
@@ -276,6 +276,7 @@ static void * proxy_thread_routine(void * arg) {
     ff_thread & obj = *(ff_thread *)arg;
     obj.thread_routine();
     pthread_exit(NULL);
+    return NULL;
 }
 
 
@@ -287,24 +288,24 @@ private:
     friend class ff_farm;
     friend class ff_pipeline;
     friend class ff_loadbalancer;
-
+	//class thWorker;
 
     void set_id(int id) { myid = id;}
     bool push(void * ptr) { return out->push(ptr); }
-    bool pop(void ** ptr) { return ((in->pop(ptr)>0)?true:false);} 
+    bool pop(void ** ptr) { return in->pop(ptr); } 
     bool skipfirstpop() const { return skip1pop; }
     
-    virtual int create_input_buffer(int nentries) {
+    virtual int create_input_buffer(int nentries, bool fixedsize=true) {
         if (in) return -1;
-        in = new FFBUFFER(nentries,true);        
+        in = new FFBUFFER(nentries,fixedsize);        
         if (!in) return -1;
         myinbuffer=true;
         return (in->init()?0:-1);
     }
     
-    virtual int create_output_buffer(int nentries) {
+    virtual int create_output_buffer(int nentries, bool fixedsize=false) {
         if (out) return -1;
-        out = new FFBUFFER(nentries,false);        
+        out = new FFBUFFER(nentries,fixedsize);        
         if (!out) return -1;
         myoutbuffer=true;
         return (out->init()?0:-1);
@@ -364,6 +365,7 @@ private:
     }
 
 public:
+	enum {TICKS2WAIT=1000};
     // If svc returns a NULL value then End-Of-Stream (EOS) is produced
     // on the output channel.
     virtual void* svc(void * task) = 0;
@@ -379,13 +381,13 @@ public:
     }
     virtual bool  get(void **ptr) { 
         spin_lock(lock);
-        register int r = out->pop(ptr);
+        register bool r = out->pop(ptr);
         spin_unlock(lock);
-        return ((r>0)?true:false);
+        return r;
     }
 #else
     virtual bool  put(void * ptr) { return in->push(ptr);}
-    virtual bool  get(void **ptr) { return ((out->pop(ptr)>0)?true:false);}
+    virtual bool  get(void **ptr) { return out->pop(ptr);}
 #endif
     virtual FFBUFFER * const get_in_buffer() const { return in;}
     virtual FFBUFFER * const get_out_buffer() const { return out;}
@@ -427,8 +429,7 @@ protected:
     
     virtual bool ff_send_out(void * task, 
                              unsigned int retry=((unsigned int)-1),
-                             unsigned int ticks=thWorker::TICKS2WAIT) {
-
+                             unsigned int ticks=(TICKS2WAIT)) { 
         if (callback) return  callback(task,retry,ticks,callback_arg);
 
         for(unsigned int i=0;i<retry;++i) {
@@ -447,20 +448,18 @@ private:
 
     class thWorker: public ff_thread {
     public:
-        enum {TICKS2WAIT=1000};
-
         thWorker(ff_node * const filter):filter(filter) {}
         
         bool push(void * task) {
             //register int cnt = 0;
             while (! filter->push(task)) {
                 // if (ch->thxcore>1) {
-            // if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
-            //    else ticks_wait(TICKS2WAIT);
-            //} else 
+                // if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
+                //    else ticks_wait(TICKS2WAIT);
+                //} else 
 
-                FFTRACE(filter->lostpushticks+=TICKS2WAIT; ++filter->pushwait);
-                ticks_wait(TICKS2WAIT);
+                FFTRACE(filter->lostpushticks+=ff_node::TICKS2WAIT; ++filter->pushwait);
+                ticks_wait(ff_node::TICKS2WAIT);
             }     
             return true;
         }
@@ -468,13 +467,13 @@ private:
         bool pop(void ** task) {
             //register int cnt = 0;       
             while (! filter->pop(task)) {
-                //    if (ch->thxcore>1) {
+                //if (ch->thxcore>1) {
                 //if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
                 //else ticks_wait(TICKS2WAIT);
                 //} else 
 
-                FFTRACE(filter->lostpopticks+=TICKS2WAIT; ++filter->popwait);
-                ticks_wait(TICKS2WAIT);
+                FFTRACE(filter->lostpopticks+=ff_node::TICKS2WAIT; ++filter->popwait);
+                ticks_wait(ff_node::TICKS2WAIT);
             } 
             return true;
         }
@@ -510,8 +509,8 @@ private:
 #if defined(TRACE_FASTFLOW)
                 register ticks diff=(getticks()-t0);
                 filter->tickstot +=diff;
-                filter->ticksmin=std::min(filter->ticksmin,diff);
-                filter->ticksmax=std::max(filter->ticksmax,diff);
+                filter->ticksmin=(std::min)(filter->ticksmin,diff); // (std::min) for win portability)
+                filter->ticksmax=(std::max)(filter->ticksmax,diff);
 #endif                
                 if (!ret || (ret == (void*)FF_EOS) || (ret == (void*)FF_EOS_NOFREEZE)) {
                     // NOTE: The EOS is gonna be produced in the output queue

@@ -36,7 +36,7 @@
 #include <iostream>
 #include <cmath>
 #include <fcntl.h>
-#include <sys/mman.h>
+//#include <sys/mman.h>
 #include <ff/farm.hpp>
 #include <cholconst.h>
 #include <complex.h>

@@ -24,3 +24,25 @@ cd <FASTFLOW_ROOT>/tests
 make all
 make test   # minimal regression test
 
+====================================
+Mac OS X platform specific notes
+====================================
+Follows general instructions to generate command-line Makefile-based build, or 
+
+cmake -GXcode ../
+
+to generate the Xcode project. 
+It is possibile to generate more than one build (e.g. both Xcode and 
+command-line) in different directories (e.g. build and xcode_build).
+
+====================================
+Windows platform specific notes
+====================================
+Install cmake and follows general instructions from windows "cmd" or other 
+terminal shell. 
+
+Cmake installer is available at 
+
+http://www.cmake.org/cmake/resources/software.html
+
+Currently tested with Visual Studio only.

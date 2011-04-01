@@ -211,6 +211,7 @@ void * P(void *) {
 #endif
 
     pthread_exit(NULL);
+	return NULL;
 }
     
 
@@ -326,6 +327,7 @@ void * C(void *) {
 #endif
 
     pthread_exit(NULL);
+	return NULL;
 }
 
 
@@ -339,11 +341,11 @@ int main(int argc, char * argv[]) {
             cpu_C = atoi(argv[4]);
             int nc = ff_numCores();
             if (cpu_P < 0 || cpu_P >= nc) {
-                std::cerr << "Wrong producer thread CPU number, range is [0-" << nc << "[\n";
+                std::cerr << "Wrong producer thread CPU number, range is [0 - " << nc << "[\n";
                 return -1;
             }
             if (cpu_C < 0 || cpu_C >= nc) {
-                std::cerr << "Wrong consumer thread CPU number, range is [0-" << nc << "[\n";
+                std::cerr << "Wrong consumer thread CPU number, range is [0 - " << nc << "[\n";
                 return -1;
             }
         } else {        
@@ -465,7 +467,7 @@ int main(int argc, char * argv[]) {
     b = new dynqueue(size,true);
 #else
     b = new uSWSR_Ptr_Buffer(size);
-    if (b->init()<0) abort();
+    if (!b->init()) abort();
 #endif // FF_DYNAMIC
 #endif // FF_BOUNDED 
 #endif // FF_STATIC_LINKED_LIST

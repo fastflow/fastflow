@@ -48,6 +48,8 @@ extern "C" {
 };
 struct queue_state *msq;
 #else
+
+//#define TEST_DELAYED_RECLAMATION 1
 #include <ff/MPMCqueues.hpp>
 
 #if defined(SCALABLE_QUEUE)
@@ -60,6 +62,9 @@ MSqueue msq;
 
 const int MAX_NUM_THREADS=128;  // just an upper bound, it can be increased
 
+#if defined(SCALABLE_QUEUE)
+int nqueues=4;
+#endif
 int ntasks=0;                   // total number of tasks
 bool end = false;               // termination flag
 atomic_long_t counter;           
@@ -77,7 +82,8 @@ static inline bool PUSH(int myid) {
 #if defined(USE_LFDS)
     do ; while( !queue_enqueue(msq, p ) );
 #else
-    do ; while(!(msq.push(p)));
+    assert(msq.push(p));
+    //do ; while(!(msq.push(p)));
 #endif
 
     ++taskP[myid];
@@ -113,7 +119,9 @@ void * C(void * arg) {
         if (msq.pop(&task.b)) 
 #endif
         {
-            if (task.b == (void*)FF_EOS) end=true;
+            if (task.b == (void*)FF_EOS) {
+                end=true;
+            }
             else {
                 if (task.a > ntasks) {
                     std::cerr << "received " << task.a << " ABORT\n";
@@ -132,13 +140,18 @@ void * C(void * arg) {
 
 
 int main(int argc, char * argv[]) {
-    if (argc!=4) {
-        std::cerr << "use: " << argv[0] << " ntasks #P #C\n";
+
+    if (argc<4) {
+        std::cerr << "use: " << argv[0] << " ntasks #P #C [nqueues]\n";
         return -1;
     }
     ntasks= atoi(argv[1]);
     int numP  = atoi(argv[2]);
     int numC  = atoi(argv[3]);
+#if defined(SCALABLE_QUEUE)
+    if (argc>=5)
+        nqueues = atoi(argv[4]);
+#endif
 
     if (numP+numC > MAX_NUM_THREADS) {
         std::cerr << "too many threads, please increase MAX_NUM_THREADS\n";
@@ -150,7 +163,11 @@ int main(int argc, char * argv[]) {
 #if defined(USE_LFDS)
     queue_new( &msq, 1000000 );
 #else
-    msq.init();
+#if defined(SCALABLE_QUEUE)    
+    msq.init(nqueues);
+#else
+    assert(msq.init());
+#endif // SCALABLE_QUEUE
 #endif
 
     atomic_long_set(&counter,0);
@@ -180,7 +197,6 @@ int main(int argc, char * argv[]) {
     for(int i=0;i<numP;++i) 
         pthread_join(P_handle[i],NULL);
 
-    sleep(1);
     // send EOS to stop the consumers
 #if defined(SCALABLE_QUEUE)
     msq.stop_producing();
@@ -209,11 +225,12 @@ int main(int argc, char * argv[]) {
         }
     if (!wrong)  std::cout << "Ok. Done!\n";
 
+#if 0
     // stats
     for(int i=0;i<numP;++i)
         std::cout << "P " << i << " got " << taskP[i] << " tasks\n";
     for(int i=0;i<numC;++i)
         std::cout << "C " << i << " got " << taskC[i] << " tasks\n";
-
+#endif
     return 0;
 }

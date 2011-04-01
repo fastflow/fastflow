@@ -13,9 +13,9 @@ include_directories ( ${PROJECT_SOURCE_DIR}
                       ${PROJECT_SOURCE_DIR}/atomic/
                     )
 
-target_link_libraries ( pbzip2_ff bz2 pthread )
-target_link_libraries ( pbzip2 bz2 pthread )
+target_link_libraries ( pbzip2_ff bz2 ${CMAKE_THREAD_LIBS_INIT}  )
+target_link_libraries ( pbzip2 bz2 ${CMAKE_THREAD_LIBS_INIT}  )
 
-set_target_properties ( pbzip2      PROPERTIES COMPILE_FLAGS "-O3 -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64" )
-set_target_properties ( pbzip2_ff   PROPERTIES COMPILE_FLAGS "-O3 -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64" )
+set_target_properties ( pbzip2      PROPERTIES COMPILE_FLAGS "-D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64" )
+set_target_properties ( pbzip2_ff   PROPERTIES COMPILE_FLAGS "-D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64" )
 

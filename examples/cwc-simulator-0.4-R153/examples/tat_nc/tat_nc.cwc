@@ -1,0 +1,25 @@
+%model "TAT and GFP production model (without compartments)"
+
+%alphabet
+CmRNA GFP LTR NmRNA TATd TEFa TEFd
+
+%rules
+{T} LTR ~X >>>[0.000000001]>>> LTR NmRNA ~X %%
+{T} NmRNA ~X >>>[0.00072]>>> CmRNA ~X %%
+{T} CmRNA ~X >>>[0.5]>>> CmRNA GFP ~X %%
+{T} CmRNA ~X >>>[0.00132]>>> CmRNA TATd ~X %%
+{T} TATd LTR ~X >>>[0.00015]>>> TEFd ~X %%
+{T} TEFd ~X >>>[0.017]>>> TATd LTR ~X %%
+{T} TEFd ~X >>>[0.001]>>> TEFa ~X %%
+{T} TEFa ~X >>>[0.13]>>> TEFd ~X %%
+{T} TEFa ~X >>>[0.1]>>> LTR NmRNA TATd ~X %%
+{T} GFP ~X >>>[0.00000301]>>> ~X %%
+{T} TATd ~X >>>[0.000043]>>> ~X %%
+{T} CmRNA ~X >>>[0.000048]>>> ~X %%
+{T} NmRNA ~X >>>[0.000048]>>> ~X %%
+
+%term
+75000*GFP 5*TATd LTR
+
+%monitors
+"GFP": {T} GFP %%

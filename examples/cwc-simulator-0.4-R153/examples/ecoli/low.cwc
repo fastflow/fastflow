@@ -1,0 +1,24 @@
+%model
+"phosphate regulation mechanism in EColi"
+
+%alphabet
+Pi pore PhoR PhoRP PhoB PhoBP PhoGenes PhoProt
+
+%rules
+{T}			Pi ({external} pore ~x|~X) ~Y >>>[0.1]>>> ({external} pore ~x|Pi ~X) ~Y %%
+{T}			({external} pore ~x|Pi ~X) ~Y >>>[0.1]>>> Pi ({external} pore ~x|~X) ~Y %%
+{external} 	Pi ({internal} PhoR ~x|~X) ~Y >>>[0.01]>>> ({internal} PhoRP ~x|~X) ~Y %%
+{external} 	({internal} PhoRP ~x|~X) ~Y >>>[0.005]>>> Pi ({internal} PhoR ~x|~X) ~Y %%
+{external} 	({internal} PhoR ~x|PhoB ~X) ~Y >>>[0.001]>>> ({internal} PhoR ~x|PhoBP ~X) ~Y %%
+{internal} 	PhoBP PhoGenes ~X >>>[0.0001]>>> PhoBP PhoGenes PhoProt ~X %%
+{internal} 	PhoProt ~X >>>[0.00008]>>> ~X %%
+{external} 	({internal} PhoRP ~x|PhoBP ~X) ~Y >>>[0.0001]>>> ({internal} PhoRP ~x|PhoB ~X) ~Y %%
+
+%term
+5*Pi ({external} pore | ({internal} 5*PhoR 5*PhoRP|10*PhoB PhoGenes))
+
+%monitors
+"Periplasmic Pi": {external} Pi %%
+"PhoB-P": {internal} PhoBP %%
+"PhoR-P": {external} ({internal} PhoRP ~x| ~X) %%
+"PhoB target": {internal} PhoProt %%
