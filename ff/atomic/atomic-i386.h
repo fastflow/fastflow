@@ -6,6 +6,12 @@
 #ifndef __ARCH_I386_ATOMIC__
 #define __ARCH_I386_ATOMIC__
 
+#if !defined(likely)
+#define likely(x)	__builtin_expect(!!(x), 1)
+#endif
+#if !defined(unlikely)
+#define unlikely(x)	__builtin_expect(!!(x), 0)
+#endif
 
 #define LOCK_PREFIX "lock ; "
 
@@ -215,31 +221,48 @@ static __inline__ int atomic_sub_return(int i, atomic_t *v)
 	return atomic_add_return(-i,v);
 }
 
-#define atomic_cmpxchg(v, old, new) ((int)cmpxchg(&((v)->counter), old, new))
-#define atomic_xchg(v, new) (xchg(&((v)->counter), new))
+
+#define atomic_cmpxchg(v, old, New) (cmpxchg(&((v)->counter), (old), (New)))
+
+struct __xchg_dummy {
+	unsigned long a[100];
+};
+#define __xg(x) ((struct __xchg_dummy *)(x))
+
+static __inline__ unsigned long cmpxchg(volatile void *ptr, unsigned long old,
+					unsigned long New)
+{
+    unsigned long prev;
+    asm volatile(LOCK_PREFIX "cmpxchgl %1,%2"
+		 : "=a"(prev)
+		 : "r"(New), "m"(*__xg(ptr)), "0"(old)
+		 : "memory");
+    return prev;
+}
 
 /**
- * atomic_add_unless - add unless the number is a given value
+ * atomic_add_unless - add unless the number is already a given value
  * @v: pointer of type atomic_t
  * @a: the amount to add to v...
  * @u: ...unless v is equal to u.
  *
- * Atomically adds @a to @v, so long as it was not @u.
+ * Atomically adds @a to @v, so long as @v was not already @u.
  * Returns non-zero if @v was not @u, and zero otherwise.
  */
-#define atomic_add_unless(v, a, u)				\
-({								\
-	int c, old;						\
-	c = atomic_read(v);					\
-	for (;;) {						\
-		if (unlikely(c == (u)))				\
-			break;					\
-		old = atomic_cmpxchg((v), c, c + (a));		\
-		if (likely(old == c))				\
-			break;					\
-		c = old;					\
-	}							\
-	c != (u);						\
-})
+static inline int atomic_add_unless(atomic_t *v, int a, int u)
+{
+	int c, old;
+	c = atomic_read(v);
+	for (;;) {
+		if (unlikely(c == (u)))
+			break;
+		old = atomic_cmpxchg((v), c, c + (a));
+		if (likely(old == c))
+			break;
+		c = old;
+	}
+	return c != (u);
+}
+
 
 #endif

@@ -19,9 +19,16 @@
  ****************************************************************************
  */
 
+/*! \mainpage Fastflow main page
+ 
+	\section intro_sec Introduction
+ 
+ */
+
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <ff/platforms/platform.h>
 #include <ff/lb.hpp>
 #include <ff/gt.hpp>
 #include <ff/node.hpp>
@@ -69,7 +76,7 @@ public:
     ff_farm(bool input_ch=false,
             int in_buffer_entries=DEF_IN_BUFF_ENTRIES, 
             int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
-            int worker_cleanup=false,
+            bool worker_cleanup=false,
             int max_num_workers=DEF_MAX_NUM_WORKERS):
         has_input_channel(input_ch),prepared(false),ondemand(false),
         nworkers(0),
@@ -83,7 +90,7 @@ public:
         for(int i=0;i<max_num_workers;++i) workers[i]=NULL;
 
         if (has_input_channel) { 
-            if (create_input_buffer(in_buffer_entries)<0) {
+            if (create_input_buffer(in_buffer_entries, false)<0) {
                 error("FARM, creating input buffer\n");
             }
         }
@@ -182,7 +189,7 @@ public:
             return 0;
         }
 
-        if (create_input_buffer(in_buffer_entries)<0) {
+        if (create_input_buffer(in_buffer_entries, false)<0) {
             error("FARM, creating input buffer\n");
             return -1;
         }
@@ -343,17 +350,17 @@ protected:
     int   svc_init()       { return -1; };
     void  svc_end()        {}
 
-    int create_input_buffer(int nentries) {
+    int create_input_buffer(int nentries, bool fixedsize) {
         if (in) {
             error("FARM create_input_buffer, buffer already present\n");
             return -1;
         }
-        if (ff_node::create_input_buffer(nentries)<0) return -1;
+        if (ff_node::create_input_buffer(nentries, fixedsize)<0) return -1;
         lb->set_in_buffer(in);
         return 0;
     }
     
-    int create_output_buffer(int nentries) {
+    int create_output_buffer(int nentries, bool fixedsize=false) {
         if (!gt) {
             error("FARM with no collector, cannot create output buffer\n");
             return -1;
@@ -362,7 +369,7 @@ protected:
             error("FARM create_output_buffer, buffer already present\n");
             return -1;
         }
-        if (ff_node::create_output_buffer(nentries)<0) return -1;
+        if (ff_node::create_output_buffer(nentries, fixedsize)<0) return -1;
         gt->set_out_buffer(out);
         return 0;
     }

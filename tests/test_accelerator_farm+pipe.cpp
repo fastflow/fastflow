@@ -45,10 +45,12 @@
 #include <ff/pipeline.hpp>
 #include <ff/farm.hpp>
 #include <ff/allocator.hpp>
+#include <ff/mapping_utils.hpp>
 
+
+#if __linux__
 #include <sys/time.h>
 #include <sys/resource.h>
-#ifdef __linux__
 #include <asm/unistd.h>
 #define gettid() syscall(__NR_gettid)
 #else
@@ -60,31 +62,14 @@ using namespace ff;
 enum { IN_QUEUE_SIZE=1024, OUT_QUEUE_SIZE=2048};
 
 // define your task
-typedef int task_t;
-
-
-/*
- * priority_level is a value in the range -20 to 19.
- * The default priority is 0, lower priorities cause more favorable scheduling.
- *
- */
-static inline int setPriority(int priority_level=0) {
-    if (priority_level) {
-        if (setpriority(PRIO_PROCESS, gettid(),priority_level) != 0) {
-            perror("setpriority:");
-            return -2;
-        }
-    }
-    return 0;
-}
-
+typedef int my_task_t;
 
 class Stage1: public ff_node {
 public:
     Stage1(int priority_level):priority_level(priority_level) {}
 
     int svc_init() {
-        return setPriority(priority_level);
+        return ff_setPriority(priority_level);
     }
 
     void * svc(void * task) {
@@ -100,7 +85,7 @@ public:
     Stage2(int priority_level):priority_level(priority_level) {}
 
     int svc_init() {
-        return setPriority(priority_level);
+        return ff_setPriority(priority_level);
     }
 
     void * svc(void * task) {
@@ -117,7 +102,7 @@ public:
     Emitter(int priority_level):priority_level(priority_level) {}
 
     int svc_init() {
-        return setPriority(priority_level);
+        return ff_setPriority(priority_level);
     }
 
     void * svc(void * task) { return task;}
@@ -131,7 +116,7 @@ public:
     Collector(int priority_level):priority_level(priority_level) {}
 
     int svc_init() {
-        return setPriority(priority_level);
+        return ff_setPriority(priority_level);
     }
 
     void * svc(void * task) { return task;}
@@ -212,9 +197,9 @@ int main(int argc, char * argv[]) {
         
 
         for(int j=0;j<bunch;++j) {
-            task_t * task = new task_t(i+j);
+            my_task_t * task = new my_task_t(i+j);
 
-            if (farm.offload(task)<0) {
+            if (!farm.offload(task)) {
                 error("offloading task\n");
                 return -1;
             }
@@ -233,7 +218,7 @@ int main(int argc, char * argv[]) {
         }
 
         // offload End-Of-Stream
-        if (farm.offload((void *)FF_EOS)<0) {
+        if (!farm.offload((void *)FF_EOS)) {
             error("offloading EOS\n");
             return -1;
         }

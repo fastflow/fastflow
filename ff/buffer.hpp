@@ -89,7 +89,14 @@ public:
         pread(0),pwrite(0),size(n),buf(0) {
     }
     
-    ~SWSR_Ptr_Buffer() { if (buf)::free(buf); }
+    ~SWSR_Ptr_Buffer() {
+		#if defined(_MSC_VER)
+        if (buf)::aligned_free(buf);    
+		#else	
+        if (buf)::free(buf);
+		#endif  
+
+	}
     
     /* initialize the circular buffer. */
     bool init(const bool startatlineend=false) {
@@ -99,9 +106,12 @@ public:
         if (size<MULTIPUSH_BUFFER_SIZE) return false;
 #endif
 
-#if __MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_6
+		#if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && (__MAC_OS_X_VERSION_MIN_REQUIRED < 1060))
         buf = (void **)::malloc(size*sizeof(void*));
         if (!buf) return false;
+#elif defined(_MSC_VER)
+                buf = (void **) aligned_malloc(size*sizeof(void*));
+        if (!buf) return false;         
 #else
         void * ptr;
         if (posix_memalign(&ptr,longxCacheLine*sizeof(long),size*sizeof(void*))!=0)
@@ -245,9 +255,14 @@ public:
 #if defined(SWSR_MULTIPUSH)        
         mcnt   = 0;
 #endif        
-        bzero(buf,size*sizeof(void*));
+        memset(buf,0,size*sizeof(void*));
     }
 
+    inline size_t length() const {
+        size_t len = pwrite-pread;
+        if (len>=0) return len;
+        return size-len;
+    }
 
 };
 

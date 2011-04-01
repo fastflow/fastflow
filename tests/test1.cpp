@@ -25,10 +25,11 @@
  ****************************************************************************
  */
 
-/*
- * Very basic test for the FastFlow farm.
- *
- */
+/**
+
+ Very basic test for the FastFlow farm.
+ 
+*/
 #include <vector>
 #include <iostream>
 #include <ff/farm.hpp>

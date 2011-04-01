@@ -12,11 +12,11 @@
 
 #include <stdlib.h>
 #include <ff/buffer.hpp>
+#include <ff/sysdep.h>
 #include <ff/allocator.hpp>
 #include <ff/atomic/abstraction_dcas.h>
 
 namespace ff {
-
 
 /* 
  * MSqueue is an implementation of the lock-free FIFO MPMC queue by
@@ -119,19 +119,15 @@ private:
     long padding2[longxCacheLine-(sizeof(Pointer)/sizeof(long))];
     atomic_long_t aba_counter;
     long padding3[longxCacheLine-(sizeof(atomic_long_t)/sizeof(long))];
+    FFAllocator *delayedAllocator;
 
 private:
     inline void allocnode(Pointer & p, void * data) {
         union { Node * p1; void * p2;} pn;
-#if defined(USE_STD_ALLOCATOR)
-        if(posix_memalign((void**)&pn.p2, ALIGN_DOUBLE_POINTER,sizeof(Node))!=0) {
-            abort();
-        }
-#else
-        if (FFAllocator::instance()->posix_memalign((void**)&pn.p2,ALIGN_DOUBLE_POINTER,sizeof(Node))!=0) {
+
+        if (delayedAllocator->posix_memalign((void**)&pn.p2,ALIGN_DOUBLE_POINTER,sizeof(Node))!=0) {
             abort();
         }            
-#endif
         new (pn.p2) Node(data);
         p.set(*pn.p1, atomic_long_inc_return(&aba_counter));
         pn.p1->setTag(atomic_long_inc_return(&aba_counter));
@@ -139,14 +135,15 @@ private:
 
     inline void deallocnode( Node * n) {
         n->~Node();
-#if defined(USE_STD_ALLOCATOR)
-        free(n);
-#else
-        FFAllocator::instance()->free(n);
-#endif
+        delayedAllocator->free(n);
     }
 
 public:
+    MSqueue(): delayedAllocator(NULL) {}
+    
+    ~MSqueue() {
+        if (delayedAllocator)  delete delayedAllocator;
+    }
 
     MSqueue& operator=(const MSqueue& v) { 
         head=v.head;
@@ -155,11 +152,15 @@ public:
         return *this;
     }
 
+
     /* initialize the MSqueue */
     bool init() {
         // reset the ABA counter
         atomic_long_set(&aba_counter,0);
         
+        delayedAllocator = new FFAllocator(2); 
+        if (!delayedAllocator) return false;
+
         // create the first NULL node 
         // so the queue is never really empty
         Pointer dummy;
@@ -170,10 +171,8 @@ public:
         return true;
     }
 
-    // insert method, it never fails if data is not NULL
+    // insert method, it never fails
     inline bool push(void * const data) {
-        if (!data) return false;
-
         bool done = false;
 
         ALIGN(ALIGN_DOUBLE_POINTER) Pointer tailptr;
@@ -246,6 +245,7 @@ public:
 /*
  * Simple and scalable Multi-Producer/Multi-Consumer queue.
  *
+ * Experimental code !!
  *
  */
 template <typename Q=MSqueue>
@@ -267,44 +267,67 @@ public:
             if (!pool[i].init()) return false;
 
         stop=false;
-
         return true;
     }
 
     inline void stop_producing() { 
-        for(size_t i=0;i<pool.size();++i)
-            pool[i].push((void*)FF_EOS);        
+        WMB();
         stop=true;
     }
 
     // insert method, it never fails if data is not NULL
     inline bool push(void * const data) {
-        if (!data || stop) return false;
+        if (stop) return false;
         register long q = atomic_long_inc_return(&enqueue) % pool.size();
-        return pool[q].push(data);
+        bool r = pool[q].push(data);
+        return r;
     }
 
     // extract method, it returns false if the queue is empty
     inline bool  pop(void ** data) {      
         if (!data) return false;
+        bool r;
+
+#if defined(FIFO_QUEUE)  
+        register long q, q1, ret;
+        do {
+            q  = atomic_long_read(&dequeue), q1 = atomic_long_read(&enqueue);
+            
+            if ((q == q1) && !stop)  return false;
+
+            ret = atomic_long_cmpxchg(&dequeue,q,(q+1));
+            if (ret == q) break;
+        } while(1);
+
+        q %= pool.size(); 
+        do ; while( !(r=pool[q].pop(data)) && !stop);
+        
+#else
         register long q = atomic_long_inc_return(&dequeue) % pool.size();
-        bool r = pool[q].pop(data);
-        if (stop && !r) { *data = (void*)FF_EOS;   return true; }
+        r = pool[q].pop(data);
+#endif
+        
+        if (stop && !r && empty())  { 
+            *data = (void*)FF_EOS;   
+            return true; 
+        }
+        
         return r;
     }
-
+    
     inline bool empty() {
-         for(size_t i=0;i<pool.size();++i)
-             if (!pool[i].empty()) return false;
+        for(size_t i=0;i<pool.size();++i)
+            if (!pool[i].empty()) return false;
          return true;
     }
 private:
-    std::vector<Q> pool;
     atomic_long_t enqueue;
+    long padding1[longxCacheLine-sizeof(atomic_long_t)];
     atomic_long_t dequeue;
+    long padding2[longxCacheLine-sizeof(atomic_long_t)];
+    std::vector<Q> pool;
     bool          stop;
 };
-
 
 
 } // namespace

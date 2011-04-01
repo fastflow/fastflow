@@ -78,6 +78,9 @@
 
 /***************************************************************************/
 
+#ifndef __CYCLE_H
+#define __CYCLE_H
+
 #if TIME_WITH_SYS_TIME
 # include <sys/time.h>
 # include <time.h>
@@ -93,6 +96,7 @@
 {									  \
      return (double)t1 - (double)t0;					  \
 }
+
 
 /*----------------------------------------------------------------*/
 /* Solaris */
@@ -186,16 +190,41 @@ INLINE_ELAPSED(__inline__)
 #define TIME_MIN 5000.0   /* unreliable pentium IV cycle counter */
 #endif
 
+/*----------------------------------------------------------------
+ generic Windows platform 
+ March 2011, Marco Aldinucci, aldinuc@di.unito.it
+----------------------------------------------------------------*/
+
+#if (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32) && !defined(HAVE_TICK_COUNTER)
+#pragma once
+#pragma intrinsic(__rdtsc)
+#include <windows.h>
+#include <intrin.h>
+typedef unsigned __int64 ticks;
+
+static __forceinline ticks getticks(void)
+{
+    //LARGE_INTEGER time;
+    //QueryPerformanceCounter(&time);
+    //return (long long) time.QuadPart;
+	return(__rdtsc());
+}
+
+INLINE_ELAPSED(inline)
+
+#define HAVE_TICK_COUNTER
+#endif
+
 /* Visual C++ -- thanks to Morten Nissov for his help with this */
 #if _MSC_VER >= 1200 && _M_IX86 >= 500 && !defined(HAVE_TICK_COUNTER)
 #include <windows.h>
-typedef LARGE_INTEGER ticks;
+typedef LARGE_INTEGER ticks; 
 #define RDTSC __asm __emit 0fh __asm __emit 031h /* hack for VC++ 5.0 */
 
 static __inline ticks getticks(void)
 {
      ticks retval;
-	 
+
      __asm {
 	  RDTSC
 	  mov retval.HighPart, edx
@@ -512,3 +541,5 @@ INLINE_ELAPSED(inline)
 #endif
 #endif /* HAVE_MIPS_ZBUS_TIMER */
 
+
+#endif // __CYCLE_H

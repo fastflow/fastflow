@@ -2078,7 +2078,7 @@ int main(int argc, char* argv[])
 		#endif
 		if (sizeof(OFF_T) <= 4)
 		{
-			fprintf(stderr, "\npbzip2_ff: *WARNING: off_t variable size only %d bits!\n", sizeof(OFF_T)*8);
+			fprintf(stderr, "\npbzip2_ff: *WARNING: off_t variable size only %lu bits!\n", sizeof(OFF_T)*8);
 			if (decompress == 1)
 				fprintf(stderr, " You will only able to uncompress files smaller than 2GB in size.\n\n");
 			else

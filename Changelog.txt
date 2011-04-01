@@ -1,4 +1,5 @@
-* ??/??/?? - v.1.0.1
+* 01/04/11 - v.1.0.9
+   - fixes return type error in node.hpp ubuffer.hpp and buffer.hpp
    - added the method get_channel_id() in the emitter and collector class
      the method returns the id of the worker thread from which an input task
      is coming from
@@ -10,13 +11,18 @@
    - improved cmake test
    - improved performance for fine grain D&C computation (farm+feedback)
      by changing the losetime_in method in the lb class.
-   - added Multi-Producers/Multi-Consumers queue (MSqueue by Michael and Scott)
+   - added Multi-Producers/Multi-Consumers queue (MSqueue by Michael and Scott) 
+     (EXPERIMENTAL code )
    - added abstraction_dcas from liblfds (www.liblfds.org), no powerpc support yet!
    - fixed some bugs in the allocator
    - posix_memalign implemented in the allocator
-   - ticket-spinlock from Linux kernel (experimental code only for Linux)
+   - ticket-spinlock from Linux kernel (EXPERIMENTAL code only for Linux)
    - added two lock-based methods in uSWSR queue (mp_push and mc_pop)
    - fixed missing files in CMakeLists.txt
+   - fixed deadlock situation when pipeline with feedback channel is created (torus pattern)
+   - implemented a Deferred Reclamation strategy based on number of free in the allocator
+   - added the ff_queue implementation of a SPSC queue by Dmitry Vyukov (www.1024cores.net)
+   - first porting on Windows OS
 * 01/09/10 - v.1.0.0
    - New release
    - some bugs fixed

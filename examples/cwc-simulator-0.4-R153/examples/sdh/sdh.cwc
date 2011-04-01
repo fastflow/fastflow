@@ -1,0 +1,19 @@
+%model "Sorbitol Dehydrogenase"
+
+%alphabet
+E NADH ENADH ENAD NAD F S
+
+%rules
+{T} E NADH ~X >>>[0.0000062]>>> ENADH ~X %%
+{T} ENADH ~X >>>[33.0]>>> E NADH ~X %%
+{T} ENADH F ~X >>>[0.000000002]>>> ENAD S ~X %%
+{T} ENAD S ~X >>>[0.000000008]>>> ENADH F ~X %%
+{T} ENAD ~X >>>[227.0]>>> E NAD ~X %%
+{T} E NAD ~X >>>[0.0000006]>>> ENAD ~X %%
+{T} E ~X >>>[0.0019]>>> ~X %%
+
+%term
+210*E 400000000000*F 160000000*NADH
+
+%monitors
+"NADH": {T} NADH %%

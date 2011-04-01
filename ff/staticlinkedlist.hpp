@@ -26,6 +26,12 @@
  *  
  * -- Massimiliano Meneghin: themaxmail@gmail.com 
  */
+
+#include <stdlib.h>
+#include <ff/buffer.hpp>
+#include <ff/sysdep.h>
+#include <assert.h>
+
 #if defined(WHILE)
 #define WHILE_VERSION 1
 #else
@@ -50,13 +56,19 @@
 #define POSTPOLLING_VERSION 1
 #endif
 
+#if defined(__GNUC__)
+#if !defined(likely)
 #define likely(x)       __builtin_expect((x),1)
+#endif
+#if !defined(unlikely)
 #define unlikely(x)     __builtin_expect((x),0)
+#endif
+#else
+#define likely(x) (x)
+#define unlikely(x) (x)
+#endif 
 
-#include <stdlib.h>
-#include <ff/buffer.hpp>
-#include <ff/sysdep.h>
-#include <assert.h>
+
 #define CAST_TO_UL(X) ((unsigned long)X)
 #define CAST_TO_VUL(X) *((volatile unsigned long * )&X)
 

@@ -9,6 +9,15 @@
 
 /* atomic_t should be 32 bit signed type */
 
+
+#if !defined(likely)
+#define likely(x)	__builtin_expect(!!(x), 1)
+#endif
+#if !defined(unlikely)
+#define unlikely(x)	__builtin_expect(!!(x), 0)
+#endif
+
+
 /*
  * Atomic operations that C can't guarantee us.  Useful for
  * resource counting etc..
@@ -145,7 +154,7 @@ static __inline__ void atomic64_add(long i, atomic64_t *v)
  *
  * Atomically adds @i to @v and returns @i + @v
  */
-static inline long atomic64_add_return(long i, atomic64_t *v)
+static __inline__ long atomic64_add_return(long i, atomic64_t *v)
 {
 	long __i = i;
 	asm volatile(LOCK_PREFIX "xaddq %0, %1;"
@@ -170,4 +179,49 @@ static __inline__ void atomic64_sub(long i, atomic64_t *v)
 }
 
 
+#define atomic64_cmpxchg(v, old, New) (cmpxchg8(&((v)->counter), (old), (New)))
+
+
+/*
+ * Atomic compare and exchange.  Compare OLD with MEM, if identical,
+ * store NEW in MEM.  Return the initial value in MEM.  Success is
+ * indicated by comparing RETURN with OLD.
+ */
+
+#define __xg(x) ((volatile long *)(x))
+static __inline__ unsigned long cmpxchg8(volatile void *ptr, unsigned long old,
+				      unsigned long New)
+{
+	unsigned long prev;
+	asm volatile(LOCK_PREFIX "cmpxchgq %1,%2"
+		     : "=a"(prev)
+		     : "r"(New), "m"(*__xg(ptr)), "0"(old)
+		     : "memory");
+	return prev;
+}
+
+
+/**
+ * atomic64_add_unless - add unless the number is a given value
+ * @v: pointer of type atomic64_t
+ * @a: the amount to add to v...
+ * @u: ...unless v is equal to u.
+ *
+ * Atomically adds @a to @v, so long as it was not @u.
+ * Returns non-zero if @v was not @u, and zero otherwise.
+ */
+static inline int atomic64_add_unless(atomic64_t *v, long a, long u)
+{
+	long c, old;
+	c = atomic64_read(v);
+	for (;;) {
+		if (unlikely(c == (u)))
+			break;
+		old = atomic64_cmpxchg((v), c, c + (a));
+		if (likely(old == c))
+			break;
+		c = old;
+	}
+	return c != (u);
+}
 #endif

@@ -1,0 +1,16 @@
+%model "lotka-volterra"
+
+%alphabet
+p P
+
+%rules
+{T} p ~X >>>[10.0]>>> 2*p ~X %%
+{T} p P ~X >>>[0.01]>>> 2*P ~X %%
+{T} P ~X >>>[10.0]>>> ~X %%
+
+%term
+1000*p 1000*P
+
+%monitors
+"preys": {T} p %%
+"predators": {T} P %%

@@ -84,7 +84,9 @@ typedef unsigned long int     atom_t;
 
 #if (defined __unix__ && defined __x86_64__ && __GNUC__)
 // TRD : any UNIX with GCC on x64
+#if !defined(_XOPEN_SOURCE)
 #define _XOPEN_SOURCE 600
+#endif
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -97,7 +99,9 @@ typedef unsigned long long int  atom_t;
 
 #if (defined __unix__ && defined __i686__ && __GNUC__)
 // TRD : any UNIX with GCC on x86
+#if !defined(_XOPEN_SOURCE)
 #define _XOPEN_SOURCE 600
+#endif
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -110,7 +114,9 @@ typedef unsigned long int     atom_t;
 
 #if (defined __unix__ && defined __arm__ && __GNUC__)
 // TRD : any UNIX with GCC on ARM
+#if !defined(_XOPEN_SOURCE)
 #define _XOPEN_SOURCE 600
+#endif
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -124,7 +130,21 @@ typedef unsigned long int     atom_t;
 
 
 // ------------------------------ abstraction_dcas.c file --------------------------------
-
+// 2011 - Marco Aldinucci - aldinuc@di.unito.it
+#if (defined __APPLE__ && defined __x86_64__ && __GNUC__)
+// TRD : any UNIX with GCC on x64
+#if !defined(_XOPEN_SOURCE)
+#define _XOPEN_SOURCE 600
+#endif
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+typedef unsigned long long int  atom_t;
+#define INLINE                  inline
+#define ALIGN(alignment)        __attribute__( (aligned(alignment)) )
+#define ALIGN_SINGLE_POINTER    8
+#define ALIGN_DOUBLE_POINTER    16
+#endif
 
 
 /****************************************************************************/

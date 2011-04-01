@@ -34,7 +34,7 @@
  *     |                   v                   |
  *     |            |(stage2_1->stage2_2)|     |
  *     v            |                    |     v
- *    stage1-->farm |(stage2_1->stage2_2)|-->stage2
+ *    stage1-->farm |(stage2_1->stage2_2)|-->stage3
  *                  |                    |
  *                  |(stage2_1->stage2_2)|
  *                    ^                ^
@@ -100,7 +100,7 @@ class Stage3: public ff_node {
 public:
     Stage3():sum(0){}
 
-    void * svc(void * task) {
+    void * svc(void * task) {        
         int * t = (int *)task;
         if (!t)  abort();
         sum +=*t;
@@ -136,9 +136,10 @@ int main(int argc, char * argv[]) {
     int streamlen=atoi(argv[1]);
     int nworkers=atoi(argv[2]);    
 
+	std::cerr << "Init allocator ...";
     // init allocator
     ffalloc.init();
-
+	std::cerr << " Done\n";
     // bild main pipeline
     ff_pipeline pipe;
     pipe.add_stage(new Stage1(streamlen));
@@ -163,7 +164,7 @@ int main(int argc, char * argv[]) {
 
     // add last stage to the main pipeline
     pipe.add_stage(new Stage3);
-
+    std::cerr << "Starting ...\n";
     if (pipe.run_and_wait_end()<0) {
         error("running pipeline\n");
         return -1;

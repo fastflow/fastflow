@@ -17,8 +17,9 @@
 
 //#include <asm/types.h>
 
-#if __linux__ || __FreeBSD__
+#if __linux__ || __FreeBSD__ || __APPLE__
 
+#if __linux__ || __FreeBSD__
 #ifdef __i386__
 #include "atomic-i386.h"
 #elif __x86_64__
@@ -53,7 +54,8 @@
  * macros of a platform may have.
  */
 
-#if BITS_PER_LONG == 64
+#if (BITS_PER_LONG == 64)
+
 
 typedef atomic64_t atomic_long_t;
 
@@ -108,6 +110,17 @@ static inline void atomic_long_sub(long i, atomic_long_t *l)
         atomic64_sub(i, v);
 }
 
+
+static inline long atomic_long_add_unless(atomic_long_t *l, long a, long u)
+{
+	atomic64_t *v = (atomic64_t *)l;
+
+	return (long)atomic64_add_unless(v, a, u);
+}
+
+
+#define atomic_long_cmpxchg(l, old, new) \
+	(atomic64_cmpxchg((atomic64_t *)(l), (old), (new)))
 
 #else
 
@@ -165,5 +178,22 @@ static inline void atomic_long_sub(long i, atomic_long_t *l)
         atomic_sub(i, v);
 }
 
+static inline long atomic_long_add_unless(atomic_long_t *l, long a, long u)
+{
+	atomic_t *v = (atomic_t *)l;
+
+	return (long)atomic_add_unless(v, a, u);
+}
+
+#define atomic_long_cmpxchg(l, old, new) \
+	(atomic_cmpxchg((atomic_t *)(l), (old), (new)))
+
 #endif
+
+#elif (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
+typedef struct { volatile int counter; } atomic_t;
+#include "ff/platforms/platform_msvc_windows.h"
+#define BITS_PER_LONG (sizeof(long) * 8)
+#endif
+
 #endif

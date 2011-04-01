@@ -92,9 +92,9 @@ public:
             p.buf = (SWSR_Ptr_Buffer*)malloc(sizeof(SWSR_Ptr_Buffer));
             new (p.buf) SWSR_Ptr_Buffer(size);
 #if defined(uSWSR_MULTIPUSH)        
-            if (p.buf->init(true)<0) return NULL;
+            if (!p.buf->init(true)) return NULL;
 #else
-            if (p.buf->init()<0) return NULL;
+            if (!p.buf->init()) return NULL;
 #endif
         }
         
@@ -169,9 +169,9 @@ public:
         if (!buf_r) return false;
         new ((void *)buf_r) SWSR_Ptr_Buffer(size);
 #if defined(uSWSR_MULTIPUSH)        
-        if (buf_r->init(true)<0) return false;
+        if (!buf_r->init(true)) return false;
 #else
-        if (buf_r->init()<0) return false;
+        if (!buf_r->init()) return false;
 #endif
         buf_w = buf_r;
         return true;
@@ -271,6 +271,16 @@ public:
         bool r=pop(data);
         spin_unlock(C_lock);
         return r;
+    }
+    
+    /* NOTE: this is not the real queue length
+     * but just a raw estimation.
+     *
+     */
+    inline size_t length() const {
+        size_t len = buf_r->length();
+        if (buf_r == buf_w) return len;
+        return len+buf_w->length();
     }
 
 

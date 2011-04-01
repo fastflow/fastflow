@@ -28,7 +28,7 @@
 namespace ff {
 
 class ff_loadbalancer: public ff_thread {
-    
+public:    
     enum {TICKS2WAIT=1000};
 
 protected:
@@ -280,8 +280,8 @@ public:
 #if defined(TRACE_FASTFLOW)
                     register ticks diff=(getticks()-t0);
                     tickstot +=diff;
-                    ticksmin=std::min(ticksmin,diff);
-                    ticksmax=std::max(ticksmax,diff);
+                    ticksmin=(std::min)(ticksmin,diff);
+                    ticksmax=(std::max)(ticksmax,diff);
 #endif  
                     if (task == GO_ON) continue;
 
@@ -339,8 +339,8 @@ public:
 #if defined(TRACE_FASTFLOW)
                         register ticks diff=(getticks()-t0);
                         tickstot +=diff;
-                        ticksmin=std::min(ticksmin,diff);
-                        ticksmax=std::max(ticksmax,diff);
+                        ticksmin=(std::min)(ticksmin,diff);
+                        ticksmax=(std::max)(ticksmax,diff);
 #endif  
 
                         if (task == GO_ON) continue;
