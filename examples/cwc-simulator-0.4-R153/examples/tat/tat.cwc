@@ -1,0 +1,27 @@
+%model "TAT and GFP production model"
+
+%alphabet
+LTR NmRNA CMRNA GFP CTAT TAT TEF TEFa
+
+%rules
+{nucleus} LTR ~X >>>[0.000000001]>>> LTR NmRNA ~X %%
+{T} ({nucleus} ~x|NmRNA ~X) ~Y >>>[0.00072]>>> CMRNA ({nucleus} ~x|~X) ~Y %%
+{T} CMRNA ~X >>>[0.5]>>> CMRNA GFP ~X %%
+{T} CMRNA ~X >>>[0.00132]>>> CMRNA CTAT ~X %%
+{T} ({nucleus} ~x|TAT ~X) ~Y >>>[0.00072]>>> CTAT ({nucleus} ~x|~X) ~Y %%
+{T} CTAT ({nucleus} ~x|~X) ~Y >>>[0.0085]>>> ({nucleus} ~x|TAT ~X) ~Y %%
+{nucleus} TAT LTR ~X >>>[0.00015]>>> TEF ~X %%
+{nucleus} TEF ~X >>>[0.017]>>> TAT LTR ~X %%
+{nucleus} TEF ~X >>>[0.001]>>> TEFa ~X %%
+{nucleus} TEFa ~X >>>[0.13]>>> TEF ~X %%
+{nucleus} TEFa ~X >>>[0.1]>>> LTR NmRNA TAT ~X %%
+{T} GFP ~X >>>[0.00000301]>>> ~X %%
+{T} CTAT ~X >>>[0.000043]>>> ~X %%
+{T} CMRNA ~X >>>[0.000048]>>> ~X %%
+{nucleus} NmRNA ~X >>>[0.000048]>>> ~X %%
+
+%term
+75000*GFP 5*CTAT ({nucleus} | LTR)
+
+%monitors
+"GFP": {T} GFP %%

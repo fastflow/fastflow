@@ -1,0 +1,34 @@
+%model "Quorum sensing of P. aeruginosa (1 bacterium)"
+
+%alphabet
+LasI LasR oxo3 R3
+LasO.LasR.LasI
+RO3.LasR.LasI
+monitor
+
+%rules
+{membrane} LasO.LasR.LasI ~X >>>[20.0]>>> LasO.LasR.LasI LasR ~X %% //R1
+{membrane} LasO.LasR.LasI ~X >>>[5.0]>>> LasO.LasR.LasI LasI ~X %% //R2
+
+{membrane} LasI ~X >>>[8.0]>>> LasI oxo3 ~X %% //R3
+{membrane} oxo3 LasR ~X >>>[0.25]>>> R3 ~X %% //R4
+{membrane} R3 ~X >>>[400.0]>>> oxo3 LasR ~X %% //R5
+
+{membrane} R3 LasO.LasR.LasI ~X >>>[0.25]>>> RO3.LasR.LasI ~X %% //R6
+{membrane} RO3.LasR.LasI ~X >>>[10.0]>>> R3 LasO.LasR.LasI ~X %% //R7
+{membrane} RO3.LasR.LasI ~X >>>[1200.0]>>> RO3.LasR.LasI LasR ~X %% //R8
+{membrane} RO3.LasR.LasI ~X >>>[300.0]>>> RO3.LasR.LasI LasI ~X %% //R9
+
+{T} ({membrane} ~x | oxo3 ~X) ~Y >>>[30.0]>>> oxo3 ({membrane} ~x | ~X) ~Y %% //R10
+{T} oxo3 ({membrane} ~x | ~X) ~Y >>>[1.0]>>> ({membrane} ~x | oxo3 ~X) ~Y %% //R11
+
+{membrane} LasI ~X >>>[1.0]>>> ~X %% //R12
+{membrane} LasR ~X >>>[1.0]>>> ~X %% //R13
+{membrane} oxo3 ~X >>>[1.0]>>> ~X %% //R14
+{T} oxo3 ~X >>>[1.0]>>> ~X %% //R14'
+
+%term
+({membrane}| LasO.LasR.LasI monitor)
+
+%monitors
+"autoinducer": {membrane} monitor oxo3 %%

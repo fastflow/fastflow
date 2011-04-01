@@ -1,0 +1,16 @@
+%model "calcium spiking"
+
+%alphabet
+F P S
+
+%rules
+{T} F ~X >>>[0.5]>>> F S ~X %%
+{T} S ~X >>>[1.5 0.6]>>> P ~X %%
+{T} P ~X >>>[0.02]>>> ~X %%
+
+%term
+100*S F
+
+%monitors
+"S": {T} S %%
+"P": {T} P %%

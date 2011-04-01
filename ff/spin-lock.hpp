@@ -125,6 +125,25 @@ static inline void init_locked(lock_t l)   { l[0]=!UNLOCKED;}
  *  The Cilk Project web site is  http://supertech.csail.mit.edu/cilk/
  *
  */
+
+#if (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
+#include <WinBase.h>
+// windows platform
+static inline void spin_lock(lock_t l) {
+	while (InterlockedExchange((long *)l, 1) != UNLOCKED) {	
+        while (l[0]) ;  /* spin using only reads - reduces bus traffic */
+    }
+}
+
+static inline void spin_unlock(lock_t l) {
+    /*
+     *  Ensure that all previous writes are globally visible before any
+     *  future writes become visible.
+     */    
+    WMB();
+    l[0]=UNLOCKED;
+}
+#else // non windows platform
 static inline void spin_lock(lock_t l) {
     while (xchg((int *)l, 1) != UNLOCKED) {
         while (l[0]) ;  /* spin using only reads - reduces bus traffic */
@@ -139,6 +158,8 @@ static inline void spin_unlock(lock_t l) {
     WMB();
     l[0]=UNLOCKED;
 }
+
+#endif // windows platform spin_lock
 #endif
 
 

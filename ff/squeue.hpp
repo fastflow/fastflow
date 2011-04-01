@@ -86,7 +86,7 @@ public:
             if (tail == (datacap-1)) {
                 datacap += DATA_CHUNK;
                 data = (data_type *)realloc(data, datacap*sizeof(data_type));
-            }
+           }
 
             T * v = newchunk();
             data[++tail] = data_type(0,0,v);

@@ -32,7 +32,7 @@
  */
 
 #include <sys/types.h>
-#include <unistd.h>
+//#include <unistd.h>
 #include <stdlib.h>
 
 #include <vector>
@@ -154,7 +154,7 @@ public:
 #else
             task = (task_t*)MALLOC(itemsize*sizeof(task_t));
 #endif
-            bzero(task,itemsize*sizeof(task_t));
+            memset(task,0,itemsize*sizeof(task_t));
 
             do_work(&task[0],itemsize,nticks);            
 
@@ -290,7 +290,7 @@ int main(int argc, char * argv[]) {
         for(unsigned int i=0;i<ntasks;++i) {
             // allocates memory
             void * task= MALLOC(itemsize*sizeof(task_t));
-            bzero(task,itemsize*sizeof(task_t));
+            memset(task,0,itemsize*sizeof(task_t));
             FREE(task,itemsize*sizeof(task_t));
         }
         ffTime(STOP_TIME);       

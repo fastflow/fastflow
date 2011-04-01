@@ -29,9 +29,9 @@ public:
     enum { DEF_IN_BUFF_ENTRIES=512, DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+128)};
 
     ff_pipeline(int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
-                int out_buffer_entries=DEF_OUT_BUFF_ENTRIES):
+                int out_buffer_entries=DEF_OUT_BUFF_ENTRIES, bool fixedsize=true):
         in_buffer_entries(in_buffer_entries),
-        out_buffer_entries(out_buffer_entries) {}
+        out_buffer_entries(out_buffer_entries),fixedsize(fixedsize) {}
 
     int add_stage(ff_node * s) {        
         nodes_list.push_back(s);
@@ -45,7 +45,10 @@ public:
             error("PIPE, too few pipeline nodes\n");
             return -1;
         }
-        if (create_input_buffer(out_buffer_entries)<0)
+
+        fixedsize=false; // NOTE: force unbounded size for the queues!
+
+        if (create_input_buffer(out_buffer_entries, fixedsize)<0)
             return -1;
         
         if (set_output_buffer(get_in_buffer())<0)
@@ -65,7 +68,7 @@ public:
         }
         
         for(int i=1;i<nstages;++i) {
-            if (nodes_list[i]->create_input_buffer(in_buffer_entries)<0) {
+            if (nodes_list[i]->create_input_buffer(in_buffer_entries, fixedsize)<0) {
                 error("PIPE, creating input buffer for node %d\n", i);
                 return -1;
             }
@@ -162,9 +165,9 @@ protected:
     int   svc_init() { return -1; };
     void  svc_end()  {}
     
-    int create_input_buffer(int nentries) { 
+    int create_input_buffer(int nentries, bool fixedsize) { 
         if (in) return -1;
-        if (nodes_list[0]->create_input_buffer(nentries)<0) {
+        if (nodes_list[0]->create_input_buffer(nentries, fixedsize)<0) {
             error("PIPE, creating input buffer for node 0\n");
             return -1;
         }
@@ -172,11 +175,11 @@ protected:
         return 0;
     }
     
-    int create_output_buffer(int nentries) {
+    int create_output_buffer(int nentries, bool fixedsize=false) {
         int last = nodes_list.size()-1;
         if (!last) return -1;
 
-        if (nodes_list[last]->create_output_buffer(nentries)<0) {
+        if (nodes_list[last]->create_output_buffer(nentries, fixedsize)<0) {
             error("PIPE, creating output buffer for node %d\n",last);
             return -1;
         }
@@ -199,6 +202,7 @@ private:
     int in_buffer_entries;
     int out_buffer_entries;
     std::vector<ff_node *> nodes_list;
+    bool fixedsize;
 };
 
 

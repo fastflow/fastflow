@@ -1,0 +1,51 @@
+CWC Simulator (ver. 0.3a)
+*************************
+This is a C++ implementation of CWC, a calculus for the representation and simulation of biological systems.
+After a successful installation (see INSTALL) you'll be able to run simulations over CWC models, as shown in some examples (see examples directory).
+
+
+
+* Features
+- Gillespie SSA algorithm over CWC models;
+- hybrid stochastic/deterministic semantics;
+- dynamic cutoff-based reconfiguration;
+- labelled CWC compartments;
+- multiple instances of simulation with online statistics;
+- optimization for multicore architectures based on FastFlow framework.
+
+
+
+* (Command-line) Interface
+As a generic user, you should run:
+
+<scwc>
+	-i model.cwc
+	-o statistics.dat
+	-t <time>
+	-s <sampling_rate>
+	-n <runs>
+	-r <rate_cutoff>
+	-p <population_cutoff>
+	-c <confidence>
+	-q <quantiles>
+	-w <workers>
+
+where:
+- <scwc> is the name of the executable (default: scwc);
+- model.cwc is the CWC program (see examples);
+- statistics.dat is the output file;
+- <time> is the time-limit for the simulation (i.e. 30);
+- <sampling_frequency> is the sampling frequency (i.e. 0.12 to get 250 points with time-limit=30);
+- <runs> is the number of instances of simulation;
+- <rate_cutoff> is the minimum rate cutoff
+- <population_cutoff> is the minimum population cutoff
+- <confidence> is the confidence-level for the statistical estimations (i.e. 95 to get 95%-confidence intervals);
+- <quantiles> is the number of quantiles;
+- <workers> has usually to match the number of cores of your system (i.e. 4 for quad-core CPU).
+
+
+
+* Output
+The tool produces:
+- some .dat files (the sampled output of the simulations)
+- some gnuplot scripts to draw statistical analysises

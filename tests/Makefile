@@ -47,11 +47,16 @@ LDFLAGS              =
 INCS                 = -I../ 
 LIBS                 = -lpthread
 ARCH                 = $(shell uname -m)
+OS					 = $(shell uname)
 ifeq ($(ARCH),x86_64)
   ARCH = core2
 endif
+ifeq ($(OS),Darwin)
+  ARCH = core2
+endif
+
 INCLUDES             = -I. $(INCS)
-TARGET               = test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator_farm+pipe test_freeze test_masterworker test_scheduling test_dt perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_mpmc
+TARGET               = test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator_farm+pipe test_freeze test_masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_mpmc
 
 
 .PHONY: all clean cleanall distclean install uninstall
@@ -101,14 +106,15 @@ test_masterworker:test_masterworker.o
 test_dt:test_dt.o
 test_scheduling:test_scheduling.o
 test_uBuffer:test_uBuffer.cpp
-	$(CXX) -march=$(ARCH) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+test_torus:test_torus.cpp
+	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_mpmc:test_mpmc.cpp
-	$(CXX) -march=$(ARCH) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+	$(CXX) -march=$(ARCH) -Wno-strict-aliasing $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 perf_test_alloc1:perf_test_alloc1.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 perf_test_alloc2:perf_test_alloc2.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-
 perf_test_alloc3:perf_test_alloc3.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 perf_test_noalloc:perf_test_noalloc.cpp

@@ -32,6 +32,8 @@
 
 namespace ff {
 
+
+#if !defined(_FF_DYNQUEUE_OPTIMIZATION)
 class dynqueue {
 private:
     struct Node {
@@ -103,6 +105,124 @@ public:
         return false;
     }    
 };
+
+#else // _FF_DYNQUEUE_OPTIMIZATION
+
+
+class dynqueue {
+private:
+    struct Node {
+        void        * data;
+        struct Node * next;
+    };
+
+    volatile Node *         head;
+    volatile unsigned long  pwrite;
+    long padding1[longxCacheLine-((sizeof(Node *)+sizeof(unsigned long))/sizeof(long))];
+    volatile Node *        tail;
+    volatile unsigned long pread;
+    long padding2[longxCacheLine-((sizeof(Node*)+sizeof(unsigned long))/sizeof(long))];
+
+    const   size_t cachesize;
+    void ** cache;
+
+private:
+
+    inline bool cachepush(void * const data) {
+        
+        if (!cache[pwrite]) {
+            /* Write Memory Barrier: ensure all previous memory write 
+             * are visible to the other processors before any later
+             * writes are executed.  This is an "expensive" memory fence
+             * operation needed in all the architectures with a weak-ordering 
+             * memory model where stores can be executed out-or-order 
+             * (e.g. Powerpc). This is a no-op on Intel x86/x86-64 CPUs.
+             */
+            WMB(); 
+            cache[pwrite] = data;
+            pwrite += (pwrite+1 >= cachesize) ? (1-cachesize): 1;
+            return true;
+        }
+        return false;
+    }
+
+    inline bool  cachepop(void ** data) {
+        if (!cache[pread]) return false;
+        
+        *data = cache[pread];
+        cache[pread]=NULL;
+        pread += (pread+1 >= cachesize) ? (1-cachesize): 1;    
+        return true;
+    }    
+    
+public:
+    enum {DEFAULT_CACHE_SIZE=1024};
+
+    dynqueue(int cachesize=DEFAULT_CACHE_SIZE, bool fillcache=false):cachesize(cachesize) {
+        Node * n = (Node *)::malloc(sizeof(Node));
+        n->data = NULL; n->next = NULL;
+        head=tail=n;
+
+
+#if __MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_6
+        cache = (void **)::malloc(cachesize*sizeof(void*));
+        if (!cache) abort();
+#else
+        void * ptr;
+        if (posix_memalign(&ptr,longxCacheLine*sizeof(long),cachesize*sizeof(void*))!=0)
+            abort();
+        cache=(void **)ptr;
+#endif
+
+        if (fillcache) {
+            for(int i=0;i<cachesize;++i) {
+                n = (Node *)::malloc(sizeof(Node));
+                if (n) cachepush(n);
+            }
+        }
+    }
+
+    ~dynqueue() {
+        union { Node * n; void * n2; } p;
+        while(cachepop(&p.n2)) free(p.n);
+        while(head != tail) {
+            p.n = (Node*)head;
+            head = head->next;
+            free(p.n);
+        }
+        if (head) free((void*)head);
+    }
+
+    inline bool push(void * const data) {
+        if (!data) return false;
+
+        union { Node * n; void * n2; } p;
+        if (!cachepop(&p.n2))
+            p.n = (Node *)::malloc(sizeof(Node));
+        
+        p.n->data = data; p.n->next = NULL;
+        WMB();
+        tail->next = p.n;
+        tail       = p.n;
+
+        return true;
+    }
+
+    inline bool  pop(void ** data) {
+        if (!data) return false;
+        if (head->next) {
+            Node * n = (Node *)head;
+            *data    = (head->next)->data;
+            head     = head->next;
+
+            if (!cachepush(n)) free(n);
+            return true;
+        }
+        return false;
+    }    
+};
+
+#endif // _FF_DYNQUEUE_OPTIMIZATION
 
 } // namespace
 

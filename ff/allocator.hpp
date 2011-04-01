@@ -43,7 +43,8 @@
  *
  * 2. Based on the ff_allocator, the FFAllocator has been implemented.
  *    It might be used by any number of threads to dynamically allocate/deallocate 
- *    memory. 
+ *    memory. You have to include allocator.hpp and just use ff_malloc, ff_free, 
+ *    ff_realloc, ff_posix_memalign.
  *
  * Note: In all the cases it is possible, it is better to use the ff_allocator
  *       as it allows more control and is more efficient.
@@ -52,18 +53,21 @@
  *
  */
 
-/* - June 2008 first version
- *   Author: Massimo Torquati <torquati@di.unipi.it> <massimotor@gmail.com>
- *    
+/* - June  2008 first version
+ *   March 2011 main rework
+ *
+ *   Author: Massimo Torquati <torquati@di.unipi.it> <massimotor@gmail.com>    
  */
 
 
 #include <assert.h>
 #include <algorithm>
 
+#include <ff/platforms/platform.h>
+
 #if defined(HAVE_ATOMIC_H)
 #include <asm/atomic.h>
-#else
+#else 
 #include <ff/atomic/atomic.h>
 #endif
 
@@ -71,14 +75,13 @@
 #include <Availability.h>
 #endif
 
-
-#include <pthread.h>
-#include <ff/cycle.h>
+//#include <pthread.h>
 #include <ff/buffer.hpp>
 #include <ff/ubuffer.hpp>
 #include <ff/spin-lock.hpp>
 #include <ff/svector.hpp>
 #include <ff/utils.hpp>
+
 
 //#define DEBUG_ALLOCATOR 1
 #if defined(DEBUG_ALLOCATOR)
@@ -190,15 +193,17 @@ static inline bool isPowerOfTwoMultiple(size_t alignment, size_t multiple) {
 
 class SegmentAllocator {
 public:
-    SegmentAllocator():memory_allocated(0) {}
+    SegmentAllocator():memory_allocated(0) { }
     ~SegmentAllocator() {}
-
+    
     void * newsegment(size_t segment_size) { 
         //void * ptr = ::malloc(segment_size);
         void * ptr=NULL;
 
 #if __MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_6
         ptr = ::malloc(segment_size);
+#elif (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
+        ptr = ::malloc(segment_size); // FIX ME
 #else
         if (posix_memalign(&ptr,sysconf(_SC_PAGESIZE),segment_size)!=0)
             return NULL; 
@@ -206,12 +211,16 @@ public:
         memory_allocated += segment_size;
 
         ALLSTATS(atomic_long_inc(&all_stats::instance()->segmalloc); atomic_long_add(segment_size, &all_stats::instance()->memallocated));
+
+        //uncomment the following line just to please valgrind
+        memset(ptr,0,segment_size);  // COMMETARE
         return ptr;
     }
 
     void   freesegment(void * ptr, size_t segment_size) { 
         DBG(assert(memory_allocated >=segment_size));
-        ::free(ptr); 
+        ::free(ptr);
+        
         memory_allocated -= segment_size;
         ALLSTATS(atomic_long_inc(&all_stats::instance()->segfree); atomic_long_add(segment_size, &all_stats::instance()->memfreed));
     }
@@ -223,7 +232,7 @@ private:
 };
     
     
-    // forward declarations
+// forward declarations
 class SlabCache;
 class ff_allocator;
     
@@ -248,39 +257,21 @@ struct Seg_ctl {
 struct xThreadData {
     enum { MIN_BUFFER_ITEMS=8192, LEAK_CHUNK=4096 };
     
-    xThreadData(const bool allocator, int nslabs):leak(0) { 
-#if defined(FF_BOUNDED_BUFFER)
-        b=0;
-        if (!allocator) {
-            b = (SWSR_Ptr_Buffer*)::malloc(sizeof(SWSR_Ptr_Buffer));
-            if (!b) abort();
-            new (b) SWSR_Ptr_Buffer((MIN_BUFFER_ITEMS>(2*nslabs))?MIN_BUFFER_ITEMS:(2*nslabs)); 
-            b->init();
-        }
-#endif
+    xThreadData(const bool allocator, int nslabs,const unsigned long key):leak(0),key(key) { 
         leak = (uSWSR_Ptr_Buffer*)::malloc(sizeof(uSWSR_Ptr_Buffer));
         if (!leak) abort();
         new (leak) uSWSR_Ptr_Buffer(LEAK_CHUNK); 
-        leak->init();
+        if (!leak->init()) abort();
     }
 
     ~xThreadData() { 
-#if defined(FF_BOUNDED_BUFFER)
-        if (b) { b->~SWSR_Ptr_Buffer(); ::free(b);}
-#endif
         if (leak) { leak->~uSWSR_Ptr_Buffer(); ::free(leak);}
     }
     
-#if defined(FF_BOUNDED_BUFFER)
-    SWSR_Ptr_Buffer       * b;
     uSWSR_Ptr_Buffer      * leak;
+    const unsigned long     key;
     long padding[longxCacheLine-2];
-#else
-    uSWSR_Ptr_Buffer      * leak;
-    long padding[longxCacheLine-1];
-#endif
 };
-
     
 /*
  * Cache of slab segment. Each segment consists of contiguous memory
@@ -315,7 +306,6 @@ private:
     enum {TICKS_TO_WAIT=500,TICKS_CNT=3};
     enum {BUFFER_OVERHEAD=sizeof(Buf_ctl)};
     enum {MIN_FB_CAPACITY=32};
-
     
     inline Seg_ctl * const getsegctl(Buf_ctl * buf) { return *((Seg_ctl **)buf); }
 
@@ -355,52 +345,77 @@ private:
         }
     }
 
+    /* return true if some memory has been reclaimed */
+    inline bool checkReclaim(Seg_ctl  * seg) {
+        bool r=false;
+        spin_lock(lock); 
+        DBG(assert(seg->availbuffers <= (unsigned)nslabs));
+        if (++(seg->availbuffers) == (unsigned long)nslabs) {
+            freeslab(seg); /* reclaim allocated memory */
+            r=true;
+        }
+        spin_unlock(lock);
+        return r;
+    }
+
+
+    /* return true if some memory has been reclaimed */
+    inline void checkReclaimD(Seg_ctl  * seg) {
+        if (++(seg->availbuffers) == (unsigned long)nslabs) {
+            freeslab(seg); /* reclaim allocated memory */
+        }
+    }
+
+    inline void * getfrom_fb_delayed() {
+        if (fb_size==1) return 0;
+        for(register unsigned i=1;i<fb_size;++i) {
+            if (fb[i]->leak->length()<(unsigned)delayedReclaim)  {
+                return 0; // cache empty
+            }
+        }
+
+        union { Buf_ctl * buf; void * ptr; } b;
+        for(register unsigned i=2;i<fb_size;++i) {
+            fb[i]->leak->pop(&b.ptr); 
+            DBG(assert(b.ptr));
+            checkReclaimD(getsegctl(b.buf));
+        }
+
+        fb[1]->leak->pop(&b.ptr);  
+        ALLSTATS(atomic_long_inc(&all_stats::instance()->leakremoved));
+        return b.ptr;
+    }
+
+
     inline void * getfrom_fb() {
         void * buf = 0;
-#if defined(FF_BOUNDED_BUFFER)
-        register SWSR_Ptr_Buffer * b = 0;
-        for(register unsigned i=0;i<fb_size;++i) {
-            DBG(assert(fb[i]));
-            b = fb[i]->b;            
-            if (b) {
-                if (b->pop(&buf))   {
-                    DBG(assert(buf));
-                    return buf;
-                }
-            } 
-        }
-#endif
+
         // fallback:
         // try to pop something from the leak queue 
         // of each threads
         for(register unsigned i=0;i<fb_size;++i) {
-            if (fb[i]->leak->pop((void **)&buf)) {
+            if (fb[i]->leak->pop((void **)&buf)) {              
                 ALLSTATS(atomic_long_inc(&all_stats::instance()->leakremoved));
                 return buf;
             }
         }
-        
+
         // the cache is empty
         return 0;
     }
-    
-    inline void checkReclaim(Seg_ctl  * seg) {
-        if (++(seg->availbuffers) == (unsigned long)nslabs) 
-            freeslab(seg); /* reclaim allocated memory */
+
+    inline int searchfb(const unsigned long key) {
+        for(register unsigned i=0;i<fb_size;++i) 
+            if (fb[i]->key == key) return (int)i;
+        return -1;
     }
-
-
-    inline ticks ticks_wait(ticks t1) {
-        register ticks delta, t0 = getticks();
-        do { delta = getticks()-t0; } while (delta < t1);
-        return delta-t1;
-    }
-
+        
 public:    
-    SlabCache(ff_allocator * const mainalloc, 
+    SlabCache(ff_allocator * const mainalloc, const int delayedReclaim,
               SegmentAllocator * const alloc, size_t sz, int ns):
         size(sz),nslabs(ns),fb(0),fb_capacity(0),fb_size(0),buffptr(0),availbuffers(0),
-        alloc(alloc),mainalloc(mainalloc) {}
+        alloc(alloc),mainalloc(mainalloc),delayedReclaim(delayedReclaim) {
+    }
     
     ~SlabCache() { 
         if (!nslabs) return;
@@ -418,7 +433,6 @@ public:
                 }
             ::free(fb);
         }
-        pthread_key_delete(fb_key);
     }
 
     int init(bool prealloc=true) {
@@ -432,22 +446,19 @@ public:
         if (!fb) return -1;
         fb_capacity = MIN_FB_CAPACITY;
 
-        if (pthread_key_create(&fb_key,NULL)!=0) {
-            error("ff_allocator::SlabCache: ops! no more keys available!!\n");
-            return -1;
-        }
-
         if (prealloc && (newslab()<0)) return -1;
         return 0;
     }
     
     inline xThreadData * register4free(const bool allocator=false) {
         DBG(assert(nslabs>0));
-        xThreadData * xtd = (xThreadData*)pthread_getspecific(fb_key);
-        if (!xtd) {
-            xtd = (xThreadData*)::malloc(sizeof(xThreadData));
+        
+        unsigned long key=(unsigned long)(pthread_self());
+        int entry = searchfb(key);
+        if (entry<0) {
+            xThreadData * xtd = (xThreadData*)::malloc(sizeof(xThreadData));
             if (!xtd) return NULL;
-            new (xtd) xThreadData(allocator, nslabs);
+            new (xtd) xThreadData(allocator, nslabs, key);
 
             spin_lock(lock); 
             if (fb_size==fb_capacity) {
@@ -459,50 +470,26 @@ public:
                 fb = fb_new;
                 fb_capacity += MIN_FB_CAPACITY;
             }
-            fb[fb_size++] = xtd;
-            if (pthread_setspecific(fb_key, xtd)!=0) return NULL;
+            fb[entry=fb_size++] = xtd;
             spin_unlock(lock);
         }
-        return xtd;
+        DBG(assert(fb[entry]->key == key));
+        return fb[entry];
     }
 
     inline void deregisterAllocator(const bool reclaim) {
         DBG(assert(nslabs>0));
+        DBG(assert(delayedReclaim==0));
+        
         atomic_long_set(&nomoremalloc,1);
-
+        
         // try to reclaim some memory
         for(register unsigned i=0;i<fb_size;++i) {
             DBG(assert(fb[i]));
-#if defined(FF_BOUNDED_BUFFER)
-            void * buf = 0;
-            SWSR_Ptr_Buffer * b = fb[i]->b;
-            if (b) {
-                if (reclaim) {
-                    while(b->pop((void **)&buf)) { 
-                        DBG(assert(buf));
-                        Seg_ctl  * seg = *(Seg_ctl **)buf;
-                        checkReclaim(seg);
-                        ALLSTATS(atomic_long_inc(&all_stats::instance()->leakremoved));
-                    }
-                    union { Buf_ctl * buf2; void * ptr;} b;
-                    while(fb[i]->leak->pop(&b.ptr)) { 
-                        checkReclaim(getsegctl(b.buf2));                        
-                        ALLSTATS(atomic_long_inc(&all_stats::instance()->leakremoved));
-                    }
-                } else  {
-                    /* NOTE: free at least some buffer rooms 
-                     * to avoid race conditions for buffer full 
-                     */
-                    for(register int i=0;i<5;++i) b->pop((void**)&buf);
-                }
-            } else 
-#endif
-            {
-                if (reclaim) {
-                    union { Buf_ctl * buf2; void * ptr; } b;
-                    while(fb[i]->leak->pop(&b.ptr)) {
-                        checkReclaim(getsegctl(b.buf2));                        
-                    }
+            if (reclaim) {
+                union { Buf_ctl * buf2; void * ptr; } b;
+                while(fb[i]->leak->pop(&b.ptr)) {                        
+                    checkReclaim(getsegctl(b.buf2));                        
                 }
             }
         }
@@ -535,7 +522,8 @@ public:
         } 
 
         // try to get a free item from cache
-        item = getfrom_fb();
+        item = delayedReclaim?getfrom_fb_delayed():getfrom_fb();
+
         if (item) {
             ALLSTATS(atomic_long_inc(&all_stats::instance()->hit));
             DBG(if ((getsegctl((Buf_ctl *)item))->allocator == NULL) abort());
@@ -550,50 +538,24 @@ public:
         return NULL; // not reached
     }
 
-    /* return an item into the slab */
+    /* give back an item into the slab 
+     *  return true if some memory has been reclaimed  otherwise false
+     */
     inline bool putitem(Buf_ctl * buf) {        
         DBG(assert(buf)); DBG(assert(nslabs>0));
         if (atomic_long_read(&nomoremalloc)) { 
-            Seg_ctl  * seg = *(Seg_ctl **)buf;
-            checkReclaim(seg);
-            return false;
-        }
-        
-        xThreadData * xtd = (xThreadData*)pthread_getspecific(fb_key);
-        
-        // if xtd is NULL probably register4free function has not yet been called
-        if (!xtd) xtd = register4free();
-        DBG(if (!xtd) abort());
+            // NOTE: if delayedReclaim is set freeing threads cannot pass here
+            DBG(assert(delayedReclaim==0));
 
-#if defined(FF_BOUNDED_BUFFER)
-        register SWSR_Ptr_Buffer * const b = xtd->b;        
-        if (b) {
-            register int cnt=0;
-            do {
-                if (b->push((char *)buf))  {
-                    ALLSTATS(atomic_long_inc(&all_stats::instance()->freeok1));
-                    return true;
-                    //break;
-                }
-                else   {
-                    if (cnt<TICKS_CNT) { // retry
-                        ticks_wait(TICKS_TO_WAIT);
-                        ++cnt;
-                        continue;
-                    } else {
-                        /* fallback:  
-                         * ok, there is no way to insert the item in the buffer,
-                         * so we insert in the leak queue.
-                         */
-                        xtd->leak->push((void *)buf);
-                        ALLSTATS(atomic_long_inc(&all_stats::instance()->nleak));
-                        return false;
-                    }                    
-                }
-            } while(1);
+            Seg_ctl  * seg = *(Seg_ctl **)buf;
+            return checkReclaim(seg);
         }
-        // I'm the allocator and this is my personal buffer.
-#endif
+        
+        int entry = searchfb((unsigned long)(pthread_self()));
+        xThreadData * xtd = NULL;
+        if (entry<0) xtd = register4free();
+        else xtd = fb[entry];
+        DBG(if (!xtd) abort());
         xtd->leak->push((void *)buf);
         ALLSTATS(atomic_long_inc(&all_stats::instance()->freeok2));
         return false;
@@ -613,7 +575,6 @@ protected:
     size_t                     fb_capacity;
     size_t                     fb_size;
     lock_t                     lock;
-    //pthread_mutex_t            fb_mutex;
             
     Buf_ctl *             buffptr;
     size_t                availbuffers;
@@ -622,7 +583,7 @@ private:
     atomic_long_t            nomoremalloc;
     SegmentAllocator * const alloc;  
     ff_allocator     * const mainalloc;
-    pthread_key_t            fb_key;
+    const int                delayedReclaim;
     svector<void *>          seglist;
 };
 
@@ -656,11 +617,12 @@ private:
 
 protected:
 
-    virtual inline void   free(Buf_ctl * buf) {
+    /* return true if some memory has been reclaimed */
+    virtual inline bool   free(Buf_ctl * buf) {
         SlabCache * const entry = getslabs(buf);        
         DBG(if (!entry) abort());
         ALLSTATS(atomic_long_inc(&all_stats::instance()->nfree));
-        entry->putitem(buf);
+        return entry->putitem(buf);
     }
 
     inline size_t allocatedsize() {
@@ -675,7 +637,8 @@ protected:
     
 public:
     // FIX: we have to implement max_size !!!!
-    ff_allocator(size_t max_size=0):alloc(0),max_size(max_size) {}
+    ff_allocator(size_t max_size=0,const int delayedReclaim=0):
+        alloc(0),max_size(max_size),delayedReclaim(delayedReclaim) {}
 
     virtual ~ff_allocator() {
         for(size_t i=0;i<slabcache.size(); ++i) {
@@ -711,7 +674,7 @@ public:
         for(int i=0; i<N_SLABBUFFER; ++i) {
             s = (SlabCache*)::malloc(sizeof(SlabCache));
             if (!s) return -1;
-            new (s) SlabCache(this, alloc, buffersize[i], nslabs[i]);
+            new (s) SlabCache(this, delayedReclaim, alloc, buffersize[i], nslabs[i]);
             if (s->init(prealloc)<0) {               
                 error("ff_allocator:init: slab init fails!\n");
                 return -1;
@@ -726,7 +689,7 @@ public:
         svector<SlabCache *>::iterator b(slabcache.begin()), e(slabcache.end());
         for(;b!=e;++b) {
             if ((*b)->getnslabs())
-                if ((*b)->register4free(true)<0) return -1;
+                if ((*b)->register4free(true)==0) return -1;
         }
         return 0;
     }
@@ -745,7 +708,7 @@ public:
         svector<SlabCache *>::iterator b(slabcache.begin()), e(slabcache.end());
         for(;b!=e;++b) {
             if ((*b)->getnslabs())
-                if ((*b)->register4free()<0) return -1;
+                if ((*b)->register4free()==0) return -1;
         }
         
         return 0; 
@@ -790,12 +753,14 @@ public:
         DBG(if (entry<0) abort());
         ALLSTATS(atomic_long_inc(&all_stats::instance()->nmalloc));
         void * buf = slabcache[entry]->getitem();
+
         Buf_ctl * backptr = (Buf_ctl *)((char *)buf - sizeof(Buf_ctl));
         DBG(assert(backptr)); 
         void * ptraligned = (void *)(((long)((char*)buf) + alignment) & ~(alignment-1));
-        for(Buf_ctl *p=(Buf_ctl*)buf;p!=(Buf_ctl*)ptraligned;p++)
-            p->ptr = backptr->ptr;
 
+        for(Buf_ctl *p=(Buf_ctl*)buf;p!=(Buf_ctl*)ptraligned;p++) {
+            p->ptr = backptr->ptr;
+        }
 
         *memptr = ptraligned;
         return 0;
@@ -866,13 +831,14 @@ public:
         }
         return this->malloc(newsize);
     }
-
+    
     ALLSTATS(void printstats(std::ostream & out) { all_stats::instance()->print(out);})
 
 private:
     svector<SlabCache *>   slabcache;
     SegmentAllocator     * alloc;
-    size_t                 max_size;
+    const size_t           max_size;
+    const int              delayedReclaim;
 };
 
 /* ----------------------------------- */
@@ -885,28 +851,22 @@ static void killMyself(ffa_wrapper * ptr);
 class ffa_wrapper: public ff_allocator {
 protected:
 
-    virtual inline void   free(Buf_ctl * buf) {
-
-        ff_allocator::free(buf);
-
-#if 0
-        std::cerr << pthread_self() << " nomorealloc= " 
-                  << atomic_long_read(&nomorealloc) 
-                  << " allocated size= " << allocatedsize() << "\n"; 
-#endif
+    virtual inline bool   free(Buf_ctl * buf) {
+        bool reclaimed = ff_allocator::free(buf);
 
         // Do I have to kill myself?
-        if (atomic_long_read(&nomorealloc) && 
+        if (reclaimed && atomic_long_read(&nomorealloc) && 
             (allocatedsize()==0)) {
-            killMyself(this);
+            killMyself(this); 
         }
+        return reclaimed;
     }
 
 public:
     friend void FFAkeyDestructorHandler(void * kv);
 
     // FIX: we have to implement max_size !!!!
-    ffa_wrapper(size_t max_size=0):ff_allocator(max_size) {
+    ffa_wrapper(size_t max_size=0,const int delayedReclaim=0):ff_allocator(max_size,delayedReclaim) {
         atomic_long_set(&nomorealloc,0);
     }
     
@@ -933,6 +893,7 @@ public:
     }
 private:
     inline void nomoremalloc() {
+
         atomic_long_set(&nomorealloc,1);
     }
 
@@ -953,27 +914,9 @@ struct FFAxThreadData {
  */
 class FFAllocator {
     enum {MIN_A_CAPACITY=32};
-private:
 
-    FFAllocator():AA(0),A(0),A_capacity(0),A_size(0)  {    
-        init_unlocked(lock);
-        if (pthread_key_create(&A_key,FFAkeyDestructorHandler)!=0) {
-            error("FFAllocator FATAL ERROR: pthread_key_create fails\n");
-            abort();
-        }
-    }
-    
-    ~FFAllocator() {
-#if 0
-        if (A) {
-            for(unsigned i=0;i<A_size;++i)
-                if (A[i]) deleteAllocator(A[i]);            
-            ::free(A);
-        }
-        pthread_key_delete(A_key);
-#endif
-    }
 
+protected:
     inline Seg_ctl * const getsegctl(Buf_ctl * buf) { return *((Seg_ctl **)buf); }
 
 
@@ -984,7 +927,7 @@ private:
         if (!ffaxtd) return NULL;
         ffa_wrapper * f = (ffa_wrapper*)((char *)ffaxtd+sizeof(FFAxThreadData));
 
-        new (f) ffa_wrapper(max_size);
+        new (f) ffa_wrapper(max_size,delayedReclaim);
         new (ffaxtd) FFAxThreadData(f);
 
         if (f->init(_nslabs, prealloc)<0) {
@@ -1013,6 +956,28 @@ private:
 
 
 public:
+
+    FFAllocator(int delayedReclaim=0):AA(0),A(0),A_capacity(0),A_size(0),
+                                      delayedReclaim(delayedReclaim)  {    
+        init_unlocked(lock);
+        
+        if (pthread_key_create(&A_key,(delayedReclaim?NULL:FFAkeyDestructorHandler))!=0) {
+            error("FFAllocator FATAL ERROR: pthread_key_create fails\n");
+            abort();
+        }
+    }
+    
+    ~FFAllocator() {
+        if (delayedReclaim) {
+            if (A) {
+                for(unsigned i=0;i<A_size;++i)
+                    if (A[i]) deleteAllocator(A[i]->f);            
+                ::free(A);
+            }
+            pthread_key_delete(A_key);
+        }
+
+    }
     
     /* return the FFAallocator object */
     static inline FFAllocator * instance() {
@@ -1124,11 +1089,13 @@ public:
             }
             spin_unlock(lock);
         }
+
         return ffaxtd->f->posix_memalign(memptr,alignment,size);
     }
 
     inline void   free(void * ptr) {
         if (!ptr) return;
+
         Buf_ctl  * buf = (Buf_ctl *)((char *)ptr - sizeof(Buf_ctl));        
         if (!buf->ptr) { 
             ALLSTATS(atomic_long_inc(&all_stats::instance()->sysfree));
@@ -1191,16 +1158,31 @@ private:
 
     lock_t          lock;
     pthread_key_t   A_key;
+    const int       delayedReclaim;
 };
 
 
 static void FFAkeyDestructorHandler(void * kv) {
     FFAxThreadData * ffaxtd = (FFAxThreadData*)kv;
-    ffaxtd->f->nomoremalloc();
+    ffaxtd->f->nomoremalloc(); 
     ffaxtd->f->deregisterAllocator();
 }
 static inline void killMyself(ffa_wrapper * ptr) {
     FFAllocator::instance()->deleteAllocator(ptr);
+}
+
+
+static inline void * ff_malloc(size_t size) {
+    return FFAllocator::instance()->malloc(size);
+}
+static inline void   ff_free(void * ptr) {
+    FFAllocator::instance()->free(ptr);
+}
+static inline void * ff_realloc(void * ptr, size_t newsize) {
+    return FFAllocator::instance()->realloc(ptr,newsize);
+}
+static inline int    ff_posix_memalign(void **memptr, size_t alignment, size_t size) {
+    return FFAllocator::instance()->posix_memalign(memptr,alignment,size);
 }
 
 

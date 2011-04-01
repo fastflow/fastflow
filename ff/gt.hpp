@@ -206,8 +206,8 @@ public:
 #if defined(TRACE_FASTFLOW)
                     register ticks diff=(getticks()-t0);
                     tickstot +=diff;
-                    ticksmin=std::min(ticksmin,diff);
-                    ticksmax=std::max(ticksmax,diff);
+                    ticksmin=(std::min)(ticksmin,diff);
+                    ticksmax=(std::max)(ticksmax,diff);
 #endif    
 
                 }

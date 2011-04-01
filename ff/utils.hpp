@@ -19,14 +19,21 @@
  ****************************************************************************
  */
 
-#include <string.h>
+
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <sys/time.h>
 #include <iostream>
-#include <pthread.h>
+//#if (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
+#include <ff/platforms/platform.h>
+//#else
+//#include <pthread.h>
+//#include <sys/time.h>
+//#endif
+
+#include <string.h>
 
 #include <ff/cycle.h>
 
@@ -38,7 +45,7 @@ enum { START_TIME=0, STOP_TIME=1, GET_TIME=2 };
 static inline ticks ticks_wait(ticks t1) {
     ticks delta;
     ticks t0 = getticks();
-    do { delta = getticks()-t0; } while (delta < t1);
+    do { delta = (getticks()) - t0; } while (delta < t1);
     return delta-t1;
 }
 
