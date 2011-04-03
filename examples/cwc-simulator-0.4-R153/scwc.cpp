@@ -15,8 +15,7 @@
   along with CWC Simulator.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "ff/platforms/platform.h"
-//#define BOOST_PROGRAM_OPTIONS_NO_LIB 1
+#include <ff/platforms/platform.h>
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 
@@ -32,7 +31,7 @@ namespace po = boost::program_options;
 using namespace std;
 
 #include "Driver.h"
-#include "random.h"
+//#include "random.h"
 #include "Simulation.h"
 #include "output.h"
 #include "ProgressBars.h"
@@ -236,10 +235,13 @@ int main(int argc, char *argv[]) {
       //get a generator
       int sim_seed = seed_vg();
       cerr << sim_seed << endl;
+      /*
       rng_type sim_rng(sim_seed);
       u01_gm_type sim_gm;
       u01_vg_type sim_vg(sim_rng, sim_gm);
-      simulations.push_back(new Simulation(i, *driver.model, sim_vg
+      */
+      //simulations.push_back(new Simulation(i, *driver.model, sim_vg
+      simulations.push_back(new Simulation(i, *driver.model, sim_seed
 #ifdef HYBRID
 					   , rate_cutoff, population_cutoff
 #endif
