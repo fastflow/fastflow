@@ -3,6 +3,8 @@
 
 cmake_minimum_required(VERSION 2.6)
 
+add_definitions(${Boost_LIB_DIAGNOSTIC_DEFINITIONS})
+
 set ( CWC_FF_SRCS scwc.cpp  Compartment.cpp  Monitor.cpp
 Simulation.cpp   parser.cpp Driver.cpp       OCompartment.cpp
 Species.cpp      scanner.cpp Gillespie.cpp    PCompartment.cpp
@@ -44,6 +46,7 @@ endif (GSL_FOUND)
 #set(Boost_USE_MULTITHREADED ON)
 #set(BOOST_LIBS thread)
 #link_directories ( ${Boost_LIBRARY_DIRS}  )
+#target_link_libraries (scwc  ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} )
 target_link_libraries (scwc  ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} )
 #target_link_libraries (scwc  ${CMAKE_THREAD_LIBS_INIT} )
 

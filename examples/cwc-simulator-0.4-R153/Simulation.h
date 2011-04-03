@@ -32,12 +32,15 @@ class Simulation {
   friend ostream& operator<<(ostream &, const Simulation &);
 
  public:
-  Simulation(int id, Model model, u01_vg_type vg
+  //Simulation(int id, Model model, u01_vg_type vg
+  Simulation(int id, Model model, int seed
 #ifdef HYBRID
 	     , double rc,
 	     multiplicityType pc
 #endif
 	     );
+  ~Simulation();
+
   double get_time();
   int get_id();
   double step();
@@ -47,7 +50,7 @@ class Simulation {
   int id;
   double time; //current time
   Model model; //curent state
-  u01_vg_type random_generator; //random number generator (uniform in 0-1)
+  u01_vg_type *random_generator; //random number generator (uniform in 0-1)
 #ifdef HYBRID
   double rate_cutoff;
   multiplicityType population_cutoff;
