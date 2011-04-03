@@ -23,19 +23,28 @@
 //#include <iostream>
 //using namespace std;
 
-Simulation::Simulation(int id, Model model, u01_vg_type vg
+//Simulation::Simulation(int id, Model model, u01_vg_type vg
+Simulation::Simulation(int id, Model model, int seed
 #ifdef HYBRID
 	     , double rc,
 	     multiplicityType pc
 #endif
 	     ) :
-  id(id), time(0), model(model),
-  random_generator(vg)
+  id(id), time(0), model(model)
+  //random_generator(vg)
 #ifdef HYBRID
   , rate_cutoff(rc),
   population_cutoff(pc)
 #endif
-{}
+{
+  rng_type sim_rng(seed);
+  u01_gm_type sim_gm;
+  random_generator = new u01_vg_type(sim_rng, sim_gm);
+}
+
+Simulation::~Simulation() {
+  delete random_generator;
+}
 
 double Simulation::get_time() {
   return time;
@@ -62,7 +71,7 @@ double Simulation::step() {
     }
 #endif
 
-    stochastic_gillespie(ms, time, random_generator);
+    stochastic_gillespie(ms, time, *random_generator);
     return time;
   }
 
@@ -100,7 +109,7 @@ double Simulation::step() {
     if(ms.rate_sum > 0) {
       //hybrid step
       //cerr << "hybrid step; rate total: " << ms.rate_sum << endl;
-      hybrid_gillespie(ms, time, random_generator);
+      hybrid_gillespie(ms, time, *random_generator);
       return time;
     }
 
@@ -108,7 +117,7 @@ double Simulation::step() {
       //stochastic stall
       //cerr << "no stochastic rules: will retry with ode" << endl;
       //cerr << "should not be here" << endl; //uncomment to test with pure stochastic semantics
-      retry(ms, time, random_generator);
+      retry(ms, time, *random_generator);
       return time;
     }
   }
