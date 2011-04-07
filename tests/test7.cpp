@@ -31,6 +31,7 @@
  *
  */
 
+
 #include <iostream>
 #include <vector>
 #include <ff/farm.hpp>
@@ -84,8 +85,8 @@ public:
         if (!t) {
             // start generating the stream...
             for(int i=0;i<streamlen;++i) {
-                //t = (int *)ffalloc.malloc(sizeof(int));
-                t = (int *)malloc(sizeof(int));
+                t = (int *)ffalloc.malloc(sizeof(int));
+                //t = (int *)malloc(sizeof(int));
                 *t = i;
                 ff_send_out(t);
             }
@@ -118,6 +119,7 @@ public:
         }
 
         if (++cnt == streamlen) {
+            ffalloc.free(task);
             return NULL;
         }
         std::cout << "Collector got -1 cnt= " << cnt << "\n";
@@ -151,15 +153,17 @@ int main(int argc, char * argv[]) {
     std::vector<ff_node *> w;
     w.push_back(new Worker);
     w.push_back(new Worker);
-    w.push_back(new Worker);
+    //w.push_back(new Worker);
     farm.add_workers(w);
 
     farm.wrap_around();
 
     if (farm.run_and_wait_end()<0) {
-        error("running pipeline\n");
+        error("running farm with feedback\n");
         return -1;
     }
 
+	farm.ffStats(std::cerr);
+	
     return 0;
 }
