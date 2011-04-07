@@ -82,14 +82,14 @@ static tbb::cache_aligned_allocator<char> * tbballocator=0;
 #if defined(TEST_FFA_MALLOC)
 class Worker: public ff_node {
 private:
-      void do_work(task_t * task, int size, unsigned int nticks) {
+      void do_work(task_t * task, int size, long long nticks) {
         for(register int i=0;i<size;++i)
             task[i]=i;
         
         ticks_wait(nticks);
     }
 public:
-    Worker(int itemsize, int ntasks, unsigned int nticks):
+    Worker(int itemsize, int ntasks, long long nticks):
         itemsize(itemsize),ntasks(ntasks),nticks(nticks) {}
 
     void * svc(void *) {
@@ -108,7 +108,7 @@ public:
 private:
     int            itemsize;
     int            ntasks;
-    int            nticks;
+    long long      nticks;
 };
 
 
@@ -118,15 +118,15 @@ private:
 #if 1 //this one ...
 class Worker: public ff_node  {
 private:
-      void do_work(task_t * task, int size, unsigned int nticks) {
+      void do_work(task_t * task, int size, long long nticks) {
         for(register int i=0;i<size;++i)
             task[i]=i;
         
         ticks_wait(nticks);
     }
 public:
-    Worker(int itemsize, int ntasks, int nticks):
-        myalloc(NULL),itemsize(itemsize),ntasks(ntasks) {
+    Worker(int itemsize, int ntasks, long long nticks):
+        myalloc(NULL),itemsize(itemsize),ntasks(ntasks),nticks(nticks) {
 
         myalloc = new ff_allocator();
         myalloc->init();
@@ -167,14 +167,14 @@ private:
     ff_allocator   * myalloc;
     int              itemsize;
     int              ntasks;
-    int              nticks;
+    long long        nticks;
 };
 
 #else  // and this one.
 
 class Worker: public ff_node {
 public:
-    Worker(int itemsize, int ntasks,int nticks):
+    Worker(int itemsize, int ntasks,long long nticks):
         myalloc(NULL),itemsize(itemsize),ntasks(ntasks),nticks(nticks) {
     }
 
@@ -218,7 +218,7 @@ private:
     ffa_wrapper     * myalloc;
     int              itemsize;
     int              ntasks;
-    int              nticks;
+    long long        nticks;
 };
 
 #endif
@@ -275,9 +275,10 @@ int main(int argc, char * argv[]) {
     unsigned int ntasks         = atoi(argv[1]);
     unsigned int itemsize       = atoi(argv[2]);
     unsigned int nworkers       = atoi(argv[3]);    
-    unsigned int nticks         = atoi(argv[4]);
+    long long    nticks         = strtoll(argv[4],NULL,10);
 
-    // arguments check
+	std::cerr << "ticks " << nticks << "\n";
+	// arguments check
     if (nworkers<0 || !ntasks) {
         std::cerr << "Wrong parameters values\n";
         return -1;
