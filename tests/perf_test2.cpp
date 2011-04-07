@@ -51,7 +51,7 @@ static ff_allocator ffalloc;
 // generic worker
 class Worker: public ff_node {
 protected:
-    void do_work(int * task, int size, unsigned int nticks) {
+    void do_work(int * task, int size, long long nticks) {
         
 #if 0
         std::cerr<<"W: ";
@@ -74,7 +74,7 @@ protected:
 
 
 public:
-    Worker(int itemsize, int nticks):itemsize(itemsize),nticks(nticks) {}
+    Worker(int itemsize, long long nticks):itemsize(itemsize),nticks(nticks) {}
 
     // called just one time at the very beginning
     int svc_init() {
@@ -97,7 +97,7 @@ public:
 
 private:
     int itemsize;
-    int nticks;
+    long long nticks;
 };
 
 
@@ -162,7 +162,7 @@ int main(int argc, char * argv[]) {
     unsigned int streamlen      = atoi(argv[2]);
     unsigned int itemsize       = atoi(argv[3]);
     unsigned int nworkers       = atoi(argv[4]);    
-    unsigned int nticks         = atoi(argv[5]);
+    long long nticks			= strtoll(argv[5],NULL,10);
 
     // arguments check
     if (!nworkers || !streamlen || nticks<0) {

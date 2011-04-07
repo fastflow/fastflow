@@ -178,8 +178,9 @@ INLINE void * pthread_getspecific(pthread_key_t key) {
 
  // Other
 
+#include <string>
 typedef unsigned long useconds_t;
-#define stoll strtoll
+#define strtoll std::stoll
 
 
 INLINE int usleep(unsigned long microsecs) {

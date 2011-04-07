@@ -26,15 +26,17 @@
  */
 
 
-#include <unistd.h>
+//#include <unistd.h>
 #include <stdlib.h>
 #include <iostream>
 #include <stdint.h>
 
+#include <ff/mapping_utils.hpp>
 #include <ff/farm.hpp>
 
 using namespace ff;
 
+/*
 static inline unsigned long getCpuFreq() {
     FILE       *f;
     unsigned long long t;
@@ -47,17 +49,17 @@ static inline unsigned long getCpuFreq() {
     return (t);
 }
 
-
+*/
 class Worker: public ff_node {
 public:
-    Worker(unsigned int nticks):nticks(nticks) {};
+    Worker(long long nticks):nticks(nticks) {};
 
     void * svc(void *) {
 	ticks_wait(nticks);
         return GO_ON;
     }
 private:
-    unsigned int nticks;
+    long long nticks;
 };
 
 class Emitter: public ff_node {
@@ -88,7 +90,7 @@ int main(int argc, char * argv[]) {
     unsigned int buffer_entries = atoi(argv[1]);
     unsigned int numtasks       = atoi(argv[2]); 
     unsigned int nworkers       = atoi(argv[3]);
-    unsigned int nticks         = atoi(argv[4]);
+    long long nticks         = atoi(argv[4]);
 
     ff_farm<> farm(false, nworkers*buffer_entries);    
     Emitter E(numtasks);
@@ -110,7 +112,7 @@ int main(int argc, char * argv[]) {
 	ticks_wait(nticks);
     ff::ffTime(ff::STOP_TIME);
     printf("Time: %g (ms)\n", ff::ffTime(ff::GET_TIME));
-    printf("Ticks =~ %f (usec)\n",(nticks / (1.0*(getCpuFreq()/1000000.0))));
+    printf("Ticks =~ %f (usec)\n",(nticks / (1.0*(ff_getCpuFreq()/1000000.0))));
 
 
 
