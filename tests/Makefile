@@ -41,18 +41,23 @@ CXX 		     = g++
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O6 -finline-functions
-CXXFLAGS             = -Wall  #-DTRACE_FASTFLOW
+CXXFLAGS             = -Wall  -DTRACE_FASTFLOW
 CFLAGS               =
 LDFLAGS              = 
 INCS                 = -I../ 
 LIBS                 = -lpthread
-ARCH                 = $(shell uname -m)
+ARCH                 = -march=$(shell uname -m)
 OS					 = $(shell uname)
-ifeq ($(ARCH),x86_64)
-  ARCH = core2
+ifeq ($(ARCH),-march=x86_64)
+  ARCH = -march=core2
 endif
-ifeq ($(OS),Darwin)
-  ARCH = core2
+
+ifeq ($(strip $(OS)),Darwin)
+  ifeq  ($(strip $(ARCH)),i386)
+  ARCH = -march=core2
+  else
+  ARCH = -arch ppc
+  endif
 endif
 
 INCLUDES             = -I. $(INCS)
@@ -110,7 +115,7 @@ test_uBuffer:test_uBuffer.cpp
 test_torus:test_torus.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_mpmc:test_mpmc.cpp
-	$(CXX) -march=$(ARCH) -Wno-strict-aliasing $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+	$(CXX) $(ARCH) -Wno-strict-aliasing $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 perf_test_alloc1:perf_test_alloc1.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 perf_test_alloc2:perf_test_alloc2.cpp
