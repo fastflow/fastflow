@@ -47,10 +47,14 @@
 #include <Availability.h>
 #endif
 
+#ifndef CACHE_LINE_SIZE
+#define CACHE_LINE_SIZE 64
+#endif
+
 namespace ff {
 
 // 64bytes is the common size of a cache line
-static const int longxCacheLine = (64/sizeof(long));
+    static const int longxCacheLine = (CACHE_LINE_SIZE/sizeof(long));
 
 class SWSR_Ptr_Buffer {
     // experimentally we found that a good values is between 
