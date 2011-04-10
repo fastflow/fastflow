@@ -37,7 +37,7 @@
  * PowerPC atomic operations
  */
 
-typedef struct { int counter; } atomic_t;
+typedef struct { unsigned int counter; } atomic_t;
 
 
 #define ATOMIC_INIT(i)		{ (i) }
@@ -144,7 +144,19 @@ static __inline__ void atomic_inc(atomic_t *v)
 static __inline__ int atomic_inc_return(atomic_t *v)
 {
 	int t;
+__asm__ __volatile__(
+		LWSYNC_ON_SMP
+"\n\
+1:      lwarx   %0,0,%2\n\
+        addic   %0,%0,1\n\
+        stwcx.  %0,0,%2\n\
+        bne-    1b"
+		ISYNC_ON_SMP
+        : "=&r" (t), "=m" (v->counter)
+        : "r" (v), "m" (v->counter)
+        : "cc");
 
+	/*
 	__asm__ __volatile__(
 	LWSYNC_ON_SMP
 "1:	lwarx	%0,0,%1	\n\
@@ -156,7 +168,7 @@ static __inline__ int atomic_inc_return(atomic_t *v)
 	: "=&r" (t)
 	: "r" (&v->counter)
 	: "cc", "memory");
-
+	*/
 	return t;
 }
 
@@ -203,9 +215,6 @@ static __inline__ int atomic_dec_return(atomic_t *v)
 
 	return t;
 }
-
-#define atomic_cmpxchg(v, o, n) (cmpxchg(&((v)->counter), (o), (n)))
-#define atomic_xchg(v, new) (xchg(&((v)->counter), new))
 
 /**
  * atomic_add_unless - add unless the number is a given value
@@ -271,6 +280,33 @@ static __inline__ int atomic_dec_if_positive(atomic_t *v)
 	return t;
 }
 
+static __inline__ unsigned long 
+__cmpxchg_u32(volatile unsigned int *p, unsigned long old, unsigned long _new)
+{
+	unsigned int prev;
+	
+	__asm__ __volatile__ (
+	LWSYNC_ON_SMP
+"1:	lwarx	%0,0,%2		# __cmpxchg_u32\n\
+	cmpw	0,%0,%3\n\
+	bne-	2f\n"
+	PPC405_ERR77(0,%2)
+"	stwcx.	%4,0,%2\n\
+	bne-	1b"
+	ISYNC_ON_SMP
+	"\n\
+2:"
+	: "=&r" (prev), "+m" (*p)
+	: "r" (p), "r" (old), "r" (_new)
+	: "cc", "memory");
+
+	return prev;
+}
+
+#define atomic_cmpxchg(v, o, n) (__cmpxchg_u32(&((v)->counter), (o), (n)))
+#define atomic_xchg(v, n) (xchg(&((v)->counter), n))
+
+
 #define smp_mb__before_atomic_dec()     smp_mb()
 #define smp_mb__after_atomic_dec()      smp_mb()
 #define smp_mb__before_atomic_inc()     smp_mb()
@@ -278,7 +314,7 @@ static __inline__ int atomic_dec_if_positive(atomic_t *v)
 
 #ifdef __powerpc64__
 
-typedef struct { long counter; } atomic64_t;
+typedef struct { unsigned long counter; } atomic64_t;
 
 #define ATOMIC64_INIT(i)	{ (i) }
 
@@ -463,9 +499,6 @@ static __inline__ long atomic64_dec_if_positive(atomic64_t *v)
 	return t;
 }
 
-#define atomic64_cmpxchg(v, o, n) (cmpxchg(&((v)->counter), (o), (n)))
-#define atomic64_xchg(v, new) (xchg(&((v)->counter), new))
-
 /**
  * atomic64_add_unless - add unless the number is a given value
  * @v: pointer of type atomic64_t
@@ -498,6 +531,32 @@ static __inline__ int atomic64_add_unless(atomic64_t *v, long a, long u)
 }
 
 #define atomic64_inc_not_zero(v) atomic64_add_unless((v), 1, 0)
+
+
+static __inline__ unsigned long
+__cmpxchg_u64(volatile unsigned long *p, unsigned long old, unsigned long _new)
+{
+	unsigned long prev;
+
+	__asm__ __volatile__ (
+	LWSYNC_ON_SMP
+"1:	ldarx	%0,0,%2		# __cmpxchg_u64\n\
+	cmpd	0,%0,%3\n\
+	bne-	2f\n\
+	stdcx.	%4,0,%2\n\
+	bne-	1b"
+	ISYNC_ON_SMP
+	"\n\
+2:"
+	: "=&r" (prev), "+m" (*p)
+	: "r" (p), "r" (old), "r" (_new)
+	: "cc", "memory");
+
+	return prev;
+}
+
+#define atomic64_cmpxchg(v, o, n) (__cmpxchg_u64(&((v)->counter), (o), (n)))
+#define atomic64_xchg(v, n) (xchg(&((v)->counter), n))
 
 #endif /* __powerpc64__ */
 

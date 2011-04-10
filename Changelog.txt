@@ -1,3 +1,9 @@
+* ??/??/11 - v.1.1.0
+   - MSqueue reworked and now not is in experimental state, it is working also 
+     on Windows OS and OSX. Removed DCAS and used CAS.
+   - removed some performance problems on Windows OS. 
+   - 
+   -
 * 01/04/11 - v.1.0.9
    - fixes return type error in node.hpp ubuffer.hpp and buffer.hpp
    - added the method get_channel_id() in the emitter and collector class
