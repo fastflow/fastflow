@@ -36,6 +36,7 @@
 #include <ff/node.hpp>   // for Barrier
 #include <ff/cycle.h>
 #include <ff/atomic/atomic.h>
+#include <ff/platforms/platform.h>
 //#include <ff/mapping_utils.hpp>
 
 using namespace ff;
@@ -53,7 +54,11 @@ struct queue_state *msq;
 #include <ff/MPMCqueues.hpp>
 
 #if defined(HAVE_CDSLIB)
+#if defined(SCALABLE_QUEUE)
 multiMSqueueCDS * msq;
+#else
+cds::queue::MSQueue<cds::gc::hzp_gc, void *> * msq;
+#endif
 #else
 #if defined(SCALABLE_QUEUE)
 multiMSqueue    * msq;
@@ -69,13 +74,40 @@ const int MAX_NUM_THREADS=128;  // just an upper bound, it can be increased
 int nqueues=4;
 #endif
 int ntasks=0;                   // total number of tasks
-bool end = false;               // termination flag
 atomic_long_t counter;           
 std::vector<long> results;
 
 // for statistics
 long taskC[MAX_NUM_THREADS]={0};
 long taskP[MAX_NUM_THREADS]={0};
+
+
+
+/* 
+ * The following function has been taken from CDS library 
+ * (http://sourceforge.net/projects/libcds/).
+ * 
+ * FIX: It works only for gcc compiler and x86 and x86_64 architectures.
+ *
+ */
+#if (defined __GNUC__ && (defined __i686__ || defined __i386__ || defined__x86_64__))
+static inline void backoff_pause( unsigned int nLoop = 0x000003FF ) {
+    asm volatile (
+                  "andl %[nLoop], %%ecx;      \n\t"
+                  "cmovzl %[nLoop], %%ecx;    \n\t"
+                  "rep; "
+                  "nop;   \n\t"
+                  : /*no output*/
+                  : [nLoop] "r" (nLoop)
+                  : "ecx", "cc"
+                  )    ;
+}
+#else
+static inline void backoff_pause( unsigned int nLoop = 0x000003FF ) {
+    return;
+}
+#endif
+
 
 static inline bool PUSH(int myid) {
     long * p = (long *)(atomic_long_inc_return(&counter));
@@ -114,6 +146,7 @@ void * P(void * arg) {
     cds::threading::pthread::Manager::detachThread();
 #endif
     pthread_exit(NULL);
+	return NULL;
 }
     
 // consumer function
@@ -128,28 +161,28 @@ void * C(void * arg) {
 #endif
 
     Barrier::instance()->barrier();
+    while(1) {
+        if (!QUEUE_POP(task.b))  {
+            backoff_pause();
+            continue;
+        }
+        if (task.b == (void*)FF_EOS) break;
 
-    while(!end) {
-        if (QUEUE_POP(task.b))  {
-            if (task.b == (void*)FF_EOS) {
-                end=true;
-            }
-            else {
-                if (task.a > ntasks) {
-                    std::cerr << "received " << task.a << " ABORT\n";
-                    abort();
-                }
-                results[task.a-1] = task.a;
-                ++taskC[myid];
-            }
-        } 
+        if (task.a > ntasks) {
+            std::cerr << "received " << task.a << " ABORT\n";
+            abort();
+        }
+        results[task.a-1] = task.a;
+        ++taskC[myid];
     }
+
     ffTime(STOP_TIME);
     
 #if defined(HAVE_CDSLIB)
     cds::threading::pthread::Manager::detachThread();
 #endif
     pthread_exit(NULL);
+	return NULL;
 }
 
 #include <ff/mapping_utils.hpp>
@@ -188,34 +221,43 @@ int main(int argc, char * argv[]) {
     queue_new( &msq, 1000000 );
 #else
  #if defined(HAVE_CDSLIB)
+  #if defined(SCALABLE_QUEUE)
     msq = new multiMSqueueCDS(nqueues);
+  #else
+    msq = new cds::queue::MSQueue<cds::gc::hzp_gc, void *>;
+  #endif
  #else
   #if defined(SCALABLE_QUEUE)
     msq = new multiMSqueue(nqueues);
   #else
     msq = new MSqueue;
-    assert(msq->init());
+    if (!msq->init()) abort();
   #endif
  #endif
 #endif
 
     atomic_long_set(&counter,0);
 
-    pthread_t P_handle[numP], C_handle[numC];
+    pthread_t * P_handle, * C_handle;
 
+	P_handle = (pthread_t *) malloc(sizeof(pthread_t)*numP);
+	C_handle = (pthread_t *) malloc(sizeof(pthread_t)*numC);
+	
     // define the number of threads that are going to partecipate....
     Barrier::instance()->barrier(numP+numC);
 
     ffTime(START_TIME);
 
-    int idC[numC];
+    int * idC;
+	idC = (int *) malloc(sizeof(int)*numC);
     for(int i=0;i<numC;++i) {
         idC[i]=i;
         if (pthread_create(&C_handle[i], NULL,C,&idC[i]) != 0) {
             abort();
         }
     }
-    int idP[numP];
+    int *idP;
+	idP = (int *) malloc(sizeof(int)*numP);
     for(int i=0;i<numP;++i)  {
         idP[i]=i;
         if (pthread_create(&P_handle[i], NULL,P,&idP[i]) != 0) {
@@ -227,11 +269,7 @@ int main(int argc, char * argv[]) {
     for(int i=0;i<numP;++i) {
         pthread_join(P_handle[i],NULL);
     }
-
-    // send EOS to stop the consumers
-#if defined(SCALABLE_QUEUE) || defined(HAVE_CDSLIB)
-    msq->stop_producing();
-#else
+    
     for(int i=0;i<numC;++i) {
 #if defined(USE_LFDS)
         do ; while(! queue_enqueue(msq, (void*)FF_EOS));
@@ -239,7 +277,6 @@ int main(int argc, char * argv[]) {
         do ; while(! msq->push((long*)FF_EOS)); 
 #endif
     }
-#endif
 
     // wait all consumers
     for(int i=0;i<numC;++i) {
@@ -251,7 +288,7 @@ int main(int argc, char * argv[]) {
     bool wrong = false;
     for(int i=0;i<ntasks;++i)
         if (results[i] != i+1) {
-            std::cerr << "WRONG result " << results[i] << " should be " << i+i << "\n";
+            std::cerr << "WRONG result in position " << i << "is " << results[i] << " should be " << i+1 << "\n";
             wrong = true;
         }
     if (!wrong)  std::cout << "Ok. Done!\n";

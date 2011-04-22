@@ -44,7 +44,7 @@
 #include <ff/sysdep.h>
 
 #if defined(__APPLE__)
-#include <Availability.h>
+#include <AvailabilityMacros.h>
 #endif
 
 #ifndef CACHE_LINE_SIZE
@@ -75,7 +75,7 @@ private:
     volatile unsigned long    pwrite;
     long padding2[longxCacheLine-1];
 #endif
-    const    size_t           size;
+    const    unsigned long size;
     void                   ** buf;
     
 #if defined(SWSR_MULTIPUSH)
@@ -89,13 +89,13 @@ private:
 #endif
 
 public:
-    SWSR_Ptr_Buffer(size_t n, const bool=true):
+    SWSR_Ptr_Buffer(unsigned long n, const bool=true):
         pread(0),pwrite(0),size(n),buf(0) {
     }
     
     ~SWSR_Ptr_Buffer() {
 		#if defined(_MSC_VER)
-        if (buf)::aligned_free(buf);    
+        if (buf)::posix_memalign_free(buf);    
 		#else	
         if (buf)::free(buf);
 		#endif  
@@ -110,12 +110,9 @@ public:
         if (size<MULTIPUSH_BUFFER_SIZE) return false;
 #endif
 
-		#if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && (__MAC_OS_X_VERSION_MIN_REQUIRED < 1060))
+#if (defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED < 1060))
         buf = (void **)::malloc(size*sizeof(void*));
-        if (!buf) return false;
-#elif defined(_MSC_VER)
-                buf = (void **) aligned_malloc(size*sizeof(void*));
-        if (!buf) return false;         
+        if (!buf) return false;       
 #else
         void * ptr;
         if (posix_memalign(&ptr,longxCacheLine*sizeof(long),size*sizeof(void*))!=0)
@@ -145,7 +142,7 @@ public:
 #endif
     }
 
-    inline size_t buffersize() const { return size; };
+    inline unsigned long buffersize() const { return size; };
     
     /* modify only pwrite pointer */
     inline bool push(void * const data) {
@@ -161,7 +158,7 @@ public:
              */
             WMB(); 
             buf[pwrite] = data;
-            pwrite += (pwrite+1 >= size) ? (1-size): 1;
+            pwrite += (pwrite+1 >=  size) ? (1-size): 1;
             return true;
         }
         return false;
@@ -175,7 +172,8 @@ public:
     inline bool multipush(void * const data[], int len) {
         if ((unsigned)len>=size) return false;
         register unsigned long last = pwrite + ((pwrite+ --len >= size) ? (len-size): len);
-        register unsigned long r    = len-(last+1), l=last, i;
+        register unsigned long r    = len-(last+1), l=last;
+		register unsigned long i;
         if (buf[last]==NULL) {
             
             if (last < pwrite) {
@@ -262,8 +260,8 @@ public:
         memset(buf,0,size*sizeof(void*));
     }
 
-    inline size_t length() const {
-        size_t len = pwrite-pread;
+    inline unsigned long length() const {
+        unsigned long len = pwrite-pread;
         if (len>=0) return len;
         return size-len;
     }

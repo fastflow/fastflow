@@ -197,9 +197,9 @@ INLINE_ELAPSED(__inline__)
 
 #if (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32) && !defined(HAVE_TICK_COUNTER)
 #pragma once
-#pragma intrinsic(__rdtsc)
 #include <windows.h>
 #include <intrin.h>
+#pragma intrinsic(__rdtsc)
 typedef unsigned __int64 ticks;
 
 static __forceinline ticks getticks(void)

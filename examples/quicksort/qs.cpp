@@ -35,7 +35,7 @@
  * the two unsorted sub-lists.
  * 
  * This is just a naive implementation of the algorithm, without any specific 
- * optimisation.
+ * optimisation. More efficient implementations are possible.
  *
  */
 
@@ -43,40 +43,42 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ff/utils.hpp>
+#include <algorithm>  // to use std::sort
 
-int size=0;            // array size
+unsigned int  size=0;            // array size
 unsigned int *A=NULL;  // array which needs to be ordered
 
 
 void print_array() {
     int j=0;
-    for(int i=0;i<size;i++) {
-	if (j == 15) {
-	    printf("\n");
-	    j=0;
-	}
-	j++;
-	printf("%d ", A[i]);
+    for(unsigned  i=0;i<size;i++) {
+        if (j == 15) {
+            printf("\n");
+            j=0;
+        }
+        j++;
+        printf("%d ", A[i]);
     }
     printf("\n\n");
 }
 
 
-inline void swap(int i, int j) {
-  register int tmp;  
-  tmp = A[i]; A[i] = A[j]; A[j] = tmp;
-}
-
+//inline void swap(int i, int j) {
+//  register int tmp;  
+//  tmp = A[i]; A[i] = A[j]; A[j] = tmp;
+//}
 
 /* Return the largest of first two keys. */
 inline int FindPivot(int i, int j) {
+    // NOTE: this is not the best choice for the pivot.
     register int pivot = (i+(j-i))/2;
+
     if (A[i]>A[pivot]) {
-	if (A[i]>A[j]) return i;
-	else return j;
+        if (A[i]>A[j]) return i;
+        else return j;
     } else {
-	if (A[pivot]>A[j]) return pivot;
-	else return j;
+        if (A[pivot]>A[j]) return pivot;
+        else return j;
     }
     
     // if (A[i] > A[i+1]) return i;
@@ -90,7 +92,7 @@ inline int Partition(int i, int j, unsigned int pivot) {
     int right = j;
   
     do {
-        swap(left,right);
+        std::swap(A[left],A[right]);
         while (A[left]  <  pivot) left++;
         while (A[right] >= pivot) right--;
     } while (left <= right);
@@ -102,7 +104,7 @@ inline int Partition(int i, int j, unsigned int pivot) {
 		
 inline void QuickSort(int i, int j) {
     if (j-i < 2) {
-        if (A[i]>A[j]) swap(i,j);
+        if (A[i]>A[j]) std::swap(A[i],A[j]);
         return;
     } 
     int pivot = FindPivot(i,j);
@@ -114,26 +116,29 @@ inline void QuickSort(int i, int j) {
 
 // initialise the array A with unique elementes
 void initArray() {
-  int i;
+  unsigned int i;
 
   for (i = 0; i < size; i++) A[i] = i;
   
   /* Shuffle them randomly. */
   srandom(0);
   for (i = 0; i < size; i++)	
-      swap(i, (random() % (size-i)) + i);
+      std::swap(A[i], A[(random() % (size-i)) + i]);
   
 }
 
 
 
 int main(int argc, char * argv[]) {
-    if (argc!=2) {
+    bool check_result=false;
+    if (argc<2 || argc>3) {
         fprintf(stderr, "use: %s size\n", argv[0]);
         return -1;
     }
     
     size = atoi(argv[1]);
+    if (argc==3) check_result=true;
+
     A = new unsigned int[size];
     if (!A) {
         fprintf(stdout,"Not enough memory for A\n");
@@ -143,11 +148,21 @@ int main(int argc, char * argv[]) {
     initArray();    
     printf("starting....\n");
     ff::ffTime(ff::START_TIME);
-    QuickSort(0, size-1);
+    QuickSort(0, size-1); // my own threashold based Quicksort algo
+    //std::sort(A,A+size);
     ff::ffTime(ff::STOP_TIME);
     printf("Time: %g (ms)\n", ff::ffTime(ff::GET_TIME));
     
     if (0) print_array();
+
+    if (check_result) {
+        for(unsigned int i=0;i<size;i++) 
+            if (A[i]!=i) {
+                fprintf(stderr,"wrong result, A[%d]=%d (correct value is %d)\n",i,A[i],i);
+                return -1;
+            }
+        printf("Ok\n");
+    }
     
     delete [] A;
     return 0;

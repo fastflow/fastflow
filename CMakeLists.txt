@@ -21,34 +21,86 @@ ENDIF()
 
 project( mc-fastflow )
 
-cmake_minimum_required( VERSION 2.4 )
+cmake_minimum_required( VERSION 2.6 )
 
+
+INCLUDE (${CMAKE_ROOT}/Modules/CheckIncludeFile.cmake)
+INCLUDE (${CMAKE_ROOT}/Modules/CheckTypeSize.cmake)
+INCLUDE (${CMAKE_ROOT}/Modules/CheckFunctionExists.cmake)
+INCLUDE (${CMAKE_ROOT}/Modules/CheckCXXSourceCompiles.cmake)
+INCLUDE (${CMAKE_ROOT}/Modules/TestBigEndian.cmake)
+INCLUDE (${CMAKE_ROOT}/Modules/CheckSymbolExists.cmake)
+
+if (CMAKE_COMPILER_IS_GNUCC)
+   execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion
+                OUTPUT_VARIABLE GCC_VERSION)
+	if (NOT(GCC_VERSION VERSION_GREATER 4.1))
+	   	set(GCC_TOO_OLD 1)       
+        message(WARNING "GCC Version < 4.1, some targets will be skipped")
+        message(STATUS "Use GCC/CXX env variable to define a newer compiler, e.g. export GCC=/usr/bin/gcc-4.2; export CXX=/usr/bin/g++-4.2 ")
+	endif (NOT(GCC_VERSION VERSION_GREATER 4.1))
+endif (CMAKE_COMPILER_IS_GNUCC)
+
+if (CMAKE_SYSTEM_NAME MATCHES "Windows")
+  if(CMAKE_CL_64)
+    message(STATUS "64-bit microsoft compiler found")
+    ADD_DEFINITIONS(-D_WIN64)
+  else(CMAKE_CL_64)
+    message(STATUS "32-bit microsoft compiler found") 
+  endif(CMAKE_CL_64)
+endif (CMAKE_SYSTEM_NAME MATCHES "Windows")  
 #if (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
 #  MESSAGE(STATUS "[Unix-like system with pthread]")
 #else (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
-#  MESSAGE(STATUS "[Windows system: using Windows native threads]")
+#  MESSAGE(STATUS (${CMAKE_SYSTEM} " system: using Windows native threads]")
 #endif (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
 
 find_package(Threads)
 if (NOT(CMAKE_HAVE_PTHREAD_H))
   if (CMAKE_SYSTEM_NAME MATCHES "Windows")
      ADD_DEFINITIONS(-D_FF_SYSTEM_HAVE_WIN_PTHREAD)
-    message(STATUS "Using FF Pthread minport")
-    set(FFHEADERS_AT
-      ${FF}/platforms/platform.h
+     message(STATUS "Using FF Pthread minport")
+     set(FFHEADERS_PLAT
       ${FF}/platforms/pthread_minport_windows.h
-      ${FF}/platforms/platform_msvc_windows.h
+      ${FF}/platforms/stdint.h
     )
+  if (${CMAKE_SYSTEM} MATCHES Windows-5.1) 
+    ADD_DEFINITIONS(-D_FF_WIN_XP)
+    MESSAGE(STATUS ${CMAKE_SYSTEM} " system: using CondVar emulation")
+  endif (${CMAKE_SYSTEM} MATCHES Windows-5.1) 
   else (CMAKE_SYSTEM_NAME MATCHES "Windows")
      message(FATAL_ERROR "Cannot find Pthreads")
   endif  (CMAKE_SYSTEM_NAME MATCHES "Windows")
 endif (NOT(CMAKE_HAVE_PTHREAD_H))
 
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
-  ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS)
+# Avoid security in run time support and generate inlined intrinsics
+  ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS) 
+  if (CMAKE_BUILD_TYPE MATCHES Release)
+    ADD_DEFINITIONS(-Oy -Oi -Ot -Ob2)
+  endif (CMAKE_BUILD_TYPE MATCHES Release)
 endif (CMAKE_SYSTEM_NAME MATCHES "Windows")
 
+
 set( FF ${PROJECT_SOURCE_DIR}/ff/ )
+
+
+CHECK_INCLUDE_FILE("stdint.h"  HAVE_STDINT_H)
+
+if (NOT(HAVE_STDINT_H)) 
+  INCLUDE_DIRECTORIES(${FF}platforms/)
+endif (NOT(HAVE_STDINT_H))
+
+#find_path(STDINT_INCLUDE_DIR stdint.h
+#	HINTS /usr/include CMAKE_INCLUDE_PATH CMAKE_FRAMEWORK_PATH
+#    )
+
+#if (STDINT_INCLUDE_DIR MATCHES STDINT_INCLUDE_DIR-NOTFOUND)
+#   message(STATUS  "System hasn't stdint.h, using FF" )
+#   INCLUDE_DIRECTORIES(${FF}/platforms/stdint.h)
+#   # On WinXP using our own  ${FF}/platforms/stdint.h
+#endif (STDINT_INCLUDE_DIR MATCHES STDINT_INCLUDE_DIR-NOTFOUND)
+
 set(FFHEADERS
     ${FF}/allocator.hpp
     ${FF}/buffer.hpp
@@ -76,8 +128,11 @@ set(FFHEADERS_AT
     ${FF}/atomic/atomic-ppc.h
     ${FF}/atomic/atomic-x86_64.h
     ${FF}/atomic/abstraction_dcas.h
+  )
+set(FFHEADERS_PLAT
     ${FF}/platforms/platform.h
-   )
+  )
+
 
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
 option( BUILD_EXAMPLES      "Build examples"        ON )
@@ -100,6 +155,7 @@ add_custom_target( uninstall
 
 install( FILES ${FFHEADERS} DESTINATION /include/ff/ )
 install( FILES ${FFHEADERS_AT} DESTINATION /include/ff/atomic )
+install( FILES ${FFHEADERS_PLAT} DESTINATION /include/ff/platforms )
 
 if( BUILD_EXAMPLES )
     enable_testing()
