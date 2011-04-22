@@ -1,7 +1,7 @@
 # Author: Marco Aldinucci
 # Date: Oct 9, 2009
 
-cmake_minimum_required(VERSION 2.6)
+#cmake_minimum_required(VERSION 2.6)
 
 add_definitions(${Boost_LIB_DIAGNOSTIC_DEFINITIONS})
 
@@ -57,4 +57,4 @@ if (GSL_FOUND)
    set_target_properties ( scwc_hybrid   PROPERTIES COMPILE_FLAGS "-O3 -Wall -DUSE_FF_ACCEL -DFF_ALLOCATOR  -DLOCKFREE -DHYBRID")
 endif  (GSL_FOUND)
 
-add_test( scwc   ${CMAKE_CURRENT_BINARY_DIR}/scwc -i ${CMAKE_CURRENT_SOURCE_DIR}/examples/ecoli/low.cwc -o ecoli -t 600000 -s 2400 -n 10 -w 4 )
+add_test( scwc   ${CMAKE_CURRENT_BINARY_DIR}/scwc -i ${CMAKE_CURRENT_SOURCE_DIR}/examples/ecoli/low.cwc -o ecoli -t 600000 -s 2400 -n 10 -w 6 )

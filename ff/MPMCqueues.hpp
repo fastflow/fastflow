@@ -17,11 +17,6 @@
 #include <ff/allocator.hpp>
 #include <ff/atomic/abstraction_dcas.h>
 
-#if defined(HAVE_CDSLIB)
-#include <cds/gc/hzp/gc.h>
-#include <cds/queue/msqueue_hzp.h>
-#endif
-
 namespace ff {
 
 #define CAS abstraction_cas
@@ -185,9 +180,9 @@ public:
 
         do {
             tailptr = tail;
+            next    = tailptr.getNodeNext();
 
             if (tailptr == tail) {
-                next    = tailptr.getNodeNext();
                 if (!next) { // tail was pointing to the last node
                     done = (CAS((volatile atom_t *)(tailptr.getNodeNext()), 
                                 (atom_t)node, 
@@ -212,9 +207,9 @@ public:
         do {
             headptr = head;
             tailptr = tail;
+            next    = headptr.getNodeNext();
 
             if (head == headptr) {
-                next    = headptr.getNodeNext();
                 if (headptr.getNode() == tailptr.getNode()) {
                     if (!next) return false; // empty
                     CAS((volatile atom_t *)tail, (atom_t)next, (atom_t)tailptr);
@@ -258,9 +253,18 @@ class scalableMPMCqueue {
 public:
     enum {DEFAULT_POOL_SIZE=4};
 
-    scalableMPMCqueue():stop(true) {
+    scalableMPMCqueue() {
         atomic_long_set(&enqueue,0);
+        atomic_long_set(&count, 0);
+
+#if !defined(MULTI_MPMC_RELAX_FIFO_ORDERING)
+        // NOTE: dequeue must start from 1 because enqueue is incremented
+        //       using atomic_long_inc_return which first increments and than
+        //       return the value.
+        atomic_long_set(&dequeue,1); 
+#else
         atomic_long_set(&dequeue,0);
+#endif
     }
     
     int init(size_t poolsize = DEFAULT_POOL_SIZE) {
@@ -270,27 +274,20 @@ public:
         
         // WARNING: depending on Q, pool elements may need to be initialized  
 
-        stop = false;
         return 1;
-    }
-
-    inline void stop_producing() { 
-        WMB();
-        stop=true;
     }
 
     // insert method, it never fails if data is not NULL
     inline bool push(void * const data) {
-        if (stop) return false;
         register long q = atomic_long_inc_return(&enqueue) % pool.size();
         bool r = pool[q].push(data);
+        if (r) atomic_long_inc(&count);
         return r;
     }
 
     // extract method, it returns false if the queue is empty
     inline bool  pop(void *& data) {      
-        bool r;
-
+        if (!atomic_long_read(&count))  return false; // empty
 #if !defined(MULTI_MPMC_RELAX_FIFO_ORDERING)
         //
         // enforce FIFO ordering for the consumers
@@ -298,26 +295,24 @@ public:
         register long q, q1;
         do {
             q  = atomic_long_read(&dequeue), q1 = atomic_long_read(&enqueue);            
-            if ((q == q1) && !stop)  return false;
+            if (q > q1) return false;
             if (CAS((volatile atom_t *)&dequeue, (atom_t)(q+1), (atom_t)q) == (atom_t)q) break;
         } while(1);
 
         q %= pool.size(); 
-        do ; while( !(r=pool[q].pop(data)) && !stop);
+        do ; while( !(pool[q].pop(data)) );
+        atomic_long_dec(&count); 
+        return true;
         
 #else  // MULTI_MPMC_RELAX_FIFO_ORDERING
         register long q = atomic_long_inc_return(&dequeue) % pool.size();
-        r = pool[q].pop(data);
-#endif
-        
-        if (stop && !r && empty())  { 
-            data = (void*)FF_EOS;   
-            return true; 
-        }
-        
-        return r;
+        bool r = pool[q].pop(data);
+        if (r) { atomic_long_dec(&count); return true;}
+        return false;
+#endif        
     }
     
+    // check if the queue is empty
     inline bool empty() {
         for(size_t i=0;i<pool.size();++i)
             if (!pool[i].empty()) return false;
@@ -328,9 +323,10 @@ private:
     long padding1[longxCacheLine-sizeof(atomic_long_t)];
     atomic_long_t dequeue;
     long padding2[longxCacheLine-sizeof(atomic_long_t)];
+    atomic_long_t count;
+    long padding3[longxCacheLine-sizeof(atomic_long_t)];
 protected:
     std::vector<Q> pool;
-    bool          stop;
 };
 
 /* 
@@ -353,22 +349,6 @@ public:
     }
 };
 
-
-#if defined(HAVE_CDSLIB)
-    //
-    // WARNING: Experimental code!!!!
-    //
-class multiMSqueueCDS: public scalableMPMCqueue< cds::queue::MSQueue<cds::gc::hzp_gc, void *>  > {
-    typedef scalableMPMCqueue<cds::queue::MSQueue<cds::gc::hzp_gc, void *> > SQ;
-public:    
-      multiMSqueueCDS(size_t poolsize = SQ::DEFAULT_POOL_SIZE) {
-          if (SQ::init(poolsize) < 0) {
-              std::cerr << "multiMSqueue init ERROR, abort....\n";
-              abort();
-          }
-      }
-};
-#endif // HAVE_CDSLIB
 
 } // namespace
 

@@ -111,7 +111,7 @@ public:
 
             /* this is my scheduling policy */
             std::vector<int>::iterator idx_it = std::min_element(load.begin(),load.end());
-            int idx = idx_it-load.begin();
+            long idx = static_cast<long>(idx_it - load.begin());
             lb->set_victim(idx); /* set next worker to select */
             load[idx] += *t;
             

@@ -151,7 +151,7 @@ public:
             workers[i] = w[i];
             workers[i]->set_id(i);
         }
-        nworkers+=w.size();
+        nworkers+= (unsigned int) w.size();
         return 0;
     }
 

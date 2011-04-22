@@ -29,7 +29,7 @@
 #include <windows.h>
 #include <intrin.h>
 typedef unsigned __int64      atom_t;
-#define INLINE                extern __forceinline
+//#define INLINE                extern __forceinline
 #define ALIGN_TO(alignment)      __declspec( align(alignment) )
 #define ALIGN_SINGLE_POINTER  8
 #define ALIGN_DOUBLE_POINTER  16
@@ -43,7 +43,7 @@ typedef unsigned __int64      atom_t;
 #include <windows.h>
 #include <intrin.h>
 typedef unsigned long int     atom_t;
-#define INLINE                extern __forceinline
+//#define INLINE                extern __forceinline
 #define ALIGN_TO(alignment)      __declspec( align(alignment) )
 #define ALIGN_SINGLE_POINTER  4
 #define ALIGN_DOUBLE_POINTER  8
@@ -97,7 +97,7 @@ typedef unsigned long long int  atom_t;
 #define ALIGN_DOUBLE_POINTER    16
 #endif
 
-#if (defined __unix__ && defined __i686__ && __GNUC__)
+#if (defined __unix__ && (defined __i686__ || defined __i386__) && __GNUC__)
 // TRD : any UNIX with GCC on x86
 #if !defined(_XOPEN_SOURCE)
 #define _XOPEN_SOURCE 600
@@ -525,7 +525,7 @@ typedef unsigned long int        atom_t;
 
     return( (atom_t) _InterlockedCompareExchangePointer((void * volatile *) destination, (void *) exchange, (void *) compare) );
   }
-
+#define _ACAS_
 #endif
 
 
@@ -533,7 +533,7 @@ typedef unsigned long int        atom_t;
 
 
 /****************************************************************************/
-#if (!defined __arm__ && __GNUC__ >= 4 && __GNUC_MINOR__ >= 1 && __GNUC_PATCHLEVEL__ >= 0)
+#if (!defined __arm__ && __GNUC__ >= 4 && __GNUC_MINOR__ >= 1 && __GNUC_PATCHLEVEL__ >= 0) && !defined(_ACAS_)
 
   /* TRD : any OS on any CPU except ARM with GCC 4.1.0 or better
 
@@ -554,9 +554,6 @@ typedef unsigned long int        atom_t;
   }
 
 #endif
-
-
-
 
 
 /****************************************************************************/

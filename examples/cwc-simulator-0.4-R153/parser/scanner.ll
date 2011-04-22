@@ -8,7 +8,7 @@
 
 /* replacement of strtoll for windows platforms */
 #if (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
-#define strtoll std::stoll
+#define strtoll _strtoi64
 #endif
 
 /* import the parser's token type into a local typedef */

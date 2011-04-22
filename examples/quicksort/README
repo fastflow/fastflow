@@ -1,0 +1,11 @@
+qs            : naive sequential version of the Quicksort (QS) algorithm
+ff_qs_simple  : very simple QS implementation using FastFlow (FF)
+ff_qs_opt     : a bit smarter version of the previous QS implementation
+	        it uses std::sort for sorting small enough array portions
+ff_qs_mpmc_bk : simple blocking version using one MPMC queue (FF is used 
+	        only to start threads) 
+ff_qs_mpmc_nbk: non blocking version using one MPMC queue 
+	        (FF is used only to start threads) 
+
+NOTE: Please note that the basic algorithm, implemented by the Quicksort 
+function, is not very efficient. More efficient implementations are possible.

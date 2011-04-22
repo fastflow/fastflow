@@ -29,11 +29,28 @@ Mac OS X platform specific notes
 ====================================
 Follows general instructions to generate command-line Makefile-based build, or 
 
+Unix Makefile build
+-------------------
+
+cmake ../
+make
+make test
+
+Xcode project generation
+------------------------
+
 cmake -GXcode ../
 
 to generate the Xcode project. 
 It is possibile to generate more than one build (e.g. both Xcode and 
 command-line) in different directories (e.g. build and xcode_build).
+
+Some features requires gcc > 4.0.1. Apple 4.2.1 is default on MacOS 10.6. Apple gcc/g++4.2 are available for MacOS 10.5. gcc/g++ > 4.2 are available via Macports for 10.4, 10.5, 10.6.
+
+To use a non default version of the compiler set the env variables, e.g.
+
+export GCC=/usr/bin/gcc-4.2 
+export CXX=/usr/bin/g++-4.2 
 
 ====================================
 Windows platform specific notes
@@ -41,8 +58,20 @@ Windows platform specific notes
 Install cmake and follows general instructions from windows "cmd" or other 
 terminal shell. 
 
+32bit Visual Studio project generation
+--------------------------------------
+
+cmake .. 
+
+64bit Visual Studio project generations
+---------------------------------------
+
+cmake -G"Visual Studio 9 2008 Win64" ..
+cmake -G"Visual Studio 10 2010 Win64" ..
+
+
 Cmake installer is available at 
 
 http://www.cmake.org/cmake/resources/software.html
 
-Currently tested with Visual Studio only.
+Currently tested with Visual Studio 2008 and 2010.

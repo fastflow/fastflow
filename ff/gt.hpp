@@ -58,7 +58,7 @@ protected:
     virtual std::deque<ff_node *>::iterator  gather_task(void ** task, 
                                                          std::deque<ff_node *> & availworkers,
                                                          std::deque<ff_node *>::iterator & start) {
-        register int cnt, nw=(availworkers.end()-availworkers.begin());
+        register int cnt, nw= (int)(availworkers.end()-availworkers.begin());
         const std::deque<ff_node *>::iterator & ite(availworkers.end());
         do {
             cnt=0;

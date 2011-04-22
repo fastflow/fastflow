@@ -72,7 +72,7 @@
 #endif
 
 #if defined(__APPLE__)
-#include <Availability.h>
+#include <AvailabilityMacros.h>
 #endif
 
 //#include <pthread.h>
@@ -200,7 +200,7 @@ public:
         //void * ptr = ::malloc(segment_size);
         void * ptr=NULL;
 
-#if __MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_6
+#if (defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED < 1060))
         ptr = ::malloc(segment_size);
 #elif (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
         ptr = ::malloc(segment_size); // FIX ME
@@ -249,7 +249,7 @@ struct Seg_ctl {
     ff_allocator * allocator;    
     // number of items in the buffer freelist
     //atomic_long_t        availbuffers; 
-    unsigned long  availbuffers;
+    size_t  availbuffers;
 };
 
 
@@ -257,7 +257,7 @@ struct Seg_ctl {
 struct xThreadData {
     enum { MIN_BUFFER_ITEMS=8192, LEAK_CHUNK=4096 };
     
-    xThreadData(const bool allocator, int nslabs,const unsigned long key):leak(0),key(key) { 
+    xThreadData(const bool allocator, size_t nslabs,const pthread_t key):leak(0),key(key) { 
         leak = (uSWSR_Ptr_Buffer*)::malloc(sizeof(uSWSR_Ptr_Buffer));
         if (!leak) abort();
         new (leak) uSWSR_Ptr_Buffer(LEAK_CHUNK); 
@@ -269,7 +269,7 @@ struct xThreadData {
     }
     
     uSWSR_Ptr_Buffer      * leak;
-    const unsigned long     key;
+    const pthread_t    key;
     long padding[longxCacheLine-2];
 };
     
@@ -404,7 +404,7 @@ private:
         return 0;
     }
 
-    inline int searchfb(const unsigned long key) {
+    inline int searchfb(const pthread_t key) {
         for(register unsigned i=0;i<fb_size;++i) 
             if (fb[i]->key == key) return (int)i;
         return -1;
@@ -453,7 +453,7 @@ public:
     inline xThreadData * register4free(const bool allocator=false) {
         DBG(assert(nslabs>0));
         
-        unsigned long key=(unsigned long)(pthread_self());
+        pthread_t key= pthread_self();
         int entry = searchfb(key);
         if (entry<0) {
             xThreadData * xtd = (xThreadData*)::malloc(sizeof(xThreadData));
@@ -469,10 +469,10 @@ public:
                 }
                 fb = fb_new;
                 fb_capacity += MIN_FB_CAPACITY;
-            }
-            fb[entry=fb_size++] = xtd;
+			}
+            fb[entry=(int) fb_size++] = xtd;
             spin_unlock(lock);
-        }
+		}
         DBG(assert(fb[entry]->key == key));
         return fb[entry];
     }
@@ -551,7 +551,7 @@ public:
             return checkReclaim(seg);
         }
         
-        int entry = searchfb((unsigned long)(pthread_self()));
+        int entry = searchfb(pthread_self());
         xThreadData * xtd = NULL;
         if (entry<0) xtd = register4free();
         else xtd = fb[entry];
@@ -605,7 +605,7 @@ public:
           if ((size_t)buffersize[i]>=size) return i;
           }
         */
-        return e-POW2_MIN;
+        return (int) e-POW2_MIN;
     }
     
 private:
@@ -1077,6 +1077,7 @@ public:
             ffaxtd = newAllocator(false,0,0);
 
             if (!ffaxtd) {
+                std::cerr << "New allocator\n";
                 error("FFAllocator:posix_memalign: newAllocator fails!\n");
                 return -1;
             }
