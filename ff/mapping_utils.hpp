@@ -52,13 +52,13 @@
 #endif
 
 
-static inline int ff_getThreadID() {
+static inline long ff_getThreadID() {
 #if (defined(__GNUC__) && defined(__linux))
     return  gettid();
 #elif defined(__APPLE__) 
     return (int) syscall (SYS_gettid); // does it work?
 #elif  (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
-    return GetCurrentThread();
+    return GetCurrentThreadId();
 #endif
     return -1;
 }
@@ -123,7 +123,7 @@ static inline int ff_setPriority(int priority_level=0) {
             ret = EINVAL;
         }
     //}
-#elif (defined(__MACH__) && defined(__APPLE__))
+#elif (defined(__MACH__) && defined(__APPLE__)) && defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED >= 1060)
     if (setpriority(PRIO_DARWIN_THREAD, 0 /*myself */ ,priority_level) != 0) {
             perror("setpriority:");
             ret = EINVAL;
@@ -172,7 +172,7 @@ static inline int ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
     if (sched_setaffinity(gettid(), sizeof(mask), &mask) != 0) 
         return EINVAL;
     return (ff_setPriority(priority_level));
-#elif defined(__APPLE__) // BSD
+#elif defined(__APPLE__) && defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED >= 1060)
 	// Mac OS does not implement direct pinning of threads onto cores.
 	// Threads can be organised in affinity set. Using requested CPU
     // tag for the set. Cores under the same L2 sare not distinguished. 
@@ -271,7 +271,7 @@ size_t cache_line_size() {
     p = fopen("/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size", "r");
     unsigned int i = 0;
     if (p) {
-        fscanf(p, "%d", &i);
+        if (fscanf(p, "%d", &i) == EOF) { pclose(p); return 0;}
         fclose(p);
     }
     return i;

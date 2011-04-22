@@ -1,4 +1,4 @@
-set ( QSFF_SRCS ff_qs.cpp )
+set ( QSFF_SRCS ff_qs_simple.cpp )
 set ( QS_SRCS qs.cpp )
 
 set( TESTS ff_qs )

@@ -86,7 +86,7 @@ public:
         }
     }
     
-    inline SWSR_Ptr_Buffer * const next_w(size_t size)  { 
+    inline SWSR_Ptr_Buffer * const next_w(unsigned long size)  { 
         union { SWSR_Ptr_Buffer * buf; void * buf2;} p;
         if (!bufcache.pop(&p.buf2)) {
             p.buf = (SWSR_Ptr_Buffer*)malloc(sizeof(SWSR_Ptr_Buffer));
@@ -146,7 +146,7 @@ private:
 #endif
 
 public:
-    uSWSR_Ptr_Buffer(size_t n, const bool fixedsize=false):
+    uSWSR_Ptr_Buffer(unsigned long n, const bool fixedsize=false):
         buf_r(0),buf_w(0),size(n),fixedsize(fixedsize),
         pool(CACHE_SIZE) {
         init_unlocked(P_lock); init_unlocked(C_lock);
@@ -277,8 +277,8 @@ public:
      * but just a raw estimation.
      *
      */
-    inline size_t length() const {
-        size_t len = buf_r->length();
+    inline unsigned long length() const {
+        unsigned long len = buf_r->length();
         if (buf_r == buf_w) return len;
         return len+buf_w->length();
     }
@@ -307,9 +307,9 @@ private:
     void  * multipush_buf[MULTIPUSH_BUFFER_SIZE];
     int     mcnt;
 #endif
-    const size_t      size;
-    const bool        fixedsize;
-    BufferPool        pool;
+    const unsigned long	size;
+    const bool			fixedsize;
+    BufferPool			pool;
 };
     
 } // namespace

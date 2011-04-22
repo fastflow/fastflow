@@ -31,9 +31,16 @@ See tests directory for some simple runnable examples.
 -----------------
 
 FastFlow has been tested on:
- Intel: i386 x86_64
- Apple: PowerPC i386
+ Linux with gcc (> 4.0.1): i386, x86_64
+ Mac OS (>= 10.4) with gcc (> 4.0.1): x86_64, PowerPC G4, PowerPC G5
+ Windows XP 32bit with Visual Studio 9 2008 Win32: i386, x86_64 
+ Windows 7  64bit with Visual Studio 9 2008 Win32: x86_64 
+ Windows 7  64bit with Visual Studio 9 2008 Win64: x86_64 
+ Windows 7  64bit with Visual Studio 10 2010 Win32:  x86_64 
+ Windows 7  64bit with Visual Studio 10 2010 Win64:  x86_64
+ Windows with cygwin: not yet tested
 
+Main development platform are Linux and MacOS.
 
 Please report tips, improvements or bug to the FastFlow mailing list
 (see http://calvados.di.unipi.it/fastflow) or directly to:

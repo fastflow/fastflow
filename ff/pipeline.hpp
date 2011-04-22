@@ -60,7 +60,7 @@ public:
     }
 
     int run(bool skip_init=false) {
-        int nstages=nodes_list.size();
+        int nstages=static_cast<int>(nodes_list.size());
 
         if (!skip_init) {            
             // set the initial value for the barrier 
@@ -176,7 +176,7 @@ protected:
     }
     
     int create_output_buffer(int nentries, bool fixedsize=false) {
-        int last = nodes_list.size()-1;
+        int last = static_cast<int>(nodes_list.size())-1;
         if (!last) return -1;
 
         if (nodes_list[last]->create_output_buffer(nentries, fixedsize)<0) {
@@ -188,7 +188,7 @@ protected:
     }
 
     int set_output_buffer(FFBUFFER * const o) {
-        int last = nodes_list.size()-1;
+        int last = static_cast<int>(nodes_list.size())-1;
         if (!last) return -1;
 
         if (nodes_list[last]->set_output_buffer(o)<0) {

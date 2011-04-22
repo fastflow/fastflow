@@ -35,7 +35,7 @@ INCS                 = -I$(FF_HOME)
 LIBS                 = -lpthread
 
 INCLUDES             = -I. $(INCS)
-TARGET               = ff_qs qs
+TARGET               = qs ff_qs_simple ff_qs_opt ff_qs_mpmc_bk ff_qs_mpmc_nbk
 
 
 .PHONY: all clean cleanall distclean
@@ -46,8 +46,17 @@ TARGET               = ff_qs qs
 
 all: $(TARGET)
 
-ff_qs: ff_qs.cpp
+ff_qs_simple: ff_qs_simple.cpp
 	$(CXX) $(INCS) $(CXXFLAGS) $(OPTIMIZE_FLAGS) $< -o $@ $(LIBS)
+
+ff_qs_opt: ff_qs_opt.cpp
+	$(CXX) $(INCS) $(CXXFLAGS) $(OPTIMIZE_FLAGS) $< -o $@ $(LIBS)
+
+ff_qs_mpmc_bk: ff_qs_mpmc_bk.cpp
+	$(CXX) -Wno-strict-aliasing $(INCS) $(CXXFLAGS) $(OPTIMIZE_FLAGS) $< -o $@ $(LIBS)
+
+ff_qs_mpmc_nbk: ff_qs_mpmc_nbk.cpp
+	$(CXX) -Wno-strict-aliasing $(INCS) $(CXXFLAGS) $(OPTIMIZE_FLAGS) $< -o $@ $(LIBS)
 
 qs: qs.cpp
 	$(CXX) $(INCS) $(CXXFLAGS) $(OPTIMIZE_FLAGS) $< -o $@

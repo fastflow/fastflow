@@ -191,9 +191,26 @@ static inline long atomic_long_add_unless(atomic_long_t *l, long a, long u)
 #endif
 
 #elif (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
-typedef struct { volatile int counter; } atomic_t;
-#include "ff/platforms/platform_msvc_windows.h"
-#define BITS_PER_LONG (sizeof(long) * 8)
+typedef __declspec(align(4 /* 32 bit */)) struct { volatile long counter; } atomic_t;
+typedef atomic_t atomic_long_t;
+#define atomic_set(v,i)         (((v)->counter) = (i))
+#define atomic_read(v)          ((v)->counter)
+#define atomic_long_set atomic_set
+#define atomic_long_read atomic_read
+
+// This include is useless actually - currently kept for compability
+//#include <ff/platforms/platform_msvc_windows.h>
+#define BITS_PER_LONG 32 // Both win32 and win64 have long=32 (LLP64 model)
+#pragma intrinsic (_InterlockedIncrement)
+static inline long atomic_long_inc_return(atomic_long_t *v) {
+	
+	return _InterlockedIncrement(&v->counter);
+	//return _InterlockedExchangeAdd((long volatile*)l, 1) + 1;
+}
+
+
 #endif
 
 #endif
+
+

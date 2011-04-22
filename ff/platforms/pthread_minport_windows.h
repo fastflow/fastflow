@@ -31,7 +31,7 @@ March 2011 - Ver 0: Basic functional port, tested on Win 7 x64 - Performance not
 #include <process.h>
 #include <intrin.h>
 #include <stdio.h>
-#include <stdint.h>
+//#include <stdint.h>
 #include <errno.h>
 #include <time.h>
 
@@ -50,14 +50,13 @@ typedef HANDLE pthread_t;
 typedef struct _opaque_pthread_attr_t { long __sig; } pthread_attr_t;
 typedef struct _opaque_pthread_mutexattr_t { long __sig; } pthread_mutexattr_t;
 typedef struct _opaque_pthread_condattr_t {long __sig; } pthread_condattr_t;
+
 typedef DWORD pthread_key_t;
 
 
 // Mutex and cond vars
 
 typedef CRITICAL_SECTION pthread_mutex_t;
-typedef CONDITION_VARIABLE pthread_cond_t;
-
 
 INLINE int pthread_create(pthread_t RESTRICT * thread,
 		const pthread_attr_t RESTRICT * attr, 
@@ -109,13 +108,6 @@ INLINE int pthread_mutex_init(pthread_mutex_t  RESTRICT * mutex,
 	return (0); // Errors partially managed
 }
 
-INLINE int pthread_cond_init(pthread_cond_t  RESTRICT * cond,
-    const pthread_condattr_t  RESTRICT * attr) {
-	if (attr) return(EINVAL);
-	InitializeConditionVariable(cond);	
-	return (0);	 // Errors not managed
- }
-
 INLINE int pthread_mutex_lock(pthread_mutex_t *mutex) {
 	EnterCriticalSection(mutex);
 	return(0); // Errors not managed
@@ -131,27 +123,6 @@ INLINE int pthread_mutex_destroy(pthread_mutex_t *mutex) {
 	return(0); // Errors not managed
  }
  
-INLINE int pthread_cond_signal(pthread_cond_t *cond) {
-	WakeConditionVariable(cond);
-	return(0); // Errors not managed
- }
-
-INLINE int pthread_cond_broadcast(pthread_cond_t *cond) {
-	WakeAllConditionVariable(cond);
-	return(0);
- }
-
-INLINE int pthread_cond_wait(pthread_cond_t  RESTRICT * cond,
-					   pthread_mutex_t  RESTRICT * mutex) {
-    SleepConditionVariableCS(cond, mutex, INFINITE);
-	//WaitForSingleObject(cond[0], INFINITE); 
-	return(0); // Errors not managed
- }
-
-INLINE int pthread_cond_destroy(pthread_cond_t *cond) {
-	// Do nothing. Did not find a Windows call .... 
-	return (0); // Errors not managed
- }
 
 INLINE  pthread_t pthread_self(void) {
 	return(GetCurrentThread());
@@ -173,80 +144,158 @@ INLINE  int pthread_setspecific(pthread_key_t key, const void *value) {
 }
 
 INLINE void * pthread_getspecific(pthread_key_t key) {
-	return NULL;
+	return(TlsGetValue(key));
 }
 
- // Other
+//#if (_WIN32_WINNT >= _WIN32_WINNT_VISTA)
+#ifndef _FF_WIN_XP
+typedef CONDITION_VARIABLE pthread_cond_t;
 
-#include <string>
-typedef unsigned long useconds_t;
-#define strtoll std::stoll
+INLINE int pthread_cond_init(pthread_cond_t  RESTRICT * cond,
+    const pthread_condattr_t  RESTRICT * attr) {
+	if (attr) return(EINVAL);
+	InitializeConditionVariable(cond);	
+	return (0);	 // Errors not managed
+ }
 
+INLINE int pthread_cond_signal(pthread_cond_t *cond) {
+	WakeConditionVariable(cond);
+	return(0); // Errors not managed
+ }
 
-INLINE int usleep(unsigned long microsecs) {
-	Sleep(microsecs/1000);
+INLINE int pthread_cond_broadcast(pthread_cond_t *cond) {
+	WakeAllConditionVariable(cond);
 	return(0);
-}
+ }
 
-//#define __TICKS2WAIT 1000
-#define random rand
-#define srandom srand
-#define getpid _getpid
-#if defined(_MSC_VER) || defined(_MSC_EXTENSIONS)
-  #define DELTA_EPOCH_IN_MICROSECS  11644473600000000Ui64
-#else
-  #define DELTA_EPOCH_IN_MICROSECS  11644473600000000ULL
-#endif
+INLINE int pthread_cond_wait(pthread_cond_t  RESTRICT * cond,
+					   pthread_mutex_t  RESTRICT * mutex) {
+    SleepConditionVariableCS(cond, mutex, INFINITE);
+	//WaitForSingleObject(cond[0], INFINITE); 
+	return(0); // Errors not managed
+ }
 
-/*
-#ifndef _TIMEVAL_DEFINED
-#define _TIMEVAL_DEFINED
-struct timeval {
-  long tv_sec;
-  long tv_usec;
-};
-#endif 
-*/
+INLINE int pthread_cond_destroy(pthread_cond_t *cond) {
+	// Do nothing. Did not find a Windows call .... 
+	return (0); // Errors not managed
+ }
+#else 
+// Win XP hasn't Condition variables!
+//
+// Douglas C. Schmidt and Irfan Pyarali
+// Strategies for Implementing POSIX Condition Variables on Win32
+// http://www.cs.wustl.edu/~schmidt/win32-cv-1.html
 
-struct timezone 
+typedef struct
 {
-  int  tz_minuteswest; /* minutes W of Greenwich */
-  int  tz_dsttime;     /* type of dst correction */
-};
- 
-int gettimeofday(struct timeval *tv, struct timezone *tz)
-{
-  FILETIME ft;
-  unsigned __int64 tmpres = 0;
-  static int tzflag;
- 
-  if (NULL != tv)
-  {
-    GetSystemTimeAsFileTime(&ft);
- 
-    tmpres |= ft.dwHighDateTime;
-    tmpres <<= 32;
-    tmpres |= ft.dwLowDateTime;
- 
-    /*converting file time to unix epoch*/
-    tmpres -= DELTA_EPOCH_IN_MICROSECS; 
-    tmpres /= 10;  /*convert into microseconds*/
-    tv->tv_sec = (long)(tmpres / 1000000UL);
-    tv->tv_usec = (long)(tmpres % 1000000UL);
-  }
- 
-  if (NULL != tz)
-  {
-    if (!tzflag)
-    {
-      _tzset();
-      tzflag++;
-    }
-    tz->tz_minuteswest = _timezone / 60;
-    tz->tz_dsttime = _daylight;
-  }
- 
+  int waiters_count_;
+  // Count of the number of waiters.
+
+  CRITICAL_SECTION waiters_count_lock_;
+  // Serialize access to <waiters_count_>.
+
+  int release_count_;
+  // Number of threads to release via a <pthread_cond_broadcast> or a
+  // <pthread_cond_signal>. 
+  
+  int wait_generation_count_;
+  // Keeps track of the current "generation" so that we don't allow
+  // one thread to steal all the "releases" from the broadcast.
+
+  HANDLE event_;
+  // A manual-reset event that's used to block and release waiting
+  // threads. 
+} pthread_cond_t;
+
+INLINE int pthread_cond_init(pthread_cond_t  RESTRICT * cv,
+    const pthread_condattr_t  RESTRICT * attr) {
+  cv->waiters_count_ = 0;
+  cv->wait_generation_count_ = 0;
+  cv->release_count_ = 0;
+
+  // Create a manual-reset event.
+  cv->event_ = CreateEvent (NULL,  // no security
+                            TRUE,  // manual-reset
+                            FALSE, // non-signaled initially
+                            NULL); // unnamed
+
+  pthread_mutex_init(&cv->waiters_count_lock_,NULL);
   return 0;
 }
+
+INLINE int pthread_cond_wait(pthread_cond_t  RESTRICT * cv,
+					   pthread_mutex_t  RESTRICT * external_mutex) {
+  // Avoid race conditions.
+  EnterCriticalSection (&cv->waiters_count_lock_);
+
+  // Increment count of waiters.
+  cv->waiters_count_++;
+
+  // Store current generation in our activation record.
+  int my_generation = cv->wait_generation_count_;
+
+  LeaveCriticalSection (&cv->waiters_count_lock_);
+  LeaveCriticalSection (external_mutex);
+
+  for (;;) {
+    // Wait until the event is signaled.
+    WaitForSingleObject (cv->event_, INFINITE);
+
+    EnterCriticalSection (&cv->waiters_count_lock_);
+    // Exit the loop when the <cv->event_> is signaled and
+    // there are still waiting threads from this <wait_generation>
+    // that haven't been released from this wait yet.
+    int wait_done = cv->release_count_ > 0
+                    && cv->wait_generation_count_ != my_generation;
+    LeaveCriticalSection (&cv->waiters_count_lock_);
+
+    if (wait_done)
+      break;
+  }
+
+  EnterCriticalSection (external_mutex);
+  EnterCriticalSection (&cv->waiters_count_lock_);
+  cv->waiters_count_--;
+  cv->release_count_--;
+  int last_waiter = cv->release_count_ == 0;
+  LeaveCriticalSection (&cv->waiters_count_lock_);
+
+  if (last_waiter)
+    // We're the last waiter to be notified, so reset the manual event.
+    ResetEvent (cv->event_);
+  return 0;
+}
+
+INLINE int pthread_cond_signal(pthread_cond_t *cv) {
+  EnterCriticalSection (&cv->waiters_count_lock_);
+  if (cv->waiters_count_ > cv->release_count_) {
+    SetEvent (cv->event_); // Signal the manual-reset event.
+    cv->release_count_++;
+    cv->wait_generation_count_++;
+  }
+  LeaveCriticalSection (&cv->waiters_count_lock_);
+  return 0;
+}
+
+INLINE int pthread_cond_broadcast(pthread_cond_t *cv) {
+  EnterCriticalSection (&cv->waiters_count_lock_);
+  if (cv->waiters_count_ > 0) {  
+    SetEvent (cv->event_);
+    // Release all the threads in this generation.
+    cv->release_count_ = cv->waiters_count_;
+
+    // Start a new generation.
+    cv->wait_generation_count_++;
+  }
+  LeaveCriticalSection (&cv->waiters_count_lock_);
+  return 0;
+}
+
+INLINE int pthread_cond_destroy(pthread_cond_t *cond) {
+	// Do nothing. Did not find a Windows call .... 
+	return (0); // Errors not managed
+ }
+
+#endif
 
 #endif // _FF_MINPORT_WIN_H_

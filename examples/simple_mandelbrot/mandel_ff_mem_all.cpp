@@ -42,6 +42,7 @@
 #include <iostream>
 #include <ff/farm.hpp>
 #include <ff/spin-lock.hpp>
+#include <ff/mapping_utils.hpp>
 #include "marX2.h"
 
 
@@ -213,7 +214,7 @@ public:
 
 
 int main(int argc, char ** argv) {
-  int ncores = sysconf(_SC_NPROCESSORS_ONLN);
+  int ncores = ff_numCores();
   int r,retries=1,workers=2;
   double avg=0, var, * runs;
 
