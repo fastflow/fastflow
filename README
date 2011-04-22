@@ -42,6 +42,17 @@ FastFlow has been tested on:
 
 Main development platform are Linux and MacOS.
 
+Windows platform can be particuarly slow in debug mode due to iterator debugging and secure crt layers. Release mode appers to be not affected by the issue.
+See http://blogs.warwick.ac.uk/ahazelden/entry/visual_studio_stl/
+
+The following preprocessor directives 
+/D_SECURE_SCL=0; /D_HAS_ITERATOR_DEBUGGING=0
+(i.e. ADD_DEFINITIONS(-D_SECURE_SCL=0 -D_HAS_ITERATOR_DEBUGGING=0) in cmake)
+might ameliorate the problem. Consider however that they cannot be used if 
+the application links libraries compiled with different options (e.g. Boost).
+
+============
+
 Please report tips, improvements or bug to the FastFlow mailing list
 (see http://calvados.di.unipi.it/fastflow) or directly to:
  Massimo Torquati <torquati@di.unipi.it> or <massimotor@gmail.com>
