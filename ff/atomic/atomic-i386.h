@@ -111,6 +111,7 @@ static __inline__ void atomic_inc(atomic_t *v)
 
 
 #define atomic_inc_return(v)  (atomic_add_return(1, v))
+#define atomic_dec_return(v)  (atomic_sub_return(1, v))
 
 /**
  * atomic_dec - decrement atomic variable

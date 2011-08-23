@@ -1,6 +1,7 @@
 - configure
 - ordered farm
 - threads mapper
+  Basic mechanisms added
 - more applications 
 - deadlock avoidance for skeleton with cycles (DONE)
      The channels are now implemented using by default unbounded queue 

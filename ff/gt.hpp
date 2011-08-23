@@ -256,7 +256,7 @@ public:
 
     int run(bool=false) {  
         if (this->spawn()<0) {
-            error("GT, waiting GT thread\n");
+            error("GT, spawning GT thread\n");
             return -1; 
         }
         return 0;

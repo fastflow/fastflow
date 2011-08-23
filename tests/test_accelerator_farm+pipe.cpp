@@ -159,8 +159,8 @@ int main(int argc, char * argv[]) {
 
     Emitter E(priority);
     Collector C(priority);
-    farm.add_collector(&E);
-    farm.add_emitter(&C); 
+    farm.add_collector(&C);
+    farm.add_emitter(&E); 
 
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) {
@@ -171,8 +171,10 @@ int main(int argc, char * argv[]) {
         w.push_back(pipe);
     }
     farm.add_workers(w);
-
-    /*--- we start and immediatly freeze all the threads -- */
+#if 0
+    /* -- the following few lines of code shows how to start and immediatly 
+     *    freeze all threads
+     */
     farm.offload((void *)FF_EOS);
     if (farm.run_then_freeze()<0) {
         error("running farm\n");
@@ -184,7 +186,7 @@ int main(int argc, char * argv[]) {
     }
     farm.load_result(&result); // pop out the EOS
     /* ---------------------------------------------------- */
-
+#endif
     for(int i=0;i<iterations;++i) {
         
         // prepare a buch of tasks to be offloaded
@@ -247,7 +249,7 @@ int main(int argc, char * argv[]) {
 
     // wait all threads join
     if (farm.wait()<0) {
-        error("waiting farm freezing\n");
+        error("error waiting farm\n");
         return -1;
     }
 
