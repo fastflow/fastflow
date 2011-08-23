@@ -25,13 +25,77 @@
 namespace ff {
 
 class ff_pipeline: public ff_node {
+protected:
+    inline int prepare() {
+        int nstages=static_cast<int>(nodes_list.size());
+        for(int i=1;i<nstages;++i) {
+            if (nodes_list[i]->create_input_buffer(in_buffer_entries, fixedsize)<0) {
+                error("PIPE, creating input buffer for node %d\n", i);
+                return -1;
+            }
+        }
+        
+        for(int i=0;i<(nstages-1);++i) {
+            if (nodes_list[i]->set_output_buffer(nodes_list[i+1]->get_in_buffer())<0) {
+                error("PIPE, setting output buffer to node %d\n", i);
+                return -1;
+            }
+        }
+        int ret = 0;
+        if (has_input_channel) {
+            if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
+                error("PIPE, creating input buffer for the accelerator\n");
+                ret=-1;
+            } else {             
+                if (get_out_buffer()) {
+                    error("PIPE, output buffer already present for the accelerator\n");
+                    ret=-1;
+                } else {
+                    if (create_output_buffer(out_buffer_entries,fixedsize)<0) {
+                        error("PIPE, creating output buffer for the accelerator\n");
+                        ret = -1;
+                    }
+                }
+            }
+        }
+        prepared=true;
+        return ret;
+    }
+
+    /* freeze_and_run is required because in the pipeline 
+     * where there are not any manager threads,
+     * which allow to freeze other threads before starting the 
+     * computation
+     */
+    int freeze_and_run(bool=false) {
+        freeze();
+        int nstages=static_cast<int>(nodes_list.size());
+        if (!prepared) if (prepare()<0) return -1;
+        for(int i=0;i<nstages;++i) {
+            nodes_list[i]->set_id(i);
+            if (nodes_list[i]->freeze_and_run(true)<0) {
+                error("ERROR: PIPE, (freezing and) running stage %d\n", i);
+                return -1;
+            }
+        }
+        return 0;
+    } 
+
 public:
     enum { DEF_IN_BUFF_ENTRIES=512, DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+128)};
 
-    ff_pipeline(int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
+    /* input_ch = true to set accelerator mode
+     * in_buffer_entries = input queue length
+     * out_buffer_entries = output queue length
+     * fixedsize = true uses only fixed size queue
+     */
+    ff_pipeline(bool input_ch=false,
+                int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
                 int out_buffer_entries=DEF_OUT_BUFF_ENTRIES, bool fixedsize=true):
+        has_input_channel(input_ch),prepared(false),
         in_buffer_entries(in_buffer_entries),
-        out_buffer_entries(out_buffer_entries),fixedsize(fixedsize) {}
+        out_buffer_entries(out_buffer_entries),fixedsize(fixedsize) {               
+    }
 
     int add_stage(ff_node * s) {        
         nodes_list.push_back(s);
@@ -64,34 +128,57 @@ public:
 
         if (!skip_init) {            
             // set the initial value for the barrier 
-            Barrier::instance()->barrier(cardinality());        
+            //Barrier::instance()->barrier(cardinality());        
+            if (!barrier)  barrier = new Barrier;
+            barrier->doBarrier(cardinality(barrier));
         }
-        
-        for(int i=1;i<nstages;++i) {
-            if (nodes_list[i]->create_input_buffer(in_buffer_entries, fixedsize)<0) {
-                error("PIPE, creating input buffer for node %d\n", i);
-                return -1;
-            }
-        }
-        
-        for(int i=0;i<(nstages-1);++i) {
-            if (nodes_list[i]->set_output_buffer(nodes_list[i+1]->get_in_buffer())<0) {
-                error("PIPE, setting output buffer to node %d\n", i);
-                return -1;
-            }
-        }
-        
-        for(int i=0;i<nstages;++i) {
-            nodes_list[i]->set_id(i);
-            if (nodes_list[i]->run(true)<0) {
+        if (!prepared) if (prepare()<0) return -1;
+
+        if (has_input_channel) {
+            /* freeze_and_run is required because in the pipeline 
+             * where there are not any manager threads,
+             * which allow to freeze other threads before starting the 
+             * computation
+             */
+            for(int i=0;i<nstages;++i) {
+                nodes_list[i]->set_id(i);
+                if (nodes_list[i]->freeze_and_run(true)<0) {
                 error("ERROR: PIPE, running stage %d\n", i);
                 return -1;
+                }
+            }
+        }  else {
+            for(int i=0;i<nstages;++i) {
+                nodes_list[i]->set_id(i);
+                if (nodes_list[i]->run(true)<0) {
+                    error("ERROR: PIPE, running stage %d\n", i);
+                    return -1;
+                }
             }
         }
 
         return 0;
     }
 
+    int run_and_wait_end() {
+        if (isfrozen()) return -1; // FIX !!!!
+        stop();
+        if (run()<0) return -1;           
+        if (wait()<0) return -1;
+        return 0;
+    }
+    
+    int run_then_freeze() {
+        if (isfrozen()) {
+            thaw();
+            freeze();
+            return 0;
+        }
+        if (!prepared) if (prepare()<0) return -1;
+        freeze();
+        return run();
+    }
+    
     int wait(/* timeval */ ) {
         int ret=0;
         for(unsigned int i=0;i<nodes_list.size();++i)
@@ -99,10 +186,10 @@ public:
                 error("PIPE, waiting stage thread, id = %d\n",nodes_list[i]->get_my_id());
                 ret = -1;
             } 
-
+        
         return ret;
     }
-
+    
     int wait_freezing(/* timeval */ ) {
         int ret=0;
         for(unsigned int i=0;i<nodes_list.size();++i)
@@ -114,36 +201,112 @@ public:
         
         return ret;
     } 
-
+    
     void stop() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->stop();
     }
-
+    
     void freeze() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->freeze();
     }
-
+    
     void thaw() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->thaw();
     }
     
-    int run_and_wait_end() {
-        if (run()<0) return -1;           
-        wait();
-        return 0;
+    /* check if the pipeline is frozen */
+    bool isfrozen() { 
+        int nstages=static_cast<int>(nodes_list.size());
+        for(int i=0;i<nstages;++i) 
+            if (!nodes_list[i]->isfrozen()) return false;
+        return true;
     }
 
-    int   cardinality() const { 
+    /* offload the given task to the pipeline
+     */
+    inline bool offload(void * task,
+                        unsigned int retry=((unsigned int)-1),
+                        unsigned int ticks=ff_node::TICKS2WAIT) { 
+        FFBUFFER * inbuffer = get_in_buffer();
+        if (inbuffer) {
+            for(unsigned int i=0;i<retry;++i) {
+                if (inbuffer->push(task)) return true;
+                ticks_wait(ticks);
+            }     
+            return false;
+        }
+        
+        if (!has_input_channel) 
+            error("PIPE: accelerator is not set, offload not available\n");
+        else
+            error("PIPE: input buffer creation failed\n");
+        return false;
+    }    
+    
+    // return values:
+    //   false: EOS arrived or too many retries
+    //   true:  there is a new value
+    inline bool load_result(void ** task, 
+                            unsigned int retry=((unsigned int)-1),
+                            unsigned int ticks=ff_node::TICKS2WAIT) {
+        FFBUFFER * outbuffer = get_out_buffer();
+        if (outbuffer) {
+            for(unsigned int i=0;i<retry;++i) {
+                if (outbuffer->pop(task)) {
+                    if ((*task != (void *)FF_EOS)) return true;
+                    else return false;
+                }
+                ticks_wait(ticks);
+            }     
+            return false;
+        }
+        
+        if (!has_input_channel) 
+            error("PIPE: accelerator is not set, offload not available");
+        else
+            error("PIPE: output buffer not created");
+        return false;
+    }
+
+    // return values:
+    //   false: no task present
+    //   true : there is a new value, you should check if the task is an FF_EOS
+    inline bool load_result_nb(void ** task) {
+        FFBUFFER * outbuffer = get_out_buffer();
+        if (outbuffer) {
+            if (outbuffer->pop(task)) return true;
+            else return false;
+        }
+        
+        if (!has_input_channel) 
+            error("PIPE: accelerator is not set, offload not available");
+        else
+            error("PIPE: output buffer not created");
+        return false;        
+    }
+    
+    int   cardinality(Barrier * const barrier)  { 
         int card=0;
         for(unsigned int i=0;i<nodes_list.size();++i) 
-            card += nodes_list[i]->cardinality();
-
+            card += nodes_list[i]->cardinality(barrier);
+        
         return card;
     }
-
+    
+    /* the returned time comprise the time spent in svn_init and 
+     * in svc_end methods
+     */
     double ffTime() {
         return diffmsec(nodes_list[nodes_list.size()-1]->getstoptime(),
                         nodes_list[0]->getstarttime());
+    }
+    
+    /*  the returned time considers only the time spent in the svc
+     *  methods
+     */
+    double ffwTime() {
+        return diffmsec(nodes_list[nodes_list.size()-1]->getwstoptime(),
+                        nodes_list[0]->getwstartime());
     }
     
 #if defined(TRACE_FASTFLOW)
@@ -157,9 +320,9 @@ public:
         out << "FastFlow trace not enabled\n";
     }
 #endif
-
-protected:
-
+    
+    protected:
+    
     // ff_node interface
     void* svc(void * task) { return NULL; }
     int   svc_init() { return -1; };
@@ -177,7 +340,7 @@ protected:
     
     int create_output_buffer(int nentries, bool fixedsize=false) {
         int last = static_cast<int>(nodes_list.size())-1;
-        if (!last) return -1;
+        if (last<0) return -1;
 
         if (nodes_list[last]->create_output_buffer(nentries, fixedsize)<0) {
             error("PIPE, creating output buffer for node %d\n",last);
@@ -198,7 +361,9 @@ protected:
         return 0;
     }
 
-private:
+    private:
+    bool has_input_channel; // for accelerator
+    bool prepared;
     int in_buffer_entries;
     int out_buffer_entries;
     std::vector<ff_node *> nodes_list;

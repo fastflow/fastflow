@@ -21,8 +21,12 @@
 
 #include <ff/sysdep.h>
 
-
+#ifdef __cplusplus
 namespace ff {
+#define _INLINE static inline
+#else
+#define _INLINE __forceinline
+#endif
 
 #if defined(USE_TICKETLOCK)
 
@@ -116,8 +120,8 @@ static inline void spin_unlock( lock_t l ) {
 typedef volatile int lock_t[1];
 enum { UNLOCKED=0 };
 
-static inline void init_unlocked(lock_t l) { l[0]=UNLOCKED;}
-static inline void init_locked(lock_t l)   { l[0]=!UNLOCKED;}
+_INLINE void init_unlocked(lock_t l) { l[0]=UNLOCKED;}
+_INLINE void init_locked(lock_t l)   { l[0]=!UNLOCKED;}
 
 /*
  * NOTE: 
@@ -129,13 +133,13 @@ static inline void init_locked(lock_t l)   { l[0]=!UNLOCKED;}
 #if (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
 #include <WinBase.h>
 // windows platform
-static inline void spin_lock(lock_t l) {
+_INLINE void spin_lock(lock_t l) {
 	while (InterlockedExchange((long *)l, 1) != UNLOCKED) {	
         while (l[0]) ;  /* spin using only reads - reduces bus traffic */
     }
 }
 
-static inline void spin_unlock(lock_t l) {
+_INLINE void spin_unlock(lock_t l) {
     /*
      *  Ensure that all previous writes are globally visible before any
      *  future writes become visible.
@@ -144,13 +148,13 @@ static inline void spin_unlock(lock_t l) {
     l[0]=UNLOCKED;
 }
 #else // non windows platform
-static inline void spin_lock(lock_t l) {
+_INLINE void spin_lock(lock_t l) {
     while (xchg((int *)l, 1) != UNLOCKED) {
         while (l[0]) ;  /* spin using only reads - reduces bus traffic */
     }
 }
 
-static inline void spin_unlock(lock_t l) {
+_INLINE void spin_unlock(lock_t l) {
     /*
      *  Ensure that all previous writes are globally visible before any
      *  future writes become visible.
@@ -162,7 +166,8 @@ static inline void spin_unlock(lock_t l) {
 #endif // windows platform spin_lock
 #endif
 
-
+#ifdef __cplusplus
 } // namespace ff
+#endif
 
 #endif /* _FF_SPINLOCK_HPP_ */

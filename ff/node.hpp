@@ -32,6 +32,9 @@
 
 namespace ff {
 
+/*
+ * NOTE: by default FF_BOUNDED_BUFFER is not defined
+ */
 #if defined(FF_BOUNDED_BUFFER)
 #define FFBUFFER SWSR_Ptr_Buffer
 #else  // unbounded buffer
@@ -39,7 +42,7 @@ namespace ff {
 #endif
 
 
-enum { FF_EOS=0xffffffff, FF_EOS_NOFREEZE=(FF_EOS-0x1) , FF_GO_ON=0x1};
+    enum { FF_EOS=0xffffffff, FF_EOS_NOFREEZE=(FF_EOS-0x1) , FF_GO_ON=(FF_EOS-0x2)};
 
 #define GO_ON         (void*)ff::FF_GO_ON
 #define EOS_NOFREEZE  (void*)ff::FF_EOS_NOFREEZE
@@ -53,7 +56,12 @@ enum { FF_EOS=0xffffffff, FF_EOS_NOFREEZE=(FF_EOS-0x1) , FF_GO_ON=0x1};
 
 
 class Barrier {
-private:
+public:
+    static inline Barrier * instance() {
+        static Barrier b;
+        return &b;
+    }
+
     Barrier():_barrier(0) {
         if (pthread_mutex_init(&bLock,NULL)!=0) {
             error("ERROR: Barrier: pthread_mutex_init fails!\n");
@@ -64,13 +72,9 @@ private:
             abort();
         }
     }
-public:
-    static inline Barrier * instance() {
-        static Barrier b;
-        return &b;
-    }
+    
 
-    inline void barrier(int init = -1) {        
+    inline void doBarrier(int init = -1) {        
         if (!_barrier && init>0) { _barrier = init; return; }
         
         pthread_mutex_lock(&bLock);
@@ -98,10 +102,12 @@ class ff_thread {
     friend void * proxy_thread_routine(void *arg);
 
 protected:
-    ff_thread():stp(true), // only one shot by default
-                spawned(false),
-                freezing(false), frozen(false),thawed(false),
-                init_error(false) {
+    ff_thread(Barrier * barrier=NULL):
+        barrier(barrier),
+        stp(true), // only one shot by default
+        spawned(false),
+        freezing(false), frozen(false),thawed(false),
+        init_error(false) {
         if (pthread_mutex_init(&mutex,NULL)!=0) {
             error("ERROR: ff_thread: pthread_mutex_init fails!\n");
             abort();
@@ -123,7 +129,8 @@ protected:
     }
 
     void thread_routine() {
-        Barrier::instance()->barrier();
+        //Barrier::instance()->barrier();
+        if (barrier) barrier->doBarrier();
         void * ret;
         do {
             init_error=false;
@@ -192,6 +199,8 @@ public:
     virtual int   svc_init() { return 0; };
     virtual void  svc_end()  {}
 
+    void set_barrier(Barrier * const b) { barrier=b;}
+
     int spawn() {
         if (spawned) return -1;
         
@@ -257,7 +266,7 @@ public:
     pthread_t get_handle() const { return th_handle;}
 
 private:
-
+    Barrier      *  barrier;
     bool            stp;
     bool            spawned;
     bool            freezing;
@@ -329,6 +338,13 @@ private:
         return thread->run();
     }
 
+    virtual int freeze_and_run(bool=false) {
+        thread = new thWorker(this);
+        if (!thread) return -1;
+        freeze();
+        return thread->run();
+    }
+
     virtual int  wait() { 
         if (!thread) return -1;
         return thread->wait(); 
@@ -354,7 +370,10 @@ private:
             return false;
         return thread->isfrozen();
     }
-    virtual int  cardinality() const { return 1;}
+    virtual int  cardinality(Barrier * const b) { 
+        barrier = b;
+        return 1;
+    }
 
     virtual double ffTime() {
         return diffmsec(tstop,tstart);
@@ -411,7 +430,7 @@ protected:
     // protected constructor
     ff_node():in(0),out(0),myid(-1),
               myoutbuffer(false),myinbuffer(false),
-              skip1pop(false), thread(NULL),callback(NULL) {
+              skip1pop(false), thread(NULL),callback(NULL),barrier(NULL) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
@@ -448,7 +467,8 @@ private:
 
     class thWorker: public ff_thread {
     public:
-        thWorker(ff_node * const filter):filter(filter) {}
+        thWorker(ff_node * const filter):
+            ff_thread(filter->barrier),filter(filter) {}
         
         bool push(void * task) {
             //register int cnt = 0;
@@ -551,15 +571,16 @@ private:
     };
 
 private:
-    FFBUFFER         * in;
-    FFBUFFER         * out;
+    FFBUFFER        * in;
+    FFBUFFER        * out;
     int               myid;
     bool              myoutbuffer;
     bool              myinbuffer;
     bool              skip1pop;
     thWorker        * thread;
     bool (*callback)(void *,unsigned int,unsigned int, void *);
-    void * callback_arg;
+    void            * callback_arg;
+    Barrier         * barrier;
 
     struct timeval tstart;
     struct timeval tstop;

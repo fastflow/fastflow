@@ -122,7 +122,7 @@ static __inline__ void atomic64_inc(atomic64_t *v)
 }
 
 #define atomic64_inc_return(v)  (atomic64_add_return(1, (v)))
-
+#define atomic64_dec_return(v)  (atomic64_sub_return(1, (v)))
 
 /**
  * atomic64_dec - decrement atomic64 variable
@@ -161,6 +161,11 @@ static __inline__ long atomic64_add_return(long i, atomic64_t *v)
 		     : "+r" (i), "+m" (v->counter)
 		     : : "memory");
 	return i + __i;
+}
+
+static __inline__ long atomic64_sub_return(long i, atomic64_t *v)
+{
+	return atomic64_add_return(-i, v);
 }
 
 /**

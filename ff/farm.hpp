@@ -40,17 +40,20 @@ namespace ff {
 template<typename lb_t=ff_loadbalancer, typename gt_t=ff_gatherer>
 class ff_farm: public ff_node {
 protected:
-    inline int   cardinality() const { 
+    inline int   cardinality(Barrier * const barrier)  { 
         int card=0;
         for(int i=0;i<nworkers;++i) 
-            card += workers[i]->cardinality();
+            card += workers[i]->cardinality(barrier);
         
+        lb->set_barrier(barrier);
+        if (gt) gt->set_barrier(barrier);
+
         return (card + 1 + (gt?1:0));
     }
 
     inline int prepare() {
         for(int i=0;i<nworkers;++i) {
-            if (workers[i]->create_input_buffer((ondemand?1:(in_buffer_entries/nworkers + 1)))<0) return -1;
+            if (workers[i]->create_input_buffer((ondemand ? ondemand: (in_buffer_entries/nworkers + 1)))<0) return -1;
             if (gt || lb->masterworker()) 
                 if (workers[i]->create_output_buffer(out_buffer_entries/nworkers + DEF_IN_OUT_DIFF)<0) 
                     return -1;
@@ -60,6 +63,12 @@ protected:
         prepared=true;
         return 0;
     }
+
+    int freeze_and_run(bool=false) {
+        freeze();
+        return run(true);
+    } 
+
 public:
     enum { DEF_MAX_NUM_WORKERS=64, DEF_IN_BUFF_ENTRIES=2048, DEF_IN_OUT_DIFF=128, 
            DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+DEF_IN_OUT_DIFF)};
@@ -78,7 +87,7 @@ public:
             int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
             bool worker_cleanup=false,
             int max_num_workers=DEF_MAX_NUM_WORKERS):
-        has_input_channel(input_ch),prepared(false),ondemand(false),
+        has_input_channel(input_ch),prepared(false),ondemand(0),
         nworkers(0),
         in_buffer_entries(in_buffer_entries),
         out_buffer_entries(out_buffer_entries),
@@ -134,9 +143,15 @@ public:
      *
      * Alternatively it is always possible to define a complete 
      * application-level scheduling by redefining the ff_loadbalancer class.
+     *
+     * The function parameter, sets the number of queue slot for 
+     * one worker threads.
+     *
      */
-    void set_scheduling_ondemand() { ondemand=true;}
-
+    void set_scheduling_ondemand(const int inbufferentries=1) { 
+        if (in_buffer_entries<=0) ondemand=1;
+        else ondemand=inbufferentries;
+    }
 
     int add_workers(std::vector<ff_node *> & w) { 
         if ((nworkers+w.size())> (unsigned int)max_nworkers) {
@@ -206,7 +221,10 @@ public:
     int run(bool skip_init=false) {
         if (!skip_init) {
             // set the initial value for the barrier 
-            Barrier::instance()->barrier(cardinality());
+
+            //Barrier::instance()->barrier(cardinality());
+            if (!barrier)  barrier = new Barrier;
+            barrier->doBarrier(cardinality(barrier));
         }
         
         if (!prepared) if (prepare()<0) return -1;
@@ -281,26 +299,35 @@ public:
         FFBUFFER * inbuffer = get_in_buffer();
 
         if (inbuffer) {
-            while (! inbuffer->push(task)) {
-                ticks_wait(ff_loadbalancer::TICKS2WAIT);
+            for(unsigned int i=0;i<retry;++i) {
+                if (inbuffer->push(task)) return true;
+                ticks_wait(ticks);
             }     
-            return true;
+            return false;
         }
         
         if (!has_input_channel) 
-            error("Farm: accelerator is not set, offload not available");
+            error("FARM: accelerator is not set, offload not available");
         else
-            error("Farm: input buffer creation failed");
+            error("FARM: input buffer creation failed");
         return false;
 
     }    
 
     // return values:
-    //   false: EOS arrived
+    //   false: EOS arrived or too many retries
     //   true:  there is a new value
-    inline bool load_result(void ** task /* TODO: timeout */) {
+    inline bool load_result(void ** task,
+                            unsigned int retry=((unsigned int)-1),
+                            unsigned int ticks=ff_gatherer::TICKS2WAIT) {
         if (!gt) return false;
-        if (gt->pop(task) && (*task != (void *)FF_EOS)) return true;
+        for(unsigned int i=0;i<retry;++i) {
+            if (gt->pop_nb(task)) {
+                if ((*task != (void *)FF_EOS)) return true;
+                else return false;
+            }
+            ticks_wait(ticks);
+        }
         return false;
     }
 
@@ -314,6 +341,9 @@ public:
     
     inline lb_t * const getlb() const { return lb;}
 
+    /* the returned time comprise the time spent in svn_init and 
+     * in svc_end methods
+     */
     double ffTime() {
         if (gt)
             return diffmsec(gt->getstoptime(),
@@ -328,6 +358,25 @@ public:
             std::max_element(workertime.begin(),workertime.end(),time_compare);
         return diffmsec((*it),lb->getstarttime());
     }
+
+    /*  the returned time considers only the time spent in the svc
+     *  methods
+     */
+    double ffwTime() {
+        if (gt)
+            return diffmsec(gt->getwstoptime(),
+                            lb->getwstartime());
+
+        const struct timeval zero={0,0};
+        std::vector<struct timeval > workertime(nworkers+1,zero);
+        for(int i=0;i<nworkers;++i)
+            workertime[i]=workers[i]->getwstoptime();
+        workertime[nworkers]=lb->getwstoptime();
+        std::vector<struct timeval >::iterator it=
+            std::max_element(workertime.begin(),workertime.end(),time_compare);
+        return diffmsec((*it),lb->getwstartime());
+    }
+
 
 #if defined(TRACE_FASTFLOW)
     void ffStats(std::ostream & out) { 
@@ -388,7 +437,7 @@ protected:
 protected:
     bool has_input_channel; // for accelerator
     bool prepared;
-    bool ondemand;          // if true, emulate on-demand scheduling
+    int ondemand;          // if >0, emulates on-demand scheduling
     int nworkers;
     int in_buffer_entries;
     int out_buffer_entries;

@@ -61,7 +61,7 @@ protected:
     virtual inline int selectworker() { return (++nextw % nworkers); }
 
     /* number of tentative before wasting some times and than retry */
-    virtual inline int ntentative() { return nworkers;}
+    virtual inline unsigned int ntentative() { return nworkers;}
 
     virtual inline void losetime_out() { 
         //FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
@@ -84,18 +84,20 @@ protected:
     }
 
     /* main scheduling function also called by ff_send_out! */
-    virtual int schedule_task(void * task) {
-        register int cnt,cnt2;
+    virtual bool schedule_task(void * task,unsigned int retry=(unsigned)-1,unsigned int ticks=0) {
+        register unsigned int cnt,cnt2;
         do {
             cnt=0,cnt2=0;
             do {
                 nextw = selectworker();
                 if(workers[nextw]->put(task)) {
                     FFTRACE(++taskcnt);
-                    return nextw;
+                    return true;
                 }
                 else {
                     //std::cerr << ".";
+                    ++cnt;
+                    if (cnt>=retry) { nextw=-1; return false; }
                     if (++cnt == ntentative()) break; 
                 }
             } while(1);
@@ -103,12 +105,13 @@ protected:
                 nextw=-1;
                 //std::cerr << "exec fallback\n";
                 fallback->svc(task);
-                return nextw;
+                return false;
             }
             else losetime_out();
             //std::cerr << "-";
         } while(1);
-        return nextw;
+
+        return false;
     }
 
     
@@ -169,8 +172,7 @@ protected:
     }
     
     static bool ff_send_out_emitter(void * task,unsigned int retry,unsigned int ticks, void *obj) {
-        ((ff_loadbalancer *)obj)->schedule_task(task);
-        return true;
+        return ((ff_loadbalancer *)obj)->schedule_task(task, retry, ticks);
     }
 
 
@@ -211,7 +213,7 @@ public:
         return 0;
     }
 
-    void set_in_buffer(FFBUFFER * const buff) { buffer=buff;}
+    void set_in_buffer(FFBUFFER * const buff) { buffer=buff; skip1pop=false;}
 
     FFBUFFER * const get_in_buffer() const { return buffer;}
     

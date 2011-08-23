@@ -147,6 +147,14 @@ public:
         return current[current_head];
     }
 
+    inline elem_type& at(size_t idx) {
+        if (!nelements || idx > nelements) return *(elem_type*)0;
+        
+        T * current       = data[head].entry;
+        int current_head  = data[head].h+idx;
+        return current[current_head];
+    } 
+    
     /* return the number of items in the queue */
     inline size_t size() const { return nelements; }
     

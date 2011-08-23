@@ -139,7 +139,7 @@ void * P(void * arg) {
     cds::threading::pthread::Manager::attachThread();
 #endif
 
-    Barrier::instance()->barrier();
+    Barrier::instance()->doBarrier();
     do; while(PUSH(myid));
 
 #if defined(HAVE_CDSLIB)
@@ -160,7 +160,7 @@ void * C(void * arg) {
     cds::threading::pthread::Manager::attachThread();
 #endif
 
-    Barrier::instance()->barrier();
+    Barrier::instance()->doBarrier();
     while(1) {
         if (!QUEUE_POP(task.b))  {
             backoff_pause();
@@ -244,7 +244,7 @@ int main(int argc, char * argv[]) {
 	C_handle = (pthread_t *) malloc(sizeof(pthread_t)*numC);
 	
     // define the number of threads that are going to partecipate....
-    Barrier::instance()->barrier(numP+numC);
+    Barrier::instance()->doBarrier(numP+numC);
 
     ffTime(START_TIME);
 

@@ -25,41 +25,78 @@
  ****************************************************************************
  */
 
-/*
- * Very basic test for the FastFlow farm in the accelerator configuration.
+/* Tests a farm nesting case in which farm's workers are farm with feedback 
+ * channel ( i.e. farm(D&C)):                              
+ *                          ------>D&C
+ *     (mainFarm)          |
+ *         mainEmitter ----
+ *                         |
+ *                          ------>D&C    
  *
+ *  where  D&C is:
+ *
+ *            -------------------------
+ *           |                         |
+ *           |        -------> Worker -
+ *           v       |
+ *        Emitter ---
+ *           ^       | 
+ *           |        -------> Worker -                
+ *           |                         |
+ *            -------------------------
  */
+
+
+
 #include <vector>
 #include <iostream>
 #include <ff/farm.hpp>
 #include <ff/node.hpp>
   
+
 using namespace ff;
 
 // generic worker
 class Worker: public ff_node {
 public:
     void * svc(void * task) {
-        int * t = (int *)task;
-        std::cout << "[Worker] " << ff_node::get_my_id() 
-                  << " received task " << *t << "\n";
+        std::cerr << "sleeping....\n";
+        usleep(10000);
         return task;
     }
 };
 
-// the gatherer filter
-class Collector: public ff_node {
+class Emitter: public ff_node {
 public:
-    void * svc(void * task) {        
-        return task;  
+    void * svc(void * task) {
+        int * t = (int *)task;
+
+        if (*t % 2)  return GO_ON;
+        ++(*t);
+        return task;
     }
 };
+
+
+class mainEmitter: public ff_node {
+public:
+    mainEmitter(int streamlen):streamlen(streamlen) {}
+
+    void * svc(void *) {
+        for(int i=1;i<=streamlen;++i)
+            ff_send_out(new int(i));
+        return NULL;
+    }
+private:
+    int streamlen;
+};
+
 
 
 int main(int argc, 
          char * argv[]) {
 
-    if (argc<3) {
+    if (argc!=3) {
         std::cerr << "use: " 
                   << argv[0] 
                   << " nworkers streamlen\n";
@@ -73,66 +110,32 @@ int main(int argc,
         std::cerr << "Wrong parameters values\n";
         return -1;
     }
-    
-    ff_farm<> farm(true /* accelerator set */);
-    
-    // Using standard emitter
-    /*
-      Emitter E(streamlen);
-      farm.add_emitter(&E);
-    */
+
+    ff_farm<> mainFarm;
+    mainEmitter mainE(streamlen);
+    mainFarm.add_emitter(&mainE);
 
     std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
-    farm.add_workers(w);
+    std::vector<ff_node *> w2;
+    for(int i=0;i<nworkers;++i) {
+        Emitter * e = new Emitter;
+        ff_farm<> * W = new ff_farm<>;
+        W->add_emitter(e);
+        
+        w.push_back(new Worker);
+        //w.push_back(new Worker);
+        W->add_workers(w);
+        w.clear();
+        W->wrap_around();
 
-    farm.add_collector(new Collector);
-
-    ffTime(START_TIME);
-    // Now run the accelator asynchronusly
-    farm.run_then_freeze(); //  farm.run() can also be used here
-
-    void * result=NULL;
-    for (int i=0;i<streamlen;i++) {
-        int * ii = new int(i);
-        std::cout << "[Main] Offloading " << i << "\n"; 
-        // Here offloading computation onto the farm
-        farm.offload(ii); 
-
-        // try to get results, if there are any
-        if (farm.load_result_nb(&result)) {
-            std::cerr << "result= " << *((int*)result) << "\n";
-            delete ((int*)result);
-        }
+        w2.push_back(W);
     }
-    std::cout << "[Main] EOS arrived\n";
-    farm.offload((void *)FF_EOS);
-    
+    mainFarm.add_workers(w2);
 
-    // get all remaining results syncronously. 
-    while(farm.load_result(&result)) {
-        std::cerr << "result= " << *((int*)result) << "\n";
-        delete ((int*)result);
-    }
+    mainFarm.run();
+    mainFarm.wait();
 
-#if 0
-    // asynchronously wait results
-    do {
-        if (farm.load_result_nb(&result)) {
-            if (result==(void*)FF_EOS) break;
-            std::cerr << "result= " << *((int*)result) << "\n";
-            delete ((int*)result);
-        } 
-    } while(1);
-#endif
-    
-    // Here join
-    farm.wait();  
-    std::cout << "[Main] Farm accelerator stopped\n";
+    std::cout<< "DONE\n";
 
-    ffTime(STOP_TIME);
-    std::cerr << "[Main] DONE, farm time= " << farm.ffTime() << " (ms)\n";
-    std::cerr << "[Main] DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
-    
     return 0;
 }
