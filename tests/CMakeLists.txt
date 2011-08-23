@@ -16,6 +16,8 @@ add_executable( perf_test2 perf_test2.cpp )
 add_executable( test_accelerator test_accelerator.cpp )
 add_executable( test_accelerator2 test_accelerator2.cpp )
 add_executable( test_accelerator_farm+pipe test_accelerator_farm+pipe.cpp )
+add_executable( test_accelerator_pipe test_accelerator_pipe.cpp )
+add_executable( test_accelerator_pipe+farm test_accelerator_pipe+farm.cpp )
 add_executable( test_freeze test_freeze.cpp )
 add_executable( test_masterworker test_masterworker.cpp )
 add_executable( test_scheduling test_scheduling.cpp )
@@ -25,6 +27,7 @@ add_executable( perf_test_alloc2 perf_test_alloc2.cpp )
 add_executable( perf_test_alloc3 perf_test_alloc3.cpp )
 add_executable( perf_test_noalloc perf_test_noalloc.cpp )
 add_executable( test_uBuffer test_uBuffer.cpp )
+add_executable( test_torus test_torus.cpp )
 if (NOT(GCC_TOO_OLD))
   add_executable( test_mpmc test_mpmc.cpp)
   if (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
@@ -35,11 +38,12 @@ endif (NOT(GCC_TOO_OLD))
 
 
 set( TESTS test1 test2 test3 test3b test4 test5 test6 test7
-perf_test1 perf_test2 test_accelerator
-test_accelerator2 test_accelerator_farm+pipe
+perf_test1 perf_test2 test_accelerator test_accelerator2
+test_accelerator_farm+pipe test_accelerator_pipe
+test_accelerator_pipe+farm 
 test_freeze test_masterworker test_scheduling
 test_dt perf_test_alloc1 perf_test_alloc2
-perf_test_alloc3 perf_test_noalloc test_uBuffer)
+perf_test_alloc3 perf_test_noalloc test_uBuffer test_torus)
 if (NOT(GCC_TOO_OLD))
   set(TESTS ${TESTS}  test_mpmc)
 endif (NOT(GCC_TOO_OLD))
@@ -70,6 +74,9 @@ add_test( test_dt ${CMAKE_CURRENT_BINARY_DIR}/test_dt 3 50 )
 add_test( test_uBuffer ${CMAKE_CURRENT_BINARY_DIR}/test_uBuffer 1024 1000000 0 0)
 add_test( test_scheduling ${CMAKE_CURRENT_BINARY_DIR}/test_scheduling 3 10 )
 add_test( test_masterworker ${CMAKE_CURRENT_BINARY_DIR}/test_masterworker 3 1000 10 )
+add_test( test_accelerator_pipe ${CMAKE_CURRENT_BINARY_DIR}/test_accelerator_pipe 3 1000 )
+add_test( test_accelerator_pipe+farm ${CMAKE_CURRENT_BINARY_DIR}/test_accelerator_pipe+farm 1000 3 10 )
+add_test( test_torus ${CMAKE_CURRENT_BINARY_DIR}/test_torus 4 1000 )
 if (NOT(GCC_TOO_OLD))
   add_test( test_mpmc ${CMAKE_CURRENT_BINARY_DIR}/test_mpmc 10000 3 5 )
 endif (NOT(GCC_TOO_OLD))

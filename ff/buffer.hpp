@@ -261,9 +261,9 @@ public:
     }
 
     inline unsigned long length() const {
-        unsigned long len = pwrite-pread;
+        long len = pwrite-pread;
         if (len>=0) return len;
-        return size-len;
+        return size+len;
     }
 
 };

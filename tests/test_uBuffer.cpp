@@ -186,7 +186,7 @@ void * P(void *) {
 #endif
     for(int i=0;i<WARMUP;++i) PUSH(i);
 
-    Barrier::instance()->barrier();
+    Barrier::instance()->doBarrier();
     ffTime(START_TIME);
 
     for(int i=WARMUP;i<ntasks;++i) PUSH(i);
@@ -258,7 +258,7 @@ void * C(void *) {
     }
 #endif // PAPI_PERF
 
-    Barrier::instance()->barrier();
+    Barrier::instance()->doBarrier();
    
     while(!end) {
     retry:
@@ -477,7 +477,7 @@ int main(int argc, char * argv[]) {
     b = new std::deque<void*>;
 #endif
 
-    Barrier::instance()->barrier(2);
+    Barrier::instance()->doBarrier(2);
 
     ffTime(START_TIME);
 

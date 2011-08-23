@@ -1,3 +1,17 @@
+* 22/04/11 - v.1.1.1
+   - accelerator support implemented for the pipeline
+   - ff_send_out improvment: more control over the number of retries, return
+     value added
+   - barrier protocol re-worked, now is possible to create and to start a 
+     pipeline or a farm (or an accelerator) from inside a pipeline's node or 
+     a farm's worker/emitter/collector 
+   - added ffwTime which considers only the time spent in the svc methods
+   - changed the value of FF_GO_ON
+   - fixed SWSR_Ptr_Buffer length method (unsigned long --> long)
+   - fixed a bug which prevents to have a farm whose workers are D&C skeleton
+     (see test_multi_masterworker test)
+   - added the possibility to define workers' input queue size for the 
+     on-demand scheduling policy (default value is 1 slot)
 * 22/04/11 - v.1.1.0
    - MSqueue reworked and now not is in experimental state, it is working also 
      on Windows OS and OSX. Removed DCAS and used CAS.
