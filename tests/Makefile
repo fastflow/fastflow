@@ -40,7 +40,7 @@ CC                   = gcc
 CXX 		     = g++ 
 LINK_OPT             = 
 VERSION              = 
-OPTIMIZE_FLAGS       = -O6 -finline-functions
+OPTIMIZE_FLAGS       = -O3 -finline-functions #-DTRACE_FASTFLOW
 CXXFLAGS             = -Wall
 CFLAGS               =
 LDFLAGS              = 
@@ -61,7 +61,7 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I. $(INCS)
-TARGET               = test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_mpmc 
+TARGET               = test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_map test_mpmc test_bmpmc test_sendq
 
 
 .PHONY: all clean cleanall distclean install uninstall
@@ -115,11 +115,15 @@ test_masterworker:test_masterworker.o
 test_multi_masterworker:test_multi_masterworker.o
 test_dt:test_dt.o
 test_scheduling:test_scheduling.o
+test_sendq:test_sendq.o
+test_map:test_map.o
 test_uBuffer:test_uBuffer.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_torus:test_torus.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_mpmc:test_mpmc.cpp
+	$(CXX) -DUNBOUNDED_MPMC -Wno-strict-aliasing $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+test_bmpmc:test_bmpmc.cpp
 	$(CXX) -Wno-strict-aliasing $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 perf_test_alloc1:perf_test_alloc1.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)

@@ -35,8 +35,7 @@
  * the two unsorted sub-lists.
  * 
  * This is just a naive implementation of the algorithm, without any specific 
- * optimisation. More efficient implementations are possible, see for example
- * STL sort implementation.
+ * optimisation. More efficient implementations are possible.
  *
  */
 
@@ -47,7 +46,6 @@
 #include <algorithm>  // to use std::sort
 
 unsigned int  size=0;            // array size
-unsigned int  thresh=0;
 unsigned int *A=NULL;  // array which needs to be ordered
 
 
@@ -105,8 +103,8 @@ inline int Partition(int i, int j, unsigned int pivot) {
 
 		
 inline void QuickSort(int i, int j) {
-    if ((unsigned)(j-i) < thresh) {        
-        std::sort(&A[i],&A[i]+((j-i)+1));
+    if (j-i < 2) {
+        if (A[i]>A[j]) std::swap(A[i],A[j]);
         return;
     } 
     int pivot = FindPivot(i,j);
@@ -133,15 +131,13 @@ void initArray() {
 
 int main(int argc, char * argv[]) {
     bool check_result=false;
-    if (argc<2 || argc>5) {
-        fprintf(stderr, "use: %s size threashold\n", argv[0]);
-        fprintf(stderr, " if threashold is set to -1 it uses std::sort for the entire array\n\n");
+    if (argc<2 || argc>3) {
+        fprintf(stderr, "use: %s size\n", argv[0]);
         return -1;
     }
     
     size = atoi(argv[1]);
-    thresh = (unsigned)atoi(argv[2]);
-    if (argc==4) check_result=true;
+    if (argc==3) check_result=true;
 
     A = new unsigned int[size];
     if (!A) {
@@ -153,6 +149,7 @@ int main(int argc, char * argv[]) {
     printf("starting....\n");
     ff::ffTime(ff::START_TIME);
     QuickSort(0, size-1); // my own threashold based Quicksort algo
+    //std::sort(A,A+size);
     ff::ffTime(ff::STOP_TIME);
     printf("Time: %g (ms)\n", ff::ffTime(ff::GET_TIME));
     

@@ -29,8 +29,12 @@ namespace ff {
 
 class ff_loadbalancer: public ff_thread {
 public:    
-    enum {TICKS2WAIT=1000};
 
+    // NOTE:
+    //  - TICKS2WAIT should be a valued profiled for the application
+    //    Consider to redifine loosetime_in and loosetime_out for your app.
+    //
+    enum {TICKS2WAIT=1000};
 protected:
     inline bool push_task(void * task, int idx) {
         return workers[idx]->put(task);
@@ -48,7 +52,6 @@ protected:
         }	
     }
 
-    inline int getnworkers() const { return nworkers;}
     inline ff_node * const getfallback() { return fallback;}
 
     /* The following functions can be redefined to implement new
@@ -64,12 +67,14 @@ protected:
     virtual inline unsigned int ntentative() { return nworkers;}
 
     virtual inline void losetime_out() { 
-        //FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
-        //ticks_wait(TICKS2WAIT); 
+        FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
+        ticks_wait(TICKS2WAIT); 
+#if 0
         FFTRACE(register ticks t0 = getticks());
         usleep(TICKS2WAIT);
         FFTRACE(register ticks diff=(getticks()-t0));
         FFTRACE(lostpushticks+=diff;++pushwait);
+#endif
     }
 
     virtual inline void losetime_in() { 
@@ -106,8 +111,7 @@ protected:
                 //std::cerr << "exec fallback\n";
                 fallback->svc(task);
                 return false;
-            }
-            else losetime_out();
+            } else losetime_out();
             //std::cerr << "-";
         } while(1);
 
@@ -161,7 +165,17 @@ protected:
     
     bool pop(void ** task) {
         //register int cnt = 0;       
-        while (! buffer->pop(task)) {
+        if (!filter) {
+            while (! buffer->pop(task)) {
+                //    if (ch->thxcore>1) {
+                //if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
+                //else ticks_wait(TICKS2WAIT);
+                //} else 
+                losetime_in();
+            } 
+            return true;
+        }
+        while (! filter->pop(task)) {
             //    if (ch->thxcore>1) {
             //if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
             //else ticks_wait(TICKS2WAIT);
@@ -223,6 +237,8 @@ public:
     const int get_channel_id() const { return channelid;}
     void reset_channel_id() { channelid=-1;}
 
+    inline int getnworkers() const { return nworkers;}
+
     void skipfirstpop() { skip1pop=true;}
     
     int  set_masterworker() {
@@ -256,6 +272,12 @@ public:
         void * ret  = (void *)FF_EOS;
         bool inpresent  = (get_in_buffer() != NULL);
         bool skipfirstpop = skip1pop;
+
+        // the following case is possible when the emitter is a dnode
+        if (!inpresent && filter && (filter->get_in_buffer()!=NULL)) {
+            inpresent = true;
+            set_in_buffer(filter->get_in_buffer());
+        }
 
         gettimeofday(&wtstart,NULL);
         if (!master_worker) {
@@ -331,9 +353,6 @@ public:
                     }
                 } else {
                     if (filter) {
-#if 0
-                    bho:
-#endif
                         FFTRACE(register ticks t0 = getticks());
 
                         task = filter->svc(task);
@@ -358,17 +377,6 @@ public:
                             ret = (void*)FF_EOS;
                             break;
                         }
-
-#if 0
-                        // RIVEDERE
-                        //-----------------------
-                        task = fallback->svc(task);
-                        if (task == GO_ON) continue;
-
-                        goto bho;
-                        //---------------------------
-#endif                        
-
                     }
                     schedule_task(task);
                 }

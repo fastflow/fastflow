@@ -29,6 +29,10 @@
  * Tests per-thread allocator. 
  * Each thread allocates and frees memory.
  *
+ * use:
+ *   perf_test_alloc3 10000000 8 10000 #P
+ *     - where #P is the number of threads
+ *     - 8 is equivalent to 8*sizeof(long) bytes
  */
 
 #include <sys/types.h>
@@ -40,10 +44,18 @@
 #include <ff/farm.hpp>
 #include <ff/allocator.hpp>
 #include <ff/cycle.h>
+#if defined(USE_PROC_AFFINITY)
+#include <ff/mapping_utils.hpp>
+#endif
 
 using namespace ff;
 
-typedef int task_t;
+typedef unsigned long task_t;
+#if defined(USE_PROC_AFFINITY)
+//WARNING: the following mapping targets dual-eight core Intel Sandy-Bridge 
+const int worker_mapping[]   = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31};
+const int PHYCORES           = 32;
+#endif
 
 
 #if defined(USE_TBB)
@@ -71,73 +83,138 @@ static tbb::cache_aligned_allocator<char> * tbballocator=0;
 #define FF_ALLOCATOR 1
 #include <ff/allocator.hpp>
 #define ALLOCATOR_INIT() 
+#if defined(TEST_FFA_MALLOC)
 #define MALLOC(size)   (FFAllocator::instance()->malloc(size))
 #define FREE(ptr,size) (FFAllocator::instance()->free(ptr))
+#else
+#define MALLOC(size)   (myalloc->malloc(size))
+#define FREE(ptr,size) (myalloc->free(ptr))
+#endif // TEST_FFA_MALLOC
 #endif
 
-// comment the following line to use a different
+// un-comment the following line to use a different
 // implementation
-#define TEST_FFA_MALLOC
+//#define TEST_FFA_MALLOC
 
 #if defined(TEST_FFA_MALLOC)
 class Worker: public ff_node {
 public:
-    Worker(int itemsize, int ntasks):
-        itemsize(itemsize),ntasks(ntasks) {}
+    Worker(int itemsize, int ntasks, int batchsize):
+        itemsize(itemsize),ntasks(ntasks),batchsize(batchsize) {}
 
     void * svc(void *) {
-        task_t ** task = (task_t**)MALLOC(ntasks*sizeof(task_t*));
-        for(register int i=0;i<ntasks;++i) {
-            task[i]= (task_t*)MALLOC(itemsize*sizeof(task_t));
-        }
-        for(register int i=0;i<ntasks;++i) {
-            FREE(task[i], itemsize*sizeof(task_t));
-        }
-        FREE(task,ntasks*sizeof(task_t*)); 
+        task_t* task[batchsize];
 
+        int numbatch = ntasks/batchsize;
+        for(int j=0;j<numbatch;++j) {              
+            for(int i=0;i<batchsize;++i) {
+                task[i]= (task_t*)MALLOC(itemsize*sizeof(task_t));
+                memset(task[i],0,itemsize*sizeof(task_t));
+            }
+            for(register int i=0;i<batchsize;++i) {
+                FREE(task[i],itemsize*sizeof(task_t));
+            }
+            ntasks-=batchsize;
+        }
+        for(int i=0;i<ntasks;++i) {
+            task[i]= (task_t*)MALLOC(itemsize*sizeof(task_t));
+            memset(task[i],0,itemsize*sizeof(task_t));
+        }
+        for(register int i=0;i<ntasks;++i) {
+            FREE(task[i],itemsize*sizeof(task_t));
+        }
         return NULL; 
     }
 private:
     int            itemsize;
     int            ntasks;
+    int            batchsize;
 };
 
 #else  
 
+// static inline void* aligned_malloc(size_t sz)
+// {
+//     void*               mem;
+//     if (posix_memalign(&mem, 128, sz))
+//         return 0;
+//     return mem;
+// }
+
+
 class Worker: public ff_node {
 public:
-    Worker(int itemsize, int ntasks):
-        myalloc(NULL),itemsize(itemsize),ntasks(ntasks) {}
+    Worker(int itemsize, int ntasks, int batchsize):
+        myalloc(NULL),itemsize(itemsize),ntasks(ntasks),batchsize(batchsize) {}
     
     // called just one time at the very beginning
     int svc_init() {
-        myalloc = FFA->newAllocator();
-        if (!myalloc) return -1;
+#if defined(USE_PROC_AFFINITY)
+        if (ff_mapThreadToCpu(worker_mapping[get_my_id() % PHYCORES])!=0)
+            printf("Cannot map Worker %d CPU %d\n",get_my_id(),
+                   worker_mapping[get_my_id() % PHYCORES]);
+        //else printf("Thread %d mapped to CPU %d\n",get_my_id(), worker_mapping[get_my_id() % PHYCORES]);                                         
+#endif
+        
+#if defined(FF_ALLOCATOR)
+        myalloc=new(malloc(sizeof(ff_allocator))) ff_allocator();		      
+        if (myalloc->registerAllocator()<0) {
+            error("Worker, registerAllocator fails\n");
+            return -1;
+        }
+        int slab = myalloc->getslabs(itemsize*sizeof(task_t));
+        int nslabs[N_SLABBUFFER];               
+        if (slab<0) {                           
+            if (myalloc->init()<0) abort();     
+        } else {                                
+            for(int i=0;i<N_SLABBUFFER;++i) {     
+                if (i==slab) nslabs[i]=2*batchsize;
+                else nslabs[i]=0;                 
+            }                
+            if (myalloc->init(nslabs)<0) abort(); 
+        }
+#endif
         return 0;
     }
 
     void * svc(void *) {
-        task_t ** task = (task_t**)myalloc->malloc(ntasks*sizeof(task_t*));
-        for(register int i=0;i<ntasks;++i) {
-            task[i]= (task_t*)myalloc->malloc(itemsize*sizeof(task_t));
-        }
+        task_t* task[batchsize];
 
-        for(register int i=0;i<ntasks;++i) {
-            FREE(task[i], itemsize*sizeof(task_t));
+        int numbatch = ntasks/batchsize;
+        for(int j=0;j<numbatch;++j) {              
+            for(int i=0;i<batchsize;++i) {
+                task[i]= (task_t*)MALLOC(itemsize*sizeof(task_t));
+                memset(task[i],0,itemsize*sizeof(task_t));
+            }
+            for(register int i=0;i<batchsize;++i) {
+                FREE(task[i],itemsize*sizeof(task_t));
+            }
+            ntasks-=batchsize;
         }
-        myalloc->free(task);
-
+        for(int i=0;i<ntasks;++i) {
+            task[i]= (task_t*)MALLOC(itemsize*sizeof(task_t));
+            memset(task[i],0,itemsize*sizeof(task_t));
+        }
+        for(register int i=0;i<ntasks;++i) {
+            FREE(task[i],itemsize*sizeof(task_t));
+        }
         return NULL; 
     }
 
     void svc_end() {
-        if (myalloc) FFA->deleteAllocator(myalloc);
+        //if (myalloc) FFA->deleteAllocator(myalloc);
+        if (myalloc) delete myalloc;
+#if defined(FF_ALLOCATOR) && defined(ALLOCATOR_STATS)
+        myalloc->deregisterAllocator();
+        myalloc->printstats(std::cout);
+#endif
     }
 
 private:
     ff_allocator * myalloc;
     int            itemsize;
     int            ntasks;
+    int            batchsize;
 };
 #endif 
 
@@ -157,28 +234,19 @@ private:
     int nworkers;
 };
 
-class Collector: public ff_node {
-public:
-    Collector(int itemsize):itemsize(itemsize) {}
-    void * svc(void * task) { 
-        FREE(task,itemsize*sizeof(task_t));
-        return GO_ON; 
-    }
-private:
-    int itemsize; // needed for TBB's allocators
-};
 
 int main(int argc, char * argv[]) {    
-    if (argc<4) {
+    if (argc<5) {
         std::cerr 
             << "use: "  << argv[0] 
-            << " ntasks num-integer-x-item #n\n";
+            << " ntasks num-integer-x-item batchsize #n\n";
         return -1;
     }
     
     unsigned int ntasks         = atoi(argv[1]);
     unsigned int itemsize       = atoi(argv[2]);
-    unsigned int nworkers       = atoi(argv[3]);    
+    unsigned int batch          = atoi(argv[3]);    
+    unsigned int nworkers       = atoi(argv[4]);    
 
     // arguments check
     if (nworkers<0 || !ntasks) {
@@ -188,34 +256,18 @@ int main(int argc, char * argv[]) {
 
     ALLOCATOR_INIT();
 
-    if (nworkers==0) {
-        ffTime(START_TIME);
-        for(unsigned int i=0;i<ntasks;++i) {
-            // allocates memory
-            void * task= MALLOC(itemsize*sizeof(task_t));
-            memset(task,0,itemsize*sizeof(task_t));
-            FREE(task,itemsize*sizeof(task_t));
-        }
-        ffTime(STOP_TIME);       
-        std::cerr << "DONE, time= " << ffTime(GET_TIME) << " (ms)\n";
-        return 0;
-    }
-    
     // create the farm object
     ff_farm<> farm;
     std::vector<ff_node *> w;
     for(unsigned int i=0;i<nworkers;++i) 
-        w.push_back(new Worker(itemsize,ntasks/nworkers));
+        w.push_back(new Worker(itemsize,ntasks/nworkers, batch));
     farm.add_workers(w);
     
     
     // create and add emitter object to the farm
     Emitter E(nworkers);
     farm.add_emitter(&E);
-    
-    Collector C(itemsize);
-    farm.add_collector(&C);
-    
+        
     // let's start
     if (farm.run_and_wait_end()<0) {
         error("running farm\n");

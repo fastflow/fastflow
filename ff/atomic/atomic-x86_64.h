@@ -31,7 +31,7 @@
  * on us. We need to use _exactly_ the address the user gave us,
  * not some alias that contains the same information.
  */
-typedef struct { volatile int counter; } atomic_t;
+typedef struct { volatile unsigned long counter; } atomic_t;
 
 #define ATOMIC_INIT(i)	{ (i) }
 
@@ -84,7 +84,7 @@ static __inline__ void atomic_dec(atomic_t *v)
 
 /* An 64bit atomic type */
 
-typedef struct { volatile long counter; } atomic64_t;
+typedef struct { volatile unsigned long counter; } atomic64_t;
 
 #define ATOMIC64_INIT(i)	{ (i) }
 
@@ -138,7 +138,7 @@ static __inline__ void atomic64_dec(atomic64_t *v)
 		: "m" (v->counter));
 }
 
-static __inline__ void atomic64_add(long i, atomic64_t *v)
+static __inline__ void atomic64_add(unsigned long i, atomic64_t *v)
 {
        __asm__ __volatile__(
 	       LOCK_PREFIX "addq %1,%0"
@@ -154,16 +154,16 @@ static __inline__ void atomic64_add(long i, atomic64_t *v)
  *
  * Atomically adds @i to @v and returns @i + @v
  */
-static __inline__ long atomic64_add_return(long i, atomic64_t *v)
+static __inline__ unsigned long atomic64_add_return(unsigned long i, atomic64_t *v)
 {
-	long __i = i;
+	unsigned long __i = i;
 	asm volatile(LOCK_PREFIX "xaddq %0, %1;"
 		     : "+r" (i), "+m" (v->counter)
 		     : : "memory");
 	return i + __i;
 }
 
-static __inline__ long atomic64_sub_return(long i, atomic64_t *v)
+static __inline__ unsigned long atomic64_sub_return(unsigned long i, atomic64_t *v)
 {
 	return atomic64_add_return(-i, v);
 }
@@ -175,7 +175,7 @@ static __inline__ long atomic64_sub_return(long i, atomic64_t *v)
  *
  * Atomically subtracts @i from @v.
  */
-static __inline__ void atomic64_sub(long i, atomic64_t *v)
+static __inline__ void atomic64_sub(unsigned long i, atomic64_t *v)
 {
 	__asm__ __volatile__(
 		LOCK_PREFIX "subq %1,%0"
@@ -193,9 +193,9 @@ static __inline__ void atomic64_sub(long i, atomic64_t *v)
  * indicated by comparing RETURN with OLD.
  */
 
-#define __xg(x) ((volatile long *)(x))
+#define __xg(x) ((volatile unsigned long *)(x))
 static __inline__ unsigned long cmpxchg8(volatile void *ptr, unsigned long old,
-				      unsigned long New)
+					 unsigned long New)
 {
 	unsigned long prev;
 	asm volatile(LOCK_PREFIX "cmpxchgq %1,%2"
@@ -212,12 +212,12 @@ static __inline__ unsigned long cmpxchg8(volatile void *ptr, unsigned long old,
  * @a: the amount to add to v...
  * @u: ...unless v is equal to u.
  *
- * Atomically adds @a to @v, so long as it was not @u.
+ * Atomically adds @a to @v, so unsigned long as it was not @u.
  * Returns non-zero if @v was not @u, and zero otherwise.
  */
-static inline int atomic64_add_unless(atomic64_t *v, long a, long u)
+static inline unsigned long atomic64_add_unless(atomic64_t *v, unsigned long a, unsigned long u)
 {
-	long c, old;
+	unsigned long c, old;
 	c = atomic64_read(v);
 	for (;;) {
 		if (unlikely(c == (u)))

@@ -25,7 +25,7 @@
  * on us. We need to use _exactly_ the address the user gave us,
  * not some alias that contains the same information.
  */
-typedef struct { volatile int counter; } atomic_t;
+typedef struct { volatile unsigned long counter; } atomic_t;
 
 #define ATOMIC_INIT(i)	{ (i) }
 
@@ -53,7 +53,7 @@ typedef struct { volatile int counter; } atomic_t;
  * 
  * Atomically adds @i to @v.
  */
-static __inline__ void atomic_add(int i, atomic_t *v)
+static __inline__ void atomic_add(unsigned long i, atomic_t *v)
 {
 	__asm__ __volatile__(
 		LOCK_PREFIX "addl %1,%0"
@@ -68,7 +68,7 @@ static __inline__ void atomic_add(int i, atomic_t *v)
  * 
  * Atomically subtracts @i from @v.
  */
-static __inline__ void atomic_sub(int i, atomic_t *v)
+static __inline__ void atomic_sub(unsigned long i, atomic_t *v)
 {
 	__asm__ __volatile__(
 		LOCK_PREFIX "subl %1,%0"
@@ -85,7 +85,7 @@ static __inline__ void atomic_sub(int i, atomic_t *v)
  * true if the result is zero, or false for all
  * other cases.
  */
-static __inline__ int atomic_sub_and_test(int i, atomic_t *v)
+static __inline__ unsigned long atomic_sub_and_test(unsigned long i, atomic_t *v)
 {
 	unsigned char c;
 
@@ -134,7 +134,7 @@ static __inline__ void atomic_dec(atomic_t *v)
  * returns true if the result is 0, or false for all other
  * cases.
  */ 
-static __inline__ int atomic_dec_and_test(atomic_t *v)
+static __inline__ unsigned long atomic_dec_and_test(atomic_t *v)
 {
 	unsigned char c;
 
@@ -153,7 +153,7 @@ static __inline__ int atomic_dec_and_test(atomic_t *v)
  * and returns true if the result is zero, or false for all
  * other cases.
  */ 
-static __inline__ int atomic_inc_and_test(atomic_t *v)
+static __inline__ unsigned long atomic_inc_and_test(atomic_t *v)
 {
 	unsigned char c;
 
@@ -173,7 +173,7 @@ static __inline__ int atomic_inc_and_test(atomic_t *v)
  * if the result is negative, or false when
  * result is greater than or equal to zero.
  */ 
-static __inline__ int atomic_add_negative(int i, atomic_t *v)
+static __inline__ unsigned long atomic_add_negative(unsigned long i, atomic_t *v)
 {
 	unsigned char c;
 
@@ -191,7 +191,7 @@ static __inline__ int atomic_add_negative(int i, atomic_t *v)
  *
  * Atomically adds @i to @v and returns @i + @v
  */
-static __inline__ int atomic_add_return(int i, atomic_t *v)
+static __inline__ unsigned long atomic_add_return(unsigned long i, atomic_t *v)
 {
 	int __i;
 #ifdef CONFIG_M386
@@ -217,7 +217,7 @@ no_xadd: /* Legacy 386 processor */
 #endif
 }
 
-static __inline__ int atomic_sub_return(int i, atomic_t *v)
+static __inline__ unsigned long atomic_sub_return(unsigned long i, atomic_t *v)
 {
 	return atomic_add_return(-i,v);
 }
@@ -247,12 +247,12 @@ static __inline__ unsigned long cmpxchg(volatile void *ptr, unsigned long old,
  * @a: the amount to add to v...
  * @u: ...unless v is equal to u.
  *
- * Atomically adds @a to @v, so long as @v was not already @u.
+ * Atomically adds @a to @v, so unsigned long as @v was not already @u.
  * Returns non-zero if @v was not @u, and zero otherwise.
  */
-static inline int atomic_add_unless(atomic_t *v, int a, int u)
+static inline unsigned long atomic_add_unless(atomic_t *v, unsigned long a, unsigned long u)
 {
-	int c, old;
+	unsigned long c, old;
 	c = atomic_read(v);
 	for (;;) {
 		if (unlikely(c == (u)))

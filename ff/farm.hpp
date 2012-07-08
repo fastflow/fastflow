@@ -48,7 +48,7 @@ protected:
         lb->set_barrier(barrier);
         if (gt) gt->set_barrier(barrier);
 
-        return (card + 1 + (gt?1:0));
+        return (card + 1 + (collector?1:0));
     }
 
     inline int prepare() {
@@ -94,7 +94,7 @@ public:
         worker_cleanup(worker_cleanup),
         max_nworkers(max_num_workers),
         emitter(NULL),collector(NULL),fallback(NULL),
-        lb(new LoadBalancer_t(max_num_workers)),gt(NULL),
+        lb(new lb_t(max_num_workers)),gt(new gt_t(max_num_workers)),
         workers(new ff_node*[max_num_workers]) {
         for(int i=0;i<max_num_workers;++i) workers[i]=NULL;
 
@@ -128,7 +128,11 @@ public:
             return -1;
         }
 
-        emitter = e;         
+        emitter = e;
+        if (in) {
+            assert(has_input_channel);
+            emitter->set_input_buffer(in);
+        }
         fallback=fb;
         if (lb->set_filter(emitter)) return -1;
         return lb->set_fallback(fallback);
@@ -170,22 +174,27 @@ public:
         return 0;
     }
 
+    // Add the Collector filter to the farm skeleton. 
+    // If c == NULL than a default collector will be added (i.e. gt).
+    //
     int add_collector(ff_node * c, bool outpresent=false) { 
-        if (collector) return -1; 
+        if (collector) {
+            error("add_collector: collector already defined!\n");
+            return -1; 
+        }
+        if (!gt)       return -1; 
 
         if (fallback) {
             error("FARM, cannot add collector filter with fallback function\n");
             return -1;
-        }
-        
-        if (!gt) gt = new Gatherer_t(max_nworkers);
-        collector = c; 
+        }        
+        collector = ((c!=NULL)?c:(ff_node*)gt);
         
         if (has_input_channel) { /* it's an accelerator */
             if (create_output_buffer(out_buffer_entries)<0) return -1;
         }
         
-        return gt->set_filter(collector);
+        return gt->set_filter(c);
     }
     
     /* If the collector is present, than the collector output queue 
@@ -198,7 +207,7 @@ public:
             error("FARM, cannot add feedback channels if the fallback function has been set in the Emitter\n");
             return -1;
         }
-        if (!gt) {
+        if (!collector) {
             if (lb->set_masterworker()<0) return -1;
             if (!has_input_channel) lb->skipfirstpop();
             return 0;
@@ -229,7 +238,7 @@ public:
         
         if (!prepared) if (prepare()<0) return -1;
 
-        if (gt && gt->run()<0) {
+        if (collector && gt->run()<0) {
             error("FARM, running gather module\n");
             return -1;
         }
@@ -262,30 +271,30 @@ public:
     int wait(/* timeval */ ) {
         int ret=0;
         if (lb->wait()<0) ret=-1;
-        if (gt) if (gt->wait()<0) ret=-1;
+        if (collector) if (gt->wait()<0) ret=-1;
         return ret;
     }
 
     int wait_freezing(/* timeval */ ) {
         int ret=0;
         if (lb->wait_freezing()<0) ret=-1;
-        if (gt) if (gt->wait_freezing()<0) ret=-1;
+        if (collector) if (gt->wait_freezing()<0) ret=-1;
         return ret; 
     } 
 
     void stop() {
         lb->stop();
-        if (gt) gt->stop();
+        if (collector) gt->stop();
     }
 
     void freeze() {
         lb->freeze();
-        if (gt) gt->freeze();
+        if (collector) gt->freeze();
     }
 
     void thaw() {
         lb->thaw();
-        if (gt) gt->thaw();
+        if (collector) gt->thaw();
     }
 
     /* check if the farm is frozen */
@@ -320,7 +329,7 @@ public:
     inline bool load_result(void ** task,
                             unsigned int retry=((unsigned int)-1),
                             unsigned int ticks=ff_gatherer::TICKS2WAIT) {
-        if (!gt) return false;
+        if (!collector) return false;
         for(unsigned int i=0;i<retry;++i) {
             if (gt->pop_nb(task)) {
                 if ((*task != (void *)FF_EOS)) return true;
@@ -335,17 +344,18 @@ public:
     //   false: no task present
     //   true : there is a new value, you should check if the task is an FF_EOS
     inline bool load_result_nb(void ** task) {
-        if (!gt) return false;
+        if (!collector) return false;
         return gt->pop_nb(task);
     }
     
     inline lb_t * const getlb() const { return lb;}
+    inline gt_t * const getgt() const { return gt;}
 
-    /* the returned time comprise the time spent in svn_init and 
+    /* the returned time comprises the time spent in svn_init and 
      * in svc_end methods
      */
     double ffTime() {
-        if (gt)
+        if (collector)
             return diffmsec(gt->getstoptime(),
                             lb->getstarttime());
 
@@ -363,7 +373,7 @@ public:
      *  methods
      */
     double ffwTime() {
-        if (gt)
+        if (collector)
             return diffmsec(gt->getwstoptime(),
                             lb->getwstartime());
 
@@ -383,7 +393,7 @@ public:
         out << "--- farm:\n";
         lb->ffStats(out);
         for(int i=0;i<nworkers;++i) workers[i]->ffStats(out);
-        if (gt) gt->ffStats(out);
+        if (collector) gt->ffStats(out);
     }
 #else
     void ffStats(std::ostream & out) { 
@@ -404,13 +414,23 @@ protected:
             error("FARM create_input_buffer, buffer already present\n");
             return -1;
         }
-        if (ff_node::create_input_buffer(nentries, fixedsize)<0) return -1;
+        if (emitter) {
+            if (emitter->create_input_buffer(nentries,fixedsize)<0) return -1;
+            in = emitter->get_in_buffer();
+        } else {
+            if (ff_node::create_input_buffer(nentries, fixedsize)<0) return -1;
+        }
         lb->set_in_buffer(in);
+
+        // old code
+        //if (ff_node::create_input_buffer(nentries, fixedsize)<0) return -1;
+        //lb->set_in_buffer(in);
+
         return 0;
     }
     
     int create_output_buffer(int nentries, bool fixedsize=false) {
-        if (!gt) {
+        if (!collector) {
             error("FARM with no collector, cannot create output buffer\n");
             return -1;
         }        
@@ -420,16 +440,18 @@ protected:
         }
         if (ff_node::create_output_buffer(nentries, fixedsize)<0) return -1;
         gt->set_out_buffer(out);
+        if ((ff_node*)gt != collector) collector->set_output_buffer(out);
         return 0;
     }
 
 
     int set_output_buffer(FFBUFFER * const o) {
-        if (!gt) {
+        if (!collector) {
             error("FARM with no collector, cannot set output buffer\n");
             return -1;
         }
         gt->set_out_buffer(o);
+        if ((ff_node*)gt != collector) collector->set_output_buffer(o);
         return 0;
     }
 
@@ -449,7 +471,7 @@ protected:
     ff_node          *  fallback;
 
     lb_t             * lb;
-    ff_gatherer      * gt;
+    gt_t             * gt;
     ff_node         ** workers;
 };
  

@@ -1,3 +1,17 @@
+* 04/07/12 - v.2.0.0xsxsx
+   - Currently distributed communication pattern implemented are: 
+     Unicast, Broadcast, Scatter, Gather_All, FromAny, OnDemand
+   - first distributed implementation based on ZeroMQ message library
+   - dnode class added, minor changes to node class
+* not-released - v.1.2.0
+   - added a new implementation of the unbounded MPMC queue
+   - added an implementation of the bounded Multi-Producer/Multi-Consumer 
+     queue by Dmitry Vyukov (www.1024cores.net)
+   - implemented all_gather
+   - moved from int to unsigned long for embedded atomic operations
+   - performance improvements in the ff_allocator for the test one to many
+   - Micheal Scott 2-locks MPMC queue implementation (two methods mp_push 
+     and mp_pop have been added to the dSPSC queue)
 * 22/04/11 - v.1.1.1
    - accelerator support implemented for the pipeline
    - ff_send_out improvment: more control over the number of retries, return
@@ -13,8 +27,8 @@
    - added the possibility to define workers' input queue size for the 
      on-demand scheduling policy (default value is 1 slot)
 * 22/04/11 - v.1.1.0
-   - MSqueue reworked and now not is in experimental state, it is working also 
-     on Windows OS and OSX. Removed DCAS and used CAS.
+   - MSqueue reworked, now it is not in the experimental state.
+     The queue is working also on Windows OS and OSX. Removed DCAS and used CAS.
    - removed some performance problems on Windows OS. 
    - slightly modified MPMC interface and usage
    - added Quicksort algo implementation which uses MPMC queue 

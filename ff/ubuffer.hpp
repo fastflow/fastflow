@@ -54,7 +54,7 @@
  *
  *  
  */
-
+#include <assert.h>
 #include <ff/dynqueue.hpp>
 #include <ff/buffer.hpp>
 #include <ff/spin-lock.hpp>
@@ -63,68 +63,97 @@
 #else
 #include <ff/atomic/atomic.h>
 #endif
-
 namespace ff {
+
+/* Do not change the following define unless you know what you're doing */
+#define INTERNAL_BUFFER_T SWSR_Ptr_Buffer  /* Lamport_Buffer */
 
 class BufferPool {
 public:
     BufferPool(int cachesize)
         :inuse(cachesize),bufcache(cachesize) {
         bufcache.init();
+#if defined(UBUFFER_STATS)
+        miss=0;hit=0;
+#endif
     }
     
     ~BufferPool() {
-        union { SWSR_Ptr_Buffer * b1; void * b2;} p;
+        union { INTERNAL_BUFFER_T * b1; void * b2;} p;
 
         while(inuse.pop(&p.b2)) {
-            p.b1->~SWSR_Ptr_Buffer();
+            p.b1->~INTERNAL_BUFFER_T();
             free(p.b2);
         }
         while(bufcache.pop(&p.b2)) {
-            p.b1->~SWSR_Ptr_Buffer();	    
+            p.b1->~INTERNAL_BUFFER_T();	    
             free(p.b2);
         }
     }
     
-    inline SWSR_Ptr_Buffer * const next_w(unsigned long size)  { 
-        union { SWSR_Ptr_Buffer * buf; void * buf2;} p;
+    inline INTERNAL_BUFFER_T * const next_w(unsigned long size)  { 
+        union { INTERNAL_BUFFER_T * buf; void * buf2;} p;
         if (!bufcache.pop(&p.buf2)) {
-            p.buf = (SWSR_Ptr_Buffer*)malloc(sizeof(SWSR_Ptr_Buffer));
-            new (p.buf) SWSR_Ptr_Buffer(size);
+#if defined(UBUFFER_STATS)
+            ++miss;
+#endif
+            p.buf = (INTERNAL_BUFFER_T*)malloc(sizeof(INTERNAL_BUFFER_T));
+            new (p.buf) INTERNAL_BUFFER_T(size);
 #if defined(uSWSR_MULTIPUSH)        
             if (!p.buf->init(true)) return NULL;
 #else
             if (!p.buf->init()) return NULL;
 #endif
         }
-        
+#if defined(UBUFFER_STATS)
+        else  ++hit;
+#endif  
         inuse.push(p.buf);
         return p.buf;
     }
     
-    inline SWSR_Ptr_Buffer * const next_r()  { 
-        union { SWSR_Ptr_Buffer * buf; void * buf2;} p;
+    inline INTERNAL_BUFFER_T * const next_r()  { 
+        union { INTERNAL_BUFFER_T * buf; void * buf2;} p;
         return (inuse.pop(&p.buf2)? p.buf : NULL);
     }
     
-    inline void release(SWSR_Ptr_Buffer * const buf) {
+    inline void release(INTERNAL_BUFFER_T * const buf) {
         buf->reset();
         if (!bufcache.push(buf)) {
-            buf->~SWSR_Ptr_Buffer();	    
+            buf->~INTERNAL_BUFFER_T();	    
             free(buf);
         }
     }
-    
+
+#if defined(UBUFFER_STATS)
+    inline unsigned long readPoolMiss() {
+        unsigned long m = miss;
+        miss = 0;
+        return m;
+    }
+    inline unsigned long readPoolHit() {
+        unsigned long h = hit;
+        hit = 0;
+        return h;
+    }
+#endif
+
 private:
+#if defined(UBUFFER_STATS)
+    unsigned long      miss,hit;
+    long padding1[longxCacheLine-2];    
+#endif
+
     dynqueue           inuse;
-    SWSR_Ptr_Buffer    bufcache;
+    INTERNAL_BUFFER_T  bufcache;
 };
     
 
-// unbounded buffer based on the SWSR_Ptr_Buffer 
+// unbounded buffer based on the INTERNAL_BUFFER_T 
 class uSWSR_Ptr_Buffer {
 private:
     enum {CACHE_SIZE=32};
+
 #if defined(uSWSR_MULTIPUSH)
     enum { MULTIPUSH_BUFFER_SIZE=16};
 
@@ -136,11 +165,14 @@ private:
 
         if (fixedsize) return false;
         // try to get a new buffer             
-        SWSR_Ptr_Buffer * t = pool.next_w(size);
-        if (!t) return false; // EWOULDBLOCK
+        INTERNAL_BUFFER_T * t = pool.next_w(size);
+        assert(t); // if (!t) return false; // EWOULDBLOCK
         buf_w = t;
         buf_w->multipush(multipush_buf,MULTIPUSH_BUFFER_SIZE);
         mcnt=0;
+#if defined(UBUFFER_STATS)
+        atomic_long_inc(&numBuffers);
+#endif
         return true;
     }
 #endif
@@ -150,11 +182,14 @@ public:
         buf_r(0),buf_w(0),size(n),fixedsize(fixedsize),
         pool(CACHE_SIZE) {
         init_unlocked(P_lock); init_unlocked(C_lock);
+#if defined(UBUFFER_STATS)
+        atomic_long_set(&numBuffers,0);
+#endif
     }
     
     ~uSWSR_Ptr_Buffer() {
         if (buf_r) {
-            buf_r->~SWSR_Ptr_Buffer();
+            buf_r->~INTERNAL_BUFFER_T();
             free(buf_r);
         }
         // buf_w either is equal to buf_w or is freed by BufferPool destructor
@@ -165,9 +200,9 @@ public:
 #if defined(uSWSR_MULTIPUSH)
         if (size<=MULTIPUSH_BUFFER_SIZE) return false;
 #endif
-        buf_r = (SWSR_Ptr_Buffer*)::malloc(sizeof(SWSR_Ptr_Buffer));
+        buf_r = (INTERNAL_BUFFER_T*)::malloc(sizeof(INTERNAL_BUFFER_T));
         if (!buf_r) return false;
-        new ((void *)buf_r) SWSR_Ptr_Buffer(size);
+        new ((void *)buf_r) INTERNAL_BUFFER_T(size);
 #if defined(uSWSR_MULTIPUSH)        
         if (!buf_r->init(true)) return false;
 #else
@@ -201,9 +236,12 @@ public:
             if (fixedsize) return false;
 
             // try to get a new buffer             
-            SWSR_Ptr_Buffer * t = pool.next_w(size);
-            if (!t) return false; // EWOULDBLOCK
+            INTERNAL_BUFFER_T * t = pool.next_w(size);
+            assert(t); //if (!t) return false; // EWOULDBLOCK
             buf_w = t;
+#if defined(UBUFFER_STATS)
+            atomic_long_inc(&numBuffers);
+#endif
         }
         //DBG(assert(buf_w->push(data)); return true;);
         buf_w->push(data);
@@ -251,17 +289,33 @@ public:
         if (buf_r->empty()) { // current buffer is empty
             if (buf_r == buf_w) return false;
             if (buf_r->empty()) { // we have to check again
-                SWSR_Ptr_Buffer * tmp = pool.next_r();
+                INTERNAL_BUFFER_T * tmp = pool.next_r();
                 if (tmp) {
                     // there is another buffer, release the current one 
                     pool.release(buf_r); 
                     buf_r = tmp;                    
+
+#if defined(UBUFFER_STATS)
+                    atomic_long_dec(&numBuffers);
+#endif
                 }
             }
         }
         //DBG(assert(buf_r->pop(data)); return true;);
         return buf_r->pop(data);
     }    
+
+#if defined(UBUFFER_STATS)
+    inline unsigned long queue_status() {
+        return (unsigned long)atomic_long_read(&numBuffers);
+    }
+    inline unsigned long readMiss() {
+        return pool.readPoolMiss();
+    }
+    inline unsigned long readHit() {
+        return pool.readPoolHit();
+    }
+#endif
 
   /* multi-consumers method. lock protected.
      *
@@ -274,7 +328,7 @@ public:
     }
     
     /* NOTE: this is not the real queue length
-     * but just a raw estimation.
+     * but just a rough estimation.
      *
      */
     inline unsigned long length() const {
@@ -287,17 +341,20 @@ public:
 private:
     // Padding is required to avoid false-sharing between 
     // core's private cache
-    SWSR_Ptr_Buffer * buf_r;
+    INTERNAL_BUFFER_T * buf_r;
     long padding1[longxCacheLine-1];
-    SWSR_Ptr_Buffer * buf_w;
+    INTERNAL_BUFFER_T * buf_w;
     long padding2[longxCacheLine-1];
 
     /* ----- two-lock used only in the mp_push and mp_pop methods ------- */
     lock_t P_lock;
     long padding3[longxCacheLine-sizeof(lock_t)];
-           lock_t C_lock;
+    lock_t C_lock;
     long padding4[longxCacheLine-sizeof(lock_t)];
     /* -------------------------------------------------------------- */
+#if defined(UBUFFER_STATS)
+    atomic_long_t numBuffers;
+#endif
 
 #if defined(uSWSR_MULTIPUSH)
     /* massimot: experimental code (see multipush)

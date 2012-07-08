@@ -42,7 +42,7 @@ namespace ff {
 #endif
 
 
-    enum { FF_EOS=0xffffffff, FF_EOS_NOFREEZE=(FF_EOS-0x1) , FF_GO_ON=(FF_EOS-0x2)};
+enum { FF_EOS=0xffffffff, FF_EOS_NOFREEZE=(FF_EOS-0x1) , FF_GO_ON=(FF_EOS-0x2)};
 
 #define GO_ON         (void*)ff::FF_GO_ON
 #define EOS_NOFREEZE  (void*)ff::FF_EOS_NOFREEZE
@@ -123,9 +123,12 @@ protected:
     }
 
     virtual ~ff_thread() {
+        // MarcoA 27/04/12: Moved to wait
+        /*
         if (pthread_attr_destroy(&attr)) {
             error("ERROR: ~ff_thread: pthread_attr_destroy fails!");
         }
+        */
     }
 
     void thread_routine() {
@@ -224,7 +227,11 @@ public:
             wait_freezing();
             thaw();           
         }
-        pthread_join(th_handle, NULL);
+        if (spawned)
+            pthread_join(th_handle, NULL);
+        if (pthread_attr_destroy(&attr)) {
+            error("ERROR: ff_thread.wait: pthread_attr_destroy fails!");
+        }
         spawned=false;
         return 0;
     }
@@ -232,7 +239,7 @@ public:
     // wait thread freezing
     int wait_freezing() {
         pthread_mutex_lock(&mutex);
-        while(!frozen) pthread_cond_wait(&cond_frozen,&mutex);
+        while(!frozen) pthread_cond_wait(&cond_frozen,&mutex);        
         pthread_mutex_unlock(&mutex);        
         return (init_error?-1:0);
     }
@@ -297,11 +304,13 @@ private:
     friend class ff_farm;
     friend class ff_pipeline;
     friend class ff_loadbalancer;
-	//class thWorker;
+    friend class ff_gatherer;
 
+protected:
     void set_id(int id) { myid = id;}
-    bool push(void * ptr) { return out->push(ptr); }
-    bool pop(void ** ptr) { return in->pop(ptr); } 
+    virtual inline bool push(void * ptr) { return out->push(ptr); }
+    virtual inline bool pop(void ** ptr) { return in->pop(ptr); } 
+    virtual inline void skipfirstpop(bool sk)   { skip1pop=sk;}
     bool skipfirstpop() const { return skip1pop; }
     
     virtual int create_input_buffer(int nentries, bool fixedsize=true) {
@@ -470,9 +479,11 @@ private:
         thWorker(ff_node * const filter):
             ff_thread(filter->barrier),filter(filter) {}
         
-        bool push(void * task) {
+        inline bool push(void * task) {
             //register int cnt = 0;
-            while (! filter->push(task)) {
+            /* NOTE: filter->push and not buffer->push because of the filter can be a dnode
+             */
+            while (! filter->push(task)) { 
                 // if (ch->thxcore>1) {
                 // if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
                 //    else ticks_wait(TICKS2WAIT);
@@ -484,8 +495,10 @@ private:
             return true;
         }
         
-        bool pop(void ** task) {
+        inline bool pop(void ** task) {
             //register int cnt = 0;       
+            /* NOTE: filter->push and not buffer->push because of the filter can be a dnode
+             */
             while (! filter->pop(task)) {
                 //if (ch->thxcore>1) {
                 //if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
@@ -498,8 +511,8 @@ private:
             return true;
         }
         
-        bool put(void * ptr) { return filter->put(ptr);}
-        bool get(void **ptr) { return filter->get(ptr);}
+        inline bool put(void * ptr) { return filter->put(ptr);}
+        inline bool get(void **ptr) { return filter->get(ptr);}
         
         void* svc(void * ) {
             void * task = NULL;
