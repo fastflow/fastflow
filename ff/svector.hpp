@@ -34,7 +34,8 @@ public:
     typedef T* iterator;
     typedef const T* const_iterator;
     typedef T vector_type;
-    
+
+    // NOTE: @param chunk is the allocation chunk and not the svector size
     svector(size_t chunk=SVECTOR_CHUNK):first(0),len(0),cap(0),chunk(chunk) {
         reserve(chunk);
     }
@@ -75,6 +76,16 @@ public:
         cap = newcapacity;
     }
     
+    inline void resize(size_t newsize) {
+        if (len >= newsize) {
+            while(len>newsize) pop_back();
+            return;
+        }
+        reserve(newsize);
+        while(len<newsize)
+            new (first + len++) vector_type();
+    }
+
     inline void push_back(const vector_type & elem) {
         if (len==cap) reserve(cap+chunk);	    
         new (first + len++) vector_type(elem); 
