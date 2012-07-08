@@ -73,6 +73,7 @@ public:
     }
 
     void * svc(void * task) {
+        assert(task);
         std::cout << "Stage1 got task\n";
         return task;
     }
@@ -118,9 +119,7 @@ public:
     int svc_init() {
         return ff_setPriority(priority_level);
     }
-
     void * svc(void * task) { return task;}
-
 private:
     int priority_level;
 };
@@ -172,7 +171,7 @@ int main(int argc, char * argv[]) {
     }
     farm.add_workers(w);
 #if 0
-    /* -- the following few lines of code shows how to start and immediatly 
+    /* -- the following few lines of code show how to start and immediatly 
      *    freeze all threads
      */
     farm.offload((void *)FF_EOS);
@@ -188,10 +187,9 @@ int main(int argc, char * argv[]) {
     /* ---------------------------------------------------- */
 #endif
     for(int i=0;i<iterations;++i) {
-        
-        // prepare a buch of tasks to be offloaded
+        // prepare a bunch of tasks to be offloaded
         int bunch = ::random() % mstreamlen;
-
+        printf("RUNNING  ITERATION %d num tasks=%d\n", i,bunch);
         if (farm.run_then_freeze()<0) {
             error("running farm\n");
             return -1;
@@ -207,7 +205,7 @@ int main(int argc, char * argv[]) {
             }
 
             // Try to get results, if there are any
-            // If there aren't any deadlock problems, the following piece 
+            // If no deadlock problems are present, the following piece 
             // of code can be moved outside the for-j loop using 
             // the synchronous load_result method.
             if (farm.load_result_nb(&result)) {

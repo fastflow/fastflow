@@ -104,7 +104,7 @@ public:
     
     /* initialize the circular buffer. */
     bool init(const bool startatlineend=false) {
-        if (buf) return false;
+        if (buf || (size==0)) return false;
 
 #if defined(SWSR_MULTIPUSH)
         if (size<MULTIPUSH_BUFFER_SIZE) return false;
@@ -257,6 +257,102 @@ public:
 #if defined(SWSR_MULTIPUSH)        
         mcnt   = 0;
 #endif        
+        memset(buf,0,size*sizeof(void*));
+    }
+
+    inline unsigned long length() const {
+        long len = pwrite-pread;
+        if (len>=0) return len;
+        return size+len;
+    }
+
+};
+
+
+/* Implementation of the well-known 
+ * Lamport's wait-free circular buffer.
+ *
+ */
+class Lamport_Buffer {
+private:
+    // Padding is required to avoid false-sharing between 
+    // core's private cache
+    volatile unsigned long    pread;
+    long padding1[longxCacheLine-1];
+    volatile unsigned long    pwrite;
+    long padding2[longxCacheLine-1];
+
+    const    unsigned long size;
+    void                   ** buf;
+    
+public:
+    Lamport_Buffer(unsigned long n, const bool=true):
+        pread(0),pwrite(0),size(n),buf(0) {
+    }
+    
+    ~Lamport_Buffer() {
+#if defined(_MSC_VER)
+        if (buf)::posix_memalign_free(buf);    
+#else	
+        if (buf)::free(buf);
+#endif          
+	}
+    
+    /* initialize the circular buffer. */
+    bool init() {
+        if (buf) return false;
+#if (defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED < 1060))
+        buf = (void **)::malloc(size*sizeof(void*));
+        if (!buf) return false;       
+#else
+        void * ptr;
+        if (posix_memalign(&ptr,longxCacheLine*sizeof(long),size*sizeof(void*))!=0)
+            return false;
+        buf=(void **)ptr;
+#endif
+        reset();
+        return true;
+    }
+
+    /* return true if the buffer is empty */
+    inline bool empty() { return (pwrite == pread);  }
+    
+    /* return true if there is at least one room in the buffer */
+    inline bool available()   { 
+        const unsigned long next = pwrite + ((pwrite+1>=size)?(1-size):1);
+        return (next != pread);
+    }
+   
+    inline unsigned long buffersize() const { return size; };
+    
+    inline bool push(void * const data) {
+        if (!data) return false;
+
+        const unsigned long next = pwrite + ((pwrite+1>=size)?(1-size):1);
+        if (next != pread) {
+            buf[pwrite] = data;
+            /* We have to ensure that all writes have been committed 
+             * in memory before we change the value of the pwrite
+             * reference otherwise the reader can read stale data.
+             */
+            WMB(); 
+            pwrite =next;
+            return true;
+        }
+        return false;
+    }
+
+    inline bool  pop(void ** data) {
+        if (!data) return false;       
+
+        if (empty()) return false;
+        *data = buf[pread];
+        pread += (pread+1 >= size) ? (1-size): 1;
+        return true;
+    }    
+    
+    inline void reset() { 
+        pread=pwrite=0; 
         memset(buf,0,size*sizeof(void*));
     }
 

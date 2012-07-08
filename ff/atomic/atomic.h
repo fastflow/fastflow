@@ -61,11 +61,11 @@ typedef atomic64_t atomic_long_t;
 
 #define ATOMIC_LONG_INIT(i)	ATOMIC64_INIT(i)
 
-static inline long atomic_long_read(atomic_long_t *l)
+static inline unsigned long atomic_long_read(atomic_long_t *l)
 {
 	atomic64_t *v = (atomic64_t *)l;
 
-	return (long)atomic64_read(v);
+	return atomic64_read(v);
 }
 
 static inline void atomic_long_set(atomic_long_t *l, long i)
@@ -82,11 +82,11 @@ static inline void atomic_long_inc(atomic_long_t *l)
 	atomic64_inc(v);
 }
 
-static inline long atomic_long_inc_return(atomic_long_t *l)
+static inline unsigned long atomic_long_inc_return(atomic_long_t *l)
 {
 	atomic64_t *v = (atomic64_t *)l;
 
-	return (long)atomic64_inc_return(v);
+	return atomic64_inc_return(v);
 }
 
 static inline void atomic_long_dec(atomic_long_t *l)
@@ -96,11 +96,11 @@ static inline void atomic_long_dec(atomic_long_t *l)
 	atomic64_dec(v);
 }
 
-static inline long atomic_long_dec_return(atomic_long_t *l)
+static inline unsigned long atomic_long_dec_return(atomic_long_t *l)
 {
 	atomic64_t *v = (atomic64_t *)l;
 
-	return (long)atomic64_dec_return(v);
+	return atomic64_dec_return(v);
 }
 
 static inline void atomic_long_add(long i, atomic_long_t *l)
@@ -118,11 +118,11 @@ static inline void atomic_long_sub(long i, atomic_long_t *l)
 }
 
 
-static inline long atomic_long_add_unless(atomic_long_t *l, long a, long u)
+static inline unsigned long atomic_long_add_unless(atomic_long_t *l, long a, long u)
 {
 	atomic64_t *v = (atomic64_t *)l;
 
-	return (long)atomic64_add_unless(v, a, u);
+	return atomic64_add_unless(v, a, u);
 }
 
 
@@ -135,11 +135,11 @@ typedef atomic_t atomic_long_t;
 
 #define ATOMIC_LONG_INIT(i)	ATOMIC_INIT(i)
 
-static inline long atomic_long_read(atomic_long_t *l)
+static inline unsigned long atomic_long_read(atomic_long_t *l)
 {
 	atomic_t *v = (atomic_t *)l;
 
-	return (long)atomic_read(v);
+	return atomic_read(v);
 }
 
 static inline void atomic_long_set(atomic_long_t *l, long i)
@@ -156,11 +156,11 @@ static inline void atomic_long_inc(atomic_long_t *l)
 	atomic_inc(v);
 }
 
-static inline long atomic_long_inc_return(atomic_long_t *l)
+static inline unsigned long atomic_long_inc_return(atomic_long_t *l)
 {
 	atomic_t *v = (atomic_t *)l;
 
-	return (long)atomic_inc_return(v);
+	return atomic_inc_return(v);
 }
 
 static inline void atomic_long_dec(atomic_long_t *l)
@@ -170,11 +170,11 @@ static inline void atomic_long_dec(atomic_long_t *l)
 	atomic_dec(v);
 }
 
-static inline long atomic_long_dec_return(atomic_long_t *l)
+static inline unsigned long atomic_long_dec_return(atomic_long_t *l)
 {
 	atomic_t *v = (atomic_t *)l;
 
-	return (long)atomic_dec_return(v);
+	return atomic_dec_return(v);
 }
 
 
@@ -192,11 +192,11 @@ static inline void atomic_long_sub(long i, atomic_long_t *l)
         atomic_sub(i, v);
 }
 
-static inline long atomic_long_add_unless(atomic_long_t *l, long a, long u)
+static inline unsigned long atomic_long_add_unless(atomic_long_t *l, long a, long u)
 {
 	atomic_t *v = (atomic_t *)l;
 
-	return (long)atomic_add_unless(v, a, u);
+	return atomic_add_unless(v, a, u);
 }
 
 #define atomic_long_cmpxchg(l, old, new) \

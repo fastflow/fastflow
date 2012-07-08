@@ -35,24 +35,32 @@ class ff_gatherer: public ff_thread {
 
 protected:
 
-    inline int getnworkers() const { return nworkers;}
-
     /* return values: -1 no worker selected
      *                [0..numworkers[ the number of worker selected
      */
     virtual inline int selectworker() { return (++nextr % nworkers); }
 
-
+    virtual inline void losetime_out() { 
+        FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
+        ticks_wait(TICKS2WAIT); 
+#if 0
+        FFTRACE(register ticks t0 = getticks());
+        usleep(TICKS2WAIT);
+        FFTRACE(register ticks diff=(getticks()-t0));
+        FFTRACE(lostpushticks+=diff;++pushwait);
+#endif
+    }
+    
     virtual inline void losetime_in() { 
-        //FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
-        //ticks_wait(TICKS2WAIT);
-        
+        FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
+        ticks_wait(TICKS2WAIT);
+#if 0        
         FFTRACE(register ticks t0 = getticks());
         usleep(TICKS2WAIT);
         FFTRACE(register ticks diff=(getticks()-t0));
         FFTRACE(lostpopticks+=diff;++popwait);
-    }
-
+#endif
+    }    
 
     // FIX: we have to find a way to use selectworker !!!
     virtual std::deque<ff_node *>::iterator  gather_task(void ** task, 
@@ -72,45 +80,53 @@ protected:
         return ite;
     }
 
+    virtual int all_gather(void *task, void **V) {
+        V[channelid]=task;
+        std::vector<int> retry;
 
-
-#if 0
-    /* try to collect one task from the pool of workers */
-    virtual void gather_task(void ** result) {
-        register int i=0;
-        do {
-            do {
-                nextr=selectworker();
-                if (workers[nextr]->get(result)) return;
-            } while(i++<nworkers);
-
-            losetime_in();
-            i=0;
-        } while(1);
-	}
-#endif
+        for(register int i=0;i<nworkers;++i) {
+            if(i!=channelid && !workers[i]->get(&V[i]))
+                retry.push_back(i);
+        }
+        while(retry.size()) {
+            channelid = retry.back();
+            if(workers[channelid]->get(&V[channelid]))
+                retry.pop_back();
+            else losetime_in();
+        }
+        for(register int i=0;i<nworkers;++i)
+            if (V[i] == (void *)FF_EOS || V[i] == (void*)FF_EOS_NOFREEZE)
+                return -1;
+        FFTRACE(taskcnt+=nworkers-1);
+        return 0;
+    }
 
     void push(void * task) {
-         while (! buffer->push(task)) {
-             // if (ch->thxcore>1) {
-             // if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
-             //    else ticks_wait(TICKS2WAIT);
-             //} else 
-             //FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
-             //ticks_wait(TICKS2WAIT);
-             FFTRACE(register ticks t0 = getticks());
-             usleep(TICKS2WAIT);
-             FFTRACE(register ticks diff=(getticks()-t0));
-             FFTRACE(lostpushticks+=diff;++pushwait);
-         }     
+        //register int cnt = 0;
+        if (!filter) {
+            while (! buffer->push(task)) {
+                // if (ch->thxcore>1) {
+                // if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
+                //    else ticks_wait(TICKS2WAIT);
+                //} else 
+                losetime_out();
+            }     
+            return;
+        }
+        while (! filter->push(task)) {
+            // if (ch->thxcore>1) {
+            // if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
+            //    else ticks_wait(TICKS2WAIT);
+            //} else 
+            losetime_out();
+        }     
     }
 
     bool pop(void ** task) {
         //register int cnt = 0;       
         if (!get_out_buffer()) return false;
         while (! buffer->pop(task)) {
-            //ticks_wait(TICKS2WAIT);
-            usleep(TICKS2WAIT);
+            losetime_in();
         } 
         return true;
     }
@@ -150,10 +166,12 @@ public:
 
     void set_out_buffer(FFBUFFER * const buff) { buffer=buff;}
 
-    /* return the channel id of the last pop 
+    /* returns the channel id of the last pop 
      *  
      */
     const int get_channel_id() const { return channelid;}
+
+    inline int getnworkers() const { return nworkers;}
 
     FFBUFFER * const get_out_buffer() const { return buffer;}
 
@@ -170,6 +188,12 @@ public:
         void * ret  = (void*)FF_EOS;
         void * task = NULL;
         bool outpresent  = (get_out_buffer() != NULL);
+
+        // the following case is possible when the collector is a dnode
+        if (!outpresent && filter && (filter->get_out_buffer()!=NULL)) {
+            outpresent=true;
+            set_out_buffer(filter->get_in_buffer());
+        }
 
         // contains current worker
         std::deque<ff_node *> availworkers; 
@@ -199,8 +223,8 @@ public:
             } else {
                 FFTRACE(++taskcnt);
                 if (filter)  {
+                    channelid = (*victim)->get_my_id();
                     FFTRACE(register ticks t0 = getticks());
-
                     task = filter->svc(task);
 
 #if defined(TRACE_FASTFLOW)
@@ -209,7 +233,6 @@ public:
                     ticksmin=(std::min)(ticksmin,diff);
                     ticksmax=(std::max)(ticksmax,diff);
 #endif    
-
                 }
 
                 // if the filter returns NULL we exit immediatly
@@ -224,7 +247,10 @@ public:
                     ret = (void*)FF_EOS;
                     break;
                 }                
-                if (outpresent) push(task);
+                if (outpresent) {
+                    if (filter) filter->push(task);
+                    else push(task);
+                }
             }
         } while((neos<nworkers) && (neosnofreeze<nworkers));
 

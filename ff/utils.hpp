@@ -36,7 +36,7 @@
 #include <string.h>
 
 #include <ff/cycle.h>
-
+#include <ff/spin-lock.hpp>
 
 namespace ff {
 
@@ -99,20 +99,27 @@ static inline void time_setzero(struct timeval & a) {
     a.tv_usec=0;
 }
 
-static inline double ffTime(int tag) {
+static inline double ffTime(int tag, bool lock=false) {
     static struct timeval tv_start = {0,0};
     static struct timeval tv_stop  = {0,0};
+    // needed to protect gettimeofday
+    // if multiple threads call ffTime
+    static lock_t L = {0}; 
 
     double res=0.0;
     switch(tag) {
     case START_TIME:{
+        spin_lock(L);
         gettimeofday(&tv_start,NULL);
+        spin_unlock(L);
     } break;
     case STOP_TIME:{
+        spin_lock(L);
         gettimeofday(&tv_stop,NULL);
+        spin_unlock(L);
         res = diffmsec(tv_stop,tv_start);
     } break;
-    case GET_TIME: {
+    case GET_TIME: {        
         res = diffmsec(tv_stop,tv_start);
     } break;
     default:

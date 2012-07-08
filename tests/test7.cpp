@@ -86,7 +86,6 @@ public:
             // start generating the stream...
             for(int i=0;i<streamlen;++i) {
                 t = (int *)ffalloc.malloc(sizeof(int));
-                //t = (int *)malloc(sizeof(int));
                 *t = i;
                 ff_send_out(t);
             }

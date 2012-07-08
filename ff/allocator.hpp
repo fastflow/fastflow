@@ -49,14 +49,17 @@
  * Note: In all the cases it is possible, it is better to use the ff_allocator
  *       as it allows more control and is more efficient.
  *
- *  
- *
  */
-
-/* - June  2008 first version
- *   March 2011 main rework
+/*
  *
- *   Author: Massimo Torquati <torquati@di.unipi.it> <massimotor@gmail.com>    
+ *   Author: 
+ *      Massimo Torquati <torquati@di.unipi.it> or <massimotor@gmail.com>    
+ *
+ *  - June  2008 first version
+ *  - March 2011 main rework
+ *  - June  2012  - performance improvement in getfrom_fb
+ *                - statistics cleanup
+ *
  */
 
 
@@ -102,15 +105,12 @@ static const int nslabs_default[N_SLABBUFFER] ={512,512,512,512,128,  64,  32,  
 struct all_stats {
     atomic_long_t      nmalloc;
     atomic_long_t      nfree;
-    atomic_long_t      freeok1;
-    atomic_long_t      freeok2;
     atomic_long_t      nrealloc;
     atomic_long_t      sysmalloc;
     atomic_long_t      sysfree;
     atomic_long_t      sysrealloc;
     atomic_long_t      hit;
     atomic_long_t      miss;
-    atomic_long_t      nleak;
     atomic_long_t      leakremoved;
     atomic_long_t      memallocated;
     atomic_long_t      memfreed;
@@ -123,15 +123,12 @@ struct all_stats {
     all_stats() {
         atomic_long_set(&nmalloc, 0);
         atomic_long_set(&nfree, 0);
-        atomic_long_set(&freeok1, 0);
-        atomic_long_set(&freeok2, 0);
         atomic_long_set(&nrealloc, 0);
         atomic_long_set(&sysmalloc, 0);
         atomic_long_set(&sysfree, 0);
         atomic_long_set(&sysrealloc, 0);
         atomic_long_set(&hit, 0);
         atomic_long_set(&miss, 0);
-        atomic_long_set(&nleak, 0);
         atomic_long_set(&leakremoved, 0);
         atomic_long_set(&memallocated, 0);
         atomic_long_set(&memfreed, 0);
@@ -154,9 +151,6 @@ struct all_stats {
             << "  cache miss  = " << (unsigned long)atomic_long_read(&miss)        << "\n"
             << "  leakremoved = " << (unsigned long)atomic_long_read(&leakremoved) << "\n\n"
             << "free          = " << (unsigned long)atomic_long_read(&nfree)       << "\n"
-            << "  ok1         = " << (unsigned long)atomic_long_read(&freeok1)      << "\n"
-            << "  ok2         = " << (unsigned long)atomic_long_read(&freeok2)      << "\n"
-            << "  leakinsert  = " << (unsigned long)atomic_long_read(&nleak)       << "\n"
             << "realloc       = " << (unsigned long)atomic_long_read(&nrealloc)    << "\n\n"
             << "mem. allocated= " << (unsigned long)atomic_long_read(&memallocated)<< "\n"
             << "mem. freed    = " << (unsigned long)atomic_long_read(&memfreed)    << "\n\n"
@@ -212,8 +206,9 @@ public:
 
         ALLSTATS(atomic_long_inc(&all_stats::instance()->segmalloc); atomic_long_add(segment_size, &all_stats::instance()->memallocated));
 
-        //uncomment the following line just to please valgrind
-        memset(ptr,0,segment_size);  // COMMETARE
+#if defined(MAKE_VALGRIND_HAPPY)
+        memset(ptr,0,segment_size);
+#endif
         return ptr;
     }
 
@@ -366,6 +361,11 @@ private:
         }
     }
 
+
+    //
+    // TODO: The following have to be checked if it can use the lastqueue index 
+    //       as in the getfrom_fb() method !!!!!
+    //
     inline void * getfrom_fb_delayed() {
         if (fb_size==1) return 0;
         for(register unsigned i=1;i<fb_size;++i) {
@@ -386,21 +386,19 @@ private:
         return b.ptr;
     }
 
-
+    // try to pop something out from the leak queue of one thread
     inline void * getfrom_fb() {
         void * buf = 0;
-
-        // fallback:
-        // try to pop something from the leak queue 
-        // of each threads
-        for(register unsigned i=0;i<fb_size;++i) {
-            if (fb[i]->leak->pop((void **)&buf)) {              
+        for(unsigned i=0;i<fb_size;++i) {
+            register unsigned k=(lastqueue+i)%fb_size;
+            if (fb[k]->leak->pop((void **)&buf)) {        
                 ALLSTATS(atomic_long_inc(&all_stats::instance()->leakremoved));
+                lastqueue=k;
                 return buf;
             }
         }
 
-        // the cache is empty
+        // the free buffers are empty
         return 0;
     }
 
@@ -557,7 +555,6 @@ public:
         else xtd = fb[entry];
         DBG(if (!xtd) abort());
         xtd->leak->push((void *)buf);
-        ALLSTATS(atomic_long_inc(&all_stats::instance()->freeok2));
         return false;
     }
 
@@ -584,6 +581,7 @@ private:
     SegmentAllocator * const alloc;  
     ff_allocator     * const mainalloc;
     const int                delayedReclaim;
+    unsigned                 lastqueue;
     svector<void *>          seglist;
 };
 

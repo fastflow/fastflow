@@ -55,8 +55,10 @@
 static inline long ff_getThreadID() {
 #if (defined(__GNUC__) && defined(__linux))
     return  gettid();
-#elif defined(__APPLE__) 
-    return (int) syscall (SYS_gettid); // does it work?
+#elif defined(__APPLE__)  && defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED >= 1060)
+    uint64_t tid;
+    pthread_threadid_np(NULL, &tid);
+    return (long) tid; // > 10.6 only
 #elif  (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
     return GetCurrentThreadId();
 #endif
@@ -264,7 +266,7 @@ size_t cache_line_size() {
     return line_size;
 }
 
-#elif defined(linux)
+#elif defined(__linux__)
 //#include <stdio.h>
 size_t cache_line_size() {
     FILE * p = 0;

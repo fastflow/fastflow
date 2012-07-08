@@ -37,12 +37,11 @@
 #include <iostream>
 #include <deque>
 #include <ff/node.hpp>   // for Barrier
+#include <ff/dynqueue.hpp>
 #include <ff/buffer.hpp>
 #include <ff/ubuffer.hpp>
-#include <ff/dynqueue.hpp>
 #include <ff/staticlinkedlist.hpp>
 #include <ff/spin-lock.hpp>
-#include <ff/atomic/atomic.h>
 #include <ff/cycle.h>
 #include <ff/mapping_utils.hpp>
 
@@ -86,7 +85,11 @@ MSqueue * b;
 staticlinkedlist * b;
 #else
 #if defined(FF_BOUNDED) // try circular SWSR buffer
+#if defined(LAMPORT)
+Lamport_Buffer    * b;
+#else
 SWSR_Ptr_Buffer   * b;
+#endif
 #else
 #if defined(FF_DYNAMIC)
 dynqueue * b;
@@ -143,19 +146,23 @@ static inline void PUSH(const int i) {
         for(register int j=0;j<8;++j) p[j]=i+j;
 #endif
 
+        //ticks_wait(0); // just to slow down a bit the producer
 #if defined(COMPUTES)
         x.a = 3.1415*f(x.a);
         p= (long *)(x.b);
 #endif
 
 #if !defined(USE_DEQUE)
+ #if defined(TWO_LOCK)
+       do ; while(!(b->mp_push(p)));
+ #else
 
-#if defined(MULTIPUSH)
+  #if defined(MULTIPUSH)
         do ; while(!(b->mpush(p)));
-#else 
+  #else 
 	    do ; while(!(b->push(p)));
-#endif
-
+  #endif
+ #endif // TWO_LOCK
 #else // USE_DEQUE
 
 	    LOCK(block);
@@ -216,6 +223,13 @@ void * P(void *) {
     
 
 void * C(void *) {
+#if defined(UBUFFER_STATS)
+    const int STATS_SAMPLE=1000;
+    std::vector<unsigned long> length, miss,hit;
+    length.reserve(ntasks/STATS_SAMPLE +1);
+    miss.reserve(ntasks/STATS_SAMPLE +1);
+    hit.reserve(ntasks/STATS_SAMPLE +1);
+#endif
 #if defined(USE_FFA) && !defined(_FFA_)
     ffa.register4free();
 #endif
@@ -263,7 +277,11 @@ void * C(void *) {
     while(!end) {
     retry:
 #if !defined(USE_DEQUE)
+  #if defined(TWO_LOCK)
+    if (b->mp_pop(&task.b)) {
+  #else
 	if (b->pop(&task.b)) {
+  #endif // TWO_LOCK
 #else 
 	LOCK(block);
 	if (b->size()) {
@@ -271,13 +289,12 @@ void * C(void *) {
 	    b->pop_front();
 	    UNLOCK(block);
 #endif
-
 	
 	    if (task.b == (void*)FF_EOS) { 
-		end=true;
+            end=true;
 	    } else {
 #if defined(COMPUTES)
-        y+= task.a - g(y);
+            y+= task.a - g(y);
 #else
 #if defined(NO_ALLOC)
             if (task.b != (void *)(0x1234+k))
@@ -293,6 +310,14 @@ void * C(void *) {
 #endif
 
 		++k;
+
+#if defined(UBUFFER_STATS)
+        if ((k%STATS_SAMPLE)==0){
+            length.push_back(b->queue_status());
+            miss.push_back(b->readMiss());
+            hit.push_back(b->readHit());
+        }
+#endif
 
 #if !defined(NO_ALLOC)		
 		free(task.b);
@@ -321,6 +346,18 @@ void * C(void *) {
         ++i;
     }
 #endif  
+
+#if defined(UBUFFER_STATS)
+    printf("\nlength:\n");
+    for(unsigned int i=0;i<length.size();++i)
+        printf("%ld ", length[i]);
+    printf("\nmiss:\n");
+    for(unsigned int i=0;i<miss.size();++i)
+        printf("%ld ", miss[i]);
+    printf("\nhit:\n");
+    for(unsigned int i=0;i<hit.size();++i)
+        printf("%ld ", hit[i]);
+#endif
 
 #if defined(COMPUTES)
     printf("result y=%f\n", y);
@@ -460,8 +497,13 @@ int main(int argc, char * argv[]) {
     b = new staticlinkedlist(size, true);
 #else
 #if defined(FF_BOUNDED)
+#if defined(LAMPORT)
+    b = new Lamport_Buffer(size);
+    if (b->init()<0) abort();
+#else
     b = new SWSR_Ptr_Buffer(size);
     if (b->init()<0) abort();
+#endif //LAMPORT
 #else
 #if defined(FF_DYNAMIC)
     b = new dynqueue(size,true);

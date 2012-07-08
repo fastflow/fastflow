@@ -40,10 +40,20 @@
 #include <ff/farm.hpp>
 #include <ff/allocator.hpp>
 #include <ff/cycle.h>
+#if defined(USE_PROC_AFFINITY)
+#include <ff/mapping_utils.hpp>
+#endif
+
 
 using namespace ff;
 
-typedef int task_t;
+typedef unsigned long task_t;
+#if defined(USE_PROC_AFFINITY)
+//WARNING: the following mapping targets dual-eight core Intel Sandy-Bridge 
+const int worker_mapping[]   = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31};
+const int collector_mapping  = 0;
+const int PHYCORES           = 32;
+#endif
 
 
 #if defined(USE_TBB)
@@ -72,9 +82,17 @@ static tbb::cache_aligned_allocator<char> * tbballocator=0;
 #include <ff/allocator.hpp>
 #define ALLOCATOR_INIT() 
 #define MALLOC(size)   (FFAllocator::instance()->malloc(size))
-#define FREE(ptr,size) (FFAllocator::instance()->free(ptr))
 
-#endif
+#if defined(DONT_USE_FFA)
+#define MAX_NUM_THREADS  64
+static ff_allocator* MYALLOC[MAX_NUM_THREADS]={0};
+#define FREE(ptr,id)  (MYALLOC[id]->free(ptr))
+#else
+#define FREE(ptr,unused) (FFAllocator::instance()->free(ptr))
+#endif //DONT_USE_FFA
+
+#endif 
+
 
 // uncomment the following line to test FFAllocator
 //#define TEST_FFA_MALLOC 1
@@ -128,8 +146,18 @@ public:
     Worker(int itemsize, int ntasks, long long nticks):
         myalloc(NULL),itemsize(itemsize),ntasks(ntasks),nticks(nticks) {
 
-        myalloc = new ff_allocator();
-        myalloc->init();
+        myalloc=new ff_allocator();		      
+        int slab = myalloc->getslabs(itemsize*sizeof(task_t));
+        int nslabs[N_SLABBUFFER];               
+        if (slab<0) {                           
+            if (myalloc->init()<0) abort();     
+        } else {                                
+            for(int i=0;i<N_SLABBUFFER;++i) {     
+                if (i==slab) nslabs[i]=8192;      
+                else nslabs[i]=0;                 
+            }                
+            if (myalloc->init(nslabs)<0) abort(); 
+        }                                       
     }
 
     ~Worker() {
@@ -138,9 +166,19 @@ public:
     
     // called just one time at the very beginning
     int svc_init() {
+#if defined(USE_PROC_AFFINITY)
+        if (ff_mapThreadToCpu(worker_mapping[get_my_id() % PHYCORES])!=0)
+            printf("Cannot map Worker %d CPU %d\n",get_my_id(),
+                   worker_mapping[get_my_id() % PHYCORES]);
+        //else printf("Thread %d mapped to CPU %d\n",get_my_id(), worker_mapping[get_my_id() % PHYCORES]);                                         
+#endif
+
         // create a per-thread allocator
 #if defined(FF_ALLOCATOR)
         myalloc->registerAllocator();
+#if defined(DONT_USE_FFA)
+        MYALLOC[get_my_id()]=myalloc;
+#endif
 #endif
         return 0;
     }
@@ -185,6 +223,12 @@ public:
     
     // called just one time at the very beginning
     int svc_init() {
+#if defined(USE_PROC_AFFINITY)
+        if (ff_mapThreadToCpu(worker_mapping[get_my_id() % PHYCORES])!=0)
+            printf("Cannot map Worker %d CPU %d\n",get_my_id(),
+                   worker_mapping[get_my_id() % PHYCORES]);
+        //else printf("Thread %d mapped to CPU %d\n",get_my_id(), worker_mapping[get_my_id() % PHYCORES]);                                         
+#endif
         // create a per-thread allocator
 #if defined(FF_ALLOCATOR)
         myalloc= FFAllocator::instance()->newAllocator();
@@ -255,13 +299,33 @@ private:
 
 class Collector: public ff_node {
 public:
-    Collector(int itemsize):itemsize(itemsize) {}
+    Collector(int itemsize, ff_gatherer*const gt):itemsize(itemsize),gt(gt) {}
+
+    int svc_init() {
+#if defined(USE_PROC_AFFINITY)
+        if (ff_mapThreadToCpu(collector_mapping)!=0)
+            printf("Cannot map Collector to CPU %d\n",collector_mapping);
+        //else  printf("Collector mapped to CPU %d\n", collector_mapping);                                                                                                                                         
+#endif
+        return 0;
+    }
+
+    // Even in this case we have 2 options:
+    // 1. to use the FFAllocator (the simplest option)
+    // 2. to use a local data structure which mantains the association between
+    //    the allocator and the worker id (you must define DONT_USE_FFA for this option)
     void * svc(void * task) { 
+#if defined(DONT_USE_FFA)
+        FREE(task, gt->get_channel_id());
+#else
+        // the size is required for TBB's allocator
         FREE(task,itemsize*sizeof(task_t));
+#endif
         return GO_ON; 
     }
 private:
     int itemsize; // needed for TBB's allocators
+    ff_gatherer*const gt;
 };
 
 int main(int argc, char * argv[]) {    
@@ -309,9 +373,8 @@ int main(int argc, char * argv[]) {
     for(unsigned int i=0;i<nworkers;++i) 
         w.push_back(new Worker(itemsize,ntasks/nworkers,nticks));
     farm.add_workers(w);
-    
-    
-    Collector C(itemsize);
+        
+    Collector C(itemsize,farm.getgt());
     farm.add_collector(&C);
     
     // let's start

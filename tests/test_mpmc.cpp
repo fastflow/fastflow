@@ -28,8 +28,9 @@
  * Simple test for the Multi-Producer/Multi-Consumer MSqueue.
  *
  * Author: Massimo Torquati
- *  December 2010
+ *  December 2010  first version
  *  April    2011  (major rework for the MSqueue)
+ *  April    2012  added the bounded/unbounded MPMC queues 
  *
  */
 #include <iostream>
@@ -54,23 +55,33 @@ struct queue_state *msq;
 #include <ff/MPMCqueues.hpp>
 
 #if defined(HAVE_CDSLIB)
-#if defined(SCALABLE_QUEUE)
-multiMSqueueCDS * msq;
+ #if defined(SCALABLE_QUEUE)
+  multiMSqueueCDS * msq;
+ #else
+#include <cds/container/msqueue.h>
+#include <cds/gc/hp.h>
+cds::container::MSQueue< cds::gc::HP, void*> * msq;  // which allocator ?
+ #endif
 #else
-cds::queue::MSQueue<cds::gc::hzp_gc, void *> * msq;
-#endif
-#else
-#if defined(SCALABLE_QUEUE)
-multiMSqueue    * msq;
-#else // !SCALABLE_QUEUE
-MSqueue         * msq;
-#endif // SCALABLE_QUEUE
+ #if defined(SCALABLE_QUEUE)
+  multiMSqueue    * msq;
+ #else // !SCALABLE_QUEUE
+  #if defined(BOUNDED_MPMC)
+   MPMC_Ptr_Queue  * msq;
+  #else
+   #if defined(UNBOUNDED_MPMC)
+    uMPMC_Ptr_Queue * msq;
+   #else
+    MSqueue         * msq;
+   #endif // UNBOUNDED_MPMC
+  #endif // BOUNDED_MPMC
+ #endif // SCALABLE_QUEUE
 #endif // HAVE_CDSLIB
 #endif // USE_LFDS
 
 const int MAX_NUM_THREADS=128;  // just an upper bound, it can be increased
 
-#if defined(SCALABLE_QUEUE) || defined(HAVE_CDSLIB)
+#if defined(SCALABLE_QUEUE) || defined(HAVE_CDSLIB) || defined(UNBOUNDED_MPMC)
 int nqueues=4;
 #endif
 int ntasks=0;                   // total number of tasks
@@ -117,7 +128,8 @@ static inline bool PUSH(int myid) {
 #if defined(USE_LFDS)
     do ; while( !queue_enqueue(msq, p ) );
 #else
-    do ; while(!(msq->push(p)));
+    void * p2= p;
+    do ; while(!(msq->push(p2)));
 #endif
 
     ++taskP[myid];
@@ -162,7 +174,7 @@ void * C(void * arg) {
 
     Barrier::instance()->doBarrier();
     while(1) {
-        if (!QUEUE_POP(task.b))  {
+        if (!QUEUE_POP(&task.b))  {
             backoff_pause();
             continue;
         }
@@ -176,7 +188,7 @@ void * C(void * arg) {
         ++taskC[myid];
     }
 
-    ffTime(STOP_TIME);
+    ffTime(STOP_TIME,true);
     
 #if defined(HAVE_CDSLIB)
     cds::threading::pthread::Manager::detachThread();
@@ -224,14 +236,25 @@ int main(int argc, char * argv[]) {
   #if defined(SCALABLE_QUEUE)
     msq = new multiMSqueueCDS(nqueues);
   #else
-    msq = new cds::queue::MSQueue<cds::gc::hzp_gc, void *>;
+    msq = new cds::container::MSQueue< cds::gc::HP, void*>;
+    if (!msq) abort();
   #endif
  #else
   #if defined(SCALABLE_QUEUE)
     msq = new multiMSqueue(nqueues);
   #else
-    msq = new MSqueue;
+   #if defined(BOUNDED_MPMC)
+    msq = new MPMC_Ptr_Queue(ntasks/2); // we set the size to half ntasks
     if (!msq->init()) abort();
+   #else
+    #if defined(UNBOUNDED_MPMC)
+     msq = new uMPMC_Ptr_Queue;
+     if (!msq->init(nqueues, ntasks/(2*nqueues))) abort();
+    #else
+     msq = new MSqueue;
+     if (!msq->init()) abort();
+    #endif // UNBOUNDED_MPMC
+   #endif // BOUNDED_MPMC
   #endif
  #endif
 #endif
@@ -244,9 +267,7 @@ int main(int argc, char * argv[]) {
 	C_handle = (pthread_t *) malloc(sizeof(pthread_t)*numC);
 	
     // define the number of threads that are going to partecipate....
-    Barrier::instance()->doBarrier(numP+numC);
-
-    ffTime(START_TIME);
+    Barrier::instance()->doBarrier(numP+numC+1);
 
     int * idC;
 	idC = (int *) malloc(sizeof(int)*numC);
@@ -264,7 +285,10 @@ int main(int argc, char * argv[]) {
             abort();
         }
     }
-    
+
+    ffTime(START_TIME);
+    Barrier::instance()->doBarrier();
+
     // wait all producers
     for(int i=0;i<numP;++i) {
         pthread_join(P_handle[i],NULL);
@@ -288,7 +312,7 @@ int main(int argc, char * argv[]) {
     bool wrong = false;
     for(int i=0;i<ntasks;++i)
         if (results[i] != i+1) {
-            std::cerr << "WRONG result in position " << i << "is " << results[i] << " should be " << i+1 << "\n";
+            std::cerr << "WRONG result in position " << i << " is " << results[i] << " should be " << i+1 << "\n";
             wrong = true;
         }
     if (!wrong)  std::cout << "Ok. Done!\n";

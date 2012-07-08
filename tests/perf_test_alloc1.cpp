@@ -26,7 +26,7 @@
  */
 
 /*
- * This test give the possibility to test different memory allocator
+ * This test gives the possibility to test different memory allocator
  * (libc, TBB, FastFlow, Hoard (compiling with USE_STANDARD and preloading the 
  *  Hoard library) )
  */
@@ -34,17 +34,26 @@
 #include <sys/types.h>
 //#include <unistd.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <ff/farm.hpp>
 #include <ff/cycle.h>
+#if defined(USE_PROC_AFFINITY)
+#include <ff/mapping_utils.hpp>
+#endif
 
 using namespace ff;
 
 typedef unsigned long task_t;
-
+#if defined(USE_PROC_AFFINITY)
+//WARNING: the following mapping targets dual-eight core Intel Sandy-Bridge 
+const int worker_mapping[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31};
+const int emitter_mapping  = 0;
+const int PHYCORES         = 16;
+#endif
 
 #if defined(USE_TBB)
 #include <tbb/scalable_allocator.h>
@@ -86,7 +95,7 @@ static ff_allocator * ffalloc = 0;
             if (ffalloc->init()<0) abort();     \
         } else {                                \
           for(int i=0;i<N_SLABBUFFER;++i) {     \
-              if (i==slab) nslabs[i]=1024;      \
+              if (i==slab) nslabs[i]=8192;      \
               else nslabs[i]=0;                 \
           }                                     \
           if (ffalloc->init(nslabs)<0) abort(); \
@@ -105,8 +114,15 @@ static ff_allocator * ffalloc = 0;
 class Worker: public ff_node {
 protected:
     void do_work(task_t * task, int size, long long nticks) {
-        for(register int i=0;i<size;++i)
+        for(register int i=0;i<size;++i) {
             task[i]+=1;
+
+            // task[i]+=sin(1.0/(task[i]));
+            // for(int j=0;j<3;++j) {
+            //     double a =(sin(1.0/cos(task[i]) + 1.12321321*sin(task[i]))* cos(task[i])/sin(task[i]));
+            //     task[i] += j+ ((double)a*a/3.14 - 12321321.1231);
+            // }
+        }
         
         ticks_wait(nticks);
     }
@@ -121,6 +137,12 @@ public:
             error("Worker, register4free fails\n");
             return -1;
         }
+#endif
+#if defined(USE_PROC_AFFINITY)
+        if (ff_mapThreadToCpu(worker_mapping[get_my_id() % PHYCORES])!=0)
+            printf("Cannot map Worker %d CPU %d\n",get_my_id(),
+                   worker_mapping[get_my_id() % PHYCORES]);
+        //else printf("Thread %d mapped to CPU %d\n",get_my_id(), worker_mapping[get_my_id() % PHYCORES]);                                                                                                     
 #endif
         return 0;
     }
@@ -163,6 +185,11 @@ public:
             error("Emitter, registerAllocator fails\n");
             return -1;
         }
+#endif
+#if defined(USE_PROC_AFFINITY)
+        if (ff_mapThreadToCpu(emitter_mapping)!=0)
+            printf("Cannot map Emitter to CPU %d\n",emitter_mapping);
+        //else  printf("Emitter mapped to CPU %d\n", emitter_mapping);                                                                                                                                         
 #endif
         return 0;
     }
@@ -243,7 +270,7 @@ int main(int argc, char * argv[]) {
     farm.ffStats(std::cout);
 #if defined(FF_ALLOCATOR) && defined(ALLOCATOR_STATS)
     ffalloc->deregisterAllocator();
-    ffalloc->printstats();
+    ffalloc->printstats(std::cout);
 #endif
 
     return 0;

@@ -13,8 +13,9 @@
   master-worker configuration
 - give the possibility to define a user-level 
   collection policy (in the same way as in the scheduling
-  policy)
+  policy) (DONE)
 - dynamic reconfiguration of the number of workers in the farm pattern
+  (ON GOING)
 
 
 Massimo Torquati
