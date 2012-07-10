@@ -132,7 +132,7 @@ public:
 	v=&msgv;
     }
 #if 0
-    void unmarshalling(svector<msg_t*>* v[],const int vlen,
+    void unmarshalling(svector<msg_t*>* const v[],const int vlen,
 		       void *& task) {
         assert(vlen==1 && v[0]->size()==2); 
 	mystring_t* p =static_cast<mystring_t*>(v[0]->operator[](0)->getData());
