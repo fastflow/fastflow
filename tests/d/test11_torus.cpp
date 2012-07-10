@@ -1,9 +1,9 @@
 /*
  *
  *             host0                           host1
- *       --------------------             -------------------
- *      |                    |           |                   |
- *      |                    |  UNICAST  |                   |
+ *       --------------------   UNICAST   -------------------
+ *      |                    |    or     |                   |
+ *      |                    |  ONDEMAND |                   |
  *    --|-> Node0 --> Node1 -|---------- |-> Node2 --> Node3 |--
  *   |  |                    |           |                   |  |
  *   |  |    (ff_pipeline)   |           |   (ff_pipeline)   |  |
@@ -31,7 +31,7 @@
 using namespace ff;
 
 #define NTASKS 10000
-#define COMM   zmqOnDemand
+#define COMM   zmqOnDemand /* zmq1_1 */
 
 class Node0: public ff_dnode<zmq1_1> {
 public:
@@ -62,13 +62,18 @@ public:
     }
 
 
-    // overriding the default prepare method
+    // overriding the default prepare and unmarshall methods
     void prepare(svector<msg_t*>*& v, size_t len,const int=-1) {
 	msgv.clear();
 	msgv.reserve(len);
 	msgv.push_back(&msg);
 	v=&msgv;
     }
+    void unmarshalling(svector<msg_t*>* const v[], const int vlen, void *& ptr) {
+	assert(vlen==1 && v[0]->size()==1); // in this example we have just 1 msg
+        ptr = v[0]->operator[](0)->getData();
+    }
+
 
 private:
     svector<msg_t*> msgv;
@@ -122,12 +127,16 @@ public:
 	return (new long(*(long*)task));
     }
 
-    // overriding the default prepare method
+    // overriding the default prepare and unmarshall methods
     void prepare(svector<msg_t*>*& v, size_t len,const int=-1) {
 	msgv.clear();
 	msgv.reserve(len);
 	msgv.push_back(&msg);
 	v=&msgv;
+    }
+    void unmarshalling(svector<msg_t*>* const v[], const int vlen, void *& ptr) {
+	assert(vlen==1 && v[0]->size()==1); // in this example we have just 1 msg
+        ptr = v[0]->operator[](0)->getData();
     }
 
 private:

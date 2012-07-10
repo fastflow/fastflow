@@ -106,7 +106,7 @@ public:
 	v=&msgv;
     }
 
-    void unmarshalling(svector<msg_t*>* v[], const int vlen, void *& ptr) {
+    void unmarshalling(svector<msg_t*>* const v[], const int vlen, void *& ptr) {
 	// potentially, I can receive multiple messages depending on 
 	// the fact that the sender has serialized the output data 
 	// in multiple parts (peraphs because the message is not 
