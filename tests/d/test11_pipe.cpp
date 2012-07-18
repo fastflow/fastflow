@@ -95,7 +95,7 @@ public:
 
     void * svc(void *task) {
 	printf("Node2 received %ld\n", *(long*)task);
-	return task;
+	return (new long(*(long*)task));
     }
 
     // overriding the default prepare method
@@ -130,6 +130,7 @@ class Node3: public ff_node {
 public:
     void *svc(void *task) {
 	printf("received %ld\n", *(long*)task);
+	delete ((long*)task);
 	return GO_ON;
     }
 };

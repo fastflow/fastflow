@@ -141,7 +141,13 @@ protected:
     } 
     
 public:
-
+    // The init method initializes the "external channel" (comm).
+    // It gets the name of the channel (name), the address on which listen or
+    // connect to (address), the number of peers (peers), the transport layer 
+    // to use (transp), a flag saying if the current dnode is the producer (p=true) 
+    // or the consumer (p=false) w.r.t. the communication pattern used, 
+    // the id of the dnode (nodeId) and finally the callback function that will be 
+    // called once when a message just sent is no longer in use by the run-time (cbk)
     int init(const std::string& name, const std::string& address,
              const int peers, typename CommImpl::TransportImpl* const transp, 
              const bool p, const int nodeId=-1, dnode_cbk_t cbk=0) {
@@ -160,8 +166,10 @@ public:
     }
         
     // serialization/deserialization methods
+    // The first prepare is used by the Producer (p=true in the init method)
+    // whereas the second prepare and the unmarshalling methods are used
+    // by the Consumer (p=false in the init method).
 
-    // Used by the PRODUCER
     // Used to prepare (non contiguous) output messages
     virtual void prepare(svector<iovec>& v, void* ptr, const int sender=-1) {
         struct iovec iov={ptr,sizeof(void*)};
@@ -177,9 +185,8 @@ public:
     //
     //
     
-    // Used by the CONSUMER
     // Used to give to the run-time a pool of messages on which
-    // input data can be received
+    // input message frames will be received
     // @param len is the number of input messages expected
     // @param sender is the message sender
     virtual void prepare(svector<msg_t*>*& v, size_t len, const int sender=-1) {
@@ -193,20 +200,31 @@ public:
         v = v2;
     }
     
-    // Used by the CONSUMER
-    //
+    // This method is called once when all frames of composing the message have been received
+    // by the run-time. Within that method, it is possible to convert or re-arrange 
+    // all the frames back to their original data or object layout. 
     virtual void unmarshalling(svector<msg_t*>* const v[], const int vlen, void *& task) {
         assert(vlen==1 && v[0]->size()==1); 
         task = v[0]->operator[](0)->getData();
         delete v[0];
     }
 
-    // this methed can be used to pass an additional parameter (the 2nd one) 
-    // to the callback function. Typically it is called in the prepare method
+    // This methed can be used to pass an additional parameter (the 2nd one) 
+    // to the callback function. Typically it is called in the prepare method of the
+    // producer.
     void setCallbackArg(void* arg) { callbackArg.push_back(arg);}
     
+    // runs the dnode as a stand-alone thread
+    // Typically, it should not be called by application code unless you want to have just
+    // a sequential dnode
     int  run(bool=false) { return  ff_node::run(); }    
+
+    // waits the thread to finish
     int  wait() { return ff_node::wait(); }    
+    
+    // jumps the first pop from the input queue or from the input 
+    // external channel. This is typically used in the first stage
+    // of a cyclic graph (e.g. the first stage of a torus pipeline)
     void skipfirstpop(bool sk)   { ff_node::skipfirstpop(sk); }
 
 protected:
