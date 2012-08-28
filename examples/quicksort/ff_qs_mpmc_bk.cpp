@@ -159,7 +159,7 @@ public:
         while(1) {
             ff_task * task;
             
-            while (!done && !QPOP((void*&)task)) {
+            while (!done && !QPOP((void**)task)) {
                 pthread_mutex_lock(&mutex);
                 if (numwaiting==(nworkers-1)) {                        
                     pthread_cond_broadcast(&cond);

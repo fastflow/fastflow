@@ -67,7 +67,7 @@ namespace ff {
 struct descriptor1_N {
     typedef zmqTransportMsg_t  msg_t;
     descriptor1_N(const std::string name, const int peers, zmqTransport* const  transport, const bool P):
-        name(name), socket(NULL),transport(transport),P(P),peers(peers),zmqHdrSet(false),transportIDs(peers) {
+        name(name), socket(NULL),transport(transport),P(P),peers(P?peers:1),zmqHdrSet(false),transportIDs(peers) {
         if (transport) 
             socket = transport->newEndPoint(!P); // NOTE: we want to use ZMQ_ROUTER at producer side
         
@@ -195,7 +195,7 @@ struct descriptor1_N {
         return true;
         }
     
-    // returns the total number of peers
+    // returns the total number of peers (NOTE: if !P,  peers is 1)
     inline const int getPeers() const { return peers;}
 
     const std::string        name;
@@ -322,7 +322,7 @@ struct descriptor1_N {
 struct descriptorN_1 {
     typedef zmqTransportMsg_t  msg_t;
     descriptorN_1(const std::string name, const int peers, zmqTransport* const  transport, const bool P):
-        name(name), socket(NULL),transport(transport),P(P),peers(peers),recvHdr(true), transportIDs(peers) {
+        name(name), socket(NULL),transport(transport),P(P),peers(P?1:peers),recvHdr(true), transportIDs(peers) {
         if (transport) socket = transport->newEndPoint(P);
         
         if (!P) {
@@ -481,7 +481,7 @@ struct descriptorN_1 {
         return true;    
     }
     
-    // returns the number of partners of the single communication
+    // returns the number of partners of the single communication (NOTE: if P, peers is 1)
     inline const int getPeers() const { return peers;}
     
     const std::string        name;
@@ -560,7 +560,8 @@ public:
     typedef msg_t              tosend_t;
     typedef msg_t              torecv_t;
     typedef descriptor1_N      descriptor;
-    //typedef descriptorN_1      descriptor;
+
+    enum {MULTIPUT=0 };
 
     zmq1_1():desc(NULL),active(false) {}
 
@@ -590,6 +591,7 @@ public:
     inline bool putmore(const tosend_t& msg) { return desc->sendmore(msg,0,ZMQ_SNDMORE);}
 
     inline bool put(const msg_t& msg, const int) { return desc->send(msg, 0, 0); }
+    inline bool putmore(const msg_t& msg, const int) { return desc->send(msg, 0, ZMQ_SNDMORE); }
 
     // receives the message header (should be called before get)
     inline bool gethdr(torecv_t& msg, int& peer) { peer=0; return desc->recvhdr(msg); }
@@ -597,7 +599,7 @@ public:
     // receives one message
     inline bool get(torecv_t& msg, int=0) { return desc->recv(msg); }
 
-    // returns the number of peers for one single communication
+    // returns the number of distinct messages for one single communication
     inline const int getToWait() const { return 1;}
     inline const int putToPerform() const { return 1;}
 
@@ -626,6 +628,8 @@ public:
     typedef msg_t              tosend_t;
     typedef msg_t              torecv_t;
     typedef descriptor1_N      descriptor;
+
+    enum {MULTIPUT=0 };
 
     zmqBcast():desc(NULL),active(false) {}
     zmqBcast(descriptor* D):desc(D),active(false) {}
@@ -666,9 +670,9 @@ public:
     // receives one message
     inline bool get(torecv_t& msg, int=0) { return desc->recv(msg); }
 
-    // returns the number of peers for one single communication
+    // returns the number of distinct messages for one single communication
     inline const int getToWait() const { return 1;}
-    inline const int putToPerform() const { return desc->getPeers();}
+    inline const int putToPerform() const { return 1;}
 
     // close pattern
     inline bool close() { 
@@ -697,6 +701,7 @@ public:
     typedef svector<msg_t>     torecv_t;
     typedef descriptorN_1      descriptor;
 
+    enum {MULTIPUT=0 };
 
     zmqAllGather():desc(NULL),active(false) {}
     zmqAllGather(descriptor* D):desc(D),active(false) {}
@@ -725,6 +730,14 @@ public:
     }
     
     inline bool putmore(const tosend_t& msg) { return desc->send(msg,ZMQ_SNDMORE);}
+
+    inline bool put(const msg_t& msg, const int) {
+        return put(msg);
+    }
+
+    inline bool putmore(const tosend_t& msg, const int) { 
+        return putmore(msg);
+    }
     
     // receives the message header ONLY from one peer (should be called before get)
     inline bool gethdr(msg_t& msg, int& peer) { 
@@ -745,7 +758,7 @@ public:
         return true;
     }
 
-    // returns the number of peers for one single communication
+    // returns the number of distinct messages for one single communication
     inline const int getToWait() const { return desc->getPeers();}
     inline const int putToPerform() const { return 1;}
 
@@ -776,6 +789,8 @@ public:
     typedef msg_t              tosend_t;
     typedef msg_t              torecv_t;
     typedef descriptorN_1      descriptor;
+
+    enum {MULTIPUT=0 };
 
     zmqFromAny():desc(NULL),active(false) {}
     zmqFromAny(descriptor* D):desc(D),active(false) {}
@@ -809,6 +824,10 @@ public:
         return desc->send(msg, 0); 
     }
 
+    inline bool putmore(const tosend_t& msg, const int) { 
+        return desc->send(msg,ZMQ_SNDMORE);
+    }
+
     // receives the message header (should be called before get)
     inline bool gethdr(msg_t& msg, int& peer) { 
         return desc->recvhdr(msg,peer);
@@ -824,7 +843,7 @@ public:
         return desc->recv(msg,useless);
     }
 
-    // returns the number of peers for one single communication
+    // returns the number of distinct messages for one single communication
     inline const int getToWait() const { return 1;}
     inline const int putToPerform() const { return 1;}
 
@@ -855,6 +874,8 @@ public:
     typedef msg_t              torecv_t;
     typedef descriptor1_N      descriptor;
 
+    enum {MULTIPUT=1 };
+
     zmqScatter():desc(NULL),active(false) {}
     zmqScatter(descriptor* D):desc(D),active(false) {}
 
@@ -882,13 +903,23 @@ public:
             if (!desc->send(msg[i], i, 0)) return false;
         return true;
     }
-    
+    // TODO
+    inline bool putmore(const tosend_t& msg) { 
+        return -1;
+    }
+
     inline bool put(const msg_t& msg, const int to) { 
         return desc->send(msg, to, 0); 
+    }
+    inline bool put(const msg_t& msg) { 
+        return -1;
     }
 
     inline bool putmore(const msg_t& msg, const int to) { 
         return desc->sendmore(msg,to,ZMQ_SNDMORE);
+    }
+    inline bool putmore(const msg_t& msg) { 
+        return -1;
     }
 
     // receives the message header (should be called before get)
@@ -897,7 +928,7 @@ public:
     // receives one message
     inline bool get(torecv_t& msg, int=0) { return desc->recv(msg); }
 
-    // returns the number of peers for one single communication
+    // returns the number of distinct messages for one single communication
     inline const int getToWait() const { return 1;}
     inline const int putToPerform() const { return desc->getPeers();}
 
@@ -936,6 +967,8 @@ public:
     typedef msg_t              tosend_t;
     typedef msg_t              torecv_t;
     typedef descriptor1_N      descriptor;
+
+    enum {MULTIPUT=0 };
 
     zmqOnDemand():desc(NULL),active(false),to(-1),requestsToWait(0),requestSent(false) {}
     zmqOnDemand(descriptor* D):desc(D),active(false),to(-1),requestsToWait(0),requestSent(false) {}
@@ -980,26 +1013,26 @@ public:
         return desc->sendmore(msg, to, ZMQ_SNDMORE);
     }
 
-    inline bool put(const tosend_t& msg, const int dest) {
+    inline bool put(const tosend_t& msg, const int dest, int flag=0) {
         if (dest<0) {  // sends the same message to all peers, usefull for termination
             for(int i=0;i<desc->getPeers();++i) {
                 to = i;
                 tosend_t _msg;
                 _msg.copy(const_cast<msg_t&>(msg));
-                if (!desc->send(_msg, to, 0)) { to=-1; return false;}
+                if (!desc->send(_msg, to, flag)) { to=-1; return false;}
                 ++requestsToWait;
             }
             return true;
         }
         if (To[dest]) {
-            if (!desc->send(msg, dest, 0)) { to=-1; return false;}
+            if (!desc->send(msg, dest, flag)) { to=-1; return false;}
             To[dest]=false;
             return true;
         }
         do {
             if (!desc->recvReq(to)) { to=-1; return false;}
             if (to == dest) {
-                if (!desc->send(msg, to, 0)) { to=-1; return false;}
+                if (!desc->send(msg, to, flag)) { to=-1; return false;}
                 return true;
             }
             assert(To[to]==false);
@@ -1008,6 +1041,9 @@ public:
 
         // not reached
         return false;
+    }
+    inline bool putmore(const tosend_t& msg, const int dest) {
+        return put(msg,dest,ZMQ_SNDMORE);
     }
 
     // receives the message header (should be called before get)
@@ -1023,6 +1059,11 @@ public:
         bool r=desc->recv(msg); 
         if (!requestSent && r) sendReq();
         return r;
+    }
+    // receives one message part
+    inline bool get(torecv_t& msg,int& peer) { 
+        peer=0;
+        return get(msg);
     }
 
     // close pattern
@@ -1042,10 +1083,8 @@ public:
         return true;
     }
 
-    // returns the number of peers for one single communication
+    // returns the number of distinct messages for one single communication
     inline const int getToWait() const { return 1;}
-    inline const int putToPerform() const { return 1;}
-
     inline void done() { requestSent=false; }
 
 protected:
@@ -1072,6 +1111,8 @@ public:
     typedef msg_t              torecv_t;
     typedef descriptor1_N      descriptor;
     
+    enum {MULTIPUT=0 };
+
     zmq1_N():desc(NULL),active(false) {}    
     zmq1_N(descriptor* D):desc(D),active(false) {}
     

@@ -1,4 +1,10 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*! \file gt.hpp
+ *  \brief Contains the \p ff_gatherer class and methods used to model the \a Collector node, 
+ *  which is optionally used to gather tasks coming from workers.
+ */
+
 #ifndef _FF_GT_HPP_
 #define _FF_GT_HPP_
 /* ***************************************************************************
@@ -25,6 +31,27 @@
 #include <ff/node.hpp>
 
 namespace ff {
+
+/*!
+ *  \ingroup low_level
+ *
+ *  @{
+ */
+
+/*!
+ *  \class ff_gatherer
+ *
+ *  \brief A class representing the \a Collector node in a \a Farm skeleton.
+ *
+ *  This class models the \p gatherer, which wraps all the methods and structures used by the \a 
+ *  Collector node in a \p Farm skeleton. The \p farm can be seen as a three-stages \p pipeline, the 
+ *  stages being a \p ff_node called \a emitter, a pool of \p ff_node called \a workers and - 
+ *  optionally - a \p ff_node called \a collector. The \a Collector node can be used to gather the 
+ *  results outcoming from the computations executed by the pool of \a workers. The \a collector can 
+ *  also be connected to the \a emitter node via a feedback channel, in order to create a 
+ *  \p farm-with-feedback skeleton.
+ *
+ */
 
 class ff_gatherer: public ff_thread {
 
@@ -139,6 +166,12 @@ protected:
 
 
 public:
+
+    /**
+     *  Constructor
+     *
+     *  Creates \a max_num_workers \p NULL pointers to worker objects
+     */
     ff_gatherer(int max_num_workers):
         nworkers(0),max_nworkers(max_num_workers),nextr(0),
         neos(0),neosnofreeze(0),channelid(-1),
@@ -151,6 +184,11 @@ public:
         for(int i=0;i<max_num_workers;++i) workers[i]=NULL;
     }
 
+    /**
+     *  Destructor
+     *
+     *  Deallocates dynamic memory spaces previoulsy allocated for workers
+     */
     ~ff_gatherer() { 
         if (workers) delete [] workers;
     }
@@ -322,7 +360,7 @@ private:
     int               channelid;
 
     ff_node         * filter;
-    ff_node        ** workers;
+    ff_node        ** workers;          /// Pointer to the pool (array) of \a Workers
     FFBUFFER        * buffer;
 
     struct timeval tstart;
@@ -342,6 +380,10 @@ private:
     ticks         tickstot;
 #endif
 };
+
+/*!
+ *  @}
+ */
 
 } // namespace ff
 

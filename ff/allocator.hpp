@@ -764,6 +764,10 @@ public:
         return 0;
     }
 
+
+    // BUG 2 FIX: free fails if memory has been previously allocated using the posix_memalign 
+    //            method with a size grater than MAX_SLABBUFFER_SIZE!!!!
+    //
     inline void   free(void * ptr) {
         if (!ptr) return;
         Buf_ctl  * buf = (Buf_ctl *)((char *)ptr - sizeof(Buf_ctl));

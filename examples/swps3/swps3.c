@@ -277,7 +277,7 @@ int main( int argc, char * argv[] ){
 				db = swps3_readNextSequence( dbLib, &dbLen);
 				dbName = swps3_getSequenceName(dbLib);
 			} else {
-				static char buffer[MAX_SEQ_LENGTH] __ALIGNED__;
+				__WIN_ALIGNED_16__ static char buffer[MAX_SEQ_LENGTH] __ALIGNED__;
 				ssize_t res;
 
 				db = buffer;

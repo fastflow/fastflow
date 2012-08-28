@@ -224,7 +224,7 @@ public:
     do {
       old_residual = cur_residual;
       for(unsigned int i=0; i<set.size(); ++i)
-	fuy(*(t->bmp), set[i], 0, t->bmp->width(), t->bmp->height(), alpha, beta, i, *pow_table_alfa);
+	fuy(*(t->bmp), set[i], /*0, */t->bmp->width(), t->bmp->height(), alpha, beta, i, *pow_table_alfa);
       cur_residual = reduce_residual<grayscale>(*(t->bmp), set, diff);
 #ifdef TIME
       ++cycles;

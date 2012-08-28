@@ -63,7 +63,7 @@ public:
     
     // initializes dnode
     int svc_init() {
-	ff_dnode<COMM2>::init(name, address, nHosts, transp, false,0);
+	ff_dnode<COMM2>::init(name, address, nHosts, transp, RECEIVER,0);
 	return 0;
     }
    
@@ -108,7 +108,7 @@ public:
     int svc_init() {
 	// the callback will be called as soon as the output message is no 
 	// longer in use by the transport layer
-	ff_dnode<COMM1>::init(name, address, nHosts, transp, true, 0, callback);  
+	ff_dnode<COMM1>::init(name, address, nHosts, transp, SENDER, 0, callback);  
 	return 0;
     }
     
@@ -148,7 +148,7 @@ public:
 	for(unsigned j=0;j<(taskSize*taskSize);++j)
 	    c[j] = j*1.0;	
 
-	ff_dnode<COMM1>::init(name, address, 1, transp, false, transp->getProcId());  
+	ff_dnode<COMM1>::init(name, address, 1, transp, RECEIVER, transp->getProcId());  
 	return 0;
     }
 
@@ -209,7 +209,7 @@ public:
     int svc_init() {
 	// the callback will be called as soon as the output message is no 
 	// longer in use by the transport layer
-	ff_dnode<COMM2>::init(name, address, 1, transp, true, transp->getProcId(),callback);  
+	ff_dnode<COMM2>::init(name, address, 1, transp, SENDER, transp->getProcId(),callback);  
 	return 0;
     }
 

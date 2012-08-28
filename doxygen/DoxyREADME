@@ -1,0 +1,37 @@
+*******************************************************
+*                                                     *
+* This README explains what to do in order to compile *
+* the Doxygen configuration file and obtain the html  *
+* version and the latex version.                      *
+*                                                     *
+*                                                     *
+* Author: Fabio Tordini                               *
+* Date  : 19/07/2012                                  *
+*                                                     *
+*******************************************************
+
+
+
+In order to compile the doxygen configuration file (FastFlow_doxygen)
+you need to install Doxygen following this links
+
+http://www.stack.nl/~dimitri/doxygen/download.html#latestsrc
+
+Once doxygen is installed in your machine type 
+
+$ doxygen FastFlow_doxygen
+
+doxygen will compile the existing documentation according to the 
+configuration specified and will produce its outputs in the 'doc/' 
+folder, in a 'html/' and 'latex/' folder, respectively.
+
+It is configured to produce html and latex output. More are available.
+
+In order to see the html documentation generated, open with a browser 
+the file 'index.html' inside the 'html/' folder.
+
+In order to see the latex documentation, open the 'latex/' folder and
+run 'make'. This will compile the latex sources and generate the 
+'refman.pdf' file, which is the actual reference manual.
+
+

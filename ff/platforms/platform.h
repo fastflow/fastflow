@@ -27,6 +27,7 @@
 #define INLINE __forceinline
 #define NOINLINE __declspec(noinline)
 #define CACHE_LINE_SIZE 64
+#define __WIN_ALIGNED_16__ __declspec(align(16))
 
 // Only x86 and x86_64 are currently supported for Windows OS
 INLINE void WMB() {} 
@@ -158,6 +159,11 @@ INLINE static int gettimeofday(struct timeval *tv, struct timezone *tz)
 #include <sys/time.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdlib.h>
+inline static void posix_memalign_free(void* mem)
+{
+    free(mem);
+}
 //#define __TICKS2WAIT 1000
 #else
 #   error "unknown platform"

@@ -10,16 +10,22 @@ using namespace std;
 //control structures
 //typedef grayscale_ctrl *ctrl_row;
 
+/**
+ * @param w the control-window size
+ * @param yy the control-window y-center
+ * @param xx the control-window x-center
+ * @return the number of valid pixels within the control-window
+ */
 template <typename T>
-int ctrl_px(Bitmap<T> &bmp, grayscale_ctrl a[], unsigned int w, bmp_size_t y, bmp_size_t x, bmp_size_t width, bmp_size_t height) {
-  int cw(w/2);
-  y -= cw;
-  x -= cw;
-  unsigned int n = 0;
+int ctrl_px(Bitmap<T> &bmp, grayscale_ctrl a[], bmp_size_t w, bmp_size_t yy, bmp_size_t xx, bmp_size_t width, bmp_size_t height) {
+  bmp_size_t cw(w/2);
+  //bmp_size_t y = yy - cw;
+  //bmp_size_t x = xx - cw;
+  int n = 0;
   for(bmp_size_t r=0; r<w; r++) //rows
     for(bmp_size_t c=0; c<w; c++) //columns
-      if((x+c >= 0) && (x+c < width) && (y+r >= 0) && (y+r < height))
-	a[n++] = (long)bmp.get(x+c, y+r);
+      if(((xx + c) >= cw) && ((xx + c) < (width + cw)) && ((yy + r) >= cw) && ((yy + r) < (height + cw)))
+	a[n++] = (long)bmp.get(xx + c - cw, yy + r - cw);
   return n;
 }
 
@@ -36,16 +42,17 @@ inline bool is_noisy(
 	      )
 {
   if (center==SALT || center==PEPPER) {
-    for(unsigned int ws=7, wi=0; ws<w_max; ws+=2, ++wi) {
+    unsigned int wi = 0;
+    for(bmp_size_t ws=7; ws<w_max; ws+=2, ++wi) {
       int ac = ctrl_px<grayscale>(bmp, c_array, ws, r, c, width, height);
       sort(c_array, c_array + ac);
       long min_cp = c_array[0];
       long med_cp = c_array[ac / 2];
       long max_cp = c_array[ac - 1];
       if((!(min_cp==med_cp && med_cp==max_cp)) || (ws>w_max))
-		//not homogeneous zone
-		if ((center==min_cp || center==max_cp || ws>w_max))
-		  return true; //noisy
+	//not homogeneous zone
+	if ((center==min_cp || center==max_cp || ws>w_max))
+	  return true; //noisy
     }
   }
   return false; //not noisy

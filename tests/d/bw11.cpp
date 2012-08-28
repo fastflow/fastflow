@@ -41,13 +41,14 @@ public:
 	size(size),name(name), address(address), transp(transp) {}
 
     int svc_init() {
-      ff_dnode<zmq1_1>::init(name, address, 1,transp,true, 0, callback);  
-      printf("Node1 start\n");
-      return 0;
+	ff_dnode<zmq1_1>::init(name, address, 1,transp,true, 0); //, callback);
+	printf("Node1 start\n");
+	return 0;
     }
     void * svc(void*) {
+	char* data=new char[size];
 	for(int i=0;i<COUNT;++i) {
-	    char* data=new char[size];
+	    //char* data=new char[size];
 	    ff_send_out((void*)data);
 	}
 	return NULL;

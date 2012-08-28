@@ -8,7 +8,7 @@ public:
   pow_table(float exp) {
     table = (float *)malloc(256 * sizeof(float));
     for(int i=0; i<256; ++i)
-      table[i] = pow(i, exp);
+      table[i] = pow((float)i, exp);
   }
 
   ~pow_table() {
