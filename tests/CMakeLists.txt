@@ -31,7 +31,7 @@ add_executable( test_torus test_torus.cpp )
 if (NOT(GCC_TOO_OLD))
   add_executable( test_mpmc test_mpmc.cpp)
   if (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
-    SET_TARGET_PROPERTIES(test_mpmc PROPERTIES COMPILE_FLAGS " -Wno-strict-aliasing -O6  -finline-functions ")
+    SET_TARGET_PROPERTIES(test_mpmc PROPERTIES COMPILE_FLAGS " -Wno-strict-aliasing -O3  -finline-functions ")
   endif (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
 endif (NOT(GCC_TOO_OLD))
  

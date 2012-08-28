@@ -41,7 +41,7 @@
 #define DIM 800
 #define ITERATION 1024
 
-inline  double diffmsec(struct timeval  a,  struct timeval  b) {
+double diffmsec(struct timeval  a,  struct timeval  b) {
   long sec  = (a.tv_sec  - b.tv_sec);
   long usec = (a.tv_usec - b.tv_usec);
     

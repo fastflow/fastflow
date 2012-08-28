@@ -14,6 +14,7 @@
 
 #ifndef XGETOPT_H
 #define XGETOPT_H
+#include <tchar.h> // MA, VS10
 
 extern int optind, opterr;
 extern TCHAR *optarg;

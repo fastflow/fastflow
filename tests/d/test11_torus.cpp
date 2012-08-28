@@ -31,7 +31,7 @@
 using namespace ff;
 
 #define NTASKS 10000
-#define COMM   zmqOnDemand /* zmq1_1 */
+#define COMM   zmq1_1
 
 class Node0: public ff_dnode<zmq1_1> {
 public:
@@ -40,7 +40,7 @@ public:
 	ntasks(NTASKS), name(name),address(address),transp(transp) { }
 
     int svc_init() {
-	ff_dnode<zmq1_1>::init(name, address,1, transp, false);
+	ff_dnode<zmq1_1>::init(name, address,1, transp,RECEIVER);
 	ff::ffTime(START_TIME);
 	return 0;
     }
@@ -97,7 +97,7 @@ public:
 	name(name), address(address), transp(transp) {}
 
     int svc_init() {
-	ff_dnode<COMM>::init(name, address,1, transp, true, 0, callback);  	
+	ff_dnode<COMM>::init(name, address,1, transp,SENDER, 0, callback);  	
 	return 0;
     }
 
@@ -119,7 +119,7 @@ public:
 	name(name),address(address),transp(transp) {}
 
     int svc_init() {
-	ff_dnode<COMM>::init(name, address,1, transp, false, 0);  
+	ff_dnode<COMM>::init(name, address,1, transp, RECEIVER, 0);  
 	return 0;
     }
 
@@ -157,7 +157,7 @@ public:
 	name(name),address(address),transp(transp) {}
 
     int svc_init() {
-	ff_dnode<zmq1_1>::init(name, address,1, transp, true, 0, callback);  
+	ff_dnode<zmq1_1>::init(name, address,1, transp, SENDER, 0, callback);  
 	return 0;
     }
 
@@ -185,7 +185,7 @@ int main(int argc, char * argv[]) {
     char * address2 = argv[5];  // no check
 
     // creates the network using 0mq as transport layer
-    zmqTransport transport(atoi(P)?0:1);
+    zmqTransport transport(0);
     if (transport.initTransport()<0) abort();
 
     if (atoi(P)) {

@@ -1,6 +1,6 @@
 #ifndef _SPD_CONVERGENCE_HPP
 #define _SPD_CONVERGENCE_HPP
-#include "utils.h"
+#include "utils.hpp"
 #include "bitmap.hpp"
 #include "control_structures.hpp"
 #include <vector>
@@ -63,7 +63,7 @@ void partial_reduce_residual_avg(Bitmap<T> &bmp,
     */
     diff[cluster_index][i] = (T)tmp;
   }
-  res[cluster_index]= (residual_t)sum / row[cluster_index].size();
+  res[cluster_index]= (residual_t)sum / (residual_t)row[cluster_index].size();
 }
 
 
@@ -77,12 +77,12 @@ template <typename T>
 residual_t residual_avg(vector<residual_t> &sets_residuals, vector<vector<T> > &diff, unsigned int n_noisy) {
   residual_t sum = 0;
   for (unsigned int k=0; k<sets_residuals.size(); ++k)
-    sum += diff[k].size() * sets_residuals[k];
+    sum += (residual_t)diff[k].size() * sets_residuals[k];
   return (sum / n_noisy);
 }
 
 template <typename T>
-residual_t residual_max(vector<residual_t> &sets_residuals, unsigned int n_noisy) {
+residual_t residual_max(vector<residual_t> &sets_residuals/*, unsigned int n_noisy*/) {
   residual_t max = 0;
   for (unsigned int k=0; k<sets_residuals.size(); ++k)
     max = _MAX(max, sets_residuals[k]);

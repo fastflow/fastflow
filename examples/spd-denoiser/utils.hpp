@@ -1,8 +1,9 @@
-#include "utils.h"
+#ifndef _SPS_UTILS_HPP_
+#define _SPS_UTILS_HPP_
+//#include "utils.h"
 #include <string>
 #include <ff/platforms/platform.h>
-#include <iostream>
-#ifdef CUDA
+#ifdef FF_WITH_CUDA
 #include <cuda_runtime_api.h>
 #include <cuda_utils/cutil.h>
 #include <cuda_utils/cutil_inline_runtime.h>
@@ -10,23 +11,24 @@
 using namespace std;
 
 //extract the filename from a path
-string get_fname(string &path) {
+static string get_fname(string &path) {
   size_t p = path.find_last_of("/") + 1;
   return path.substr(p, path.length() - p);
 }
 
 //funzioni per le misure di tempo
-long int get_usec_from(long int s) {
+static long int get_usec_from(long int s) {
   struct timeval tv;
   gettimeofday(&tv, NULL);
   return (tv.tv_sec * 1000000 + tv.tv_usec) - s;
 }
 
-#ifdef CUDA
-void get_cuda_env(int &corecount, bool verbose) {
+#ifdef FF_WITH_CUDA
+static void get_cuda_env(int &corecount, bool verbose) {
   try
     {
       int deviceCount = 0;
+      cudaGetDeviceCount(&deviceCount);
       cutilSafeCall(cudaGetDeviceCount(&deviceCount));
       if(verbose) {
 	if (deviceCount == 0)
@@ -78,3 +80,11 @@ void get_cuda_env(int &corecount, bool verbose) {
     }
 }
 #endif
+
+
+#define _ABS(a)	   (((a) < 0) ? -(a) : (a))
+#define _MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define _MIN(a, b) (((a) < (b)) ? (a) : (b))
+
+
+#endif //_SPS_UTILS_HPP_

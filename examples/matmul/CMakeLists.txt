@@ -20,8 +20,7 @@ target_link_libraries ( ff_matmul_v2 ${CMAKE_THREAD_LIBS_INIT}  )
 #set_target_properties ( ff_matmul_v2   PROPERTIES COMPILE_FLAGS "-O3" )
 #endif (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
 
-add_test( ff_matmul-3w-with-check    ${CMAKE_CURRENT_BINARY_DIR}/ff_matmul 3 1 )
-add_test( ff_matmul-3w-with-check ${CMAKE_CURRENT_BINARY_DIR}/ff_matmul_v2 4 1 )
-add_test( ff_matmul-3w-perf    ${CMAKE_CURRENT_BINARY_DIR}/ff_matmul
-3)
-add_test( ff_matmul_v2-3w-perf    ${CMAKE_CURRENT_BINARY_DIR}/ff_matmul_v2 3)
+add_test( ff_matmul-3w-with-check    ${CMAKE_CURRENT_BINARY_DIR}/ff_matmul 4 1 )
+add_test( ff_matmul-3w-with-check ${CMAKE_CURRENT_BINARY_DIR}/ff_matmul_v2 5 1 )
+add_test( ff_matmul-3w-perf    ${CMAKE_CURRENT_BINARY_DIR}/ff_matmul 4)
+add_test( ff_matmul_v2-3w-perf    ${CMAKE_CURRENT_BINARY_DIR}/ff_matmul_v2 5)

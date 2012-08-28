@@ -32,6 +32,7 @@
 
 #include "swps3.h"
 #include <sys/types.h>
+#include <stdint.h>
 
 typedef int8_t * SBMatrix;
 typedef double * DMatrix;

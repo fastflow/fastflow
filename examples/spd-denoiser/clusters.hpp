@@ -22,7 +22,7 @@
 */
 
 #include "definitions.h"
-#include "utils.h"
+#include "utils.hpp"
 #include "control_structures.hpp"
 #include <iostream>
 #include <vector>

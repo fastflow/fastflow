@@ -26,7 +26,8 @@ bool err_max_cycles(int c) {
 }
 
 bool err_bmp(string &nomefile) {
-  int l = nomefile.length();
+  //unsigned long long  l = nomefile.length();
+  unsigned long  l = nomefile.length();
   return l<5 || (string("bmp").compare(nomefile.substr(l - 3, 3)) != 0);
 }
 
@@ -79,7 +80,7 @@ void get_arguments(char *argv[], int argc, arguments &args) {
   while((opt = getopt(argc, argv, options)) != -1) {
     switch(opt) {
     case 'a': //alpha
-      args.alfa = atof(optarg);
+      args.alfa = (float)atof(optarg);
       if(err_alfa(args.alfa)) {
 	cerr << "ERROR in argument: a" << endl;
 	print_help();
@@ -87,7 +88,7 @@ void get_arguments(char *argv[], int argc, arguments &args) {
       }
       break;
     case 'b': //beta
-      args.beta = atof(optarg);
+      args.beta = (float)atof(optarg);
       if(err_beta(args.beta)){
 	cerr << "ERROR in argument: b" << endl;
 	print_help();

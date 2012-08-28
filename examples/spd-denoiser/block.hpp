@@ -3,60 +3,55 @@
 #include "definitions.h"
 #include "control_structures.hpp"
 #include <vector>
+#include <iterator>
 //#include <iostream>
 #include <algorithm>
 using namespace std;
 
 template <typename Tnoisy>
 void build_blocks(
-		  vector<vector<Tnoisy> > &noisy_sets,
-		  vector<vector<Tnoisy> > &noisy_sets_,
+		  vector<vector<Tnoisy> > &noisy_sets,  // dst
+		  vector<vector<Tnoisy> > &noisy_sets_, // src
 		  unsigned int n_noisy,
 		  unsigned int n_blocks
 		  )
 {
   unsigned int step = (n_noisy % n_blocks==0) ? n_noisy/n_blocks: 1+n_noisy/n_blocks;
   //block copy
-  unsigned int n_stored = 0;
+  unsigned long long n_stored = 0;
   unsigned int i_block = 0;
   unsigned int i_block_ = 0;
-  //dest
-  typename vector<Tnoisy>::const_iterator start_block = noisy_sets[0].begin();
-  typename vector<Tnoisy>::const_iterator end_block = start_block + step;
+  //dest 
   noisy_sets[0].reserve(step);
+  //typename vector<Tnoisy>::iterator start_block = noisy_sets[0].begin();
+  long long free_elem_in_dest = step;
   //source
   typename vector<Tnoisy>::const_iterator start_block_ = noisy_sets_[0].begin();
   typename vector<Tnoisy>::const_iterator end_block_ = noisy_sets_[0].end();
+  long long to_be_copied_in_src = end_block_-start_block_;
   while(n_stored < n_noisy) {
-    unsigned int free_block = end_block - start_block;
-    unsigned int unstored_block_ = end_block_ - start_block_;
-    if(unstored_block_ <= free_block) {
-      //store the whole source block
-      copy(start_block_, end_block_, back_inserter(noisy_sets[i_block]));
-      start_block += unstored_block_;
-      n_stored += unstored_block_;
-      //change source block
-      ++i_block_;
-      start_block_ = noisy_sets_[i_block_].begin();
-      end_block_ = noisy_sets_[i_block_].end();
-    }
-    else {
-      //partially store the source block
-      copy(start_block_, start_block_ + free_block, back_inserter(noisy_sets[i_block]));
-      //cerr << "ok copy" << endl;
-      start_block_ += free_block;
-      n_stored += free_block;
-      //change dest block
-      ++i_block;
-      start_block = noisy_sets[i_block].begin();
-      end_block = start_block + step;
-      noisy_sets[i_block].reserve(step);
-    }
+	   if (free_elem_in_dest==0) {
+		  ++i_block;
+		  free_elem_in_dest=step;
+		  noisy_sets[i_block].reserve(step);
+	  }
+	  if (to_be_copied_in_src==0) {
+		  ++i_block_;
+		  start_block_ = noisy_sets_[i_block_].begin();
+		  end_block_ = noisy_sets_[i_block_].end();
+		  to_be_copied_in_src=end_block_-start_block_;
+	  }
+	  long long to_be_copied = (std::min)(free_elem_in_dest, to_be_copied_in_src);
+	  copy(start_block_,end_block_, back_inserter(noisy_sets[i_block]));
+	  free_elem_in_dest-=to_be_copied;
+	  n_stored+=to_be_copied;
+	  to_be_copied_in_src-=to_be_copied;	 
   }
 }
 
 
 
+/*
 #ifdef BORDER
 template <typename T>
 void find_borders(
@@ -89,4 +84,5 @@ void find_borders(
   //cerr << "Halo points " << borders.size() << "\n";
 }
 #endif
+*/
 #endif

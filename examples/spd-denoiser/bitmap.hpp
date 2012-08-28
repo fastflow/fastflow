@@ -19,7 +19,7 @@ using namespace std;
 template <typename T = grayscale>
 struct bmp_point {
   T value;
-#if defined BORDER || defined FLAT
+#ifdef FLAT
   T backup;
   short block_index; // to be moved in ctrl? 
   bool has_backup; // to be moved in ctrl?
@@ -29,7 +29,7 @@ struct bmp_point {
  
   bmp_point() {
     noisy = 0;
-#if defined BORDER || defined FLAT
+#ifdef FLAT
     has_backup = false;
 #endif
   }
@@ -48,21 +48,11 @@ public:
 
   ~Bitmap() {
     for(bmp_size_t r=0; r<rows; r++)
-      free(bitmap[r]);
-    free(bitmap);
+      posix_memalign_free(bitmap[r]);
+    posix_memalign_free(bitmap);
   }
 
-#if defined BORDER 
-  inline void set_block_index(bmp_size_t x, bmp_size_t y, short index) {
-    bitmap[y][x].block_index = index;
-  }
-  inline short get_block_index(bmp_size_t x, bmp_size_t y) {
-    return(bitmap[y][x].block_index);
-  }
-  inline T get_with_backup(bmp_size_t x, bmp_size_t y) {
-	return (bitmap[y][x].has_backup ? bitmap[y][x].backup:bitmap[y][x].value);
-  }
-#elif defined FLAT
+#ifdef FLAT
   inline T get_with_backup(bmp_size_t x, bmp_size_t y) {
 	return (bitmap[y][x].has_backup ? bitmap[y][x].backup:bitmap[y][x].value);
   }
@@ -96,7 +86,7 @@ public:
     return columns;
   }
 
-#if defined FLAT || defined BORDER
+#ifdef FLAT
   inline void backup(bmp_size_t x, bmp_size_t y) {
     bitmap[y][x].backup = bitmap[y][x].value;
     bitmap[y][x].has_backup = true;

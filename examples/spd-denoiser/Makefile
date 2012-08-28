@@ -23,9 +23,9 @@
 #
 # ---------------------------------------------------------------------------
 
-CC                   = gcc-4.4
+CC                   = gcc
 #/usr/local/bin/gcc-4.5.1
-CXX 		     = g++-4.4
+CXX 		     = g++
 #/usr/local/bin/g++-4.5.1
 LINK_OPT             = 
 VERSION              = 
@@ -41,22 +41,22 @@ BIN 		     = ./bin/
 NVCC_ = /usr/local/cuda/bin/nvcc
 NVCC  := $(NVCC_) -ccbin /usr/bin
 NVCCFLAGS += $(INCS) -m64 --use_fast_math -I./cuda/cuda_utils -I./cuda
-LIB_CUDA := -L/usr/local/cuda/lib -lcudart
+LIB_CUDA := -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib -lcudart
 
 
-SRCS = driver.cpp parameters.cpp utils.cpp cuda/cuda_kernel.cu
+SRCS = driver.cpp parameters.cpp cuda/cuda_kernel.cu
 INCLUDES = $(INCS)
 TARGET = spd_ff spd_cuda
 TARGET_EXTRA = spd_cuda_pinned spd_ff_border spd_ff_nd spd_ff_cascade
 
-COMMON_VARIANT_FLAGS = -DTIME -DAVG_TERMINATION #-DPASSES
+COMMON_VARIANT_FLAGS = -DTIME -DAVG_TERMINATION # -DSEQ_DETECTION #-DPASSES
 
 .SUFFIXES: .c .cpp .cu .o #.cudaversion.cpp
 
 all: $(TARGET)
 
 #ff (default: flat)
-FF_OBJ = parameters.ff.o driver.ff.o utils.ff.o
+FF_OBJ = parameters.ff.o driver.ff.o #utils.ff.o
 FF_FLAGS = -DFLAT $(COMMON_VARIANT_FLAGS)
 spd_ff: $(FF_OBJ)
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $(BIN)$@ $^ $(LDFLAGS) $(LIBS)
@@ -64,7 +64,7 @@ spd_ff: $(FF_OBJ)
 	$(CXX) -c $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) $(FF_FLAGS) -o $@ $<
 
 #ff_cascade
-FF_CASCADE_OBJ = parameters.ff_cascade.o driver.ff_cascade.o utils.ff_cascade.o
+FF_CASCADE_OBJ = parameters.ff_cascade.o driver.ff_cascade.o #utils.ff_cascade.o
 FF_CASCADE_FLAGS = -DCLUSTER $(COMMON_VARIANT_FLAGS)
 spd_ff_cascade: $(FF_CASCADE_OBJ)
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $(BIN)$@ $^ $(LDFLAGS) $(LIBS)
@@ -72,8 +72,8 @@ spd_ff_cascade: $(FF_CASCADE_OBJ)
 	$(CXX) -c $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) $(FF_CASCADE_FLAGS) -o $@ $<
 
 #cuda
-CUDA_OBJ = parameters.cuda.o driver.cuda.o utils.cuda.o cuda/cuda_kernel.cu.o
-CUDA_VARIANT_FLAGS = $(COMMON_VARIANT_FLAGS) -DCUDA
+CUDA_OBJ = parameters.cuda.o driver.cuda.o cuda/cuda_kernel.cu.o # utils.cuda.o
+CUDA_VARIANT_FLAGS = $(COMMON_VARIANT_FLAGS) -DFF_WITH_CUDA
 NVCCFLAGS_ = $(NVCCFLAGS)
 
 %.cuda.o: %.cpp
@@ -88,7 +88,7 @@ spd_cuda: $(CUDA_OBJ)
 
 
 #ff_border
-FF_BORDER_OBJ = parameters.ff_border.o driver.ff_border.o utils.ff_border.o
+FF_BORDER_OBJ = parameters.ff_border.o driver.ff_border.o # utils.ff_border.o
 FF_BORDER_FLAGS = -DBORDER $(COMMON_VARIANT_FLAGS)
 spd_ff_border: $(FF_BORDER_OBJ)
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $(BIN)$@ $^ $(LDFLAGS) $(LIBS)
@@ -96,7 +96,7 @@ spd_ff_border: $(FF_BORDER_OBJ)
 	$(CXX) -c $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) $(FF_BORDER_FLAGS) -o $@ $<
 
 #ff_nd
-FF_STD_OBJ = parameters.ff_nd.o driver.ff_nd.o utils.ff_nd.o
+FF_STD_OBJ = parameters.ff_nd.o driver.ff_nd.o # utils.ff_nd.o
 FF_STD_FLAGS = $(COMMON_VARIANT_FLAGS)
 spd_ff_nd: $(FF_STD_OBJ)
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $(BIN)$@ $^ $(LDFLAGS) $(LIBS)
@@ -104,8 +104,8 @@ spd_ff_nd: $(FF_STD_OBJ)
 	$(CXX) -c $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) $(FF_STD_FLAGS) -o $@ $<
 
 #cuda_pinned
-CUDA_OBJ_ = parameters.pinned.o driver.pinned.o utils.pinned.o cuda/cuda_kernel.cu.pinned.o
-NVCCFLAGS_PINNED = $(NVCCFLAGS) -DCUDA_PINNED_MEMORY
+CUDA_OBJ_ = parameters.pinned.o driver.pinned.o  cuda/cuda_kernel.cu.pinned.o # utils.pinned.o
+NVCCFLAGS_PINNED = $(NVCCFLAGS) -DFF_WITH_CUDA_PINNED_MEMORY
 
 %.pinned.o: %.cpp
 	$(NVCC) $(NVCCFLAGS_PINNED) -c $(CUDA_VARIANT_FLAGS) -o $@ $<

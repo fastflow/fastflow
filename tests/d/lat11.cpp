@@ -32,7 +32,7 @@
 #include <ff/pipeline.hpp>
 #include <ff/utils.hpp>
 
-const long int ROUNDTRIP_COUNT=100000;
+const long int ROUNDTRIP_COUNT=1000000;
 
 using namespace ff;
 

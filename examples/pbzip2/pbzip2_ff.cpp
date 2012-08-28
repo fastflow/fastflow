@@ -381,7 +381,7 @@ public:
 				return -1;
 			}
 		}	
-		
+		return 0;
 	}
 	
 	void * svc(void * t) {      
@@ -925,7 +925,7 @@ public:
 		OFF_T inSize = 0;
 		int blockNum = 0;
 		int ret = 0;
-		int pret = -1;
+		//int pret = -1;
 		
 		// We will now totally ignore the fileSize and read the data as it
 		// comes in. Aside from allowing us to process arbitrary streams, it's
@@ -1751,7 +1751,7 @@ void usage(char* progname, const char *reason)
  */
 int main(int argc, char* argv[])
 {
-	pthread_t output;
+	//pthread_t output;
 	char **FileList = NULL;
 	char *InFilename = NULL;
 	char *progName = NULL;

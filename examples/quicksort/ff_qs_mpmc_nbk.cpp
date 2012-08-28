@@ -183,7 +183,7 @@ public:
         while(1) {
             ff_task * task;
             
-            while (!done && !QPOP((void*&)task)) {
+            while (!done && !QPOP((void**)task)) {
                 if (atomic_long_read(&numtasks) == 0) done=true;
                 backoff_pause();
             }

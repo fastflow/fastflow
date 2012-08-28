@@ -38,10 +38,10 @@ INCS                 = -I. -I.. -I../../../.. -I../.. -I../../.. -I../cuda -I../
 LIBS                 = -lpthread -lopencv_core -lopencv_video -lopencv_highgui -lopencv_imgproc -lopencv_features2d -lopencv_legacy -L/opt/local/lib
 BIN 		     = ./bin/
 
-DEFINITIONS := -DSEQ_DETECTION #-DTIME
+DEFINITIONS := #-DSEQ_DETECTION #-DTIME
 NVCC  := nvcc -ccbin /usr/bin
-NVCCFLAGS += $(DEFINITIONS) $(INCS) -m64 --use_fast_math -arch=sm_11 -I./cuda_utils -DCUDA -DSEQ_DETECTION #-DCUDA_PINNED_MEMORY
-LIB_CUDA := -L/usr/local/cuda/lib -lcudart
+NVCCFLAGS += $(DEFINITIONS) $(INCS) -m64 --use_fast_math -arch=sm_11 -I./cuda_utils -DFF_WITH_CUDA -DSEQ_DETECTION #-DCUDA_PINNED_MEMORY
+LIB_CUDA :=  -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib -lcudart
 
 INCLUDES             = -I. $(INCS) 
 TARGET               = tctfb_ff tctfb_ff_cuda #seq_video	

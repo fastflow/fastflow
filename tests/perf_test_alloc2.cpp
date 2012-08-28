@@ -338,7 +338,7 @@ int main(int argc, char * argv[]) {
     
     unsigned int ntasks         = atoi(argv[1]);
     unsigned int itemsize       = atoi(argv[2]);
-    unsigned int nworkers       = atoi(argv[3]);    
+    int nworkers                = atoi(argv[3]);    
     long long    nticks         = strtoll(argv[4],NULL,10);
 
 	std::cerr << "ticks " << nticks << "\n";
@@ -370,7 +370,7 @@ int main(int argc, char * argv[]) {
     farm.add_emitter(&E);
     
     std::vector<ff_node *> w;
-    for(unsigned int i=0;i<nworkers;++i) 
+    for(int i=0;i<nworkers;++i) 
         w.push_back(new Worker(itemsize,ntasks/nworkers,nticks));
     farm.add_workers(w);
         

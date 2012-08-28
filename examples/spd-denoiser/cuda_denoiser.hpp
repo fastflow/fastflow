@@ -2,7 +2,7 @@
 #define __CUDA_DENOISER_HPP__
 
 #include <cuda_dispatcher.hpp>
-#include <utils.h>
+#include "utils.hpp"
 //#include "pow_table.hpp"
 #include <convergence.hpp>
 

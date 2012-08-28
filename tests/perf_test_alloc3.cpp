@@ -178,7 +178,9 @@ public:
     }
 
     void * svc(void *) {
-        task_t* task[batchsize];
+        //task_t* task[batchsize];
+		task_t **task;
+		task = (task_t **) MALLOC(batchsize*sizeof(task_t *));
 
         int numbatch = ntasks/batchsize;
         for(int j=0;j<numbatch;++j) {              
@@ -198,8 +200,9 @@ public:
         for(register int i=0;i<ntasks;++i) {
             FREE(task[i],itemsize*sizeof(task_t));
         }
+		FREE(task,batchsize*sizeof(task_t *));
         return NULL; 
-    }
+	}
 
     void svc_end() {
         //if (myalloc) FFA->deleteAllocator(myalloc);
@@ -246,7 +249,7 @@ int main(int argc, char * argv[]) {
     unsigned int ntasks         = atoi(argv[1]);
     unsigned int itemsize       = atoi(argv[2]);
     unsigned int batch          = atoi(argv[3]);    
-    unsigned int nworkers       = atoi(argv[4]);    
+    int nworkers                = atoi(argv[4]);    
 
     // arguments check
     if (nworkers<0 || !ntasks) {
@@ -259,7 +262,7 @@ int main(int argc, char * argv[]) {
     // create the farm object
     ff_farm<> farm;
     std::vector<ff_node *> w;
-    for(unsigned int i=0;i<nworkers;++i) 
+    for(int i=0;i<nworkers;++i) 
         w.push_back(new Worker(itemsize,ntasks/nworkers, batch));
     farm.add_workers(w);
     

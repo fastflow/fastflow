@@ -29,7 +29,8 @@
 #include <ff/d/zmqImpl.hpp>
 
 using namespace ff;
-#define COMM   zmq1_1
+/* Other options are: zmqOnDemand and zmqBcast */
+#define COMM  zmq1_1 
 
 class Node0: public ff_node {
 public:
@@ -58,7 +59,7 @@ public:
     int svc_init() {
 	// the callback will be called as soon as the output message is no 
 	// longer in use by the transport layer
-	ff_dnode<COMM>::init(name, address, 1, transp, true, 0, callback);  
+	ff_dnode<COMM>::init(name, address, 1, transp, SENDER, 0, callback);  
 
 	printf("Node1 starting\n");
 	return 0;
@@ -90,7 +91,9 @@ public:
 
     int svc_init() {
 	// initializes dnode
-	return ff_dnode<COMM>::init(name, address, 1, transp, false);
+	ff_dnode<COMM>::init(name, address, 1, transp, RECEIVER);
+	printf("Node2 starting\n");
+	return 0;
     }
 
     void * svc(void *task) {
@@ -148,7 +151,7 @@ int main(int argc, char * argv[]) {
     char * address = argv[3];  // no check
 
     // creates the network using 0mq as transport layer
-    zmqTransport transport(atoi(P)?0:1);
+    zmqTransport transport(0);
     if (transport.initTransport()<0) abort();
     
     if (atoi(P)) {

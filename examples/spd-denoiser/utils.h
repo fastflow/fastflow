@@ -14,7 +14,7 @@ string get_fname(string &path);
 //time misuration
 long int get_usec_from(long int s);
 
-#ifdef CUDA
+#ifdef FF_WITH_CUDA
 //get cuda environment and set the number of cores
 void get_cuda_env(int &, bool);
 #endif

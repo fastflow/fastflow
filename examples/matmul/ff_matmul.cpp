@@ -29,12 +29,16 @@
  * NxN integer matrix multiplication.
  *
  */
+
+//#define USE_FFA
+
 #include <vector>
 #include <iostream>
 #include <ff/farm.hpp>
 #include <ff/node.hpp>
+#if defined(USE_FFA)
 #include <ff/allocator.hpp>
-
+#endif
   
 using namespace ff;
 
@@ -44,7 +48,6 @@ static unsigned long A[N][N];
 static unsigned long B[N][N];
 static unsigned long C[N][N];
 
-//#define USE_FFA
 #if defined(USE_FFA)
 static ff_allocator ffa;
 #endif

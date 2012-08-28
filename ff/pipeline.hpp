@@ -1,4 +1,9 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*! \file pipeline.hpp
+ *  \brief This file describes the pipeline skeleton.
+ */
+
 #ifndef _FF_PIPELINE_HPP_
 #define _FF_PIPELINE_HPP_
 /* ***************************************************************************
@@ -24,9 +29,29 @@
 
 namespace ff {
 
+/*!
+ *  \ingroup high_level
+ *
+ *  @{
+ */
+
+
+/*!
+ *  \class ff_pipeline
+ *
+ *  \brief The Pipeline skeleton.
+ *
+ *  Pipelining is one of the simplest parallel pattern where data flows through a series of stages 
+ *  (or nodes) and each stage processes the input data in some way producing as output a modified 
+ *  version or new data. A pipeline's stage can operate sequentially or in parallel and may have or 
+ *  not have an internal state.
+ *
+ */
+ 
 class ff_pipeline: public ff_node {
 protected:
     inline int prepare() {
+        // create input FFBUFFER
         int nstages=static_cast<int>(nodes_list.size());
         for(int i=1;i<nstages;++i) {
             if (nodes_list[i]->create_input_buffer(in_buffer_entries, fixedsize)<0) {
@@ -35,12 +60,15 @@ protected:
             }
         }
         
+        // set output buffer
         for(int i=0;i<(nstages-1);++i) {
             if (nodes_list[i]->set_output_buffer(nodes_list[i+1]->get_in_buffer())<0) {
                 error("PIPE, setting output buffer to node %d\n", i);
                 return -1;
             }
         }
+        
+        // Preparation of buffers for the accelerator
         int ret = 0;
         if (has_input_channel) {
             if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
@@ -58,14 +86,13 @@ protected:
                 }
             }
         }
-        prepared=true;
+        prepared=true; 
         return ret;
     }
 
-    /* freeze_and_run is required because in the pipeline 
-     * where there are not any manager threads,
-     * which allow to freeze other threads before starting the 
-     * computation
+    /*! 
+     *  freeze_and_run is required when no manager threads are present in the pipeline, which would 
+     *  allow to freeze other threads before starting the computation.
      */
     int freeze_and_run(bool=false) {
         freeze();
@@ -84,10 +111,12 @@ protected:
 public:
     enum { DEF_IN_BUFF_ENTRIES=512, DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+128)};
 
-    /* input_ch = true to set accelerator mode
-     * in_buffer_entries = input queue length
-     * out_buffer_entries = output queue length
-     * fixedsize = true uses only fixed size queue
+    /*!
+     *  Constructor
+     *  \param input_ch = true to set accelerator mode
+     *  \param in_buffer_entries = input queue length
+     *  \param out_buffer_entries = output queue length
+     *  \param fixedsize = true uses only fixed size queue
      */
     ff_pipeline(bool input_ch=false,
                 int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
@@ -214,7 +243,7 @@ public:
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->thaw();
     }
     
-    /* check if the pipeline is frozen */
+    /** check if the pipeline is frozen */
     bool isfrozen() { 
         int nstages=static_cast<int>(nodes_list.size());
         for(int i=0;i<nstages;++i) 
@@ -222,8 +251,7 @@ public:
         return true;
     }
 
-    /* offload the given task to the pipeline
-     */
+    /** offload the given task to the pipeline */
     inline bool offload(void * task,
                         unsigned int retry=((unsigned int)-1),
                         unsigned int ticks=ff_node::TICKS2WAIT) { 
@@ -243,9 +271,10 @@ public:
         return false;
     }    
     
-    // return values:
-    //   false: EOS arrived or too many retries
-    //   true:  there is a new value
+    /*! 
+     *  Load results. If \p false, EOS arrived or too many retries.
+     *  If \p true, there is a new value
+     */
     inline bool load_result(void ** task, 
                             unsigned int retry=((unsigned int)-1),
                             unsigned int ticks=ff_node::TICKS2WAIT) {
@@ -323,7 +352,7 @@ public:
     
     protected:
     
-    // ff_node interface
+    /// ff_node interface
     void* svc(void * task) { return NULL; }
     int   svc_init() { return -1; };
     void  svc_end()  {}
@@ -371,7 +400,9 @@ public:
 };
 
 
-
+/*!
+ *  @}
+ */
 
 
 } // namespace ff

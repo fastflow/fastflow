@@ -49,7 +49,7 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I. $(INCS)
-TARGET               = unicast broadcast allgather fromany scatter ondemand test11_pipe test11_torus test_marshal pipe_farm farm farm_farm lat11 bw11
+TARGET               = unicast broadcast allgather fromany scatter ondemand test11_pipe test11_torus test_marshal pipe_farm pipe_farm2 farm farm_farm lat11 bw11
 
 
 .PHONY: all clean cleanall distclean install uninstall
@@ -90,8 +90,10 @@ test11_pipe:test11_pipe.o
 test11_torus:test11_torus.o
 test_marshal:test_marshal.o
 pipe_farm:pipe_farm.o
+pipe_farm2:pipe_farm2.o
 farm:farm.o
 farm_farm:farm_farm.o
+#dmap:dmap.o
 lat11:lat11.o
 bw11:bw11.o
 

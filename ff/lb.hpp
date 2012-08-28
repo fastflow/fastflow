@@ -1,4 +1,10 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*! \file lb.hpp
+ *  \brief Contains the \p ff_loadbalancer class and methods used to model the \a Emitter node, 
+ *  which is used to distribute tasks among workers.
+ */
+ 
 #ifndef _FF_LB_HPP_
 #define _FF_LB_HPP_
 /* ***************************************************************************
@@ -26,6 +32,28 @@
 #include <ff/node.hpp>
 
 namespace ff {
+
+/*!
+ *  \ingroup low_level
+ *
+ *  @{
+ */
+
+/*!
+ *  \class ff_loadbalancer
+ *
+ *  \brief A class representing the \a Emitter node in a typical \a Farm skeleton.
+ *
+ *  This class models the \p loadbalancer, which wraps all the methods and structures used by the \a 
+ *  Emitter node in a \p Farm skeleton. The \a emitter node is used to generate the stream of tasks 
+ *  for the pool of \a workers. The \a emitter can also be used as sequential preprocessor if the 
+ *  stream is coming from outside the farm, as is the case when the stream is coming from a previous 
+ *  node of a pipeline chain or from an external device.\n
+ *  The \p Farm skeleton must have the \a emitter node defined: if the user does not add it to the 
+ *  farm, the run-time support adds a default \a emitter, which acts as a stream filter and schedules 
+ *  tasks in a round-robin fashion towards the \a workers
+ *
+ */
 
 class ff_loadbalancer: public ff_thread {
 public:    
@@ -88,7 +116,7 @@ protected:
 #endif
     }
 
-    /* main scheduling function also called by ff_send_out! */
+    /** main scheduling function */
     virtual bool schedule_task(void * task,unsigned int retry=(unsigned)-1,unsigned int ticks=0) {
         register unsigned int cnt,cnt2;
         do {
@@ -146,9 +174,7 @@ protected:
         return ite;
     }
 
-    /* it sends the same task to all workers    
-     *
-     */
+    /** it sends the same task to all workers */
     virtual void broadcast_task(void * task) {
         std::vector<int> retry;
 
@@ -191,7 +217,9 @@ protected:
 
 
 public:
-
+    /*! Default constructor 
+     *  @param[in] max_num_workers The max number of workers allowed
+     */
     ff_loadbalancer(int max_num_workers): 
         nworkers(0),max_nworkers(max_num_workers),nextw(0),nextINw(0),channelid(-1),
         filter(NULL),workers(new ff_node*[max_num_workers]),
@@ -202,13 +230,17 @@ public:
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
     }
 
+    /*! Destructor. 
+     *
+     *  Deallocates dynamic memory spaces previoulsy allocated for workers
+     */
     ~ff_loadbalancer() {
         if (workers) delete [] workers;
     }
 
     int set_filter(ff_node * f) { 
         if (filter) {
-            error("LB, setting collector filter\n");
+            error("LB, setting emitter filter\n");
             return -1;
         }
         filter = f;
@@ -490,12 +522,12 @@ public:
 #endif
 
 private:
-    int                nworkers;
-    int                max_nworkers;
-    int                nextw;   // out index
-    int                nextINw; // in index, used only in master-worker mode
+    int                nworkers;            /// Number of active workers
+    int                max_nworkers;        /// Max number of workers allowed
+    int                nextw;               // out index
+    int                nextINw;             // in index, used only in master-worker mode
     int                channelid; 
-    ff_node         *  filter;
+    ff_node         *  filter;              
     ff_node        **  workers;
     ff_node         *  fallback;
     FFBUFFER        *  buffer;
@@ -519,6 +551,10 @@ private:
     ticks         tickstot;
 #endif
 };
+
+/*!
+ *  @}
+ */
 
 } // namespace ff
 

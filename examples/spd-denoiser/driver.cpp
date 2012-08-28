@@ -1,20 +1,38 @@
 // Salt-and-Pepper_Noise_Removal_GRAYSCALE
 // Filtro a due passi a più cicli per la rimozione del disturbo 'Salt & Pepper' da immagini bitmap a 8 bit in scala di grigi.
-#if !(defined(FLAT) || defined(BORDER) || defined(CLUSTER) || defined(CUDA))
-#define CONTINOUS 1
+
+/*
+  available configurations:
+  - CLUSTER: sequential-equivalent
+  - FLAT (default): standard filtering technique
+  - CONTINUOUS: non deterministic
+  - FF_WITH_CUDA: FLAT-equivalent - MD: check!
+ */
+
+#if !(defined(CONTINUOUS) || defined(CLUSTER) || defined(FF_WITH_CUDA))
+#define FLAT 1
 #endif
 
-//#if (defined(CUDA) || defined(CLUSTER))
 #ifdef CLUSTER
 #define SEQ_DETECTION 1
 #endif
 
-#ifdef CUDA
+#ifdef FF_WITH_CUDA
 #define NO_BLOCKS 1
 #endif
 
-#ifndef CUDA
+#ifndef FF_WITH_CUDA
 #define FF_ACCEL 1
+#endif
+
+/*
+  termination criterion:
+  - MAX_TERMINATION: psnr-based
+  - AVG_TERMINATION (default): mae-based 
+ */
+
+#ifndef MAX_TERMINATION
+#define AVG_TERMINATION 1
 #endif
 
 #include <stdlib.h>
@@ -43,15 +61,15 @@
 #include <map>
 #include <limits>
 //#include <ff/platforms/platform.h>
-#include "utils.h"
+#include "utils.hpp"
 #include <ff/farm.hpp>
 #include <ff/node.hpp>
-#ifdef CUDA
+#ifdef FF_WITH_CUDA
 #include <cuda_denoiser.hpp>
 #endif
 using namespace std;
 
-#define EPS_STOP 1e-04 //convergence epsilon
+#define EPS_STOP 1e-04f //convergence epsilon
 #define K_BLOCKS 4
 
 
@@ -59,15 +77,21 @@ int main(int argc,char* argv[]) {
   
   //cerr << "Size of " << sizeof(struct bmp_point<char>) << "\n"; 
   //check flags consinstency
-#if defined(CLUSTER) and defined(BORDER)
-  cerr << "CLUSTER-BORDER conflict" << endl;
-  exit(1);
-#elif defined(BORDER) and defined(FLAT)
-  cerr << "BORDER-FLAT conflict" << endl;
-  exit(1);
-#elif defined(CUDA) && (defined(BORDER) || defined(FLAT) || defined(CLUSTER) || defined(ALTERNATE))
-  cerr << "CUDA-* conflict" << endl;
-  exit(1);
+#if (defined(FLAT)) && (defined(CLUSTER))
+	cerr << "FLAT-CLUSTER conflict" << endl;
+	exit(1);
+#endif
+#if (defined(FLAT)) && (defined(CONTINUOUS))
+	cerr << "FLAT-CONTINUOUS conflict" << endl;
+	exit(1);
+#endif
+#if (defined(CLUSTER)) && (defined(CONTINUOUS))
+	cerr << "CLUSTER-CONTINUOUS conflict" << endl;
+	exit(1);
+#endif
+#if (defined(FF_WITH_CUDA) && (defined(FLAT) || defined(CLUSTER) || defined(CONTINUOUS))) 
+	cerr << "CUDA-* conflict" << endl;
+	exit(1); 
 #endif
 
 #ifdef TIME
@@ -116,19 +140,17 @@ int main(int argc,char* argv[]) {
     prefix.append("RESTORED_");
     string trunked_fname = get_fname(fname);
     prefix.append(trunked_fname.substr(0, trunked_fname.length() - 4));
-#if not defined(CLUSTER)
-    prefix.append("_block");
-#else
-    prefix.append("_cluster");
-#endif
-#if defined(BORDER)
-    prefix.append("_border");
-#endif
-#if defined(FLAT)
+#ifdef FLAT
     prefix.append("_flat");
 #endif
-#if defined(ALTERNATE)
-    prefix.append("_alternate");
+#ifdef CLUSTER
+    prefix.append("_cluster");
+#endif
+#ifdef CONTINUOUS
+    prefix.append("_continuous");
+#endif
+#ifdef FF_WITH_CUDA
+    prefix.append("_cuda");
 #endif
   }
 
@@ -136,31 +158,24 @@ int main(int argc,char* argv[]) {
   if(verbose) {
     cout << "*** This is Salt & Pepper denoiser" << endl
 	 << "mode: "
-#ifndef CUDA
-	 << "FF "
-#if not defined(CLUSTER)
-	 << "block "
-#if not defined(BORDER) and not defined(FLAT)
-	 << "non-deterministic "
-#endif
-#else
-	 << "cluster "
-#endif
-#if defined(BORDER)
-	 << "border "
-#endif
-#if defined(FLAT)
+#ifndef FF_WITH_CUDA
+	 << "(FF) "
+#ifdef FLAT
 	 << "flat "
 #endif
-#if defined(ALTERNATE)
-	 << "alternate "
+#ifdef CLUSTER
+	 << "cluster "
 #endif
-#else //CUDA
-	 << "CUDA "
-#ifdef CUDA_PINNED_MEMORY
-	 << "pinned "
+#ifdef CONTINUOUS
+	 << "continuous "
 #endif
-#endif //CUDA
+#else //FF_WITH_CUDA
+	 << "(FF_WITH_CUDA"
+#ifdef FF_WITH_CUDA_PINNED_MEMORY
+	 << "-pinned"
+#endif
+	 << ") flat "
+#endif //FF_WITH_CUDA
 
 	 << "| termination: "
 #ifdef AVG_TERMINATION
@@ -251,21 +266,14 @@ int main(int argc,char* argv[]) {
   farm_detection.offload((void *)ff::FF_EOS);
   farm_detection.wait();
 
-  //compute n_noisy and (if required) fold
-#ifdef CUDA
+  //compute n_noisy and (if required) fold it
+#ifdef FF_WITH_CUDA 
   vector<noisy<grayscale> > noisy_pixels_wrap;
   vector<noisy<grayscale> >::iterator it = noisy_pixels_wrap.begin();
 #endif
   for(unsigned int i=0; i<n_noisy_sets_; ++i) {
-    n_noisy += noisy_sets_[i].size();
-#ifdef CUDA
-    /*
-    cerr << "will copy set " << i << "/" << noisy_sets_.size() << endl;
-    //noisy_pixels_wrap.reserve(n_noisy);
-    noisy_pixels_wrap.insert(it, noisy_sets_[i].begin(), noisy_sets_[i].end());
-    it += noisy_sets_[i].size();
-    cerr << "copied set " << i << "/" << noisy_sets_.size() << endl;
-    */
+    n_noisy += (unsigned int) noisy_sets_[i].size();
+#ifdef FF_WITH_CUDA
     for(unsigned int j=0; j<noisy_sets_[i].size(); ++j)
       noisy_pixels_wrap.push_back(noisy_sets_[i][j]);
 #endif
@@ -277,12 +285,11 @@ int main(int argc,char* argv[]) {
   //SEQUENTIAL detection
   if(verbose)
     cout << "(sequential) ";
-  vector<noisy<grayscale> > noisy_pixels_wrap;
-  noisy_pixels_wrap.reserve(height * width);
-  n_noisy = find_noisy_partial<grayscale>(bmp, bmp_ctrl, w_max, noisy_pixels_wrap, 0, height - 1, width);
+  vector<vector<noisy<grayscale> > > noisy_sets_(1);
+  n_noisy = find_noisy_partial<grayscale>(bmp, bmp_ctrl, w_max, noisy_sets_[0], 0, height - 1, width);
   noisy<grayscale> *noisy_pixels = (noisy<grayscale> *)malloc(n_noisy * sizeof(noisy<grayscale>));
   for(unsigned int i=0; i<n_noisy; ++i)
-    noisy_pixels[i] = noisy_pixels_wrap[i];
+    noisy_pixels[i] = noisy_sets_[0][i];
 #endif
 
 
@@ -315,22 +322,11 @@ int main(int argc,char* argv[]) {
 
 
   //select clustering strategy
-#ifndef CLUSTER
+#if !defined(CLUSTER)
   //default strategy: BLOCK
-#ifdef CONTINOUS
-  unsigned int n_blocks = 2 * nworkers;
-#else //CONTINUOUS
   unsigned int n_blocks = K_BLOCKS * nworkers;
-#endif //CONTINUOUS
   vector<vector<noisy<grayscale> > > noisy_sets(n_blocks);
   build_blocks<noisy<grayscale> >(noisy_sets, noisy_sets_, n_noisy, n_blocks);
- 
-#ifdef BORDER
-  //find borders (for each block)
-  vector<pair<unsigned int, unsigned int> > borders;
-  find_borders<grayscale>(borders, noisy_sets, n_blocks, height, width, bmp);
-#endif //BORDER
-
 #else //CLUSTER
   vector<vector<noisy<grayscale> > > noisy_sets;
   noisy_sets.reserve(1000);
@@ -379,11 +375,12 @@ int main(int argc,char* argv[]) {
   unsigned int cycle = 0; //number of completed cycles
 
 
-#ifndef CONTINOUS
+
+#ifndef CONTINUOUS
   //not CONTINUOUS scheme
   float current_residual, old_residual, delta_residual;
 
-#ifdef CUDA
+#ifdef FF_WITH_CUDA
   //CUDA denoiser
   Cuda_denoiser<grayscale> cuda_denoiser(&bmp, alfa, beta, noisy_pixels_wrap, height, width, verbose);
   cuda_denoiser.svc_init();
@@ -411,50 +408,34 @@ int main(int argc,char* argv[]) {
     old_residual = current_residual;
     
 #ifdef FLAT
-    //backup ALL noisy pixels
-    /* seq. version
-    for(unsigned int i=0; i<noisy_sets.size(); i++)
-      for(unsigned int j=0; j<noisy_sets[i].size(); ++j)
-	bmp.backup(noisy_sets[i][j].c, noisy_sets[i][j].r);
-    */
+    //(parallel) backup
     farm.run_then_freeze();
     for(unsigned int j=1; j<=noisy_sets.size(); j++)
       if (noisy_sets[j-1].size() > 0)
 	farm.offload((void *)(j + noisy_sets.size()));
     farm.offload((void *)ff::FF_EOS);
     farm.wait_freezing();
-
-#elif defined(BORDER)
-    //backup the borders
-    for(unsigned int k=0; k<borders.size(); k++) {
-	  int i = borders[k].first;
-	  int j = borders[k].second;
-	  bmp.backup(noisy_sets[i][j].c, noisy_sets[i][j].r);
-	}
 #endif
 
-
-
-#ifdef CUDA
+#ifdef FF_WITH_CUDA
     //CUDA restoring pass
     current_residual = cuda_denoiser.svc();
 
-#else //CUDA
+#else //FF_WITH_CUDA
      //FF-accelerator restoring pass
     farm.run_then_freeze();
     for(unsigned int j=1; j<=noisy_sets.size(); j++)
       if (noisy_sets[j-1].size() > 0)
-	farm.offload((void *)j);
+	farm.offload((void *)((unsigned long long)j));
     farm.offload((void *)ff::FF_EOS);
     farm.wait_freezing();
 
 #ifdef AVG_TERMINATION
     current_residual = residual_avg<grayscale>(sets_residuals, diff, n_noisy);
 #else
-    current_residual = residual_max<grayscale>(sets_residuals, n_noisy);
+    current_residual = residual_max<grayscale>(sets_residuals/*, n_noisy*/);
 #endif
-#endif //CUDA
-    //cout << "current residual " << current_residual << endl;
+#endif //FF_WITH_CUDA
 
     //check convergence
 #ifdef CONV_MINIMUM
@@ -485,25 +466,6 @@ int main(int argc,char* argv[]) {
 #endif
     }
 
-#ifdef ALTERNATE
-    //invert mode
-    for(unsigned int i=0; i<nworkers; i++) {
-      Worker *cw = static_cast<Worker *>(w[i]);
-      cw->invert_mode();
-    }
-#endif
-
-#ifdef TIME
-    //t_red += get_usec_from(t_redp);
-#endif
-    //cout << "Fine ciclo n. " << (i+1) << " Max residual "<< (int) res << endl;
-    /*
-      #ifdef TIME
-      usec_tmp = get_usec_from(usec_tmp);	
-      cout << "Riduzione ciclo n. " << (i+1) << " time " << usec_tmp/1000 << "ms\n";
-      #endif
-      */
-
 #ifdef WRITE_PASSES
     char prefixstep[15];
     sprintf(prefixstep,"restored_pass%d_",(cycle+1));
@@ -515,7 +477,7 @@ int main(int argc,char* argv[]) {
   //join
   farm.offload((void *)ff::FF_EOS);
   farm.wait();
-#elif defined(CUDA)
+#elif defined(FF_WITH_CUDA)
   cuda_denoiser.svc_end();
 #endif
 

@@ -1,4 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*!
+ *  \file node.hpp
+ *  \brief This file contains the definition of the \p ff_node class, which acts as the basic 
+ *  structure of each skeleton. Other supplementary classes are defined here. *
+ */
+
 #ifndef _FF_NODE_HPP_
 #define _FF_NODE_HPP_
 /* ***************************************************************************
@@ -32,6 +39,9 @@
 
 namespace ff {
 
+
+
+
 /*
  * NOTE: by default FF_BOUNDED_BUFFER is not defined
  */
@@ -54,7 +64,20 @@ enum { FF_EOS=0xffffffff, FF_EOS_NOFREEZE=(FF_EOS-0x1) , FF_GO_ON=(FF_EOS-0x2)};
 #define FFTRACE(x)
 #endif
 
+/*!
+ *  \ingroup runtime
+ *
+ *  @{
+ */
 
+/*!
+ *  \class Barrier
+ *
+ *  \brief A class representing a Barrier, i.e. a \a Mutex
+ *
+ *  <em>SHALL WE INCLUDE THIS CLASS IN THE DOCUMENTATION?</em> \n
+ *  This class provides the methods necessary to implement a low-level \p pthread mutex.
+ */
 class Barrier {
 public:
     static inline Barrier * instance() {
@@ -62,6 +85,12 @@ public:
         return &b;
     }
 
+    /*!
+     *  Default Constructor.
+     *
+     *  Checks whether the mutex variable(s) and the conditional variable(s) can be propetly 
+     *  initialised
+     */
     Barrier():_barrier(0) {
         if (pthread_mutex_init(&bLock,NULL)!=0) {
             error("ERROR: Barrier: pthread_mutex_init fails!\n");
@@ -73,7 +102,7 @@ public:
         }
     }
     
-
+    /** Performs the barrier and waits on the condition variable */
     inline void doBarrier(int init = -1) {        
         if (!_barrier && init>0) { _barrier = init; return; }
         
@@ -88,20 +117,43 @@ public:
    
 
 private:
-    int _barrier;
-    pthread_mutex_t bLock;
-    pthread_cond_t  bCond;
+    int _barrier;           /// 
+    pthread_mutex_t bLock;  /// Mutex variable
+    pthread_cond_t  bCond;  /// Condition variable
 };
+
+/*!
+ * @}
+ */
 
 
 
 // forward decl
 static void * proxy_thread_routine(void * arg);
 
+/*!
+ *  \ingroup runtime
+ *
+ *  @{
+ */
+
+/*!
+ *  \class ff_thread
+ *
+ *  \brief This class contains methods to describe a ff_thread. 
+ *
+ *  This class performs all the low-level operations need to manage threads communication and 
+ *  synchronisation. It is responsible for threads creation and destruction, suspension, freezing and 
+ *  thawing.
+ *  
+ */
 class ff_thread {
     friend void * proxy_thread_routine(void *arg);
 
 protected:
+    /*! Constructor 
+     *  @param[in] barrier Takes a Barrier object as input paramenter.
+     */
     ff_thread(Barrier * barrier=NULL):
         barrier(barrier),
         stp(true), // only one shot by default
@@ -122,6 +174,7 @@ protected:
         }
     }
 
+    /// Default destructor
     virtual ~ff_thread() {
         // MarcoA 27/04/12: Moved to wait
         /*
@@ -130,7 +183,8 @@ protected:
         }
         */
     }
-
+    
+    /** Control thread's life cycle  */
     void thread_routine() {
         //Barrier::instance()->barrier();
         if (barrier) barrier->doBarrier();
@@ -204,6 +258,7 @@ public:
 
     void set_barrier(Barrier * const b) { barrier=b;}
 
+    /// Creates a new thread
     int spawn() {
         if (spawned) return -1;
         
@@ -220,7 +275,7 @@ public:
         return 0;
     }
    
-    // wait thread termination
+    /// Waits thread termination
     int wait() {
         stp=true;
         if (isfrozen()) {
@@ -236,7 +291,7 @@ public:
         return 0;
     }
 
-    // wait thread freezing
+    /// Waits thread freezing
     int wait_freezing() {
         pthread_mutex_lock(&mutex);
         while(!frozen) pthread_cond_wait(&cond_frozen,&mutex);        
@@ -244,16 +299,16 @@ public:
         return (init_error?-1:0);
     }
 
-    // force the thread to stop at next EOS or next thawing
+    /// Force the thread to stop at next EOS or next thawing
     void stop() { stp = true; };
 
-    // force the thread to freeze himself
+    /// Force the thread to freeze himself
     void freeze() {  
         stp=false;
         freezing=true; 
     }
     
-    // if the thread is frozen then thaw it
+    /// If the thread is frozen, then thaw it
     void thaw() {
         pthread_mutex_lock(&mutex);
         freezing=false;
@@ -267,13 +322,13 @@ public:
         pthread_mutex_unlock(&mutex);
     }
 
-    // tell if the thread is going to be frozen
+    /// Tell if the thread is frozen
     bool isfrozen() { return freezing;} 
 
     pthread_t get_handle() const { return th_handle;}
 
 private:
-    Barrier      *  barrier;
+    Barrier      *  barrier;            /// A \p Barrier object
     bool            stp;
     bool            spawned;
     bool            freezing;
@@ -295,8 +350,27 @@ static void * proxy_thread_routine(void * arg) {
     return NULL;
 }
 
+/*!
+ *  @}
+ */
 
+/*!
+ *  \ingroup low_level
+ *
+ *  @{
+ */
 
+/*!
+ *  \class ff_node
+ *
+ *  \brief This class describes the \p ff_node, the basic building block of every skeleton.
+ *
+ *  This class desribes the Node object, the base class of every skeleton. \p ff_node defines 3 basic 
+ *  methods, two optional - \p svc_init and \p svc_end - and one mandatory - \p svc (pure virtual 
+ *  method). The \p svc_init method is called once at node initialization, while the \p svn_end method 
+ *  is called once when the end-of-stream (EOS) is received in input or when the \p svc method returns 
+ *  \p NULL. The \p svc method is called each time an input task is ready to be processed.
+ */
 class ff_node {
 private:
 
@@ -436,7 +510,7 @@ public:
 #endif
 
 protected:
-    // protected constructor
+    /// Protected constructor
     ff_node():in(0),out(0),myid(-1),
               myoutbuffer(false),myinbuffer(false),
               skip1pop(false), thread(NULL),callback(NULL),barrier(NULL) {
@@ -449,12 +523,18 @@ protected:
 #endif
     };
     
+    /** 
+     *  Destructor 
+     *
+     *  Deletes input and output buffers and the working threads
+     */
     virtual  ~ff_node() {
         if (in && myinbuffer)  delete in;
         if (out && myoutbuffer) delete out;
         if (thread) delete thread;
     };
     
+    /** Allows to queue tasks without returning from the \p svc method */
     virtual bool ff_send_out(void * task, 
                              unsigned int retry=((unsigned int)-1),
                              unsigned int ticks=(TICKS2WAIT)) { 
@@ -473,7 +553,12 @@ private:
         callback=cb;
         callback_arg=arg;
     }
+    
+    /*!
+     *  @}
+     */
 
+    /* Inner class that wraps ff_thread functions and adds \p push and \p pop methods */
     class thWorker: public ff_thread {
     public:
         thWorker(ff_node * const filter):
@@ -582,18 +667,25 @@ private:
     protected:    
         ff_node * const filter;
     };
+    
+    
+/*!
+ *  \ingroup low_level
+ *
+ *  @{
+ */
 
 private:
-    FFBUFFER        * in;
-    FFBUFFER        * out;
+    FFBUFFER        * in;           /// Can be either a \p SWSR_Ptr_Buffer or an \p uSWSR_Ptr_Buffer
+    FFBUFFER        * out;          /// Can be either a \p SWSR_Ptr_Buffer or an \p uSWSR_Ptr_Buffer
     int               myid;
     bool              myoutbuffer;
     bool              myinbuffer;
     bool              skip1pop;
-    thWorker        * thread;
+    thWorker        * thread;       /// A \p thWorker object, which extends the \p ff_thread class 
     bool (*callback)(void *,unsigned int,unsigned int, void *);
     void            * callback_arg;
-    Barrier         * barrier;
+    Barrier         * barrier;      /// A \p Barrier object
 
     struct timeval tstart;
     struct timeval tstop;
@@ -617,6 +709,10 @@ private:
 #endif
 
 };
+
+/*!
+ *  @}
+ */
 
 
 } // namespace ff
