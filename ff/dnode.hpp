@@ -1,4 +1,10 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*! \file dnode.hpp
+ *  \brief Contains the definition of the \p ff_dnode class, which is an extension of the base class 
+ *  \p ff_node, with features oriented to distributed systems.
+ */
+ 
 #ifndef _FF_DNODE_HPP_
 #define _FF_DNODE_HPP_
 /* ***************************************************************************
@@ -36,10 +42,31 @@ static const char FF_DEOS[]="EOS";
 // callback definition 
 typedef void (*dnode_cbk_t) (void *,void*);
 
+/*!
+ *  \ingroup low_level
+ *
+ *  @{
+ */
+
+/*!
+ *  \class ff_dnode
+ *
+ *  \brief A class representing the distributed version of \p ff_node.
+ *
+ *  A \p ff_dnode is actually a \p ff_node with an extra communication channel 
+ *  (<em>external channel</em>), which connects the edge-node of the graph with one 
+ *  or more edge-nodes of other FastFlow application graphs running on the same host 
+ *  or on a different host(s).
+ *
+ */
+
 template <typename CommImpl>
 class ff_dnode: public ff_node {
 public:
     typedef typename CommImpl::TransportImpl::msg_t msg_t;
+    
+    enum {SENDER=true, RECEIVER=false};
+
 protected:    
     // this is called once as soon as the message just sent 
     // is no longer in use by the run-time
@@ -56,7 +83,7 @@ protected:
         return !(data[0]-'E' + data[1]-'O' + data[2]-'S' + data[3]-'\0');
     }
     
-    // default constructor
+    /// Default constructor
     ff_dnode():ff_node(),skipdnode(true) {}
     
     virtual ~ff_dnode() {         
@@ -64,40 +91,58 @@ protected:
         delete com.getDescriptor();
     }
     
+    /** Override \p ff_node 's \p push method */
     virtual inline bool push(void * ptr) { 
         if (skipdnode || !P) return ff_node::push(ptr);
 
         // gets the peers involved in one single communication
-        const int peers=com.putToPerform(); 
-
+        const int peers=com.getDescriptor()->getPeers();
         if (ptr == (void*)FF_EOS) {
-            for(int i=0;i<com.getDescriptor()->getPeers();++i) {
+            //cerr << "DNODE prepare to send FF_DEOS to " << peers <<" peers\n";
+            for(int i=0;i<peers;++i) {
                 msg_t msg; 
                 msg.init(FF_DEOS,msg_t::HEADER_LENGHT);
+                //cerr << "DNODE sends FF_DEOS to " << i <<"\n";
                 if (!com.put(msg,i)) return false;
             }
             return true;
         }
-
-        svector<iovec> v[peers];
-        for(int i=0;i<peers;++i) {
+        
+        if (CommImpl::MULTIPUT) {
+            svector<iovec> v[peers];
+            for(int i=0;i<peers;++i) {
+                callbackArg.resize(0);
+                prepare(v[i], ptr, i);
+                
+                msg_t hdr(new uint32_t(v[i].size()), msg_t::HEADER_LENGHT, freeHdr);
+                com.putmore(hdr,i);
+                callbackArg.resize(v[i].size());  
+                for(size_t j=0;j<v[i].size()-1;++j) {
+                    msg_t msg(v[i][j].iov_base, v[i][j].iov_len,freeMsg,callbackArg[j]); 
+                    com.putmore(msg,i);
+                }
+                msg_t msg(v[i][v[i].size()-1].iov_base, v[i][v[i].size()-1].iov_len,freeMsg,callbackArg[v[i].size()-1]);
+                if (!com.put(msg,i)) return false;            
+            }
+        } else {
+            svector<iovec> v;
             callbackArg.resize(0);
-            prepare(v[i], ptr, i);
-
-            uint32_t *len = new uint32_t(v[i].size());
-            msg_t hdr(len, msg_t::HEADER_LENGHT, freeHdr);
+            prepare(v, ptr);
+                       
+            msg_t hdr(new uint32_t(v.size()), msg_t::HEADER_LENGHT, freeHdr);
             com.putmore(hdr);
-            callbackArg.resize(*len);
-            for(size_t j=0;j<v[i].size()-1;++j) {
-                msg_t msg(v[i][j].iov_base, v[i][j].iov_len,freeMsg,callbackArg[j]); 
+            callbackArg.resize(v.size());
+            for(size_t j=0;j<v.size()-1;++j) {
+                msg_t msg(v[j].iov_base, v[j].iov_len,freeMsg,callbackArg[j]); 
                 com.putmore(msg);
             }
-            msg_t msg(v[i][*len-1].iov_base, v[i][*len-1].iov_len,freeMsg,callbackArg[*len-1]);
+            msg_t msg(v[v.size()-1].iov_base, v[v.size()-1].iov_len,freeMsg,callbackArg[v.size()-1]);
             if (!com.put(msg)) return false;
         }
         return true;
     }
     
+    /** Override \p ff_node 's \p pop method */
     virtual inline bool pop(void ** ptr) { 
         if (skipdnode || P) return ff_node::pop(ptr);
 
@@ -112,8 +157,8 @@ protected:
                 error("dnode:pop: ERROR: receiving header from peer");
                 return false;
             }
-            
             if (isEos(static_cast<char *>(hdr.getData()))) {
+                //std::cerr << "DNODE gets DEOS\n";
                 if (++neos==com.getDescriptor()->getPeers()) {
                     com.done();
                     *ptr = (void*)FF_EOS;
@@ -127,9 +172,9 @@ protected:
             register int ventry   = (sendingPeers==1)?0:sender;
             prepare(v[ventry], len, sender);
             assert(v[ventry]->size() == len);
-
+            
             for(size_t j=0;j<len;++j)
-                if (!com.get(*(v[ventry]->operator[](j)))) {
+                if (!com.get(*(v[ventry]->operator[](j)),sender)) {
                     error("dnode:pop: ERROR: receiving data from peer");
                     return false;
                 }
@@ -141,13 +186,19 @@ protected:
     } 
     
 public:
-    // The init method initializes the "external channel" (comm).
-    // It gets the name of the channel (name), the address on which listen or
-    // connect to (address), the number of peers (peers), the transport layer 
-    // to use (transp), a flag saying if the current dnode is the producer (p=true) 
-    // or the consumer (p=false) w.r.t. the communication pattern used, 
-    // the id of the dnode (nodeId) and finally the callback function that will be 
-    // called once when a message just sent is no longer in use by the run-time (cbk)
+    /**
+     *  The \p ff_dnode::init method initializes the external channel.
+     *  \param[in] name name of the channel
+     *  \param[in] address the address where to listen or connect to
+     *  \param[in] peers the number of peers
+     *  \param[in] transp the transport layer to be used
+     *  \param[in] p a flag saying whether the current \a dnode is the producer (\p p \p = \p true) 
+     *               or the consumer (\p p \p = \p false) w.r.t. the communication pattern used
+     *  \param[in] nodeId the ID of the node
+     *  \param[in] cbk the callback function that will be called once when a message just sent 
+     *                 is no longer in use by the run-time
+     *
+     */
     int init(const std::string& name, const std::string& address,
              const int peers, typename CommImpl::TransportImpl* const transp, 
              const bool p, const int nodeId=-1, dnode_cbk_t cbk=0) {
@@ -170,7 +221,11 @@ public:
     // whereas the second prepare and the unmarshalling methods are used
     // by the Consumer (p=false in the init method).
 
-    // Used to prepare (non contiguous) output messages
+    /** Used to prepare (non contiguous) output messages 
+     *  \param v is ...
+     *  \param ptr is ...
+     *  \param sender the message sender
+     */
     virtual void prepare(svector<iovec>& v, void* ptr, const int sender=-1) {
         struct iovec iov={ptr,sizeof(void*)};
         v.push_back(iov);
@@ -185,10 +240,12 @@ public:
     //
     //
     
-    // Used to give to the run-time a pool of messages on which
-    // input message frames will be received
-    // @param len is the number of input messages expected
-    // @param sender is the message sender
+    /** 
+     *  Used to give to the run-time a pool of messages on which
+     *  input message frames will be received
+     *  \param len the number of input messages expected
+     *  \param sender the message sender
+     */
     virtual void prepare(svector<msg_t*>*& v, size_t len, const int sender=-1) {
         svector<msg_t*> * v2 = new svector<msg_t*>(len);
         assert(v2);
@@ -200,31 +257,38 @@ public:
         v = v2;
     }
     
-    // This method is called once when all frames of composing the message have been received
-    // by the run-time. Within that method, it is possible to convert or re-arrange 
-    // all the frames back to their original data or object layout. 
+    /**
+     *  This method is called once, when all frames composing the message have been received
+     *  by the run-time. Within that method, it is possible to convert or re-arrange 
+     *  all the frames back to their original data or object layout. 
+     */
     virtual void unmarshalling(svector<msg_t*>* const v[], const int vlen, void *& task) {
         assert(vlen==1 && v[0]->size()==1); 
         task = v[0]->operator[](0)->getData();
         delete v[0];
     }
 
-    // This methed can be used to pass an additional parameter (the 2nd one) 
-    // to the callback function. Typically it is called in the prepare method of the
-    // producer.
+    /**
+     * This methed can be used to pass an additional parameter (the 2nd one) 
+     * to the callback function. Typically it is called in the prepare method of the
+     * producer.
+     */
     void setCallbackArg(void* arg) { callbackArg.push_back(arg);}
     
-    // runs the dnode as a stand-alone thread
-    // Typically, it should not be called by application code unless you want to have just
-    // a sequential dnode
+    /** 
+     *  Runs the \p dnode as a stand-alone thread.\n
+     *  Typically, it should not be called by application code unless you want to have just
+     *  a sequential \p dnode
+     */
     int  run(bool=false) { return  ff_node::run(); }    
 
-    // waits the thread to finish
+    /// Waits the thread to finish
     int  wait() { return ff_node::wait(); }    
     
-    // jumps the first pop from the input queue or from the input 
-    // external channel. This is typically used in the first stage
-    // of a cyclic graph (e.g. the first stage of a torus pipeline)
+    /** jumps the first pop from the input queue or from the input 
+     *  external channel. This is typically used in the first stage
+     *  of a cyclic graph (e.g. the first stage of a torus pipeline)
+     */
     void skipfirstpop(bool sk)   { ff_node::skipfirstpop(sk); }
 
 protected:
@@ -236,6 +300,11 @@ protected:
 };
 template <typename CommImpl>
 dnode_cbk_t ff_dnode<CommImpl>::cb=0;
+
+/*!
+ *  @}
+ */
+
 } // namespace ff
 
 #endif /* _FF_NODE_HPP_ */

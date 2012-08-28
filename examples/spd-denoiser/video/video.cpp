@@ -26,7 +26,7 @@
 //#include "pow_table.hpp"
 #include "fuy.hpp"
 #include "convergence.hpp"
-#ifdef CUDA
+#ifdef FF_WITH_CUDA
 #include "denoise_cuda.hpp"
 #endif
 #include "utils.h"
@@ -79,7 +79,7 @@ int main(int argc, char *argv[]) {
 #endif
 
   //denoising stage
-#ifdef CUDA
+#ifdef FF_WITH_CUDA
   pipe.add_stage(new Denoise_cuda<grayscale>(1.3 /*alpha */, 5 /* beta */));
 #else
   pipe.add_stage(new Denoise<grayscale>(1.3 /*alpha */, 5 /* beta */));

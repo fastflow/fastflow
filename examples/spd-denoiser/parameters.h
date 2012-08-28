@@ -7,8 +7,8 @@ using namespace std;
 #define MAX_CYCLES 2000
 #define MAX_CYCLES_DEFAULT 200
 #define MAX_WINDOW_SIZE (39*2+1)
-#define ALFA_DEFAULT 1.3
-#define BETA_DEFAULT 5.0
+#define ALFA_DEFAULT 1.3f
+#define BETA_DEFAULT 5.0f
 #define N_WORKERS_DEFAULT 2
 #define FRACTION_SIZE_DEFAULT 1
 

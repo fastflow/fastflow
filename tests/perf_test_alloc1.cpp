@@ -223,8 +223,8 @@ int main(int argc, char * argv[]) {
     unsigned int buffer_entries = atoi(argv[1]);
     unsigned int streamlen      = atoi(argv[2]);
     unsigned int itemsize       = atoi(argv[3]);
-    unsigned int nworkers       = atoi(argv[4]);    
-    unsigned long long nticks   = strtol(argv[5],NULL,10) ;
+    int nworkers                = atoi(argv[4]);    
+    long long nticks   = strtol(argv[5],NULL,10) ;
 
     // arguments check
     if (nworkers<0 || !streamlen || nticks<0) {
@@ -252,7 +252,7 @@ int main(int argc, char * argv[]) {
     // create the farm object
     ff_farm<> farm(false, buffer_entries*nworkers);
     std::vector<ff_node *> w;
-    for(unsigned int i=0;i<nworkers;++i) 
+    for(int i=0;i<nworkers;++i) 
         w.push_back(new Worker(itemsize,nticks));
     farm.add_workers(w);
     

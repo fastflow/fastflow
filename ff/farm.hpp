@@ -1,4 +1,10 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*! 
+ *  \file farm.hpp
+ *  \brief This file describes the farm skeleton.
+ */
+ 
 #ifndef _FF_FARM_HPP_
 #define _FF_FARM_HPP_
 /* ***************************************************************************
@@ -19,12 +25,6 @@
  ****************************************************************************
  */
 
-/*! \mainpage Fastflow main page
- 
-	\section intro_sec Introduction
- 
- */
-
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -36,8 +36,25 @@
 
 namespace ff {
 
+/*!
+ *  \ingroup high_level
+ *
+ *  @{
+ */
 
 template<typename lb_t=ff_loadbalancer, typename gt_t=ff_gatherer>
+
+/*!
+ *  \class ff_farm
+ *
+ *  \brief The Farm skeleton, with Emitter (\p lb_t) and Collector (\p gt_t).
+ *
+ *  The Farm skeleton can be seen as a 3-stages pipeline. The first stage is the \a Emitter (\ref 
+ *  ff_loadbalancer "lb_t") that act as a load-balancer; the last (optional) stage would be the \a 
+ *  Collector (\ref ff_gatherer "gt_t") that gathers the results computed by the \a Workers, which 
+ *  are ff_nodes.
+ */
+
 class ff_farm: public ff_node {
 protected:
     inline int   cardinality(Barrier * const barrier)  { 
@@ -76,11 +93,13 @@ public:
     typedef lb_t LoadBalancer_t;
     typedef gt_t Gatherer_t;
 
-    /* input_ch = true to set accelerator mode
-     * in_buffer_entries = input queue length
-     * out_buffer_entries = output queue length
-     * max_num_workers = highest number of farm's worker
-     * worker_cleanup = true deallocate worker object at exit
+    /*!
+     *  Constructor
+     *  \param input_ch = true to set accelerator mode
+     *  \param in_buffer_entries = input queue length
+     *  \param out_buffer_entries = output queue length
+     *  \param max_num_workers = highest number of farm's worker
+     *  \param worker_cleanup = true deallocate worker object at exit
      */
     ff_farm(bool input_ch=false,
             int in_buffer_entries=DEF_IN_BUFF_ENTRIES, 
@@ -105,6 +124,7 @@ public:
         }
     }
     
+    /** Destructor */
     ~ff_farm() { 
         if (lb) delete lb; 
         if (gt) delete(gt); 
@@ -138,7 +158,8 @@ public:
         return lb->set_fallback(fallback);
     }
 
-    /* The default scheduling policy is round-robin,
+    /*!
+     * The default scheduling policy is round-robin,
      * When there is a great computational difference among tasks
      * the round-robin scheduling policy could lead to load imbalance
      * in worker's workload (expecially with short stream length).
@@ -174,8 +195,8 @@ public:
         return 0;
     }
 
-    // Add the Collector filter to the farm skeleton. 
-    // If c == NULL than a default collector will be added (i.e. gt).
+    /// Add the Collector filter to the farm skeleton. 
+    /// If c == NULL than a default collector will be added (i.e. \link ff_gatherer \endlink).
     //
     int add_collector(ff_node * c, bool outpresent=false) { 
         if (collector) {
@@ -197,7 +218,8 @@ public:
         return gt->set_filter(c);
     }
     
-    /* If the collector is present, than the collector output queue 
+    /*!
+     * If the collector is present, than the collector output queue 
      * will be connected to the emitter input queue (feedback channel),
      * otherwise the emitter acts as collector filter (pure master-worker
      * skeleton).
@@ -297,11 +319,10 @@ public:
         if (collector) gt->thaw();
     }
 
-    /* check if the farm is frozen */
+    /** check if the farm is frozen */
     bool isfrozen() { return lb->isfrozen(); }
 
-    /* offload the given task to the farm
-     */
+    /** offload the given task to the farm */
     inline bool offload(void * task,
                         unsigned int retry=((unsigned int)-1),
                         unsigned int ticks=ff_loadbalancer::TICKS2WAIT) { 
@@ -474,6 +495,10 @@ protected:
     gt_t             * gt;
     ff_node         ** workers;
 };
+
+/*!
+ *  @}
+ */
  
 
 } // namespace ff

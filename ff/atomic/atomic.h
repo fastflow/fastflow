@@ -17,9 +17,9 @@
 
 //#include <asm/types.h>
 
-#if __linux__ || __FreeBSD__ || __APPLE__
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__APPLE__)
 
-#if __linux__ || __FreeBSD__
+#if defined(__linux__) || defined(__FreeBSD__)
 #ifdef __i386__
 #include "atomic-i386.h"
 #elif __x86_64__

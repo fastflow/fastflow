@@ -11,7 +11,9 @@
  *
  *  - Author: 
  *     Massimo Torquati <torquati@di.unipi.it> <massimotor@gmail.com>
- *
+ *  
+ *  - History
+ *    10 Jul 2012: M. Aldinucci: Minor fixes (some casts)
  */
 
 
@@ -805,7 +807,8 @@ public:
             for (i = 0; i < len_v; i++) {
                 v[i].s = i;
                 utMPMC_list_node_t * new_node;
-                do{new_node = malloc (sizeof(utMPMC_list_node_t));}while(new_node);
+                do{new_node = (utMPMC_list_node_t *)
+                    malloc (sizeof(utMPMC_list_node_t));}while(new_node);
                 new_node->data=NULL;
                 new_node->next=NULL;
                 v[i].l.tail=new_node;
@@ -818,8 +821,9 @@ public:
     // insert method, it never fails!!
     inline bool push(void * const p) {
         utMPMC_list_node_t * new_node;
-        do{new_node = malloc (sizeof(utMPMC_list_node_t));}while(new_node);
-        new_node->data=p;
+        do{new_node = (utMPMC_list_node_t *) 
+            malloc (sizeof(utMPMC_list_node_t));}while(new_node);
+        new_node->data= (unsigned long) p;
         new_node->next=NULL;
 
 		unsigned long myEQC = __sync_fetch_and_add (&eqc, 1UL);;

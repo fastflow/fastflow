@@ -81,7 +81,7 @@ public:
 #if !defined(SINGLE_FARM)
       struct timeval start,stop;
         gettimeofday(&start,NULL);
-	ff_dnode<COMM2>::init(name, address, nHosts, transp, false,0);
+	ff_dnode<COMM2>::init(name, address, nHosts, transp, RECEIVER,0);
         gettimeofday(&stop,NULL);
 
 	printf("Collector init time %f ms\n", diffmsec(stop,start));
@@ -183,7 +183,7 @@ public:
 	// longer in use by the transport layer
       struct timeval start,stop;
         gettimeofday(&start,NULL);
-	ff_dnode<COMM1>::init(name, address, nHosts, transp, true, 0, callback);  
+	ff_dnode<COMM1>::init(name, address, nHosts, transp, SENDER, 0, callback);  
 
         gettimeofday(&stop,NULL);
 	printf("Emitter init time %f ms\n", diffmsec(stop,start));
@@ -228,7 +228,7 @@ public:
     }
     
     int svc_init() {
-	ff_dnode<COMM1>::init(name, address, 1, transp, false, transp->getProcId());  
+	ff_dnode<COMM1>::init(name, address, 1, transp, RECEIVER, transp->getProcId());  
 	return 0;
     }
 
@@ -286,7 +286,7 @@ public:
 	    c[j] = j*1.0;	
 
 #if !defined(SINGLE_FARM)
-	ff_dnode<COMM2>::init(name, address, 1, transp, true, transp->getProcId()*nw+get_my_id());  
+	ff_dnode<COMM2>::init(name, address, 1, transp, SENDER, transp->getProcId()*nw+get_my_id());  
 #endif
 
 #if defined(USE_PROC_AFFINITY)

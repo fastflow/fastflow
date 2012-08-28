@@ -79,8 +79,8 @@ void addSaltandPepperNoise (Bitmap<> &bmp, double percent)
 
 */
 
-/*
 //***************************************************************************
+/*
 void GrayImage::addGaussianNoise (double mean, double variance)
 {
 cout << "  Adding Gaussian noise with mean = " << mean << " and variance = "
@@ -142,9 +142,8 @@ ix = (num-1)/width;
 
 cout << "done!" << endl;
 }
-//***************************************************************************
 */
-
+//***************************************************************************
 #endif
 
 

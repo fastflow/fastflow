@@ -37,7 +37,7 @@ typedef struct{
 	FILE *fp;
 	char *name;
 	char *data;
-	char readBuffer[ MAX_SEQ_LENGTH*10 + 15 ] __ALIGNED__;
+	char readBuffer[ MAX_SEQ_LENGTH*10 + 15 ]  __ALIGNED__;
 }FastaLib;
 
 FastaLib * swps3_openLib( char * filename );

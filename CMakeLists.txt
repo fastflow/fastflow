@@ -19,10 +19,12 @@ RelWithDebInfo MinSizeRel.")
 ENDIF()
 
 
+
 project( mc-fastflow )
 
 cmake_minimum_required( VERSION 2.6 )
 
+SET( CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake.modules )
 
 INCLUDE (${CMAKE_ROOT}/Modules/CheckIncludeFile.cmake)
 INCLUDE (${CMAKE_ROOT}/Modules/CheckTypeSize.cmake)

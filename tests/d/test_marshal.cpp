@@ -60,7 +60,7 @@ public:
     int svc_init() {
 	// the callback will be called as soon as the output message is no 
 	// longer in use by the transport layer
-	ff_dnode<COMM>::init(name, address,1, transp, true, 0, callback);  
+	ff_dnode<COMM>::init(name, address,1, transp, SENDER, 0, callback);  
 
 	printf("Node1 starting\n");
 	return 0;
@@ -113,7 +113,7 @@ public:
 
     int svc_init() {
 	// initializes dnode
-	return ff_dnode<COMM>::init(name, address, 1, transp, false);
+	return ff_dnode<COMM>::init(name, address, 1, transp, RECEIVER);
     }
 
     void * svc(void *task) {
