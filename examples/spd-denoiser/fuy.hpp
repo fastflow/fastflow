@@ -5,7 +5,7 @@
 #include "bitmap.hpp"
 #include "control_structures.hpp"
 #include "pow_table.hpp"
-#include "utils.h"
+#include "utils.hpp"
 //#include <cmath>
 
 
