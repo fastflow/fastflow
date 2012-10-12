@@ -29,7 +29,7 @@
 #ifdef FF_WITH_CUDA
 #include "denoise_cuda.hpp"
 #endif
-#include "utils.h"
+#include "utils.hpp"
 using namespace ff;
 //#define FPS 25
 

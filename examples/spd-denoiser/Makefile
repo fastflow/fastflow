@@ -73,7 +73,7 @@ spd_ff_cascade: $(FF_CASCADE_OBJ)
 
 #cuda
 CUDA_OBJ = parameters.cuda.o driver.cuda.o cuda/cuda_kernel.cu.o # utils.cuda.o
-CUDA_VARIANT_FLAGS = $(COMMON_VARIANT_FLAGS) -DFF_WITH_CUDA
+CUDA_VARIANT_FLAGS = $(COMMON_VARIANT_FLAGS) #-DFF_WITH_CUDA
 NVCCFLAGS_ = $(NVCCFLAGS)
 
 %.cuda.o: %.cpp

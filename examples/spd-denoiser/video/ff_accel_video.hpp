@@ -2,7 +2,7 @@
 #define _FF_ACCEL_VIDEO_HPP_
 #include "bitmap.hpp"
 #include "control_structures.hpp"
-#include <utils.h>
+#include <utils.hpp>
 #include <pow_table.hpp>
 #include <convergence.hpp>
 #include <noise_detection.hpp>

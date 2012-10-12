@@ -45,7 +45,7 @@ LIB_CUDA :=  -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib -lcudart
 
 INCLUDES             = -I. $(INCS) 
 TARGET               = tctfb_ff tctfb_ff_cuda #seq_video	
-OBJ = video.o ../utils.o 
+OBJ = video.o 
 CUDA_OBJ =  ../utils.cuda.o ../cuda/cuda_kernel.cu.o ../cuda/time_interval.cu.o video.cuda.o
 DEPS = 
 
