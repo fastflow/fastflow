@@ -1,4 +1,12 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*!
+ *  \file ubuffer.hpp
+ *  \brief This file contains the definition of the unbounded \p SWSR circular buffer used in 
+ *  FastFlow
+ */
+ 
+ 
 #ifndef __uSWSR_PTR_BUFFER_HPP_
 #define __uSWSR_PTR_BUFFER_HPP_
 /* ***************************************************************************
@@ -55,6 +63,8 @@
  *  
  */
 #include <assert.h>
+#include <cassert>
+#include <new>
 #include <ff/dynqueue.hpp>
 #include <ff/buffer.hpp>
 #include <ff/spin-lock.hpp>
@@ -68,11 +78,28 @@ namespace ff {
 /* Do not change the following define unless you know what you're doing */
 #define INTERNAL_BUFFER_T SWSR_Ptr_Buffer  /* Lamport_Buffer */
 
+/* Pool of buffers used to create and unbounded SWSR buffer*/
 class BufferPool {
 public:
-    BufferPool(int cachesize)
+    BufferPool(int cachesize, const bool fillcache=false, unsigned long size=-1)
         :inuse(cachesize),bufcache(cachesize) {
-        bufcache.init();
+        bufcache.init(); // initialise the internal buffer and allocates memory
+
+        if (fillcache) {
+            assert(size>0);
+            union { INTERNAL_BUFFER_T * buf; void * buf2;} p;
+            for(int i=0;i<cachesize;++i) {
+                p.buf = (INTERNAL_BUFFER_T*)malloc(sizeof(INTERNAL_BUFFER_T));
+                new (p.buf) INTERNAL_BUFFER_T(size);
+#if defined(uSWSR_MULTIPUSH)
+                p.buf->init(true);
+#else
+                p.buf->init();
+#endif
+                bufcache.push(p.buf);
+            }
+        }
+
 #if defined(UBUFFER_STATS)
         miss=0;hit=0;
 #endif
@@ -91,6 +118,7 @@ public:
         }
     }
     
+    /* Returns a pointer to the next internal buffer to write */
     inline INTERNAL_BUFFER_T * const next_w(unsigned long size)  { 
         union { INTERNAL_BUFFER_T * buf; void * buf2;} p;
         if (!bufcache.pop(&p.buf2)) {
@@ -112,6 +140,7 @@ public:
         return p.buf;
     }
     
+    /* Returns a pointer to the next internal buffer to read */
     inline INTERNAL_BUFFER_T * const next_r()  { 
         union { INTERNAL_BUFFER_T * buf; void * buf2;} p;
         return (inuse.pop(&p.buf2)? p.buf : NULL);
@@ -144,10 +173,32 @@ private:
     long padding1[longxCacheLine-2];    
 #endif
 
-    dynqueue           inuse;
-    INTERNAL_BUFFER_T  bufcache;
+    dynqueue           inuse;    // of type dynqueue, that is a Dynamic (list-based) 
+                                 // SWSR unbounded queue.
+                                 // No lock is needed around pop and push methods.
+                                 
+    INTERNAL_BUFFER_T  bufcache; // This is a bounded buffer
 };
     
+// --------------------------------------------------------------------------------------
+    
+/*!
+ *  \ingroup runtime
+ *
+ *  @{
+ */
+ 
+ /*! 
+  * \class uSWSR_Ptr_Buffer
+  *
+  * \brief Unbounded Single-Writer/Single-Reader circular buffer.
+  *
+  * The unbounded SWSR circular buffer is based on a pool of wait-free 
+  * SWSR circular buffers (see buffer.hpp). The pool of buffers 
+  * automatically grows and shrinks on demand. The implementation 
+  * of the pool of buffers carefully tries to minimize the impact of 
+  * dynamic memory allocation/deallocation by using caching strategies.
+  */ 
 
 // unbounded buffer based on the INTERNAL_BUFFER_T 
 class uSWSR_Ptr_Buffer {
@@ -157,6 +208,7 @@ private:
 #if defined(uSWSR_MULTIPUSH)
     enum { MULTIPUSH_BUFFER_SIZE=16};
 
+    // -
     inline bool multipush() {
         if (buf_w->multipush(multipush_buf,MULTIPUSH_BUFFER_SIZE)) {
             mcnt=0; 
@@ -178,9 +230,9 @@ private:
 #endif
 
 public:
-    uSWSR_Ptr_Buffer(unsigned long n, const bool fixedsize=false):
+    uSWSR_Ptr_Buffer(unsigned long n, const bool fixedsize=false, const bool fillcache=false):
         buf_r(0),buf_w(0),size(n),fixedsize(fixedsize),
-        pool(CACHE_SIZE) {
+        pool(CACHE_SIZE,fillcache,size) {
         init_unlocked(P_lock); init_unlocked(C_lock);
 #if defined(UBUFFER_STATS)
         atomic_long_set(&numBuffers,0);
@@ -212,20 +264,27 @@ public:
         return true;
     }
     
-    /* return true if the buffer is empty */
+    /** Returns true if the buffer is empty */
+    
     inline bool empty() {
-        return buf_r->empty();
+        //return buf_r->empty();
+        if (buf_r->empty()) { // current buffer is empty
+            if (buf_r == buf_w) return true;
+        }
+        return false;
     }
     
-    /* return true if there is at least one room in the buffer */
+    /** Returns true if there is at least one room in the buffer */
     inline bool available()   { 
         return buf_w->available();
     }
  
-    /* push the input value into the queue. 
-     * If fixedsize has been set, this method may
-     * returns false, this means EWOULDBLOCK 
-     * and the call should be retried.  
+    /*! Push Method: push the input value into the queue.
+     *  @param[in] data Data to be pushed in the buffer
+     * 
+     *  If fixedsize has been set to true, this method may
+     *  return false. This means EWOULDBLOCK 
+     *  and the call should be retried.  
      */
     inline bool push(void * const data) {
         /* NULL values cannot be pushed in the queue */
@@ -253,7 +312,7 @@ public:
      */
     inline bool mp_push(void *const data) {
         spin_lock(P_lock);
-        bool r=push(data);
+        bool r=push(data);  // should it be mpush(data)?
         spin_unlock(P_lock);
         return r;
     }
@@ -284,10 +343,15 @@ public:
     }
 #endif /* uSWSR_MULTIPUSH */
     
+    /*! Pop method: get the next data from the buffer
+     *  
+     *  @param[in] data Double pointer to the location where to store the 
+     *  data popped from the buffer
+     */
     inline bool  pop(void ** data) {
         if (!data || !buf_r) return false;
         if (buf_r->empty()) { // current buffer is empty
-            if (buf_r == buf_w) return false;
+            if (buf_r == buf_w) return false; 
             if (buf_r->empty()) { // we have to check again
                 INTERNAL_BUFFER_T * tmp = pool.next_r();
                 if (tmp) {
@@ -327,9 +391,10 @@ public:
         return r;
     }
     
-    /* NOTE: this is not the real queue length
+    /*!
+     * Returns the length of the queue. \n
+     * Note that this is not the real queue length
      * but just a rough estimation.
-     *
      */
     inline unsigned long length() const {
         unsigned long len = buf_r->length();
@@ -346,7 +411,7 @@ private:
     INTERNAL_BUFFER_T * buf_w;
     long padding2[longxCacheLine-1];
 
-    /* ----- two-lock used only in the mp_push and mp_pop methods ------- */
+    /* ----- two-lock used only in the mp_push and mc_pop methods ------- */
     lock_t P_lock;
     long padding3[longxCacheLine-sizeof(lock_t)];
     lock_t C_lock;

@@ -52,8 +52,8 @@ static unsigned long C[N][N];
 static ff_allocator ffa;
 #endif
 
-struct task_t {
-    task_t(int i,int j):i(i),j(j) {}
+struct ff_task_t {
+    ff_task_t(int i,int j):i(i),j(j) {}
     int i;
     int j;
 };
@@ -73,7 +73,7 @@ public:
 #endif
 
     void * svc(void * task) {
-        task_t * t = (task_t *)task;
+        ff_task_t * t = (ff_task_t *)task;
         
         register unsigned long _C=0;
         for(register int k=0;k<N;++k)
@@ -136,10 +136,10 @@ int main(int argc,
     for (int i=0;i<N;i++) {
         for(int j=0;j<N;++j) {
 #if defined(USE_FFA)
-            void * t = ffa.malloc(sizeof(task_t));
-            task_t * task = new (t) task_t(i,j);
+            void * t = ffa.malloc(sizeof(ff_task_t));
+            ff_task_t * task = new (t) ff_task_t(i,j);
 #else
-            task_t * task = new task_t(i,j);
+            ff_task_t * task = new ff_task_t(i,j);
 #endif
             farm.offload(task); 
         }

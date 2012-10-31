@@ -17,7 +17,7 @@
 #include <cuda_definitions.h>
 #include <convergence.hpp>
 #include "cuda_kernel.h"
-#include <utils.h>
+#include <utils.hpp>
 #include <vector>
 using namespace std;
 

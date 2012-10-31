@@ -13,6 +13,7 @@
 #include <vector>
 #include <opencv/cv.h>
 
+
 using namespace std;
 
 void addSaltandPepperNoiseDEPTH_8U (IplImage* img, double percent)
@@ -27,7 +28,8 @@ void addSaltandPepperNoiseDEPTH_8U (IplImage* img, double percent)
     for (int j = 0; j < img->width; ++j)
       {
 	// Generate random number between -1.0 and +1.0
-	double random = 2.0*(rand()-RAND_MAX/2.0)/RAND_MAX;
+    double rr = (double) rand( ); 
+	double random = 2.0*((rr - (RAND_MAX)) / 2.0)/(RAND_MAX);
 	if (random > pr)
 	  {
 		((uchar *)(img->imageData + i*img->widthStep))[j]=255;

@@ -165,6 +165,22 @@ return ret;
 }
 
 
+static inline int ff_getMyCpu() {
+#if defined(__linux__) && defined(CPU_SET)
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+    if (sched_getaffinity(gettid(), sizeof(mask), &mask) != 0) {
+        perror("sched_getaffinity");
+        return EINVAL;
+    }
+    for(int i=0;i<CPU_SETSIZE;++i) 
+        if (CPU_ISSET(i,&mask)) return i;
+#else
+#warning "ff_getThreadCpu not supported"
+#endif
+    return -1;
+}
+
 static inline int ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
 	if (cpu_id > ff_numCores()) return EINVAL;
 #if defined(__linux__) && defined(CPU_SET)

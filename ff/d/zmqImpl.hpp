@@ -1,4 +1,10 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*!
+ *  \file zmqImpl.hpp
+ *  \brief Communication patterns in distributed FastFlow using ØMQ
+ */
+ 
 #ifndef _FF_zmqIMPL_HPP_
 #define _FF_zmqIMPL_HPP_
 /* ***************************************************************************
@@ -64,13 +70,46 @@ namespace ff {
 /* --------------------------------------------------------------- */
 
 // used in Unicast, Bcast, Scatter, On-Demand, OneToMany
+
+/*!
+ *  \ingroup zmq
+ *
+ *  @{
+ */
+ 
+/**
+ *  \struct descriptor1_N
+ *
+ *  \brief Descriptor used in several communication patterns: 
+ *  Unicast, Broadcast, Scatter, On-Demand, OneToMany.
+ *
+ *  REW - Complete this one
+ */
 struct descriptor1_N {
     typedef zmqTransportMsg_t  msg_t;
-    descriptor1_N(const std::string name, const int peers, zmqTransport* const  transport, const bool P):
-        name(name), socket(NULL),transport(transport),P(P),peers(P?peers:1),zmqHdrSet(false),transportIDs(peers) {
-        if (transport) 
-            socket = transport->newEndPoint(!P); // NOTE: we want to use ZMQ_ROUTER at producer side
+    
+    /** 
+     * Constructor. Creates a One-to-Many descriptor, that is, instantiate a 
+     * transport layer using the firt node as a router
+     *
+     * @param[in] name name of the descriptor (?)
+     * @param[in] peers number of peers (?)
+     * @param[in] transport pointer to the transport layer object
+     * @param[in] P boh!
+     *
+     */
+    descriptor1_N( const std::string name, const int peers, 
+                   zmqTransport* const transport, const bool P ) :
+        name(name), socket(NULL), transport(transport), P(P), 
+        peers(P ? peers : 1), zmqHdrSet(false), transportIDs(peers) 
+    {
         
+        if (transport) 
+            socket = transport->newEndPoint(!P); 
+            // NOTE: we want to use ZMQ_ROUTER at producer side
+            // !P means ROUTER => create a socket (a new end-point)
+            // acting as a ROUTER -- REW, P always true?
+                                                    
         if (P) {
             std::stringstream identity;
             for(int i=0;i<peers;++i) {
@@ -82,18 +121,22 @@ struct descriptor1_N {
     }
     ~descriptor1_N() { close(); socket=NULL; }
     
+    
     inline int close() {
         if (socket) return transport->deleteEndPoint(socket);
         return -1;
     }
     
-    // @param addr is the ip address in the form ip/host:port
-    // nodeId is the node identifier in the range [0..inf[
-    //
+    /* 
+     *  Initialise a socket 
+     *
+     *  addr is the ip address in the form ip/host:port
+     *  nodeId is the node identifier in the range [0..inf[
+     */
     inline int init(const std::string& addr, const int nodeId=-1) {
         if (!socket) return -1;
         
-        if (!P) {
+        if (!P) {   // if ROUTER: routing of messages to specific a connection
             std::stringstream identity;
             identity.str("");
             identity << name << ":" << ((nodeId!=-1)?nodeId:transport->getProcId());
@@ -108,7 +151,7 @@ struct descriptor1_N {
 #if defined(CONNECTION_PROTOCOL)
             sendHelloRecvHi();
 #endif
-        } else {
+        } else {    // if DEALER: fair-queuing on input and load-balancing on output
             int i;
             if ((i=addr.find(":"))<0) {
                 printf("init: ERROR wrong ip address format for %s\n",addr.c_str());
@@ -198,8 +241,9 @@ struct descriptor1_N {
     // returns the total number of peers (NOTE: if !P,  peers is 1)
     inline const int getPeers() const { return peers;}
 
-    const std::string        name;
-    zmq::socket_t*           socket;
+    // variables
+    const std::string        name;          // name of descriptor (?)
+    zmq::socket_t*           socket;        // zmq socket object
     zmqTransport * const     transport;
     const bool               P;
     const int                peers;
@@ -316,13 +360,38 @@ struct descriptor1_N {
         zmqTDBG(printf("%s sending HI\n", name.c_str()));    
     }
 #endif
-};
+}; // end descriptor1_N
 
-// used in ALL gather, collect from ANY, ManyToOne
+/*!
+ *  @}
+ */
+
+// ---------------------------------------------------------
+// used in ALLgather, collect fromANY, ManyToOne
+
+/*!
+ *  \ingroup zmq
+ *
+ *  @{
+ */
+ 
+/**
+ *  \struct descriptorN_1
+ *
+ *  \brief Descriptor used in several communication patterns:
+ *  AllGather, Collect FromAny, ManyToOne.
+ *
+ *  REW - Complete this one
+ */
 struct descriptorN_1 {
     typedef zmqTransportMsg_t  msg_t;
-    descriptorN_1(const std::string name, const int peers, zmqTransport* const  transport, const bool P):
-        name(name), socket(NULL),transport(transport),P(P),peers(P?1:peers),recvHdr(true), transportIDs(peers) {
+    
+    /// Constructor
+    descriptorN_1( const std::string name, const int peers, 
+                   zmqTransport* const  transport, const bool P ) :
+            name(name), socket(NULL), transport(transport), P(P), 
+            peers(P?1:peers), recvHdr(true), transportIDs(peers) 
+    {
         if (transport) socket = transport->newEndPoint(P);
         
         if (!P) {
@@ -334,6 +403,7 @@ struct descriptorN_1 {
             }
         }
     }
+    
     ~descriptorN_1() { close(); socket=NULL; }
     
     inline int close() {
@@ -546,38 +616,51 @@ struct descriptorN_1 {
         zmqTDBG(printf("%s sending HI\n", name.c_str()));    
     }
 #endif
-};
+}; // end descriptorN_1
+
+/*!
+ *  @}
+ */
 
 /* --------------------------------------------------------------- */
 
-// 
-//  ZeroMQ implementation of the 1 to 1 communication patter
-//
+/*!
+ *  \ingroup zmq
+ *
+ *  @{
+ */
+
+/*! 
+ *  \class zmq1_1
+ *
+ *  \brief ZeroMQ implementation of the 1 to 1 communication patter
+ */
 class zmq1_1 {
 public:
-    typedef zmqTransportMsg_t  msg_t;
-    typedef zmqTransport       TransportImpl;
-    typedef msg_t              tosend_t;
-    typedef msg_t              torecv_t;
-    typedef descriptor1_N      descriptor;
+    typedef zmqTransportMsg_t  msg_t;           /// a ØMQ message (extends zmq::message_t)
+    typedef zmqTransport       TransportImpl;   /// to the transpoort layer
+    typedef msg_t              tosend_t;        /// ut supra
+    typedef msg_t              torecv_t;        /// ut supra
+    typedef descriptor1_N      descriptor;      ///< descriptor used in Unicast, Bcast, Scatter,
+                                                ///< On-Demand, OneToMany
 
     enum {MULTIPUT=0 };
 
     zmq1_1():desc(NULL),active(false) {}
 
-    // point to point communication implemented using OMQ
+    // point to point communication implemented using ØMQ
     zmq1_1(descriptor* D):desc(D),active(false) {}
 
-    // sets the descriptor
+    /// Set the descriptor
     inline void setDescriptor(descriptor* D) { 
         if (desc)  desc->close(); 
         desc = D; 
     }
 
-    // returns the descriptor
+    /// Get the descriptor
     inline  descriptor* getDescriptor() { return desc; }
 
-    // initializes communication pattern
+    /** Initialize the communication pattern */
     inline bool init(const std::string& address,const int nodeId=-1) { 
         if (active) return false;
         // we force 0 to be the nodeId for the consumer
@@ -618,9 +701,12 @@ protected:
     bool        active;
 };
 
-// 
-//  ZeroMQ implementation of the broadcast communication patter
-//
+
+/*! 
+ *  \class zmqBcast
+ *
+ *  \brief ZeroMQ implementation of the broadcast communication patter
+ */
 class zmqBcast {
 public:
     typedef zmqTransportMsg_t  msg_t;
@@ -693,6 +779,12 @@ protected:
 // 
 //  ZeroMQ implementation of the ALL_GATHER communication patter
 //
+
+/*! 
+ *  \class zmqAllGather
+ *
+ *  \brief ZeroMQ implementation of the ALL_GATHER communication patter
+ */
 class zmqAllGather {
 public:
     typedef zmqTransportMsg_t  msg_t;
@@ -779,9 +871,11 @@ protected:
 };
 
     
-// 
-//  ZeroMQ implementation of the collect from ANY communication patter
-//
+/*! 
+ *  \class zmqFromAny
+ *
+ *  \brief ZeroMQ implementation of the collect from ANY communication patter
+ */
 class zmqFromAny {
 public:
     typedef zmqTransportMsg_t  msg_t;
@@ -863,9 +957,11 @@ protected:
 };
 
 
-// 
-//  ZeroMQ implementation of the scatter communication patter
-//
+/*!
+ *  \class zmqScatter
+ *
+ *  \brief ZeroMQ implementation of the SCATTER communication patter
+ */
 class zmqScatter {
 public:
     typedef zmqTransportMsg_t  msg_t;
@@ -948,9 +1044,11 @@ protected:
 };
 
 
-// 
-//  ZeroMQ implementation of the On-Demand communication patter
-//
+/*!
+ *  \class zmqOnDemand 
+ *
+ *  \brief ZeroMQ implementation of the ON-DEMAND communication patter
+ */
 class zmqOnDemand {
 protected:
     inline bool sendReq() {
@@ -1098,12 +1196,16 @@ protected:
 
 
 
-// 
-//  ZeroMQ implementation of the one to many communication patter. This pattern can
-//  be used to dynamically change among UNICAST, BROADCAST and SCATTER patterns.
-//
-//  ***TO BE COMPLETED AND TESTED***
-//
+/* 
+ *  \class zmq1_N
+ *
+ *  \brief ZeroMQ implementation of the ONE_TO_MANY communication patter. 
+ *
+ *  This pattern can be used to dynamically change among UNICAST, BROADCAST 
+ *  and SCATTER patterns.
+ *
+ *  ***TO BE COMPLETED AND TESTED***
+ */
 class zmq1_N {
 public:
     typedef zmqTransportMsg_t  msg_t;
@@ -1172,6 +1274,11 @@ protected:
     descriptor* desc;
     bool        active;
 };
+
+/*!
+ *
+ * @}
+ */
 
 
 }

@@ -1,4 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*!
+ *  \file buffer.hpp
+ *  \brief This file contains the definition of the bounded \p SWSR circular 
+ *  buffer used in FastFlow
+ */
+ 
 #ifndef __SWSR_PTR_BUFFER_HPP_
 #define __SWSR_PTR_BUFFER_HPP_
 /* ***************************************************************************
@@ -36,28 +43,42 @@
  *
  */
 
-#include <iostream>
 #include <stdlib.h>
 #include <string.h>
-#include <vector>
 
 #include <ff/sysdep.h>
+#include <ff/config.hpp>
 
 #if defined(__APPLE__)
 #include <AvailabilityMacros.h>
 #endif
 
-#ifndef CACHE_LINE_SIZE
-#define CACHE_LINE_SIZE 64
-#endif
 
 namespace ff {
 
-// 64bytes is the common size of a cache line
-    static const int longxCacheLine = (CACHE_LINE_SIZE/sizeof(long));
+// 64 bytes is the common size of a cache line
+static const int longxCacheLine = (CACHE_LINE_SIZE/sizeof(long));
+    
+/*!
+ *  \ingroup runtime
+ *
+ *  @{
+ */
+ 
+ /*! 
+  * \class SWSR_Ptr_Buffer
+  *
+  * \brief Single-Writer/Single-Reader circular buffer.
+  *
+  * This class describes the SWSR circular buffer, used in FastFlow to implement
+  * a lock-free (wait-free) bounded FIFO queue. No lock is needed around pop and 
+  * push methods.\n
+  * A single NULL value is used to indicate buffer full and 
+  * buffer empty conditions.
+  */ 
 
 class SWSR_Ptr_Buffer {
-    // experimentally we found that a good values is between 
+    // experimentally we found that a good value is between 
     // 2 and 6 cache lines (16 to 48 entries respectively)
     enum {MULTIPUSH_BUFFER_SIZE=16};
 
@@ -89,42 +110,36 @@ private:
 #endif
 
 public:
+    /** Constructor. */
     SWSR_Ptr_Buffer(unsigned long n, const bool=true):
         pread(0),pwrite(0),size(n),buf(0) {
     }
     
     ~SWSR_Ptr_Buffer() {
-		#if defined(_MSC_VER)
-        if (buf)::posix_memalign_free(buf);    
-		#else	
-        if (buf)::free(buf);
-		#endif  
-
+        // freeAlignedMemory is a function defined in 'sysdep.h'
+        freeAlignedMemory(buf);
 	}
     
-    /* initialize the circular buffer. */
+    /** 
+     *  Initialise the buffer. Allocate space (\p size) of possibly
+     *  aligned memory and reset the pointers (read pointer and write pointer) 
+     *  by placing them at the beginning of the buffer. 
+     */
     bool init(const bool startatlineend=false) {
         if (buf || (size==0)) return false;
 
 #if defined(SWSR_MULTIPUSH)
         if (size<MULTIPUSH_BUFFER_SIZE) return false;
 #endif
-
-#if (defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED < 1060))
-        buf = (void **)::malloc(size*sizeof(void*));
-        if (!buf) return false;       
-#else
-        void * ptr;
-        if (posix_memalign(&ptr,longxCacheLine*sizeof(long),size*sizeof(void*))!=0)
-            return false;
-        buf=(void **)ptr;
-#endif
+        // getAlignedMemory is a function defined in 'sysdep.h'
+        buf=(void**)getAlignedMemory(longxCacheLine*sizeof(long),size*sizeof(void*));
+        if (!buf) return false;
 
         reset(startatlineend);
         return true;
     }
 
-    /* return true if the buffer is empty */
+    /** Returns true if the buffer is empty */
     inline bool empty() {
 #if defined(NO_VOLATILE_POINTERS)
         return ((*(volatile unsigned long *)(&buf[pread]))==0);
@@ -133,7 +148,7 @@ public:
 #endif
     }
     
-    /* return true if there is at least one room in the buffer */
+    /** Returns true if there is at least one room in the buffer */
     inline bool available()   { 
 #if defined(NO_VOLATILE_POINTERS)
         return ((*(volatile unsigned long *)(&buf[pwrite]))==0);
@@ -142,10 +157,20 @@ public:
 #endif
     }
 
+    /** Returns the size of the buffer */
     inline unsigned long buffersize() const { return size; };
     
-    /* modify only pwrite pointer */
-    inline bool push(void * const data) {
+    /*! Push method: push the input value into the queue.
+     *  @param[in] data Data to be pushed in the buffer
+     *
+     *  A Write Memory Barrier (WMB) ensures that all previous memory writes 
+     *  are visible to the other processors before any later
+     *  write is executed.  This is an "expensive" memory fence
+     *  operation needed in all the architectures with a weak-ordering 
+     *  memory model, where stores can be executed out-of-order 
+     *  (e.g. PowerPc). This is a no-op on Intel x86/x86-64 CPUs.
+     */
+    inline bool push(void * const data) {     /* modify only pwrite pointer */
         if (!data) return false;
 
         if (available()) {
@@ -158,7 +183,7 @@ public:
              */
             WMB(); 
             buf[pwrite] = data;
-            pwrite += (pwrite+1 >=  size) ? (1-size): 1;
+            pwrite += (pwrite+1 >=  size) ? (1-size): 1; // circular buffer
             return true;
         }
         return false;
@@ -219,30 +244,42 @@ public:
         return true;
     }
 
+    /* REW -- ? */
     inline bool flush() {
         return (mcnt ? multipush(multipush_buf,mcnt) : true);
     }
 #endif /* SWSR_MULTIPUSH */
-
-    /* like pop but doesn't copy any data */
-    inline bool  inc() {
-        buf[pread]=NULL;
-        pread += (pread+1 >= size) ? (1-size): 1;        
-        return true;
-    }    
     
-    /* modify only pread pointer */
-    inline bool  pop(void ** data) {
+    /*! Pop method: get the next value from the FIFO buffer.
+     *  @param[in] data Double pointer to the location where to store the 
+     *  data popped from the buffer
+     */
+    inline bool  pop(void ** data) {  /* modify only pread pointer */
         if (!data || empty()) return false;
+
         
         *data = buf[pread];
         return inc();
-    }    
+    } 
     
+    /* like pop but doesn't copy any data */
+    inline bool  inc() {
+        buf[pread]=NULL;
+        pread += (pread+1 >= size) ? (1-size): 1; // circular buffer       
+        return true;
+    }           
+    
+    /** Returns the "head" of the buffer, i.e. the element pointed by the 
+     *  read pointer (it is a FIFO queue, so \p push on the tail and \p pop from 
+     *  the head). 
+     */
     inline void * const top() const { 
         return buf[pread];  
     }    
 
+    /** Reset the buffer and move \p read and \p write pointers to
+     * the beginning of the buffer (i.e. position 0).  
+     */
     inline void reset(const bool startatlineend=false) { 
         if (startatlineend) {
             /*
@@ -260,6 +297,9 @@ public:
         memset(buf,0,size*sizeof(void*));
     }
 
+    /** Returns the length of the buffer
+     * (i.e. the actual number of elements it contains) 
+     */
     inline unsigned long length() const {
         long len = pwrite-pread;
         if (len>=0) return len;
@@ -268,6 +308,10 @@ public:
 
 };
 
+/*!
+ *  @}
+ */
+ 
 
 /* Implementation of the well-known 
  * Lamport's wait-free circular buffer.
@@ -291,25 +335,14 @@ public:
     }
     
     ~Lamport_Buffer() {
-#if defined(_MSC_VER)
-        if (buf)::posix_memalign_free(buf);    
-#else	
-        if (buf)::free(buf);
-#endif          
+        freeAlignedMemory(buf);
 	}
     
-    /* initialize the circular buffer. */
+    /* Initialize the circular buffer. */
     bool init() {
         if (buf) return false;
-#if (defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED < 1060))
-        buf = (void **)::malloc(size*sizeof(void*));
-        if (!buf) return false;       
-#else
-        void * ptr;
-        if (posix_memalign(&ptr,longxCacheLine*sizeof(long),size*sizeof(void*))!=0)
-            return false;
-        buf=(void **)ptr;
-#endif
+        buf=(void**)getAlignedMemory(longxCacheLine*sizeof(long),size*sizeof(void*));
+        if (!buf) return false;
         reset();
         return true;
     }

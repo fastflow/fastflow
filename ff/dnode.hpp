@@ -58,6 +58,9 @@ typedef void (*dnode_cbk_t) (void *,void*);
  *  or more edge-nodes of other FastFlow application graphs running on the same host 
  *  or on a different host(s).
  *
+ *  It is implemented as a template; the template type \p CommImpl refers to 
+ *  the communication pattern that the programmer wishes to use to connect different 
+ *  \p ff_dnodes (i.e. unicast, broadcast, scatter, ondemand, fromAll, fromAny).
  */
 
 template <typename CommImpl>
@@ -245,6 +248,7 @@ public:
      *  input message frames will be received
      *  \param len the number of input messages expected
      *  \param sender the message sender
+     *  \param v vector containing the pool of messages
      */
     virtual void prepare(svector<msg_t*>*& v, size_t len, const int sender=-1) {
         svector<msg_t*> * v2 = new svector<msg_t*>(len);

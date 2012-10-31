@@ -16,6 +16,11 @@
  *
  ****************************************************************************
  */
+ 
+ /*!
+ *  \file zmqTransport.hpp
+ *  \brief Definition of the external transport layer based on ØMQ
+ */
 
 #ifndef _FF_ZMQTRANSPORT_HPP_
 #define _FF_ZMQTRANSPORT_HPP_
@@ -41,7 +46,21 @@
 #include <zmq.hpp>
 
 namespace ff {
-
+/*!
+ *  \ingroup zmq
+ *
+ *  @{
+ */
+ 
+/*!
+ * \class zmqTransportMsg_t
+ *
+ * \brief The structure of a ØMQ message.
+ *
+ * This class describes the layout of a message used for inter-thread 
+ * communications, inter-process communications, TCP/IP and multicast 
+ * sockets in a distrubuted system running on FastFlow.
+ */
 
 class zmqTransportMsg_t: public zmq::message_t {    
 public:
@@ -51,29 +70,74 @@ public:
     enum {HEADER_LENGHT=4}; // n. of bytes
 
 public:
+    /** 
+     * Default constructor: create an empty ØMQ message
+     */
     inline zmqTransportMsg_t() {}
 
-    inline zmqTransportMsg_t(const void * data, size_t size, msg_callback_t cb=0,void * arg=0):
-        zmq::message_t(const_cast<void*>(data),size,cb,arg) {}
+    /** 
+     * Default constructor (2): create a structured ØMQ message.
+     *
+     * \param data the content of the message
+     * \param size memory to be allocated for the message
+     * \param cb   a callback function
+     * \param arg  additional arguments.   
+     */
+    inline zmqTransportMsg_t( const void * data, size_t size, 
+                              msg_callback_t cb=0, void * arg=0 ) :
+                              zmq::message_t( const_cast<void*>(data), size, cb, arg ) 
+                              { }
 
 
-    inline void init(const void * data, size_t size, msg_callback_t cb=0,void * arg=0) {
-        zmq::message_t::rebuild(const_cast<void*>(data),size,cb,arg);
+    /**
+     * Initialise the message object (like the constructor but 
+     * it rebuilds the object from scratch using new values). 
+     */
+    inline void init(const void * data, size_t size, msg_callback_t cb=0, void * arg=0) {
+        zmq::message_t::rebuild( const_cast<void*>(data), size, cb, arg );
     }
 
+    /**
+     * Copy the message
+     */
     inline void copy(zmq::message_t &msg) {
         zmq::message_t::copy(&msg);
     }
 
+    /**
+     * Retrieve the message content
+     * \returns a pointer to the content of the message object
+     */
     inline void * getData() {
         return zmq::message_t::data();
     }
 
+    /**
+     * \returns the size in bytes of the content of the message object
+     */
     inline size_t size() {
         return zmq::message_t::size();
     }
 };
 
+/*!
+ *  @}
+ */
+
+/*!
+ *  \ingroup zmq
+ *
+ *  @{
+ */
+
+/*!
+ * \class zmqTransport
+ *
+ * \brief The transport layer
+ *
+ * This class describes the transport layer used in a distributed
+ * FastFlow environment.
+ */
 class zmqTransport {
 private:
     enum {NUM_IO_THREADS=1};
@@ -83,9 +147,9 @@ protected:
     // closes all connections
     inline int closeConnections() {
         //
-        // WARNING: Instead of setting a linger period of some minutes, 
+        // WARNING: Instead of setting a longer period of some minutes, 
         // it would be better to implement a shoutdown protocol and to set 
-        // the linger period to 0.
+        // the longer period to 0.
         //
         int zero = 1000000; //milliseconds 
         for(unsigned i=0;i<Socks.size();++i) {
@@ -109,6 +173,12 @@ public:
 
     ~zmqTransport() { closeTransport();  }
 
+    /**
+     * Initialise the transport layer: create a new ØMQ context
+     * and clean the list of active en-points.
+     *
+     * \returns 0 if successful 
+     */
     int initTransport() {
         if (context) return -1;
         context = new zmq::context_t(NUM_IO_THREADS);        
@@ -117,13 +187,28 @@ public:
         return 0;
     }
     
+    /**
+     * Close the transport layer, close all connections to any
+     * active endpoint and delete the existing context.
+     *
+     * \returns 0 if successful
+     */
     int closeTransport() {
         closeConnections();
         if (context) {delete context; context=NULL;}        
         return 0;
     }
 
-    
+    /**
+     * Create a new socket and push it to the active sockets list.
+     *
+     * \param P if \p false, the new socket acts as a \p ROUTER (
+     * allows routing of messages to specific connections); if \p true
+     * the new socket acts as a \p DEALER (used for fair-queuing on 
+     * input and for performing load-balancing on output toward a pool of collections).
+     *
+     * \returns a pointer to the newly created endpoint.
+     */
     endpoint_t * newEndPoint(const bool P) {
         endpoint_t * s = new endpoint_t(*context, (P ? ZMQ_DEALER : ZMQ_ROUTER));
         if (!s) return NULL;
@@ -131,6 +216,14 @@ public:
         return s;
     }
     
+    /**
+     * Delete the socket pointed by \p s. It removes the socket from
+     * the list of active sockets and then destroys the socket.
+     *
+     * \param s a pointer to the socket to be deleted
+     * 
+     * \returns 0 if successful; negative value otherwise
+     */
     int deleteEndPoint(endpoint_t *s) {
         if (s) {
             std::deque<endpoint_t*>::iterator it = std::find(Socks.begin(), Socks.end(), s);
@@ -152,10 +245,16 @@ public:
     const int getProcId() const { return procId;}
 
 protected:
-    const int                procId;
-    zmq::context_t *         context;
-    std::deque<endpoint_t *> Socks;    // all active end-points
+    const int                procId;    // Process (or thread) ID
+    zmq::context_t *         context;   ///< A context encapsulates functionality dealing with the
+                                        ///< initialisation and termination of a ØMQ context.
+                                        
+    std::deque<endpoint_t *> Socks;     // all active end-points (i.e. sockets)
 };
+
+/*!
+ *  @}
+ */
 
 } // namespace
 #endif /* _ZMQTRANSPORT_HPP_INCLUDE_ */

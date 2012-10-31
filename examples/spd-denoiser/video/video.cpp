@@ -16,6 +16,8 @@
 #endif
 #include <opencv/highgui.h>
 #include <opencv/cv.h>
+//#include <highgui.h>
+//#include <cv.h>
 #include <noiser.hpp>
 #include "videoTaskTypes.hpp"
 //#include "taskTypes.hpp"
@@ -50,7 +52,7 @@ int main(int argc, char *argv[]) {
   int inflight=0;
   IplImage **imageclone, *frame, *filteredframe, *imageresult;
   void * result=NULL;
-  long int start_usec = get_usec_from(0), time_usec, prev_time = start_usec;
+  long int start_usec = get_usec_from(0), time_usec=0, prev_time = start_usec;
 #define RAN 8
   long int time_usec_ra[RAN],ra; // running average framerate
   memset (time_usec_ra, 0, sizeof(long)*RAN);

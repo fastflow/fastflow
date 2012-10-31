@@ -26,9 +26,8 @@
  */
 
 /*
- * The program is a simple map used:
- *   1. as a software accelerator (mapSA)
- *   2. to compute just one single task (mapOneShot).
+ * The program is a mapreduce which computes the sum of the elements of the
+ * array given in input.
  *
  */
 #include <vector>
@@ -38,27 +37,33 @@
 
 using namespace ff;
 
-// this is the map function
+// this is the map function which computes a local reduce
 void* mapF(basePartitioner*const P, int tid) {
     LinearPartitioner<int>* const partitioner=(LinearPartitioner<int>* const)P;
     LinearPartitioner<int>::partition_t Partition;
     partitioner->getPartition(tid, Partition);
-    
-    int* p   = (int*)Partition.getData(); // gets the pointer to the first element of the partion
-    size_t l = Partition.getLength(); // gets the length of the partion
 
-    for(size_t i=0;i<l;++i)  p[i] += tid;
+    int* p = (int*)(Partition.getData());
+    size_t l = Partition.getLength();
 
-    return p;  // returns the partition pointer !!!
+    for(size_t i=1;i<l;++i)  p[0]+=p[i]; 
+
+    return &p[0];
+}
+
+// this is the reduce function called in the Collector
+void* reduceF(void** V, int n) {
+    int sum=0;
+    for(int i=0;i<n;++i)  sum += ((int**)V)[i][0];
+    printf("Sum = %d\n", sum);
+
+    return NULL;
 }
 
 
-int main(int argc, char * argv[]) {
-    
+int main(int argc, char * argv[]) {    
     if (argc<3) {
-        std::cerr << "use: " 
-                  << argv[0] 
-                  << " arraysize nworkers\n";
+        std::cerr << "use: " << argv[0] << " arraysize nworkers\n";
         return -1;
     }
     int arraySize= atoi(argv[1]);
@@ -69,43 +74,13 @@ int main(int argc, char * argv[]) {
         return -1;
     }
     
-    // defining a linear partitioner of integer elements
-    LinearPartitioner<int> P(arraySize,nworkers);
-    // defining the map passing as parameter the function called 
-    // within each worker and the partitioner that has to be used
-    // to create the worker partitions
-    ff_map mapSA(mapF,&P, NULL, true); // the 4rd parameter enable the accelerator mode
-    mapSA.run();
-
-    printf("\nmapSA:\n");
-    for(int i=0;i<10;++i) {
-        // create a task
-        int* A=new int[arraySize];
-        for(int j=0;j<arraySize;++j) A[j]=i;
-
-        // offload the task into the map 
-        mapSA.offload(A);
-
-        // wait for the result (NOTE: also the non-blocking call may be used !)
-        void* R=NULL;
-        mapSA.load_result(&R);
-
-        // print the result
-        for(int j=0;j<arraySize;++j) printf("%d ", ((int*)R)[j]);
-        printf("\n");
-    }
-    // stopping the accelerator
-    mapSA.offload(EOS);
-    mapSA.wait();
-
+    // creates the array
     int* oneTask=new int[arraySize];
     for(int j=0;j<arraySize;++j) oneTask[j]=j;
-    ff_map mapOneShot(mapF,&P, oneTask);
-    mapOneShot.run_and_wait_end();
-    // print the result
-    printf("\nmapOneShot:\n");
-    for(int j=0;j<arraySize;++j) printf("%d ", oneTask[j]);
-    printf("\n");
+
+    LinearPartitioner<int> P(arraySize,nworkers);
+    ff_map mapreduce(mapF,&P,oneTask,reduceF);
+    mapreduce.run_and_wait_end();
 
     std::cerr << "DONE\n";
     return 0;
