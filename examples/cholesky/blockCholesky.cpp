@@ -264,7 +264,7 @@ void matrixSub(const comp_t *a, unsigned bia, unsigned bja,
 class Worker: public ff_node {
 public:
 	void *svc(void *task) {
-        comp_t *l = ((task_t *) task)->l;
+        comp_t *l = ((ff_task_t *) task)->l;
 		int i, k, j, cpi, cpj;		// indexes used in loops
 		
 		// Number of blocks
@@ -349,10 +349,10 @@ class Emitter: public ff_node
 {
 private:
     int ntask;
-	task_t *tasks;
+	ff_task_t *tasks;
 	
 public:
-    Emitter(task_t *taskList, int max_task) : ntask(max_task) { tasks = taskList; }
+    Emitter(ff_task_t *taskList, int max_task) : ntask(max_task) { tasks = taskList; }
 	
     void *svc(void *) {
         if (--ntask < 0) return NULL;
@@ -389,7 +389,7 @@ int main(int argc,
 	}
 	
 	// Array of tasks (each task is made up of an A matrix and a L matrix)
-	task_t *tasks = new task_t[streamlen];
+	ff_task_t *tasks = new ff_task_t[streamlen];
 	
 	// Variables needed to use HUGE_PAGES
 	int huge_size;

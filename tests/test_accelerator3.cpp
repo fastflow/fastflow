@@ -26,8 +26,7 @@
  */
 
 /*
- * Very basic test for the FastFlow farm (without the collector) in the 
- * accelerator configuration.
+ * Tests nesting accelerators.
  *
  */
 #include <vector>
@@ -47,10 +46,6 @@ public:
                   << " received task " << *t << "\n";
         return task;
     }
-    // I don't need the following for this test
-    //int   svc_init() { return 0; }
-    //void  svc_end() {}
-
 };
 
 // the gatherer filter
@@ -61,7 +56,7 @@ public:
     int svc_init() {
         if (secondFarm==NULL) return 0;
         else {
-            std::cerr << "Starting 2 farm\n";
+            std::cerr << "Starting 2nd farm\n";
             secondFarm->run_then_freeze();
         }
         return 0;
@@ -106,22 +101,6 @@ private:
 
 };
 
-// the load-balancer filter 
-/* 
-class Emitter: public ff_node {
-public:
-    Emitter(int max_task):ntask(max_task) {
-        std::cout << "Emitter set up\n";  
-    };
-    void * svc(void *intask) {     
-        //std::cout << " EMITTER \n";
-        return intask;   
-    }
-private:
-    int ntask;
-};
-*/
-
 int main(int argc, 
          char * argv[]) {
 
@@ -141,19 +120,10 @@ int main(int argc,
     }
     
     ff_farm<> farm(true /* accelerator set */);
-    
-    // Using standard emitter
-    /*
-      Emitter E(streamlen);
-      farm.add_emitter(&E);
-    */
 
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker);
     farm.add_workers(w);
-
-
-    
 
     ff_farm<> farm2(true);
     std::vector<ff_node *> w2;
@@ -162,10 +132,8 @@ int main(int argc,
     Collector C2(NULL);
     farm2.add_collector(&C2);
     
-
     Collector C(&farm2);
     farm.add_collector(&C);   
-
 
     // Now run the accelator asynchronusly
     farm.run();

@@ -4,7 +4,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Windows")
 set (SPD_SRCS ${SPD_SRCS} XGetopt/XGetopt.cpp)
 endif (CMAKE_SYSTEM_NAME MATCHES "Windows")
 
-set (SPD_CUDA_SRCS ${SPD_SRCS} cuda/cuda_kernel.cu)
+set (SPD_CUDA_SRCS ${SPD_SRCS} ${CMAKE_CURRENT_SOURCE_DIR}/cuda/cuda_kernel.cu)
 
 include_directories (
   ${PROJECT_SOURCE_DIR}

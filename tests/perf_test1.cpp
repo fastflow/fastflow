@@ -27,7 +27,7 @@
 
 /*
  * Simple Farm without collector. Tasks are allocated dinamically by the 
- * ff_allocator and all tasks have a fixed size (itemsize*sizeof(task_t)).
+ * ff_allocator and all tasks have a fixed size (itemsize*sizeof(ff_task_t)).
  *
  */
 
@@ -43,7 +43,7 @@
 
 using namespace ff;
 
-typedef int task_t;
+typedef int ff_task_t;
 
 static ff_allocator ffalloc;
 
@@ -71,7 +71,7 @@ public:
     }
 
     void * svc(void * t) {
-        task_t * task = (task_t *)t;
+        ff_task_t * task = (ff_task_t *)t;
 
         do_work(task,itemsize,nticks);
 
@@ -112,7 +112,7 @@ public:
 
     void * svc(void *) {
         static int n=0;
-        task_t * task = (task_t*)ffalloc.malloc(itemsize*sizeof(task_t));
+        ff_task_t * task = (ff_task_t*)ffalloc.malloc(itemsize*sizeof(ff_task_t));
         if (!task) abort();
         filltask(&task[1], itemsize-1);
         task[0] = n++;

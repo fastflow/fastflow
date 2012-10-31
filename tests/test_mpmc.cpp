@@ -79,7 +79,6 @@ cds::container::MSQueue< cds::gc::HP, void*> * msq;  // which allocator ?
 #endif // HAVE_CDSLIB
 #endif // USE_LFDS
 
-const int MAX_NUM_THREADS=128;  // just an upper bound, it can be increased
 
 #if defined(SCALABLE_QUEUE) || defined(HAVE_CDSLIB) || defined(UNBOUNDED_MPMC)
 int nqueues=4;
@@ -93,7 +92,7 @@ long taskC[MAX_NUM_THREADS]={0};
 long taskP[MAX_NUM_THREADS]={0};
 
 
-
+#if 0
 /* 
  * The following function has been taken from CDS library 
  * (http://sourceforge.net/projects/libcds/).
@@ -118,7 +117,7 @@ static inline void backoff_pause( unsigned int nLoop = 0x000003FF ) {
     return;
 }
 #endif
-
+#endif
 
 static inline bool PUSH(int myid) {
     long * p = (long *)(atomic_long_inc_return(&counter));
@@ -151,7 +150,7 @@ void * P(void * arg) {
     cds::threading::pthread::Manager::attachThread();
 #endif
 
-    Barrier::instance()->doBarrier();
+    Barrier::instance()->doBarrier(myid);
     do; while(PUSH(myid));
 
 #if defined(HAVE_CDSLIB)
@@ -172,10 +171,10 @@ void * C(void * arg) {
     cds::threading::pthread::Manager::attachThread();
 #endif
 
-    Barrier::instance()->doBarrier();
+    Barrier::instance()->doBarrier(myid);
     while(1) {
         if (!QUEUE_POP(&task.b))  {
-            backoff_pause();
+            PAUSE();
             continue;
         }
         if (task.b == (void*)FF_EOS) break;
@@ -267,7 +266,7 @@ int main(int argc, char * argv[]) {
 	C_handle = (pthread_t *) malloc(sizeof(pthread_t)*numC);
 	
     // define the number of threads that are going to partecipate....
-    Barrier::instance()->doBarrier(numP+numC+1);
+    Barrier::instance()->barrierSetup(numP+numC+1);
 
     int * idC;
 	idC = (int *) malloc(sizeof(int)*numC);
@@ -280,14 +279,14 @@ int main(int argc, char * argv[]) {
     int *idP;
 	idP = (int *) malloc(sizeof(int)*numP);
     for(int i=0;i<numP;++i)  {
-        idP[i]=i;
+        idP[i]=i+numC;
         if (pthread_create(&P_handle[i], NULL,P,&idP[i]) != 0) {
             abort();
         }
     }
 
     ffTime(START_TIME);
-    Barrier::instance()->doBarrier();
+    Barrier::instance()->doBarrier(numP+numC);
 
     // wait all producers
     for(int i=0;i<numP;++i) {

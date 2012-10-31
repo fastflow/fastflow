@@ -41,11 +41,10 @@ namespace ff {
  *
  *  \brief The Pipeline skeleton.
  *
- *  Pipelining is one of the simplest parallel pattern where data flows through a series of stages 
- *  (or nodes) and each stage processes the input data in some way producing as output a modified 
- *  version or new data. A pipeline's stage can operate sequentially or in parallel and may have or 
+ *  Pipelining is one of the simplest parallel patterns where data flows through a series of stages 
+ *  (or nodes) and each stage processes the input data in some ways, producing as output a modified 
+ *  version or new data. A pipeline's stage can operate sequentially or in parallel and may or may
  *  not have an internal state.
- *
  */
  
 class ff_pipeline: public ff_node {
@@ -157,9 +156,8 @@ public:
 
         if (!skip_init) {            
             // set the initial value for the barrier 
-            //Barrier::instance()->barrier(cardinality());        
-            if (!barrier)  barrier = new Barrier;
-            barrier->doBarrier(cardinality(barrier));
+            if (!barrier)  barrier = new BARRIER_T;
+            barrier->barrierSetup(cardinality(barrier));
         }
         if (!prepared) if (prepare()<0) return -1;
 
@@ -314,7 +312,7 @@ public:
         return false;        
     }
     
-    int   cardinality(Barrier * const barrier)  { 
+    int   cardinality(BARRIER_T * const barrier)  { 
         int card=0;
         for(unsigned int i=0;i<nodes_list.size();++i) 
             card += nodes_list[i]->cardinality(barrier);
@@ -350,13 +348,18 @@ public:
     }
 #endif
     
-    protected:
+protected:
     
     /// ff_node interface
     void* svc(void * task) { return NULL; }
     int   svc_init() { return -1; };
     void  svc_end()  {}
-    
+    int   get_my_id() const { return -1; };
+    void  setAffinity(int) { 
+        error("PIPE, setAffinity: cannot set affinity for the pipeline\n");
+    }
+    int   getCPUId() { return -1;}
+
     int create_input_buffer(int nentries, bool fixedsize) { 
         if (in) return -1;
         if (nodes_list[0]->create_input_buffer(nentries, fixedsize)<0) {
@@ -390,7 +393,7 @@ public:
         return 0;
     }
 
-    private:
+private:
     bool has_input_channel; // for accelerator
     bool prepared;
     int in_buffer_entries;

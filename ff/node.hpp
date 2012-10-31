@@ -3,7 +3,7 @@
 /*!
  *  \file node.hpp
  *  \brief This file contains the definition of the \p ff_node class, which acts as the basic 
- *  structure of each skeleton. Other supplementary classes are defined here. *
+ *  structure of each skeleton. Other supplementary classes are defined here.
  */
 
 #ifndef _FF_NODE_HPP_
@@ -27,53 +27,30 @@
  */
 
 #include <stdlib.h>
-//#include <sys/time.h>
-//#include <pthread.h>
 #include <iostream>
 #include "ff/platforms/platform.h"
 #include <ff/cycle.h>
 #include <ff/utils.hpp>
 #include <ff/buffer.hpp>
 #include <ff/ubuffer.hpp>
-
+#include <ff/mapper.hpp>
+#include <ff/config.hpp>
 
 namespace ff {
 
-
-
-
 /*
- * NOTE: by default FF_BOUNDED_BUFFER is not defined
- */
-#if defined(FF_BOUNDED_BUFFER)
-#define FFBUFFER SWSR_Ptr_Buffer
-#else  // unbounded buffer
-#define FFBUFFER uSWSR_Ptr_Buffer
-#endif
-
-
-enum { FF_EOS=0xffffffff, FF_EOS_NOFREEZE=(FF_EOS-0x1) , FF_GO_ON=(FF_EOS-0x2)};
-
-#define GO_ON         (void*)ff::FF_GO_ON
-#define EOS_NOFREEZE  (void*)ff::FF_EOS_NOFREEZE
-#define EOS           (void*)ff::FF_EOS
-
-#if defined(TRACE_FASTFLOW)
-#define FFTRACE(x) x
-#else
-#define FFTRACE(x)
-#endif
-
-/*!
  *  \ingroup runtime
  *
  *  @{
  */
 
-/*!
+// this is just a counter, it is used to set the ff_node::tid value.
+static unsigned threadCounter=0;
+
+/*
  *  \class Barrier
  *
- *  \brief A class representing a Barrier, i.e. a \a Mutex
+ *  \brief This class models a classical \a Mutex 
  *
  *  <em>SHALL WE INCLUDE THIS CLASS IN THE DOCUMENTATION?</em> \n
  *  This class provides the methods necessary to implement a low-level \p pthread mutex.
@@ -85,7 +62,7 @@ public:
         return &b;
     }
 
-    /*!
+    /*
      *  Default Constructor.
      *
      *  Checks whether the mutex variable(s) and the conditional variable(s) can be propetly 
@@ -102,10 +79,13 @@ public:
         }
     }
     
-    /** Performs the barrier and waits on the condition variable */
-    inline void doBarrier(int init = -1) {        
-        if (!_barrier && init>0) { _barrier = init; return; }
-        
+    inline void barrierSetup(int init) {        
+        if (!_barrier && init>0) _barrier = init; 
+        return;
+    }
+
+    /* Performs the barrier and waits on the condition variable */
+    inline void doBarrier(int) {                
         pthread_mutex_lock(&bLock);
         if (!--_barrier) pthread_cond_broadcast(&bCond);
         else {
@@ -117,12 +97,84 @@ public:
    
 
 private:
-    int _barrier;           /// 
-    pthread_mutex_t bLock;  /// Mutex variable
-    pthread_cond_t  bCond;  /// Condition variable
+    int _barrier;           // num threads in the barrier
+    pthread_mutex_t bLock;  // Mutex variable
+    pthread_cond_t  bCond;  // Condition variable
 };
 
-/*!
+
+class spinBarrier {
+public:
+    static inline spinBarrier * instance() {
+        static spinBarrier b;
+        return &b;
+    }
+
+    /*
+     *  Default Constructor.
+     *
+     */
+    spinBarrier(const int maxNThreads=MAX_NUM_THREADS):_barrier(0),maxNThreads(maxNThreads) {
+        atomic_long_set(&B[0],0);
+        atomic_long_set(&B[1],0);
+        barArray=new bool[maxNThreads];
+        for(int i=0;i<maxNThreads;++i) barArray[i]=false;
+    }
+
+    ~spinBarrier() {
+        if (barArray != NULL) delete [] barArray;
+        barArray=NULL;
+    }
+    
+    inline void barrierSetup(int init) {        
+        if (!_barrier && init>0) _barrier = init; 
+        return;
+    }
+
+    /* Performs the barrier */
+    inline void doBarrier(int tid) {        
+        assert(tid<maxNThreads);
+        const int whichBar = (barArray[tid] ^= true); // computes % 2
+        long c = atomic_long_inc_return(&B[whichBar]);
+        if (c == _barrier) 
+            atomic_long_set(&B[whichBar], 0);
+        else
+            while(c) { 
+                c= atomic_long_read(&B[whichBar]);
+                PAUSE();
+            }
+    }
+    
+private:
+    long _barrier;          // num threads in the barrier    
+    const long maxNThreads; // max number of threads
+    // each thread has an entry in the barArray, it is used to 
+    // point to the current barrier counter either B[0] or B[1]
+    bool* barArray;          
+    atomic_long_t B[2];   // barrier counter 
+};
+    
+
+
+#if defined(HAVE_PTHREAD_SETAFFINITY_NP)
+static inline void init_thread_affinity(pthread_attr_t*attr, int cpuId) {
+    cpu_set_t cpuset;    
+    CPU_ZERO(&cpuset);
+
+    if (cpuId<0)
+        CPU_SET (threadMapper::instance()->getCoreId(), &cpuset);
+    else 
+        CPU_SET (cpuId, &cpuset);
+
+    if (pthread_attr_setaffinity_np (attr, sizeof(cpuset), &cpuset)<0) {
+        perror("pthread_attr_setaffinity_np");
+    }
+}
+#else
+static inline void init_thread_affinity(pthread_attr_t*,int) {}
+#endif /* HAVE_PTHREAD_SETAFFINITY_NP */
+
+/*
  * @}
  */
 
@@ -140,26 +192,29 @@ static void * proxy_thread_routine(void * arg);
 /*!
  *  \class ff_thread
  *
- *  \brief This class contains methods to describe a ff_thread. 
+ *  \brief FastFlow's  threads. 
  *
- *  This class performs all the low-level operations need to manage threads communication and 
- *  synchronisation. It is responsible for threads creation and destruction, suspension, freezing and 
- *  thawing.
- *  
+ *  This class manages all the low-level communications and 
+ *  synchronisations needed among threads. It is responsible for threads creation and 
+ *  destruction, suspension, freezing and thawing.
  */
 class ff_thread {
     friend void * proxy_thread_routine(void *arg);
 
 protected:
     /*! Constructor 
-     *  @param[in] barrier Takes a Barrier object as input paramenter.
+     *  @param[in] barrier Takes a Barrier object (i.e a custom Mutex) 
+     *  as input paramenter.
      */
-    ff_thread(Barrier * barrier=NULL):
-        barrier(barrier),
+    ff_thread(BARRIER_T * barrier=NULL):
+        tid((unsigned)-1),barrier(barrier),
         stp(true), // only one shot by default
         spawned(false),
         freezing(false), frozen(false),thawed(false),
         init_error(false) {
+        
+        /* Attr is NULL, default mutex attributes are used. Upon successful initialization, 
+         * the state of the mutex becomes initialized and unlocked. */
         if (pthread_mutex_init(&mutex,NULL)!=0) {
             error("ERROR: ff_thread: pthread_mutex_init fails!\n");
             abort();
@@ -174,7 +229,7 @@ protected:
         }
     }
 
-    /// Default destructor
+    // Default destructor
     virtual ~ff_thread() {
         // MarcoA 27/04/12: Moved to wait
         /*
@@ -184,10 +239,9 @@ protected:
         */
     }
     
-    /** Control thread's life cycle  */
+    /** Each thread's life cycle  */
     void thread_routine() {
-        //Barrier::instance()->barrier();
-        if (barrier) barrier->doBarrier();
+        if (barrier) barrier->doBarrier(tid);
         void * ret;
         do {
             init_error=false;
@@ -203,6 +257,8 @@ protected:
                 return;
             }
 
+            // acquire lock. While freezing is true,
+            // freeze and wait. 
             pthread_mutex_lock(&mutex);
             if (ret != (void*)FF_EOS_NOFREEZE) {
                 while(freezing) {
@@ -233,6 +289,8 @@ protected:
         } 
     }
 
+    // Make thread not cancelable. If a cancellation request is received,
+    // it is blocked until cancelability is enabled.
     int disable_cancelability()
     {
         if (pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancelstate)) {
@@ -242,6 +300,7 @@ protected:
         return 0;
     }
 
+    // Make thread cancelable.
     int enable_cancelability()
     {
         if (pthread_setcancelstate(old_cancelstate, 0)) {
@@ -256,34 +315,40 @@ public:
     virtual int   svc_init() { return 0; };
     virtual void  svc_end()  {}
 
-    void set_barrier(Barrier * const b) { barrier=b;}
+    void set_barrier(BARRIER_T * const b) { barrier=b;}
 
-    /// Creates a new thread
-    int spawn() {
+    /// Create a new thread
+    int spawn(int cpuId=-1) {
         if (spawned) return -1;
         
         if (pthread_attr_init(&attr)) {
                 perror("pthread_attr_init");
                 return -1;
         }
+
+        init_thread_affinity(&attr, cpuId);
+        tid=threadCounter;
         if (pthread_create(&th_handle, &attr,
                            proxy_thread_routine, this) != 0) {
             perror("pthread_create");
             return -1;
         }
+        ++threadCounter;
         spawned = true;
         return 0;
     }
    
-    /// Waits thread termination
+    /// Wait thread termination
     int wait() {
         stp=true;
         if (isfrozen()) {
             wait_freezing();
             thaw();           
         }
-        if (spawned)
+        if (spawned) {
             pthread_join(th_handle, NULL);
+            threadCounter--;
+        }
         if (pthread_attr_destroy(&attr)) {
             error("ERROR: ff_thread.wait: pthread_attr_destroy fails!");
         }
@@ -291,7 +356,7 @@ public:
         return 0;
     }
 
-    /// Waits thread freezing
+    /// Wait for the thread to freeze (uses Mutex)
     int wait_freezing() {
         pthread_mutex_lock(&mutex);
         while(!frozen) pthread_cond_wait(&cond_frozen,&mutex);        
@@ -322,13 +387,15 @@ public:
         pthread_mutex_unlock(&mutex);
     }
 
-    /// Tell if the thread is frozen
+    /// Check whether the thread is frozen
     bool isfrozen() { return freezing;} 
 
     pthread_t get_handle() const { return th_handle;}
 
+protected:
+    unsigned        tid;
 private:
-    Barrier      *  barrier;            /// A \p Barrier object
+    BARRIER_T    *  barrier;            /// A \p Barrier object
     bool            stp;
     bool            spawned;
     bool            freezing;
@@ -354,6 +421,8 @@ static void * proxy_thread_routine(void * arg) {
  *  @}
  */
 
+// -------------------------------------------------------------------------------------------------
+
 /*!
  *  \ingroup low_level
  *
@@ -365,7 +434,10 @@ static void * proxy_thread_routine(void * arg) {
  *
  *  \brief This class describes the \p ff_node, the basic building block of every skeleton.
  *
- *  This class desribes the Node object, the base class of every skeleton. \p ff_node defines 3 basic 
+ *  This class desribes the Node object, the basic unit of parallelism in a streaming network.
+ *  It is used to encapsulate sequential portions of code implementing functions, as well as higher
+ *  level parallel patterns such as pipelines and farms.
+ *  \p ff_node defines 3 basic 
  *  methods, two optional - \p svc_init and \p svc_end - and one mandatory - \p svc (pure virtual 
  *  method). The \p svc_init method is called once at node initialization, while the \p svn_end method 
  *  is called once when the end-of-stream (EOS) is received in input or when the \p svc method returns 
@@ -387,6 +459,7 @@ protected:
     virtual inline void skipfirstpop(bool sk)   { skip1pop=sk;}
     bool skipfirstpop() const { return skip1pop; }
     
+    /** */
     virtual int create_input_buffer(int nentries, bool fixedsize=true) {
         if (in) return -1;
         in = new FFBUFFER(nentries,fixedsize);        
@@ -453,9 +526,12 @@ protected:
             return false;
         return thread->isfrozen();
     }
-    virtual int  cardinality(Barrier * const b) { 
+    virtual int  cardinality(BARRIER_T * const b) { 
         barrier = b;
         return 1;
+    }
+    virtual void set_barrier(BARRIER_T * const b) {
+        barrier = b;
     }
 
     virtual double ffTime() {
@@ -474,6 +550,14 @@ public:
     virtual int   svc_init() { return 0; }
     virtual void  svc_end() {}
     virtual int   get_my_id() const { return myid; };
+    virtual void  setAffinity(int cpuID) { 
+        if (cpuID<0 || !threadMapper::instance()->checkCPUId(cpuID) ) {
+            error("setAffinity, invalid cpuID\n");
+        }
+        CPUId=cpuID;
+    }
+    virtual int   getCPUId() const { return CPUId;}
+
 #if defined(TEST_QUEUE_SPIN_LOCK)
     virtual bool  put(void * ptr) { 
         spin_lock(lock);
@@ -494,10 +578,11 @@ public:
     virtual FFBUFFER * const get_in_buffer() const { return in;}
     virtual FFBUFFER * const get_out_buffer() const { return out;}
 
-    virtual const struct timeval & getstarttime() const { return tstart;}
-    virtual const struct timeval & getstoptime()  const { return tstop;}
-    virtual const struct timeval & getwstartime() const { return wtstart;}
-    virtual const struct timeval & getwstoptime() const { return wtstop;}
+    virtual const struct timeval getstarttime() const { return tstart;}
+    virtual const struct timeval getstoptime()  const { return tstop;}
+    virtual const struct timeval getwstartime() const { return wtstart;}
+    virtual const struct timeval getwstoptime() const { return wtstop;}
+
 #if defined(TRACE_FASTFLOW)    
     virtual void ffStats(std::ostream & out) { 
         out << "ID: " << get_my_id()
@@ -511,7 +596,7 @@ public:
 
 protected:
     /// Protected constructor
-    ff_node():in(0),out(0),myid(-1),
+    ff_node():in(0),out(0),myid(-1),CPUId(-1),
               myoutbuffer(false),myinbuffer(false),
               skip1pop(false), thread(NULL),callback(NULL),barrier(NULL) {
         time_setzero(tstart);time_setzero(tstop);
@@ -646,7 +731,14 @@ private:
             return ret;
         }
         
-        int svc_init() { 
+        int svc_init() {
+#if !defined(HAVE_PTHREAD_SETAFFINITY_NP)
+            int cpuId = filter->getCPUId();            
+            if (ff_mapThreadToCpu((cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId)!=0)
+                error("Cannot map thread %d to CPU %d, going on...\n",tid,
+                      (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId);
+#endif
+            
             gettimeofday(&filter->tstart,NULL);
             return filter->svc_init(); 
         }
@@ -656,7 +748,7 @@ private:
             gettimeofday(&filter->tstop,NULL);
         }
         
-        int run() { return ff_thread::spawn(); }
+        int run() { return ff_thread::spawn(filter->getCPUId()); }
         int wait() { return ff_thread::wait();}
         int wait_freezing() { return ff_thread::wait_freezing();}
         void freeze() { ff_thread::freeze();}
@@ -676,16 +768,21 @@ private:
  */
 
 private:
-    FFBUFFER        * in;           /// Can be either a \p SWSR_Ptr_Buffer or an \p uSWSR_Ptr_Buffer
-    FFBUFFER        * out;          /// Can be either a \p SWSR_Ptr_Buffer or an \p uSWSR_Ptr_Buffer
-    int               myid;
+    FFBUFFER        * in;           ///< Input buffer, built upon SWSR lock-free (wait-free) 
+                                    ///< (un)bounded FIFO queue                                 
+                                     
+    FFBUFFER        * out;          ///< Output buffer, built upon SWSR lock-free (wait-free) 
+                                    ///< (un)bounded FIFO queue 
+                                                                        
+    int               myid;         ///< This is the node id, it is valid only for farm's workers
+    int               CPUId;    
     bool              myoutbuffer;
     bool              myinbuffer;
     bool              skip1pop;
     thWorker        * thread;       /// A \p thWorker object, which extends the \p ff_thread class 
     bool (*callback)(void *,unsigned int,unsigned int, void *);
     void            * callback_arg;
-    Barrier         * barrier;      /// A \p Barrier object
+    BARRIER_T       * barrier;      /// A \p Barrier object
 
     struct timeval tstart;
     struct timeval tstop;

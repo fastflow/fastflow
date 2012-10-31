@@ -1,7 +1,12 @@
-- configure
-- ordered farm
-- threads mapper
-  Basic mechanisms added
+New ideas and features:
+
+- configure 
+  by using cmake, still work in progress
+- ordered farm (DONE)
+  it is sufficient to define a suitable scheduler and gatherer, which distribute
+  and collect tasks in the same order. 
+- threads mapper (DONE)
+  in the release 2.0.0
 - more applications 
 - deadlock avoidance for skeleton with cycles (DONE)
      The channels are now implemented using by default unbounded queue 
@@ -16,6 +21,6 @@
   policy) (DONE)
 - dynamic reconfiguration of the number of workers in the farm pattern
   (ON GOING)
-
+- blocking run-time (using mutex) for coarse-grain applications 
 
 Massimo Torquati

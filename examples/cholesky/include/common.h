@@ -2,4 +2,4 @@
 typedef struct { 
   comp_t *a;	// base address of matrix A (input)
   comp_t *l;	// base address of matrix L (result)
-} task_t;
+} ff_task_t;

@@ -26,14 +26,17 @@
  */
 
 /*
- * The program is a simple map used:
- *   1. as a software accelerator (mapSA)
- *   2. to compute just one single task (mapOneShot).
+ * The program is a pipeline of 3 stages where the middle one is a simple map.
+ * Logically:
+ *
+ *     node0 ---> map ---> node1
  *
  */
 #include <vector>
 #include <iostream>
 #include <ff/map.hpp>
+#include <ff/pipeline.hpp>
+#include <ff/node.hpp>
 #include <ff/utils.hpp>  
 
 using namespace ff;
@@ -43,28 +46,61 @@ void* mapF(basePartitioner*const P, int tid) {
     LinearPartitioner<int>* const partitioner=(LinearPartitioner<int>* const)P;
     LinearPartitioner<int>::partition_t Partition;
     partitioner->getPartition(tid, Partition);
-    
-    int* p   = (int*)Partition.getData(); // gets the pointer to the first element of the partion
-    size_t l = Partition.getLength(); // gets the length of the partion
+
+    int* p = (int*)(Partition.getData());
+    size_t l = Partition.getLength();
 
     for(size_t i=0;i<l;++i)  p[i] += tid;
 
-    return p;  // returns the partition pointer !!!
+    return p; // returns the partition pointer !!!
 }
 
 
+// first stage of the pipeline (it generates the stream of arrays)
+class Init: public ff_node {
+public:
+    Init(int arraySize,int streamlen):arraySize(arraySize),streamlen(streamlen) {}
+    
+    void *svc(void *) {
+        for(int i=0;i<streamlen;++i) {
+            int * M = new int[arraySize];
+            for(int j=0;j<arraySize;++j) M[j]=i;
+            ff_send_out(M);
+        }
+        return NULL;
+    }
+private:
+    int arraySize;
+    int streamlen;
+};
+
+// last stage of the pipeline (it collects the stream of arrays)
+class End: public ff_node {
+public:
+    End(int arraySize):arraySize(arraySize) {}
+    void *svc(void *task) {
+        int *M=(int*)task;
+        for(int i=0;i<arraySize;++i)
+            printf("%d ",M[i]);
+        printf("\n");
+        return GO_ON;
+    }
+private:
+    int arraySize;
+};
+
 int main(int argc, char * argv[]) {
     
-    if (argc<3) {
+    if (argc<4) {
         std::cerr << "use: " 
                   << argv[0] 
-                  << " arraysize nworkers\n";
+                  << " arraysize nworkers streamlen\n";
         return -1;
     }
-    int arraySize= atoi(argv[1]);
-    int nworkers = atoi(argv[2]);
-
-    if (nworkers<=0) {
+    int arraySize=atoi(argv[1]);
+    int nworkers =atoi(argv[2]);
+    int streamlen=atoi(argv[3]);
+    if (nworkers<=0 || streamlen<=0) {
         std::cerr << "Wrong parameters values\n";
         return -1;
     }
@@ -74,38 +110,15 @@ int main(int argc, char * argv[]) {
     // defining the map passing as parameter the function called 
     // within each worker and the partitioner that has to be used
     // to create the worker partitions
-    ff_map mapSA(mapF,&P, NULL, true); // the 4rd parameter enable the accelerator mode
-    mapSA.run();
+    ff_map map(mapF,&P);
 
-    printf("\nmapSA:\n");
-    for(int i=0;i<10;++i) {
-        // create a task
-        int* A=new int[arraySize];
-        for(int j=0;j<arraySize;++j) A[j]=i;
+    // defining the 3-stage pipeline
+    ff_pipeline pipe;
+    pipe.add_stage(new Init(arraySize,streamlen));
+    pipe.add_stage(&map);
+    pipe.add_stage(new End(arraySize));
 
-        // offload the task into the map 
-        mapSA.offload(A);
-
-        // wait for the result (NOTE: also the non-blocking call may be used !)
-        void* R=NULL;
-        mapSA.load_result(&R);
-
-        // print the result
-        for(int j=0;j<arraySize;++j) printf("%d ", ((int*)R)[j]);
-        printf("\n");
-    }
-    // stopping the accelerator
-    mapSA.offload(EOS);
-    mapSA.wait();
-
-    int* oneTask=new int[arraySize];
-    for(int j=0;j<arraySize;++j) oneTask[j]=j;
-    ff_map mapOneShot(mapF,&P, oneTask);
-    mapOneShot.run_and_wait_end();
-    // print the result
-    printf("\nmapOneShot:\n");
-    for(int j=0;j<arraySize;++j) printf("%d ", oneTask[j]);
-    printf("\n");
+    pipe.run_and_wait_end();
 
     std::cerr << "DONE\n";
     return 0;

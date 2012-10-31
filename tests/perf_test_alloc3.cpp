@@ -50,7 +50,7 @@
 
 using namespace ff;
 
-typedef unsigned long task_t;
+typedef unsigned long ff_task_t;
 #if defined(USE_PROC_AFFINITY)
 //WARNING: the following mapping targets dual-eight core Intel Sandy-Bridge 
 const int worker_mapping[]   = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31};
@@ -103,25 +103,25 @@ public:
         itemsize(itemsize),ntasks(ntasks),batchsize(batchsize) {}
 
     void * svc(void *) {
-        task_t* task[batchsize];
+        ff_task_t* task[batchsize];
 
         int numbatch = ntasks/batchsize;
         for(int j=0;j<numbatch;++j) {              
             for(int i=0;i<batchsize;++i) {
-                task[i]= (task_t*)MALLOC(itemsize*sizeof(task_t));
-                memset(task[i],0,itemsize*sizeof(task_t));
+                task[i]= (ff_task_t*)MALLOC(itemsize*sizeof(ff_task_t));
+                memset(task[i],0,itemsize*sizeof(ff_task_t));
             }
             for(register int i=0;i<batchsize;++i) {
-                FREE(task[i],itemsize*sizeof(task_t));
+                FREE(task[i],itemsize*sizeof(ff_task_t));
             }
             ntasks-=batchsize;
         }
         for(int i=0;i<ntasks;++i) {
-            task[i]= (task_t*)MALLOC(itemsize*sizeof(task_t));
-            memset(task[i],0,itemsize*sizeof(task_t));
+            task[i]= (ff_task_t*)MALLOC(itemsize*sizeof(ff_task_t));
+            memset(task[i],0,itemsize*sizeof(ff_task_t));
         }
         for(register int i=0;i<ntasks;++i) {
-            FREE(task[i],itemsize*sizeof(task_t));
+            FREE(task[i],itemsize*sizeof(ff_task_t));
         }
         return NULL; 
     }
@@ -162,7 +162,7 @@ public:
             error("Worker, registerAllocator fails\n");
             return -1;
         }
-        int slab = myalloc->getslabs(itemsize*sizeof(task_t));
+        int slab = myalloc->getslabs(itemsize*sizeof(ff_task_t));
         int nslabs[N_SLABBUFFER];               
         if (slab<0) {                           
             if (myalloc->init()<0) abort();     
@@ -178,29 +178,29 @@ public:
     }
 
     void * svc(void *) {
-        //task_t* task[batchsize];
-		task_t **task;
-		task = (task_t **) MALLOC(batchsize*sizeof(task_t *));
+        //ff_task_t* task[batchsize];
+		ff_task_t **task;
+		task = (ff_task_t **) MALLOC(batchsize*sizeof(ff_task_t *));
 
         int numbatch = ntasks/batchsize;
         for(int j=0;j<numbatch;++j) {              
             for(int i=0;i<batchsize;++i) {
-                task[i]= (task_t*)MALLOC(itemsize*sizeof(task_t));
-                memset(task[i],0,itemsize*sizeof(task_t));
+                task[i]= (ff_task_t*)MALLOC(itemsize*sizeof(ff_task_t));
+                memset(task[i],0,itemsize*sizeof(ff_task_t));
             }
             for(register int i=0;i<batchsize;++i) {
-                FREE(task[i],itemsize*sizeof(task_t));
+                FREE(task[i],itemsize*sizeof(ff_task_t));
             }
             ntasks-=batchsize;
         }
         for(int i=0;i<ntasks;++i) {
-            task[i]= (task_t*)MALLOC(itemsize*sizeof(task_t));
-            memset(task[i],0,itemsize*sizeof(task_t));
+            task[i]= (ff_task_t*)MALLOC(itemsize*sizeof(ff_task_t));
+            memset(task[i],0,itemsize*sizeof(ff_task_t));
         }
         for(register int i=0;i<ntasks;++i) {
-            FREE(task[i],itemsize*sizeof(task_t));
+            FREE(task[i],itemsize*sizeof(ff_task_t));
         }
-		FREE(task,batchsize*sizeof(task_t *));
+		FREE(task,batchsize*sizeof(ff_task_t *));
         return NULL; 
 	}
 
@@ -258,6 +258,18 @@ int main(int argc, char * argv[]) {
     }
 
     ALLOCATOR_INIT();
+
+    if (nworkers==0) {
+        ffTime(START_TIME);
+        Worker* w = new Worker(itemsize,ntasks,batch);
+        w->svc_init();
+        w->svc(NULL);
+        w->svc_end();
+        ffTime(STOP_TIME);
+        std::cerr << "DONE, seq time= " << ffTime(GET_TIME) << " (ms)\n";        
+        return 0;
+    }
+
 
     // create the farm object
     ff_farm<> farm;

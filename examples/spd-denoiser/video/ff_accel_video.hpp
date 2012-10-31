@@ -162,7 +162,8 @@ public:
 
     //send completed denoising tasks
     while(true) {
-      bmp = bmp_order.front();
+	  //while (bmp_order.empty()); // MA ???
+      bmp = bmp_order.front();	
       cerr << "visiting bmp {" << bmp << "}: " << sets_counts[bmp] << " sets" << endl;
       if(sets_counts[bmp] == n_sets) {
 	cerr << "completed buffer for bmp {" << bmp << "}" << endl;
@@ -216,7 +217,7 @@ public:
     noisy_img_task<T> *t = (noisy_img_task<T> *)task;
     vector<noisy<T> > &set = *(t->the_noisy_set);
     vector<grayscale> diff(set.size(),0);
-    int cur_residual, old_residual = 0;
+    int cur_residual = 0, old_residual = 0;
 #ifdef TIME
     int cycles = 0;
     long t_rec = get_usec_from(0);

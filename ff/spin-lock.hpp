@@ -1,4 +1,10 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*!
+ *  \file spin-lock.hpp
+ *  \brief This file contains the spin lock(s) used in FastFlow
+ */
+ 
 #ifndef _FF_SPINLOCK_HPP_
 #define _FF_SPINLOCK_HPP_
 /* ***************************************************************************
@@ -18,8 +24,12 @@
  *
  ****************************************************************************
  */
+ 
+// REW -- documentation
 
 #include <ff/sysdep.h>
+#include <ff/config.hpp>
+#include <ff/atomic/abstraction_dcas.h>
 
 #ifdef __cplusplus
 namespace ff {
@@ -27,6 +37,7 @@ namespace ff {
 #else
 #define _INLINE __forceinline
 #endif
+
 
 #if defined(USE_TICKETLOCK)
 
@@ -41,11 +52,13 @@ namespace ff {
 #define LOCK_PREFIX "lock ; "
 #endif
 
+
 typedef  struct {unsigned int slock;}  lock_t[1];
 enum { UNLOCKED=0 };
 
-static inline void init_unlocked(lock_t l) { l[0].slock=UNLOCKED;}
 
+static inline void init_unlocked(lock_t l) { l[0].slock=UNLOCKED;}
+static inline void init_locked(lock_t l)   { abort(); }
 
 /* Ticket-Lock from Linux kernel 2.6.37 */
 static __always_inline void spin_lock(lock_t lock)
@@ -77,48 +90,73 @@ static __always_inline void spin_unlock(lock_t lock)
 		     : "memory", "cc");
 }
 
-#if 0
-/* The following, courtesy of Fabrizio Petrini <fpetrin@us.ibm.com> */
+
+#else /* TICKET_LOCK  */
+
+
+
+#if !defined(__APPLE__)
+/*
+ * CLH spin-lock is a FIFO lock implementation which uses only the 
+ * atomic swap operation. More info can be found in:  
+ *
+ * "Building FIFO and Priority-Queuing Spin Locks from Atomic Swap"
+ * by Travis S. Craig in Techical Report 93-02-02 University of Washington
+ * 
+ * The following code is based on the implementation presented
+ * in the synch1.0.1 (http://code.google.com/p/sim-universal-construction/) 
+ * by Nikolaos D. Kallimanis (released under the New BSD licence).
+ *
+ */
+struct CLHSpinLock {
+    typedef union CLHLockNode {
+        bool locked;
+        char align[CACHE_LINE_SIZE];
+    } CLHLockNode;
     
-union ticketlock
-{
-    uint32_t u;
-    struct
-    {
-        uint16_t ticket;
-        uint16_t users;
-    } s;
-};
+    volatile CLHLockNode *Tail ALIGN_TO(CACHE_LINE_SIZE);
+    volatile CLHLockNode *MyNode[MAX_NUM_THREADS] ALIGN_TO(CACHE_LINE_SIZE);
+    volatile CLHLockNode *MyPred[MAX_NUM_THREADS] ALIGN_TO(CACHE_LINE_SIZE);
 
-/* simple interface to the gcc atomics */
-#define atomic_xadd(P, V)       __sync_fetch_and_add((P), (V))
+    void init() {
+        Tail = (CLHLockNode*)getAlignedMemory(CACHE_LINE_SIZE, sizeof(CLHLockNode));
+        Tail->locked = false;
+        for (int j = 0; j < MAX_NUM_THREADS; j++) {
+            MyNode[j] = (CLHLockNode*)getAlignedMemory(CACHE_LINE_SIZE, sizeof(CLHLockNode));
+            MyPred[j] = NULL;
+        }	
+    }
 
-/* pause instruction to prevent excess processor bus usage */ 
-#define cpu_relax() asm volatile("pause\n": : :"memory")
+    inline void spin_lock(const int pid) {
+        MyNode[pid]->locked = true;
+        /*
+         * FIX: 
+         */
+        MyPred[pid] = (CLHLockNode *) __sync_lock_test_and_set((long *)&Tail, (long)MyNode[pid]);
+        while (MyPred[pid]->locked == true) ;
+    }
+    
+    inline void spin_unlock(const int pid) {
+        MyNode[pid]->locked = false;
+        MyNode[pid]= MyPred[pid];
+    }
+    
+} ALIGN_TO(CACHE_LINE_SIZE);
+    
+typedef CLHSpinLock clh_lock_t[1];
 
-typedef volatile ticketlock lock_t[1];
+_INLINE void init_unlocked(clh_lock_t l) { l->init();}
+_INLINE void init_locked(clh_lock_t l) { abort(); }
+_INLINE void spin_lock(clh_lock_t l, const int pid) { l->spin_lock(pid); }
+_INLINE void spin_unlock(clh_lock_t l, const int pid) { l->spin_unlock(pid); }
+
+#endif // __APPLE__
+
+
+/* -------- XCHG-based spin-lock --------- */
+    
 enum { UNLOCKED=0 };
-
-static inline void init_unlocked(lock_t l) { l[0].u=UNLOCKED;}
-
-static inline void spin_lock( lock_t l ) {
-    uint16_t me = atomic_xadd( &(l[0].s.users), 1 );
-    
-    while ( l[0].s.ticket != me ) ; //cpu_relax();
-}
-    
-static inline void spin_unlock( lock_t l ) {
-    WMB();
-    l[0].s.ticket++;
-}
-#endif
-
-
-#else /* xchg-based spin-lock */
-    
-
 typedef volatile int lock_t[1];
-enum { UNLOCKED=0 };
 
 _INLINE void init_unlocked(lock_t l) { l[0]=UNLOCKED;}
 _INLINE void init_locked(lock_t l)   { l[0]=!UNLOCKED;}
@@ -147,7 +185,9 @@ _INLINE void spin_unlock(lock_t l) {
     WMB();
     l[0]=UNLOCKED;
 }
+
 #else // non windows platform
+
 _INLINE void spin_lock(lock_t l) {
     while (xchg((int *)l, 1) != UNLOCKED) {
         while (l[0]) ;  /* spin using only reads - reduces bus traffic */
@@ -162,12 +202,18 @@ _INLINE void spin_unlock(lock_t l) {
     WMB();
     l[0]=UNLOCKED;
 }
-
 #endif // windows platform spin_lock
-#endif
+
+#endif // TICKET_LOCK
+
 
 #ifdef __cplusplus
 } // namespace ff
 #endif
+
+/*!
+ *
+ * @}
+ */
 
 #endif /* _FF_SPINLOCK_HPP_ */

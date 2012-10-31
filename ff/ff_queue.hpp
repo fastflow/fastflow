@@ -45,8 +45,9 @@
 
 #define INLINE static __inline
 #define NOINLINE
+#if !defined(CACHE_LINE_SIZE)
 #define CACHE_LINE_SIZE 128
-
+#endif
 
 INLINE void* aligned_malloc(size_t sz)
 {

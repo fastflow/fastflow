@@ -42,6 +42,7 @@ namespace ff {
 
 enum { START_TIME=0, STOP_TIME=1, GET_TIME=2 };
 
+
 static inline ticks ticks_wait(ticks t1) {
     ticks delta;
     ticks t0 = getticks();
@@ -99,12 +100,23 @@ static inline void time_setzero(struct timeval & a) {
     a.tv_usec=0;
 }
 
+static inline bool isPowerOf2(unsigned long x) {
+    return (x==1 || (x & (x-1)) == 0);
+}
+
+static inline unsigned long nextPowerOf2(unsigned long x) {
+    assert(isPowerOf2(x)==false); // x is not a power of two!
+    unsigned long p=1;
+    while (x>p) p <<= 1;
+    return p;
+}
+
 static inline double ffTime(int tag, bool lock=false) {
     static struct timeval tv_start = {0,0};
     static struct timeval tv_stop  = {0,0};
     // needed to protect gettimeofday
     // if multiple threads call ffTime
-    static lock_t L = {0}; 
+    static lock_t L = {0};
 
     double res=0.0;
     switch(tag) {
