@@ -1,5 +1,17 @@
-* 04/07/12 - v.2.0.0xsxsx
-   - Currently distributed communication pattern implemented are: 
+* 04/07/12 - v.2.0.0
+   - added the map template that can be used to compute map, map-reduce
+     and data-parallel patterns.
+   - Added the possibility to have multi-input Emitter in a farm template
+     (useful to collapse in a single thread the Collector and the Emitter 
+     in a 2-stage pipeline of 2 farms).
+   - Changed the thread start order in the farm skeleton. The old one was:
+     collector (if present), all workers, emitter; now it is: emitter,
+     all workers, and finally the collector (if present).
+   - Added the class threadMapper for implementing threads mapping. 
+   - Implemented the spinBarrier which has a lower overhead when the 
+     number of thread is high.
+   - Fixed problems in ffTime and ffwTime for application with nested patterns.
+   - The distributed communication patterns implemented so far are: 
      Unicast, Broadcast, Scatter, Gather_All, FromAny, OnDemand
    - first distributed implementation based on ZeroMQ message library
    - dnode class added, minor changes to node class

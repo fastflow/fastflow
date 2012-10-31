@@ -37,6 +37,10 @@
  * Modified by Bradley.
  */
 
+#if defined(__APPLE__)
+#include <AvailabilityMacros.h>
+#endif
+
 
 /***********************************************************\
  * Various types of memory barriers and atomic operations
@@ -54,7 +58,8 @@
  *   observed such a speculation).
  */
 
-#define WMB()  __asm__ __volatile__ ("lwsync" : : : "memory")
+#define WMB()    __asm__ __volatile__ ("lwsync" : : : "memory")
+#define PAUSE()
 
 /* atomic swap operation */
 static __inline__ int xchg(volatile int *ptr, int x)
@@ -75,7 +80,8 @@ static __inline__ int xchg(volatile int *ptr, int x)
  ------------------------*/
 #ifdef __ia64__
 
-#define WMB()  __asm__ __volatile__ ("mf" : : : "memory")
+#define WMB()    __asm__ __volatile__ ("mf" : : : "memory")
+#define PAUSE()
 
 /* atomic swap operation */
 static inline int xchg(volatile int *ptr, int x)
@@ -92,9 +98,12 @@ static inline int xchg(volatile int *ptr, int x)
  ------------------------*/
 #ifdef __i386__ 
 
-#define WMB() __asm__ __volatile__ ("": : :"memory")
+#define WMB()    __asm__ __volatile__ ("": : :"memory")
+#define PAUSE()  __asm__ __volatile__ ("rep; nop" : : : "memory")
 
-/* atomic swap operation */
+/* atomic swap operation 
+   Note: no "lock" prefix even on SMP: xchg always implies lock anyway
+*/
 static inline int xchg(volatile int *ptr, int x)
 {
     __asm__("xchgl %0,%1" :"=r" (x) :"m" (*(ptr)), "0" (x) :"memory");
@@ -107,7 +116,8 @@ static inline int xchg(volatile int *ptr, int x)
  ------------------------*/
 #ifdef __x86_64
 
-#define WMB() __asm__ __volatile__ ("": : :"memory")
+#define WMB()    __asm__ __volatile__ ("": : :"memory")
+#define PAUSE()  __asm__ __volatile__ ("rep; nop" : : : "memory")
 
 /* atomic swap operation */
 static inline int xchg(volatile int *ptr, int x)
@@ -116,5 +126,34 @@ static inline int xchg(volatile int *ptr, int x)
     return x;
 }
 #endif /* __x86_64 */
+
+static inline void *getAlignedMemory(size_t align, size_t size) {
+    void *ptr;
+
+    // malloc should guarantee a sufficiently well aligned memory for any purpose.
+#if (defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED < 1060))    
+    ptr = ::malloc(size);
+#elif (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
+    ptr = ::malloc(size); // FIX ME
+#else
+    if (posix_memalign(&ptr,align,size)!=0)
+        return NULL; 
+#endif
+
+    /* ptr = (void *)memalign(align, size);
+       if (p == NULL) return NULL;
+    */
+    return ptr;
+}
+
+static inline void freeAlignedMemory(void* ptr) {
+#if defined(_MSC_VER)
+        if (ptr) ::posix_memalign_free(ptr);    
+#else	
+        if (ptr) ::free(ptr);
+#endif  
+}
+
+
 
 #endif /* _SPIN_SYSDEP_H */

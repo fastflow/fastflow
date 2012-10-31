@@ -41,7 +41,7 @@ CXX 		     = g++
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O3 -finline-functions #-DTRACE_FASTFLOW
-CXXFLAGS             = -Wall
+CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall
 CFLAGS               =
 LDFLAGS              = 
 INCS                 = -I../ 
@@ -61,7 +61,8 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I. $(INCS)
-TARGET               = test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_map test_mpmc test_bmpmc test_sendq
+TARGET               = test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe+farm test_accelerator_pipe test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_map test_map2 test_mapreduce test_dotprod test_sendq test_spinBarrier test_multi_input 
+#test_mpmc test_mpmc2 test_bmpmc latency_MPMC 
 
 
 .PHONY: all clean cleanall distclean install uninstall
@@ -113,16 +114,25 @@ test_farm+pipe:test_farm+pipe.o
 test_freeze:test_freeze.o
 test_masterworker:test_masterworker.o
 test_multi_masterworker:test_multi_masterworker.o
+test_pipe+masterworker:test_pipe+masterworker.o
 test_dt:test_dt.o
 test_scheduling:test_scheduling.o
 test_sendq:test_sendq.o
 test_map:test_map.o
+test_map2:test_map2.o
+test_mapreduce:test_mapreduce.o
+test_dotprod:test_dotprod.o
+latency_MPMC:latency_MPMC.o
+test_spinBarrier:test_spinBarrier.o
+test_multi_input:test_multi_input.o
 test_uBuffer:test_uBuffer.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_torus:test_torus.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_mpmc:test_mpmc.cpp
 	$(CXX) -DUNBOUNDED_MPMC -Wno-strict-aliasing $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+test_mpmc2:test_mpmc2.cpp
+	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_bmpmc:test_bmpmc.cpp
 	$(CXX) -Wno-strict-aliasing $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 perf_test_alloc1:perf_test_alloc1.cpp

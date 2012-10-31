@@ -31,8 +31,6 @@
  *
  */
 
-#include <sys/types.h>
-//#include <unistd.h>
 #include <stdlib.h>
 
 #include <vector>
@@ -42,7 +40,7 @@
 
 using namespace ff;
 
-typedef int task_t;
+typedef int ff_task_t;
 
 static ff_allocator ffalloc;
 
@@ -94,7 +92,7 @@ public:
     void * svc(void *) {
         size_t size = random() % MAX_TASK_SIZE;
         if (!size) size=MIN_TASK_SIZE;
-        task_t * task = (task_t*)ffalloc.malloc(size);
+        ff_task_t * task = (ff_task_t*)ffalloc.malloc(size);
         if (!task) abort();
         std::cout << "Emitter allocated task size= " << size << "\n";
 

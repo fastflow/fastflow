@@ -49,8 +49,8 @@ using namespace ff;
 class Worker: public ff_node {
 public:
     void *svc(void *task) {
-		comp_t *a = ((task_t *) task)->a;
-		comp_t *l = ((task_t *) task)->l;
+		comp_t *a = ((ff_task_t *) task)->a;
+		comp_t *l = ((ff_task_t *) task)->l;
 		int i, k, j;	// indexes used in loops
 		float sumSQR;	// support variable
 		comp_t sum;		// support variable
@@ -106,10 +106,10 @@ class Emitter: public ff_node
 {
 private:
     int ntask;
-	task_t *tasks;
+	ff_task_t *tasks;
 
 public:
-    Emitter(task_t *taskList, int max_task) : ntask(max_task) { tasks = taskList; }
+    Emitter(ff_task_t *taskList, int max_task) : ntask(max_task) { tasks = taskList; }
 
     void *svc(void *) {
         if (--ntask < 0) return NULL;
@@ -146,7 +146,7 @@ int main(int argc,
 	}
 	
 	// Array of tasks (each task is made up of an A matrix and a L matrix)
-	task_t *tasks = new task_t[streamlen];
+	ff_task_t *tasks = new ff_task_t[streamlen];
 	
 	// Variables needed to use HUGE_PAGES
 	int huge_size;

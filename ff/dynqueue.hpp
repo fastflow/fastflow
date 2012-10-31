@@ -251,16 +251,8 @@ public:
         n->data = NULL; n->next = NULL;
         head=tail=n;
 
-
-#if __MAC_OS_X_VERSION_MIN_REQUIRED < __MAC_10_6
-        cache = (void **)::malloc(cachesize*sizeof(void*));
+        cache=(void**)getAlignedMemory(longxCacheLine*sizeof(long),cachesize*sizeof(void*));
         if (!cache) abort();
-#else
-        void * ptr;
-        if (posix_memalign(&ptr,longxCacheLine*sizeof(long),cachesize*sizeof(void*))!=0)
-            abort();
-        cache=(void **)ptr;
-#endif
 
         if (fillcache) {
             for(int i=0;i<cachesize;++i) {
@@ -279,6 +271,7 @@ public:
             free(p.n);
         }
         if (head) free((void*)head);
+        if (cache) freeAlignedMemory(cache);
     }
 
     inline bool push(void * const data) {

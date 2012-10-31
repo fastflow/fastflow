@@ -42,8 +42,6 @@ namespace ff {
  *  @{
  */
 
-template<typename lb_t=ff_loadbalancer, typename gt_t=ff_gatherer>
-
 /*!
  *  \class ff_farm
  *
@@ -54,10 +52,10 @@ template<typename lb_t=ff_loadbalancer, typename gt_t=ff_gatherer>
  *  Collector (\ref ff_gatherer "gt_t") that gathers the results computed by the \a Workers, which 
  *  are ff_nodes.
  */
-
+template<typename lb_t=ff_loadbalancer, typename gt_t=ff_gatherer>
 class ff_farm: public ff_node {
 protected:
-    inline int   cardinality(Barrier * const barrier)  { 
+    inline int   cardinality(BARRIER_T * const barrier)  { 
         int card=0;
         for(int i=0;i<nworkers;++i) 
             card += workers[i]->cardinality(barrier);
@@ -71,11 +69,11 @@ protected:
     inline int prepare() {
         for(int i=0;i<nworkers;++i) {
             if (workers[i]->create_input_buffer((ondemand ? ondemand: (in_buffer_entries/nworkers + 1)))<0) return -1;
-            if (gt || lb->masterworker()) 
+            if (collector || lb->masterworker() || collector_removed) 
                 if (workers[i]->create_output_buffer(out_buffer_entries/nworkers + DEF_IN_OUT_DIFF)<0) 
                     return -1;
             lb->register_worker(workers[i]);
-            if (gt) gt->register_worker(workers[i]);
+            if (collector && !collector_removed) gt->register_worker(workers[i]);
         }
         prepared=true;
         return 0;
@@ -106,7 +104,7 @@ public:
             int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
             bool worker_cleanup=false,
             int max_num_workers=DEF_MAX_NUM_WORKERS):
-        has_input_channel(input_ch),prepared(false),ondemand(0),
+        has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
         nworkers(0),
         in_buffer_entries(in_buffer_entries),
         out_buffer_entries(out_buffer_entries),
@@ -136,7 +134,7 @@ public:
             delete [] workers;
         }
     }
-    
+
     int add_emitter(ff_node * e, ff_node * fb=NULL) { 
         if (emitter) return -1; 
 
@@ -147,7 +145,6 @@ public:
             error("FARM, cannot add fallback function if the collector is present or master-worker configuration has been set\n");
             return -1;
         }
-
         emitter = e;
         if (in) {
             assert(has_input_channel);
@@ -249,25 +246,49 @@ public:
         return 0;
     }
 
+    // allows not to start the collector thread, whereas all worker's 
+    // output buffer will be created as if it were present.
+    int remove_collector() { 
+        collector_removed = true;
+        return 0;
+    }
+
+    int set_multi_input(ff_node **mi, int misize) {
+        if (lb->masterworker()) {
+            error("FARM, master-worker paradigm and multi-input farm used together\n");
+            return -1;
+        }
+        if (mi == NULL) {
+            error("FARM, invalid multi-input vector\n");
+            return -1;
+        }
+        if (misize <= 0) {
+            error("FARM, invalid multi-input vector size\n");
+            return -1;
+        }
+        return lb->set_multi_input(mi, misize);
+    }
+
     int run(bool skip_init=false) {
         if (!skip_init) {
             // set the initial value for the barrier 
 
-            //Barrier::instance()->barrier(cardinality());
-            if (!barrier)  barrier = new Barrier;
-            barrier->doBarrier(cardinality(barrier));
+            if (!barrier)  barrier = new BARRIER_T;
+            barrier->barrierSetup(cardinality(barrier));
         }
         
         if (!prepared) if (prepare()<0) return -1;
 
-        if (collector && gt->run()<0) {
-            error("FARM, running gather module\n");
-            return -1;
-        }
         if (lb->run()<0) {
             error("FARM, running load-balancer module\n");
             return -1;        
         }
+        if (!collector_removed)
+            if (collector && gt->run()<0) {
+                error("FARM, running gather module\n");
+                return -1;
+            }
+
         return 0;
     }
 
@@ -372,14 +393,12 @@ public:
     inline lb_t * const getlb() const { return lb;}
     inline gt_t * const getgt() const { return gt;}
 
-    /* the returned time comprises the time spent in svn_init and 
-     * in svc_end methods
-     */
-    double ffTime() {
-        if (collector)
-            return diffmsec(gt->getstoptime(),
-                            lb->getstarttime());
+    ff_node** const getWorkers() const { return workers; }
+    int getNWorkers() const { return nworkers;}
 
+    const struct timeval  getstarttime() const { return lb->getstarttime();}
+    const struct timeval  getstoptime()  const {
+        if (collector) return gt->getstoptime();
         const struct timeval zero={0,0};
         std::vector<struct timeval > workertime(nworkers+1,zero);
         for(int i=0;i<nworkers;++i)
@@ -387,7 +406,31 @@ public:
         workertime[nworkers]=lb->getstoptime();
         std::vector<struct timeval >::iterator it=
             std::max_element(workertime.begin(),workertime.end(),time_compare);
-        return diffmsec((*it),lb->getstarttime());
+        return (*it);
+    }
+
+    const struct timeval  getwstartime() const { return lb->getwstartime(); }    
+    const struct timeval  getwstoptime() const {
+        if (collector) return gt->getwstoptime();
+        const struct timeval zero={0,0};
+        std::vector<struct timeval > workertime(nworkers+1,zero);
+        for(int i=0;i<nworkers;++i) {
+            workertime[i]=workers[i]->getwstoptime();
+            }
+        workertime[nworkers]=lb->getwstoptime();
+        std::vector<struct timeval >::iterator it=
+            std::max_element(workertime.begin(),workertime.end(),time_compare);
+        return (*it);
+    }
+    
+    /* the returned time comprises the time spent in svn_init and 
+     * in svc_end methods
+     */
+    double ffTime() {
+        if (collector)
+            return diffmsec(gt->getstoptime(),
+                            lb->getstarttime());
+        return diffmsec(getstoptime(),lb->getstarttime());
     }
 
     /*  the returned time considers only the time spent in the svc
@@ -398,16 +441,8 @@ public:
             return diffmsec(gt->getwstoptime(),
                             lb->getwstartime());
 
-        const struct timeval zero={0,0};
-        std::vector<struct timeval > workertime(nworkers+1,zero);
-        for(int i=0;i<nworkers;++i)
-            workertime[i]=workers[i]->getwstoptime();
-        workertime[nworkers]=lb->getwstoptime();
-        std::vector<struct timeval >::iterator it=
-            std::max_element(workertime.begin(),workertime.end(),time_compare);
-        return diffmsec((*it),lb->getwstartime());
+        return diffmsec(getwstoptime(),lb->getwstartime());
     }
-
 
 #if defined(TRACE_FASTFLOW)
     void ffStats(std::ostream & out) { 
@@ -429,6 +464,11 @@ protected:
     void* svc(void * task) { return NULL; }
     int   svc_init()       { return -1; };
     void  svc_end()        {}
+    int   get_my_id() const { return -1; };
+    void  setAffinity(int) { 
+        error("FARM, setAffinity: cannot set affinity for the farm\n");
+    }
+    int   getCPUId() { return -1;}
 
     int create_input_buffer(int nentries, bool fixedsize) {
         if (in) {
@@ -467,19 +507,25 @@ protected:
 
 
     int set_output_buffer(FFBUFFER * const o) {
-        if (!collector) {
+        if (!collector && !collector_removed) {
             error("FARM with no collector, cannot set output buffer\n");
             return -1;
         }
         gt->set_out_buffer(o);
-        if ((ff_node*)gt != collector) collector->set_output_buffer(o);
+        if (collector && ((ff_node*)gt != collector)) collector->set_output_buffer(o);
         return 0;
     }
 
+    ff_node* getEmitter()   { return emitter;}
+    ff_node* getCollector() { 
+        if (collector == (ff_node*)gt) return NULL;
+        return collector;
+    }
 
 protected:
     bool has_input_channel; // for accelerator
     bool prepared;
+    bool collector_removed;
     int ondemand;          // if >0, emulates on-demand scheduling
     int nworkers;
     int in_buffer_entries;

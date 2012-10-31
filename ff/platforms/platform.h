@@ -158,6 +158,7 @@ INLINE static int gettimeofday(struct timeval *tv, struct timezone *tz)
 #elif defined(__GNUC__) && (defined(__linux) || defined(__APPLE__))
 #include <sys/time.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <pthread.h>
 #include <stdlib.h>
 inline static void posix_memalign_free(void* mem)

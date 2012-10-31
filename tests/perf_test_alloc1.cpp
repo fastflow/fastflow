@@ -47,7 +47,7 @@
 
 using namespace ff;
 
-typedef unsigned long task_t;
+typedef unsigned long ff_task_t;
 #if defined(USE_PROC_AFFINITY)
 //WARNING: the following mapping targets dual-eight core Intel Sandy-Bridge 
 const int worker_mapping[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31};
@@ -113,7 +113,7 @@ static ff_allocator * ffalloc = 0;
 // generic worker
 class Worker: public ff_node {
 protected:
-    void do_work(task_t * task, int size, long long nticks) {
+    void do_work(ff_task_t * task, int size, long long nticks) {
         for(register int i=0;i<size;++i) {
             task[i]+=1;
 
@@ -148,7 +148,7 @@ public:
     }
 
     void * svc(void * t) {
-        task_t * task = (task_t *)t;
+        ff_task_t * task = (ff_task_t *)t;
         do_work(&task[1],itemsize-1,nticks);
         FREE(task,itemsize);
         // we don't have the collector so we have any task to send out
@@ -166,7 +166,7 @@ class Emitter: public ff_node {
     int val;
 protected:
 
-    inline void filltask(task_t * task, size_t size) {
+    inline void filltask(ff_task_t * task, size_t size) {
         ++val;
         for(register unsigned int i=0;i<size;++i)
             task[i]=val;
@@ -174,7 +174,7 @@ protected:
 
 public:
     Emitter(int max_task, int itemsize):ntask(max_task),itemsize(itemsize) {
-        ALLOCATOR_INIT(itemsize*sizeof(task_t));
+        ALLOCATOR_INIT(itemsize*sizeof(ff_task_t));
         val=0;
     };
 
@@ -195,7 +195,7 @@ public:
     }
 
     void * svc(void *) {
-        task_t * task = (task_t*)MALLOC(itemsize*sizeof(task_t));
+        ff_task_t * task = (ff_task_t*)MALLOC(itemsize*sizeof(ff_task_t));
         if (!task) abort();
         filltask(&task[1], itemsize-1);
         task[0] = 0;

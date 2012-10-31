@@ -121,6 +121,8 @@ set(FFHEADERS
     ${FF}/version.h
     ${FF}/dynqueue.hpp
     ${FF}/mapping_utils.hpp
+    ${FF}/config.hpp
+    ${FF}/mapper.hpp
     ${FF}/MPMCqueues.hpp
    ) 
 
@@ -131,10 +133,15 @@ set(FFHEADERS_AT
     ${FF}/atomic/atomic-x86_64.h
     ${FF}/atomic/abstraction_dcas.h
   )
-set(FFHEADERS_PLAT
-    ${FF}/platforms/platform.h
+set(FFHEADERS_D
+    ${FF}/platforms/inter.hpp
+	${FF}/platforms/zmqImpl.hpp
+	${FF}/platforms/zmqTranport.hpp
   )
 
+set(FFHEADERS_PLAT
+    ${FF}/d/platform.h
+  )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
 option( BUILD_EXAMPLES      "Build examples"        ON )
@@ -158,6 +165,7 @@ add_custom_target( uninstall
 install( FILES ${FFHEADERS} DESTINATION /include/ff/ )
 install( FILES ${FFHEADERS_AT} DESTINATION /include/ff/atomic )
 install( FILES ${FFHEADERS_PLAT} DESTINATION /include/ff/platforms )
+install( FILES ${FFHEADERS_D} DESTINATION /include/ff/d )
 
 if( BUILD_EXAMPLES )
     enable_testing()
@@ -168,3 +176,6 @@ if( BUILD_TESTS )
     enable_testing()
     add_subdirectory( tests )
 endif( BUILD_TESTS )
+
+#FIND_PACKAGE( zeromq )
+

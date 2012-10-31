@@ -159,7 +159,7 @@ public:
         while(1) {
             ff_task * task;
             
-            while (!done && !QPOP((void**)task)) {
+            while (!done && !QPOP((void**)&task)) {
                 pthread_mutex_lock(&mutex);
                 if (numwaiting==(nworkers-1)) {                        
                     pthread_cond_broadcast(&cond);
@@ -174,8 +174,10 @@ public:
             }
 
             if (done) break; // work finished
-
+            
             int i=task->i, j=task->j;
+
+            //printf("thread %d got (%d, %d)\n", get_my_id(), i, j);
             do { 
                 if (j - i <= thresh) {
                     std::sort(&A[i],&A[i]+((j-i)+1));
@@ -213,7 +215,7 @@ public:
          
         ff_task * task = new ff_task(0,k-1);
         QPUSH(task);
- 
+
         task = new ff_task(k,size-1);
         QPUSH(task);
         

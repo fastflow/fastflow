@@ -23,13 +23,16 @@
 #
 # ---------------------------------------------------------------------------
 
+ifndef ZMQ_PATH
+$(error ZMQ_PATH env variable not defined)
+endif
 
 CC                   = gcc 
 CXX 		     = g++ 
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O6 -finline-functions
-CXXFLAGS             = -Wall
+CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall
 CFLAGS               =
 LDFLAGS              = -L ${ZMQ_PATH}/lib
 INCS                 = -I../.. -I${ZMQ_PATH}/include
@@ -49,7 +52,7 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I. $(INCS)
-TARGET               = unicast broadcast allgather fromany scatter ondemand test11_pipe test11_torus test_marshal pipe_farm pipe_farm2 farm farm_farm lat11 bw11
+TARGET               = unicast broadcast allgather fromany scatter ondemand test11_pipe test11_torus test_marshal pipe_farm pipe_farm2 farm farm_farm dmap lat11 bw11
 
 
 .PHONY: all clean cleanall distclean install uninstall
@@ -93,7 +96,7 @@ pipe_farm:pipe_farm.o
 pipe_farm2:pipe_farm2.o
 farm:farm.o
 farm_farm:farm_farm.o
-#dmap:dmap.o
+dmap:dmap.o
 lat11:lat11.o
 bw11:bw11.o
 

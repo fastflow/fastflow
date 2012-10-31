@@ -62,10 +62,11 @@ public:
         else {
             const_iterator i1=v.begin();
             const_iterator i2=v.end();
+            if (first) { clear(); ::free(first); }
             first=(vector_type*)::malloc((i2-i1)*sizeof(vector_type));
             while(i1!=i2) push_back(*(i1++));
         }
-        return this;
+        return *this;
     }
     inline void reserve(size_t newcapacity) {
         if(newcapacity<=cap) return;

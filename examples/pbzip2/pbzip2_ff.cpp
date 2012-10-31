@@ -8,7 +8,7 @@
  *           (http://www.di.unipi.it/~torquati)
  *
  *  Date  :  February 18, 2010
- *
+ *  Date  :  October  30, 2012 (M.A.: Mountain Lion small fixes) 
  *
  *
  * ************************************************************************
@@ -182,8 +182,8 @@ inline void operator delete[] (void * ptr) {
 
 
 // FastFlow's task type 
-struct task_t {
-    task_t(char * in, unsigned int buffSize, int blockNum):
+struct ff_task_t {
+    ff_task_t(char * in, unsigned int buffSize, int blockNum):
 	in(in),buf(NULL),buffSize(buffSize),blockNum(blockNum) {}
 
     char         * in;       // input
@@ -360,13 +360,13 @@ class FileWriter: public ff::ff_node {
 public:
         FileWriter():
 		OutFilename(NULL),currBlock(0),hOutfile(1),// default to stdout
-		CompressedSize(0),OutputBuffer(NumBlocks,(task_t*)0) {};
+		CompressedSize(0),OutputBuffer(NumBlocks,(ff_task_t*)0) {};
 
 	void set_input_data(char * f) {
 		OutFilename = f;
                 currBlock = 0;
                 CompressedSize = 0;               
-                OutputBuffer.resize(NumBlocks, (task_t*)0);
+                OutputBuffer.resize(NumBlocks, (ff_task_t*)0);
 	}
 
 	// called just once at very beginning
@@ -385,7 +385,7 @@ public:
 	}
 	
 	void * svc(void * t) {      
-		task_t * task = (task_t*)t;
+		ff_task_t * task = (ff_task_t*)t;
 		int ret;
 		int percentComplete = 0;
 		
@@ -406,7 +406,7 @@ public:
 					fprintf(stderr, "fileWriter:  Resizing OutputBuffer to %d\n", newsize);
                                         #endif
 					
-					OutputBuffer.resize(newsize,(task_t*)0);
+					OutputBuffer.resize(newsize,(ff_task_t*)0);
 					if (OutputBuffer.size() != newsize) {
 						fprintf(stderr, "fileWriter:  *ERROR: cannot resize IutputBuffer\n");
 						return NULL;
@@ -480,7 +480,7 @@ private:
 	int currBlock;
 	int hOutfile;
 	OFF_T CompressedSize;
-	std::vector <task_t *> OutputBuffer;
+	std::vector <ff_task_t *> OutputBuffer;
 };
 
 
@@ -986,7 +986,7 @@ public:
 				inSize = ret;
 			
 			/* create and fill a new task */
-			task_t * task = new task_t(FileData,inSize,blockNum);
+			ff_task_t * task = new ff_task_t(FileData,inSize,blockNum);
 			ff_send_out(task);  
 			
 			blockNum++;
@@ -1256,7 +1256,7 @@ public:
 			
 			
 			/* create and fill a new task */
-			task_t * task = new task_t(FileData,inSize,blockNum);
+			ff_task_t * task = new ff_task_t(FileData,inSize,blockNum);
 			ff_send_out(task);
 			
 			blockNum++;
@@ -1303,7 +1303,7 @@ class Consumer: public ff::ff_node {
 public:
 	Consumer():comp_decomp(0) {}
 
-	inline int consumer (task_t * task)
+	inline int consumer (ff_task_t * task)
 		{
 			char *FileData = NULL;
 			char *CompressedData = NULL;
@@ -1346,7 +1346,7 @@ public:
 		}
 
 
-	inline int consumer_decompress(task_t  * task)
+	inline int consumer_decompress(ff_task_t  * task)
 		{
 			char *FileData = NULL;
 			char *DecompressedData = NULL;
@@ -1428,10 +1428,10 @@ public:
 	void * svc(void * task) {
 		if (comp_decomp==0) 
 		{
-			if (consumer((task_t*)task)<0) return NULL;
+			if (consumer((ff_task_t*)task)<0) return NULL;
 		} else
 		{
-			if (consumer_decompress((task_t*)task)<0) return NULL;
+			if (consumer_decompress((ff_task_t*)task)<0) return NULL;
 		}				
 		return task; // return the task to send to the collector
 	}

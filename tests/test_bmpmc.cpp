@@ -52,7 +52,7 @@ void * consumer(void * arg) {
     int myid= *(int*)arg;
     int * data;
 
-    ff::Barrier::instance()->doBarrier();
+    ff::Barrier::instance()->doBarrier(myid);
     while(1) {
 	if (q->pop((void**)&data)) {
 	    printf("(%d %ld) ", myid, (long)data);
@@ -76,12 +76,13 @@ int main(int argc, char* argv[]) {
     NTHREADS=atoi(argv[2]);
     assert(NTHREADS>0);
 
-    q = new ff::MPMC_Ptr_Queue(SIZE);
+    q = new ff::MPMC_Ptr_Queue;
     assert(q);
+    q->init(SIZE);
 
     for(int i=1;i<=SIZE;++i) 
-	q->push((void*)i);
-    
+        q->push((void*)i);
+
     atomic_long_set(&counter,0);
 
     pthread_t * C_handle;
@@ -89,7 +90,7 @@ int main(int argc, char* argv[]) {
     C_handle = (pthread_t *) malloc(sizeof(pthread_t)*NTHREADS);
 	
     // define the number of threads that are going to partecipate....
-    ff::Barrier::instance()->doBarrier(NTHREADS);
+    ff::Barrier::instance()->barrierSetup(NTHREADS);
 
     int * idC;
     idC = (int *) malloc(sizeof(int)*NTHREADS);

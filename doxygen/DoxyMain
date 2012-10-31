@@ -64,3 +64,10 @@
   *  Streaming networks patterns; this is FastFlow's top layer.
   */
 
+  /*!
+   * \defgroup zmq External Transport Layer
+   *
+   * Communication patterns built upon the <a href="http://www.zeromq.org/" target="_blank">ZeroMQ</a> library
+   */
+   
+

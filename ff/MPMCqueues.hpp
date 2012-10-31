@@ -1,4 +1,10 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*!
+ *  \file MPMCqueues.hpp
+ *  \brief This file contains several MPMC queue implementations.
+ */
+ 
 #ifndef __FF_MPMCQUEUE_HPP_ 
 #define __FF_MPMCQUEUE_HPP_ 
 
@@ -17,7 +23,8 @@
  */
 
 
-#include <stdlib.h>
+#include <cstdlib>
+#include <vector>
 #include <ff/buffer.hpp>
 #include <ff/sysdep.h>
 #include <ff/allocator.hpp>
@@ -44,10 +51,16 @@
 
 namespace ff {
 
+/*!
+ *  \ingroup runtime
+ *
+ *  @{
+ */
+
 #define CAS abstraction_cas
 
 /* 
- *  In the following we implement two kind of queues: 
+ *  In the following we implement two kinds of queues: 
  *   - the MPMC_Ptr_Queue is an implementation of the ** bounded ** 
  *     Multi-Producer/Multi-Consumer queue algorithm by Dmitry Vyukov 
  *     (www.1024cores.net). It stores pointers.
@@ -59,24 +72,29 @@ namespace ff {
  *     uSWSR_Ptr_Buffer.
  *  
  */
+ 
 #if defined(USE_STD_C0X)
+
+/*! 
+ * \class MPMC_Ptr_Queue
+ *
+ * \brief An implementation of the \a bounded Multi-Producer/Multi-Consumer queue
+ *
+ * This class describes an implementation of the MPMC queue inspired by the solution 
+ * proposed by <a href="https://sites.google.com/site/1024cores/home/lock-free-algorithms/queues/bounded-mpmc-queue" target="_blank">Dmitry Vyukov</a>. \n
+ *
+ * This version uses the new C++0X standard
+ */
 class MPMC_Ptr_Queue {
 private:
     struct element_t {
         std::atomic<unsigned long> seq;
         void *                     data;
     };
+    
 public:
-    MPMC_Ptr_Queue(size_t size) {
-        if (size<2) size=2;
-        // we need a size that is a power 2 in order to set the mask 
-        if (size & (size-1)) {
-            size_t p=1;
-            while (size>p) p <<= 1;
-            size = p;
-        }
-        mask = size-1;
-    }
+    /** Default constructor */
+    MPMC_Ptr_Queue() {}
     
     ~MPMC_Ptr_Queue() {
         if (buf) {
@@ -85,30 +103,71 @@ public:
         }
     }
 
-    inline bool init() {
-        size_t size=mask+1;
+    /*    |  data  | seq |        |  data  | seq |        |  data  | seq |
+     *    |  NULL  |  0  | ------ |  NULL  |  1  | ------ |  NULL  | ... |
+     *    ||||||||||||||||        ||||||||||||||||        ||||||||||||||||
+     *                |
+     *                |
+     *                | 
+     *          pwrite pread
+     */
+     
+    /**
+     * This method initialises the underlying bounded buffer using
+     * the operator 'new'.
+     */
+    inline bool init(size_t size) {
+        if (size<2) size=2;
+        // we need a size that is a power 2 in order to set the mask 
+        if (!isPowerOf2(size)) size = nextPowerOf2(size);
+        mask = size-1;
+
         buf = new element_t[size];
         if (!buf) return false;
         for(size_t i=0;i<size;++i) {
             buf[i].data = NULL;
             buf[i].seq.store(i,std::memory_order_relaxed);
+            
+            // store method
+            // Atomically stores the value 'i'. 
+            //
+            // Memory is affected according to the value of memory_order:
+            // memory_order must be one of 
+            //      std::memory_order_relaxed 
+            //      std::memory_order_release 
+            //      std::memory_order_seq_cst. 
+            // Otherwise the behavior is undefined.  
         }
         pwrite.store(0,std::memory_order_relaxed);        
         pread.store(0,std::memory_order_relaxed);
         return true;
     }
     
-    // non-blocking push
+    /** 
+     * Push method: enqueue data in the queue. \n
+     * This method is non-blocking and costs one CAS per operation. 
+     */
     inline bool push(void *const data) {
         unsigned long pw, seq;
         element_t * node;
+        unsigned long bk = BACKOFF_MIN;
         do {
             pw    = pwrite.load(std::memory_order_relaxed);
             node  = &buf[pw & mask];
             seq   = node->seq.load(std::memory_order_acquire);
-            if (pw == seq) {
+            
+            // load method
+            // Atomically loads and returns the current value of the atomic variable. 
+            // Memory is affected according to the value of memory_order. 
+            
+            if (pw == seq) { // CAS 
                 if (pwrite.compare_exchange_weak(pw, pw+1, std::memory_order_relaxed))
                     break;
+
+                // exponential delay with max value
+                for(volatile unsigned i=0;i<bk;++i) ;
+                bk <<= 1;
+                bk &= BACKOFF_MAX;
             } else 
                 if (pw > seq) return false; // queue full
         } while(1);
@@ -117,19 +176,29 @@ public:
         return true;
     }
 
-    // non-blocking pop
+    /**
+     * Pop method: dequeue data from the queue. \n
+     * This is a non-blocking method.
+     */
     inline bool pop(void** data) {
         unsigned long pr, seq;
         element_t * node;
+        unsigned long bk = BACKOFF_MIN;
+
         do {
             pr    = pread.load(std::memory_order_relaxed);
             node  = &buf[pr & mask];
             seq   = node->seq.load(std::memory_order_acquire);
 
             long diff = seq - (pr+1);
-            if (diff == 0) {
+            if (diff == 0) { // CAS
                 if (pread.compare_exchange_weak(pr, (pr+1), std::memory_order_relaxed))
                     break;
+
+                // exponential delay with max value
+                for(volatile unsigned i=0;i<bk;++i) ;
+                bk <<= 1;
+                bk &= BACKOFF_MAX;
             } else { 
                 if (diff < 0) return false; // queue empty
             }
@@ -141,15 +210,27 @@ public:
     
 private:
     // WARNING: on 64bit Windows platform sizeof(unsigned long) = 32 !!
-    std::atomic<unsigned long>  pwrite;
+    std::atomic<unsigned long>  pwrite; /// Pointer to the location where to write to
     long padding1[longxCacheLine-1];
-    std::atomic<unsigned long>  pread;
+    std::atomic<unsigned long>  pread;  /// Pointer to the location where to read from
     long padding2[longxCacheLine-1];
     element_t *                 buf;
     unsigned long               mask;
 };
+
+
 #else  // using internal atomic operations
 
+/*! 
+ * \class MPMC_Ptr_Queue
+ *
+ * \brief An implementation of the \a bounded Multi-Producer/Multi-Consumer queue
+ *
+ * This class describes an implementation of the MPMC queue inspired by the solution 
+ * proposed by <a href="http://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue" target="_blank">Dmitry Vyukov</a>. \n
+ *
+ * This version uses internal atomic operations
+ */
 class MPMC_Ptr_Queue {
 protected:
     struct element_t {
@@ -158,53 +239,58 @@ protected:
     };
 
 public:
-    MPMC_Ptr_Queue(size_t size) {
-        if (size<2) size=2;
-        // we need a size that is a power 2 in order to set the mask 
-        if (size & (size-1)) {
-            size_t p=1;
-            while (size>p) p <<= 1;
-            size = p;
-        }
-        mask = size-1;
-    }
+    /** 
+     *  Default constructor 
+     *  @param[in] size The size of the queue.
+     */
+    MPMC_Ptr_Queue() {}
 
     ~MPMC_Ptr_Queue() { 
         if (buf) {
-#if defined(_MSC_VER)
-            if (buf) ::posix_memalign_free(buf);    
-#else	
-            if (buf) ::free(buf);
-#endif               
+            freeAlignedMemory(buf);
             buf = NULL;
         }
     }
+    
+    /*    |  data  | seq |        |  data  | seq |        |  data  | seq |
+     *    |  NULL  |  0  | ------ |  NULL  |  1  | ------ |  NULL  | ... |
+     *    ||||||||||||||||        ||||||||||||||||        ||||||||||||||||
+     *                |
+     *                |
+     *                |
+     *          pwrite pread
+     */
+    
+    /**
+     * This method initialises the underlying bounded buffer.
+     */
+    inline bool init(size_t size) {
+        if (size<2) size=2;
+        // we need a size that is a power 2 in order to set the mask 
+        if (!isPowerOf2(size)) size = nextPowerOf2(size);
+        mask = size-1;
 
-    inline bool init() {
-        size_t size= mask+1;
-
-#if (defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED < 1060))
-        buf = (element_t*)::malloc(size*sizeof(element_t));
-        if (!buf) return false;       
-#else
-        void * ptr;
-        if (posix_memalign(&ptr,longxCacheLine*sizeof(long),size*sizeof(element_t))!=0)
-            return false;
-        buf=(element_t*)ptr;
-#endif
+        buf=(element_t*)getAlignedMemory(longxCacheLine*sizeof(long),size*sizeof(element_t));
+        if (!buf) return false;
         for(size_t i=0;i<size;++i) {
             buf[i].data = NULL;
             atomic_long_set(&buf[i].seq,i);
         }
         atomic_long_set(&pwrite,0);
         atomic_long_set(&pread,0);
+
         return true;
     }
 
-    // non-blocking push
+    /**
+     * Push method: enqueue data in the queue. \n
+     * This method is non-blocking and costs one CAS per operation. 
+     */
     inline bool push(void *const data) {
         unsigned long pw, seq;
         element_t * node;
+        unsigned long bk = BACKOFF_MIN;
+
         do {
             pw    = atomic_long_read(&pwrite);
             node  = &buf[pw & mask];
@@ -213,8 +299,14 @@ public:
             if (pw == seq) {
                 if (abstraction_cas((volatile atom_t*)&pwrite, (atom_t)(pw+1), (atom_t)pw)==(atom_t)pw) 
                     break;
+
+                // exponential delay with max value
+                for(volatile unsigned i=0;i<bk;++i) ;
+                bk <<= 1;
+                bk &= BACKOFF_MAX;
             } else 
                 if (pw > seq) return false;
+
         } while(1);
         node->data = data;
         //atomic_long_inc(&node->seq);
@@ -222,10 +314,15 @@ public:
         return true;
     }
         
-    // non-blocking pop
+    /**
+     * Pop method: dequeue data from the queue. \n
+     * This is a non-blocking method.
+     */
     inline bool pop(void** data) {
         unsigned long pr , seq;
         element_t * node;
+        unsigned long bk = BACKOFF_MIN;
+
         do {
             pr    = atomic_long_read(&pread);
             node  = &buf[pr & mask];
@@ -234,9 +331,15 @@ public:
             if (diff == 0) {
                 if (abstraction_cas((volatile atom_t*)&pread, (atom_t)(pr+1), (atom_t)pr)==(atom_t)pr) 
                     break;
+
+                // exponential delay with max value
+                for(volatile unsigned i=0;i<bk;++i) ;
+                bk <<= 1;
+                bk &= BACKOFF_MAX;
             } else { 
                 if (diff < 0) return false;
             }
+
         } while(1);
         *data = node->data;
         atomic_long_set(&node->seq,(pr+mask+1));
@@ -255,7 +358,18 @@ protected:
 };
 
 
-// unbounded Multi-Producer/Multi-Consumer FIFO queue
+ 
+/*! 
+ * \class uMPMC_Ptr_Queue
+ *
+ * \brief An implementation of the \a unbounded Multi-Producer/Multi-Consumer queue
+ *
+ * This class implements an \a unbounded  MPMC queue which does not require 
+ * any special memory allocator to avoid dangling pointers. The implementation blends 
+ * together the MPMC_Ptr_Queue and the uSWSR_Ptr_Buffer. \n
+ *
+ * It uses internal atomic operations.
+ */
 class uMPMC_Ptr_Queue {
 protected:
     enum {DEFAULT_NUM_QUEUES=4, DEFAULT_uSPSC_SIZE=2048};
@@ -267,63 +381,27 @@ protected:
 public:
     uMPMC_Ptr_Queue() {}
     
-
     ~uMPMC_Ptr_Queue() {
         if (buf) {
             for(size_t i=0;i<(mask+1);++i) {
                 if (buf[i]) delete (uSWSR_Ptr_Buffer*)(buf[i]);
             }
-#if defined(_MSC_VER)
-            posix_memalign_free(buf);    
-#else	
-            ::free(buf);
-#endif               
+            freeAlignedMemory(buf);
             buf = NULL;
         }
-        if (seqP) {
-#if defined(_MSC_VER)
-            posix_memalign_free(seqP);    
-#else	
-            ::free(seqP);
-#endif               
-        }
-        if (seqC) {
-#if defined(_MSC_VER)
-            posix_memalign_free(seqC);    
-#else	
-            ::free(seqC);
-#endif               
-        }
+        if (seqP) freeAlignedMemory(seqP);        
+        if (seqC) freeAlignedMemory(seqC);
     }
 
     inline bool init(unsigned long nqueues=DEFAULT_NUM_QUEUES, size_t size=DEFAULT_uSPSC_SIZE) {
         if (nqueues<2) nqueues=2;
-        if (nqueues & (nqueues-1)) {
-            size_t p=1;
-            while (nqueues>p) p <<= 1;
-            size = p;
-        }
+        if (!isPowerOf2(nqueues)) nqueues = nextPowerOf2(nqueues);
         mask = nqueues-1;
 
-#if (defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED < 1060))
-        buf = (data_element_t*)::malloc(nqueues*sizeof(data_element_t));
-        if (!buf) return false;
-        seqP = (sequenceP_t*)::malloc(nqueues*sizeof(sequenceP_t));
-        if (!seqP) return false;
-        seqC = (sequenceC_t*)::malloc(nqueues*sizeof(sequenceC_t));
-        if (!seqC) return false;
-#else
-        void * ptr;
-        if (posix_memalign(&ptr,longxCacheLine*sizeof(long),nqueues*sizeof(data_element_t))!=0)
-            return false;
-        buf=(data_element_t*)ptr;
-        if (posix_memalign(&ptr,longxCacheLine*sizeof(long),nqueues*sizeof(sequenceP_t))!=0)
-            return false;
-        seqP=(sequenceP_t*)ptr;
-        if (posix_memalign(&ptr,longxCacheLine*sizeof(long),nqueues*sizeof(sequenceC_t))!=0)
-            return false;
-        seqC=(sequenceP_t*)ptr;
-#endif
+        buf=(data_element_t*)getAlignedMemory(longxCacheLine*sizeof(long),nqueues*sizeof(data_element_t));
+        seqP=(sequenceP_t*)getAlignedMemory(longxCacheLine*sizeof(long),nqueues*sizeof(sequenceP_t));
+        seqC=(sequenceP_t*)getAlignedMemory(longxCacheLine*sizeof(long),nqueues*sizeof(sequenceC_t));
+
         for(size_t i=0;i<nqueues;++i) {
             buf[i]= new uSWSR_Ptr_Buffer(size);
             ((uSWSR_Ptr_Buffer*)(buf[i]))->init();
@@ -338,6 +416,7 @@ public:
     // it always returns true
     inline bool push(void *const data) {
         unsigned long pw,seq,idx;
+        unsigned long bk = BACKOFF_MIN;
         do {
             pw    = atomic_long_read(&preadP);
             idx   = pw & mask;
@@ -345,6 +424,11 @@ public:
             if (pw == seq) {
                 if (abstraction_cas((volatile atom_t*)&preadP, (atom_t)(pw+1), (atom_t)pw)==(atom_t)pw) 
                     break;
+                
+                // exponential delay with max value
+                for(volatile unsigned i=0;i<bk;++i) ;
+                bk <<= 1;
+                bk &= BACKOFF_MAX;
             } 
         } while(1);
         ((uSWSR_Ptr_Buffer*)(buf[idx]))->push(data); // cannot fail
@@ -355,6 +439,8 @@ public:
     // non-blocking pop
     inline bool pop(void ** data) {
         unsigned long pr,seq,idx;
+        unsigned long bk = BACKOFF_MIN;
+
         do {
             pr     = atomic_long_read(&preadC);
             idx    = pr & mask;
@@ -363,6 +449,11 @@ public:
                 if (atomic_long_read(&seqP[idx]) <= seq) return false; // queue 
                 if (abstraction_cas((volatile atom_t*)&preadC, (atom_t)(pr+1), (atom_t)pr)==(atom_t)pr) 
                     break;
+
+                // exponential delay with max value
+                for(volatile unsigned i=0;i<bk;++i) ;
+                bk <<= 1;
+                bk &= BACKOFF_MAX;
             }  
         } while(1);
         ((uSWSR_Ptr_Buffer*)(buf[idx]))->pop(data);
@@ -386,14 +477,19 @@ protected:
 
 #endif // USE_STD_C0X
 
+/*!
+ *  @}
+ */
 
-/* 
- * MSqueue is an implementation of the lock-free FIFO MPMC queue by
- * Maged M. Michael and Michael L. Scott described in the paper:
- *   "Simple, Fast, and Practical Non-Blocking and Blocking
- *    Concurrent Queue Algorithms", PODC 1996.
+
+/*! 
+ * \class MSqueue
  *
- * The MSqueue implementation is inspired to the one in the liblfds 
+ * \brief An implementation of the lock-free FIFO MPMC queue by
+ * Michael and Scott, described in the paper: "Simple, Fast, and Practical 
+ * Non-Blocking and Blocking Concurrent Queue Algorithms", PODC 1996.
+ *
+ * The MSqueue implementation is inspired to the one in the \p liblfds 
  * libraly that is a portable, license-free, lock-free data structure 
  * library written in C. The liblfds implementation uses double-word CAS 
  * (aka DCAS) whereas this implementation uses only single-word CAS 
@@ -516,7 +612,7 @@ public:
         return *this;
     }
 
-    /* initialize the MSqueue */
+    /** initialize the MSqueue */
     int init() {
         if (delayedAllocator) return 0;
         delayedAllocator = new FFAllocator(2); 
@@ -601,6 +697,90 @@ public:
 
 /* ---------------------- experimental code -------------------------- */
 
+
+#if !defined(__APPLE__)
+/*
+ *
+ */
+
+class multiSWSR {
+protected:
+    enum {DEFAULT_NUM_QUEUES=4, DEFAULT_uSPSC_SIZE=2048};
+
+public:
+    multiSWSR() {}
+    
+    ~multiSWSR() {
+        if (buf) {
+            for(size_t i=0;i<(mask+1);++i) {
+                if (buf[i]) delete buf[i];
+            }
+            freeAlignedMemory(buf);
+            buf = NULL;
+        }
+        if (PLock) freeAlignedMemory(PLock);        
+        if (CLock) freeAlignedMemory(CLock);
+    }
+
+    inline bool init(unsigned long nqueues=DEFAULT_NUM_QUEUES, size_t size=DEFAULT_uSPSC_SIZE) {
+        if (nqueues<2) nqueues=2;
+        if (!isPowerOf2(nqueues)) nqueues = nextPowerOf2(nqueues);
+        mask = nqueues-1;
+
+        buf=(uSWSR_Ptr_Buffer**)getAlignedMemory(CACHE_LINE_SIZE,nqueues*sizeof(uSWSR_Ptr_Buffer*));
+        PLock=(CLHSpinLock*)getAlignedMemory(CACHE_LINE_SIZE,nqueues*sizeof(CLHSpinLock));
+        CLock=(CLHSpinLock*)getAlignedMemory(CACHE_LINE_SIZE,nqueues*sizeof(CLHSpinLock));
+
+        for(size_t i=0;i<nqueues;++i) {
+            buf[i]= new uSWSR_Ptr_Buffer(size);
+            buf[i]->init();
+            PLock[i].init();
+            CLock[i].init();
+        }
+        atomic_long_set(&count, 0);
+        atomic_long_set(&enqueue,0);
+        atomic_long_set(&dequeue,0);
+        return true;
+    }
+
+    // it always returns true
+    inline bool push(void *const data, int tid) {
+        long q = atomic_long_inc_return(&enqueue) & mask;
+        PLock[q].spin_lock(tid);
+        buf[q]->push(data);
+        PLock[q].spin_unlock(tid);
+        atomic_long_inc(&count);
+        return true;
+    }
+    
+    // non-blocking pop
+    inline bool pop(void ** data, int tid) {
+        if (!atomic_long_read(&count))  return false; // empty
+
+        long q = atomic_long_inc_return(&dequeue) & mask;
+        CLock[q].spin_lock(tid);
+        bool r = buf[q]->pop(data);
+        CLock[q].spin_unlock(tid);
+        if (r) { atomic_long_dec(&count); return true;}
+        return false;
+    }
+
+private:
+    atomic_long_t  enqueue;
+    long           padding1[longxCacheLine-1];
+    atomic_long_t  dequeue;
+    long           padding2[longxCacheLine-1];
+    atomic_long_t  count;
+    long           padding3[longxCacheLine-1];
+protected:
+    uSWSR_Ptr_Buffer **buf;
+    CLHSpinLock *PLock;    
+    CLHSpinLock *CLock;    
+    size_t   mask;
+};
+#endif //__APPLE__
+
+
 /*
  * Simple and scalable Multi-Producer/Multi-Consumer queue.
  * By defining at compile time MULTI_MPMC_RELAX_FIFO_ORDERING it is possible 
@@ -656,6 +836,7 @@ public:
     inline bool  pop(void ** data) {      
         if (!atomic_long_read(&count))  return false; // empty
 #if !defined(MULTI_MPMC_RELAX_FIFO_ORDERING)
+        unsigned long bk = BACKOFF_MIN;
         //
         // enforce FIFO ordering for the consumers
         //
@@ -664,12 +845,19 @@ public:
             q  = atomic_long_read(&dequeue), q1 = atomic_long_read(&enqueue);            
             if (q > q1) return false;
             if (CAS((volatile atom_t *)&dequeue, (atom_t)(q+1), (atom_t)q) == (atom_t)q) break;
-        } while(1);
 
+            // exponential delay with max value
+            for(volatile unsigned i=0;i<bk;++i) ;
+            bk <<= 1;
+            bk &= BACKOFF_MAX;
+        } while(1);
+        
         q %= pool.size(); 
-        do ; while( !(pool[q].pop(data)) );
-        atomic_long_dec(&count); 
-        return true;
+        if (pool[q].pop(data)) {
+            atomic_long_dec(&count);
+            return true;
+        }
+        return false;
         
 #else  // MULTI_MPMC_RELAX_FIFO_ORDERING
         register long q = atomic_long_inc_return(&dequeue) % pool.size();
@@ -683,7 +871,7 @@ public:
     inline bool empty() {
         for(size_t i=0;i<pool.size();++i)
             if (!pool[i].empty()) return false;
-         return true;
+        return true;
     }
 private:
     atomic_long_t enqueue;
@@ -699,22 +887,22 @@ protected:
 /* 
  * multiMSqueue is a specialization of the scalableMPMCqueue which uses the MSqueue 
 */
-class multiMSqueue: public scalableMPMCqueue<MSqueue> {
-public:
-
-    multiMSqueue(size_t poolsize = scalableMPMCqueue<MSqueue>::DEFAULT_POOL_SIZE) {
-        if (! scalableMPMCqueue<MSqueue>::init(poolsize)) {
-            std::cerr << "multiMSqueue init ERROR, abort....\n";
-            abort();
-        }
+    class multiMSqueue: public scalableMPMCqueue<MSqueue> {
+    public:
         
-        for(size_t i=0;i<poolsize;++i)
-            if (pool[i].init()<0) {
-                std::cerr << "ERROR initializing MSqueue, abort....\n";
+        multiMSqueue(size_t poolsize = scalableMPMCqueue<MSqueue>::DEFAULT_POOL_SIZE) {
+            if (! scalableMPMCqueue<MSqueue>::init(poolsize)) {
+                std::cerr << "multiMSqueue init ERROR, abort....\n";
                 abort();
             }
-    }
-};
+            
+            for(size_t i=0;i<poolsize;++i)
+                if (pool[i].init()<0) {
+                    std::cerr << "ERROR initializing MSqueue, abort....\n";
+                    abort();
+                }
+        }
+    };
 
 
 
@@ -724,7 +912,7 @@ public:
 
 
 /* ---------------------- MaX experimental code -------------------------- */
-
+#if 0
 /*
  *
  *   bool push(T)
@@ -930,7 +1118,7 @@ private:
 //             }
 //     }
 // };
-
+#endif
 
 } // namespace
 

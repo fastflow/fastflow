@@ -31,7 +31,7 @@ LINK_OPT             =
 VERSION              = 
 OPTIMIZE_FLAGS       = -g  #-DTIME -O6 -finline-functions -fno-rtti  -march=core2 -msse3 -mfpmath=387 -fno-strict-aliasing # -ffast-math -mfpmath=sse -msse2
 OMP_FLAGS 	     = -fopenmp
-CXXFLAGS             = -Wall #-DALLOCATOR_STATS #-DTRACE_FASTFLOW
+CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall #-DALLOCATOR_STATS #-DTRACE_FASTFLOW
 CFLAGS               =
 LDFLAGS              = 
 INCS                 = -I. -I.. -I../.. -I../../.. -I/opt/local/include 
@@ -40,7 +40,7 @@ BIN 		     = ./bin/
 
 NVCC_ = /usr/local/cuda/bin/nvcc
 NVCC  := $(NVCC_) -ccbin /usr/bin
-NVCCFLAGS += $(INCS) -m64 --use_fast_math -I./cuda/cuda_utils -I./cuda
+NVCCFLAGS += $(INCS) -DNO_CMAKE_CONFIG -m64 --use_fast_math -I./cuda/cuda_utils -I./cuda
 LIB_CUDA := -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib -lcudart
 
 
@@ -73,7 +73,7 @@ spd_ff_cascade: $(FF_CASCADE_OBJ)
 
 #cuda
 CUDA_OBJ = parameters.cuda.o driver.cuda.o cuda/cuda_kernel.cu.o # utils.cuda.o
-CUDA_VARIANT_FLAGS = $(COMMON_VARIANT_FLAGS) #-DFF_WITH_CUDA
+CUDA_VARIANT_FLAGS = $(COMMON_VARIANT_FLAGS) -DFF_WITH_CUDA
 NVCCFLAGS_ = $(NVCCFLAGS)
 
 %.cuda.o: %.cpp

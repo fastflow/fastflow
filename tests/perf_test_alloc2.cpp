@@ -47,7 +47,7 @@
 
 using namespace ff;
 
-typedef unsigned long task_t;
+typedef unsigned long ff_task_t;
 #if defined(USE_PROC_AFFINITY)
 //WARNING: the following mapping targets dual-eight core Intel Sandy-Bridge 
 const int worker_mapping[]   = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31};
@@ -100,7 +100,7 @@ static ff_allocator* MYALLOC[MAX_NUM_THREADS]={0};
 #if defined(TEST_FFA_MALLOC)
 class Worker: public ff_node {
 private:
-      void do_work(task_t * task, int size, long long nticks) {
+      void do_work(ff_task_t * task, int size, long long nticks) {
         for(register int i=0;i<size;++i)
             task[i]=i;
         
@@ -111,11 +111,11 @@ public:
         itemsize(itemsize),ntasks(ntasks),nticks(nticks) {}
 
     void * svc(void *) {
-        task_t * task;
+        ff_task_t * task;
         for(int i=0;i<ntasks;++i) {
             // allocates memory
-            task= (task_t*)MALLOC(itemsize*sizeof(task_t));
-            bzero(task,itemsize*sizeof(task_t));
+            task = (ff_task_t*)MALLOC(itemsize*sizeof(ff_task_t));
+            bzero(task,itemsize*sizeof(ff_task_t));
 
             do_work(&task[0],itemsize,nticks);
 
@@ -136,7 +136,7 @@ private:
 #if 1 //this one ...
 class Worker: public ff_node  {
 private:
-      void do_work(task_t * task, int size, long long nticks) {
+      void do_work(ff_task_t * task, int size, long long nticks) {
         for(register int i=0;i<size;++i)
             task[i]=i;
         
@@ -147,7 +147,7 @@ public:
         myalloc(NULL),itemsize(itemsize),ntasks(ntasks),nticks(nticks) {
 
         myalloc=new ff_allocator();		      
-        int slab = myalloc->getslabs(itemsize*sizeof(task_t));
+        int slab = myalloc->getslabs(itemsize*sizeof(ff_task_t));
         int nslabs[N_SLABBUFFER];               
         if (slab<0) {                           
             if (myalloc->init()<0) abort();     
@@ -184,15 +184,15 @@ public:
     }
 
     void * svc(void *) {
-        task_t * task;
+        ff_task_t * task;
         for(int i=0;i<ntasks;++i) {
             // allocates memory
 #if defined(FF_ALLOCATOR)
-            task= (task_t*)myalloc->malloc(itemsize*sizeof(task_t));
+            task= (ff_task_t*)myalloc->malloc(itemsize*sizeof(ff_task_t));
 #else
-            task = (task_t*)MALLOC(itemsize*sizeof(task_t));
+            task = (ff_task_t*)MALLOC(itemsize*sizeof(ff_task_t));
 #endif
-            memset(task,0,itemsize*sizeof(task_t));
+            memset(task,0,itemsize*sizeof(ff_task_t));
 
             do_work(&task[0],itemsize,nticks);            
 
@@ -241,15 +241,15 @@ public:
     }
 
     void * svc(void *) {
-        task_t * task;
+        ff_task_t * task;
         for(int i=0;i<ntasks;++i) {
             // allocates memory
 #if defined(FF_ALLOCATOR)
-            task= (task_t*)myalloc->malloc(itemsize*sizeof(task_t));
+            task= (ff_task_t*)myalloc->malloc(itemsize*sizeof(ff_task_t));
 #else
-            task = (task_t*)MALLOC(itemsize*sizeof(task_t));
+            task = (ff_task_t*)MALLOC(itemsize*sizeof(ff_task_t));
 #endif
-            bzero(task,itemsize*sizeof(task_t));
+            bzero(task,itemsize*sizeof(ff_task_t));
 
             do_work(&task[0],itemsize,nticks);
 
@@ -319,7 +319,7 @@ public:
         FREE(task, gt->get_channel_id());
 #else
         // the size is required for TBB's allocator
-        FREE(task,itemsize*sizeof(task_t));
+        FREE(task,itemsize*sizeof(ff_task_t));
 #endif
         return GO_ON; 
     }
@@ -354,9 +354,9 @@ int main(int argc, char * argv[]) {
         ffTime(START_TIME);
         for(unsigned int i=0;i<ntasks;++i) {
             // allocates memory
-            void * task= MALLOC(itemsize*sizeof(task_t));
-            memset(task,0,itemsize*sizeof(task_t));
-            FREE(task,itemsize*sizeof(task_t));
+            void * task= MALLOC(itemsize*sizeof(ff_task_t));
+            memset(task,0,itemsize*sizeof(ff_task_t));
+            FREE(task,itemsize*sizeof(ff_task_t));
         }
         ffTime(STOP_TIME);       
         std::cerr << "DONE, time= " << ffTime(GET_TIME) << " (ms)\n";

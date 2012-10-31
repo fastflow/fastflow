@@ -26,7 +26,7 @@
  */
 
 #include <iostream>
-
+#include <deque>
 #include <ff/utils.hpp>
 #include <ff/node.hpp>
 
@@ -319,7 +319,7 @@ public:
     }
 
     int run(bool=false) {  
-        if (this->spawn()<0) {
+        if (this->spawn(filter?filter->getCPUId():-1)<0) {
             error("GT, spawning GT thread\n");
             return -1; 
         }

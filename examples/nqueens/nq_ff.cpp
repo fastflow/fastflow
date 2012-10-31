@@ -156,7 +156,7 @@ typedef struct {
     int aQueenBitCol;
     int aQueenBitNegDiag;
     int aQueenBitPosDiag;
-} task_t;
+} ff_task_t;
 
 static unsigned long streamlen=0;
 
@@ -230,7 +230,7 @@ private:
 
 private:
 
-    inline void Nqueen(task_t * task) {
+    inline void Nqueen(ff_task_t * task) {
         SOLUTIONTYPE numsolutions=0;
 
         register int* pnStack= aStack + 1; /* stack pointer */
@@ -309,7 +309,7 @@ public:
 
 
     void * svc(void * t) {
-        task_t * task  = (task_t *)t;
+        ff_task_t * task  = (ff_task_t *)t;
 
         Nqueen(task);
         ffalloc.free(task);
@@ -411,7 +411,7 @@ private:
                 assert(numrows<board_minus);
                 
                 if (numrows == (depth-1)) {
-                    task_t * task = (task_t*)ffalloc.malloc(sizeof(task_t));
+                    ff_task_t * task = (ff_task_t*)ffalloc.malloc(sizeof(ff_task_t));
                     task->numrow           = numrows;
                     task->aQueenBitCol     = aQueenBitCol[numrows];
                     task->aQueenBitNegDiag = aQueenBitNegDiag[numrows];

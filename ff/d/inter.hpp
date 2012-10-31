@@ -1,4 +1,10 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*
+ *  \file inter.hpp
+ *  \brief Interfaces for communication and transportation patterns
+ */
+ 
 #ifndef _FF_COMMINTERFACE_HPP_
 #define _FF_COMMINTERFACE_HPP_
 /* ***************************************************************************
@@ -22,9 +28,21 @@
 
 namespace ff {
 
+/*!
+ *  \ingroup runtime
+ *
+ *  @{
+ */
+
 //
 // Communication Pattern interface
 //
+
+/*
+ * \class commPattern
+ *
+ * \brief Communication Pattern interface
+ */
 template <typename Impl>
 class commPattern  {
 protected:
@@ -76,6 +94,12 @@ public:
 //
 // Communication Transport interface
 //
+
+/*
+ * \class commTransport
+ *
+ * \brief Transport Pattern interface
+ */
 template <typename Impl>
 class commTransport  {
 protected:
@@ -104,6 +128,11 @@ public:
 
     const int getProcId() const { return impl.getProcId();}
 };
+
+/*!
+ *
+ * @}
+ */
 
 
 } // namespace
