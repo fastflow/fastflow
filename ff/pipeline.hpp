@@ -41,14 +41,16 @@ namespace ff {
  *
  *  \brief The Pipeline skeleton.
  *
- *  Pipelining is one of the simplest parallel patterns where data flows through a series of stages 
- *  (or nodes) and each stage processes the input data in some ways, producing as output a modified 
- *  version or new data. A pipeline's stage can operate sequentially or in parallel and may or may
- *  not have an internal state.
+ *  Pipelining is one of the simplest parallel patterns where data flows through 
+ *  a series of stages (or nodes) and each stage processes the input data in some 
+ *  ways, producing as output a modified version or new data. A pipeline's stage 
+ *  can operate sequentially or in parallel and may or may not have an internal 
+ *  state.
  */
  
 class ff_pipeline: public ff_node {
 protected:
+    /// Prepare the Pipeline skeleton for execution
     inline int prepare() {
         // create input FFBUFFER
         int nstages=static_cast<int>(nodes_list.size());
@@ -90,8 +92,9 @@ protected:
     }
 
     /*! 
-     *  freeze_and_run is required when no manager threads are present in the pipeline, which would 
-     *  allow to freeze other threads before starting the computation.
+     *  This function is required when no manager threads are present in the 
+     *  pipeline, which would allow to freeze other threads before starting the 
+     *  computation.
      */
     int freeze_and_run(bool=false) {
         freeze();
@@ -125,13 +128,21 @@ public:
         out_buffer_entries(out_buffer_entries),fixedsize(fixedsize) {               
     }
 
+    /**
+     *  Add a stage to the Pipeline
+     *
+     *  \param s a ff_node that is the stage to be added to the skeleton. The stage 
+     *  contains the task that has to be executed.
+     */
     int add_stage(ff_node * s) {        
         nodes_list.push_back(s);
         return 0;
     }
 
-    // the last stage output queue will be connected 
-    // to the first stage input queue (feedback channel).
+    /**
+     * the last stage output queue will be connected 
+     * to the first stage input queue (feedback channel).
+     */
     int wrap_around() {
         if (nodes_list.size()<2) {
             error("PIPE, too few pipeline nodes\n");
@@ -151,6 +162,7 @@ public:
         return 0;
     }
 
+    /// Run the Pipeline skeleton.
     int run(bool skip_init=false) {
         int nstages=static_cast<int>(nodes_list.size());
 
@@ -187,6 +199,7 @@ public:
         return 0;
     }
 
+    /// Run and wait all threads to finish.
     int run_and_wait_end() {
         if (isfrozen()) return -1; // FIX !!!!
         stop();
@@ -195,6 +208,7 @@ public:
         return 0;
     }
     
+    /// Run and then freeze.
     int run_then_freeze() {
         if (isfrozen()) {
             thaw();
@@ -206,6 +220,7 @@ public:
         return run();
     }
     
+    /// Wait for a stage to complete its task
     int wait(/* timeval */ ) {
         int ret=0;
         for(unsigned int i=0;i<nodes_list.size();++i)
@@ -217,6 +232,7 @@ public:
         return ret;
     }
     
+    /// Wait freezing.
     int wait_freezing(/* timeval */ ) {
         int ret=0;
         for(unsigned int i=0;i<nodes_list.size();++i)
@@ -229,14 +245,15 @@ public:
         return ret;
     } 
     
+    /// Stop all stages
     void stop() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->stop();
     }
-    
+    /// Freeze all stages    
     void freeze() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->freeze();
     }
-    
+    /// Thaw all frozen stages    
     void thaw() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->thaw();
     }
@@ -249,7 +266,7 @@ public:
         return true;
     }
 
-    /** offload the given task to the pipeline */
+    /** Offload the given task to the pipeline */
     inline bool offload(void * task,
                         unsigned int retry=((unsigned int)-1),
                         unsigned int ticks=ff_node::TICKS2WAIT) { 

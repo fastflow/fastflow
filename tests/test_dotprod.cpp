@@ -75,8 +75,8 @@ public:
     }
     inline void setTask(void* t)  { 
         ff_task_t* mytask = (ff_task_t*)t;
-        base::task = mytask->A;
-        task2= mytask->B;
+        base::task = (T1 *) mytask->A;
+        task2 = (T2 *) mytask->B;
     }
 protected:
     T2* task2;

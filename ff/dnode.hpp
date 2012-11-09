@@ -1,8 +1,8 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*! \file dnode.hpp
- *  \brief Contains the definition of the \p ff_dnode class, which is an extension of the base class 
- *  \p ff_node, with features oriented to distributed systems.
+ *  \brief Contains the definition of the \p ff_dnode class, which is an extension 
+ *  of the base class \p ff_node, with features oriented to distributed systems.
  */
  
 #ifndef _FF_DNODE_HPP_
@@ -43,7 +43,7 @@ static const char FF_DEOS[]="EOS";
 typedef void (*dnode_cbk_t) (void *,void*);
 
 /*!
- *  \ingroup low_level
+ *  \ingroup zmq_low_level
  *
  *  @{
  */
@@ -56,9 +56,9 @@ typedef void (*dnode_cbk_t) (void *,void*);
  *  A \p ff_dnode is actually a \p ff_node with an extra communication channel 
  *  (<em>external channel</em>), which connects the edge-node of the graph with one 
  *  or more edge-nodes of other FastFlow application graphs running on the same host 
- *  or on a different host(s).
+ *  or on different host(s).
  *
- *  It is implemented as a template; the template type \p CommImpl refers to 
+ *  It is implemented as a template: the template type \p CommImpl refers to 
  *  the communication pattern that the programmer wishes to use to connect different 
  *  \p ff_dnodes (i.e. unicast, broadcast, scatter, ondemand, fromAll, fromAny).
  */
@@ -89,12 +89,13 @@ protected:
     /// Default constructor
     ff_dnode():ff_node(),skipdnode(true) {}
     
+    /// Destructor: closes all connections.
     virtual ~ff_dnode() {         
         com.close();
         delete com.getDescriptor();
     }
     
-    /** Override \p ff_node 's \p push method */
+    /** Override \p ff_node's \p push method */
     virtual inline bool push(void * ptr) { 
         if (skipdnode || !P) return ff_node::push(ptr);
 
@@ -112,7 +113,7 @@ protected:
         }
         
         if (CommImpl::MULTIPUT) {
-            svector<iovec> v[peers];
+            vector<svector<iovec> > v(peers);
             for(int i=0;i<peers;++i) {
                 callbackArg.resize(0);
                 prepare(v[i], ptr, i);
@@ -191,14 +192,15 @@ protected:
 public:
     /**
      *  The \p ff_dnode::init method initializes the external channel.
-     *  \param[in] name name of the channel
-     *  \param[in] address the address where to listen or connect to
-     *  \param[in] peers the number of peers
-     *  \param[in] transp the transport layer to be used
-     *  \param[in] p a flag saying whether the current \a dnode is the producer (\p p \p = \p true) 
+     *
+     *  \param name name of the channel
+     *  \param address the address where to listen or connect to
+     *  \param peers the number of peers
+     *  \param transp the transport layer to be used
+     *  \param p a flag saying whether the current \a dnode is the producer (\p p \p = \p true) 
      *               or the consumer (\p p \p = \p false) w.r.t. the communication pattern used
-     *  \param[in] nodeId the ID of the node
-     *  \param[in] cbk the callback function that will be called once when a message just sent 
+     *  \param nodeId the ID of the node
+     *  \param cbk the callback function that will be called once when a message just sent 
      *                 is no longer in use by the run-time
      *
      */

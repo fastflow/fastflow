@@ -76,7 +76,7 @@
 namespace ff {
 
 /* Do not change the following define unless you know what you're doing */
-#define INTERNAL_BUFFER_T SWSR_Ptr_Buffer  /* Lamport_Buffer */
+#define INTERNAL_BUFFER_T SWSR_Ptr_Buffer  /* bounded SPSC buffer */
 
 /* Pool of buffers used to create and unbounded SWSR buffer*/
 class BufferPool {
@@ -208,7 +208,7 @@ private:
 #if defined(uSWSR_MULTIPUSH)
     enum { MULTIPUSH_BUFFER_SIZE=16};
 
-    // -
+    // Multipush: push a bach of items.
     inline bool multipush() {
         if (buf_w->multipush(multipush_buf,MULTIPUSH_BUFFER_SIZE)) {
             mcnt=0; 
@@ -230,6 +230,14 @@ private:
 #endif
 
 public:
+    /**
+     *  Constructor
+     *
+     *  \param n the size of the buffer
+     *  \param fixedsize a boolean flag that asserts whether the buffer can be 
+     *  resized. Default is \p false.
+     *  \param fillcache a flag.
+     */
     uSWSR_Ptr_Buffer(unsigned long n, const bool fixedsize=false, const bool fillcache=false):
         buf_r(0),buf_w(0),size(n),fixedsize(fixedsize),
         pool(CACHE_SIZE,fillcache,size) {
@@ -239,6 +247,7 @@ public:
 #endif
     }
     
+    /** Destructor */
     ~uSWSR_Ptr_Buffer() {
         if (buf_r) {
             buf_r->~INTERNAL_BUFFER_T();
@@ -247,6 +256,9 @@ public:
         // buf_w either is equal to buf_w or is freed by BufferPool destructor
     }
     
+    /**
+     *  Initialise the unbounded buffer.
+     */
     bool init() {
         if (buf_w || buf_r) return false;
 #if defined(uSWSR_MULTIPUSH)
@@ -264,8 +276,7 @@ public:
         return true;
     }
     
-    /** Returns true if the buffer is empty */
-    
+    /** Returns true if the buffer is empty */    
     inline bool empty() {
         //return buf_r->empty();
         if (buf_r->empty()) { // current buffer is empty
@@ -279,17 +290,23 @@ public:
         return buf_w->available();
     }
  
-    /*! Push Method: push the input value into the queue.
-     *  @param[in] data Data to be pushed in the buffer
-     * 
-     *  If fixedsize has been set to true, this method may
+    /*! 
+     *  Push Method: push the input value into the queue.\n
+     *  If fixedsize has been set to \p true, this method may
      *  return false. This means EWOULDBLOCK 
-     *  and the call should be retried.  
+     *  and the call should be retried.
+     *
+     *  \param data Data to be pushed in the buffer 
+     *  \return \p false if \p fixedsize is set to \p true OR if \p data is NULL 
+     *  OR if there is not a buffer to write to. 
+     *  \return \p true if the push succedes. 
      */
     inline bool push(void * const data) {
         /* NULL values cannot be pushed in the queue */
         if (!data || !buf_w) return false;
         
+        // If fixedsize has been set to \p true, this method may
+        // return false. This means EWOULDBLOCK 
         if (!available()) {
 
             if (fixedsize) return false;
@@ -307,7 +324,8 @@ public:
         return true;
     }
 
-    /* multi-producers method. lock protected.
+    /*
+     *  Multi-producers push method (lock protected)
      *
      */
     inline bool mp_push(void *const data) {
@@ -343,9 +361,10 @@ public:
     }
 #endif /* uSWSR_MULTIPUSH */
     
-    /*! Pop method: get the next data from the buffer
+    /*! 
+     *  Pop method: get the next data from the buffer
      *  
-     *  @param[in] data Double pointer to the location where to store the 
+     *  \param data Double pointer to the location where to store the 
      *  data popped from the buffer
      */
     inline bool  pop(void ** data) {
@@ -381,7 +400,7 @@ public:
     }
 #endif
 
-  /* multi-consumers method. lock protected.
+    /* multi-consumers pop method. lock protected.
      *
      */
     inline bool mc_pop(void ** data) {

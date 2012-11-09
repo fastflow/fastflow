@@ -27,6 +27,7 @@
 
 
 #include <vector>
+#include <ff/svector.hpp>
 #include <ff/gt.hpp>
 #include <ff/lb.hpp>
 #include <ff/node.hpp>
@@ -41,29 +42,82 @@ namespace ff {
  *  @{
  */
 
+/**
+ * \class map_lb
+ *
+ * \brief A loadbalancer for the \p map skeleton
+ *
+ * The map loadbalancer extends the \p ff_loadbalancer and uses ff_loadbalancer's 
+ * method \p broadcast_task() to send task to all workers.
+ */
 class map_lb: public ff_loadbalancer {
 public:
+    /**
+     * Default constructor
+     *
+     * \param max_num_workers max number of workers
+     */
     map_lb(int max_num_workers):ff_loadbalancer(max_num_workers) {}
+    
+    /// Broadcast the task to all workers
     void broadcast(void * task) {
         ff_loadbalancer::broadcast_task(task);
     }   
 };
+
+/*!
+ *  @}
+ */
+ 
+ 
+ /*!
+ *  \ingroup high_level
+ *
+ *  @{
+ */
+ 
+
+/**
+ * \class map_gt
+ *
+ * \brief A gatherer for the \p map skeleton
+ *
+ * The map gatherer extends the \p ff_gatherer and uses ff_gatherer's
+ * method \p all_gather() to collect the result from all workers.
+ */
 class map_gt: public ff_gatherer {
 public:
+    /**
+     * Default constructor
+     *
+     * \param max_num_workers max number of workers
+     */
     map_gt(int max_num_workers):ff_gatherer(max_num_workers) {}
+    
+    /// Collect results from all tasks
     int all_gather(void * task, void **V) {
         return ff_gatherer::all_gather(task,V);
     }   
 };
 
-
-
 /*!
+ *  @}
+ */
+ 
+ 
+ /*!
+ *  \ingroup high_level
+ *
+ *  @{
+ */
+     
+
+/**
  * \class ff_map
  *
  * \brief The map skeleton
  *
- * The map skeleton extends the \p farm skeleton.
+ * The map skeleton, that extends the \p farm skeleton.
  */
 class ff_map: public ff_farm<map_lb,map_gt> {
 public:
@@ -85,6 +139,7 @@ public:
      *  vsize is the size of the V array.
      */
     typedef void* (*reduce_F_t) (void** V, int vsize);
+    
 private:
     // Emitter, Collector and Worker of the farm.
     // Emitter
@@ -111,9 +166,9 @@ private:
         
         void * svc(void *task) {
             int nw= gt->getnworkers();
-            void *Task[nw];
+            svector<void*> Task(nw);
             gt->all_gather(task, &Task[0]);
-            if (reduceF) return reduceF(Task, nw);
+            if (reduceF) return reduceF(Task.begin(), nw);
             return Task[0];  // "default" reduceF
         }
     private:
@@ -141,13 +196,13 @@ public:
      *  This constructor allows to activate the map for working on a stream of
      *  tasks or as a software accelerator by setting \p input_ch \p = \p true.
      *
-     * @param[in] mapF Specifies the \p Worker object that will execute the 
+     *  \param mapF Specifies the \p Worker object that will execute the 
      *                 operations.
-     * @param[in] mapP It is the partitioner that is responsible to partition the 
+     *  \param mapP It is the partitioner that is responsible to partition the 
      *                 problem.
-     * @param[in] reduceF The \p Reduce object. This parameter is optional and is 
+     *  \param reduceF The \p Reduce object. This parameter is optional and is 
      *    to be specified when using a \a MapReduce skeleton. Defult is \p NULL.
-     * @param[in] input_ch Specifies whether the map skeleton is used as an 
+     *  \param input_ch Specifies whether the map skeleton is used as an 
      *                     accelerator. Default is \p false.
      */
     ff_map ( map_worker_F_t mapF, 
@@ -168,12 +223,12 @@ public:
      *  This constructor allows to activate the map for the computation of
      *  just one task
      *
-     * @param[in] mapF Specifies the \p Worker object that will execute the 
+     *  \param mapF Specifies the \p Worker object that will execute the 
      *                 operations.
-     * @param[in] mapP It is the partitioner that is responsible to partition the 
+     *  \param mapP It is the partitioner that is responsible to partition the 
      *                 problem.
-     * @param[in] task The task to be executed.
-     * @param[in] reduceF The \p Reduce object. This parameter is optional and is 
+     *  \param task The task to be executed.
+     *  \param reduceF The \p Reduce object. This parameter is optional and is 
      * to be specified when using a \a MapReduce skeleton. Defult is \p NULL.
      */
     ff_map ( map_worker_F_t mapF, 
@@ -189,6 +244,7 @@ public:
         add_workers(w);
     }
     
+    /** Destructor */
     ~ff_map() {
         delete (mapE*)(getEmitter());
         delete (mapC*)(getCollector());
@@ -198,8 +254,12 @@ public:
     }
 
     int   get_my_id() const { return -1; };
-    /* This method sets the affinity for the emitter and collector threads,
+    
+    /**
+     * This method sets the affinity for the emitter and collector threads,
      * both are pinned on the same core.
+     *
+     * \param cpuID the ID of the cpu to which the threads will be pinned 
      */
     void  setAffinity(int cpuID) { 
         if (cpuID<0 || !threadMapper::instance()->checkCPUId(cpuID) ) {

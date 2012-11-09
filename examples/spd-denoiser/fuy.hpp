@@ -68,9 +68,9 @@ inline void fuy(
 		/*long set_i,*/
 		bmp_size_t width,
 		bmp_size_t height,
-		float alfa, // useless - remove
+		//float alfa, // useless - remove
 		float beta,
-		bmp_size_t i, // useless - remove
+		//bmp_size_t i, // useless - remove
 		pow_table &pt
 		)
 {

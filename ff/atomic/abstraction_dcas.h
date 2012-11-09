@@ -30,7 +30,9 @@
 #include <intrin.h>
 typedef unsigned __int64      atom_t;
 //#define INLINE                extern __forceinline
-#define ALIGN_TO(alignment)      __declspec( align(alignment) )
+#define ALIGN_TO_PRE(alignment)      __declspec( align(alignment) )
+#define ALIGN_TO_POST(alignment) 
+#define FF_MEM_ALIGN(__A,__alignment)  __declspec( align(__alignment) ) __A  
 #define ALIGN_SINGLE_POINTER  8
 #define ALIGN_DOUBLE_POINTER  16
 #endif
@@ -44,7 +46,9 @@ typedef unsigned __int64      atom_t;
 #include <intrin.h>
 typedef unsigned long int     atom_t;
 //#define INLINE                extern __forceinline
-#define ALIGN_TO(alignment)      __declspec( align(alignment) )
+#define ALIGN_TO_PRE(alignment)      __declspec( align(alignment) )
+#define ALIGN_TO_POST(alignment)
+#define FF_MEM_ALIGN(__A,__alignment)  __declspec( align(__alignment) ) __A
 #define ALIGN_SINGLE_POINTER  4
 #define ALIGN_DOUBLE_POINTER  8
 
@@ -61,7 +65,9 @@ typedef unsigned long int     atom_t;
 #include <wdm.h>
 typedef unsigned __int64      atom_t;
 #define INLINE                extern __forceinline
-#define ALIGN_TO(alignment)      __declspec( align(alignment) )
+#define FF_MEM_ALIGN(__A,__alignment)  __declspec( align(__alignment) ) __A
+#define ALIGN_TO_PRE(alignment)      __declspec( align(alignment) )
+#define ALIGN_TO_POST(alignment)
 #define ALIGN_SINGLE_POINTER  8
 #define ALIGN_DOUBLE_POINTER  16
 #endif
@@ -74,7 +80,9 @@ typedef unsigned __int64      atom_t;
 #include <wdm.h>
 typedef unsigned long int     atom_t;
 #define INLINE                extern __forceinline
-#define ALIGN_TO(alignment)      __declspec( align(alignment) )
+#define ALIGN_TO_PRE(alignment)      __declspec( align(alignment) )
+#define ALIGN_TO_POST(alignment)
+#define FF_MEM_ALIGN(__A,__alignment)  __declspec( align(__alignment) ) __A
 #define ALIGN_SINGLE_POINTER  4
 #define ALIGN_DOUBLE_POINTER  8
 
@@ -92,7 +100,9 @@ typedef unsigned long int     atom_t;
 #include <stdlib.h>
 typedef unsigned long long int  atom_t;
 #define INLINE                  inline
-#define ALIGN_TO(alignment)        __attribute__( (aligned(alignment)) )
+#define ALIGN_TO_PRE(alignment)
+#define ALIGN_TO_POST(alignment)        __attribute__( (aligned(alignment)) )
+#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
 #define ALIGN_SINGLE_POINTER    8
 #define ALIGN_DOUBLE_POINTER    16
 #endif
@@ -107,7 +117,9 @@ typedef unsigned long long int  atom_t;
 #include <stdlib.h>
 typedef unsigned long int     atom_t;
 #define INLINE                inline
-#define ALIGN_TO(alignment)      __attribute__( (aligned(alignment)) )
+#define ALIGN_TO_PRE(alignment)
+#define ALIGN_TO_POST(alignment)      __attribute__( (aligned(alignment)) )
+#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
 #define ALIGN_SINGLE_POINTER  4
 #define ALIGN_DOUBLE_POINTER  8
 #endif
@@ -122,7 +134,9 @@ typedef unsigned long int     atom_t;
 #include <stdlib.h>
 typedef unsigned long int     atom_t;
 #define INLINE                inline
-#define ALIGN_TO(alignment)      __attribute__( (aligned(alignment)) )
+#define ALIGN_TO_PRE(alignment)
+#define ALIGN_TO_POST(alignment)      __attribute__( (aligned(alignment)) )
+#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
 #define ALIGN_SINGLE_POINTER  4
 #define ALIGN_DOUBLE_POINTER  8
 #endif
@@ -140,13 +154,17 @@ typedef unsigned long int     atom_t;
 #if (defined __x86_64__)
 typedef unsigned long long int  atom_t;
 #define INLINE                  inline
-#define ALIGN_TO(alignment)        __attribute__( (aligned(alignment)) )
+#define ALIGN_TO_PRE(alignment)
+#define ALIGN_TO_POST(alignment)        __attribute__( (aligned(alignment)) )
+#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
 #define ALIGN_SINGLE_POINTER    8
 #define ALIGN_DOUBLE_POINTER    16
 #else
 typedef unsigned long int        atom_t;
 #define INLINE                  inline
-#define ALIGN_TO(alignment)        __attribute__( (aligned(alignment)) )
+#define ALIGN_TO_PRE(alignment)
+#define ALIGN_TO_POST(alignment)        __attribute__( (aligned(alignment)) )
+#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
 #define ALIGN_SINGLE_POINTER    4 
 #define ALIGN_DOUBLE_POINTER    8
 #endif

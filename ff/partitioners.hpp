@@ -30,11 +30,7 @@ namespace ff {
 
 
 
-/*!
- *  \ingroup runtime
- *
- *  @{
- */
+
 
 struct basePartition {
     basePartition():task(NULL), len(0) {}
@@ -49,9 +45,15 @@ struct basePartition {
 };
 
 /*!
+ *  \ingroup runtime
+ *
+ *  @{
+ */
+
+/*!
  * \class basePartitioner
  *
- * \brief A basic interface for the partitioner.
+ * \brief A basic interface for the partitioner used by the Map skeleton.
  */    
 class basePartitioner {
 public:
@@ -63,6 +65,16 @@ public:
 protected:
     int parts;
 };
+
+/*!
+ *  @}
+ */
+ 
+/*!
+ *  \ingroup runtime
+ *
+ *  @{
+ */
     
     
 // one dimensional array partitioner
@@ -71,7 +83,7 @@ protected:
  *
  * \brief A linear partitioner.
  *
- * A one dimensional array partitioner.
+ * A one-dimensional array partitioner for the Map skeleton.
  */
 template<typename T>
 class LinearPartitioner: public basePartitioner {
@@ -94,6 +106,7 @@ public:
         P.setLength(((size_t)threadId<r)?(q+1):q);
     }
     
+    /// Set the task
     inline void setTask(void* t) { task = (T*)t; }
     
 protected:
@@ -101,6 +114,10 @@ protected:
     const size_t q;  // Num_of_Elements / Num_of_threads
     const size_t r;  // Num_of_Elements % Num_of_threads
 };
+
+/*!
+ *  @}
+ */
 
 // REW
 struct basePartitionList: public basePartition {
@@ -114,6 +131,8 @@ struct basePartitionList: public basePartition {
     void*  task;
     size_t len;
 };
+
+
 
 #if 0
     // caso base list di N elementi tutti della stessa size e dello stesso tipo
@@ -139,23 +158,21 @@ public:
         basePartitionList& pList = *(basePartitionLinst*)&P;
 
         T::iterator b=T->begin(), e=T->end();
-        for(int i=0; b!=e; ++b, ++i) {
+        for(int i=0; b!=e; ++b, ++i) //{
             pList[i].setData((*b) + start);
-            pList[i].
-
+        //pList[i].
+        
         for(size_t i=0;i<listSize;++i) {
             P.setData(task+start);
-        P.setLength(((size_t)threadId<r)?(q+1):q);
-    }
+            P.setLength(((size_t)threadId<r)?(q+1):q);
+        }
     
-    inline void setTask(void* t) { task = (T*)t; }
-};
+        inline void setTask(void* t) { task = (T*)t; }
+    };
     
 #endif
 
-    /*!
-     *  @}
-     */
+    
     
 } // namespace ff
 

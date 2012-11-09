@@ -47,7 +47,7 @@
 
 namespace ff {
 /*!
- *  \ingroup zmq
+ *  \ingroup zmq_runtime
  *
  *  @{
  */
@@ -106,6 +106,7 @@ public:
 
     /**
      * Retrieve the message content
+     *
      * \returns a pointer to the content of the message object
      */
     inline void * getData() {
@@ -125,7 +126,7 @@ public:
  */
 
 /*!
- *  \ingroup zmq
+ *  \ingroup zmq_runtime
  *
  *  @{
  */
@@ -144,7 +145,7 @@ private:
 
 protected:
 
-    // closes all connections
+    /** Closes all existing connections */
     inline int closeConnections() {
         //
         // WARNING: Instead of setting a longer period of some minutes, 
@@ -167,17 +168,23 @@ public:
     typedef zmq::socket_t endpoint_t;
     typedef zmqTransportMsg_t msg_t;
 
+    /** 
+     *  Default constructor 
+     *
+     *  \param procId Process (or thread) ID
+     */
     zmqTransport(const int procId) :
         procId(procId),context(NULL) {
     };
 
-    ~zmqTransport() { closeTransport();  }
+    /** Default destructor */
+    ~zmqTransport() { closeTransport(); }
 
     /**
-     * Initialise the transport layer: create a new ØMQ context
-     * and clean the list of active en-points.
+     * Initialise the transport layer: creates a new ØMQ context
+     * and cleans the list of active end-points.
      *
-     * \returns 0 if successful 
+     * \returns 0 if successful, a negative value otherwise. 
      */
     int initTransport() {
         if (context) return -1;
@@ -189,7 +196,7 @@ public:
     
     /**
      * Close the transport layer, close all connections to any
-     * active endpoint and delete the existing context.
+     * active end-point and delete the existing context.
      *
      * \returns 0 if successful
      */
@@ -200,11 +207,11 @@ public:
     }
 
     /**
-     * Create a new socket and push it to the active sockets list.
+     * Create a new socket and push it into the active sockets list.
      *
-     * \param P if \p false, the new socket acts as a \p ROUTER (
-     * allows routing of messages to specific connections); if \p true
-     * the new socket acts as a \p DEALER (used for fair-queuing on 
+     * \param P flag specifying the role of the socket: if \p false, the new socket 
+     * acts as a \p ROUTER (allows routing of messages to specific connections); 
+     * if \p true the new socket acts as a \p DEALER (used for fair-queuing on 
      * input and for performing load-balancing on output toward a pool of collections).
      *
      * \returns a pointer to the newly created endpoint.
@@ -218,11 +225,11 @@ public:
     
     /**
      * Delete the socket pointed by \p s. It removes the socket from
-     * the list of active sockets and then destroys the socket.
+     * the list of active sockets and destroys the socket.
      *
      * \param s a pointer to the socket to be deleted
      * 
-     * \returns 0 if successful; negative value otherwise
+     * \returns 0 if successful; a negative value otherwise
      */
     int deleteEndPoint(endpoint_t *s) {
         if (s) {
@@ -246,8 +253,9 @@ public:
 
 protected:
     const int                procId;    // Process (or thread) ID
-    zmq::context_t *         context;   ///< A context encapsulates functionality dealing with the
-                                        ///< initialisation and termination of a ØMQ context.
+    zmq::context_t *         context;   /* A context encapsulates functionality 
+                                        dealing with the initialisation and 
+                                        termination of a ØMQ context. */
                                         
     std::deque<endpoint_t *> Socks;     // all active end-points (i.e. sockets)
 };
