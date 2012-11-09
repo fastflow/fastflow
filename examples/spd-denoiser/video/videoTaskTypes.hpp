@@ -1,8 +1,8 @@
 #ifndef __VIDEOTASKTYPES_HPP__
 #define __VIDEOTASKTYPES_HPP__
+#include <opencv/cv.h>
 #include "bitmap.hpp"
 #include "control_structures.hpp"
-#include <opencv/cv.h>
 
 template <typename T>
 class Bitmap_cv : public Bitmap<T> {

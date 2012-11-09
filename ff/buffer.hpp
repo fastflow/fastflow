@@ -110,11 +110,16 @@ private:
 #endif
 
 public:
-    /** Constructor. */
+    /** 
+     *  Constructor.
+     *
+     *  \param n the size of the buffer
+     */
     SWSR_Ptr_Buffer(unsigned long n, const bool=true):
         pread(0),pwrite(0),size(n),buf(0) {
     }
     
+    /** Default destructor */
     ~SWSR_Ptr_Buffer() {
         // freeAlignedMemory is a function defined in 'sysdep.h'
         freeAlignedMemory(buf);
@@ -160,15 +165,16 @@ public:
     /** Returns the size of the buffer */
     inline unsigned long buffersize() const { return size; };
     
-    /*! Push method: push the input value into the queue.
-     *  @param[in] data Data to be pushed in the buffer
-     *
+    /** 
+     *  Push method: push the input value into the queue. \n
      *  A Write Memory Barrier (WMB) ensures that all previous memory writes 
      *  are visible to the other processors before any later
      *  write is executed.  This is an "expensive" memory fence
      *  operation needed in all the architectures with a weak-ordering 
      *  memory model, where stores can be executed out-of-order 
      *  (e.g. PowerPc). This is a no-op on Intel x86/x86-64 CPUs.
+     *
+     *  \param data Element to be pushed in the buffer
      */
     inline bool push(void * const data) {     /* modify only pwrite pointer */
         if (!data) return false;
@@ -190,7 +196,7 @@ public:
     }
 
     /*
-     *
+     * the multipush method, which pushes a batch of elements (array) in the queue.
      * NOTE: len should be a multiple of  longxCacheLine/sizeof(void*)
      *
      */
@@ -223,12 +229,15 @@ public:
 
 
 #if defined(SWSR_MULTIPUSH)
-    /* massimot: experimental code
-     *
-     * This method provides the same interface of the push one but 
-     * uses the multipush method to provide a batch of items to
-     * the consumer thus ensuring better cache locality and 
+    
+    // massimot: experimental code
+    /**
+     * This method provides the same interface of the \p push method, but it
+     * allows to provide a batch of items to
+     * the consumer, thus ensuring better cache locality and 
      * lowering the cache trashing.
+     *
+     * \param data Element to be pushed in the buffer
      */
     inline bool mpush(void * const data) {
         if (!data) return false;
@@ -250,8 +259,10 @@ public:
     }
 #endif /* SWSR_MULTIPUSH */
     
-    /*! Pop method: get the next value from the FIFO buffer.
-     *  @param[in] data Double pointer to the location where to store the 
+    /** 
+     *  Pop method: get the next value from the FIFO buffer.
+     *
+     *  \param data Pointer to the location where to store the 
      *  data popped from the buffer
      */
     inline bool  pop(void ** data) {  /* modify only pread pointer */
@@ -269,7 +280,8 @@ public:
         return true;
     }           
     
-    /** Returns the "head" of the buffer, i.e. the element pointed by the 
+    /** 
+     *  Returns the "head" of the buffer, i.e. the element pointed by the 
      *  read pointer (it is a FIFO queue, so \p push on the tail and \p pop from 
      *  the head). 
      */
@@ -277,8 +289,10 @@ public:
         return buf[pread];  
     }    
 
-    /** Reset the buffer and move \p read and \p write pointers to
-     * the beginning of the buffer (i.e. position 0).  
+    /** 
+     * Reset the buffer and move \p read and \p write pointers to
+     * the beginning of the buffer (i.e. position 0).\n
+     * Also, the entire buffer is cleaned and set to 0  
      */
     inline void reset(const bool startatlineend=false) { 
         if (startatlineend) {

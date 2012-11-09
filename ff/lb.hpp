@@ -64,9 +64,17 @@ public:
     //
     enum {TICKS2WAIT=1000};
 protected:
+    /**
+     * Send a task to a worker.
+     *
+     * \param task the task to be sent
+     * \param idx ID of the worker.
+     */
     inline bool push_task(void * task, int idx) {
         return workers[idx]->put(task);
     }    
+    
+    
     inline void push_eos(bool nofreeze=false) {
         //register int cnt=0;
         void * eos = (void *)(nofreeze?FF_EOS_NOFREEZE:FF_EOS);
@@ -86,8 +94,11 @@ protected:
      * scheduling policy.
      */
 
-    /* return values: -1 no worker selected
-     *                [0..numworkers[ the number of worker selected
+    /** 
+     * Virtual function that can be redefined to implement a new
+     * scheduling policy.\n
+     * By default it returns -1 if no worker selected. Otherwise the number of 
+     * worker selected.
      */
     virtual inline int selectworker() { return (++nextw % nworkers); }
 #if defined(LB_CALLBACK)
@@ -119,7 +130,10 @@ protected:
 #endif
     }
 
-    /** main scheduling function */
+    /** 
+     * Main scheduling function. This is a virtual function and can be redefined
+     * implement a custom scheduling policy. 
+     */
     virtual bool schedule_task(void * task,unsigned int retry=(unsigned)-1,unsigned int ticks=0) {
         register unsigned int cnt,cnt2;
         do {
@@ -180,7 +194,7 @@ protected:
         return ite;
     }
 
-    /** it sends the same task to all workers */
+    /** Send the same task to all workers */
     virtual void broadcast_task(void * task) {
         std::vector<int> retry;
 
@@ -194,6 +208,7 @@ protected:
             else losetime_out();
         }
     }
+    
     
     bool pop(void ** task) {
         //register int cnt = 0;       
@@ -217,14 +232,16 @@ protected:
         return true;
     }
     
+    /// Static version of the task scheduler.
     static bool ff_send_out_emitter(void * task,unsigned int retry,unsigned int ticks, void *obj) {
         return ((ff_loadbalancer *)obj)->schedule_task(task, retry, ticks);
     }
 
 
 public:
-    /*! Default constructor 
-     *  @param[in] max_num_workers The max number of workers allowed
+    /** 
+     *  Default constructor 
+     *  \param max_num_workers The max number of workers allowed
      */
     ff_loadbalancer(int max_num_workers): 
         nworkers(0),max_nworkers(max_num_workers),nextw(0),nextINw(0),channelid(-2),
@@ -236,7 +253,8 @@ public:
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
     }
 
-    /*! Destructor. 
+    /** 
+     *  Destructor. 
      *
      *  Deallocates dynamic memory spaces previoulsy allocated for workers
      */
@@ -244,6 +262,7 @@ public:
         if (workers) delete [] workers;
     }
 
+    /// Set emitter node.
     int set_filter(ff_node * f) { 
         if (filter) {
             error("LB, setting emitter filter\n");
@@ -255,6 +274,7 @@ public:
         return 0;
     }
 
+    /// Set fallback node.
     int set_fallback(ff_node * fb) {
         if (fallback) {
             error("LB, setting fallback\n");
@@ -265,11 +285,13 @@ public:
         return 0;
     }
 
+    /// Set input buffer
     void set_in_buffer(FFBUFFER * const buff) { 
         buffer=buff; 
         skip1pop=false;
     }
 
+    /// Get input buffer
     FFBUFFER * const get_in_buffer() const { return buffer;}
     
     /* return the channel id of the last pop 
@@ -278,10 +300,12 @@ public:
     const int get_channel_id() const { return channelid;}
     void reset_channel_id() { channelid=-2;}
 
+    /// Get the number of workers
     inline int getnworkers() const { return nworkers;}
 
     void skipfirstpop() { skip1pop=true;}
     
+    /// Decide master-worker schema.
     int  set_masterworker() {
         if (master_worker) {
             error("LB, master_worker flag already set\n");
@@ -311,6 +335,7 @@ public:
 
     const bool masterworker() const { return master_worker;}
     
+    /// Register the given node into the workers' list
     int  register_worker(ff_node * w) {
         if (nworkers>=max_nworkers) {
             error("LB, max number of workers reached (max=%d)\n",max_nworkers);
@@ -325,7 +350,7 @@ public:
         return -1;
     }
 
-
+    /// Virtual function: the loadbalancer task.
     virtual void * svc(void *) {
         void * task = NULL;
         void * ret  = (void *)FF_EOS;
@@ -467,6 +492,7 @@ public:
         return ret;
     }
 
+    /// Virtual function: initialise the loadbalancer task.
     virtual int svc_init() { 
         gettimeofday(&tstart,NULL);
 
@@ -476,12 +502,14 @@ public:
         return 0;
     }
 
+    /// Virtual function: finalise the loadbalancer task.
     virtual void svc_end() {
         if (filter) filter->svc_end();
         if (fallback) fallback->svc_end();
         gettimeofday(&tstop,NULL);
     }
 
+    /// Spawn workers threads
     int run(bool=false) {
         if (this->spawn(filter?filter->getCPUId():-1)<0) {
             error("LB, spawning LB thread\n");
@@ -500,6 +528,7 @@ public:
         return 0;
     }
 
+    /// Wait workers to finish their task.
     int wait() {
         int ret=0;
         for(int i=0;i<nworkers;++i)

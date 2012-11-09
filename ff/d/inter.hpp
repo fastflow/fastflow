@@ -28,8 +28,8 @@
 
 namespace ff {
 
-/*!
- *  \ingroup runtime
+/*
+ *  \ingroup zmq
  *
  *  @{
  */

@@ -70,10 +70,10 @@ const int PHYCORES         = 16;
 #endif
 
 
-struct task_t { 
+struct ff_task_t { 
     double* getData() { return (double*)(msg->getData()); }	
     zmqTransport::msg_t*   msg;
-    task_t*  self;
+    ff_task_t*  self;
 };
 
 
@@ -117,7 +117,7 @@ public:
 	printf("got result\n");
 
 	// just free memory for each input task
-	task_t* t = (task_t*)task;
+	ff_task_t* t = (ff_task_t*)task;
 	delete (t->msg);
 	delete (t->self);
 
@@ -142,7 +142,7 @@ public:
 
     virtual void unmarshalling(svector<msg_t*>* const v[], const int vlen, void *& task) {
         assert(vlen==1 && v[0]->size()==1); 
-	task_t* t = new task_t;
+	ff_task_t* t = new ff_task_t;
 	t->msg = v[0]->operator[](0);
 	t->self= t;
 	task   = t;
@@ -236,7 +236,7 @@ public:
 
     virtual void unmarshalling(svector<msg_t*>* const v[], const int vlen, void *& task) {
         assert(vlen==1 && v[0]->size()==1); 
-	task_t* t = new task_t;
+	ff_task_t* t = new ff_task_t;
 	t->msg = v[0]->operator[](0);
 	t->self= t;
 	task   = t;
@@ -259,7 +259,7 @@ public:
     }
     
     void * svc(void * task) {
-	double* t = ((task_t*)task)->getData();
+	double* t = ((ff_task_t*)task)->getData();
 	bzero(myt,taskSize*taskSize*sizeof(double));
 	
 	for(unsigned i=0;i<taskSize;++i)
@@ -286,7 +286,7 @@ class Collector2: public ff_dnode<COMM2> {
    typedef COMM2::TransportImpl        transport_t;
 protected:
     static void callback(void *e, void* arg) {
-	task_t* t = (task_t*)arg;
+	ff_task_t* t = (ff_task_t*)arg;
 	assert(t);
 	delete (t->msg);
 	delete (t->self);
@@ -307,7 +307,7 @@ public:
     }
 
     void prepare(svector<iovec>& v, void* ptr, const int sender=-1) {
-        struct iovec iov={((task_t*)ptr)->getData(),taskSize*taskSize*sizeof(double)};
+        struct iovec iov={((ff_task_t*)ptr)->getData(),taskSize*taskSize*sizeof(double)};
         v.push_back(iov);
 	setCallbackArg(ptr);
     }    
@@ -352,7 +352,7 @@ public:
 
     virtual void unmarshalling(svector<msg_t*>* const v[], const int vlen, void *& task) {
         assert(vlen==1 && v[0]->size()==1); 
-	task_t* t = new task_t;
+	ff_task_t* t = new ff_task_t;
 	t->msg = v[0]->operator[](0);
 	t->self= t;
 	task   = t;
@@ -371,7 +371,7 @@ class Sender: public ff_dnode<COMM3> {
     typedef COMM3::TransportImpl        transport_t;
 protected:
     static void callback(void *e, void* arg) {
-	task_t* t = (task_t*)arg;
+	ff_task_t* t = (ff_task_t*)arg;
 	assert(t);
 	delete (t->msg);
 	delete (t->self);
@@ -392,7 +392,7 @@ public:
     }
 
     void prepare(svector<iovec>& v, void* ptr, const int sender=-1) {
-        struct iovec iov={((task_t*)ptr)->getData(),taskSize*taskSize*sizeof(double)};
+        struct iovec iov={((ff_task_t*)ptr)->getData(),taskSize*taskSize*sizeof(double)};
         v.push_back(iov);
 	setCallbackArg(ptr);
     }    

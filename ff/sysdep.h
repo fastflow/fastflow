@@ -127,6 +127,7 @@ static inline int xchg(volatile int *ptr, int x)
 }
 #endif /* __x86_64 */
 
+
 static inline void *getAlignedMemory(size_t align, size_t size) {
     void *ptr;
 

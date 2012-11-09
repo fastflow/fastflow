@@ -81,7 +81,7 @@ static inline const double diffmsec(const struct timeval & a,
         --sec;
         usec += 1000000;
     }
-    return ((double)(sec*1000)+ (double)usec/1000.0);
+    return ((double)(sec*1000)+ ((double)usec)/1000.0);
 }
 
 static inline bool time_compare(struct timeval & a, struct timeval & b) {

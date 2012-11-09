@@ -27,6 +27,17 @@
 
 /*
  * Tests nesting accelerators.
+ *                                            --------------------------------------
+ *                                           |                                      |
+ *                           |Worker|        |               | Worker|              |
+ *                           |               V               |                      |
+ *    main-flow ---->Emitter |Worker|---Collector--->Emitter | Worker|--Collector---
+ *        .                  |               |               |
+ *        .                  |Worker|        |               | Worker|
+ *        .                                  |
+ *    main-flow <----------------------------          
+ *  
+ *          (main accelerator)                            (nested accelerator)         
  *
  */
 #include <vector>
@@ -40,12 +51,16 @@ using namespace ff;
 // generic worker
 class Worker: public ff_node {
 public:
+    Worker(const char *tag): tag(tag) {}
+    int svc_init() { std::cout << "[Worker" << tag << "] " << ff_node::get_my_id() << " started\n"; return 0; } 
     void * svc(void * task) {
         int * t = (int *)task;
-        std::cout << "[Worker] " << ff_node::get_my_id() 
+        std::cout << "[Worker" << tag << "] " << ff_node::get_my_id() 
                   << " received task " << *t << "\n";
         return task;
     }
+private:
+    const char* tag;
 };
 
 // the gatherer filter
@@ -65,13 +80,12 @@ public:
     void * svc(void * task) {   
         void * result=NULL;
         int * t = (int *)task;
-
         
         if (secondFarm) {
             std::cout << "[Farm Collector1] task received " << *t << "\n";
             secondFarm->offload(task);
             if (secondFarm->load_result_nb(&result)) {
-                std::cerr << "result= " << *((int*)result) << "\n";
+                std::cerr << "result_nb = " << *((int*)result) << "\n";
                 delete ((int*)result);
                 return GO_ON;
             }
@@ -88,7 +102,7 @@ public:
 
             void * result;
             while(secondFarm->load_result(&result)) {
-                std::cerr << "result= " << *((int*)result) << "\n";
+                std::cerr << "result = " << *((int*)result) << "\n";
                 delete ((int*)result);
             }
             secondFarm->wait();
@@ -98,7 +112,6 @@ public:
 
 private:
     ff_farm<> * secondFarm;
-
 };
 
 int main(int argc, 
@@ -122,12 +135,12 @@ int main(int argc,
     ff_farm<> farm(true /* accelerator set */);
 
     std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
+    for(int i=0;i<nworkers;++i) w.push_back(new Worker("1"));
     farm.add_workers(w);
 
     ff_farm<> farm2(true);
     std::vector<ff_node *> w2;
-    for(int i=0;i<nworkers;++i) w2.push_back(new Worker);
+    for(int i=0;i<nworkers;++i) w2.push_back(new Worker("2"));
     farm2.add_workers(w2);
     Collector C2(NULL);
     farm2.add_collector(&C2);
@@ -148,7 +161,7 @@ int main(int argc,
     std::cout << "[Main] EOS arrived\n";
     void * eos = (void *)FF_EOS;
     farm.offload(eos);
-    
+
     // Here join
     farm.wait();  
 

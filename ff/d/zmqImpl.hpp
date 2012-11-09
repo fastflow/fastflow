@@ -72,7 +72,7 @@ namespace ff {
 // used in Unicast, Bcast, Scatter, On-Demand, OneToMany
 
 /*!
- *  \ingroup zmq
+ *  \ingroup zmq_low_level
  *
  *  @{
  */
@@ -83,19 +83,20 @@ namespace ff {
  *  \brief Descriptor used in several communication patterns: 
  *  Unicast, Broadcast, Scatter, On-Demand, OneToMany.
  *
- *  REW - Complete this one
+ *  REW - To be Completed
  */
 struct descriptor1_N {
     typedef zmqTransportMsg_t  msg_t;
     
     /** 
      * Constructor. Creates a One-to-Many descriptor, that is, instantiate a 
-     * transport layer using the firt node as a router
+     * transport layer using the first node as a router.  
      *
-     * @param[in] name name of the descriptor (?)
-     * @param[in] peers number of peers (?)
-     * @param[in] transport pointer to the transport layer object
-     * @param[in] P boh!
+     * \param name name of the descriptor
+     * \param peers number of peers involved (receiving nodes)
+     * \param transport pointer to the transport layer object
+     * \param P flag that identifies whether the descriptor refers to a \p sender 
+     * (i.e. a Router) or to a \p receiver.
      *
      */
     descriptor1_N( const std::string name, const int peers, 
@@ -119,19 +120,21 @@ struct descriptor1_N {
             }
         }
     }
+    
+    /** Destructor */
     ~descriptor1_N() { close(); socket=NULL; }
     
-    
+    /** Close active connection and delete the existing socket. */
     inline int close() {
         if (socket) return transport->deleteEndPoint(socket);
         return -1;
     }
     
-    /* 
-     *  Initialise a socket 
+    /** 
+     *  Initialise a socket and estabilish a connection to the given address.
      *
-     *  addr is the ip address in the form ip/host:port
-     *  nodeId is the node identifier in the range [0..inf[
+     *  \param addr it is the ip address in the form 'ip/host:port'
+     *  \param nodeId it is the node identifier in the range [0..inf[
      */
     inline int init(const std::string& addr, const int nodeId=-1) {
         if (!socket) return -1;
@@ -174,7 +177,14 @@ struct descriptor1_N {
         return 0;
     }
 
-    // broadcast
+    /** 
+     *  Broadcast a message to all connected peers. 
+     *
+     *  \param msg eference to the message to be sent
+     *  \param flags a flag indcating whether the operation should be in 
+     *  non-blocking mode or if the message is a multi-part message.
+     *  See <a href="http://api.zeromq.org/2-1:_start"> ØMQ's API </a> for details.
+     */
     inline bool send(const msg_t& msg, int flags = 0) {
         for(int i=0;i<peers;++i) {
             msg_t _msg;
@@ -191,7 +201,15 @@ struct descriptor1_N {
         return true;    
     }
     
-    // broadcast
+    /** 
+     *  Broadcast other parts of a multi-parts message to all connected peers.
+     *  This method exits if the flag is not set to ZMQ_SNDMORE.  
+     *
+     *  \param msg eference to the message to be sent
+     *  \param flags a flag indcating whether the operation should be in 
+     *  non-blocking mode or if the message is a multi-part message.
+     *  See <a href="http://api.zeromq.org/2-1:_start"> ØMQ's API </a> for details.
+     */
     inline bool sendmore(const msg_t& msg, int flags) {
         assert(flags==ZMQ_SNDMORE);
         bool v=send(msg,flags);
@@ -199,7 +217,16 @@ struct descriptor1_N {
         return v;
     }
 
-    // unicast
+    
+    /** 
+     *  Unicast a message to a specified destination 
+     *
+     *  \param msg eference to the message to be sent
+     *  \param dest ID of the receiving peer.
+     *  \param flags a flag indcating whether the operation should be in 
+     *  non-blocking mode or if the message is a multi-part message.
+     *  See <a href="http://api.zeromq.org/2-1:_start"> ØMQ's API </a> for details.
+     */
     inline bool send(const msg_t& msg, const int dest, int flags) {
         assert(dest<peers);
         zmq::message_t to(const_cast<char*>(transportIDs[dest].c_str()), transportIDs[dest].length()+1,0,0);
@@ -212,7 +239,17 @@ struct descriptor1_N {
         zmqHdrSet=false;
         return true;    
     }
-    // unicast
+    
+    /** 
+     *  Unicast other parts of a multi-parts message to a specified destination.
+     *  This method exits if the flag is not set to ZMQ_SNDMORE.  
+     *
+     *  \param msg eference to the message to be sent
+     *  \param dest ID of the receiving peer.
+     *  \param flags a flag indcating whether the operation should be in 
+     *  non-blocking mode or if the message is a multi-part message.
+     *  See <a href="http://api.zeromq.org/2-1:_start"> ØMQ's API </a> for details.
+     */
     inline bool sendmore(const msg_t& msg, const int dest, int flags) {
         assert(flags==ZMQ_SNDMORE);
         bool v=send(msg,dest,flags);
@@ -220,12 +257,12 @@ struct descriptor1_N {
         return v;
     }
        
-    // receives a message from a ZMQ_DEALER
+    /** Receives a message header */
     inline bool recvhdr(msg_t& msg) {   
         return recv(msg);
     }
     
-    // receives a message after having received the header
+    /** Receive a message after having received the header */
     inline bool recv(msg_t& msg) {   
         try {
             if(!socket->recv(&msg)) { 
@@ -238,7 +275,7 @@ struct descriptor1_N {
         return true;
         }
     
-    // returns the total number of peers (NOTE: if !P,  peers is 1)
+    /** Returns the total number of peers (NOTE: if !P,  peers is 1) */
     inline const int getPeers() const { return peers;}
 
     // variables
@@ -370,7 +407,7 @@ struct descriptor1_N {
 // used in ALLgather, collect fromANY, ManyToOne
 
 /*!
- *  \ingroup zmq
+ *  \ingroup zmq_low_level
  *
  *  @{
  */
@@ -381,12 +418,22 @@ struct descriptor1_N {
  *  \brief Descriptor used in several communication patterns:
  *  AllGather, Collect FromAny, ManyToOne.
  *
- *  REW - Complete this one
+ *  REW - To be completed
  */
 struct descriptorN_1 {
     typedef zmqTransportMsg_t  msg_t;
     
-    /// Constructor
+    /** 
+     * Constructor. Creates a Many-to-One descriptor, that is, instantiate a 
+     * transport layer using the first node as a router.  
+     *
+     * \param name name of the descriptor
+     * \param peers number of peers involved (sending nodes)
+     * \param transport pointer to the transport layer object
+     * \param P flag that identifies whether the descriptor refers to a \p sender 
+     * (i.e. a Router) or to a \p receiver.
+     *
+     */
     descriptorN_1( const std::string name, const int peers, 
                    zmqTransport* const  transport, const bool P ) :
             name(name), socket(NULL), transport(transport), P(P), 
@@ -404,16 +451,21 @@ struct descriptorN_1 {
         }
     }
     
+    /** Destructor */
     ~descriptorN_1() { close(); socket=NULL; }
     
+    /** Close active connection and delete the existing socket. */    
     inline int close() {
         if (socket) return transport->deleteEndPoint(socket);
         return -1;
     }
     
-    // @param addr is the ip address in the form ip/host:port
-    // nodeId is the node identifier in the range [0..inf[
-    //
+    /** 
+     *  Initialise a socket and estabilish a connection to the given address.
+     *
+     *  \param addr it is the ip address in the form 'ip/host:port'
+     *  \param nodeId it is the node identifier in the range [0..inf[
+     */
     inline int init(const std::string& addr, const int nodeId=-1) {
         if (!socket) return -1;
         
@@ -455,6 +507,14 @@ struct descriptorN_1 {
         return 0;
     }
     
+    /** 
+     *  Send a message.
+     *
+     *  \param msg eference to the message to be sent
+     *  \param flags a flag indcating whether the operation should be in 
+     *  non-blocking mode or if the message is a multi-part message.
+     *  See <a href="http://api.zeromq.org/2-1:_start"> ØMQ's API </a> for details.
+     */
     inline bool send(const msg_t& msg, int flags = 0) {
         try {
             if (!socket->send(const_cast<msg_t&>(msg), flags)) return false;
@@ -464,7 +524,7 @@ struct descriptorN_1 {
         return true;            
     }
     
-    // receives a message from a ZMQ_ROUTER
+    /** Receive a message header */
     inline bool recvhdr(msg_t& msg, int& peer) {   
         zmq::message_t from;
         try {
@@ -490,7 +550,7 @@ struct descriptorN_1 {
         return true;
     }
     
-    // receives a message after having received the header
+    /** Receive a message after having received the header */
     inline bool recv(msg_t& msg, int& peer) {   
         try {
             if (recvHdr) {
@@ -551,7 +611,7 @@ struct descriptorN_1 {
         return true;    
     }
     
-    // returns the number of partners of the single communication (NOTE: if P, peers is 1)
+    /** Returns the number of partners of the single communication (NOTE: if P, peers is 1) */
     inline const int getPeers() const { return peers;}
     
     const std::string        name;
@@ -625,7 +685,7 @@ struct descriptorN_1 {
 /* --------------------------------------------------------------- */
 
 /*!
- *  \ingroup zmq
+ *  \ingroup zmq_low_level
  *
  *  @{
  */
@@ -646,9 +706,14 @@ public:
 
     enum {MULTIPUT=0 };
 
+    /** Constructor */
     zmq1_1():desc(NULL),active(false) {}
 
-    // point to point communication implemented using ØMQ
+    /**
+     * Constructor (2)
+     *
+     * \param D pointer to a 1_N descriptor object.
+     */
     zmq1_1(descriptor* D):desc(D),active(false) {}
 
     /// Set the descriptor
@@ -668,27 +733,36 @@ public:
         return active;
     }
 
-    // sends one message 
+    /**
+     * Send one message 
+     *
+     * \param msg reference to the message to be sent
+     */
     inline bool put(const tosend_t& msg) { return desc->send(msg, 0, 0); }
     
+    /**
+     * Send other parts of a multi-part message.
+     *
+     * \param msg reference to the message to be sent
+     */
     inline bool putmore(const tosend_t& msg) { return desc->sendmore(msg,0,ZMQ_SNDMORE);}
 
     inline bool put(const msg_t& msg, const int) { return desc->send(msg, 0, 0); }
     inline bool putmore(const msg_t& msg, const int) { return desc->send(msg, 0, ZMQ_SNDMORE); }
 
-    // receives the message header (should be called before get)
+    /// Receive the message header (should be called before get)
     inline bool gethdr(torecv_t& msg, int& peer) { peer=0; return desc->recvhdr(msg); }
 
-    // receives one message
+    /// Receive one message
     inline bool get(torecv_t& msg, int=0) { return desc->recv(msg); }
 
-    // returns the number of distinct messages for one single communication
+    /// Returns the number of distinct messages for one single communication
     inline const int getToWait() const { return 1;}
     inline const int putToPerform() const { return 1;}
 
     inline void done() { }
 
-    // close pattern
+    /// Close the communication pattern
     inline bool close() { 
         if (!active) return false;
         if (!desc->close()) return false;
@@ -701,6 +775,18 @@ protected:
     bool        active;
 };
 
+/*!
+ *  @}
+ */
+
+/* --------------------------------------------------------------- */
+
+/*!
+ *  \ingroup zmq_low_level
+ *
+ *  @{
+ */
+
 
 /*! 
  *  \class zmqBcast
@@ -708,37 +794,54 @@ protected:
  *  \brief ZeroMQ implementation of the broadcast communication patter
  */
 class zmqBcast {
-public:
-    typedef zmqTransportMsg_t  msg_t;
-    typedef zmqTransport       TransportImpl;
-    typedef msg_t              tosend_t;
-    typedef msg_t              torecv_t;
-    typedef descriptor1_N      descriptor;
+public:    
+    typedef zmqTransportMsg_t  msg_t;           /// a ØMQ message (extends zmq::message_t)
+    typedef zmqTransport       TransportImpl;   /// to the transpoort layer
+    typedef msg_t              tosend_t;        /// ut supra
+    typedef msg_t              torecv_t;        /// ut supra
+    typedef descriptor1_N      descriptor;      ///< descriptor used in Unicast, Bcast, Scatter,
+                                                ///< On-Demand, OneToMany
 
     enum {MULTIPUT=0 };
 
+    /** Constructor */
     zmqBcast():desc(NULL),active(false) {}
+    
+    /** 
+     *  Constructor (2) 
+     *
+     *  \param D pointer to a 1_N descriptor object.    
+     */
     zmqBcast(descriptor* D):desc(D),active(false) {}
 
-    // sets the descriptor
+    /// Set the descriptor
     inline void setDescriptor(descriptor* D) { 
         if (desc)  desc->close(); 
         desc = D; 
     }
 
-    // returns the descriptor
+    /// Return the descriptor
     inline  descriptor* getDescriptor() { return desc; }
 
-    // initializes communication pattern
+    /// Initialize the communication pattern
     inline bool init(const std::string& address,const int nodeId=-1) { 
         if (active) return false;
         if(!desc->init(address,nodeId)) active = true;       
         return active;
     }
 
-    // sends one message 
+    /**
+     * Send one message 
+     *
+     * \param msg reference to the message to be sent
+     */ 
     inline bool put(const tosend_t& msg) { return desc->send(msg, 0); }
     
+    /**
+     * Send other parts of a multi-part message.
+     *
+     * \param msg reference to the message to be sent
+     */
     inline bool putmore(const tosend_t& msg) { return desc->sendmore(msg,ZMQ_SNDMORE);}
 
 
@@ -750,17 +853,17 @@ public:
         return desc->sendmore(msg,to,ZMQ_SNDMORE);
     }
 
-    // receives the message header (should be called before get)
+    /// Receive the message header (should be called before get)
     inline bool gethdr(torecv_t& msg, int& peer) { peer=0; return desc->recvhdr(msg); }
 
-    // receives one message
+    /// Receive one message
     inline bool get(torecv_t& msg, int=0) { return desc->recv(msg); }
 
-    // returns the number of distinct messages for one single communication
+    /// Returns the number of distinct messages for one single communication
     inline const int getToWait() const { return 1;}
     inline const int putToPerform() const { return 1;}
 
-    // close pattern
+    /// Close the communication pattern
     inline bool close() { 
         if (!active) return false;
         if (!desc->close()) return false;
@@ -775,6 +878,17 @@ protected:
     bool        active;
 };
     
+/*!
+ *  @}
+ */
+
+/* --------------------------------------------------------------- */
+
+/*!
+ *  \ingroup zmq_low_level
+ *
+ *  @{
+ */
     
 // 
 //  ZeroMQ implementation of the ALL_GATHER communication patter
@@ -870,6 +984,18 @@ protected:
     bool        active;
 };
 
+/*!
+ *  @}
+ */
+
+/* --------------------------------------------------------------- */
+
+/*!
+ *  \ingroup zmq_low_level
+ *
+ *  @{
+ */
+
     
 /*! 
  *  \class zmqFromAny
@@ -956,6 +1082,17 @@ protected:
     bool        active;
 };
 
+/*!
+ *  @}
+ */
+
+/* --------------------------------------------------------------- */
+
+/*!
+ *  \ingroup zmq_low_level
+ *
+ *  @{
+ */
 
 /*!
  *  \class zmqScatter
@@ -1043,6 +1180,17 @@ protected:
     bool        active;
 };
 
+/*!
+ *  @}
+ */
+
+/* --------------------------------------------------------------- */
+
+/*!
+ *  \ingroup zmq_low_level
+ *
+ *  @{
+ */
 
 /*!
  *  \class zmqOnDemand 
@@ -1194,7 +1342,17 @@ protected:
     svector<bool> To;
 };
 
+/*!
+ *  @}
+ */
 
+/* --------------------------------------------------------------- */
+
+/*!
+ *  \ingroup zmq_low_level
+ *
+ *  @{
+ */
 
 /* 
  *  \class zmq1_N

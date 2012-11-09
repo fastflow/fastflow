@@ -213,10 +213,10 @@ protected:
 };
 
 
-struct task_t { 
+struct ff_task_t { 
     double* getData() { return (double*)(msg->getData()); }	
     COMM1::TransportImpl::msg_t*   msg;
-    task_t*  self;
+    ff_task_t*  self;
 };
 
 
@@ -249,7 +249,7 @@ public:
 
     virtual void unmarshalling(svector<msg_t*>* const v[], const int vlen, void *& task) {
         assert(vlen==1 && v[0]->size()==1); 
-	task_t* t = new task_t;
+	ff_task_t* t = new ff_task_t;
 	t->msg = v[0]->operator[](0);
 	t->self= t;
 	task = t;
@@ -267,7 +267,7 @@ class Worker: public ff_dnode<COMM2> {
     typedef COMM2::TransportImpl        transport_t;
 protected:
     static void callback(void *e, void* arg) {
-	task_t* t = (task_t*)arg;
+	ff_task_t* t = (ff_task_t*)arg;
 	assert(t);
 	delete (t->msg);
 	delete (t->self);
@@ -302,7 +302,7 @@ public:
     
     void * svc(void * task) {
 #if !defined(SINGLE_FARM)
-	double* t = ((task_t*)task)->getData();
+	double* t = ((ff_task_t*)task)->getData();
 #else
 	double* t = (double*)task;
 #endif
@@ -325,7 +325,7 @@ public:
     }
 
     void prepare(svector<iovec>& v, void* ptr, const int sender=-1) {
-        struct iovec iov={((task_t*)ptr)->getData(),taskSize*taskSize*sizeof(double)};
+        struct iovec iov={((ff_task_t*)ptr)->getData(),taskSize*taskSize*sizeof(double)};
         v.push_back(iov);
 	setCallbackArg(ptr);
     }    

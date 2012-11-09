@@ -24,9 +24,21 @@ cd <FASTFLOW_ROOT>/tests
 make all
 make test   # minimal regression test
 
+
 ====================================
 Mac OS X platform specific notes
 ====================================
+
+Tested with macport, with at least the following packages
+
+boost @1.51.0_1+no_single+no_static (active)
+cmake @2.8.9_1 (active)
+coreutils @8.19_0 (active)
+opencv @2.4.2_2 (active)
+qt4-mac @4.8.3_1+quartz (active)
+quartz-wm @1.3.1_1 (active)
+zmq22 @2.2.0_0 (active) Notice zmq@3.2.0-rc2 has no C++ binding and don't work.
+
 Follows general instructions to generate command-line Makefile-based build, or 
 
 Unix Makefile build
@@ -42,10 +54,14 @@ Xcode project generation
 cmake -GXcode ../
 
 to generate the Xcode project. 
+
+------------------------
+
 It is possibile to generate more than one build (e.g. both Xcode and 
 command-line) in different directories (e.g. build and xcode_build).
 
-Some features requires gcc > 4.0.1. Apple 4.2.1 is default on MacOS 10.6. Apple gcc/g++4.2 are available for MacOS 10.5. gcc/g++ > 4.2 are available via Macports for 10.4, 10.5, 10.6.
+Some features requires gcc > 4.0.1. Apple 4.2.1 is default on MacOS 10.6. Apple gcc/g++4.2 are available for MacOS 10.5. gcc/g++ > 4.2 are available via Macports for 10.4 - 10.8. 
+Apple C++ clang compiler version 4.1 is tested and working.
 
 To use a non default version of the compiler set the env variables, e.g.
 
@@ -75,3 +91,10 @@ Cmake installer is available at
 http://www.cmake.org/cmake/resources/software.html
 
 Currently tested with Visual Studio 2008 and 2010.
+
+--- Compilation flags
+
+-DNO_DEFAULT_MAPPING  --> avoid thread pinning (default off)
+-DBARRIER_T=Barrier   --> use lock-based barrier (default off)
+-DTRACE_FASTFLOW      --> perfomance analysis (default off)
+-DNO_CMAKE_CONFIG     --> use static configuration (experimental)

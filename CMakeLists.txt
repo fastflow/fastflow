@@ -41,6 +41,9 @@ if (CMAKE_COMPILER_IS_GNUCC)
         message(WARNING "GCC Version < 4.1, some targets will be skipped")
         message(STATUS "Use GCC/CXX env variable to define a newer compiler, e.g. export GCC=/usr/bin/gcc-4.2; export CXX=/usr/bin/g++-4.2 ")
 	endif (NOT(GCC_VERSION VERSION_GREATER 4.1))
+else (CMAKE_COMPILER_IS_GNUCC)
+	message(WARNING "Compiler is not GCC, some advanced features
+   will not be enabled")
 endif (CMAKE_COMPILER_IS_GNUCC)
 
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")

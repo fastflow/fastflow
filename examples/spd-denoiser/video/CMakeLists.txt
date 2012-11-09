@@ -10,7 +10,7 @@ include_directories (
   ${CMAKE_CURRENT_SOURCE_DIR}/../cuda/cuda_utils
   )
 
-set( OpenCV_DIR /opt/local/lib/cmake )
+#set( OpenCV_DIR /opt/local/lib/cmake  )
 #set( OpenCV_DIR C:/opencv/build )
 
 FIND_PACKAGE( OpenCV )
@@ -40,8 +40,8 @@ if(OpenCV_FOUND)
     #set_target_properties ( tctfb_cuda PROPERTIES COMPILE_FLAGS "-O2" )
 
   else(CUDA_FOUND)
-    message (WARNING "Cuda not found: can't configure CUDA-enabled tctfb (video denoiser)")
+    message (WARNING " CUDA not found: can't configure CUDA-enabled tctfb (video denoiser)")
   endif(CUDA_FOUND)
 else(OpenCV_FOUND)
-  message (WARNING "OpenCV not found: can't configure tctfb (video denoiser)")
+  message (WARNING " OpenCV not found: can't configure tctfb (video denoiser)")
 endif(OpenCV_FOUND)

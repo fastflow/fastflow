@@ -26,8 +26,9 @@
  */
  
 // REW -- documentation
-
+//#include <iostream>
 #include <ff/sysdep.h>
+#include <ff/platforms/platform.h>
 #include <ff/config.hpp>
 #include <ff/atomic/abstraction_dcas.h>
 
@@ -36,6 +37,13 @@ namespace ff {
 #define _INLINE static inline
 #else
 #define _INLINE __forceinline
+#endif
+
+// to be moved in platforms-specific, redefine some gcc intrinsics
+#if !defined(__GNUC__) && defined(_MSC_VER)
+// An acquire-barrier exchange, despite the name
+
+#define __sync_lock_test_and_set(_PTR,_VAL)  InterlockedExchangePointer( ( _PTR ), ( _VAL ))
 #endif
 
 
@@ -95,7 +103,7 @@ static __always_inline void spin_unlock(lock_t lock)
 
 
 
-#if !defined(__APPLE__)
+#if defined(__GNUC__) || defined(_MSC_VER) || defined(__APPLE__)
 /*
  * CLH spin-lock is a FIFO lock implementation which uses only the 
  * atomic swap operation. More info can be found in:  
@@ -108,15 +116,16 @@ static __always_inline void spin_unlock(lock_t lock)
  * by Nikolaos D. Kallimanis (released under the New BSD licence).
  *
  */
-struct CLHSpinLock {
+
+ALIGN_TO_PRE(CACHE_LINE_SIZE) struct CLHSpinLock {
     typedef union CLHLockNode {
         bool locked;
         char align[CACHE_LINE_SIZE];
     } CLHLockNode;
     
-    volatile CLHLockNode *Tail ALIGN_TO(CACHE_LINE_SIZE);
-    volatile CLHLockNode *MyNode[MAX_NUM_THREADS] ALIGN_TO(CACHE_LINE_SIZE);
-    volatile CLHLockNode *MyPred[MAX_NUM_THREADS] ALIGN_TO(CACHE_LINE_SIZE);
+    volatile ALIGN_TO_PRE(CACHE_LINE_SIZE) CLHLockNode *Tail  ALIGN_TO_POST(CACHE_LINE_SIZE);
+    volatile ALIGN_TO_PRE(CACHE_LINE_SIZE) CLHLockNode *MyNode[MAX_NUM_THREADS] ALIGN_TO_POST(CACHE_LINE_SIZE);
+    volatile ALIGN_TO_PRE(CACHE_LINE_SIZE) CLHLockNode *MyPred[MAX_NUM_THREADS] ALIGN_TO_POST(CACHE_LINE_SIZE);
 
     void init() {
         Tail = (CLHLockNode*)getAlignedMemory(CACHE_LINE_SIZE, sizeof(CLHLockNode));
@@ -127,13 +136,15 @@ struct CLHSpinLock {
         }	
     }
 
+	// FIX
     inline void spin_lock(const int pid) {
         MyNode[pid]->locked = true;
-        /*
-         * FIX: 
-         */
-        MyPred[pid] = (CLHLockNode *) __sync_lock_test_and_set((long *)&Tail, (long)MyNode[pid]);
-        while (MyPred[pid]->locked == true) ;
+#if defined(_MSC_VER) // To be tested
+		MyPred[pid] = (CLHLockNode *) __sync_lock_test_and_set((void *volatile *)&Tail, (void *)MyNode[pid]);
+#else //defined(__GNUC__)
+		MyPred[pid] = (CLHLockNode *) __sync_lock_test_and_set((long *)&Tail, (long)MyNode[pid]);
+#endif
+		while (MyPred[pid]->locked == true) ;
     }
     
     inline void spin_unlock(const int pid) {
@@ -141,7 +152,7 @@ struct CLHSpinLock {
         MyNode[pid]= MyPred[pid];
     }
     
-} ALIGN_TO(CACHE_LINE_SIZE);
+} ALIGN_TO_POST(CACHE_LINE_SIZE);
     
 typedef CLHSpinLock clh_lock_t[1];
 
@@ -150,7 +161,7 @@ _INLINE void init_locked(clh_lock_t l) { abort(); }
 _INLINE void spin_lock(clh_lock_t l, const int pid) { l->spin_lock(pid); }
 _INLINE void spin_unlock(clh_lock_t l, const int pid) { l->spin_unlock(pid); }
 
-#endif // __APPLE__
+#endif 
 
 
 /* -------- XCHG-based spin-lock --------- */

@@ -19,6 +19,26 @@
  ****************************************************************************
  */
 
+// APPLE specific backward compatibility 
+
+// posix_memalign is available on OS X starting with 10.6
+#if defined(__APPLE__)
+#include <Availability.h>
+#if defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+#define __FF_HAS_POSIX_MEMALIGN 1
+#else
+//#warning "Redefining posix_memalign"
+#include <errno.h>
+inline static int posix_memalign(void **memptr, size_t alignment, size_t size)
+{
+    if (memptr && (*memptr = malloc(size))) return 0; 
+    else return (ENOMEM);
+}
+#endif
+#endif
+ 
+
+
 
 #if (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
 #pragma unmanaged
@@ -26,11 +46,12 @@
 #include "ff/platforms/pthread_minport_windows.h"
 #define INLINE __forceinline
 #define NOINLINE __declspec(noinline)
-#define CACHE_LINE_SIZE 64
+//#define CACHE_LINE_SIZE 64
 #define __WIN_ALIGNED_16__ __declspec(align(16))
 
 // Only x86 and x86_64 are currently supported for Windows OS
 INLINE void WMB() {} 
+INLINE void PAUSE() {}
 
 INLINE static int posix_memalign(void **memptr,size_t alignment, size_t sz)
 {

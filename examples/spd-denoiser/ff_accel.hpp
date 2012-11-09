@@ -163,7 +163,8 @@ private:
   void fuy_set(long set_i) {
     vector<noisy<T> > &set = clusters[set_i];
     for(unsigned int i=0; i<set.size(); i++)
-      fuy(bmp, set[i], /*set_i, */width, height, alfa, beta, i, *pow_table_alfa);
+      fuy(bmp, set[i], /*set_i, */width, height, /* alfa, */ beta, /* i, */ 
+	  *pow_table_alfa);
   }
 };
 

@@ -62,8 +62,11 @@ class ff_gatherer: public ff_thread {
 
 protected:
 
-    /* return values: -1 no worker selected
-     *                [0..numworkers[ the number of worker selected
+    /**
+     * Virtual function. \n Select a worker
+     * 
+     * \return -1 if no worker is selected
+     * \return the number of workers selected otherwise.
      */
     virtual inline int selectworker() { return (++nextr % nworkers); }
 
@@ -107,6 +110,7 @@ protected:
         return ite;
     }
 
+    /// Virtual function. \n Gather tasks' results from all workers
     virtual int all_gather(void *task, void **V) {
         V[channelid]=task;
         std::vector<int> retry;
@@ -128,6 +132,7 @@ protected:
         return 0;
     }
 
+    /// Push the task in the tasks queue.
     void push(void * task) {
         //register int cnt = 0;
         if (!filter) {
@@ -149,6 +154,7 @@ protected:
         }     
     }
 
+    /// Pop a task out of the queue.
     bool pop(void ** task) {
         //register int cnt = 0;       
         if (!get_out_buffer()) return false;
@@ -202,17 +208,21 @@ public:
         return 0;
     }
 
+    /// Set output buffer
     void set_out_buffer(FFBUFFER * const buff) { buffer=buff;}
 
-    /* returns the channel id of the last pop 
-     *  
+    /**
+     * Get the channel id of the last pop.  
      */
     const int get_channel_id() const { return channelid;}
 
+    /// Get the number of workers from which collect results.
     inline int getnworkers() const { return nworkers;}
-
+    
+    /// Get the ouput buffer
     FFBUFFER * const get_out_buffer() const { return buffer;}
 
+    /// Register the given worker to the list of workers
     int  register_worker(ff_node * w) {
         if (nworkers>=max_nworkers) {
             error("GT, max number of workers reached (max=%d)\n",max_nworkers);
@@ -222,6 +232,7 @@ public:
         return 0;
     }
 
+    /// Virtual function: the gatherer task.
     virtual void * svc(void *) {
         void * ret  = (void*)FF_EOS;
         void * task = NULL;
@@ -307,17 +318,20 @@ public:
         return ret;
     }
 
+    /// Virtual function: initialise the gatherer task.
     virtual int svc_init() { 
         gettimeofday(&tstart,NULL);
         if (filter) return filter->svc_init(); 
         return 0;
     }
 
+    /// Virtual function: finalise the gatherer task.
     virtual void svc_end() {
         if (filter) filter->svc_end();
         gettimeofday(&tstop,NULL);
     }
 
+    /// Execute the gatherer task.
     int run(bool=false) {  
         if (this->spawn(filter?filter->getCPUId():-1)<0) {
             error("GT, spawning GT thread\n");

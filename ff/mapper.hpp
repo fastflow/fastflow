@@ -54,12 +54,13 @@ namespace ff {
   */ 
 class threadMapper {
 public:
+    /** Get a static instance of the threadMapper object */
     static inline threadMapper* instance() {
         static threadMapper thm;
         return &thm;
     }
     
-    /* REW -- num_cores is never set?
+    /**
      * Default constructor. 
      */
     threadMapper():rrcnt(-1),mask(0),num_cores(ff_numCores()),CList(num_cores) {
@@ -123,7 +124,7 @@ public:
         CList=List;
     }
     
-    /*!
+    /**
      *  Returns the next CPU id using a round-robin mapping access on the 
      *  mapping list. 
      */ 

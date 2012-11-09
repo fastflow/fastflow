@@ -16,12 +16,14 @@ static string get_fname(string &path) {
   return path.substr(p, path.length() - p);
 }
 
+#ifdef TIME
 //funzioni per le misure di tempo
 static long int get_usec_from(long int s) {
   struct timeval tv;
   gettimeofday(&tv, NULL);
   return (tv.tv_sec * 1000000 + tv.tv_usec) - s;
 }
+#endif
 
 #ifdef FF_WITH_CUDA
 static void get_cuda_env(int &corecount, bool verbose) {

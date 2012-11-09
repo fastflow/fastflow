@@ -66,6 +66,7 @@ protected:
         return (card + 1 + (collector?1:0));
     }
 
+    /// Prepare the Farm skeleton for execution
     inline int prepare() {
         for(int i=0;i<nworkers;++i) {
             if (workers[i]->create_input_buffer((ondemand ? ondemand: (in_buffer_entries/nworkers + 1)))<0) return -1;
@@ -93,6 +94,7 @@ public:
 
     /*!
      *  Constructor
+     *
      *  \param input_ch = true to set accelerator mode
      *  \param in_buffer_entries = input queue length
      *  \param out_buffer_entries = output queue length
@@ -135,6 +137,17 @@ public:
         }
     }
 
+    /** 
+     *  Add an Emitter to the Farm.\n
+     *  The Emitter is of type \p ff_node and there can be only one Emitter in a 
+     *  Farm skeleton. 
+     *  
+     *  \param e the ff_node acting as an Emitter
+     *  \param fb an ff_node acting as a fallback (Note that it is not possible to 
+     *  add a fallback funtion if the collector is present or a master-worker 
+     *  configuration has been set).
+     *
+     */
     int add_emitter(ff_node * e, ff_node * fb=NULL) { 
         if (emitter) return -1; 
 
@@ -175,6 +188,15 @@ public:
         else ondemand=inbufferentries;
     }
 
+    /**
+     *  Add workers to the Farm.\n
+     *  There is a limit to the number of workers that can be added to a Farm. This 
+     *  limit is set by default to 64. This limit can be augmented by passing the 
+     *  desired limit as the fifth parameter of the ff_farm constructor.
+     *
+     *  \param w a vector of \p ff_nodes which are Workers to be attached to the 
+     *  Farm.
+     */
     int add_workers(std::vector<ff_node *> & w) { 
         if ((nworkers+w.size())> (unsigned int)max_nworkers) {
             error("FARM, try to add too many workers, please increase max_nworkers\n");
@@ -192,9 +214,15 @@ public:
         return 0;
     }
 
-    /// Add the Collector filter to the farm skeleton. 
-    /// If c == NULL than a default collector will be added (i.e. \link ff_gatherer \endlink).
-    //
+    /**
+     *  Add the Collector filter to the farm skeleton.\n 
+     *  If no object is passed as a colelctor, than a default collector will be 
+     *  added (i.e. \link ff_gatherer \endlink). Note that it is not possible to 
+     *  add more than one collector. And it is not possible to add a collector 
+     *  when a fallback funciton is defined.
+     *
+     *  \param c the ff_node acting as Collector node.
+     */
     int add_collector(ff_node * c, bool outpresent=false) { 
         if (collector) {
             error("add_collector: collector already defined!\n");
@@ -215,7 +243,9 @@ public:
         return gt->set_filter(c);
     }
     
-    /*!
+    /**
+     * This method allows to estabilish a feedback channel from the Collector to 
+     * the Emitter.
      * If the collector is present, than the collector output queue 
      * will be connected to the emitter input queue (feedback channel),
      * otherwise the emitter acts as collector filter (pure master-worker
@@ -246,13 +276,16 @@ public:
         return 0;
     }
 
-    // allows not to start the collector thread, whereas all worker's 
-    // output buffer will be created as if it were present.
+    /**
+     * Allows not to start the collector thread, whereas all worker's 
+     * output buffer will be created as if it were present.
+     */
     int remove_collector() { 
         collector_removed = true;
         return 0;
     }
 
+    
     int set_multi_input(ff_node **mi, int misize) {
         if (lb->masterworker()) {
             error("FARM, master-worker paradigm and multi-input farm used together\n");
@@ -269,6 +302,7 @@ public:
         return lb->set_multi_input(mi, misize);
     }
 
+    /** Execute the Farm */
     int run(bool skip_init=false) {
         if (!skip_init) {
             // set the initial value for the barrier 
@@ -292,6 +326,7 @@ public:
         return 0;
     }
 
+    /** Execute the farm and wait for all workers to complete their tasks */
     int run_and_wait_end() {
         if (isfrozen()) return -1; // FIX !!!!
 
@@ -301,6 +336,7 @@ public:
         return 0;
     }
 
+    /** Execute the farm and then freeze. */
     int run_then_freeze() {
         if (isfrozen()) {
             thaw();
@@ -311,6 +347,8 @@ public:
         freeze();
         return run();
     }
+    
+    /** Wait */
     int wait(/* timeval */ ) {
         int ret=0;
         if (lb->wait()<0) ret=-1;
@@ -318,6 +356,7 @@ public:
         return ret;
     }
 
+    /** Wait freezing */
     int wait_freezing(/* timeval */ ) {
         int ret=0;
         if (lb->wait_freezing()<0) ret=-1;
@@ -325,25 +364,28 @@ public:
         return ret; 
     } 
 
+    /** Force a thread to Stop at the next EOS signal. */
     void stop() {
         lb->stop();
         if (collector) gt->stop();
     }
 
+    /** Force a thread to Freeze itself */
     void freeze() {
         lb->freeze();
         if (collector) gt->freeze();
     }
 
+    /** If the thread is frozen, then thaw it. */
     void thaw() {
         lb->thaw();
         if (collector) gt->thaw();
     }
 
-    /** check if the farm is frozen */
+    /** Check if the farm is frozen */
     bool isfrozen() { return lb->isfrozen(); }
 
-    /** offload the given task to the farm */
+    /** Offload the given task to the farm */
     inline bool offload(void * task,
                         unsigned int retry=((unsigned int)-1),
                         unsigned int ticks=ff_loadbalancer::TICKS2WAIT) { 
@@ -365,9 +407,12 @@ public:
 
     }    
 
-    // return values:
-    //   false: EOS arrived or too many retries
-    //   true:  there is a new value
+    /**
+     * Load results into the gatherer (if any).
+     *
+     * \return \p false if EOS arrived or too many retries
+     * \return \p true if  there is a new value
+     */
     inline bool load_result(void ** task,
                             unsigned int retry=((unsigned int)-1),
                             unsigned int ticks=ff_gatherer::TICKS2WAIT) {
@@ -390,9 +435,13 @@ public:
         return gt->pop_nb(task);
     }
     
+    /// Get Emitter node
     inline lb_t * const getlb() const { return lb;}
+
+    /// Get Collector node
     inline gt_t * const getgt() const { return gt;}
 
+    /// Get workers list
     ff_node** const getWorkers() const { return workers; }
     int getNWorkers() const { return nworkers;}
 
@@ -460,7 +509,6 @@ public:
     
 protected:
 
-    // ff_node interface
     void* svc(void * task) { return NULL; }
     int   svc_init()       { return -1; };
     void  svc_end()        {}
@@ -470,6 +518,13 @@ protected:
     }
     int   getCPUId() { return -1;}
 
+    /** 
+     *  This function redefines the ff_node's virtual method of the same name.
+     *  It creates an input buffer for the Emitter node. 
+     *
+     *  \param nentries the size of the buffer
+     *  \param fixedsize flag to decide whether the buffer is resizable. 
+     */
     int create_input_buffer(int nentries, bool fixedsize) {
         if (in) {
             error("FARM create_input_buffer, buffer already present\n");
@@ -490,6 +545,14 @@ protected:
         return 0;
     }
     
+    /** 
+     *  This function redefines the ff_node's virtual method of the same name. 
+     *  It create an output buffer for the Collector
+     *
+     *  \param nentries the size of the buffer
+     *  \param fixedsize flag to decide whether the buffer is resizable. 
+     *  Default is \p false
+     */
     int create_output_buffer(int nentries, bool fixedsize=false) {
         if (!collector) {
             error("FARM with no collector, cannot create output buffer\n");
@@ -505,7 +568,13 @@ protected:
         return 0;
     }
 
-
+    /** 
+     *  This function redefines the ff_node's virtual method of the same name. 
+     *  Set the output buffer for the Collector.
+     *
+     *  \param o a buffer object, which can be of type \p SWSR_Ptr_Buffer or 
+     *  \p uSWSR_Ptr_Buffer
+     */
     int set_output_buffer(FFBUFFER * const o) {
         if (!collector && !collector_removed) {
             error("FARM with no collector, cannot set output buffer\n");
