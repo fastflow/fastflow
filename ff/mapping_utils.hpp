@@ -1,4 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*!
+ *  \file mapping_utils.hpp
+ *  \brief This file contains utilities for thread pinning to cores and thread 
+ *  mapping.
+ */
+ 
 #ifndef __MAPPING_UTILS_HPP_
 #define __MAPPING_UTILS_HPP_
 /* ***************************************************************************
@@ -29,6 +36,7 @@
 
 #include <iostream>
 #include <errno.h>
+#include <ff/config.hpp>
 #if defined(__linux__)
 #include <sys/types.h>
 #include <sys/resource.h>
@@ -51,11 +59,14 @@
 //}
 #endif
 
-
+/** 
+ *  Returns the ID of the calling thread.\n
+ *  Works on Linux OS, Apple OS, Windows.
+ */
 static inline long ff_getThreadID() {
 #if (defined(__GNUC__) && defined(__linux))
     return  gettid();
-#elif defined(__APPLE__)  && defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED >= 1060)
+#elif defined(__APPLE__) && MAC_OS_X_HAS_AFFINITY
     uint64_t tid;
     pthread_threadid_np(NULL, &tid);
     return (long) tid; // > 10.6 only
@@ -65,6 +76,11 @@ static inline long ff_getThreadID() {
     return -1;
 }
 
+/** 
+ *  Returns the frequency of the CPUs (On a schared memory system, all cores have 
+ *  the same frequency).\n
+ *  Works on Linux OS and Apple OS.
+ */
 static inline unsigned long ff_getCpuFreq() { // MA
     unsigned long  t = 0;
 #if defined(__linux__)
@@ -75,7 +91,7 @@ static inline unsigned long ff_getCpuFreq() { // MA
     if (fscanf(f, "%f", &mhz) == EOF) {pclose(f); return t;}
     t = (unsigned long)(mhz * 1000000);
     pclose(f);
-#elif defined(__APPLE__)
+#elif defined(__APPLE__) && MAC_OS_X_HAS_AFFINITY
     size_t len = 8;
     if (sysctlbyname("hw.cpufrequency", &t, &len, NULL, 0) != 0) {
         perror("sysctl");
@@ -89,6 +105,11 @@ static inline unsigned long ff_getCpuFreq() { // MA
     return (t);
 }
 
+/** 
+ *  Returns the number of cores present in the system. (Note that it does not take 
+ *  into account hyper threadings) \n
+ *  Works on Linux OS, Apple OS and Windows.
+ */
 static inline const int ff_numCores() {
     int  n=-1;
 #if defined(__linux__)
@@ -111,9 +132,11 @@ static inline const int ff_numCores() {
 }
 
 
-/*
- * priority_level is a value in the range -20 to 19.
- * The default priority is 0, lower priorities cause more favorable scheduling.
+/**
+ * Set the scheduling priority of the process (or thread). The priority_level is 
+ * a value in the range -20 to 19. The default priority is 0, lower priorities 
+ * cause more favorable scheduling.
+ *
  * MA: This should be redesigned it since might have different behaviour in different systems
  */
 static inline int ff_setPriority(int priority_level=0) {
@@ -125,7 +148,7 @@ static inline int ff_setPriority(int priority_level=0) {
             ret = EINVAL;
         }
     //}
-#elif (defined(__MACH__) && defined(__APPLE__)) && defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED >= 1060)
+#elif defined(__APPLE__) 
     if (setpriority(PRIO_DARWIN_THREAD, 0 /*myself */ ,priority_level) != 0) {
             perror("setpriority:");
             ret = EINVAL;
@@ -164,7 +187,10 @@ static inline int ff_setPriority(int priority_level=0) {
 return ret;
 }
 
-
+/** 
+ *  Returns the ID of the CPU where the calling thread is running.\n
+ *  Works on Linux OS and Apple OS.
+ */
 static inline int ff_getMyCpu() {
 #if defined(__linux__) && defined(CPU_SET)
     cpu_set_t mask;
@@ -175,12 +201,33 @@ static inline int ff_getMyCpu() {
     }
     for(int i=0;i<CPU_SETSIZE;++i) 
         if (CPU_ISSET(i,&mask)) return i;
+#elif defined(__APPLE__) && MAC_OS_X_HAS_AFFINITY
+    // Not tested
+    struct thread_affinity_policy mypolicy;
+    boolean_t get_default;
+    mach_msg_type_number_t thread_info_count = THREAD_AFFINITY_POLICY_COUNT;
+    thread_policy_get(mach_thread_self(), THREAD_AFFINITY_POLICY,
+                      (integer_t*) &mypolicy,
+                      &thread_info_count, &get_default);
+    int res = mypolicy.affinity_tag;
+    return(res);
 #else
-#warning "ff_getThreadCpu not supported"
+	#if __GNUC__
+	#warning "ff_getMyCpu not supported"
+	#else 
+	#pragma NOTE("ff_getMyCpu not supported")
+	#endif
 #endif
-    return -1;
+return -1;
 }
 
+/** 
+ *  Maps the calling thread to the given CPU.\n
+ *  Works on Linux OS, Apple OS, Windows.
+ *
+ *  \param cpu_id the ID of the CPU to which the thread will be attached.
+ *  \param
+ */
 static inline int ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
 	if (cpu_id > ff_numCores()) return EINVAL;
 #if defined(__linux__) && defined(CPU_SET)
@@ -190,13 +237,13 @@ static inline int ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
     if (sched_setaffinity(gettid(), sizeof(mask), &mask) != 0) 
         return EINVAL;
     return (ff_setPriority(priority_level));
-#elif defined(__APPLE__) && defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED >= 1060)
+#elif defined(__APPLE__) && MAC_OS_X_HAS_AFFINITY
 	// Mac OS does not implement direct pinning of threads onto cores.
 	// Threads can be organised in affinity set. Using requested CPU
-    // tag for the set. Cores under the same L2 sare not distinguished. 
-    // Should e called before running the thread.
+    // tag for the set. Cores under the same L2 cache are not distinguished. 
+    // Should be called before running the thread.
 	#define CACHE_LEVELS 3
-    #define L2 2
+    #define CACHE_L2 2
 	size_t len;
 	
 	if (sysctlbyname("hw.cacheconfig",NULL, &len, NULL, 0) != 0) {
@@ -212,7 +259,7 @@ static inline int ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
 		*/
 		struct thread_affinity_policy mypolicy;
 		// Define sets taking in account pinning is performed on L2
-		mypolicy.affinity_tag = cpu_id/cacheconfig[L2];
+		mypolicy.affinity_tag = cpu_id/cacheconfig[CACHE_L2];
 		if (
 			thread_policy_set(mach_thread_self(), THREAD_AFFINITY_POLICY, (integer_t*) &mypolicy, THREAD_AFFINITY_POLICY_COUNT) != KERN_SUCCESS
 			) {
@@ -222,7 +269,7 @@ static inline int ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
 		  return EINVAL;
 		} else {
 		  std::cerr << "Sucessfully set affinity of thread (" << 
-			mach_thread_self() << ") to core " << cpu_id/cacheconfig[L2] << "\n";
+			mach_thread_self() << ") to core " << cpu_id/cacheconfig[CACHE_L2] << "\n";
 		}
 	  }
 	}
@@ -234,7 +281,7 @@ static inline int ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
 	}
 	std::cerr << "Sucessfully set affinity of thread " << GetCurrentThreadId() << " to core " << cpu_id << "\n";
 #else 
-//#warning "CPU_SET not defined, cannot map thread to specific CPU"
+#warning "CPU_SET not defined, cannot map thread to specific CPU"
 #endif
     return 0;
 }

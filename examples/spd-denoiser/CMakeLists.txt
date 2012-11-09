@@ -25,7 +25,7 @@ add_executable (spd_ff_time ${SPD_SRCS}) #FLAT with time misuration
 #convergence flags: -DCONV_FIXE -DCONV_MINIMUM
 
 if(CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS "-Wall -Wextra") #doesn't work in win
+    set(CMAKE_CXX_FLAGS "-Wall") #doesn't work in win
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
 set_target_properties (spd_ff_cluster PROPERTIES COMPILE_DEFINITIONS "CLUSTER")

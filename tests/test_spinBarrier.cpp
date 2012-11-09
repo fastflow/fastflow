@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
     data = (int*)malloc(sizeof(int)*nthreads);
     assert(data);
     
-    Thread* N[nthreads];
+    Thread** N = new Thread*[nthreads];
 
     for(int i=0;i<nthreads;++i) {
         data[i]=0;

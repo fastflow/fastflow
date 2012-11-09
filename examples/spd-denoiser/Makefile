@@ -29,7 +29,7 @@ CXX 		     = g++
 #/usr/local/bin/g++-4.5.1
 LINK_OPT             = 
 VERSION              = 
-OPTIMIZE_FLAGS       = -g  #-DTIME -O6 -finline-functions -fno-rtti  -march=core2 -msse3 -mfpmath=387 -fno-strict-aliasing # -ffast-math -mfpmath=sse -msse2
+OPTIMIZE_FLAGS       = -DTIME -O6 -finline-functions -fno-rtti  -march=core2 -msse3 -mfpmath=387 -fno-strict-aliasing # -ffast-math -mfpmath=sse -msse2
 OMP_FLAGS 	     = -fopenmp
 CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall #-DALLOCATOR_STATS #-DTRACE_FASTFLOW
 CFLAGS               =

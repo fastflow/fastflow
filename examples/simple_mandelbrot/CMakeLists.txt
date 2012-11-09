@@ -13,7 +13,9 @@ set( MARX2SRC       marX2.c )
 set( LINKS          ${X11_LIBRARIES} marX2 pthread  m )
 set( TARGETS        mandel_ff mandel_seq mandel_ff_mem_all mandel_pt )
 
+
 include_directories( 
+        ${X11_INCLUDE_DIR}
         ${PROJECT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR} )
 add_library( marX2 STATIC ${MARX2SRC} )

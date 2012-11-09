@@ -3,7 +3,8 @@
 
 // Salt-and-Pepper_Noise_Removal_GRAYSCALE
 // Filtro a due passi a più cicli per la rimozione del disturbo 'Salt & Pepper' da immagini bitmap a 8 bit in scala di grigi.
-
+#include <opencv/cv.h>
+#include <opencv/cvaux.h>
 #include <stdlib.h>
 #include <limits.h>
 #include <stdio.h>
@@ -11,7 +12,6 @@
 #include <math.h>
 #include <algorithm>
 #include <vector>
-#include <opencv/cv.h>
 
 
 using namespace std;
@@ -29,7 +29,7 @@ void addSaltandPepperNoiseDEPTH_8U (IplImage* img, double percent)
       {
 	// Generate random number between -1.0 and +1.0
     double rr = (double) rand( ); 
-	double random = 2.0*((rr - (RAND_MAX)) / 2.0)/(RAND_MAX);
+    double random = 2.0*(rr - (RAND_MAX) / 2.0) / (RAND_MAX);
 	if (random > pr)
 	  {
 		((uchar *)(img->imageData + i*img->widthStep))[j]=255;

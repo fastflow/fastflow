@@ -4,7 +4,9 @@
 //  Created by Marco Aldinucci on 9/7/11.
 //  Copyright 2011 Computer Science Dept. - University of Torino. All rights reserved.
 //
-
+#include <opencv/cv.h>
+#include <opencv/cvaux.h>
+#include <opencv/highgui.h>
 #define MAXINFLIGHT 4
 #define FROMCAMERA 1
 #define W_MAX 25 //max detection-window size
@@ -14,10 +16,7 @@
 #ifndef SEQ_DETECTION
 #include <ff/farm.hpp>
 #endif
-#include <opencv/highgui.h>
-#include <opencv/cv.h>
-//#include <highgui.h>
-//#include <cv.h>
+
 #include <noiser.hpp>
 #include "videoTaskTypes.hpp"
 //#include "taskTypes.hpp"
