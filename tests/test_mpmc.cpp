@@ -243,8 +243,8 @@ int main(int argc, char * argv[]) {
     msq = new multiMSqueue(nqueues);
   #else
    #if defined(BOUNDED_MPMC)
-    msq = new MPMC_Ptr_Queue(ntasks/2); // we set the size to half ntasks
-    if (!msq->init()) abort();
+    msq = new MPMC_Ptr_Queue;
+    if (!msq->init(ntasks/2)) abort(); // we set the size to half ntasks
    #else
     #if defined(UNBOUNDED_MPMC)
      msq = new uMPMC_Ptr_Queue;

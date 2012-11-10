@@ -268,7 +268,6 @@ public:
     inline bool  pop(void ** data) {  /* modify only pread pointer */
         if (!data || empty()) return false;
 
-        
         *data = buf[pread];
         return inc();
     } 

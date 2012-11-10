@@ -557,8 +557,8 @@ private:
         inline void * getData() const { return ptr[MSQUEUE_PTR]->getData(); }
 
         Node * volatile ptr[1];
-    } ALIGN_TO(ALIGN_SINGLE_POINTER);
-
+    } ALIGN_TO_POST(ALIGN_SINGLE_POINTER);
+    
     struct Node {
         Node():data(0) { next.ptr[MSQUEUE_PTR]=0;}
         Node(void * data):data(data) {
@@ -572,7 +572,7 @@ private:
 
         Pointer   next;
         void    * data;
-    } ALIGN_TO(ALIGN_DOUBLE_POINTER);
+    } ALIGN_TO_POST(ALIGN_DOUBLE_POINTER);
 
     Pointer  head;
     long padding1[longxCacheLine-(sizeof(Pointer)/sizeof(long))];
@@ -635,9 +635,9 @@ public:
     inline bool push(void * const data) {
         bool done = false;
 
-        ALIGN_TO(ALIGN_SINGLE_POINTER) Pointer tailptr;
-        ALIGN_TO(ALIGN_SINGLE_POINTER) Pointer next;
-        ALIGN_TO(ALIGN_SINGLE_POINTER) Pointer node;
+        Pointer tailptr ALIGN_TO_POST(ALIGN_SINGLE_POINTER);
+        Pointer next    ALIGN_TO_POST(ALIGN_SINGLE_POINTER);
+        Pointer node    ALIGN_TO_POST(ALIGN_SINGLE_POINTER);
         allocnode(node,data);
 
         do {
@@ -662,9 +662,9 @@ public:
     inline bool  pop(void ** data) {        
         bool done = false;
 
-        ALIGN_TO(ALIGN_SINGLE_POINTER) Pointer headptr;
-        ALIGN_TO(ALIGN_SINGLE_POINTER) Pointer tailptr;
-        ALIGN_TO(ALIGN_SINGLE_POINTER) Pointer next;
+        ALIGN_TO_PRE(ALIGN_SINGLE_POINTER) Pointer headptr;
+        ALIGN_TO_PRE(ALIGN_SINGLE_POINTER) Pointer tailptr;
+        ALIGN_TO_PRE(ALIGN_SINGLE_POINTER) Pointer next;
 
         do {
             headptr = head;
