@@ -113,19 +113,20 @@ protected:
         }
         
         if (CommImpl::MULTIPUT) {
-            vector<svector<iovec> > v(peers);
+            svector<iovec> v;
             for(int i=0;i<peers;++i) {
+                v.clear();
                 callbackArg.resize(0);
-                prepare(v[i], ptr, i);
+                prepare(v, ptr, i);
                 
-                msg_t hdr(new uint32_t(v[i].size()), msg_t::HEADER_LENGHT, freeHdr);
+                msg_t hdr(new uint32_t(v.size()), msg_t::HEADER_LENGHT, freeHdr);
                 com.putmore(hdr,i);
-                callbackArg.resize(v[i].size());  
-                for(size_t j=0;j<v[i].size()-1;++j) {
-                    msg_t msg(v[i][j].iov_base, v[i][j].iov_len,freeMsg,callbackArg[j]); 
+                callbackArg.resize(v.size());  
+                for(size_t j=0;j<v.size()-1;++j) {
+                    msg_t msg(v[j].iov_base, v[j].iov_len,freeMsg,callbackArg[j]); 
                     com.putmore(msg,i);
                 }
-                msg_t msg(v[i][v[i].size()-1].iov_base, v[i][v[i].size()-1].iov_len,freeMsg,callbackArg[v[i].size()-1]);
+                msg_t msg(v[v.size()-1].iov_base, v[v.size()-1].iov_len,freeMsg,callbackArg[v.size()-1]);
                 if (!com.put(msg,i)) return false;            
             }
         } else {

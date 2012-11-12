@@ -36,10 +36,10 @@ public:
     typedef T vector_type;
 
     // NOTE: @param chunk is the allocation chunk and not the svector size
-    svector(size_t chunk=SVECTOR_CHUNK):first(0),len(0),cap(0),chunk(chunk) {
+    svector(size_t chunk=SVECTOR_CHUNK):first(NULL),len(0),cap(0),chunk(chunk) {
         reserve(chunk);
     }
-    svector(const svector & v):first(0),len(0),cap(0),chunk(v.chunk) {
+    svector(const svector & v):first(NULL),len(0),cap(0),chunk(v.chunk) {
         if(v.len) {
             const_iterator i1=v.begin();
             const_iterator i2=v.end();
@@ -53,7 +53,11 @@ public:
     }
     
     ~svector() { 
-        if(first) {  clear(); ::free(first); }  
+        if(first) {  
+            clear(); 
+            ::free(first); 
+            first=NULL;
+        }  
     }
     
     svector& operator=(const svector & v) {
@@ -70,7 +74,7 @@ public:
     }
     inline void reserve(size_t newcapacity) {
         if(newcapacity<=cap) return;
-        if (!first)
+        if (first==NULL)
             first=(vector_type*)::malloc(sizeof(vector_type)*newcapacity);
         else 
             first=(vector_type*)::realloc(first,sizeof(vector_type)*newcapacity);
