@@ -127,6 +127,10 @@ public:
         in_buffer_entries(in_buffer_entries),
         out_buffer_entries(out_buffer_entries),fixedsize(fixedsize) {               
     }
+    
+    ~ff_pipeline() {
+        if (barrier) delete barrier;
+    }
 
     /**
      *  Add a stage to the Pipeline

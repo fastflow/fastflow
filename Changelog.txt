@@ -1,4 +1,8 @@
 * 04/07/12 - v.2.0.0
+   - added class ff_dinout that allows to have a single dnode with both
+     input and output external channels.
+   - added the class ff_ofarm to implement the ordered farm template
+   - fixed problem in gt.hpp class
    - NO_DEFAULT_MAPPING compilation flag added 
    - added the map template that can be used to compute map, map-reduce
      and data-parallel patterns.

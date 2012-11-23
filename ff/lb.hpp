@@ -97,10 +97,9 @@ protected:
     /** 
      * Virtual function that can be redefined to implement a new
      * scheduling policy.\n
-     * By default it returns -1 if no worker selected. Otherwise the number of 
-     * worker selected.
      */
     virtual inline int selectworker() { return (++nextw % nworkers); }
+
 #if defined(LB_CALLBACK)
     virtual inline void callback(int n) { }
 #endif
@@ -371,9 +370,11 @@ public:
                     else skipfirstpop=false;
                     
                     if (task == (void*)FF_EOS) {
+                        if (filter) filter->eosnotify();
                         push_eos(); 
                         break;
                     } else if (task == (void*)FF_EOS_NOFREEZE) {
+                        if (filter) filter->eosnotify();
                         push_eos(true);
                         ret = task;
                         break;
@@ -439,6 +440,7 @@ public:
                         if ((victim == availworkers.end()) || (channelid==-1)) 
                             push_eos((task==(void*)FF_EOS_NOFREEZE));
                         else {
+                            if (filter) filter->eosnotify((*victim)->get_my_id());
                             availworkers.erase(victim);
                             start=availworkers.begin(); // restart iterator
                             --nw;
@@ -454,6 +456,7 @@ public:
                             ret = task;
                             break; // received all EOS, exit
                         }
+                        if (filter) filter->eosnotify((*victim)->get_my_id());
                     }
                 } else {
                     if (filter) {

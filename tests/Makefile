@@ -61,7 +61,7 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I. $(INCS)
-TARGET               = test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe+farm test_accelerator_pipe test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_map test_map2 test_mapreduce test_dotprod test_sendq test_spinBarrier test_multi_input test_dotprod test_mpmc 
+TARGET               = test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_accelerator_ofarm test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_map test_map2 test_mapreduce test_dotprod test_sendq test_spinBarrier test_multi_input test_dotprod test_mpmc 
 #test_mpmc2 test_bmpmc latency_MPMC 
 
 
@@ -108,9 +108,9 @@ test_accelerator:test_accelerator.o
 test_accelerator2:test_accelerator2.o
 test_accelerator3:test_accelerator3.o
 test_accelerator_farm+pipe:test_accelerator_farm+pipe.o
-test_accelerator_pipe:test_accelerator_pipe.o
 test_accelerator_pipe+farm:test_accelerator_pipe+farm.o
-#test_accelerator+pinning:test_accelerator+pinning.o
+test_accelerator_pipe:test_accelerator_pipe.o
+test_accelerator_ofarm:test_accelerator_ofarm.o
 test_farm+pipe:test_farm+pipe.o
 test_freeze:test_freeze.o
 test_masterworker:test_masterworker.o

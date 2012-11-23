@@ -87,32 +87,30 @@ protected:
     }
     
     /// Default constructor
-    ff_dnode():ff_node(),skipdnode(true) {}
+    ff_dnode():ff_node(),skipdnode(true),neos(0) {}
     
     /// Destructor: closes all connections.
     virtual ~ff_dnode() {         
         com.close();
         delete com.getDescriptor();
     }
-    
-    /** Override \p ff_node's \p push method */
-    virtual inline bool push(void * ptr) { 
-        if (skipdnode || !P) return ff_node::push(ptr);
 
+    template<typename CI>
+    inline bool internal_push(void * ptr, CI& comm) { 
         // gets the peers involved in one single communication
-        const int peers=com.getDescriptor()->getPeers();
+        const int peers=comm.getDescriptor()->getPeers();
         if (ptr == (void*)FF_EOS) {
             //cerr << "DNODE prepare to send FF_DEOS to " << peers <<" peers\n";
             for(int i=0;i<peers;++i) {
                 msg_t msg; 
                 msg.init(FF_DEOS,msg_t::HEADER_LENGHT);
                 //cerr << "DNODE sends FF_DEOS to " << i <<"\n";
-                if (!com.put(msg,i)) return false;
+                if (!comm.put(msg,i)) return false;
             }
             return true;
         }
         
-        if (CommImpl::MULTIPUT) {
+        if (CI::MULTIPUT) {
             svector<iovec> v;
             for(int i=0;i<peers;++i) {
                 v.clear();
@@ -120,14 +118,14 @@ protected:
                 prepare(v, ptr, i);
                 
                 msg_t hdr(new uint32_t(v.size()), msg_t::HEADER_LENGHT, freeHdr);
-                com.putmore(hdr,i);
+                comm.putmore(hdr,i);
                 callbackArg.resize(v.size());  
                 for(size_t j=0;j<v.size()-1;++j) {
                     msg_t msg(v[j].iov_base, v[j].iov_len,freeMsg,callbackArg[j]); 
-                    com.putmore(msg,i);
+                    comm.putmore(msg,i);
                 }
                 msg_t msg(v[v.size()-1].iov_base, v[v.size()-1].iov_len,freeMsg,callbackArg[v.size()-1]);
-                if (!com.put(msg,i)) return false;            
+                if (!comm.put(msg,i)) return false;            
             }
         } else {
             svector<iovec> v;
@@ -135,16 +133,23 @@ protected:
             prepare(v, ptr);
                        
             msg_t hdr(new uint32_t(v.size()), msg_t::HEADER_LENGHT, freeHdr);
-            com.putmore(hdr);
+            comm.putmore(hdr);
             callbackArg.resize(v.size());
             for(size_t j=0;j<v.size()-1;++j) {
                 msg_t msg(v[j].iov_base, v[j].iov_len,freeMsg,callbackArg[j]); 
-                com.putmore(msg);
+                comm.putmore(msg);
             }
             msg_t msg(v[v.size()-1].iov_base, v[v.size()-1].iov_len,freeMsg,callbackArg[v.size()-1]);
-            if (!com.put(msg)) return false;
+            if (!comm.put(msg)) return false;
         }
         return true;
+    }
+
+    
+    /** Override \p ff_node's \p push method */
+    virtual inline bool push(void * ptr) { 
+        if (skipdnode || !P) return ff_node::push(ptr);
+        return internal_push(ptr, com);
     }
     
     /** Override \p ff_node 's \p pop method */
@@ -307,6 +312,67 @@ protected:
 };
 template <typename CommImpl>
 dnode_cbk_t ff_dnode<CommImpl>::cb=0;
+
+
+/*!
+ *  \class ff_dinout
+ *
+ *  \brief A \p ff_dnode with both input and output channels.
+ *
+ *  A \p ff_dinout is actually a \p ff_dnode with an extra communication channel 
+ *  (<em>external channel</em>), so that the dinout node is connected with the 
+ *  "external world" both with input and output channels.
+ *
+ *  It is implemented as a template class: the template type \p CommImplIn refers to 
+ *  the input communication pattern, the type \p CommImplOut refers to the output 
+ *  communication pattern.
+ *
+ */
+template <typename CommImplIn, typename CommImplOut>
+class ff_dinout: public ff_dnode<CommImplIn> {
+protected:    
+    typedef typename CommImplOut::TransportImpl::msg_t msg_t;
+
+    /// Destructor: closes all connections.
+    virtual ~ff_dinout() {         
+        comOut.close();
+        delete comOut.getDescriptor();
+    }
+    
+    /** Override \p ff_dnode's \p push method */
+    virtual inline bool push(void * ptr) { 
+        return ff_dnode<CommImplIn>::internal_push(ptr, comOut);
+    }
+    
+public:
+    int initIn(const std::string& name, const std::string& address,
+             const int peers, typename CommImplIn::TransportImpl* const transp, 
+             const int nodeId=-1) {       
+
+        ff_dnode<CommImplIn>::skipdnode=false;
+        ff_dnode<CommImplIn>::P=ff_dnode<CommImplIn>::RECEIVER;
+        ff_dnode<CommImplIn>::ff_node::create_input_buffer(1);
+        ff_dnode<CommImplIn>::com.setDescriptor(new typename CommImplIn::descriptor(name,peers,transp,
+                                                              ff_dnode<CommImplIn>::RECEIVER));
+        return ff_dnode<CommImplIn>::com.init(address,nodeId); 
+    }
+
+    int initOut(const std::string& name, const std::string& address,
+                const int peers, typename CommImplOut::TransportImpl* const transp, 
+                const int nodeId=-1, dnode_cbk_t cbk=0) {
+
+        ff_dnode<CommImplIn>::skipdnode=false;
+        ff_dnode<CommImplIn>::cb=cbk;  
+        comOut.setDescriptor(new typename CommImplOut::descriptor(name,peers,transp,ff_dnode<CommImplIn>::SENDER));
+        
+        return comOut.init(address,nodeId);
+    }
+
+protected:
+    CommImplOut comOut;
+};
+
+
 
 /*!
  *  @}

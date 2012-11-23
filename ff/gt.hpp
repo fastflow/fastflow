@@ -27,6 +27,7 @@
 
 #include <iostream>
 #include <deque>
+#include <ff/svector.hpp>
 #include <ff/utils.hpp>
 #include <ff/node.hpp>
 
@@ -55,20 +56,29 @@ namespace ff {
 
 class ff_gatherer: public ff_thread {
 
-    enum {TICKS2WAIT=5000};
-
     template <typename T1, typename T2>  friend class ff_farm;
     friend class ff_pipeline;
+public:
+    enum {TICKS2WAIT=5000};
 
 protected:
 
     /**
      * Virtual function. \n Select a worker
      * 
-     * \return -1 if no worker is selected
-     * \return the number of workers selected otherwise.
+     * Gets the next one using the RR policy.
+     * The one selected has to be alive (and kicking).
      */
-    virtual inline int selectworker() { return (++nextr % nworkers); }
+    virtual inline int selectworker() { 
+        do nextr = (nextr+1) % nworkers;
+        while(offline[nextr]);
+        return nextr;
+    }
+
+    virtual inline void notifyeos(int id) {}
+
+    /* number of tentative before wasting some times and than retry */
+    virtual inline unsigned int ntentative() { return nworkers;}
 
     virtual inline void losetime_out() { 
         FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
@@ -92,43 +102,47 @@ protected:
 #endif
     }    
 
-    // FIX: we have to find a way to use selectworker !!!
-    virtual std::deque<ff_node *>::iterator  gather_task(void ** task, 
-                                                         std::deque<ff_node *> & availworkers,
-                                                         std::deque<ff_node *>::iterator & start) {
-        register int cnt, nw= (int)(availworkers.end()-availworkers.begin());
-        const std::deque<ff_node *>::iterator & ite(availworkers.end());
+    virtual int gather_task(void ** task) {
+        register unsigned int cnt;
         do {
             cnt=0;
             do {
-                if (++start == ite) start=availworkers.begin();
-                if((*start)->get(task)) return start;
-                else if (++cnt == nw) break;
+                nextr = selectworker();
+                assert(offline[nextr]==false);
+                if (workers[nextr]->get(task)) return nextr;
+                else if (++cnt == ntentative()) break;
             } while(1);
             losetime_in();
         } while(1);
-        return ite;
+
+        // not reached
+        return -1;
     }
+
 
     /// Virtual function. \n Gather tasks' results from all workers
     virtual int all_gather(void *task, void **V) {
         V[channelid]=task;
-        std::vector<int> retry;
+        int nw=getnworkers();
+        svector<ff_node*> _workers(nw);
+        for(int i=0;i<nworkers;++i) 
+            if (!offline[i]) _workers.push_back(workers[i]);
+        svector<int> retry(nw);
 
-        for(register int i=0;i<nworkers;++i) {
-            if(i!=channelid && !workers[i]->get(&V[i]))
+        for(register int i=0;i<nw;++i) {
+            if(i!=channelid && !_workers[i]->get(&V[i]))
                 retry.push_back(i);
         }
         while(retry.size()) {
             channelid = retry.back();
-            if(workers[channelid]->get(&V[channelid]))
+            if(_workers[channelid]->get(&V[channelid]))
                 retry.pop_back();
             else losetime_in();
         }
-        for(register int i=0;i<nworkers;++i)
+        for(register int i=0;i<nw;++i)
             if (V[i] == (void *)FF_EOS || V[i] == (void*)FF_EOS_NOFREEZE)
                 return -1;
-        FFTRACE(taskcnt+=nworkers-1);
+        FFTRACE(taskcnt+=nw-1);
         return 0;
     }
 
@@ -179,25 +193,15 @@ public:
      *  Creates \a max_num_workers \p NULL pointers to worker objects
      */
     ff_gatherer(int max_num_workers):
-        nworkers(0),max_nworkers(max_num_workers),nextr(0),
+        max_nworkers(max_num_workers),nworkers(0),nextr(0),
         neos(0),neosnofreeze(0),channelid(-1),
-        filter(NULL),workers(new ff_node*[max_num_workers]),
-        buffer(NULL) {
+        filter(NULL), workers(max_nworkers), offline(max_nworkers), buffer(NULL) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
-        wttime=0;
-        FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
-        for(int i=0;i<max_num_workers;++i) workers[i]=NULL;
+        wttime=0;        
+        FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);        
     }
 
-    /**
-     *  Destructor
-     *
-     *  Deallocates dynamic memory spaces previoulsy allocated for workers
-     */
-    ~ff_gatherer() { 
-        if (workers) delete [] workers;
-    }
 
     int set_filter(ff_node * f) { 
         if (filter) {
@@ -216,8 +220,8 @@ public:
      */
     const int get_channel_id() const { return channelid;}
 
-    /// Get the number of workers from which collect results.
-    inline int getnworkers() const { return nworkers;}
+    /// Gets the number of worker threads currently running.
+    inline const int getnworkers() const { return workers.size()-neos-neosnofreeze; }
     
     /// Get the ouput buffer
     FFBUFFER * const get_out_buffer() const { return buffer;}
@@ -228,7 +232,16 @@ public:
             error("GT, max number of workers reached (max=%d)\n",max_nworkers);
             return -1;
         }
-        workers[nworkers++]= w;
+        workers.push_back(w);
+        ++nworkers;
+        return 0;
+    }
+
+    /// Virtual function: initialise the gatherer task.
+    virtual int svc_init() { 
+        gettimeofday(&tstart,NULL);
+        for(unsigned i=0;i<workers.size();++i)  offline[i]=false;
+        if (filter) return filter->svc_init(); 
         return 0;
     }
 
@@ -243,36 +256,25 @@ public:
             outpresent=true;
             set_out_buffer(filter->get_in_buffer());
         }
-
-        // contains current worker
-        std::deque<ff_node *> availworkers; 
-        for(int i=0;i<nworkers;++i)
-            availworkers.push_back(workers[i]);
-        std::deque<ff_node *>::iterator start(availworkers.begin());
-        std::deque<ff_node *>::iterator victim(availworkers.begin());
-
+       
         gettimeofday(&wtstart,NULL);
         do {
             task = NULL;
-            
-            victim=gather_task(&task, availworkers, start);
-
-
-            //gather_task(&task);            
+            nextr = gather_task(&task); 
             if (task == (void *)FF_EOS) {
-                availworkers.erase(victim);
-                start=availworkers.begin(); // restart iterator
+                if (filter) filter->eosnotify(workers[nextr]->get_my_id());
+                offline[nextr]=true;
                 ++neos;
                 ret=task;
             } else if (task == (void *)FF_EOS_NOFREEZE) {
-                availworkers.erase(victim);
-                start=availworkers.begin(); // restart iterator
+                if (filter) filter->eosnotify(workers[nextr]->get_my_id());
+                offline[nextr]=true;
                 ++neosnofreeze;
                 ret = task;
             } else {
                 FFTRACE(++taskcnt);
                 if (filter)  {
-                    channelid = (*victim)->get_my_id();
+                    channelid = workers[nextr]->get_my_id();
                     FFTRACE(register ticks t0 = getticks());
                     task = filter->svc(task);
 
@@ -297,8 +299,9 @@ public:
                     break;
                 }                
                 if (outpresent) {
-                    if (filter) filter->push(task);
-                    else push(task);
+                    //if (filter) filter->push(task);
+                    //else 
+                    push(task);
                 }
             }
         } while((neos<nworkers) && (neosnofreeze<nworkers));
@@ -311,18 +314,10 @@ public:
 
         gettimeofday(&wtstop,NULL);
         wttime+=diffmsec(wtstop,wtstart);
-
         if (neos>=nworkers) neos=0;
         if (neosnofreeze>=nworkers) neosnofreeze=0;
 
         return ret;
-    }
-
-    /// Virtual function: initialise the gatherer task.
-    virtual int svc_init() { 
-        gettimeofday(&tstart,NULL);
-        if (filter) return filter->svc_init(); 
-        return 0;
     }
 
     /// Virtual function: finalise the gatherer task.
@@ -365,8 +360,8 @@ public:
 #endif
 
 private:
-    int               nworkers;
     int               max_nworkers;
+    int               nworkers; // this is the # of workers initially registered
     int               nextr;
 
     int               neos;
@@ -374,7 +369,8 @@ private:
     int               channelid;
 
     ff_node         * filter;
-    ff_node        ** workers;          /// Pointer to the pool (array) of \a Workers
+    svector<ff_node*> workers;
+    svector<bool>     offline;
     FFBUFFER        * buffer;
 
     struct timeval tstart;
