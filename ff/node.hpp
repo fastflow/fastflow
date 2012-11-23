@@ -675,6 +675,15 @@ public:
      * This is called only once for each thread, right after the \p svc method
      */
     virtual void  svc_end() {}
+
+    /**
+     * Virtual function.\n
+     * Called once just after the EOS has arrived.
+     *
+     * \param id is the ID of the input channel, it makes sense only for
+     * N-to-1 input channels.
+     */
+    virtual void  eosnotify(int id=-1) {}
     
     /// Virtual function.\n Get thread's ID
     virtual int   get_my_id() const { return myid; };
@@ -841,6 +850,7 @@ private:
                     if ((task == (void*)FF_EOS) || 
                         (task == (void*)FF_EOS_NOFREEZE)) {
                         ret = task;
+                        filter->eosnotify();
                         if (outpresent)  push(task); 
                         break;
                     }

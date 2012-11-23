@@ -69,9 +69,10 @@ protected:
     /// Prepare the Farm skeleton for execution
     inline int prepare() {
         for(int i=0;i<nworkers;++i) {
-            if (workers[i]->create_input_buffer((ondemand ? ondemand: (in_buffer_entries/nworkers + 1)))<0) return -1;
+            if (workers[i]->create_input_buffer((ondemand ? ondemand: (in_buffer_entries/nworkers + 1)), 
+                                                (ondemand ? true: fixedsize))<0) return -1;
             if (collector || lb->masterworker() || collector_removed) 
-                if (workers[i]->create_output_buffer(out_buffer_entries/nworkers + DEF_IN_OUT_DIFF)<0) 
+                if (workers[i]->create_output_buffer(out_buffer_entries/nworkers + DEF_IN_OUT_DIFF, fixedsize)<0) 
                     return -1;
             lb->register_worker(workers[i]);
             if (collector && !collector_removed) gt->register_worker(workers[i]);
@@ -100,12 +101,14 @@ public:
      *  \param out_buffer_entries = output queue length
      *  \param max_num_workers = highest number of farm's worker
      *  \param worker_cleanup = true deallocate worker object at exit
+     *  \param fixedsize = true uses only fixed size queue
      */
     ff_farm(bool input_ch=false,
             int in_buffer_entries=DEF_IN_BUFF_ENTRIES, 
             int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
             bool worker_cleanup=false,
-            int max_num_workers=DEF_MAX_NUM_WORKERS):
+            int max_num_workers=DEF_MAX_NUM_WORKERS,
+            bool fixedsize=false):  // NOTE: by default all the internal farm queues are unbounded !
         has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
         nworkers(0),
         in_buffer_entries(in_buffer_entries),
@@ -114,11 +117,11 @@ public:
         max_nworkers(max_num_workers),
         emitter(NULL),collector(NULL),fallback(NULL),
         lb(new lb_t(max_num_workers)),gt(new gt_t(max_num_workers)),
-        workers(new ff_node*[max_num_workers]) {
+        workers(new ff_node*[max_num_workers]),fixedsize(fixedsize) {
         for(int i=0;i<max_num_workers;++i) workers[i]=NULL;
 
         if (has_input_channel) { 
-            if (create_input_buffer(in_buffer_entries, false)<0) {
+            if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
                 error("FARM, creating input buffer\n");
             }
         }
@@ -135,6 +138,7 @@ public:
             }
             delete [] workers;
         }
+        if (barrier) delete barrier;
     }
 
     /** 
@@ -237,7 +241,7 @@ public:
         collector = ((c!=NULL)?c:(ff_node*)gt);
         
         if (has_input_channel) { /* it's an accelerator */
-            if (create_output_buffer(out_buffer_entries)<0) return -1;
+            if (create_output_buffer(out_buffer_entries, fixedsize)<0) return -1;
         }
         
         return gt->set_filter(c);
@@ -327,7 +331,7 @@ public:
     }
 
     /** Execute the farm and wait for all workers to complete their tasks */
-    int run_and_wait_end() {
+    virtual int run_and_wait_end() {
         if (isfrozen()) return -1; // FIX !!!!
 
         stop();
@@ -337,7 +341,7 @@ public:
     }
 
     /** Execute the farm and then freeze. */
-    int run_then_freeze() {
+    virtual int run_then_freeze() {
         if (isfrozen()) {
             thaw();
             freeze();
@@ -609,7 +613,223 @@ protected:
     lb_t             * lb;
     gt_t             * gt;
     ff_node         ** workers;
+    bool               fixedsize;
 };
+
+/*!
+ *  @}
+ */
+ 
+/*!
+ *  \ingroup runtime
+ *
+ *  @{
+ */
+class ofarm_lb: public ff_loadbalancer {
+protected:
+    inline int selectworker() { return victim; }
+public:
+    ofarm_lb(int max_num_workers):ff_loadbalancer(max_num_workers) {}
+    void set_victim(int v) { victim=v;}
+private:
+    int victim;
+};
+
+class ofarm_gt: public ff_gatherer {
+protected:
+    inline int selectworker() { return victim; }
+public:
+    ofarm_gt(int max_num_workers):
+        ff_gatherer(max_num_workers),dead(max_num_workers) {
+        dead.resize(max_num_workers);
+        for(int i=0;i<max_num_workers;++i) dead[i]=false;
+    }
+    bool set_victim(int v) { if (dead[v]) return false; victim=v; return true;}
+    void set_dead(int v)   { dead[v]=true;}
+private:
+    int victim;
+    svector<bool> dead;
+};
+
+/*!
+ *  @}
+ */
+
+
+/*!
+ *  \ingroup high_level
+ *
+ *  @{
+ */
+
+/*!
+ *  \class ff_ofarm
+ *
+ *  \brief The ordered Farm skeleton.
+ *
+ *
+ */
+
+class ff_ofarm: public ff_farm<ofarm_lb, ofarm_gt> {
+public:    
+    typedef void* (*inout_F_t) (void*);
+
+private:
+    // emitter
+    class ofarmE: public ff_node {
+    public:
+        ofarmE(ofarm_lb * const lb):
+            nworkers(0),nextone(0), lb(lb),E_f(NULL) {}
+        void setnworkers(int nw) { nworkers=nw;}
+        void setfilter(inout_F_t f) { E_f = f;}
+        int svc_init() {
+            assert(nworkers>0);
+            lb->set_victim(nextone);
+            return 0;
+        }        
+        void * svc(void * task) {
+            if (E_f) task = E_f(task);
+            ff_send_out(task);
+            nextone=(nextone+1) % nworkers;
+            lb->set_victim(nextone);
+            return GO_ON;
+        }        
+    private:
+        int nworkers;
+        int nextone;
+        ofarm_lb * lb;
+        inout_F_t E_f;
+    };
+
+    // collector
+    class ofarmC: public ff_node {
+    public:
+        ofarmC(ofarm_gt * const gt):
+            nworkers(0),nextone(0), gt(gt),C_f(NULL) {}
+
+        void setnworkers(int nw) { nworkers=nw;}
+        void setfilter(inout_F_t f) { C_f = f;}
+        int svc_init() {
+            assert(nworkers>0);
+            gt->set_victim(nextone);
+            return 0;
+        }        
+        void * svc(void * task) {
+            if (C_f) task = C_f(task);
+            ff_send_out(task);
+            do nextone = (nextone+1) % nworkers;
+            while(!gt->set_victim(nextone));
+            return GO_ON;
+        }        
+        void eosnotify(int id) { 
+            gt->set_dead(id);
+            if (nextone == id) {
+                nextone= (nextone+1) % nworkers;
+                gt->set_victim(nextone);
+            }
+        }        
+    private:
+        int nworkers;
+        int nextone;
+        ofarm_gt * gt;
+        inout_F_t C_f;
+    };
+    
+public:
+
+
+    ff_ofarm(bool input_ch=false,
+            int in_buffer_entries=DEF_IN_BUFF_ENTRIES, 
+            int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
+            bool worker_cleanup=false,
+            int max_num_workers=DEF_MAX_NUM_WORKERS):
+        ff_farm<ofarm_lb,ofarm_gt>(input_ch,in_buffer_entries,out_buffer_entries,worker_cleanup,max_num_workers),E(NULL),C(NULL),E_f(NULL),C_f(NULL) {
+        E = new ofarmE(this->getlb());
+        C = new ofarmC(this->getgt());
+        this->add_emitter(E);
+        this->add_collector(C);
+    }
+
+    ~ff_ofarm() {
+        if (E) delete E;
+        if (C) delete C;
+    }
+
+    void setEmitterF  (inout_F_t f) { E_f = f; }
+    void setCollectorF(inout_F_t f) { C_f = f; }
+    
+    int run(bool skip_init=false) {
+        E->setnworkers(this->getNWorkers());
+        C->setnworkers(this->getNWorkers());
+        E->setfilter(E_f);
+        C->setfilter(C_f);
+        return ff_farm<ofarm_lb,ofarm_gt>::run(skip_init);
+    }
+
+#if 0
+    int run_and_wait_end() {
+        return ff_farm<ofarm_lb,ofarm_gt>::run_and_wait_end();
+    }
+    int run_then_freeze() {
+        return run();
+    }
+
+    int add_workers(std::vector<ff_node *> & w) { 
+        return ff_farm<ofarm_lb,ofarm_gt>::add_workers(w);
+    }
+
+    int wait(/* timeval */ ) {
+        return ff_farm<ofarm_lb,ofarm_gt>::wait();
+    }
+    int wait_freezing(/* timeval */ ) {
+        return ff_farm<ofarm_lb,ofarm_gt>::wait_freezing();
+    } 
+    void stop()   { ff_farm<ofarm_lb,ofarm_gt>::stop(); }
+    void freeze() { ff_farm<ofarm_lb,ofarm_gt>::freeze(); }
+    void thaw()   { ff_farm<ofarm_lb,ofarm_gt>::thaw(); }
+    bool isfrozen() { return ff_farm<ofarm_lb,ofarm_gt>::isfrozen(); }
+
+    inline bool offload(void * task,
+                        unsigned int retry=((unsigned int)-1),
+                        unsigned int ticks=ofarm_lb::TICKS2WAIT) { 
+        return ff_farm<ofarm_lb,ofarm_gt>::offload(task,retry,ticks);
+    }    
+    inline bool load_result(void ** task,
+                            unsigned int retry=((unsigned int)-1),
+                            unsigned int ticks=ofarm_gt::TICKS2WAIT) {
+        return ff_farm<ofarm_lb,ofarm_gt>::load_result(task,retry,ticks);
+    }
+    inline bool load_result_nb(void ** task) {
+        return ff_farm<ofarm_lb,ofarm_gt>::load_result_nb(task);
+    }
+    
+    const struct timeval  getstarttime() const { 
+        return ff_farm<ofarm_lb,ofarm_gt>::getstarttime();
+    }
+    const struct timeval  getstoptime()  const {
+        return ff_farm<ofarm_lb,ofarm_gt>::getstoptime();
+    }
+    const struct timeval  getwstartime() const { 
+        return ff_farm<ofarm_lb,ofarm_gt>::getwstartime();
+    }
+    const struct timeval  getwstoptime() const {
+        return ff_farm<ofarm_lb,ofarm_gt>::getwstoptime();
+    }
+    
+    double ffTime() {
+        return ff_farm<ofarm_lb,ofarm_gt>::ffTime();
+    }
+    double ffwTime() {
+        return ff_farm<ofarm_lb,ofarm_gt>::ffwTime();
+    }
+#endif
+protected:
+    ofarmE* E;
+    ofarmC* C;
+    inout_F_t E_f;
+    inout_F_t C_f;
+};
+
 
 /*!
  *  @}

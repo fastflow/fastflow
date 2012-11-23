@@ -37,7 +37,7 @@
 namespace ff {
 
 /*!
- *  \ingroup high_level
+ *  \ingroup runtime
  *
  *  @{
  */
@@ -71,7 +71,7 @@ public:
  
  
  /*!
- *  \ingroup high_level
+ *  \ingroup runtime
  *
  *  @{
  */
@@ -214,7 +214,7 @@ public:
         add_emitter(new mapE(getlb(),NULL));
         add_collector(new mapC(getgt(), reduceF));
         std::vector<ff_node *> w;
-        for(int i=0;i<mapP->getParts();++i) w.push_back(new mapW(mapF,mapP));
+        for(size_t i=0;i<mapP->getParts();++i) w.push_back(new mapW(mapF,mapP));
         add_workers(w);
     }
 
@@ -240,7 +240,7 @@ public:
         add_emitter(new mapE(getlb(), task));
         add_collector(new mapC(getgt(),reduceF));
         std::vector<ff_node *> w;
-        for(int i=0;i<mapP->getParts();++i) w.push_back(new mapW(mapF,mapP));
+        for(size_t i=0;i<mapP->getParts();++i) w.push_back(new mapW(mapF,mapP));
         add_workers(w);
     }
     
