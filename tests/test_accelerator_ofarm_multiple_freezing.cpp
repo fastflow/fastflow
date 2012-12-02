@@ -41,19 +41,18 @@ class Worker: public ff_node {
 public:
     void * svc(void * task) {
         int * t = (int *)task;
+#if 0
         std::cout << "[Worker] " << ff_node::get_my_id() 
                   << " received task " << *t << "\n";
+#endif
         return task;
+    }
+    void svc_end() {
+        printf("worker END\n");
     }
 };
 
-// the gatherer filter
-class Collector: public ff_node {
-public:
-    void * svc(void * task) {        
-        return task;  
-    }
-};
+
 
 
 int main(int argc, 
@@ -80,36 +79,39 @@ int main(int argc,
     farm.add_workers(w);
 
     ffTime(START_TIME);
-    farm.run();
-    void * result=NULL;
-    int expected=0;
-    for (int i=0;i<streamlen;i++) {
-        int * ii = new int(i);
-        std::cout << "[Main] Offloading " << i << "\n"; 
-        // Here offloading computation onto the farm
-        farm.offload(ii); 
+    for(int k=0; k<100; k++){
+        farm.run_then_freeze();
+        void * result=NULL;
+        int expected=0;
+        for (int i=0;i<streamlen;i++) {
+            int * ii = new int(i);
+//            std::cout << "[Main] Offloading " << i << "\n"; 
+            // Here offloading computation onto the farm
+            farm.offload(ii); 
 
-        // try to get results, if there are any
-        if (farm.load_result_nb(&result)) {
-            std::cerr << "result= " << *((int*)result) << "\n";
+            // try to get results, if there are any
+            if (farm.load_result_nb(&result)) {
+//                std::cerr << "result= " << *((int*)result) << "\n";
+                assert(*(int*)result == expected);
+                ++expected;
+                delete ((int*)result);
+            }
+        }
+        std::cout << "[Main] EOS arrived\n";
+        farm.offload((void *)FF_EOS);
+    
+
+        // get all remaining results syncronously. 
+        while(farm.load_result(&result)) {
+//            std::cerr << "result= " << *((int*)result) << "\n";
             assert(*(int*)result == expected);
             ++expected;
             delete ((int*)result);
         }
+        // Here join
+        farm.wait_freezing();  
+        std::cout << "Iteration " << k << " terminated." << std::endl;
     }
-    std::cout << "[Main] EOS arrived\n";
-    farm.offload((void *)FF_EOS);
-    
-
-    // get all remaining results syncronously. 
-    while(farm.load_result(&result)) {
-        std::cerr << "result= " << *((int*)result) << "\n";
-        assert(*(int*)result == expected);
-        ++expected;
-        delete ((int*)result);
-    }
-    // Here join
-    farm.wait();  
 
     ffTime(STOP_TIME);
     std::cerr << "[Main] DONE, farm time= " << farm.ffTime() << " (ms)\n";
