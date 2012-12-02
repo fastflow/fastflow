@@ -642,10 +642,15 @@ public:
     ofarm_gt(int max_num_workers):
         ff_gatherer(max_num_workers),dead(max_num_workers) {
         dead.resize(max_num_workers);
-        for(int i=0;i<max_num_workers;++i) dead[i]=false;
+        reset();
     }
-    bool set_victim(int v) { if (dead[v]) return false; victim=v; return true;}
-    void set_dead(int v)   { dead[v]=true;}
+    inline bool set_victim(int v) { 
+        if (dead[v]) return false; victim=v; return true;
+    }
+    inline void set_dead(int v)   { dead[v]=true;}
+    inline void reset() {
+        for(size_t i=0;i<dead.size();++i) dead[i]=false;
+    }
 private:
     int victim;
     svector<bool> dead;
@@ -684,6 +689,7 @@ private:
         void setfilter(inout_F_t f) { E_f = f;}
         int svc_init() {
             assert(nworkers>0);
+            nextone = 0;
             lb->set_victim(nextone);
             return 0;
         }        
@@ -711,6 +717,8 @@ private:
         void setfilter(inout_F_t f) { C_f = f;}
         int svc_init() {
             assert(nworkers>0);
+            nextone=0;
+            gt->reset();
             gt->set_victim(nextone);
             return 0;
         }        
@@ -727,7 +735,7 @@ private:
                 nextone= (nextone+1) % nworkers;
                 gt->set_victim(nextone);
             }
-        }        
+        }  
     private:
         int nworkers;
         int nextone;
@@ -771,7 +779,7 @@ public:
         return ff_farm<ofarm_lb,ofarm_gt>::run_and_wait_end();
     }
     int run_then_freeze() {
-        return run();
+        return ff_farm<ofarm_lb,ofarm_gt>::run();
     }
 
     int add_workers(std::vector<ff_node *> & w) { 
