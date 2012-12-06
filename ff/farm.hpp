@@ -676,9 +676,6 @@ private:
  */
 
 class ff_ofarm: public ff_farm<ofarm_lb, ofarm_gt> {
-public:    
-    typedef void* (*inout_F_t) (void*);
-
 private:
     // emitter
     class ofarmE: public ff_node {
@@ -686,25 +683,30 @@ private:
         ofarmE(ofarm_lb * const lb):
             nworkers(0),nextone(0), lb(lb),E_f(NULL) {}
         void setnworkers(int nw) { nworkers=nw;}
-        void setfilter(inout_F_t f) { E_f = f;}
+        void setfilter(ff_node* f) { E_f = f;}
         int svc_init() {
             assert(nworkers>0);
+            int ret = 0;
+            if (E_f) ret = E_f->svc_init();
             nextone = 0;
             lb->set_victim(nextone);
-            return 0;
+            return ret;
         }        
         void * svc(void * task) {
-            if (E_f) task = E_f(task);
+            if (E_f) task = E_f->svc(task);
             ff_send_out(task);
             nextone=(nextone+1) % nworkers;
             lb->set_victim(nextone);
             return GO_ON;
         }        
+        void svc_end() {
+            if (E_f) E_f->svc_end();
+        }
     private:
         int nworkers;
         int nextone;
         ofarm_lb * lb;
-        inout_F_t E_f;
+        ff_node* E_f;
     };
 
     // collector
@@ -714,16 +716,18 @@ private:
             nworkers(0),nextone(0), gt(gt),C_f(NULL) {}
 
         void setnworkers(int nw) { nworkers=nw;}
-        void setfilter(inout_F_t f) { C_f = f;}
+        void setfilter(ff_node* f) { C_f = f;}
         int svc_init() {
             assert(nworkers>0);
+            int ret = 0;
+            if (C_f) ret = C_f->svc_init();
             nextone=0;
             gt->reset();
             gt->set_victim(nextone);
-            return 0;
+            return ret;
         }        
         void * svc(void * task) {
-            if (C_f) task = C_f(task);
+            if (C_f) task = C_f->svc(task);
             ff_send_out(task);
             do nextone = (nextone+1) % nworkers;
             while(!gt->set_victim(nextone));
@@ -736,11 +740,14 @@ private:
                 gt->set_victim(nextone);
             }
         }  
+        void svc_end() {
+            if (C_f) C_f->svc_end();
+        }
     private:
         int nworkers;
         int nextone;
         ofarm_gt * gt;
-        inout_F_t C_f;
+        ff_node* C_f;
     };
     
 public:
@@ -763,8 +770,8 @@ public:
         if (C) delete C;
     }
 
-    void setEmitterF  (inout_F_t f) { E_f = f; }
-    void setCollectorF(inout_F_t f) { C_f = f; }
+    void setEmitterF  (ff_node* f) { E_f = f; }
+    void setCollectorF(ff_node* f) { C_f = f; }
     
     int run(bool skip_init=false) {
         E->setnworkers(this->getNWorkers());
@@ -773,69 +780,11 @@ public:
         C->setfilter(C_f);
         return ff_farm<ofarm_lb,ofarm_gt>::run(skip_init);
     }
-
-#if 0
-    int run_and_wait_end() {
-        return ff_farm<ofarm_lb,ofarm_gt>::run_and_wait_end();
-    }
-    int run_then_freeze() {
-        return ff_farm<ofarm_lb,ofarm_gt>::run();
-    }
-
-    int add_workers(std::vector<ff_node *> & w) { 
-        return ff_farm<ofarm_lb,ofarm_gt>::add_workers(w);
-    }
-
-    int wait(/* timeval */ ) {
-        return ff_farm<ofarm_lb,ofarm_gt>::wait();
-    }
-    int wait_freezing(/* timeval */ ) {
-        return ff_farm<ofarm_lb,ofarm_gt>::wait_freezing();
-    } 
-    void stop()   { ff_farm<ofarm_lb,ofarm_gt>::stop(); }
-    void freeze() { ff_farm<ofarm_lb,ofarm_gt>::freeze(); }
-    void thaw()   { ff_farm<ofarm_lb,ofarm_gt>::thaw(); }
-    bool isfrozen() { return ff_farm<ofarm_lb,ofarm_gt>::isfrozen(); }
-
-    inline bool offload(void * task,
-                        unsigned int retry=((unsigned int)-1),
-                        unsigned int ticks=ofarm_lb::TICKS2WAIT) { 
-        return ff_farm<ofarm_lb,ofarm_gt>::offload(task,retry,ticks);
-    }    
-    inline bool load_result(void ** task,
-                            unsigned int retry=((unsigned int)-1),
-                            unsigned int ticks=ofarm_gt::TICKS2WAIT) {
-        return ff_farm<ofarm_lb,ofarm_gt>::load_result(task,retry,ticks);
-    }
-    inline bool load_result_nb(void ** task) {
-        return ff_farm<ofarm_lb,ofarm_gt>::load_result_nb(task);
-    }
-    
-    const struct timeval  getstarttime() const { 
-        return ff_farm<ofarm_lb,ofarm_gt>::getstarttime();
-    }
-    const struct timeval  getstoptime()  const {
-        return ff_farm<ofarm_lb,ofarm_gt>::getstoptime();
-    }
-    const struct timeval  getwstartime() const { 
-        return ff_farm<ofarm_lb,ofarm_gt>::getwstartime();
-    }
-    const struct timeval  getwstoptime() const {
-        return ff_farm<ofarm_lb,ofarm_gt>::getwstoptime();
-    }
-    
-    double ffTime() {
-        return ff_farm<ofarm_lb,ofarm_gt>::ffTime();
-    }
-    double ffwTime() {
-        return ff_farm<ofarm_lb,ofarm_gt>::ffwTime();
-    }
-#endif
 protected:
     ofarmE* E;
     ofarmC* C;
-    inout_F_t E_f;
-    inout_F_t C_f;
+    ff_node* E_f;
+    ff_node* C_f;
 };
 
 

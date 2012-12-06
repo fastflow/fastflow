@@ -7,6 +7,7 @@
  
 #ifndef _FF_COMMINTERFACE_HPP_
 #define _FF_COMMINTERFACE_HPP_
+
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU Lesser General Public License version 3 as 
@@ -43,10 +44,13 @@ namespace ff {
  *
  * \brief Communication Pattern interface
  */
+
 template <typename Impl>
 class commPattern  {
+
 protected:
     Impl impl;
+
 public:
     typedef typename Impl::descriptor      descriptor;
     typedef typename Impl::tosend_t        tosend_t;
