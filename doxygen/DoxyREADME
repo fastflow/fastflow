@@ -10,28 +10,29 @@
 *                                                     *
 *******************************************************
 
+Make sure that doxygen is installed on your machine. You can download doxygen
+from given link. http://www.stack.nl/~dimitri/doxygen/download.html#latestsrc
 
+NOTE: mac users can use macports sudo port install doxygen
 
-In order to compile the doxygen configuration file (FastFlow_doxygen)
-you need to install Doxygen following this links
+In order to generate documentation files using doxygen type: $ doxygen
+FastFlow_doxygen
 
-http://www.stack.nl/~dimitri/doxygen/download.html#latestsrc
+doxygen will compile the existing documentation according to the configuration
+file (i.e. FastFlow_doxygen). The output is produced in 'doc/' folder. We have
+two types of output i.e. 'html' and 'latex'. We can configure to generate more
+kind of outputs. 
 
-Once doxygen is installed in your machine type 
+In order to see the html documentation, open 'html/index.hmtl' in a browser.
 
-$ doxygen FastFlow_doxygen
+In order to see the latex documentation, go to the 'latex/' folder and run
+'make'. This will compile the latex sources and generate the 'refman.pdf' file,
+which is the actual reference manual.
 
-doxygen will compile the existing documentation according to the 
-configuration specified and will produce its outputs in the 'doc/' 
-folder, in a 'html/' and 'latex/' folder, respectively.
+*****************************************************
 
-It is configured to produce html and latex output. More are available.
+We give a little more detail to the developer of documentation.
 
-In order to see the html documentation generated, open with a browser 
-the file 'index.html' inside the 'html/' folder.
-
-In order to see the latex documentation, open the 'latex/' folder and
-run 'make'. This will compile the latex sources and generate the 
-'refman.pdf' file, which is the actual reference manual.
-
-
+1) Manual of doxygen can be found in manual
+2) The configuration file is Fastflow_doxygen
+3) The configuration file for related pages can be found in DoxyPapers

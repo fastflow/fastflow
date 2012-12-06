@@ -8,18 +8,18 @@
 #ifndef _FF_zmqIMPL_HPP_
 #define _FF_zmqIMPL_HPP_
 /* ***************************************************************************
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU Lesser General Public License version 3 as 
- *  published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License version 3 as
+ * published by the Free Software Foundation.
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU Lesser General Public License for more details.
+ *  This program is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
+ *  License for more details.
  *
  *  You should have received a copy of the GNU Lesser General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  along with this program; if not, write to the Free Software Foundation,
+ *  Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  *
  ****************************************************************************
@@ -88,15 +88,14 @@ namespace ff {
 struct descriptor1_N {
     typedef zmqTransportMsg_t  msg_t;
     
-    /** 
-     * Constructor. Creates a One-to-Many descriptor, that is, instantiate a 
+    /** Constructor. Creates a One-to-Many descriptor, that is, instantiate a
      * transport layer using the first node as a router.  
      *
-     * \param name name of the descriptor
-     * \param peers number of peers involved (receiving nodes)
+     * \param name name of the descriptor 
+     * \param peers number of peers involved (receiving nodes) 
      * \param transport pointer to the transport layer object
-     * \param P flag that identifies whether the descriptor refers to a \p sender 
-     * (i.e. a Router) or to a \p receiver.
+     * \param P flag that identifies whether the descriptor refers to a \p
+     * sender (i.e. a Router) or to a \p receiver.
      *
      */
     descriptor1_N( const std::string name, const int peers, 
@@ -107,13 +106,13 @@ struct descriptor1_N {
         
         if (transport) 
             socket = transport->newEndPoint(!P); 
-            // NOTE: we want to use ZMQ_ROUTER at producer side
-            // !P means ROUTER => create a socket (a new end-point)
-            // acting as a ROUTER -- REW, P always true?
+            // NOTE: we want to use ZMQ_ROUTER at producer side !P means ROUTER
+            // => create a socket (a new end-point) acting as a ROUTER -- REW,
+            // P always true?
                                                     
         if (P) {
             std::stringstream identity;
-            for(int i=0;i<peers;++i) {
+            for(int i = 0; i < peers; ++i) {
                 identity.str("");
                 identity << name << ":" << i;
                 transportIDs[i]=identity.str();
@@ -130,10 +129,9 @@ struct descriptor1_N {
         return -1;
     }
     
-    /** 
-     *  Initialise a socket and estabilish a connection to the given address.
+    /** Initialise a socket and estabilish a connection to the given address.
      *
-     *  \param addr it is the ip address in the form 'ip/host:port'
+     *  \param addr it is the ip address in the form 'ip/host:port' 
      *  \param nodeId it is the node identifier in the range [0..inf[
      */
     inline int init(const std::string& addr, const int nodeId=-1) {
@@ -142,9 +140,9 @@ struct descriptor1_N {
         if (!P) {   // if ROUTER: routing of messages to specific a connection
             std::stringstream identity;
             identity.str("");
-            identity << name << ":" << ((nodeId!=-1)?nodeId:transport->getProcId());
+            identity << name << ":" << ((nodeId!=-1) ? nodeId:transport->getProcId());
             // set durable identity. it must be set before connecting the socket
-            socket->setsockopt(ZMQ_IDENTITY, identity.str().c_str(), identity.str().length()+1);
+            socket->setsockopt(ZMQ_IDENTITY, identity.str().c_str(), identity.str().length() + 1);
             
             std::stringstream address;
             address.str("");
@@ -159,7 +157,7 @@ struct descriptor1_N {
             if ((i=addr.find(":"))<0) {
                 printf("init: ERROR wrong ip address format for %s\n",addr.c_str());
                 return -1;
-            }	    
+            }
             int port = atoi((addr.substr(i+1)).c_str());
             std::stringstream address;
             address << "tcp://*:" << port;
@@ -186,7 +184,7 @@ struct descriptor1_N {
      *  See <a href="http://api.zeromq.org/2-1:_start"> ØMQ's API </a> for details.
      */
     inline bool send(const msg_t& msg, int flags = 0) {
-        for(int i=0;i<peers;++i) {
+        for(int i=0; i < peers; ++i) {
             msg_t _msg;
             _msg.copy(const_cast<msg_t&>(msg));
             zmq::message_t to(const_cast<char*>(transportIDs[i].c_str()), transportIDs[i].length()+1,0,0);
@@ -221,7 +219,7 @@ struct descriptor1_N {
     /** 
      *  Unicast a message to a specified destination 
      *
-     *  \param msg eference to the message to be sent
+     *  \param msg reference to the message to be sent
      *  \param dest ID of the receiving peer.
      *  \param flags a flag indcating whether the operation should be in 
      *  non-blocking mode or if the message is a multi-part message.
@@ -241,8 +239,8 @@ struct descriptor1_N {
     }
     
     /** 
-     *  Unicast other parts of a multi-parts message to a specified destination.
-     *  This method exits if the flag is not set to ZMQ_SNDMORE.  
+     *  Unicast other parts of a multi-parts message to a specified
+     *  destination. This method exits if the flag is not set to ZMQ_SNDMORE.
      *
      *  \param msg eference to the message to be sent
      *  \param dest ID of the receiving peer.
@@ -324,7 +322,7 @@ struct descriptor1_N {
     // receives a message from a ZMQ_ROUTER
     inline bool recvreq(msg_t& msg) {   
         msg_t from;
-        for(int i=0;i<peers;++i) {
+        for(int i = 0; i < peers; ++i) {
             try {
                 if(!socket->recv(&from)) { 
                     zmqTDBG(printf("recvreq RETURN -1\n"));
@@ -357,10 +355,10 @@ struct descriptor1_N {
             if(!socket->recv(&from, flags)) return false;
             const std::string & f=static_cast<char*>(from.data());
             int i;
-            if ((i=f.find(":"))<0) {
+            if ((i=f.find(":")) < 0) {
                 printf("recvhdr: ERROR: wrong header\n");
                 return false;
-            }	    
+            }
             peer = atoi((f.substr(i+1)).c_str());
             if(!socket->recv(&msg)) { 
                 zmqTDBG(printf("recvreq RETURN -1\n"));
@@ -373,7 +371,7 @@ struct descriptor1_N {
     }
 
     inline bool sendreply(const msg_t& msg) {
-        for(int i=0;i<peers;++i) {
+        for(int i = 0; i < peers; ++i) {
             msg_t _msg;
             _msg.copy(const_cast<msg_t&>(msg));
             zmq::message_t to(const_cast<char*>(transportIDs[i].c_str()), transportIDs[i].length()+1,0,0);
@@ -443,10 +441,10 @@ struct descriptorN_1 {
         
         if (!P) {
             std::stringstream identity;
-            for(int i=0;i<peers;++i) {
+            for(int i = 0; i < peers; ++i) {
                 identity.str("");
                 identity << name << ":" << i;
-                transportIDs[i]=identity.str();
+                transportIDs[i] = identity.str();
             }
         }
     }
@@ -466,15 +464,15 @@ struct descriptorN_1 {
      *  \param addr it is the ip address in the form 'ip/host:port'
      *  \param nodeId it is the node identifier in the range [0..inf[
      */
-    inline int init(const std::string& addr, const int nodeId=-1) {
+    inline int init(const std::string& addr, const int nodeId = -1) {
         if (!socket) return -1;
         
         if (P) {
             std::stringstream identity;
             identity.str("");
-            identity << name << ":" << ((nodeId!=-1)?nodeId:transport->getProcId());
+            identity << name << ":" << ((nodeId != -1) ? nodeId:transport->getProcId());
             // set durable identity. it must be set before connecting the socket
-            socket->setsockopt(ZMQ_IDENTITY, identity.str().c_str(), identity.str().length()+1);
+            socket->setsockopt(ZMQ_IDENTITY, identity.str().c_str(), identity.str().length() + 1);
             
             std::stringstream address;
             address.str("");
@@ -486,11 +484,11 @@ struct descriptorN_1 {
 #endif
         } else {
             int i;
-            if ((i=addr.find(":"))<0) {
+            if ((i = addr.find(":")) < 0) {
                 printf("init: ERROR wrong ip address format for %s\n",addr.c_str());
                 return -1;
-            }	    
-            int port = atoi((addr.substr(i+1)).c_str());
+            }
+            int port = atoi((addr.substr(i + 1)).c_str());
             std::stringstream address;
             address << "tcp://*:" << port;
             try {
@@ -511,7 +509,7 @@ struct descriptorN_1 {
      *  Send a message.
      *
      *  \param msg eference to the message to be sent
-     *  \param flags a flag indcating whether the operation should be in 
+     *  \param flags a flag indicating whether the operation should be in 
      *  non-blocking mode or if the message is a multi-part message.
      *  See <a href="http://api.zeromq.org/2-1:_start"> ØMQ's API </a> for details.
      */
@@ -532,13 +530,13 @@ struct descriptorN_1 {
                 zmqTDBG(printf("recvhdr RETURN -1\n"));
                 return false;
             }
-            const std::string & f=static_cast<char*>(from.data());
+            const std::string & f = static_cast<char*>(from.data());
             int i;
-            if ((i=f.find(":"))<0) {
+            if ((i = f.find(":")) < 0) {
                 printf("recvhdr: ERROR: wrong header\n");
                 return false;
-            }	    
-            peer = atoi((f.substr(i+1)).c_str());
+            }
+            peer = atoi((f.substr(i + 1)).c_str());
             recvHdr = false;
             if(!socket->recv(&msg)) { 
                 zmqTDBG(printf("recvhdr RETURN -1\n"));
@@ -562,11 +560,11 @@ struct descriptorN_1 {
                 
                 const std::string & f=static_cast<char*>(from.data());
                 int i;
-                if ((i=f.find(":"))<0) {
+                if ((i = f.find(":")) < 0) {
                     printf("recvhdr: ERROR: wrong header\n");
                     return false;
-                    }	    
-                peer = atoi((f.substr(i+1)).c_str());
+                    }
+                peer = atoi((f.substr(i + 1)).c_str());
             }
             
             if(!socket->recv(&msg)) { 
@@ -596,8 +594,8 @@ struct descriptorN_1 {
     inline bool done(bool sendready=false) {
         if (sendready) {
             static const char ready[] = "READY";	
-            for(int i=0;i<peers;++i) {
-                msg_t msg(ready,6);
+            for(int i = 0; i < peers; ++i) {
+                msg_t msg(ready, 6);
                 zmq::message_t to(const_cast<char*>(transportIDs[i].c_str()), transportIDs[i].length()+1,0,0);
                 try {
                     if (!socket->send(to,ZMQ_SNDMORE)) return false;
@@ -624,10 +622,10 @@ struct descriptorN_1 {
     
 #if defined(CONNECTION_PROTOCOL)
     inline void sendHelloRecvHi() {
-        const char hello[] = "HELLO";	
+        const char hello[] = "HELLO";
         // sending Hello
         zmqTDBG(printf("%s sending HELLO\n", name.c_str()));
-        zmqTransportMsg_t req(hello,6);
+        zmqTransportMsg_t req(hello, 6);
         send(req);
         // receive Hi
         zmqTransportMsg_t msg;
@@ -648,7 +646,7 @@ struct descriptorN_1 {
     }
     
     inline bool sendreply(const msg_t& msg) {
-        for(int i=0;i<peers;++i) {
+        for(int i = 0; i < peers; ++i) {
             msg_t _msg;
             _msg.copy(const_cast<msg_t&>(msg));
             zmq::message_t to(const_cast<char*>(transportIDs[i].c_str()), transportIDs[i].length()+1,0,0);
@@ -666,7 +664,7 @@ struct descriptorN_1 {
         static const char hi[] = "HI"; // need to be static
         // receives Hello and sends Hi
         int useless;
-        for(int i=0;i<peers;++i) {
+        for(int i = 0; i < peers; ++i) {
             zmqTransportMsg_t req;
             recv(req,useless);
             zmqTDBG(printf("%s received %s\n",name.c_str(), static_cast<char*>(req.getData())));
@@ -704,7 +702,7 @@ public:
     typedef descriptor1_N      descriptor;      ///< descriptor used in Unicast, Bcast, Scatter,
                                                 ///< On-Demand, OneToMany
 
-    enum {MULTIPUT=0 };
+    enum {MULTIPUT = 0};
 
     /** Constructor */
     zmq1_1():desc(NULL),active(false) {}
@@ -766,7 +764,7 @@ public:
     inline bool close() { 
         if (!active) return false;
         if (!desc->close()) return false;
-        active=false;
+        active = false;
         return true;
     }
 
@@ -802,7 +800,7 @@ public:
     typedef descriptor1_N      descriptor;      ///< descriptor used in Unicast, Bcast, Scatter,
                                                 ///< On-Demand, OneToMany
 
-    enum {MULTIPUT=0 };
+    enum {MULTIPUT = 0};
 
     /** Constructor */
     zmqBcast():desc(NULL),active(false) {}
@@ -907,13 +905,13 @@ public:
     typedef svector<msg_t>     torecv_t;
     typedef descriptorN_1      descriptor;
 
-    enum {MULTIPUT=0 };
+    enum {MULTIPUT = 0};
 
     zmqAllGather():desc(NULL),active(false) {}
     zmqAllGather(descriptor* D):desc(D),active(false) {}
     
     // sets the descriptor
-    inline void setDescriptor(descriptor* D) { 
+    inline void setDescriptor(descriptor* D) {
         if (desc)  desc->close(); 
         desc = D; 
     }
@@ -949,17 +947,19 @@ public:
     inline bool gethdr(msg_t& msg, int& peer) { 
         return desc->recvhdr(msg, peer);
     }
+
     // receives one message ONLY from one peer (gethdr should be called before)
     inline bool get(msg_t& msg, int& peer) {
         return desc->recv(msg,peer);
     }
+
     // receives one message
     inline bool get(torecv_t& msg) { 
-        const int peers=desc->getPeers();
+        const int peers = desc->getPeers();
         int useless;
         msg.resize(peers);
-        for(int i=0;i<peers;++i)
-            if (!desc->recv(msg[i],useless)) return false;        
+        for(int i = 0; i < peers; ++i)
+            if (!desc->recv(msg[i], useless)) return false;
         done();
         return true;
     }
@@ -1010,7 +1010,7 @@ public:
     typedef msg_t              torecv_t;
     typedef descriptorN_1      descriptor;
 
-    enum {MULTIPUT=0 };
+    enum {MULTIPUT = 0};
 
     zmqFromAny():desc(NULL),active(false) {}
     zmqFromAny(descriptor* D):desc(D),active(false) {}
@@ -1057,9 +1057,10 @@ public:
     inline bool get(msg_t& msg, int& peer) { 
         return desc->recv(msg,peer);
     }
+
     // receives one message
     inline bool get(msg_t& msg) { 
-        int useless=0;
+        int useless = 0;
         return desc->recv(msg,useless);
     }
 
@@ -1073,7 +1074,7 @@ public:
     inline bool close() { 
         if (!active) return false;
         if (!desc->close()) return false;
-        active=false;
+        active = false;
         return true;
     }
         
@@ -1097,7 +1098,7 @@ protected:
 /*!
  *  \class zmqScatter
  *
- *  \brief ZeroMQ implementation of the SCATTER communication patter
+ *  \brief ZeroMQ implementation of the SCATTER communication pattern
  */
 class zmqScatter {
 public:
@@ -1107,15 +1108,15 @@ public:
     typedef msg_t              torecv_t;
     typedef descriptor1_N      descriptor;
 
-    enum {MULTIPUT=1 };
+    enum {MULTIPUT = 1};
 
     zmqScatter():desc(NULL),active(false) {}
     zmqScatter(descriptor* D):desc(D),active(false) {}
 
     // sets the descriptor
     inline void setDescriptor(descriptor* D) { 
-        if (desc)  desc->close(); 
-        desc = D; 
+        if (desc) desc->close(); 
+        desc = D;
     }
 
     // returns the descriptor
@@ -1130,9 +1131,9 @@ public:
 
     // sends one message 
     inline bool put(const tosend_t& msg) { 
-        const int peers=desc->getPeers();
+        const int peers = desc->getPeers();
         assert(msg.size()==(size_t)peers);
-        for(int i=0;i<peers;++i) 
+        for(int i = 0; i < peers; ++i) 
             if (!desc->send(msg[i], i, 0)) return false;
         return true;
     }
@@ -1169,7 +1170,7 @@ public:
     inline bool close() { 
         if (!active) return false;
         if (!desc->close()) return false;
-        active=false;
+        active = false;
         return true;
     }
 
@@ -1203,7 +1204,7 @@ protected:
         static const char ready[] = "R";
         msg_t request(ready,2);
         if (!desc->sendReq(request)) return false;
-        requestSent=true;
+        requestSent = true;
         return true;
     }
 
@@ -1214,14 +1215,14 @@ public:
     typedef msg_t              torecv_t;
     typedef descriptor1_N      descriptor;
 
-    enum {MULTIPUT=0 };
+    enum {MULTIPUT = 0};
 
     zmqOnDemand():desc(NULL),active(false),to(-1),requestsToWait(0),requestSent(false) {}
     zmqOnDemand(descriptor* D):desc(D),active(false),to(-1),requestsToWait(0),requestSent(false) {}
 
     // sets the descriptor
     inline void setDescriptor(descriptor* D) { 
-        if (desc)  desc->close(); 
+        if (desc) desc->close(); 
         desc = D; 
     }
 
@@ -1237,7 +1238,7 @@ public:
         }
 
         To.resize(desc->getPeers());
-        for(int i=0;i<desc->getPeers();++i) To[i]=false;
+        for(int i = 0; i < desc->getPeers(); ++i) To[i] = false;
 
         return active;
     }

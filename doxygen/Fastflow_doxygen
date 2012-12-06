@@ -38,7 +38,7 @@ PROJECT_NUMBER         = 2.0.0
 # for a project that appears at the top of each page and should give viewer
 # a quick idea about the purpose of the project. Keep the description short.
 
-PROJECT_BRIEF          = "a non-blocking parallel programming framework for shared-memory multi-core platforms."
+PROJECT_BRIEF          = "A non-blocking, high-level parallel programming framework for shared-memory and distributed-memory multi-core platforms."
 
 # With the PROJECT_LOGO tag one can specify an logo or icon that is
 # included in the documentation. The maximum height of the logo should not
