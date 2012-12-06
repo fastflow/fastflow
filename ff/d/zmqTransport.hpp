@@ -1,43 +1,40 @@
-/* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*-
+ * */
 /* ***************************************************************************
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU Lesser General Public License version 3 as 
- *  published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License version 3 as
+ * published by the Free Software Foundation.
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU Lesser General Public License for more details.
+ *  This program is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
+ *  License for more details.
  *
  *  You should have received a copy of the GNU Lesser General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *  along with this program; if not, write to the Free Software Foundation,
+ *  Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  *
  ****************************************************************************
  */
  
- /*!
- *  \file zmqTransport.hpp
- *  \brief Definition of the external transport layer based on ØMQ
+ /*! \file zmqTransport.hpp \brief Definition of the external transport layer
+  * based on ØMQ
  */
 
-#ifndef _FF_ZMQTRANSPORT_HPP_
+#ifndef _FF_ZMQTRANSPORT_HPP_ 
 #define _FF_ZMQTRANSPORT_HPP_
 
 // TODO: better management of error (and exception) conditions.
-//
-//
 
 // NOTE: from 0mq manuals (http://zguide.zeromq.org/)
 //   
-//   You MUST NOT share ØMQ sockets between threads. 
-//   ØMQ sockets are not threadsafe. Technically it's possible to do 
-//   this, but it demands semaphores, locks, or mutexes. This will make 
-//   your application slow and fragile. The only place where it's 
-//   remotely sane to share sockets between threads are in language 
-//   bindings that need to do magic like garbage collection on sockets.
-//
+//   You MUST NOT share ØMQ sockets between threads. ØMQ sockets are not
+//   threadsafe. Technically it's possible to do this, but it demands
+//   semaphores, locks, or mutexes. This will make your application slow and
+//   fragile. The only place where it's remotely sane to share sockets
+//   between threads are in language bindings that need to do magic like
+//   garbage collection on sockets.
 
 #include <assert.h>
 #include <deque>
@@ -46,23 +43,21 @@
 #include <zmq.hpp>
 
 namespace ff {
-/*!
- *  \ingroup zmq_runtime
+/*! \ingroup zmq_runtime
  *
  *  @{
  */
  
-/*!
- * \class zmqTransportMsg_t
+/*! \class zmqTransportMsg_t
  *
- * \brief The structure of a ØMQ message.
+ * \brief The structure of a ØMQ transport message.
  *
- * This class describes the layout of a message used for inter-thread 
- * communications, inter-process communications, TCP/IP and multicast 
- * sockets in a distrubuted system running on FastFlow.
+ * This class describes the layout of a message used for inter-thread
+ * communications, inter-process communications, TCP/IP and multicast sockets
+ * in a distrubuted system running on FastFlow.
  */
 
-class zmqTransportMsg_t: public zmq::message_t {    
+class zmqTransportMsg_t: public zmq::message_t {
 public:
     // callback definition 
     typedef void (msg_callback_t) (void *, void *);
@@ -78,16 +73,15 @@ public:
     /** 
      * Default constructor (2): create a structured ØMQ message.
      *
-     * \param data the content of the message
-     * \param size memory to be allocated for the message
-     * \param cb   a callback function
-     * \param arg  additional arguments.   
+     * \param data has the content of the message
+     * \param size is the amount of memory to be allocated for the message
+     * \param cb is the callback function
+     * \param arg has additional arguments.   
      */
     inline zmqTransportMsg_t( const void * data, size_t size, 
                               msg_callback_t cb=0, void * arg=0 ) :
                               zmq::message_t( const_cast<void*>(data), size, cb, arg ) 
                               { }
-
 
     /**
      * Initialise the message object (like the constructor but 
@@ -131,14 +125,14 @@ public:
  *  @{
  */
 
-/*!
- * \class zmqTransport
+/*! \class zmqTransport
  *
  * \brief The transport layer
  *
- * This class describes the transport layer used in a distributed
- * FastFlow environment.
+ * This class describes the transport layer used in a distributed FastFlow
+ * environment.
  */
+
 class zmqTransport {
 private:
     enum {NUM_IO_THREADS=1};
@@ -148,12 +142,12 @@ protected:
     /** Closes all existing connections */
     inline int closeConnections() {
         //
-        // WARNING: Instead of setting a longer period of some minutes, 
-        // it would be better to implement a shoutdown protocol and to set 
-        // the longer period to 0.
+        // WARNING: Instead of setting a longer period of some minutes, it
+        // would be better to implement a shoutdown protocol and to set the
+        // longer period to 0.
         //
         int zero = 1000000; //milliseconds 
-        for(unsigned i=0;i<Socks.size();++i) {
+        for(unsigned i = 0; i < Socks.size(); ++i) {
             if (Socks[i]) { 
                 Socks[i]->setsockopt(ZMQ_LINGER, &zero, sizeof(zero));
                 Socks[i]->close();
@@ -194,9 +188,8 @@ public:
         return 0;
     }
     
-    /**
-     * Close the transport layer, close all connections to any
-     * active end-point and delete the existing context.
+    /** Close the transport layer, close all connections to any active
+     * end-point and delete the existing context.
      *
      * \returns 0 if successful
      */
@@ -206,13 +199,13 @@ public:
         return 0;
     }
 
-    /**
-     * Create a new socket and push it into the active sockets list.
+    /** Create a new socket and push it into the active sockets list.
      *
-     * \param P flag specifying the role of the socket: if \p false, the new socket 
-     * acts as a \p ROUTER (allows routing of messages to specific connections); 
-     * if \p true the new socket acts as a \p DEALER (used for fair-queuing on 
-     * input and for performing load-balancing on output toward a pool of collections).
+     * \param P flag specifying the role of the socket: if \p false, the new
+     * socket acts as a \p ROUTER (allows routing of messages to specific
+     * connections); if \p true the new socket acts as a \p DEALER (used for
+     * fair-queuing on input and for performing load-balancing on output toward
+     * a pool of collections).
      *
      * \returns a pointer to the newly created endpoint.
      */
@@ -223,9 +216,8 @@ public:
         return s;
     }
     
-    /**
-     * Delete the socket pointed by \p s. It removes the socket from
-     * the list of active sockets and destroys the socket.
+    /** Delete the socket pointed by \p s. It removes the socket from the list
+     * of active sockets and destroys the socket.
      *
      * \param s a pointer to the socket to be deleted
      * 
@@ -249,6 +241,9 @@ public:
         return -1;
     }
 
+    /** return the process (or thread) ID
+     *
+     */
     const int getProcId() const { return procId;}
 
 protected:
