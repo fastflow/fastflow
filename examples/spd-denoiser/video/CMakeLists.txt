@@ -15,7 +15,14 @@ include_directories (
 
 FIND_PACKAGE( OpenCV )
 
-if(OpenCV_FOUND)
+FIND_FILE (HIGHGUI "opencv/highgui.h" PATHS "/usr/include"
+"/opt/local/include" "$ENV{INCLUDE}" DOC "-- Checking for highgui.h" )
+
+if (${HIGHGUI} MATCHES "HIGHGUI-NOTFOUND")
+   message (WARNING "OpenCV highgui.h not found")
+endif (${HIGHGUI} MATCHES "HIGHGUI-NOTFOUND")
+
+if ((OpenCV_FOUND) AND NOT (${HIGHGUI} MATCHES "HIGHGUI-NOTFOUND"))
   #message(STATUS "Using ${OpenCV_LIBS}")
   add_executable (tctfb_ff ${TCTFB_SRCS})
   set_target_properties (tctfb_ff PROPERTIES COMPILE_DEFINITIONS "TIME;SEQ_DETECTION")
@@ -42,6 +49,6 @@ if(OpenCV_FOUND)
   else(CUDA_FOUND)
     message (WARNING " CUDA not found: can't configure CUDA-enabled tctfb (video denoiser)")
   endif(CUDA_FOUND)
-else(OpenCV_FOUND)
-  message (WARNING " OpenCV not found: can't configure tctfb (video denoiser)")
-endif(OpenCV_FOUND)
+else ((OpenCV_FOUND) AND NOT (${HIGHGUI} MATCHES "HIGHGUI-NOTFOUND"))
+  message (WARNING " OpenCV or opencv/highgui.h not found: can't configure tctfb (video denoiser)")
+endif  ((OpenCV_FOUND) AND NOT (${HIGHGUI} MATCHES "HIGHGUI-NOTFOUND"))
