@@ -26,14 +26,16 @@ March 2011 - Ver 0: Basic functional port, tested on Win 7 x64 - Performance not
 */
 
 #pragma once
-
-#include <windows.h>
+#include <Windows.h>
+#include <WinBase.h>
 #include <process.h>
 #include <intrin.h>
 #include <stdio.h>
 //#include <stdint.h>
 #include <errno.h>
 #include <time.h>
+
+
 
 #define INLINE __forceinline
 #define NOINLINE __declspec(noinline)
@@ -101,6 +103,7 @@ INLINE int pthread_setcancelstate(int state, int *oldstate) {
 	return(0);
 }
 
+// This requires #define _WIN32_WINNT 0x0403 to be stated as C++ preprocessor option (-D_WIN32_WINNT=0x0403)
 INLINE int pthread_mutex_init(pthread_mutex_t  RESTRICT * mutex,
 	const pthread_mutexattr_t RESTRICT  * attr) {
 	if (attr) return(EINVAL);
