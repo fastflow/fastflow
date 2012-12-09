@@ -15,7 +15,7 @@ include_directories (
 
 FIND_PACKAGE( OpenCV )
 
-FIND_FILE (HIGHGUI "opencv/highgui.h" PATHS "/usr/include"
+FIND_FILE (HIGHGUI "opencv/highgui.h" PATHS "${OpenCV_CONFIG_PATH}/include" "/usr/include"
 "/opt/local/include" "$ENV{INCLUDE}" DOC "-- Checking for highgui.h" )
 
 if (${HIGHGUI} MATCHES "HIGHGUI-NOTFOUND")

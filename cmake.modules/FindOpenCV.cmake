@@ -7,12 +7,19 @@
 # if cannot be found just fails. OpenCV webpage cmake simply does not work
 ##----------------------------------------------------------
 
-find_path(OpenCV_DIR OpenCVConfig.cmake HINTS /usr/share/opencv/ /opt/local/lib/cmake DOC "Root directory of OpenCV")
+IF(DEFINED ENV{OpenCV_DIR})
+  SET(OpenCV_DIR $ENV{OpenCV_DIR})
+  MESSAGE(STATUS "OpenCV_DIR read from environment: ${OpenCV_DIR}")
+ELSE()
+find_path(OpenCV_DIR "OpenCVConfig.cmake" HINTS /usr/share/opencv/ /opt/local/lib/cmake /opencv/build DOC "Root directory of OpenCV") 
+  message(STATUS "Looking for OpenCVConfig.cmake, found in: ${OpenCV_DIR}")
+ENDIF()
+
 
 ##====================================================
 ## Find OpenCV libraries
 ##----------------------------------------------------
-	  message(STATUS "OpenCV_DIR is ${OpenCV_DIR}")
+	
 if(EXISTS "${OpenCV_DIR}/OpenCVConfig.cmake")
           ## Include the standard CMake script
           include("${OpenCV_DIR}/OpenCVConfig.cmake")
@@ -20,9 +27,16 @@ if(EXISTS "${OpenCV_DIR}/OpenCVConfig.cmake")
 	  ## Search for a specific version
           set(CVLIB_SUFFIX "${OpenCV_VERSION_MAJOR}${OpenCV_VERSION_MINOR}${OpenCV_VERSION_PATCH}")
           set(OpenCV_FOUND true)
+elseif(EXISTS "${OpenCV_DIR}/share/OpenCV/OpenCVConfig.cmake")
+	  ## Include the standard CMake script
+          include("${OpenCV_DIR}/share/OpenCV/OpenCVConfig.cmake")
+	  message(STATUS "Found OpenCVConfig.cmake in ${OpenCV_DIR}/share/OpenCV (found version ${OpenCV_VERSION})")  
+	  ## Search for a specific version
+          set(CVLIB_SUFFIX "${OpenCV_VERSION_MAJOR}${OpenCV_VERSION_MINOR}${OpenCV_VERSION_PATCH}")
+          set(OpenCV_FOUND true)
 #Otherwise fails.
-else(EXISTS "${OpenCV_DIR}/OpenCVConfig.cmake")
-	  set(OpenCV_FOUND false)
+else()
+	set(OpenCV_FOUND false)
 endif(EXISTS "${OpenCV_DIR}/OpenCVConfig.cmake")
     
 ##----------------------------------------------------
@@ -33,7 +47,6 @@ if(NOT OpenCV_FOUND)
                         message(FATAL_ERROR "OpenCV required but some headers or libs not found. ${ERR_MSG}")
                 else(OpenCV_FIND_REQUIRED)
                         message(STATUS "WARNING: OpenCV was not found. ${ERR_MSG}")
-			message(STATUS "Try: cmake -D OpenCV_DIR=your-path-to-opencv")
                 endif(OpenCV_FIND_REQUIRED)
         endif(NOT OpenCV_FIND_QUIETLY)
 endif(NOT OpenCV_FOUND)
