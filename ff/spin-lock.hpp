@@ -127,13 +127,25 @@ ALIGN_TO_PRE(CACHE_LINE_SIZE) struct CLHSpinLock {
     volatile ALIGN_TO_PRE(CACHE_LINE_SIZE) CLHLockNode *MyNode[MAX_NUM_THREADS] ALIGN_TO_POST(CACHE_LINE_SIZE);
     volatile ALIGN_TO_PRE(CACHE_LINE_SIZE) CLHLockNode *MyPred[MAX_NUM_THREADS] ALIGN_TO_POST(CACHE_LINE_SIZE);
 
-    void init() {
+    CLHSpinLock():Tail(NULL) {
+        for (int j = 0; j < MAX_NUM_THREADS; j++) {
+            MyNode[j] = NULL;
+            MyPred[j] = NULL;
+        }
+    }
+    ~CLHSpinLock() {
+        if (Tail) freeAlignedMemory((void*)Tail);
+        for (int j = 0; j < MAX_NUM_THREADS; j++) 
+            if (MyNode[j]) freeAlignedMemory((void*)(MyNode[j]));
+    }
+    int init() {
+        if (Tail != NULL) return -1;
         Tail = (CLHLockNode*)getAlignedMemory(CACHE_LINE_SIZE, sizeof(CLHLockNode));
         Tail->locked = false;
-        for (int j = 0; j < MAX_NUM_THREADS; j++) {
+        for (int j = 0; j < MAX_NUM_THREADS; j++) 
             MyNode[j] = (CLHLockNode*)getAlignedMemory(CACHE_LINE_SIZE, sizeof(CLHLockNode));
-            MyPred[j] = NULL;
-        }	
+        
+        return 0;
     }
 
 	// FIX

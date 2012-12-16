@@ -694,8 +694,11 @@ private:
         }        
         void * svc(void * task) {
             if (E_f) task = E_f->svc(task);
+            // FT: I comment this out because the compiler does not know 
+            // how to compare 'task' to 'FF_EOS'
+            // if (task == FF_EOS) return task;
             ff_send_out(task);
-            nextone=(nextone+1) % nworkers;
+            nextone = (nextone+1) % nworkers;
             lb->set_victim(nextone);
             return GO_ON;
         }        
@@ -757,8 +760,9 @@ public:
             int in_buffer_entries=DEF_IN_BUFF_ENTRIES, 
             int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
             bool worker_cleanup=false,
-            int max_num_workers=DEF_MAX_NUM_WORKERS):
-        ff_farm<ofarm_lb,ofarm_gt>(input_ch,in_buffer_entries,out_buffer_entries,worker_cleanup,max_num_workers),E(NULL),C(NULL),E_f(NULL),C_f(NULL) {
+            int max_num_workers=DEF_MAX_NUM_WORKERS,
+            bool fixedsize=false):  // NOTE: by default all the internal farm queues are unbounded !
+        ff_farm<ofarm_lb,ofarm_gt>(input_ch,in_buffer_entries,out_buffer_entries,worker_cleanup,max_num_workers,fixedsize),E(NULL),C(NULL),E_f(NULL),C_f(NULL) {
         E = new ofarmE(this->getlb());
         C = new ofarmC(this->getgt());
         this->add_emitter(E);
