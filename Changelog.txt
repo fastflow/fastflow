@@ -1,4 +1,6 @@
 * 04/07/12 - v.2.0.0
+   - fixed compilation ploblems on Windows 7 64bit using Visual Studio 10
+     (cmake -G "Visual Studio 10 Win64" ...)
    - added class ff_dinout that allows to have a single dnode with both
      input and output external channels.
    - added the class ff_ofarm to implement the ordered farm template
