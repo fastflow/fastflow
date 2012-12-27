@@ -1,3 +1,11 @@
+* 23/12/12 - v.2.0.0
+   - Distributed version ported and tested on Win7 64-bit.
+   - little fix on allocator.hpp, freesegment now release aligned memory 
+     to avoid stack corruption on Win platform that requires symmetric 
+	 primitives for aligned memory allocation and deallocation.
+   - Winsock.h (windows.h) and winsock2.h incompatbility issue partially resolved.
+     <ff/dnode.h> should be included before other includes to avoid the problem. It
+	 includes winsock2.h that is required by zeromq.  
 * 04/07/12 - v.2.0.0
    - fixed compilation ploblems on Windows 7 64bit using Visual Studio 10
      (cmake -G "Visual Studio 10 Win64" ...)

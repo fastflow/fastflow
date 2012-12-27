@@ -694,9 +694,7 @@ private:
         }        
         void * svc(void * task) {
             if (E_f) task = E_f->svc(task);
-            // FT: I comment this out because the compiler does not know 
-            // how to compare 'task' to 'FF_EOS'
-            // if (task == FF_EOS) return task;
+            if (task == (void*)FF_EOS) return task;
             ff_send_out(task);
             nextone = (nextone+1) % nworkers;
             lb->set_victim(nextone);

@@ -256,8 +256,9 @@ public:
      */
     void   freesegment(void * ptr, size_t segment_size) { 
         DBG(assert(memory_allocated >=segment_size));
-        ::free(ptr);
-        
+        //::free(ptr);
+        freeAlignedMemory(ptr);
+
         memory_allocated -= segment_size;
         ALLSTATS( atomic_long_inc(&all_stats::instance()->segfree); 
               atomic_long_add(segment_size, &all_stats::instance()->memfreed) );
@@ -368,12 +369,12 @@ struct xThreadData {
     }
 
     ~xThreadData() { 
-        if (leak) { leak->~uSWSR_Ptr_Buffer(); ::free(leak);}
+		if (leak) { leak->~uSWSR_Ptr_Buffer(); freeAlignedMemory(leak); } // free(leak)
     }
     
     uSWSR_Ptr_Buffer      * leak;   //  
     const pthread_t    key;         // used to identify a thread (threadID)
-    long padding[longxCacheLine-2]; // 
+    long padding[longxCacheLine-((sizeof(const pthread_t)+sizeof(uSWSR_Ptr_Buffer*))/sizeof(long))]; // 
 };
 
 /*!
@@ -566,7 +567,7 @@ private:
         for(register unsigned i=2;i<fb_size;++i) {
             fb[i]->leak->pop(&b.ptr); 
             DBG(assert(b.ptr));
-            checkReclaimD(getsegctl(b.buf)); //FT: I get a lot of warnings here!
+            checkReclaimD(getsegctl(b.buf)); 
         }
 
         fb[1]->leak->pop(&b.ptr);  
@@ -1735,6 +1736,7 @@ static inline void killMyself(ffa_wrapper * ptr) {
 }
 
 
+// Static functions below are not documented, but their usage is quite obvious
 static inline void * ff_malloc(size_t size) {
     return FFAllocator::instance()->malloc(size);
 }

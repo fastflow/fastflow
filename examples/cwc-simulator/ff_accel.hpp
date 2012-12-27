@@ -26,14 +26,15 @@
 //#include "statistics.hpp"
 #include <ff_definitions.hpp>
 #include "utils.h"
+#include <ff/platforms/platform.h>
 #include <ff/farm.hpp>
 #include <ff/mapping_utils.hpp>
 /*
 #include <ff/node.hpp>
 #include <ff/lb.hpp>
 */
-#include <sys/time.h>
-#include <sys/resource.h>
+//#include <sys/time.h>
+//#include <sys/resource.h>
 
 using namespace ff;
 using namespace std;

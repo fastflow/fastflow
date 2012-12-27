@@ -218,7 +218,7 @@ int validate_parameters(cwc_parameters_t &p) {
 
 #ifdef USE_FF_ACCEL
   if(0.01 * p.p_inflight * p.n_simulations < p.n_workers)
-    p.p_inflight = (int)std::min(99.0, 100.0 * std::ceil((float)p.n_workers / p.n_simulations));
+    p.p_inflight = (int)(std::min)(99.0, 100.0 * ceil((float)p.n_workers / p.n_simulations));
 #endif
 
   return 1;

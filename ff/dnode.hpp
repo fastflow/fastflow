@@ -25,9 +25,19 @@
  ****************************************************************************
  */
 
-#include <sys/uio.h>
+//#include <sys/uio.h>
+
+#if defined(_WIN32)
+#include <WinSock2.h>
+#endif
+
 #include <stdint.h>
 #include <cstdlib>
+#include <vector>
+#include <ff/platforms/platform.h>
+#if !defined(_WIN32)
+ #include <sys/uio.h>
+#endif
 #include <ff/d/zmqTransport.hpp>
 #include <ff/d/zmqImpl.hpp>
 #include <ff/node.hpp>
@@ -158,13 +168,17 @@ protected:
 
         // gets the peers involved in one single communication
         const int sendingPeers=com.getToWait();
-
+#ifdef _WIN32
+		svector<msg_t*> ** v = (svector<msg_t*> **) malloc(sendingPeers*sizeof(svector<msg_t*> *));
+#else // C99
         svector<msg_t*>* v[sendingPeers];
+#endif
         for(int i=0;i<sendingPeers;++i) {
             msg_t hdr;
             int sender=-1;
             if (!com.gethdr(hdr, sender)) {
                 error("dnode:pop: ERROR: receiving header from peer");
+				// free (v); // Win
                 return false;
             }
             if (isEos(static_cast<char *>(hdr.getData()))) {
@@ -173,6 +187,7 @@ protected:
                     com.done();
                     *ptr = (void*)FF_EOS;
                     neos=0;
+					// free (v) // Win
                     return true;
                 }
                 if (sendingPeers==1) i=-1; // reset for index
@@ -186,12 +201,14 @@ protected:
             for(size_t j=0;j<len;++j)
                 if (!com.get(*(v[ventry]->operator[](j)),sender)) {
                     error("dnode:pop: ERROR: receiving data from peer");
+					// free (v) // Win32
                     return false;
                 }
         }
         com.done();
         
         unmarshalling(v, sendingPeers, *ptr);
+		// free (v) // Win32
         return true;
     } 
     

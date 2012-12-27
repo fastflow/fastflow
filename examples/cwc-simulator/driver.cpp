@@ -7,6 +7,10 @@
 #include <math.h>
 using namespace std;
 
+#ifdef USE_FF_DISTR
+#include <ff_distributed.hpp>
+#endif
+
 #include <ff/pipeline.hpp>
 #ifdef USE_STAT_ACCEL
 #include <ff_stat_accel.hpp>
@@ -16,9 +20,7 @@ using namespace ff;
 #include <Driver.h>
 #include <Monitor.h>
 #include <ff_nodes.hpp>
-#ifdef USE_FF_DISTR
-#include <ff_distributed.hpp>
-#endif
+
 
 #include <utils.h>
 

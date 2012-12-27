@@ -22,22 +22,24 @@
 #include <algorithm>
 using namespace std;
 
+#include <ff/node.hpp>
+#include <ff/mapping_utils.hpp>
+
 #include <random.h>
 #include <Driver.h>
 #include <Simulation.h>
 #include <parameters.hpp>
 #include <ff_definitions.hpp>
 #include <utils.h>
-#include <sys/time.h>
-#include <sys/resource.h>
+//#include <sys/time.h>
+//#include <sys/resource.h>
 #ifdef USE_FF_ACCEL
 #include <ff_accel.hpp>
 #endif
 #include <ProgressBars.hpp>
 #include "statistics.hpp"
 
-#include <ff/node.hpp>
-#include <ff/mapping_utils.hpp>
+
 using namespace ff;
 
 /*
@@ -85,13 +87,15 @@ public:
     for(unsigned int i=0; i<n_simulations; i++) {
       int sim_seed = seed_vg(); //get a seed
       Simulation *fsp;
-      MYNEW(fsp, Simulation, i, *driver.model, sim_seed
 #ifdef HYBRID
-	    , param.rate_cutoff
+	  MYNEW(fsp, Simulation, i, *driver.model, sim_seed
+		, param.rate_cutoff
 	    , param.population_cutoff
-	    , param.sampling_period
+	    , param.sampling_period);
+#else
+	  MYNEW(fsp, Simulation, i, *driver.model, sim_seed);
 #endif
-	    );
+	 
       p = MALLOC(sizeof(simulation_task_t));
       tasks->at(i) = new (p) simulation_task_t(fsp);
     }

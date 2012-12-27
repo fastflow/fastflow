@@ -24,3 +24,19 @@ New ideas and features:
 - blocking run-time (using mutex) for coarse-grain applications 
 
 Massimo Torquati
+
+
+Windows version:
+
+- Currently tested only on Windows 7 Visual Studio 10 Win64
+- Automatic pinning currently not enabled. Thread id should be made coherent with 1..n Linux vision.
+- ZeroMQ is not always automatically detected, install location should be passed to cmake, e.g.
+
+cmake -G"Visual Studio 10 Win64" -DZEROMQ_ROOT="C:\Program Files\ZeroMQ 2.2.0" ..
+
+- Distributed version has not been extensively tested.
+- Winsock.h (windows.h) and winsock2.h conflict issue partially solved.
+  <ff/dnode.h> should be included before other includes to avoid the problem. 
+  It includes winsock2.h that is required by zeromq.  
+- opencv and zeromq apparently cannot be mixed. Opencv requires winsock.h, zeromq winsock2.h. 
+Marco Aldinucci

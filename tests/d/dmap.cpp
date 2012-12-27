@@ -28,8 +28,11 @@
  *  Distributed map example.
  *
  */
+
 #include <map>
+#ifdef __linux
 #include <sys/uio.h>
+#endif
 #include <assert.h>
 #include <cstdlib>
 #include <iostream>
@@ -37,9 +40,11 @@
 #include <stdint.h>
 #include <math.h>
 
+// On win dnode.h should be included as first header to ensure winsock2.h comes before windows.h
+// ZMQ requires winsock2.h and conflicts with windows.h
+#include <ff/dnode.hpp>
 #include <ff/node.hpp>
 #include <ff/svector.hpp>
-#include <ff/dnode.hpp>
 #include <ff/pipeline.hpp>
 #include <ff/d/inter.hpp>
 #include <ff/d/zmqTransport.hpp>
@@ -233,7 +238,7 @@ public:
 	const unsigned numRows=_t->numRows;
 	
 	//printf("Worker: get one task, numRows=%d\n", numRows);
-	bzero(myt,matSize*matSize*sizeof(double));	
+	memset(myt,0,matSize*matSize*sizeof(double));	
 	for(unsigned i=0;i<numRows;++i)
 	    for(unsigned j=0;j<matSize;++j)
 	  	for(unsigned k=0;k<numRows;++k)

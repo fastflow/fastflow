@@ -50,7 +50,9 @@ if (CMAKE_SYSTEM_NAME MATCHES "Windows")
   if(CMAKE_CL_64)
     message(STATUS "64-bit microsoft compiler found")
     ADD_DEFINITIONS(-D_WIN64)
+	ADD_DEFINITIONS(-D_AMD64_)
 	ADD_DEFINITIONS(-D_WIN32_WINNT=0x0403)
+	ADD_DEFINITIONS(-DNO_DEFAULT_MAPPING)
   else(CMAKE_CL_64)
     message(STATUS "32-bit microsoft compiler found") 
   endif(CMAKE_CL_64)
@@ -138,9 +140,9 @@ set(FFHEADERS_AT
     ${FF}/atomic/abstraction_dcas.h
   )
 set(FFHEADERS_D
-    ${FF}/platforms/inter.hpp
-	${FF}/platforms/zmqImpl.hpp
-	${FF}/platforms/zmqTranport.hpp
+    ${FF}/d/inter.hpp
+	${FF}/d/zmqImpl.hpp
+	${FF}/d/zmqTranport.hpp
   )
 
 set(FFHEADERS_PLAT

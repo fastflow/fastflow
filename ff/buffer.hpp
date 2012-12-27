@@ -122,7 +122,7 @@ public:
     /** Default destructor */
     ~SWSR_Ptr_Buffer() {
         // freeAlignedMemory is a function defined in 'sysdep.h'
-        freeAlignedMemory(buf);
+		freeAlignedMemory(buf);
 	}
     
     /** 

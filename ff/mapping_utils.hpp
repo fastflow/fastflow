@@ -215,7 +215,7 @@ static inline int ff_getMyCpu() {
 	#if __GNUC__
 	#warning "ff_getMyCpu not supported"
 	#else 
-	#pragma NOTE("ff_getMyCpu not supported")
+	#pragma message( "ff_getMyCpu not supported")
 	#endif
 #endif
 return -1;

@@ -48,8 +48,8 @@
  *
  */
 
-#include <ff/svector.hpp>
 #include <ff/dnode.hpp>
+#include <ff/svector.hpp>
 #include <ff/pipeline.hpp>
 #include <ff/d/inter.hpp>
 #include <ff/d/zmqTransport.hpp>
@@ -346,13 +346,14 @@ public:
       // create a simulation
       int sim_seed = sv[i]; // get from a vector of seeds
       Simulation *fsp;
-      MYNEW(fsp, Simulation, offset+i, *driver.model, sim_seed
 #ifdef HYBRID
-	    , rate_cutoff
-	    , population_cutoff
-	    , sampling_period
+	  MYNEW(fsp, Simulation, offset+i, *driver.model, sim_seed
+			  , rate_cutoff
+		    , population_cutoff
+			, sampling_period);
+#else
+	  MYNEW(fsp, Simulation, offset+i, *driver.model, sim_seed);
 #endif
-	    );
       p = MALLOC(sizeof(simulation_task_t));
       tasks->at(i) = new (p) simulation_task_t(fsp, offset);
     }

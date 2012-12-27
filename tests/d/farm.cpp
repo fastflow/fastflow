@@ -27,7 +27,10 @@
  *   COMM2, the server address is master:port2 (the address2 parameter)
  *
  */
+
+#ifdef __linux
 #include <sys/uio.h>
+#endif
 #include <assert.h>
 #include <cstdlib>
 #include <iostream>
@@ -35,9 +38,11 @@
 #include <stdint.h>
 #include <math.h>
 
+// On win dnode.h should be included as first header to ensure winsock2.h comes before windows.h
+// ZMQ requires winsock2.h and conflicts with windows.h
+#include <ff/dnode.hpp>
 #include <ff/node.hpp>
 #include <ff/svector.hpp>
-#include <ff/dnode.hpp>
 #include <ff/pipeline.hpp>
 #include <ff/d/inter.hpp>
 #include <ff/d/zmqTransport.hpp>
@@ -157,7 +162,7 @@ public:
 	double* t = (double*)task;
 	printf("Worker: get one task %d\n",++c);
 
-	bzero(myt,taskSize*taskSize*sizeof(double));
+	memset(myt,0,taskSize*taskSize*sizeof(double));
 	
 	for(unsigned i=0;i<taskSize;++i)
 	    for(unsigned j=0;j<taskSize;++j)
