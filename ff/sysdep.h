@@ -134,9 +134,12 @@ static inline void *getAlignedMemory(size_t align, size_t size) {
     // malloc should guarantee a sufficiently well aligned memory for any purpose.
 #if (defined(MAC_OS_X_VERSION_MIN_REQUIRED) && (MAC_OS_X_VERSION_MIN_REQUIRED < 1060))    
     ptr = ::malloc(size);
-#elif (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
-    ptr = ::malloc(size); // FIX ME
-#else
+#elif (defined(_WIN32)) // || defined(__INTEL_COMPILER)) && defined(_WIN32)
+	if (posix_memalign(&ptr,align,size)!=0)  // defined in platform.h
+		return NULL; 
+	// Fallback solution in case of strange segfaults on memory allocator
+    //ptr = ::malloc(size);
+#else // linux
     if (posix_memalign(&ptr,align,size)!=0)
         return NULL; 
 #endif
@@ -148,8 +151,10 @@ static inline void *getAlignedMemory(size_t align, size_t size) {
 }
 
 static inline void freeAlignedMemory(void* ptr) {
-#if defined(_MSC_VER)
-        if (ptr) ::posix_memalign_free(ptr);    
+#if defined(_WIN32)
+		if (ptr) posix_memalign_free(ptr); // defined in platform.h
+		// Fallback solution in case of strange segfaults
+		//::free(ptr);
 #else	
         if (ptr) ::free(ptr);
 #endif  

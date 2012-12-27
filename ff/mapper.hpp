@@ -76,8 +76,8 @@ public:
  
         mask = size-1;
         
-        for(size_t i=0;i<num_cores;++i) CList.push_back(i);
-        for(size_t i=num_cores,j=0; i<size;++i,j++) CList.push_back(j);
+        for(unsigned int i=0;i<num_cores;++i) CList.push_back(i);
+        for(unsigned int i=num_cores,j=0; i<size;++i,j++) CList.push_back(j);
         
         rrcnt=0;
     }
@@ -114,7 +114,7 @@ public:
             if (*_str == '\0')	break;
         } while (1);
 
-        unsigned long size=List.size();
+        size_t size=List.size();
         if (!isPowerOf2(size)) {
             size=nextPowerOf2(size);
             List.reserve(size);

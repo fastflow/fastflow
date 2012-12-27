@@ -54,17 +54,34 @@ namespace cwc_utils {
 #ifdef __linux
 #define RUSAGE_WHO RUSAGE_THREAD
 //#define RUSAGE_WHO RUSAGE_SELF
+#include <sys/time.h>
+#include <sys/resource.h>
 #else
 #define RUSAGE_WHO RUSAGE_SELF
 #endif
-#include <sys/time.h>
-#include <sys/resource.h>
 
+#ifdef __linux
 //get per-thread (if possible) elapsed time (ms) since s
 inline double get_time_from(double s, struct rusage &usage) {
   getrusage(RUSAGE_WHO, &usage);
   return (double)usage.ru_utime.tv_sec * 1e+03 + (double)usage.ru_utime.tv_usec * 1e-03 - s;
 }
+#else
+// Currently just return wall clock time - it can be implemented as follows:
+//HANDLE hProcess = GetCurrentProcess();
+//    FILETIME ftCreation, ftExit, ftKernel, ftUser;
+//    SYSTEMTIME stKernel;
+//    SYSTEMTIME stUser;
+
+//    GetProcessTimes(hProcess, &ftCreation, &ftExit, &ftKernel, &ftUser);
+//    FileTimeToSystemTime(&ftKernel, &stKernel);
+//    FileTimeToSystemTime(&ftUser, &stUser);
+inline double get_time_from(double s, struct rusage &usage) {
+  //getrusage(RUSAGE_WHO, &usage);
+	gettimeofday(&usage.ru_utime, NULL);
+  return (double)usage.ru_utime.tv_sec * 1e+03 + (double)usage.ru_utime.tv_usec * 1e-03 - s;
+}	
+#endif
 
 //get external elapsed time (ms) since s
 inline double get_xtime_from(double s, struct timeval &time_misuration) {

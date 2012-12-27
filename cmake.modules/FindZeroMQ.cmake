@@ -23,15 +23,19 @@ IF (UNIX)
 	  PATHS ${ZEROMQ_ROOT}/lib ${ZeroMQ_PKGCONF_LIBRARY_DIRS}
 	)
 ELSEIF (WIN32)
+	message(STATUS "Checking 0mq for windows")
 	find_path(ZeroMQ_INCLUDE_DIR
 	  NAMES zmq.hpp
 	  PATHS ${ZEROMQ_ROOT}/include ${CMAKE_INCLUDE_PATH}
 	)
+	message(STATUS "0mq ${ZeroMQ_INCLUDE_DIR}" )
+
 	# Finally the library itself
 	find_library(ZeroMQ_LIBRARY
-	  NAMES libzmq
+	  NAMES zmq libzmq-v100-mt
 	  PATHS ${ZEROMQ_ROOT}/lib ${CMAKE_LIB_PATH}
 	)
+	message(STATUS "0mq ${ZeroMQ_LIBRARY}" )
 ENDIF()
 
 # Set the include dir variables and the libraries and let libfind_process do the rest.
