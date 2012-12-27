@@ -58,11 +58,11 @@ Simulation::Simulation(int id, Model m, int seed
 #endif
 	  );
 
-  MYNEW(gillespie, Gillespie, seed
 #ifdef LOG
-			    , *logfile
+  MYNEW(gillespie, Gillespie, seed, *logfile);
+#else
+	   MYNEW(gillespie, Gillespie, seed);
 #endif
-			    );
 
 #ifdef HYBRID
   ode_delta.t_sampling = sampling_rate;

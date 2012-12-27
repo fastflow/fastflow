@@ -45,7 +45,7 @@ typedef map<PCompartment *, SubMatch *> updatesType;
 typedef struct updates {
   Rule *rule;
   Compartment *context;
-  updatesType *updates;
+  updatesType *s_updates;
 } updates_t;
 
 //ode updates
@@ -115,7 +115,7 @@ public:
       
       //compute detailed updates
       Rule *rule = mu.first;
-      out.updates = get_updates(mu.second->submatchset, &(rule->lhs));
+      out.s_updates = get_updates(mu.second->submatchset, &(rule->lhs));
       out.rule = rule;
       out.context = mu.second->context;
 
@@ -335,14 +335,14 @@ public:
     if(!ma.ode_only) {
 #endif
       
-      do_updates(*(u.rule), *(u.updates)
+      do_updates(*(u.rule), *(u.s_updates)
 #ifdef HYBRID
 		 , ode_delta
 #endif
 		 , *(u.context));
       
       //clean-up
-      delete u.updates;
+      delete u.s_updates;
       
 #ifdef HYBRID
     }
