@@ -211,7 +211,13 @@ static inline void init_thread_affinity(pthread_attr_t*attr, int cpuId) {
     
 }
 #else
-static inline void init_thread_affinity(pthread_attr_t*,int) {}
+static inline void init_thread_affinity(pthread_attr_t*,int) {
+	// Just ensure static threadMapper::instance() has been constructed; 
+	int ret;
+    ret = threadMapper::instance()->getCoreId();
+    if (ret==EINVAL) 
+        error("ERROR: init_thread_affinity fails!\n");
+}
 #endif /* HAVE_PTHREAD_SETAFFINITY_NP */
 
 /*
@@ -884,10 +890,14 @@ private:
         
         int svc_init() {
 #if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
-            int cpuId = filter->getCPUId();            
+            int cpuId = filter->getCPUId();  
+			//std::cerr << "--> getCPUId " << cpuId << " tid " << tid << " destination " <<
+			//	threadMapper::instance()->getCoreId(tid) << "\n";
+			//std::cout << " Node: mask is " << threadMapper::instance()->getMask() << "\n";
+			//std::cout.flush();
             if (ff_mapThreadToCpu((cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId)!=0)
-                error("Cannot map thread %d to CPU %d, going on...\n",tid,
-                      (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId);
+                error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid,
+				(cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());
 #endif
             
             gettimeofday(&filter->tstart,NULL);
