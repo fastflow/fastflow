@@ -221,7 +221,7 @@ public:
     const int get_channel_id() const { return channelid;}
 
     /// Gets the number of worker threads currently running.
-    inline const int getnworkers() const { return workers.size()-neos-neosnofreeze; }
+    inline const int getnworkers() const { return (int) workers.size()-neos-neosnofreeze; }
     
     /// Get the ouput buffer
     FFBUFFER * const get_out_buffer() const { return buffer;}

@@ -100,13 +100,13 @@ static inline void time_setzero(struct timeval & a) {
     a.tv_usec=0;
 }
 
-static inline bool isPowerOf2(unsigned long x) {
+static inline bool isPowerOf2(unsigned int x) {
     return (x==1 || (x & (x-1)) == 0);
 }
 
-static inline unsigned long nextPowerOf2(unsigned long x) {
+static inline unsigned int nextPowerOf2(unsigned int x) {
     assert(isPowerOf2(x)==false); // x is not a power of two!
-    unsigned long p=1;
+    unsigned int p=1;
     while (x>p) p <<= 1;
     return p;
 }

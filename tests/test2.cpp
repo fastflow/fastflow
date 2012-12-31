@@ -52,7 +52,7 @@ class Worker: public ff_node {
 public:
     // called just one time at the very beginning
     int svc_init() {
-        std::cout << "Worker << " << pthread_self() << " svc_init called\n";
+        std::cout << "Worker << " << get_my_id() << " (thread id " << ff_getThreadID() << ") svc_init called\n";
         if (ffalloc.register4free()<0) {
             error("Worker, register4free fails\n");
             return -1;
@@ -126,6 +126,8 @@ int main(int argc,
         return -1;
     }
     
+	std::cout << "Detected num of cores " << ff_numCores() << "\n"; 
+
     ff_farm<> farm;
 
     std::vector<ff_node *> w;

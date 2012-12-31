@@ -63,22 +63,28 @@ public:
     /**
      * Default constructor. 
      */
-    threadMapper():rrcnt(-1),mask(0),num_cores(ff_numCores()),CList(num_cores) {
-        if (num_cores <= 0) {
+    threadMapper():rrcnt(-1),mask(0) {
+		int nc = ff_numCores();
+        if (nc <= 0) {
             error("threadMapper: invalid num_cores\n");
             return;
         }
-        
-        unsigned long size=num_cores;
+		num_cores = nc;
+		
+        unsigned int size=num_cores;
         // usually num_cores is a power of two....!
         if (!isPowerOf2(size)) size = nextPowerOf2(size);
         CList.reserve(size);
  
         mask = size-1;
-        
-        for(unsigned int i=0;i<num_cores;++i) CList.push_back(i);
-        for(unsigned int i=num_cores,j=0; i<size;++i,j++) CList.push_back(j);
-        
+		
+      
+        for(int i=0;i<nc;++i) CList.push_back(i);
+        for(unsigned int i= nc,j=0; i<size;++i,j++) CList.push_back(j);
+		
+		//std::cout << "MASK [" << mask << "][" << CList.size() << "\n";
+        //std::cout.flush();
+
         rrcnt=0;
     }
     /*!
@@ -114,7 +120,7 @@ public:
             if (*_str == '\0')	break;
         } while (1);
 
-        size_t size=List.size();
+        unsigned int size= (unsigned int) List.size();
         if (!isPowerOf2(size)) {
             size=nextPowerOf2(size);
             List.reserve(size);
@@ -134,9 +140,20 @@ public:
         rrcnt &= mask;
         return id;
     }
+	// for debug
+	unsigned int getMask() {
+		return mask;
+	}
 
-    int getCoreId(unsigned long tid) { 
+	// for debug
+	unsigned int getCListSize() {
+		return (unsigned int) CList.size();
+	}
+
+    int getCoreId(unsigned int tid) { 
         int id=CList[tid & mask];
+		//std::cerr << "Mask is " << mask << "\n";
+		//int id = CList[tid % (mask+1)];
         return id;
     }
 
@@ -145,9 +162,9 @@ public:
     }
 
 protected:
-    long          rrcnt;
-    unsigned long mask;
-    unsigned long num_cores;
+    long rrcnt;
+    unsigned int mask;
+    unsigned int num_cores;
     svector<int> CList;
 };
 

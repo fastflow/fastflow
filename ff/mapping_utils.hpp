@@ -77,7 +77,7 @@ static inline long ff_getThreadID() {
 }
 
 /** 
- *  Returns the frequency of the CPUs (On a schared memory system, all cores have 
+ *  Returns the frequency of the CPUs (On a shared memory system, all cores have 
  *  the same frequency).\n
  *  Works on Linux OS and Apple OS.
  */
@@ -137,7 +137,7 @@ static inline const int ff_numCores() {
  * a value in the range -20 to 19. The default priority is 0, lower priorities 
  * cause more favorable scheduling.
  *
- * MA: This should be redesigned it since might have different behaviour in different systems
+ * MA: This should be redesigned since might have different behaviours in different systems
  */
 static inline int ff_setPriority(int priority_level=0) {
 	int ret=0;
@@ -215,6 +215,7 @@ static inline int ff_getMyCpu() {
 	#if __GNUC__
 	#warning "ff_getMyCpu not supported"
 	#else 
+	std::cerr << "---> ff_getMyCpu not supported\n";
 	#pragma message( "ff_getMyCpu not supported")
 	#endif
 #endif
@@ -264,13 +265,13 @@ static inline int ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
 			thread_policy_set(mach_thread_self(), THREAD_AFFINITY_POLICY, (integer_t*) &mypolicy, THREAD_AFFINITY_POLICY_COUNT) != KERN_SUCCESS
 			) {
 		  
-		  std::cerr << "Setting affinity of thread ? (" << mach_thread_self() << 
-			") failed!" << std::endl;
+            std::cerr << "Setting affinity of thread ? (" << mach_thread_self() << 
+                ") failed!" << std::endl;
 		  return EINVAL;
-		} else {
-		  std::cerr << "Sucessfully set affinity of thread (" << 
-			mach_thread_self() << ") to core " << cpu_id/cacheconfig[CACHE_L2] << "\n";
-		}
+		} // else {
+		  //   std::cerr << "Sucessfully set affinity of thread (" << 
+		  // 	mach_thread_self() << ") to core " << cpu_id/cacheconfig[CACHE_L2] << "\n";
+		  // }
 	  }
 	}
 	return(ff_setPriority(priority_level));
@@ -279,7 +280,7 @@ static inline int ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
 		perror("ff_mapThreadToCpu:SetThreadIdealProcessor");
 		return EINVAL;
 	}
-	std::cerr << "Sucessfully set affinity of thread " << GetCurrentThreadId() << " to core " << cpu_id << "\n";
+	//std::cerr << "Successfully set affinity of thread " << GetCurrentThreadId() << " to core " << cpu_id << "\n";
 #else 
 #warning "CPU_SET not defined, cannot map thread to specific CPU"
 #endif
