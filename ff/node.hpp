@@ -212,11 +212,8 @@ static inline void init_thread_affinity(pthread_attr_t*attr, int cpuId) {
 }
 #else
 static inline void init_thread_affinity(pthread_attr_t*,int) {
-	// Just ensure static threadMapper::instance() has been constructed; 
-	int ret;
-    ret = threadMapper::instance()->getCoreId();
-    if (ret==EINVAL) 
-        error("ERROR: init_thread_affinity fails!\n");
+	// Just ensure that the threadMapper constructor is called
+    threadMapper::instance();
 }
 #endif /* HAVE_PTHREAD_SETAFFINITY_NP */
 
