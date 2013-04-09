@@ -83,6 +83,13 @@ if (NOT(CMAKE_HAVE_PTHREAD_H))
   endif  (CMAKE_SYSTEM_NAME MATCHES "Windows")
 endif (NOT(CMAKE_HAVE_PTHREAD_H))
 
+if (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
+  if(CMAKE_HAVE_PTHREAD_H)
+    MESSAGE(STATUS "Linking to pthreads")
+    SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread")
+  endif(CMAKE_HAVE_PTHREAD_H)
+endif  (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
+
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
 # Avoid security in run time support and generate inlined intrinsics
   ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS) 

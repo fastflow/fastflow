@@ -1,1 +1,42 @@
-The distributed version has not yet tested on Windows platform.
+Compiling tests under Linux
+===========================
+
+Prerequisite: ZeroMQ (aka: 0mq, zmq).
+^^^^^^^^^^^^
+Please install zeromq version 2.2.0 from www.zeromq.org.
+Note that if you want to install newer versions, starting from 
+version 3.x.x you need also to download the zmq.hpp C++ file binding 
+from  https://github.com/zeromq/cppzmq
+Copy the zmq.hpp file in the <zmq-installdir>/include> directory.
+With the old stable version 2.2.0 the file zmq.hpp is already in the 
+tarball.
+
+When running the make command inside the tests/d directory you may 
+obtain something similar to the following:
+
+Makefile:27: *** The ZMQ_PATH variable is not defined in your environment.  Stop.
+
+This means that you have to define the ZMQ_PATH env variable with 
+the zeromq install path. For example is zeromq is installed in the 
+default directory (/usr/local) the command which defines ZMQ_PATH
+is either 
+  export ZMQ_PATH=/usr/local   for bash-like shells
+or 
+  setenv ZMQ_PATH /usr/local   for csh-like shells.
+
+If the zmq install path is not in the linker search path you have to define 
+olso LD_LIBRARY_PATH before executing the program otherwise the linker 
+won't be able to find the libzmq shared library.
+The command is:
+  export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/lib"   for bash-like shells
+or
+  setenv LD_LIBRARY_PATH "$LD_LIBRARY_PATH:/usr/local/lib"   for csh-like shells.
+
+In order to avoid to define the env variable each time you open a new shell, 
+you may either add the command at the end of the bashrc file 
+(actually the .bashrc or .cshrc file in your home directory) or to insert the path 
+in the ld.so.conf system file and then run (you need root privileges) 
+the command ldconfig to rebuild the linker cache (see man (8) ldconfig for more
+info).
+
+

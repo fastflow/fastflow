@@ -102,13 +102,16 @@ add_test( test_map2 ${CMAKE_CURRENT_BINARY_DIR}/test_map2 65536 3 10 )
 add_test( test_spinBarrier ${CMAKE_CURRENT_BINARY_DIR}/test_spinBarrier 3 100)
 add_test( test_multi_input ${CMAKE_CURRENT_BINARY_DIR}/test_multi_input 3 10000 )
 add_test( test_mapreduce ${CMAKE_CURRENT_BINARY_DIR}/test_mapreduce 1000000 3 )
-add_test( test_dotprod ${CMAKE_CURRENT_BINARY_DIR}/test_dotprod 104857600 3 )
+add_test( test_dotprod ${CMAKE_CURRENT_BINARY_DIR}/test_dotprod 10485760 3 )
 add_test( test_ofarm ${CMAKE_CURRENT_BINARY_DIR}/test_ofarm 3 1000 )
 add_test( test_accelerator_ofarm ${CMAKE_CURRENT_BINARY_DIR}/test_accelerator_ofarm 3 1000 )
 add_test( test_accelerator_ofarm_multiple_freezing ${CMAKE_CURRENT_BINARY_DIR}/test_accelerator_ofarm_multiple_freezing 3 1000 )
 
-# Distributed
+#layer2 tests
 
+add_subdirectory( layer2-tests-HAL )
+
+# Distributed
 
 find_package(ZeroMQ)
 if(NOT ZeroMQ_FOUND)

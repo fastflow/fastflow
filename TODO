@@ -3,8 +3,7 @@ New ideas and features:
 - configure 
   by using cmake, still work in progress
 - ordered farm (DONE)
-  it is sufficient to define a suitable scheduler and gatherer, which distribute
-  and collect tasks in the same order. 
+  ff_ofarm pattern
 - threads mapper (DONE)
   in the release 2.0.0
 - more applications 
@@ -15,7 +14,7 @@ New ideas and features:
 
 - add the possibility to define fallback function
   even if there are feedback channels due to 
-  master-worker configuration
+  master-worker configuration (ABORTED)
 - give the possibility to define a user-level 
   collection policy (in the same way as in the scheduling
   policy) (DONE)

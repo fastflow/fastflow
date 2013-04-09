@@ -8,17 +8,17 @@ public:
     manager():running(false) {}
 
     void enterActive() {
-	if (!running)
-	    {
-		running = true;
-		freeze();
-		spawn();
-		freeze();
-		wait_freezing();
-	    }
-	
-	thaw();
+    if (!running)
+    {
+        running = true;
+        freeze();
+        spawn();
+        freeze();
+        wait_freezing();
     }
+    
+    thaw();
+}
     
     void enterActive_2() {
 	if (!running)

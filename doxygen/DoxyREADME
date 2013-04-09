@@ -10,13 +10,17 @@
 *                                                     *
 *******************************************************
 
+INSTALL DOXYGEN:
+
 Make sure that doxygen is installed on your machine. You can download doxygen
 from given link. http://www.stack.nl/~dimitri/doxygen/download.html#latestsrc
 
 NOTE: mac users can use macports sudo port install doxygen
 
-In order to generate documentation files using doxygen type: $ doxygen
-FastFlow_doxygen
+COMPILATION:
+In order to generate documentation files using doxygen type: 
+
+$ doxygen FastFlow_doxygen
 
 doxygen will compile the existing documentation according to the configuration
 file (i.e. FastFlow_doxygen). The output is produced in 'doc/' folder. We have

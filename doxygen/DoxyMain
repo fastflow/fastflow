@@ -1,115 +1,245 @@
+//********************************
+Main Page contents
+//********************************
+
 /*! \mainpage FastFlow Documentation
  *
- *  \section geninfo_sec General Information
+ *  \section geninfo_sec Parallel programming in FastFlow
  *
- *  FastFlow is essentially a C++ template library built on top of a non-blocking 
- *  synchronisation mechanism.
- *  FastFlow is designed to ease the development of applications and make them very 
- *  fast and scalable. It is particularly targeted to the development of streaming 
- *  applications.
+ *  FastFlow is essentially a C++ template library built on top of a
+ *  non-blocking synchronisation mechanism. The main objectives are to provide
+ *  an efficient execution of parallel applications on concurrent architecture
+ *  and to provide abstraction in the parallel programming langauge where
+ *  writing parallel applications is relatively simple. FastFlow has been used
+ *  in a number of applications and typically exhibit a better or similar
+ *  performance compared with their counterparts developed using
+ *  state-of-the-art programming frameworks e.g. POSIX threads, Intel TBB,
+ *  Cilk, OpenMP.
  *
- *
- *  \section layers_sec  Multi-layers framework
- *
- *  FastFlow is built upon a stack of layers that progressively abstract the shared 
- *  memory parallelism at the level of cores up to the definition of useful 
- *  programming constructs and patterns.
- *
- *  \image html dff_arch.png
- *
- *  The programmer is exposed to the top layer of the stack of layers, where it is 
- *  provided with parallel programming patterns (a.k.a. \a <a href="http://en.wikipedia.org/wiki/Algorithmic_skeleton">skeletons</a>).
- *  They capture common parallel programming paradigms (e.g. \p Map, \p MaReduce, 
- *  \p ForAll, etc.) and make them  available to the programmer as high-level 
- *  programming constructs equipped with well-defined functional and  extra-
- *  functional semantics. FastFlow specifically focuses on Stream Parallelism, and 
- *  in particular provides: \p farm, \p farm-with-feedback (i.e. Divide&Conquer), 
- *  \p pipeline, and their arbitrary nesting and composition.   
- *
- *  \li ff::ff_pipeline - pipeline.hpp
- *  \li ff::ff_farm - farm.hpp
- *  \li ff::ff_node - node.hpp
- *
- *
- *  \subsection comp_sec FastFlow is fast.
- *
- *  FastFlow has been used in a number of applications; they typically exhibit a 
- *  better or similar performance compared with their counterparts developed using 
- *  state-of-the-art programming frameworks (e.g. Intel TBB, Cilk, OpenMP).
- *
- *  Please see the examples provided with the 
- *  <a href="http://calvados.di.unipi.it/dokuwiki/doku.php?id=ffnamespace:about#downloads_and_contacts" target="_blank">source code.</a>
+ *  You can download FastFlow frameowrk from 
+ <a href="http://calvados.di.unipi.it/dokuwiki/doku.php?id=ffnamespace:about#downloads_and_contacts" target="_blank">source code.</a>
  * 
+ *  \section layers_sec  Multi layered design of FastFlow
+ *
+ *  FastFlow is built upon a stack of layers that progressively abstract the
+ *  shared memory parallelism at the level of cores up to the definition of
+ *  useful programming constructs and patterns. The stack of layeres in
+ *  FastFlow can be seen in diagram given below.
+ *
+ *  \image html FastFlow.pdf
+ *
+ *  \li The top layer provides the model for applications on multicore,
+ *  manycore and distributed platforms of multicores. The aim is to provide
+ *  efficient and portable application model with high level patterns such as
+ *  farm (farm.hpp), pipeline (pipeline.hpp) and FastFlow basic structure
+ *  as Node (node.hpp).
+ *
+ *  \li The middle layer provides the streaming network in the form of queues.
+ *  We have two different implementations: Arbitrary streaming networks and
+ *  simple streaming networks. Arbitrary streaming network provides lock-free
+ *  single producer single consumer (SPSC) and multiple producer multiple
+ *  consumer (MPMC) queues based on FastFlow node (node.hpp) or FastFlow
+ *  distributed node (dnode.hpp). The simple streaming network provides
+ *  lock-free single producer single consumer (SPSC) queues based on threading
+ *  model for shared memory and zercopy networking plus processor model on the
+ *  distributed network.
+ * 
+ *  \li The bottom layer provides the low-level implementation of shared memory
+ *  and distributed memory. The shared memory include SMP, cc-UMA and cc-NUMA
+ *  memory architectures. While the distributed memory includes cloudes,
+ *  clusters of SMPs or grids.
+ *
  */
+//********************************
+Namespaces
+//********************************
 
 /*!
  *  \namespace ff
  *
  *  \brief The principal namespace for the FastFlow library.
  *
- *  All classes and functions in the FastFlow library are contained within this 
- *  namespace. 
+ *  All classes and functions in the FastFlow library are contained within this
+ *  namespace.
  */
  
- 
+//********************************
+Modules
+//********************************
+
  /*!
-  *  \defgroup high_level Streaming network patterns.
+  *  \defgroup application_level Applications level
   *
-  *  \brief FastFlow's top layer. 
+  *  \brief This module defines the applications on multi-cores, many-cores,
+  *  GPGPUs and distributed platforms of multi-cores. This is not part of the
+  *  FastFlow implementation.
   *
-  *  At this level are presented the common parallel patterns (\a skeletons) 
-  *  proposed by FastFlow: \p pipeline, \p farm, \p map, \p reduce, etc. These 
-  *  skeletons can be arbitrarily composed to obtain structures of higher complexity 
-  *  that can express more complex behaviour.
-  */
- 
-  /*!
-  *  \defgroup zmq_low_level Distributed arbitrary streaming networks
-  *
-  *  \brief This module contains the implementation of the communication patterns 
-  *  used in the distributed version of FastFlow.
-  *
-  *  The distributed extension of FastFlow provides a number of communication 
-  *  patterns, built upon the underlying networking infrastructure. These patterns 
-  *  reflect the common model used in distributed computing: Broadcast, GatherAll, 
-  *  FromAny, Scatter, OnDemand, Unicast, One-to-Many, Many-to-One.
-  */
-  
- /*!
-  *  \defgroup low_level Arbitrary streaming networks
-  *
-  *  \brief This module contains the implementation of the \p ff_node and its 
-  *  distributed version \p ff_dnode. 
-  *
-  *  Using the runtime objects proposed in the lower layer, the structures of this 
-  *  level can be arbitrarily composed to build MPMC queues and collective 
-  *  communications patterns.
-  */
- 
-  /*!
-  *  \defgroup zmq_runtime Distributed simple streaming networks
-  *
-  *  \brief This module encompasses networking and communication infrastructures 
-  *  used in the distributed implementation of FastFlow
+  *  The FastFlow framework provides a set of applications to test the
+  *  performance of the parallel programming langauge. 
   *  
-  *  The objects contained in this module constitute a basic infrastructure upon 
-  *  which the communications between hosts in a distributed environment is operated.
-  *  Currently, these networking primitives are based on the 
-  *  <a href="http://www.zeromq.org/"> ØMQ </a> library.
-  */
- 
- /*!
-  *  \defgroup runtime Simple streaming networks
+  *  We also encourage our users to write programs to see the performance of
+  *  the FastFlow framework. You can email us your benchmarks at
+  *  aldinuc[@]di.unito.it, and we can test on different platform. After
+  *  verification we can include them in the FastFlow framework.
   *
-  *  \brief This module includes those objects working at the lowest level of 
-  *  FastFlow's architecture, right above the hardware. 
+  */
+
+//--------------------------------&------------------------------------------------
+
+//--------------------------------
+LEVEL 1
+//--------------------------------
+ /*!
+  * \defgroup high_level_patterns High-level patterns
+  *
+  * \brief This is the first level of FastFlow and defines the high-level patterns to achieve stream
+  * parallelism.
+  *
+  * The FastFlow framework is pased on pattern-based streaming programming. We
+  * have defined different patterns for shared and distributed memory. Some of
+  * these patters are; pipeline, farm, farm with feed back, map, reduce,
+  * mapreduce etc. 
+  *
+  */
+
+ /*!
+  * \defgroup high_level_patterns_shared_memory High-level patterns for shared memory
+  * \ingroup high_level_patterns
+  *
+  * \brief This levels defines the high-level patterns for shared memory.
+  *
+  * High-level patterns are defined to support the shared memory environment. 
+  *
+  *  The parallel patterns (\a skeletons) for stream parallelism are defined at
+  *  this level. These skeletons in FastFlow are; \p pipeline, \p farm, \p map,
+  *  \p reduce etc. 
+  */
+ /*!
+  * \defgroup high_level_patterns_distributed_memory High-level patterns for distributed memory
+  * \ingroup high_level_patterns
+  *
+  * \brief This levels defines the high-level patterns for distributed memory.
+  *
+  * High-level patterns are defined to support the distributed memory environment.
+  *
+  */
+
+//--------------------------------
+LEVEL 2
+//--------------------------------
+ /*!
+  *  \defgroup streaming_network_arbitrary Arbitrary streaming network
+  *
+  *  \brief This is the second level of FastFlow and defines the arbitrary patterns for stream parallelism. 
+  *
+  *  The skeletons in FastFlow can be arbitrarily composed to obtain structures 
+  *  of higher complexity that can express more complex behavior.
+  *
+  *  At this level an arbitrary combination of queues are defined. This
+  *  includes single producer single consumer (SPSC) queues, and multiple
+  *  producer and multiple consumer queues (MPMC). This queues are lock-less
+  *  and provides the abstraction to the skeleton. The arbitrary combination
+  *  of streaming network pattern are defined for shared memory and
+  *  distributed memory architectures.
+  *
+  */
+
+ /*!
+  *  \defgroup streaming_network_arbitrary_shared_memory Arbitrary streaming network for shared memory
+  *  \ingroup streaming_network_arbitrary
+  *
+  *  \brief The arbitrary streaming network pattern of FastFlow for shared-memory. 
   *  
+  *  At this level an arbitrary combination of queues are defined for shared-memroy.
+  *
+  */
+
+ /*!
+  *  \defgroup streaming_network_arbitrary_distributed_memory Arbitrary streaming network for distributed memory
+  *  \ingroup streaming_network_arbitrary
+  *
+  *  \brief The arbitrary streaming network pattern of FastFlow for distributed-memory. 
+  *  
+  *  At this level an arbitrary combination of queues are defined for distributed-memroy.
+  *
+  */
+
+//--------------------------------
+LEVEL 3
+//--------------------------------
+  /*!
+  *  \defgroup streaming_network_simple Simple streaming network
+  * 
+  *  \brief This is the third and last level of FastFlow and defines the simple patterns for stream parallelism. 
+  *
+  *  At this level signel one producer one consumer (SPSC) queue is defined.
+  *  This queue is lock-less and provide implementation for shared memory and
+  *  distributed memory architectures.
+  *
   *  These objects describe threading models and \a lock-free data structures (such 
   *  as SPSC queues), as well as transmission protocols and communication protocols 
   *  used in the distributed version. This is the lowest level of FastFlow's layered 
   *  structure, and encompasses all those low-level programming operations strongly 
   *  coupled with the underlying architectures. 
+  *
   */
-  
-   
 
+ /*!
+  *  \defgroup streaming_network_simple_shared_memory Simple streaming network for shared memory
+  *  \ingroup streaming_network_simple
+  *
+  *  \brief This module contains the implementation of simple streaming network on the
+  *  shared-memory architectures.
+  *
+  *
+  */
+
+  /*!
+  *  \defgroup streaming_network_simple_distributed_memory Simple streaming network for distributed memory
+  *  \ingroup streaming_network_simple
+  *
+  *  \brief This module contains the implementation of the networking and
+  *  communication patterns used in the distributed version of FastFlow.
+  *
+  *  The distributed extension of FastFlow provides a number of communication 
+  *  patterns, built upon the underlying networking infrastructure. These patterns 
+  *  reflect the common model used in distributed computing: Broadcast, GatherAll, 
+  *  FromAny, Scatter, OnDemand, Unicast, One-to-Many, Many-to-One.
+  *  
+  *  The objects contained in this module constitute a basic infrastructure
+  *  upon which the communications between hosts in a distributed environment
+  *  is operated. Currently, these networking primitives are based on the <a
+  *  href="http://www.zeromq.org/"> ØMQ </a> library.
+  *
+  */
+
+//--------------------------------&------------------------------------------------
+
+  /*!
+  *  \defgroup extra_functional_features Extra Functional Features
+  * 
+  *  \brief These are the extra functional features 
+  *
+  *
+  */
+
+ /*!
+  *  \defgroup host_machine Host machines
+  *
+  *  \brief This module defines the targeted architectures supported by
+  *  FastFlow. This is not part of FastFlow, but defines the level which
+  *  already exists. Actually, we have no implementation of any architecture,
+  *  rather we exploit different existing architectures or architectures in
+  *  research.
+  *
+  *  FastFlow targets multi-cores, manyc-ores and distributed systems.
+  *  Multi-core includes shared memroy SMP machines. Many-cores systems
+  *  includes shared or distributed memory on the chip and GPGPUs. An example
+  *  many-cores systems is TILE64. We also target clouds, clusters and
+  *  large-scale grid systems.
+  *
+  *  FastFlow does not provide any implementation of the underlying
+  *  architecture, rather a library that exploit the parallelism of the
+  *  underlying architecture. 
+  *
+  */

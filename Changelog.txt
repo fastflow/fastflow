@@ -1,8 +1,14 @@
-* 23/12/12 - v.2.0.1
+* 23/12/13 - v.2.0.1
+   - added experimental OFED code 
+   - added some layer1/2 tests
+   - map pattern using CUDA: ff_mapCUDA
+   - map and reduce patterns using OpenCL: ff_mapOCL and ff_reduceOCL
+   - Added multi-input node: ff_minode class implemented
+   - Added multi-output node: ff_monode class inplemented
    - Distributed version ported and tested on Win7 64-bit.
    - little fix on allocator.hpp, freesegment now release aligned memory 
      to avoid stack corruption on Win platform that requires symmetric 
-	 primitives for aligned memory allocation and deallocation.
+     primitives for aligned memory allocation and deallocation.
    - Winsock.h (windows.h) and winsock2.h incompatibility issue partially resolved.
      <ff/dnode.h> should be included before other includes to avoid the problem. It
 	 includes winsock2.h that is required by zeromq.  
