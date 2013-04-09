@@ -1,0 +1,16 @@
+PSNR e MAE calculator   
+------------------------------------------------------------------------------------
+
+Funziona solo con immagini bitmap a 8 bit in scala di grigi.
+
+----- Senza passaggio di parametri ----- ( es. ./psnr_mae )
+
+filename immagine originale   :  "a.bmp"
+filename immagine restaurata  :  "b.bmp"
+
+----- Passaggio dei filenames ----- ( es. ./psnr_mae lena.bmp r_lena.bmp)
+
+filename immagine originale   :  "lena.bmp"
+filename immagine restaurata  :  "r_lena.bmp"
+
+------------------------------------------------------------------------------------

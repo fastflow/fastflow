@@ -10,7 +10,7 @@ set( MARX2SRC       marX2.c )
 # ${X11_LIBRARIES} has been used instead of X11 to prevent a bug on
 # MacOS in the linking of -lx11 that requires -L ...
  
-set( LINKS          ${X11_LIBRARIES} marX2 pthread  m )
+set( LINKS          marX2 pthread  m ${X11_LIBRARIES})
 set( TARGETS        mandel_ff mandel_seq mandel_ff_mem_all mandel_pt )
 
 

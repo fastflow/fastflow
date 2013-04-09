@@ -1,4 +1,17 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*!
+ *  \link
+ *  \file ff_fib.cpp 
+ *  \ingroup application_level
+ *
+ *  \brief This file contains the implementation of fibonacci program written
+ *  in FastFlow with skeletal programming patterns.
+ *
+ *  It computes the n-th Fibonacci sequence number using a 
+ *  simple stream parallel approach
+ */
+
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as 
@@ -25,12 +38,6 @@
  ****************************************************************************
  */
 
-/*
- * computes the n-th Fibonacci sequence number using a 
- * simple stream parallel approach
- *
- */
-
 //#include <unistd.h>
 #include <stdlib.h>
 #include <iostream>
@@ -45,6 +52,15 @@ inline uint64_t fib(uint64_t n) {
     return fib(n-1)+fib(n-2);
 }
 
+/*!
+ *  \class Worker
+ *  \ingroup application_level
+ *
+ *  \breif It defines the workers of the form.
+ *
+ *  This class is defined in \ref ff_fib.cpp
+ */
+
 class Worker: public ff_node {
 public:
     void * svc(void * task) {
@@ -52,27 +68,36 @@ public:
     }
 };
 
+/*!
+ *  \class Emitter
+ *  \ingroup application_level
+ *
+ *  \breif It defines the emitter of the form.
+ *
+ *  This class is defined in \ref ff_fib.cpp
+ */
+
 class Emitter: public ff_node {
 private:
     inline void generate_stream(int k) {
-	if (k<=b) {
-	    ff_send_out((void*)k);
-	    ++streamlen;
-	    return;
-	}
-	generate_stream(k-1);
-	generate_stream(k-2);
+    if (k<=b) {
+        ff_send_out((void*)k);
+        ++streamlen;
+        return;
+    }
+    generate_stream(k-1);
+    generate_stream(k-2);
     }
 public:
     Emitter(int n, int b):n(n),b(b),streamlen(0),result(0) {};
 
-    void * svc(void * task) {	
-	if (task==NULL) generate_stream(n);
-	else {
-	    result +=(uint64_t)task;
-	    if (--streamlen == 0) return NULL;
-	}
-	return GO_ON;       
+    void * svc(void * task) {
+    if (task==NULL) generate_stream(n);
+    else {
+        result +=(uint64_t)task;
+        if (--streamlen == 0) return NULL;
+    }
+    return GO_ON;
     }
 
     uint64_t get_result() const { return result; }
@@ -97,7 +122,7 @@ int main(int argc, char * argv[]) {
     int nworkers = 2;
 #endif
 
-    if (argc>=3) {	
+    if (argc>=3) {
         n = atoi(argv[1]); b = atoi(argv[2]);
         if (argc==4)  nworkers = atoi(argv[3]);
         if (argc==5)  check=true;
@@ -107,7 +132,7 @@ int main(int argc, char * argv[]) {
             return -1;
         }
     } else if (argc == 2) {
-        n = atoi(argv[1]);			
+        n = atoi(argv[1]);
     } else {
         usage(argv[0]);
         return -1;
@@ -156,3 +181,8 @@ int main(int argc, char * argv[]) {
 
     return 0;
 }
+
+/*!
+ *  @}
+ *  \endlink
+ */

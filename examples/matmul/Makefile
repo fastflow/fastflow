@@ -38,7 +38,7 @@ INCS                 = -I../../
 LIBS                 = -lpthread
 
 INCLUDES             = -I. $(INCS)
-TARGET               = ff_matmul ff_matmul_v2 ff_matmul_map matmul
+TARGET               = ff_matmul ff_matmul_v2 ff_matmul_map ff_streamMM matmul
 
 all: $(TARGET)
 
@@ -49,6 +49,9 @@ ff_matmul_v2:ff_matmul_v2.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 ff_matmul_map:ff_matmul_map.cpp
+	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+ff_streamMM:ff_streamMM.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 matmul:matmul.cpp
