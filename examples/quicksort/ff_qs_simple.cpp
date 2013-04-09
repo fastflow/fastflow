@@ -1,4 +1,14 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*!
+ *  \link
+ *  \file ff_qs_simple.cpp
+ *  \ingroup application_level
+ *
+ *  \brief TODO
+ *
+ */
+
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as 
@@ -262,4 +272,7 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-
+/*!
+ *  @}
+ *  \endlink
+ */

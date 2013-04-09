@@ -31,7 +31,9 @@ const long int COUNT=1000;
 
 using namespace ff;
 
-class Node1: public ff_dnode<zmq1_1> {
+#define COMM zmqOnDemand
+
+class Node1: public ff_dnode<COMM> {
 protected:
     static void callback(void * e,void*) {
 	delete [] ((char*)e);
@@ -41,7 +43,7 @@ public:
 	size(size),name(name), address(address), transp(transp) {}
 
     int svc_init() {
-	ff_dnode<zmq1_1>::init(name, address, 1,transp,true, 0); //, callback);
+	ff_dnode<COMM>::init(name, address, 1,transp,true, 0); //, callback);
 	printf("Node1 start\n");
 	return 0;
     }
@@ -66,7 +68,7 @@ private:
 };
 
     
-class Node2: public ff_dnode<zmq1_1> {
+class Node2: public ff_dnode<COMM> {
 public:
     typedef zmqTransport::msg_t msg_t;
     
@@ -74,13 +76,13 @@ public:
 	size(size),name(name),address(address),transp(transp) {}
     
     int svc_init() {
-	ff_dnode<zmq1_1>::init(name,address, 1, transp, false, 0);  
+	ff_dnode<COMM>::init(name,address, 1, transp, false, 0);  
 	printf("Node2 start\n");
 	ff::ffTime(START_TIME);
 	return 0;
     }
     void * svc(void *task) { 
-	zmq1_1::TransportImpl::msg_t* msg=(zmq1_1::TransportImpl::msg_t*)task;
+	COMM::TransportImpl::msg_t* msg=(COMM::TransportImpl::msg_t*)task;
 	assert(size == msg->size());
 	delete msg;
 	return GO_ON;

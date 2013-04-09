@@ -1,0 +1,102 @@
+IMPORTANT NOTES FOR OFED.
+
+The OFED integration is still experimental. This means that, at the moment, 
+the possibilities offered by this library are be limited.
+
+The software is released under LGPL3, as the rest of FastFlow. A copy
+of the license can be found in the FastFlow distribution.
+
+If you want to try this library, you may contact the author:
+Alessandro Secco, alessandro.secco@gmail.com
+
+REQUIREMENTS
+To compile your program, you need OFED libraries installed on your 
+cluster. You need a working cluster connected by the InfiniBand network.
+You also need IP over IB configured correctly. You also need FastFlow 
+installed. 
+
+INSTALLATION:
+The following sources are needed to be in <fastflow_root>/ff/d:
+ofedTools.hpp
+ofedConnection.hpp
+ofedImpl.hpp
+ofedTransport.hpp
+ofedSettings.hpp
+
+FastFlow COMPATIBILITY
+If your dnode.hpp has the following lines, please comment or remove them:
+#include <ff/d/zmqTransport.hpp>
+#include <ff/d/zmqImpl.hpp>
+
+The following FastFlow pattern have been tested IN A LAB ENVIRONMENT:
+UNICAST, BROADCAST, FROMANY, ONETOMANY, ONDEMAND
+
+The TCP sockets, in OFED, are used just for the initial connection. 
+For the FastFlow, the socket of a master node are allocated sequentially
+from the port that you chose. Example:
+
+broadcast test 1 5 10.10.5.150:16000
+will need TCP ports 16000, 16001, 16002, 16003, 16004 free.
+
+the slave hosts should be launched like this:
+broadcast test 0 0 10.10.5.150:16000
+broadcast test 0 1 10.10.5.150:16001
+broadcast test 0 2 10.10.5.150:16002
+broadcast test 0 3 10.10.5.150:16003
+broadcast test 0 4 10.10.5.150:16004
+
+We think it shouldn't be a problem to ask a system administrator to have some
+reserved ports on a big cluster. Please send us a message if you need a more 
+dinamic port selection as TCP does.
+
+
+COMPILING AND TESTING:
+To test the library, you may begin from compiling a test that you find 
+in <fastflow_root>/tests/d
+Working tests are:
+test11_pipe
+bw11
+lat11
+broadcast
+fromany
+farm
+unicast
+
+For each test, you need to modify:
+#include <ff/d/zmqTransport.hpp>
+#include <ff/d/zmqImpl.hpp>
+to:
+#include <ff/d/ofedTransport.hpp>
+#include <ff/d/ofedImpl.hpp>
+
+you need to comment the following line, if defined:
+typedef zmqTransportMsg_t msg_t;
+
+at last, you need to modify the Makefile:
+LIBS                 = -lpthread
+
+should be rewritten as:
+LIBS                 = -lpthread -lrdmacm
+
+Please note that the host names or addresses used to launch the tests must 
+be the TCP over IB interfaces !!!.
+
+LIMITATION:
+Messages have to be at least twice smaller than BUFFER_SIZE 
+defined in ofedSettings.hpp
+
+SCALABILITY:
+At the moment, scalability have been tested on a limited number of machines.
+10/20/30 computers: there should be no problem
+40/50 computers: we experienced no troubles, but some tests failed occasionaly
+on nodes disconnection. 
+100 computers: there's a problem on nodes connection. We're working to solve the
+issue.
+
+
+PERFORMANCE:
+This integration performs better than the zmq integration for small messages
+(using the TCP over IB interface).
+In the case of big sized messages or little of communication, you may not
+notice any difference with the ZMQ and TCP over IB configuration.
+The test lat11 at the moment performs poorly.

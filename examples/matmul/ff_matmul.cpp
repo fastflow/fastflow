@@ -1,4 +1,17 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+/*!
+ *  \link
+ *  \file ff_matmul.cpp
+ *  \ingroup application_level
+ *
+ *  \brief This file contains implementation of Matrix Multiplication program
+ *  written in FastFlow
+ *
+ *  NxN integer matrix multiplication.
+ *
+ */
+
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as 
@@ -25,11 +38,6 @@
  ****************************************************************************
  */
 
-/*
- * NxN integer matrix multiplication.
- *
- */
-
 //#define USE_FFA
 
 #include <vector>
@@ -39,7 +47,13 @@
 #if defined(USE_FFA)
 #include <ff/allocator.hpp>
 #endif
-  
+
+/*!
+ *  \ingroup application_level
+ *
+ *  @{
+ */
+
 using namespace ff;
 
 const int N=1024;
@@ -59,7 +73,16 @@ struct ff_task_t {
 };
 
 
-// generic worker
+/*!
+ * \class Worker
+ * \ingroup application_level
+ *
+ * \brief generic worker
+ *
+ * This class is defined in \ref ff_matmul.cpp
+ *
+ */
+
 class Worker: public ff_node {
 public:
 #if defined(USE_FFA)
@@ -121,7 +144,7 @@ int main(int argc,
     ffTime(START_TIME);
 
 #if defined(USE_FFA)
-	int nslabs[N_SLABBUFFER] = { N,0,0,0,0,0,0,0,0}; 
+    int nslabs[N_SLABBUFFER] = { N,0,0,0,0,0,0,0,0}; 
     if (ffa.init(nslabs)<0) return -1;
     if (ffa.registerAllocator()<0) return -1;
 #endif
@@ -193,4 +216,7 @@ int main(int argc,
     return 0;
 }
 
-
+/*!
+ *  @}
+ *  \endlink
+ */

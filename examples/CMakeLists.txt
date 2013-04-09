@@ -39,5 +39,17 @@ if(Boost_FOUND)
 else (Boost_FOUND)
 message (WARNING " Boost not found: Skipping CWC simulator example")
 endif (Boost_FOUND)
-add_subdirectory( spd-denoiser )
-add_subdirectory( spd-denoiser/video )
+
+#OpenCV
+#include_directories ("/home/software/include") #custom OpenCV headers
+#find_library ( OpenCV_LIBS opencv_highgui /home/software/lib ) #custom OpenCV libs
+#set (OpenCV_FOUND TRUE)
+find_package( OpenCV )
+if (OpenCV_FOUND)
+  #add_subdirectory( spd-denoiser/cuda )
+  #add_subdirectory( spd-denoiser/cuda/video )
+  add_subdirectory( spd-denoiser/opencl )
+else (OpenCV_FOUND)
+  message (WARNING " OpenCV not found: Skipping denoiser example")
+endif (OpenCV_FOUND)
+

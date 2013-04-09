@@ -91,8 +91,14 @@ void* mapF(basePartitioner*const P, int tid) {
     for(unsigned long i=0;i<l;++i) 
         for(unsigned long j=0;j<N;++j) {
             for(unsigned long k=0;k<N;++k)
+#if defined(OPTIMIZE_CACHE)
+                _C += A[j*N+i]*B[i*N+k];
+            C[j*N+k]=_C;
+#else
                 _C += A[i*N+k]*B[k*N+j];
             C[i*N+j]=_C;
+#endif
+
             _C=0;
         }
     return Partition.task;

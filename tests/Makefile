@@ -61,7 +61,7 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I. $(INCS)
-TARGET               = test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_map test_map2 test_mapreduce test_dotprod test_sendq test_spinBarrier test_multi_input test_mpmc 
+TARGET               = test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_map test_map2 test_mapreduce test_dotprod test_sendq test_spinBarrier test_multi_input test_accelerator+pinning test_mpmc test_stencil test_dataflow test_dataflow2 test_noinput_pipe
 #test_mpmc2 test_bmpmc latency_MPMC 
 
 
@@ -110,6 +110,7 @@ test_accelerator3:test_accelerator3.o
 test_accelerator_farm+pipe:test_accelerator_farm+pipe.o
 test_accelerator_pipe+farm:test_accelerator_pipe+farm.o
 test_accelerator_pipe:test_accelerator_pipe.o
+test_accelerator+pinning:test_accelerator+pinning.o
 test_ofarm:test_ofarm.o
 test_accelerator_ofarm:test_accelerator_ofarm.o
 test_accelerator_ofarm_multiple_freezing:test_accelerator_ofarm_multiple_freezing.o
@@ -128,6 +129,11 @@ test_dotprod:test_dotprod.o
 latency_MPMC:latency_MPMC.o
 test_spinBarrier:test_spinBarrier.o
 test_multi_input:test_multi_input.o
+test_stencil:test_stencil.o
+test_dataflow:test_dataflow.o
+test_dataflow2:test_dataflow2.o
+test_noinput_pipe:test_noinput_pipe.o
+test_layer2:test_layer2.o
 test_uBuffer:test_uBuffer.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_torus:test_torus.cpp

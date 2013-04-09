@@ -48,8 +48,8 @@
  *
  */
 
-#include <ff/dnode.hpp>
 #include <ff/svector.hpp>
+#include <ff/dnode.hpp>
 #include <ff/pipeline.hpp>
 #include <ff/d/inter.hpp>
 #include <ff/d/zmqTransport.hpp>
@@ -104,7 +104,18 @@ public:
     address(param.scatter_address),
     transp(transp)
   {
-    sim_per_site = nTasks/nHosts;
+    //sim_per_site = nTasks/nHosts;
+    int acc = 0;
+    sim_per_site = new int[nHosts];
+    ifstream pf("part");
+    unsigned int i;
+    for(i=0; i<nHosts-1; ++i) {
+      float part;
+      pf >> part;
+      sim_per_site[i] = (int)((part / 100) * nTasks);
+      acc += sim_per_site[i];
+    }
+    sim_per_site[i] = nTasks - acc;
   }
     
   int svc_init() {
@@ -120,6 +131,7 @@ public:
     return 0;
   }
   void svc_end() {
+    delete[] sim_per_site;
 #ifdef LOG
     cerr << "Emitter: DONE\n";
 #endif
@@ -136,13 +148,14 @@ public:
     uint_vg_type seed_vg(seed_rng, seed_gm);
     int **seeds = new int*[nHosts];
     int offset = 0;
+    
     for(unsigned i=0;i<nHosts;++i) {
-      seeds[i] = new int[1+sim_per_site];
+      seeds[i] = new int[1+sim_per_site[i]];
       seeds[i][0] = offset;
-      for(unsigned int j=0; j<sim_per_site; ++j, ++offset)
+      for(int j=0; j<sim_per_site[i]; ++j, ++offset)
 	seeds[i][j+1] = seed_vg();
 #ifdef LOG
-      for(unsigned int j=0; j<sim_per_site; ++j)
+      for(int j=0; j<sim_per_site[i]; ++j)
 	cerr << seeds[i][j] << " ";
       cerr << endl;
 #endif
@@ -158,20 +171,21 @@ public:
 #ifdef LOG
     cerr << name << ": preparing data for scattering seeds to " << dest << " ptr  " << ptr << "\n";
 #endif
-    int * num = new int(1+sim_per_site); 
+    int * num = new int(1 + sim_per_site[dest]); 
     int **seeds = (int **) ptr; //difficult to handle delete; 
-    struct iovec tasknum={num,sizeof(int)};
-    struct iovec iov={seeds[dest],*num * sizeof(int)};
+    struct iovec tasknum={num, sizeof(int)};
+    struct iovec iov={seeds[dest], *num * sizeof(int)};
     v.push_back(tasknum);
     v.push_back(iov);
   }
 
 private:
+  int *sim_per_site;
   unsigned int nTasks;
   unsigned int nHosts;
   bool fixed_seed;
   int fixed_seed_value;
-  unsigned int sim_per_site;
+  //unsigned int sim_per_site;
 protected:
   const std::string name;
   const std::string address;
@@ -346,14 +360,13 @@ public:
       // create a simulation
       int sim_seed = sv[i]; // get from a vector of seeds
       Simulation *fsp;
+      MYNEW(fsp, Simulation, offset+i, *driver.model, sim_seed
 #ifdef HYBRID
-	  MYNEW(fsp, Simulation, offset+i, *driver.model, sim_seed
-			  , rate_cutoff
-		    , population_cutoff
-			, sampling_period);
-#else
-	  MYNEW(fsp, Simulation, offset+i, *driver.model, sim_seed);
+	    , rate_cutoff
+	    , population_cutoff
+	    , sampling_period
 #endif
+	    );
       p = MALLOC(sizeof(simulation_task_t));
       tasks->at(i) = new (p) simulation_task_t(fsp, offset);
     }

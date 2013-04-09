@@ -1,7 +1,12 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-/*! \file pipeline.hpp
- *  \brief This file describes the pipeline skeleton.
+/*! 
+ * \link
+ * \file pipeline.hpp
+ * \ingroup high_level_patterns_shared_memory
+ *
+ * \brief This file describes the pipeline skeleton.
+ *
  */
 
 #ifndef _FF_PIPELINE_HPP_
@@ -30,7 +35,7 @@
 namespace ff {
 
 /*!
- *  \ingroup high_level
+ * \ingroup high_level_patterns_shared_memory
  *
  *  @{
  */
@@ -38,19 +43,26 @@ namespace ff {
 
 /*!
  *  \class ff_pipeline
+ * \ingroup high_level_patterns_shared_memory
  *
  *  \brief The Pipeline skeleton.
  *
- *  Pipelining is one of the simplest parallel patterns where data flows through 
- *  a series of stages (or nodes) and each stage processes the input data in some 
- *  ways, producing as output a modified version or new data. A pipeline's stage 
- *  can operate sequentially or in parallel and may or may not have an internal 
- *  state.
+ *  Pipelining is one of the simplest parallel patterns where data flows
+ *  through a series of stages (or nodes) and each stage processes the input
+ *  data in some ways, producing as output a modified version or new data. A
+ *  pipeline's stage can operate sequentially or in parallel and may or may not
+ *  have an internal state.
+ *
+ *  This class is defined in \ref pipeline.hpp
  */
  
 class ff_pipeline: public ff_node {
 protected:
-    /// Prepare the Pipeline skeleton for execution
+    /**
+     * It prepare the Pipeline skeleton for execution.
+     *
+     * \return TODO
+     */
     inline int prepare() {
         // create input FFBUFFER
         int nstages=static_cast<int>(nodes_list.size());
@@ -91,10 +103,12 @@ protected:
         return ret;
     }
 
-    /*! 
+    /**
      *  This function is required when no manager threads are present in the 
      *  pipeline, which would allow to freeze other threads before starting the 
      *  computation.
+     *
+     *  \return TODO
      */
     int freeze_and_run(bool=false) {
         freeze();
@@ -111,10 +125,14 @@ protected:
     } 
 
 public:
+    /**
+     * TODO
+     */
     enum { DEF_IN_BUFF_ENTRIES=512, DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+128)};
 
-    /*!
+    /**
      *  Constructor
+     *
      *  \param input_ch = true to set accelerator mode
      *  \param in_buffer_entries = input queue length
      *  \param out_buffer_entries = output queue length
@@ -128,15 +146,18 @@ public:
         out_buffer_entries(out_buffer_entries),fixedsize(fixedsize) {               
     }
     
+    /**
+     * Destructor
+     */
     ~ff_pipeline() {
         if (barrier) delete barrier;
     }
 
     /**
-     *  Add a stage to the Pipeline
+     *  It adds a stage to the Pipeline
      *
-     *  \param s a ff_node that is the stage to be added to the skeleton. The stage 
-     *  contains the task that has to be executed.
+     *  \param s a ff_node that is the stage to be added to the skeleton. The
+     *  stage contains the task that has to be executed.
      */
     int add_stage(ff_node * s) {        
         nodes_list.push_back(s);
@@ -144,7 +165,7 @@ public:
     }
 
     /**
-     * the last stage output queue will be connected 
+     * The last stage output queue will be connected 
      * to the first stage input queue (feedback channel).
      */
     int wrap_around() {
@@ -166,7 +187,9 @@ public:
         return 0;
     }
 
-    /// Run the Pipeline skeleton.
+    /**
+     * It run the Pipeline skeleton.
+     */
     int run(bool skip_init=false) {
         int nstages=static_cast<int>(nodes_list.size());
 
@@ -203,7 +226,9 @@ public:
         return 0;
     }
 
-    /// Run and wait all threads to finish.
+    /**
+     * It run and wait all threads to finish.
+     */
     int run_and_wait_end() {
         if (isfrozen()) return -1; // FIX !!!!
         stop();
@@ -212,7 +237,9 @@ public:
         return 0;
     }
     
-    /// Run and then freeze.
+    /**
+     * It run and then freeze.
+     */
     int run_then_freeze() {
         if (isfrozen()) {
             thaw();
@@ -224,7 +251,9 @@ public:
         return run();
     }
     
-    /// Wait for a stage to complete its task
+    /**
+     * It waits for a stage to complete its task
+     */
     int wait(/* timeval */ ) {
         int ret=0;
         for(unsigned int i=0;i<nodes_list.size();++i)
@@ -236,7 +265,9 @@ public:
         return ret;
     }
     
-    /// Wait freezing.
+    /**
+     * It waits for freezing.
+     */
     int wait_freezing(/* timeval */ ) {
         int ret=0;
         for(unsigned int i=0;i<nodes_list.size();++i)
@@ -249,20 +280,29 @@ public:
         return ret;
     } 
     
-    /// Stop all stages
+    /**
+     * It stops all stages.
+     */
     void stop() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->stop();
     }
-    /// Freeze all stages    
+
+    /**
+     * It freeze all stages.
+     */
     void freeze() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->freeze();
     }
-    /// Thaw all frozen stages    
+    /**
+     * It Thaws all frozen stages.
+     */
     void thaw() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->thaw();
     }
     
-    /** check if the pipeline is frozen */
+    /** 
+     * It checks if the pipeline is frozen 
+     */
     bool isfrozen() { 
         int nstages=static_cast<int>(nodes_list.size());
         for(int i=0;i<nstages;++i) 
@@ -270,7 +310,9 @@ public:
         return true;
     }
 
-    /** Offload the given task to the pipeline */
+    /** 
+     * It offfload the given task to the pipeline 
+     */
     inline bool offload(void * task,
                         unsigned int retry=((unsigned int)-1),
                         unsigned int ticks=ff_node::TICKS2WAIT) { 
@@ -290,9 +332,9 @@ public:
         return false;
     }    
     
-    /*! 
-     *  Load results. If \p false, EOS arrived or too many retries.
-     *  If \p true, there is a new value
+    /**
+     *  It loads results. If \p false, EOS arrived or too many retries. If \p
+     *  true, there is a new value
      */
     inline bool load_result(void ** task, 
                             unsigned int retry=((unsigned int)-1),
@@ -316,9 +358,13 @@ public:
         return false;
     }
 
-    // return values:
-    //   false: no task present
-    //   true : there is a new value, you should check if the task is an FF_EOS
+    /**
+     * TODO
+     *
+     * \return values:
+     * false: no task present
+     * true : there is a new value, you should check if the task is an FF_EOS
+     */
     inline bool load_result_nb(void ** task) {
         FFBUFFER * outbuffer = get_out_buffer();
         if (outbuffer) {
@@ -333,7 +379,12 @@ public:
         return false;        
     }
     
-    int   cardinality(BARRIER_T * const barrier)  { 
+    /**
+     * TODO
+     *
+     * \return TODO
+     */
+    int cardinality(BARRIER_T * const barrier)  { 
         int card=0;
         for(unsigned int i=0;i<nodes_list.size();++i) 
             card += nodes_list[i]->cardinality(barrier);
@@ -341,16 +392,22 @@ public:
         return card;
     }
     
-    /* the returned time comprise the time spent in svn_init and 
+    /* 
+     * The returned time comprise the time spent in svn_init and 
      * in svc_end methods
+     *
+     * \return TODO
      */
     double ffTime() {
         return diffmsec(nodes_list[nodes_list.size()-1]->getstoptime(),
                         nodes_list[0]->getstarttime());
     }
     
-    /*  the returned time considers only the time spent in the svc
+    /*  
+     *  The returned time considers only the time spent in the svc
      *  methods
+     *
+     *  \return TODO
      */
     double ffwTime() {
         return diffmsec(nodes_list[nodes_list.size()-1]->getwstoptime(),
@@ -358,12 +415,18 @@ public:
     }
     
 #if defined(TRACE_FASTFLOW)
+    /**
+     * TODO
+     */
     void ffStats(std::ostream & out) { 
         out << "--- pipeline:\n";
         for(unsigned int i=0;i<nodes_list.size();++i)
             nodes_list[i]->ffStats(out);
     }
 #else
+    /**
+     * TODO
+     */
     void ffStats(std::ostream & out) { 
         out << "FastFlow trace not enabled\n";
     }
@@ -371,16 +434,41 @@ public:
     
 protected:
     
-    /// ff_node interface
+    /**
+     * TODO
+     */
     void* svc(void * task) { return NULL; }
+    
+    /**
+     * TODO
+     */
     int   svc_init() { return -1; };
+    
+    /**
+     * TODO
+     */
     void  svc_end()  {}
+    
+    /**
+     * TODO
+     */
     int   get_my_id() const { return -1; };
+
+    /**
+     * TODO
+     */
     void  setAffinity(int) { 
         error("PIPE, setAffinity: cannot set affinity for the pipeline\n");
     }
+    
+    /**
+     * TODO
+     */
     int   getCPUId() { return -1;}
 
+    /**
+     * TODO
+     */
     int create_input_buffer(int nentries, bool fixedsize) { 
         if (in) return -1;
         if (nodes_list[0]->create_input_buffer(nentries, fixedsize)<0) {
@@ -391,6 +479,9 @@ protected:
         return 0;
     }
     
+    /**
+     * TODO
+     */
     int create_output_buffer(int nentries, bool fixedsize=false) {
         int last = static_cast<int>(nodes_list.size())-1;
         if (last<0) return -1;
@@ -403,6 +494,9 @@ protected:
         return 0;
     }
 
+    /**
+     * TODO
+     */
     int set_output_buffer(FFBUFFER * const o) {
         int last = static_cast<int>(nodes_list.size())-1;
         if (!last) return -1;
@@ -423,11 +517,9 @@ private:
     bool fixedsize;
 };
 
-
 /*!
  *  @}
  */
-
 
 } // namespace ff
 

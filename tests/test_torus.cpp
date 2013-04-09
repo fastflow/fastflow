@@ -27,11 +27,9 @@
 
 /* simple torus pipeline */
 
-
 #include <ff/pipeline.hpp>
 
 using namespace ff;
-
 
 // some globals
 const long NUMTASKS=1048576;
@@ -39,7 +37,6 @@ const long bigbatchSize=1024;
 const long smallbatchSize=256; // 64
 unsigned int nticks=0;
 long numBatch;
-
 
 struct masterStage: public ff_node {
     int svc_init() { eossent=false; return 0;}
@@ -70,20 +67,18 @@ struct Stage: public ff_node {
     void * svc(void * task) {  ticks_wait(nticks); return task; }
 };
 
-
 //
 void usage(char * name) {
     std::cerr << "usage: \n";
     std::cerr << "      " << name << " num-stages nticks\n";
 }
 
-
 int main(int argc, char * argv[]) {
-    if (argc!=3) {	
+    if (argc!=3) {
         usage(argv[0]);
         return -1;
     }
-	
+
     unsigned int nstages  = atoi(argv[1]);
     nticks                = atoi(argv[2]);
     

@@ -24,7 +24,7 @@
 # ---------------------------------------------------------------------------
 
 ifndef ZMQ_PATH
-$(error ZMQ_PATH env variable not defined)
+$(error The ZMQ_PATH variable is not defined in your environment)
 endif
 
 CC                   = gcc 
@@ -52,7 +52,7 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I. $(INCS)
-TARGET               = unicast broadcast allgather fromany scatter ondemand test11_pipe test11_torus test_marshal test_dinout pipe_farm pipe_farm2 farm farm_farm dmap lat11 bw11
+TARGET               = unicast broadcast allgather fromany scatter ondemand test11_pipe test11_torus test_marshal test_dinout pipe_farm pipe_farm2 farm farm_farm dmap lat11 lat11_v2 bw11
 
 
 .PHONY: all clean cleanall distclean install uninstall
@@ -99,6 +99,7 @@ farm:farm.o
 farm_farm:farm_farm.o
 dmap:dmap.o
 lat11:lat11.o
+lat11_v2:lat11_v2.o
 bw11:bw11.o
 
 clean: 

@@ -90,6 +90,21 @@ public:
     //backup
     backupKernel_wrapper(device_noisy_vect, device_image_data, image_height, image_width, smemSize, alg_parameters, par_parameters);
 
+    // Bitmap<T> bmp(image_width, image_height);
+    // CUDAPixel *buf = (CUDAPixel *)malloc(image_height * image_width * sizeof(CUDAPixel));
+    // cudaMemcpy(buf, device_image_data, image_height * image_width * sizeof(CUDAPixel), cudaMemcpyDeviceToHost);
+    // CUDAPixel *buf_iterator = buf;
+    // for(int i=0; i<image_height; i++)
+    //   for(int j=0; j<image_width; j++)
+    // 	bmp.set(j, i, (buf_iterator++)->grey);
+    // free(buf);
+    // unsigned int chk = 0;
+    // for(int i=0; i<image_height; ++i)
+    //   for(int j=0; j<image_width; ++j)
+    // 	chk += bmp.get(j, i);
+    // cerr << "checksum = " << chk << endl;
+	
+
 #if CUDART_VERSION >= 4000
     cudaDeviceSynchronize();
 #else

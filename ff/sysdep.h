@@ -139,7 +139,7 @@ static inline void *getAlignedMemory(size_t align, size_t size) {
 		return NULL; 
 	// Fallback solution in case of strange segfaults on memory allocator
     //ptr = ::malloc(size);
-#else // linux
+#else // linux or MacOS >= 10.6
     if (posix_memalign(&ptr,align,size)!=0)
         return NULL; 
 #endif

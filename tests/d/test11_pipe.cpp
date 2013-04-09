@@ -36,7 +36,7 @@ class Node0: public ff_node {
 public:
     void * svc(void*) {
 	printf("Node0 starting\n");
-	for(long i=1;i<=1000;++i)
+	for(long i=1;i<=10000;++i)
 	    ff_send_out((void*)i);
 	printf("Node0 exiting\n");
 	return NULL;
@@ -66,12 +66,12 @@ public:
     }
 
     void * svc(void *task) {	
-	//printf("Node1 received %ld\n", (long)task);
+	printf("Node1 received %ld\n", (long)task);
 	return (new long((long)task)); // the callback deallocates the data
     }
 
     void svc_end() {
-	printf("Node1 ending\n");
+	printf("Node1 svn_end\n");
     }
 
 protected:
@@ -97,7 +97,7 @@ public:
     }
 
     void * svc(void *task) {
-	printf("Node2 received %ld\n", *(long*)task);
+	//printf("Node2 received %ld\n", *(long*)task);
 	return (new long(*(long*)task));
     }
 
@@ -132,7 +132,7 @@ private:
 class Node3: public ff_node {
 public:
     void *svc(void *task) {
-	printf("received %ld\n", *(long*)task);
+	printf("Node3 received %ld\n", *(long*)task);
 	delete ((long*)task);
 	return GO_ON;
     }
