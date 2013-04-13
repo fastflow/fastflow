@@ -28,26 +28,23 @@ Main Page contents
  *
  *  \image html FastFlow.pdf
  *
- *  \li The top layer provides the model for applications on multicore,
- *  manycore and distributed platforms of multicores. The aim is to provide
- *  efficient and portable application model with high level patterns such as
- *  farm (farm.hpp), pipeline (pipeline.hpp) and FastFlow basic structure
- *  as Node (node.hpp).
+ *  \li Layer 1: The top layer provides the high-level patterns for writing
+ *  skeletal programs for shared-memory and distributed-memory systems. The aim
+ *  is to provide efficient and portable application model with high level
+ *  patterns such as farm (farm.hpp), pipeline (pipeline.hpp).
  *
- *  \li The middle layer provides the streaming network in the form of queues.
- *  We have two different implementations: Arbitrary streaming networks and
- *  simple streaming networks. Arbitrary streaming network provides lock-free
- *  single producer single consumer (SPSC) and multiple producer multiple
- *  consumer (MPMC) queues based on FastFlow node (node.hpp) or FastFlow
- *  distributed node (dnode.hpp). The simple streaming network provides
- *  lock-free single producer single consumer (SPSC) queues based on threading
- *  model for shared memory and zercopy networking plus processor model on the
- *  distributed network.
+ *  \li Layer 2: The middle layer provides the arbitrary streaming network in
+ *  the form of queues with possible combination of multiple inputs and
+ *  multiple outputs. Arbitrary streaming network provides lock-free single
+ *  producer single consumer (SPSC) and multiple producer multiple consumer
+ *  (MPMC) queues based on FastFlow node (node.hpp) or FastFlow distributed
+ *  node (dnode.hpp). 
  * 
- *  \li The bottom layer provides the low-level implementation of shared memory
- *  and distributed memory. The shared memory include SMP, cc-UMA and cc-NUMA
- *  memory architectures. While the distributed memory includes cloudes,
- *  clusters of SMPs or grids.
+ *  \li Layer 3: The bottom layer provides the simple streaming network in form
+ *  of queues with single input and single output. The simple streaming network
+ *  provides lock-free single producer single consumer (SPSC) queues based on
+ *  threading model for shared memory and zercopy networking plus processor
+ *  model on the distributed network.
  *
  */
 //********************************
@@ -128,7 +125,7 @@ LEVEL 1
 LEVEL 2
 //--------------------------------
  /*!
-  *  \defgroup streaming_network_arbitrary Arbitrary streaming network
+  *  \defgroup streaming_network_arbitrary Arbitrary streaming network (ParaPhrase HAL)
   *
   *  \brief This is the second level of FastFlow and defines the arbitrary patterns for stream parallelism. 
   *

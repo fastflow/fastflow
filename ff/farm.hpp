@@ -1324,7 +1324,7 @@ protected:
 };
 
 /*!
- * \ingroup high_level_patterns_shared_memory
+ * \ingroup streaming_network_arbitrary_shared_memory
  *
  * \brief FastFlow node with multiple inputs
  *
@@ -1459,10 +1459,8 @@ private:
     ff_gatherer* gt;
 };
 
-
-
 /*!
- *  \ingroup high_level_patterns_shared_memory
+ *  \ingroup streaming_network_arbitrary_shared_memory
  *
  * \brief Multiple output FastFlow node
  *

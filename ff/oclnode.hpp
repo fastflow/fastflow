@@ -5,7 +5,11 @@
  * \file oclnode.hpp
  * \ingroup streaming_network_arbitrary_shared_memory
  *
- * \brief TODO
+ * \brief Defines the OpenCL implementation of FastFlow node
+ *
+ * This files defines the FastFlow implementation of OpenCL. This
+ * implementation enables us to support FastFlow on the GPGPUs. 
+ *
  */
 
 /* ***************************************************************************
@@ -53,7 +57,9 @@ namespace ff{
  * \class ff_oclNode
  * \ingroup streaming_network_arbitrary_shared_memory
  *
- * \brief TODO
+ * \brief OpenCL implementation of FastFlow node
+ *
+ * This class defines the OpenCL implementation of FastFlow node.
  *
  * This class is defined in \ref ff_oclnode.hpp
  *
@@ -62,19 +68,32 @@ class ff_oclNode : public ff_node, public Ocl_Utilities {
 public:
 
     /**
-     * TODO
+     * \brief Setup OCL object
+     *
+     * It is a pure virtual function. It sets up the OpenCL object of the FastFlow node.
+     *
+     * \parm id is the identifier of the opencl device
      */
-    virtual void  svc_SetUpOclObjects(cl_device_id id)=0;
+    virtual void svc_SetUpOclObjects(cl_device_id id)=0;
     
     /**
-     * TODO
+     * \brief Releases OCL object
+     *
+     * It is a pure virtual function, and releases the OpenCL object of the
+     * FastFlow node.
+     *
      */
-    virtual void  svc_releaseOclObjects()=0;
+    virtual void svc_releaseOclObjects()=0;
      
-protected:    
+protected:
    
     /**
-     * TODO
+     * \brief Intializes OpenCL instance
+     *
+     * It initializes the OpenCL instance. 
+     *
+     * \return If successful \p true is returned, otherwise \p false is
+     * returned.
      */
     bool initOCLInstance() {
         Environment::instance()->createEntry(tId, this);
@@ -86,17 +105,28 @@ protected:
     }
     
     /**
-     * TODO
+     * \brief Constructor
+     *
+     * It construct the OpenCL node for the device.
+     *
      */
     ff_oclNode():baseclass_ocl_node_deviceId(NULL),tId(-1){ }
     
     /**
-     * TODO
+     * \brief Device rules
+     *
+     * It defines the ruls for the device.
+     *
+     * \parm id is the identifier of the device
+     *
+     * \return \p true is always returned
      */
     bool  device_rules(cl_device_id id){ return true;}
     
     /**
-     * TODO
+     * \brief Creates OpenCL
+     *
+     * It initializes OpenCL instance,
      */
     inline void svc_createOCL(){
         if (baseclass_ocl_node_deviceId==NULL) {
@@ -114,14 +144,20 @@ protected:
     } 
     
     /**
-     * TODO
+     * \brief Releases OpenCL
+     *
+     * It releases OpenCL instance.
      */
     inline void svc_releaseOCL(){ 
-        svc_releaseOclObjects();        
+        svc_releaseOclObjects();
     }
     
     /**
-     * TODO
+     * \brief Evaluation
+     *
+     * it evalautes the OpenCL node on the device.
+     *
+     * \return If successful \p true, otherwise \p false
      */
     inline bool evaluation(){
         cl_device_id nDId = Environment::instance()->reallocation(tId); 

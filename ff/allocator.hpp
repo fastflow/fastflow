@@ -985,7 +985,6 @@ public:
      */
     ff_allocator(size_t max_size=0, const int delayedReclaim=0) :
         alloc(0), max_size(max_size), delayedReclaim(delayedReclaim) { }
-
     /**
      * Destructor
      */
