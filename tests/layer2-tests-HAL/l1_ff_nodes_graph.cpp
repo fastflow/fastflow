@@ -47,33 +47,31 @@
 
 using namespace ff;
 
-
 class A: public ff_monode {
 public:
 
     A(std::vector<ff_node*>& w,long ntasks):workers(w),ntasks(ntasks) {}
-    
+
     int svc_init() {
         printf("A initialised: sending %ld tasks\n",ntasks);
         return 0;
     }
 
     void* svc(void *) {
- 
         for(long i=1;i<=ntasks;++i) 
             ff_send_out((void*)i);
 
-        return NULL;                
+        return NULL;
     }
 
-    /* this allows to add the input channels */
+    /* This allows to add the input channels */
     int set_output(std::vector<ff_node*>& w) {
         w = workers;
         return 0;
     }
 
     int wait() { 
-        return ff_monode::wait(); 
+        return ff_monode::wait();
     }
 
 protected:
@@ -113,7 +111,6 @@ public:
 protected:
     std::vector<ff_node*> workers;
 };
-
 
 class C: public ff_node {
 public:
@@ -156,7 +153,6 @@ private:
     long received;
 };
 
-
 class D: public ff_node {
 public:
     void* svc(void *t) {
@@ -171,7 +167,6 @@ public:
         return ff_node::create_input_buffer(nentries, fixedsize);
     }
 };
-
 
 int main() {
     long ntasks = 20;
