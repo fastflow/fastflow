@@ -5,7 +5,9 @@
  *  \file dnode.hpp
  *  \ingroup streaming_network_arbitrary_distributed_memory
  *  
- *  \brief It contains the definition of the \p ff_dnode class, which is an
+ *  \brief Defines the distributed version of FastFlow node
+ *
+ *  It contains the definition of the \p ff_dnode class, which is an
  *  extension of the base class \p ff_node, with features oriented to
  *  distributed systems.
  *
@@ -56,6 +58,8 @@ namespace ff {
 static const char FF_DEOS[]="EOS";
 
 /**
+ * \brief Defines callback
+ *
  * It defines the callback.
  */
 typedef void (*dnode_cbk_t) (void *,void*);
@@ -70,12 +74,13 @@ typedef void (*dnode_cbk_t) (void *,void*);
  *  \class ff_dnode
  *  \ingroup streaming_network_arbitrary_distributed_memory
  *
- *  \brief This class represents the distributed version of \p ff_node.
+ *  \brief Defines the distributed version of FastFlow node
  *
- *  A \p ff_dnode is actually a \p ff_node with an extra communication channel
- *  (<em>external channel</em>), which connects the edge-node of the graph with
- *  one or more edge-nodes of other FastFlow application graphs running on the
- *  same host or on different host(s).
+ *  This class represents the distributed version of \p ff_node. A \p ff_dnode
+ *  is actually a \p ff_node with an extra communication channel (<em>external
+ *  channel</em>), which connects the edge-node of the graph with one or more
+ *  edge-nodes of other FastFlow application graphs running on the same host or
+ *  on different host(s).
  *
  *  It is implemented as a template: the template type \p CommImpl refers to
  *  the communication pattern that the programmer wishes to use to connect
@@ -90,12 +95,12 @@ template <typename CommImpl>
 class ff_dnode: public ff_node {
 public:
     /**
-     * TODO
+     * Implements communication transport layer
      */
     typedef typename CommImpl::TransportImpl::msg_t msg_t;
     
     /**
-     * TODO
+     * Defines sender and receiver
      */
     enum {SENDER=true, RECEIVER=false};
 
@@ -105,10 +110,12 @@ protected:
     static dnode_cbk_t cb;
     
     /**
-     * TODO
+     * \brief Free the message
      *
-     * \parm data TODO
-     * \parm arg TODO
+     * It frees the message.
+     *
+     * \parm data pointer to the data to be freed
+     * \parm arg arguments to be passed to the callback function
      *
      */
     static inline void freeMsg(void * data, void * arg) {
@@ -116,47 +123,56 @@ protected:
     }
 
     /**
-     * TODO
+     * \brief Frees header
      *
-     * \parm data TODO
+     * It frees the header of the message
+     *
+     * \parm data is pointer to the header
+     *
      */
     static inline void freeHdr(void * data, void *) {
         delete static_cast<uint32_t*>(data);
     }
 
     /**
-     * TODO
+     * \brief Checks EOS
      *
-     * \parm data
+     * It checks if it is EOS of the message.
+     * 
+     * \parm data is the array of messages
      *
-     * \return TODO
+     * \return The EOS of the message
      */
     inline bool isEos(const char data[msg_t::HEADER_LENGTH]) const {
         return !(data[0]-'E' + data[1]-'O' + data[2]-'S' + data[3]-'\0');
     }
     
     /**
-     * Constructor
+     * \brief Constructor
+     *
+     * It builds the FastFlow node.
      */
     ff_dnode():ff_node(),skipdnode(true),neos(0) {}
     
     /**
-     * Destructor
+     * \brief Destructor
      *
-     * It closes all connections.
+     * It closes all communication connections.
      */
-    virtual ~ff_dnode() {         
+    virtual ~ff_dnode() {
         com.close();
         delete com.getDescriptor();
     }
 
     /**
-     * TODO
+     * \brief Defines internal push
      *
-     * \parm ptr TODO
-     * \parm comm TODO
+     * It sends the signal. TODO please write more here.
      *
-     * \return TODO
+     * \parm ptr is pointer to the message
+     * \parm comm is communication signal
+     *
+     * \return If successful \p true, otherwise \p false.
      */
     template<typename CI>
     inline bool internal_push(void * ptr, CI& comm) { 
@@ -208,13 +224,14 @@ protected:
         return true;
     }
 
-    
     /**
+     * \brief Pushes the data
+     *
      * It overrides \p ff_node's \p push method 
      *
-     * \parm ptr TODO
+     * \parm ptr points to the data
      *
-     * \return TODO
+     * \return The status of \p internal_push() as Boolean value.
      */
     virtual inline bool push(void * ptr) { 
         if (skipdnode || !P) return ff_node::push(ptr);
@@ -222,9 +239,13 @@ protected:
     }
     
     /** 
-     * It overrides \p ff_node 's \p pop method 
+     * \brief Pops the data
      *
-     * \return TODO
+     * It overrides \p ff_node 's \p pop method.
+     *
+     * \parm ptr points to the data
+     *
+     * \return If successful \p true is returned, otherwise \p false.
      */
     virtual inline bool pop(void ** ptr) { 
         if (skipdnode || P) return ff_node::pop(ptr);
@@ -277,6 +298,8 @@ protected:
     
 public:
     /**
+     *  \brief Initializes external communication channel
+     *
      *  It initializes the external communication channel.
      *
      *  \param name is the name of the channel
@@ -289,7 +312,7 @@ public:
      *  \param cbk is the callback function that will be called once when a message just sent 
      *                 is no longer in use by the run-time
      *
-     *  \return TODO
+     *  \return The status of \p com.init() as an integer value
      */
     int init(const std::string& name, const std::string& address,
              const int peers, typename CommImpl::TransportImpl* const transp, 
@@ -316,10 +339,12 @@ public:
      */
 
     /** 
+     *  \brief Prepares output message
+     *
      *  It is used to prepare (non contiguous) output messages 
      *
      *  \param v is a vector containing the pool of messages
-     *  \param ptr is ...
+     *  \param ptr is pointer to the data
      *  \param sender is the sender of the message
      */
     virtual void prepare(svector<iovec>& v, void* ptr, const int sender=-1) {
@@ -337,6 +362,8 @@ public:
      */
     
     /** 
+     *  \brief Prepars a pool of messages
+     *
      *  It is used to give to the run-time a pool of messages on which
      *  input message frames will be received
      *
@@ -356,14 +383,16 @@ public:
     }
     
     /**
+     *  \brief Unmarshalling
+     *
      *  It is called once, when all frames composing the message
      *  have been received by the run-time. Within that method, it is possible
      *  to convert or re-arrange all the frames back to their original data or
      *  object layout. 
      *
-     *  \parm v TODO
-     *  \parm vlen TODO
-     *  \parm task TODO
+     *  \parm v is vector of messages
+     *  \parm vlen is the length of the vector
+     *  \parm task pointer to the task
      */
     virtual void unmarshalling(svector<msg_t*>* const v[], const int vlen, void *& task) {
         assert(vlen==1 && v[0]->size()==1); 
@@ -372,36 +401,45 @@ public:
     }
 
     /**
+     * \brief Sets call back arguments
+     *
      * It is used to pass an additional parameter (the 2nd one)
      * to the callback function. Typically it is called in the prepare method
      * of the producer.
      *
-     * \parm arg TODO
+     * \parm arg points to the arguments to be pussed to the callback
      */
     void setCallbackArg(void* arg) { callbackArg.push_back(arg);}
     
     /** 
-     *  It runs the \p dnode as a stand-alone thread. Typically, it should
-     *  not be called by application code unless you want to have just a
-     *  sequential \p dnode .
+     *  \brief Executes the FastFlow dnode
      *
-     *  \return TODO
+     *  It runs the \p dnode as a stand-alone thread. Typically, it should not
+     *  be called by application code unless you want to have just a sequential
+     *  \p dnode .
+     *
+     *  \return The status of the \p run() method.
      */
-    int  run(bool=false) { return  ff_node::run(); }    
+    int  run(bool=false) { return  ff_node::run(); }
 
     /**
+     * \brief Waits the FastFlow node
+     *
      * It waits the thread to finish.
      *
-     * \return TODO
+     * \return The status of \p wait() method.
      */
-    int  wait() { return ff_node::wait(); }    
+    int  wait() { return ff_node::wait(); }
     
     /**
+     * \brief Skips first pop
+     *
      * It jumps the first pop from the input queue or from the
      * input external channel. This is typically used in the first stage of a
      * cyclic graph (e.g. the first stage of a torus pipeline).
      *
-     * \parm sk TODO
+     * \parm sk is boolean value showing whether skifirstpop should be skipped
+     * or not
      */
     void skipfirstpop(bool sk)   { ff_node::skipfirstpop(sk); }
 
@@ -437,22 +475,28 @@ class ff_dinout: public ff_dnode<CommImplIn> {
 protected:
 
     /**
-     * TODO
+     * Defines the output communication
      */
     typedef typename CommImplOut::TransportImpl::msg_t msg_t;
 
     /**
-     * Destructor
+     * \brief Destructor
      *
      * It closes all connections.
      */
-    virtual ~ff_dinout() {         
+    virtual ~ff_dinout() {
         comOut.close();
         delete comOut.getDescriptor();
     }
     
     /** 
+     * \brief Pushes the task
+     *
      * It overrides \p ff_dnode's \p push method.
+     *
+     * \parm ptr points to the task
+     *
+     * \return The status of \p internal_push() method.
      */
     virtual inline bool push(void * ptr) { 
         return ff_dnode<CommImplIn>::internal_push(ptr, comOut);
@@ -460,19 +504,21 @@ protected:
     
 public:
     /**
+     * \brief Initializes input communication channels
+     *
      * It initializes all the input communication channels.
      *
-     * \parm name TODO
-     * \parm address TODO
-     * \parm peers TODO
-     * \parm transp TODO
-     * \parm nodeID TODO
+     * \parm name is the string to be passed through the communication channel
+     * \parm address is the address of the destination
+     * \parm peers are the number of peers involved in the communication
+     * \parm transp is the transport for the communication
+     * \parm nodeID is the identifer of the node
      *
-     * \return TODO
+     * \return The status of \p com.init() method.
      */
     int initIn(const std::string& name, const std::string& address,
-             const int peers, typename CommImplIn::TransportImpl* const transp, 
-             const int nodeId=-1) {       
+             const int peers, typename CommImplIn::TransportImpl* const transp,
+             const int nodeId=-1) {
 
         ff_dnode<CommImplIn>::skipdnode=false;
         ff_dnode<CommImplIn>::P=ff_dnode<CommImplIn>::RECEIVER;
@@ -483,16 +529,18 @@ public:
     }
 
     /**
+     * \brief Initializes the output communicaiton channels
+     *
      * It initializes all the output communication channels.
      *
-     * \parm name TODO
-     * \parm address TODO
-     * \parm peers TODO
-     * \parm transp TODO
-     * \pame nodeId TODO
-     * \parm cbk TODO
+     * \parm name is the string to be sent
+     * \parm address is the address of the destination
+     * \parm peers are the number of peers involve in the communication
+     * \parm transp is the transport address
+     * \pame nodeId is the identifier of the node
+     * \parm cbk is the callback 
      *
-     * \return TODO
+     * \return The status of \p comOut.init() method.
      */
     int initOut(const std::string& name, const std::string& address,
                 const int peers, typename CommImplOut::TransportImpl* const transp, 

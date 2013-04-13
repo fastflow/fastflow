@@ -1,0 +1,28 @@
+%model "Neurospora Circadian Clock"
+
+%alphabet
+M F
+
+%rules
+// vs KI
+{T} ({nucleus} ~x | F ~X) ~Y >>>[5 160.0 100.0 4.0 576.0 1.5]>>>  ({nucleus} ~x | F ~X)  M ~Y %%
+// ks
+{T} M ~X >>>[0.5]>>> M F ~X %%
+// vm km
+{T} M ~X >>>[1 50.5 50.0]>>>  ~X %%
+// vd Kd
+{T} F ~X >>>[1 140.0 13.0]>>> ~X %%
+// k1
+{T} F ({nucleus} ~x | ~X ) ~Y >>>[0.5]>>> ({nucleus} ~x | F ~X) ~Y %%
+// k2
+{T} ({nucleus} ~x| F ~X) ~Y >>>[0.6]>>> F ({nucleus} ~x| ~X) ~Y %%
+
+
+%term
+
+78*M  27*F ({nucleus} | 88*F)
+
+%monitors
+"FC": {T} F %%
+"FN": {nucleus} F %%
+"M" : {T} M %%

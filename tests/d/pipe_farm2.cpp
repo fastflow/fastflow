@@ -265,7 +265,11 @@ public:
 	for(unsigned i=0;i<taskSize;++i)
 	    for(unsigned j=0;j<taskSize;++j)
 		for(unsigned k=0;k<taskSize;++k)
+#if defined(OPTIMIZE_CACHE)
+		    myt[j*taskSize+k] += t[j*taskSize+i]*t[i*taskSize+k];
+#else
 		    myt[i*taskSize+j] += t[i*taskSize+k]*t[k*taskSize+j];
+#endif
 	
 	memcpy(t,myt,taskSize*taskSize*sizeof(double));
 	++cnt;

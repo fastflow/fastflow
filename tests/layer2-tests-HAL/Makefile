@@ -61,7 +61,7 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I./. $(INCS)
-TARGET               = l1_ff_nodes_graph l2_generic_dag l2_cyclic_graph l2_cyclic_graph_trace
+TARGET               = l1_ff_nodes_graph l2_generic_dag l2_cyclic_graph l2_cyclic_graph_trace l2_mapping_utils l2_generic_dag_pinning
 #test_mpmc2 test_bmpmc latency_MPMC 
 
 
@@ -100,6 +100,8 @@ l1_ff_nodes_graph: l1_ff_nodes_graph.o
 l2_generic_dag: l2_generic_dag.o
 l2_cyclic_graph: l2_cyclic_graph.o
 l2_cyclic_graph_trace: l2_cyclic_graph_trace.o
+l2_mapping_utils: l2_mapping_utils.o
+l2_generic_dag_pinning: l2_generic_dag_pinning.o
 
 clean: 
 	-rm -fr *.o *~

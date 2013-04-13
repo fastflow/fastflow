@@ -1,0 +1,9 @@
+#master
+scwc_distr -i <input> -o out -t 1000000 -s 4000 -n 100 --address1 <scatter:port> --address2 <fromany:port> -w 2 --role 1 --n-worker-sites <n_hosts>
+
+#host i
+scwc_distr -i <input> -o out -t 1000000 -s 4000 -n 100 --address1 <scatter:port> --address2 <fromany:port> -w 2 --role 0 --n-worker-sites i
+
+-n: n. simulazioni totali che vengono poi suddivise tra gli host
+-w: n. sim. workers per host
+con -t 1000000 -s 4000 il run viene piuttosto lungo (approx. 14h seq. @ 2GHz)

@@ -25,15 +25,15 @@
  ****************************************************************************
  */
 /*  Author: aldinuc
- *  Layer 2 test: dag of nodes, 
+ *  Layer 2 test: dag of nodes,
  *                e1,e2 = multiple output nodes (ff_monode)
  *                n1,n2,n3,n4,n5,6 = nodes (ff_node)
  *                c1 = multiple input node (ff_minode)
  *
  *      [e1]---->[n1]---->[n5]
  *       +
- *       +------>[n2]-------v  
- *                        [c1]              
+ *       +------>[n2]-------v
+ *                        [c1]
  *       +------>[n3]-------^
  *       +
  *      [e2]---->[n4]---->[n6]
@@ -61,13 +61,12 @@ public:
         printf("E%ld terminating\n",id);
     }
 
-
     void* svc(void *) {
  
         for(long i=1;i<=ntasks;++i) 
             ff_send_out((void*)i);
 
-        return NULL;                
+        return NULL;
     }
 
     /* this allows to add the input channels */
@@ -128,7 +127,6 @@ private:
     long id;
     long received;
 };
-
 
 
 class C: public ff_minode {

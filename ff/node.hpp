@@ -54,7 +54,9 @@ namespace ff {
  *  \class Barrier
  *  \ingroup streaming_network_arbitrary_shared_memory
  *
- *  \brief This class models a classical \a Mutex. This class provides the
+ *  \brief Models a classical mutex
+ *
+ *  This class models a classical \a Mutex. This class provides the
  *  methods necessary to implement a low-level \p pthread mutex.
  *
  *  This class is defined in \ref node.hpp
@@ -158,7 +160,7 @@ private:
  *  \class spinBarrier
  *  \ingroup streaming_network_arbitrary_shared_memory
  *
- *  \brief This class models a classical \a Mutex.
+ *  \brief Models a classical \a Mutex.
  *
  *  This class provides the methods necessary to implement a low-level
  *  pthread mutex.
@@ -718,8 +720,7 @@ static void * proxy_thread_routine(void * arg) {
  *
  *  This class describes the \p ff_node, which is the basic building
  *  block of every skeleton in stream programming. It is used to encapsulate
- *  sequential portions of code implementing functions, as well as higher level
- *  parallel patterns such as pipelines and farms etc. \p ff_node defines 3
+ *  sequential portions of code implementing functions. \p ff_node defines 3
  *  methods; two optional and one mandatory. The optional methods are (1) \p
  *  svc_init and (2) \p svc_end. The mandatory method is \p svc (pure virtual
  *  method). The \p svc_init method is called once at node initialization,
@@ -750,20 +751,24 @@ protected:
     void set_id(int id) { myid = id;}
 
     /**
-     *  Virtual method. Pushes data into the output buffer.
+     *  \brief Pushes to output buffer
+     *
+     *  It is a virtual method. It pushes data into the output buffer.
      *
      *  \param ptr pointer to the data to be pushed out.
      *
-     *  \return pointer to the data.
+     *  \return Boolean value showing the status of push operation.
      */
     virtual inline bool push(void * ptr) { return out->push(ptr); }
     
     /**
-     *  Virtual method. It pops data from the input buffer.
+     *  \brief Pops the data from input buffer
      *
-     *  \param ptr pointer to the location where to store the data.
+     *  It is a virtual method. It pops data from the input buffer.
      *
-     *  \reutn pointer to the element of the data.
+     *  \param ptr pointer to the location where the data is located
+     *
+     *  \return A boolean value showing the status of the pop operation.
      */
     virtual inline bool pop(void ** ptr) { 
         if (!in_active) return false; // it does not want to receive data
@@ -771,27 +776,33 @@ protected:
     }
 
     /**
+     * \brief Skips the first element popped
+     *
      * It skips the first element popped.
      *
-     * \parm sk TODO
+     * \parm sk Boolean value showing if the first element should be skipped.
      */
     virtual inline void skipfirstpop(bool sk)   { skip1pop=sk;}
 
     /**
-     * It skips the first element popped.
+     * \brief Gets the status of \p skipfirstpop
      *
-     * \return the skipped element.
+     * It returns the status of \p ski1pop 
+     * 
+     * \return A booleon value showing the status of \p ski1pop
      */
     bool skipfirstpop() const { return skip1pop; }
     
     /** 
-     *  It create an input buffer for the ff_node. 
+     * \brief Creates the input buffer
+     *
+     *  It create an input buffer for the \p ff_node. 
      *
      *  \param nentries the size of the buffer
      *  \param fixedsize flag to decide whether the buffer is resizable.
      *  Default is \p true
      *
-     *  \return 0 if successful otherwise a negative value.
+     *  \return 0 if successful, otherwise a negative value.
      */
     virtual int create_input_buffer(int nentries, bool fixedsize=true) {
         if (in) return -1;
@@ -802,29 +813,32 @@ protected:
     }
     
     /** 
-     *  It creates an output buffer for the ff_node. 
+     *  \brief Creates the output buffer
+     *
+     *  It creates an output buffer for the \p ff_node. 
      *
      *  \param nentries the size of the buffer 
-     *  \param fixedsize flag to decide
-     *  whether the buffer is resizable. Default is \p false .
+     *  \param fixedsize flag to decide whether the buffer is resizable.
+     *  Default is \p false .
      *
-     *  \return 0 if successful otherwise a negative value.
+     *  \return 0 if successful, otherwise a negative value.
      */
     virtual int create_output_buffer(int nentries, bool fixedsize=false) {
         if (out) return -1;
-        out = new FFBUFFER(nentries,fixedsize);        
+        out = new FFBUFFER(nentries,fixedsize); 
         if (!out) return -1;
         myoutbuffer=true;
         return (out->init()?0:-1);
     }
 
     /** 
+     *  \brief Sets the output buffer
+     *
      *  It sets the output buffer for the ff_node.
      *
-     *  \param o a buffer object, which can be of type \p SWSR_Ptr_Buffer or 
-     *  \p uSWSR_Ptr_Buffer
+     *  \param o a buffer object of type \p FFBUFFER
      *
-     *  \return 0 if successful otherwise a negative value is returned.
+     *  \return 0 if successful, otherwise a negative value is returned.
      */
     virtual int set_output_buffer(FFBUFFER * const o) {
         if (myoutbuffer) return -1;
@@ -833,10 +847,11 @@ protected:
     }
 
     /** 
+     *  \brief Sets the input buffer
+     *
      *  It sets the input buffer for the ff_node.
      *
-     *  \param i a buffer object, which can be of type \p SWSR_Ptr_Buffer or 
-     *  \p uSWSR_Ptr_Buffer
+     *  \param i a buffer object of type \p FFBUFFER
      *
      *  \return 0 if successful otherwise a negative value is returned.
      */
@@ -847,10 +862,12 @@ protected:
     }
 
     /**
-     * It executes the thread.
+     * \brief Executes the FastFlow thread
      *
-     * \return It returns the state of the run method if successful, otherwise a
-     * negative value is returned.
+     * It executes the FastFlow thread.
+     *
+     * \return The state of the run method if successful, otherwise a negative
+     * value is returned.
      */
     virtual int run(bool=false) { 
         thread = new thWorker(this);
@@ -859,6 +876,8 @@ protected:
     }
     
     /**
+     * \brief Freezes the thread and then run
+     *
      * It freezes the thread and then run.
      *
      * \return It returns the state of the run method if successful, otherwise
@@ -872,7 +891,9 @@ protected:
     }
 
     /**
-     * It let to wait the thread for termination.
+     * \brief Waits for thread termination
+     *
+     * It lets the thread to wait until termination.
      *
      * \return If successful the state of the wait method otherwise a negative
      * value.
@@ -883,6 +904,8 @@ protected:
     }
     
     /**
+     * \brief Waits for thread to thaw
+     *
      * It wait for thread to thaw.
      *
      * \return If successful the state of the \p wait_freezing method, otherwise a
@@ -894,6 +917,8 @@ protected:
     }
     
     /**
+     * \brief Stops the thread
+     *
      * It stops thread.
      *
      * \return If the thread does not exist, then the method is returned.
@@ -904,6 +929,8 @@ protected:
     }
     
     /**
+     * \brief Freezes the thread
+     *
      * It freezes the thread.
      *
      * \return If thread does not exist, then the method returns.
@@ -914,9 +941,12 @@ protected:
     }
     
     /**
-     * It checks if the thread is frozem then thaw it.
+     * \brief Checks to thaw a thread
      *
-     * \return If the thread does not exist, then the method is returned.
+     * It checks if the thread is created then thaw it.
+     *
+     * \return If the thread does not exist then the method is returned,
+     * otherwise the thread is thawed.
      */
     virtual void thaw() { 
         if (!thread) return; 
@@ -924,9 +954,12 @@ protected:
     }
     
     /**
+     * \brief Checks if the thread is frozen
+     *
      * It checks whether the thread is frozen.
      *
-     * \return If the thread does not exists, then false is returned.
+     * \return If the thread does not exists then false is returned, otherwise
+     * the status of \p isfrozen() is returned.
      */
     virtual bool isfrozen() { 
         if (!thread) 
@@ -935,9 +968,13 @@ protected:
     }
     
     /**
+     * \brief Assigns the cardinality
+     *
      * It assigns the cardinality.
      *
      * \parm b is the barrier.
+     *
+     * \return 1 is always returned.
      */
     virtual int  cardinality(BARRIER_T * const b) { 
         barrier = b;
@@ -945,6 +982,8 @@ protected:
     }
     
     /**
+     * \brief Sets the barrier
+     *
      * It sets the barrier.
      *
      * \parmm b is the barrier.
@@ -952,9 +991,12 @@ protected:
     virtual void set_barrier(BARRIER_T * const b) {
         barrier = b;
     }
-    //FIXME: what is the difference between cardinality and set_barrier?
+    //FIXME: what is the difference between cardinality and set_barrier? They
+    //are the same functions no?
 
     /**
+     * \brief Gets the time
+     *
      * It retrives the tim spent in FastFlow pattern.
      *
      * \return The difference in the time spent.
@@ -964,6 +1006,8 @@ protected:
     }
 
     /**
+     * \brief Gets the time
+     *
      * It retrieves the time spend in FastFlow skeleton.
      *
      * \return The difference in the time spent.
@@ -980,6 +1024,8 @@ public:
     enum {TICKS2WAIT=1000};
 
     /**
+     * \brief The \p svc method
+     *
      * It is a pure virtual function. If \p svc returns a NULL value then
      * End-Of-Stream (EOS) is produced on the output channel.
      *
@@ -988,6 +1034,8 @@ public:
     virtual void* svc(void * task) = 0;
     
     /**
+     * \brief The \p svc_init()
+     *
      * It is a virtual function. This is called only once for each
      * thread, right before the \p svc method.
      *
@@ -996,12 +1044,16 @@ public:
     virtual int svc_init() { return 0; }
     
     /**
+     * \brief The \p svc_end()
+     *
      * It is a virtual function. This is called only once for each
      * thread, right after the \p svc method.
      */
     virtual void  svc_end() {}
 
     /**
+     * \brief Notifies EOS
+     *
      * It is a virtual function. It is called once just after the EOS
      * has arrived.
      *
@@ -1011,6 +1063,8 @@ public:
     virtual void eosnotify(int id=-1) {}
     
     /**
+     * \brief Gets the ID of the thread
+     *
      * It is a virtual function. It returns thread's ID. 
      *
      * \return The identifier of the thread
@@ -1018,6 +1072,8 @@ public:
     virtual int get_my_id() const { return myid; };
     
     /**
+     * \brief Sets threads affinity 
+     *
      * It is a virtual function. It maps the working thread to the
      * chosen CPU.
      *
@@ -1031,21 +1087,24 @@ public:
     }
     
     /** 
+     * \brief Gets ID of the CPU
+     *
      * It gets the ID of the CPU where the thread is running.
      *
-     * \return The identifier of the core is returned.
-     *
+     * \return The identifier of the CPU.
      */
     virtual int getCPUId() const { return CPUId;}
 
 #if defined(TEST_QUEUE_SPIN_LOCK)
     /**
+     * \brief Pushes the task
+     *
      * It tries to acquire the lock, pushes the task to the input queue and
      * then releaes the lock
      *
-     * \parm ptr TODO
+     * \parm ptr is pointing to the task
      *
-     * \return TODO
+     * \return The status of \p push operation as Boolean value
      */
     virtual bool put(void * ptr) { 
         spin_lock(lock);
@@ -1055,12 +1114,14 @@ public:
     }
 
     /**
+     * \brief Pops the task
+     *
      * It tries to acquire the lock, pop the data from the output queue and
      * then releases the lock. 
      *
-     * \parm ptr TODO
+     * \parm ptr is pointing to the task
      *
-     * \return TODO
+     * \return The status of \p pop operation as Boolean value
      */
     virtual bool  get(void **ptr) { 
         spin_lock(lock);
@@ -1070,49 +1131,101 @@ public:
     }
 #else
     /**
-     * See push.
+     * \brief Pushes the task
      *
-     * \parm ptr TODO
+     * It pushes task without using locks.
      *
-     * \return TODO
+     * \parm ptr is a pointer to the task
+     *
+     * \return The status of \p push as Boolean value
      */
     virtual inline bool  put(void * ptr) { 
         return in->push(ptr);
     }
     
     /**
-     * See pop.
+     * \brief Pops the task
      *
-     * \parm ptr TODO
+     * It pops the task without acquiring the lock.
      *
-     * \return TODO
+     * \parm ptr is a pointer to the task
+     *
+     * \return The status of \p pop operation as Boolean value
      */
     virtual inline bool  get(void **ptr) { return out->pop(ptr);}
 #endif
     /**
+     * \brief Gets input buffer
+     *
      * It returns a pointer to the input buffer.
      *
-     * \return TODO
+     * \return A pointer to the input buffer
      */
     virtual FFBUFFER * const get_in_buffer() const { return in;}
 
     /**
+     * \brief Gets pointer to the output buffer
+     *
      * It returns a pointer to the output buffer.
      *
-     * \return TODO
+     * \return A pointer to the output buffer.
      */
     virtual FFBUFFER * const get_out_buffer() const { return out;}
 
+    /**
+     * \brief Gets start time
+     *
+     * It resturns the starting time.
+     *
+     * \return Starting time.
+     */
     virtual const struct timeval getstarttime() const { return tstart;}
+
+    /**
+     * \brief Gets stop time
+     *
+     * It returns the stopping time.
+     *
+     * \return Stopping time.
+     */
     virtual const struct timeval getstoptime()  const { return tstop;}
+
+    /**
+     * \brief Gets start time
+     *
+     * It returns the starting time.
+     *
+     * \return Starting time.
+     */
     virtual const struct timeval getwstartime() const { return wtstart;}
+
+    /**
+     * \brief Gets the stop time
+     *
+     * It returns the stopping time.
+     *
+     * \return Stopping time.
+     */
     virtual const struct timeval getwstoptime() const { return wtstop;}    
 
+    /**
+     * \brief Create OCL
+     *
+     * It creates OCL. FIXME: How it creates?
+     */
     virtual inline void svc_createOCL()  {} 
+
+    /**
+     * \brief Releases OCL
+     *
+     * It releases OCL. FIXME: How it releases?
+     */
     virtual inline void svc_releaseOCL() {}
 
 #if defined(TRACE_FASTFLOW)
     /**
+     * \brief Prints the trace
+     *
      * It prints the trace for debugging.
      */
     virtual void ffStats(std::ostream & out) {
@@ -1127,7 +1240,9 @@ public:
 
 protected:
     /**
-     * It is the protected constructor.
+     * \brief Protected constructor
+     *
+     * It is the protected constructor. It initializes the FastFlow node.
      */
     ff_node():in(0),out(0),myid(-1),CPUId(-1),
               myoutbuffer(false),myinbuffer(false),
@@ -1142,8 +1257,10 @@ protected:
     };
     
     /** 
-     *  It is a desctructor and it deletes input buffers and output buffers
-     *  and the working threads.
+     *  \brief Destructor
+     *
+     *  It is a desctructor and it deletes input buffers and output buffers and
+     *  the working thread.
      */
     virtual  ~ff_node() {
         if (in && myinbuffer) delete in;
@@ -1152,13 +1269,18 @@ protected:
     };
     
     /**
+     * \brief Sends out the task
+     *
      * It allows to queue tasks without returning from the \p svc method 
      *
-     * \parm task TODO
-     * \parm retry TODO
-     * \parm ticks TODO
+     * \parm task a pointer to the task
+     * \parm retry number of tries to push the task to the buffer
+     * \parm ticks number of ticks to wait
      * 
-     * \return TODO
+     * \return If call back is defined, then returns the status of \p callback
+     * function. Otherwise, if tries to push an element with the number of
+     * \retry and if succesfful \p true is returned, and if after the number of
+     * \retry the push is not successful \p false is returned.
      */
     virtual bool ff_send_out(void * task, 
                              unsigned int retry=((unsigned int)-1),
@@ -1174,34 +1296,50 @@ protected:
     
     virtual inline void input_active(const bool onoff) {
         if (in_active != onoff)
-            in_active= onoff;       
+            in_active= onoff;
     }
 
 private:
     
     /**
+     * \brief Registers the call back
+     *
      * It registers the call back method and arguments.
      *
+     * \parm cb is the callback function
+     * \parm arg is a pointer to arguments
      */
     void registerCallback(bool (*cb)(void *,unsigned int,unsigned int,void *), void * arg) {
         callback=cb;
         callback_arg=arg;
     }
     
-    
     /**
+     * \brief An inner class for FastFlow's thread
+     *
      * It is an inner class that wraps ff_thread functions and adds \p push and \p pop methods. 
      */
     class thWorker: public ff_thread {
     public:
         /**
-         * TODO
+         * \brief Constructor
+         *
+         * It is contructor to create FastFlow thread.
+         *
+         * \parm filter is a pointer to FastFlow's node
+         *
          */
         thWorker(ff_node * const filter):
             ff_thread(filter->barrier),filter(filter) {}
         
         /**
-         * TODO
+         * \brief Pushes the task
+         *
+         * It pushes the task to the \p filter
+         *
+         * \parm task is a pointer to the task.
+         *
+         * \return \p true is always returned.
          */
         inline bool push(void * task) {
             //register int cnt = 0;
@@ -1220,7 +1358,13 @@ private:
         }
         
         /**
-         * TODO
+         * \brief Pops the task
+         *
+         * It pops the task from the buffer of the filter.
+         *
+         * \task is a pointer to the task
+         *
+         * \return \p true is always returned.
          */
         inline bool pop(void ** task) {
             //register int cnt = 0;
@@ -1242,22 +1386,42 @@ private:
         }
         
         /**
-         * TODO
+         * \brief Puts the task in buffer
+         *
+         * It pushes the task in the filter.
+         *
+         * \parm ptr is a pointer to the task.
          */
         inline bool put(void * ptr) { return filter->put(ptr);}
 
         /**
-         * TODO
+         * \brief Gets the task from the buffer.
+         *
+         * It gets the task from the buffer.
+         *
+         * \return The status of \p get function as Boolean value.
          */
         inline bool get(void **ptr) { return filter->get(ptr);}
 
+        /**
+         * \brief Creates OCL
+         *
+         * It creates OCL.
+         */
         inline void svc_createOCL()  { filter-> svc_createOCL();}
         
+        /**
+         * \brief Releases OCL.
+         *
+         * It releases OCL.
+         */
         inline void svc_releaseOCL() { filter-> svc_releaseOCL();}
 
         
         /**
-         * TODO
+         * \brief The \p svc method
+         *
+         * It defines the \p svc method of the FastFlow.
          */
         void* svc(void * ) {
             void * task = NULL;
@@ -1278,7 +1442,7 @@ private:
                         (task == (void*)FF_EOS_NOFREEZE)) {
                         ret = task;
                         filter->eosnotify();
-                        if (outpresent)  push(task); 
+                        if (outpresent)  push(task);
                         break;
                     }
                 }
@@ -1310,7 +1474,11 @@ private:
         }
         
         /**
-         * TODO
+         * \brief The \p svc_init method
+         *
+         * It defines the \p svc_init method of FastFlow.
+         *
+         * \return The status of \p svc_init() method.
          */
         int svc_init() {
 #if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
@@ -1326,17 +1494,66 @@ private:
             return filter->svc_init(); 
         }
         
+        /**
+         * \brief The \p svc_end method
+         *
+         * It defines the \p svc_end method of the FastFlow.
+         */
         virtual void svc_end() {
             filter->svc_end();
             gettimeofday(&filter->tstop,NULL);
         }
         
+        /**
+         * \brief Executes FastFlow thread
+         *
+         * It executs the FastFlow thread.
+         *
+         * \return The status of \p spawn method.
+         */
         int run() { return ff_thread::spawn(filter->getCPUId()); }
+
+        /**
+         * \brief Waits the thread
+         *
+         * It waits for the thread.
+         *
+         * \return The staus of \p wait() method.
+         */
         int wait() { return ff_thread::wait();}
+
+        /**
+         * \brief Waits for freezing
+         *
+         * It waits the thread to freeze.
+         *
+         * \return The status of \p wait_freezing() method.
+         */
         int wait_freezing() { return ff_thread::wait_freezing();}
+
+        /**
+         * \brief Freezes the thread
+         *
+         * It freezes the thread.
+         */
         void freeze() { ff_thread::freeze();}
+
+        /**
+         * \brief Checks if the thread is frozen
+         * 
+         * It checks if the thread is frozen.
+         *
+         * \return the status of the \p isfrozen() method.
+         */
         bool isfrozen() { return ff_thread::isfrozen();}
 
+        /**
+         * \brief Gets the ID of the thread
+         *
+         * It returns the ID of the thread.
+         *
+         * \return An integer value showing the identifier of the thread.
+         */
         int get_my_id() const { return filter->get_my_id(); };
         
     protected:    
