@@ -1,4 +1,6 @@
-* 23/12/12 - v.2.0.1
+   - removed many warnings when compiling with the Intel compiler
+   - fixed get_my_id() problem for pipeline
+* 23/12/13 - v.2.0.1
    - improved cmake compilation
    - added experimental OFED code 
    - added some layer1/2 tests
@@ -9,7 +11,7 @@
    - Distributed version ported and tested on Win7 64-bit.
    - little fix on allocator.hpp, freesegment now release aligned memory 
      to avoid stack corruption on Win platform that requires symmetric 
-	 primitives for aligned memory allocation and deallocation.
+     primitives for aligned memory allocation and deallocation.
    - Winsock.h (windows.h) and winsock2.h incompatibility issue partially resolved.
      <ff/dnode.h> should be included before other includes to avoid the problem. It
 	 includes winsock2.h that is required by zeromq.  

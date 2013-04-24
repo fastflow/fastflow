@@ -1161,7 +1161,7 @@ public:
      *
      * \return A pointer to the input buffer
      */
-    virtual FFBUFFER * const get_in_buffer() const { return in;}
+    virtual FFBUFFER * get_in_buffer() const { return in;}
 
     /**
      * \brief Gets pointer to the output buffer
@@ -1170,7 +1170,7 @@ public:
      *
      * \return A pointer to the output buffer.
      */
-    virtual FFBUFFER * const get_out_buffer() const { return out;}
+    virtual FFBUFFER * get_out_buffer() const { return out;}
 
     /**
      * \brief Gets start time

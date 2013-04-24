@@ -132,7 +132,7 @@ static inline unsigned long ff_getCpuFreq() { // MA
  *
  *  \return An integer value showing the number of cores.
  */
-static inline const int ff_numCores() {
+static inline int ff_numCores() {
     int  n=-1;
 #if defined(__linux__)
     FILE       *f;    

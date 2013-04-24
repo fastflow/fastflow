@@ -120,7 +120,7 @@ public:
     /*
      *TODO
      */
-    enum { DEF_MAX_NUM_WORKERS=64, DEF_IN_BUFF_ENTRIES=2048, DEF_IN_OUT_DIFF=128, 
+    enum { DEF_MAX_NUM_WORKERS=(MAX_NUM_THREADS-2), DEF_IN_BUFF_ENTRIES=2048, DEF_IN_OUT_DIFF=128, 
            DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+DEF_IN_OUT_DIFF)};
 
     /**
@@ -406,7 +406,12 @@ public:
             // set the initial value for the barrier 
 
             if (!barrier)  barrier = new BARRIER_T;
-            barrier->barrierSetup(cardinality(barrier));
+            const int nthreads = cardinality(barrier);
+            if (nthreads > MAX_NUM_THREADS) {
+                error("FARM, too much threads, increase MAX_NUM_THREADS !\n");
+                return -1;
+            }
+            barrier->barrierSetup(nthreads);            
         }
         
         if (!prepared) if (prepare()<0) return -1;
@@ -425,7 +430,7 @@ public:
     }
 
     /** 
-     * \brief Executs the form and wait for workers to complete
+     * \brief Executs the farm and wait for workers to complete
      *
      * It executes the farm and waits for all workers to complete their
      * tasks.
@@ -606,7 +611,7 @@ public:
      * \return A pointer to the load balancer is returned.
      *
      */
-    inline lb_t * const getlb() const { return lb;}
+    inline lb_t * getlb() const { return lb;}
 
     /**
      * \breif Gets Collector node
@@ -615,7 +620,7 @@ public:
      *
      * \return A pointer to the gatherer is returned.
      */
-    inline gt_t * const getgt() const { return gt;}
+    inline gt_t * getgt() const { return gt;}
 
     /**
      * \brief Gets workers list
@@ -624,7 +629,7 @@ public:
      *
      * \return A list of workers is returned.
      */
-    ff_node** const getWorkers() const { return workers; }
+    ff_node** getWorkers() const { return workers; }
 
     /**
      * \brief Gets the number of workers
@@ -1442,7 +1447,7 @@ public:
      *
      * \return A pointer to the FastFlow gatherer.
      */
-    inline ff_gatherer * const getgt() const { return gt;}
+    inline ff_gatherer * getgt() const { return gt;}
 
 #if defined(TRACE_FASTFLOW) 
     /**
@@ -1551,8 +1556,14 @@ public:
         lb->set_filter(this);
 
         std::vector<ff_node*> w;
-        if (set_output(w)<0) return -1;
-        if (w.size()==0) return -1;
+        if (set_output(w)<0) {
+            error("ff_monode, run, set_output failed\n");
+            return -1;
+        }
+        if (w.size()==0) {
+            error("ff_monode, run, set_output returned 0 workers\n");
+            return -1;
+        }
         for(size_t i=0;i<w.size();++i)
             lb->register_worker(w[i]);
         
@@ -1570,7 +1581,7 @@ public:
      *
      * \return A pointer to the FastFlow load balancer
      */
-    inline ff_loadbalancer * const getlb() const { return lb;}
+    inline ff_loadbalancer * getlb() const { return lb;}
 
 #if defined(TRACE_FASTFLOW) 
     /**

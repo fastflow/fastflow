@@ -98,3 +98,22 @@ Currently tested with Visual Studio 2008 and 2010.
 -DBARRIER_T=Barrier   --> use lock-based barrier (default off)
 -DTRACE_FASTFLOW      --> perfomance analysis (default off)
 -DNO_CMAKE_CONFIG     --> use static configuration (experimental)
+
+
+=======================================================
+Compilation instructions for OpenCL denoiser example
+=======================================================
+
+In case cmake does not automatically find required headers and libraries, the path can be indicated through system variables (for example, using export)
+
+=> OpenCV:
+ - the OpenCV_DIR variable must point to the directory containing the file OpenCVConfig.cmake
+ - for example "export OpenCV_DIR=/usr/share/OpenCV/"
+
+=> OpenCL:
+ - OpenCL_INCPATH="Directory containing OpenCL headers"
+ - OpenCL_LIBPATH="Directory containing OpenCL .so libs 
+
+Nvidia OPTIMUS support under Linux
+ - optirun executable path must be passed to cmake in order to run the GPU-enabled tests
+ - " cmake -DOPTIRUN=/usr/bin/optirun ../ "

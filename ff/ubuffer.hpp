@@ -142,7 +142,7 @@ public:
     /**
      * It returns a pointer to the next internal buffer to write 
      */
-    inline INTERNAL_BUFFER_T * const next_w(unsigned long size)  { 
+    inline INTERNAL_BUFFER_T * next_w(unsigned long size)  { 
         union { INTERNAL_BUFFER_T * buf; void * buf2;} p;
         if (!bufcache.pop(&p.buf2)) {
 #if defined(UBUFFER_STATS)
@@ -166,7 +166,7 @@ public:
     /**
      * It returns a pointer to the next internal buffer to read 
      */
-    inline INTERNAL_BUFFER_T * const next_r()  { 
+    inline INTERNAL_BUFFER_T * next_r()  { 
         union { INTERNAL_BUFFER_T * buf; void * buf2;} p;
         return (inuse.pop(&p.buf2)? p.buf : NULL);
     }

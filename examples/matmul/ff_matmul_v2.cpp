@@ -32,119 +32,103 @@
 #include <vector>
 #include <iostream>
 #include <ff/farm.hpp>
-#include <ff/node.hpp>
-#include <ff/allocator.hpp>
 
-  
 using namespace ff;
 
-const int N=1024;
-
-static unsigned long A[N][N];
-static unsigned long B[N][N];
-static unsigned long C[N][N];
+static long    N=0;      // matrix size
+static double* A=NULL;
+static double* B=NULL;
+static double* C=NULL;
 
 // generic worker
 class Worker: public ff_node {
 public:
     void * svc(void * task) {
-        int i = *(int *)task;
-        
-        register unsigned long _C=0;
-        for(register int j=0;j<N;++j) {
-            for(register int k=0;k<N;++k)
-                _C += A[i][k]*B[k][j];
-
-            C[i][j] = _C;
-            _C=0;
+        long z = (long)task;
+        --z;
+        for(long j=0;j<N;++j) {
+            for(long k=0;k<N;++k)
+                C[z*N+j] += A[z*N+k]*B[k*N+j];
         }
-
-        delete ((int *)task);
         return GO_ON;
     }
 };
 
-int main(int argc, 
-         char * argv[]) {
-    bool check=false;
-    
-    if (argc<2) {
+int main(int argc, char * argv[]) {    
+    if (argc<3) {
         std::cerr << "use: " 
                   << argv[0] 
-                  << " nworkers\n";
+                  << " nworkers size [check]\n";
         return -1;
     }
-    
-    if (argc==3) check=true;
-
     int nworkers=atoi(argv[1]);
+    N               =atol(argv[2]);
+    assert(N>0);
+    bool   check    =false;  
+    if (argc==4) check=true;  // checks result
     
     if (nworkers<=0) {
         std::cerr << "Wrong parameter value\n";
         return -1;
     }
-    
-    /* init */
-    for(int i=0;i<N;++i) 
-        for(int j=0;j<N;++j) {
-            A[i][j] = i+j;
-            B[i][j] = i*j;
-            C[i][j] = 0;
+    A = (double*)malloc(N*N*sizeof(double));
+    B = (double*)malloc(N*N*sizeof(double));
+    C = (double*)malloc(N*N*sizeof(double));
+    assert(A && B && C);
+
+    for(long i=0;i<N;++i) 
+        for(long j=0;j<N;++j) {
+            A[i*N+j] = (i+j)/(double)N;
+            B[i*N+j] = i*j*3.14;
+            C[i*N+j] = 0;
         }
-        
+
     ffTime(START_TIME);
-
     ff_farm<> farm(true, N+nworkers);    
-
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker);
-    farm.add_workers(w);    
+    farm.add_workers(w); 
+    // setting dynamic scheduling
+    //farm.set_scheduling_ondemand();
+    
+    // pin main thread on core 0
+    ff_mapThreadToCpu(0);
+
+#if defined(MIC_MAPPING)
+    const char worker_mapping[]="0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 148, 152, 156, 160, 164, 168, 172, 176, 180, 184, 188, 192, 196, 200, 204, 208, 212, 216, 220, 224, 228, 232, 236, 1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97, 101, 105, 109, 113, 117, 121, 125, 129, 133, 137, 141, 145, 149, 153, 157, 161, 165, 169, 173, 177, 181, 185, 189, 193, 197, 201, 205, 209, 213, 217, 221, 225, 229, 233, 237, 2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62, 66, 70, 74, 78, 82, 86, 90, 94, 98, 102, 106, 110, 114, 118, 122, 126, 130, 134, 138, 142, 146, 150, 154, 158, 162, 166, 170, 174, 178, 182, 186, 190, 194, 198, 202, 206, 210, 214, 218, 222, 226, 230, 234, 238, 3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63, 67, 71, 75, 79, 83, 87, 91, 95, 99, 103, 107, 111, 115, 119, 123, 127, 131, 135, 139, 143, 147, 151, 155, 159, 163, 167, 171, 175, 179, 183, 187, 191, 195, 199, 203, 207, 211, 215, 219, 223, 227, 231, 235, 239";
+    threadMapper::instance()->setMappingList(worker_mapping);
+#endif
+
+#if defined(MIC_MAPPING2)
+    const char worker_mapping[]="1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97, 101, 105, 109, 113, 117, 121, 125, 129, 133, 137, 141, 145, 149, 153, 157, 161, 165, 169, 173, 177, 181, 185, 189, 193, 197, 201, 205, 209, 213, 217, 221, 225, 229, 233, 0, 2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62, 66, 70, 74, 78, 82, 86, 90, 94, 98, 102, 106, 110, 114, 118, 122, 126, 130, 134, 138, 142, 146, 150, 154, 158, 162, 166, 170, 174, 178, 182, 186, 190, 194, 198, 202, 206, 210, 214, 218, 222, 226, 230, 234, 237, 3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63, 67, 71, 75, 79, 83, 87, 91, 95, 99, 103, 107, 111, 115, 119, 123, 127, 131, 135, 139, 143, 147, 151, 155, 159, 163, 167, 171, 175, 179, 183, 187, 191, 195, 199, 203, 207, 211, 215, 219, 223, 227, 231, 235, 238, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 148, 152, 156, 160, 164, 168, 172, 176, 180, 184, 188, 192, 196, 200, 204, 208, 212, 216, 220, 224, 228, 232, 236, 239";
+    threadMapper::instance()->setMappingList(worker_mapping);
+#endif
 
     // Now run the accelator asynchronusly
     farm.run_then_freeze();
-    for (int i=0;i<N;i++) {
-        int * task = new int(i);
-        farm.offload(task); 
-    }
-    std::cout << "[Main] EOS arrived\n";
+    for (long i=1;i<=N;i++) farm.offload((void*)i);
     farm.offload((void *)FF_EOS);
-    
-    // Here join
     farm.wait();  
-    std::cout << "[Main] Farm accelerator stopped\n";
-    
     ffTime(STOP_TIME);
-    std::cerr << "DONE, farm time= " << farm.ffTime() << " (ms)\n";
-    std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
-    farm.ffStats(std::cerr);
 
-#if 0
-    for(int i=0;i<N;++i)  {
-        for(int j=0;j<N;++j)
-            printf(" %ld", C[i][j]);
-        
-        printf("\n");
-    }
-#endif
+    printf("%d Time = %g (ms)\n",nworkers, farm.ffwTime());
+    //printf("total=%g (ms)\n", ffTime(GET_TIME));
 
     if (check) {
-        unsigned long R=0;
-        
-        for(int i=0;i<N;++i) 
-            for(int j=0;j<N;++j) {
-                for(int k=0;k<N;++k)
-                    R += A[i][k]*B[k][j];
+        double R=0;        
+        for(long i=0;i<N;++i) 
+            for(long j=0;j<N;++j) {
+                for(long k=0;k<N;++k)
+                    R += A[i*N+k]*B[k*N+j];
                 
-                if (C[i][j]!=R) {
-                    std::cerr << "Wrong result\n";
+                if (abs(C[i*N+j]-R)>1e-06) {
+                    std::cerr << "Wrong result\n";                                        
                     return -1;
                 }
                 R=0;
             }
         std::cout << "OK\n";
     }
-
-
     return 0;
 }
 

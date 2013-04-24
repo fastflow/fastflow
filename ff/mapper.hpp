@@ -189,7 +189,7 @@ public:
      *
      * \return It will return either \p true of \p false.
      */
-    inline const bool checkCPUId(const int cpuId) const {
+    inline bool checkCPUId(const int cpuId) const {
         return ((unsigned)cpuId < num_cores);
     }
 

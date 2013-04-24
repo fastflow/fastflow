@@ -57,6 +57,23 @@ struct task_t {
     long t;
 };
 
+#if defined(TEST_INNER_PIPELINE)
+class Prefetcher: public ff_node {
+public:
+    void* svc(void* task) { 
+        // do here some smart prefetching of data
+        // computed in the MU
+        return task; 
+    }
+    inline bool  push(void * ptr) {
+        while(!ff_node::push(ptr)) {
+            // do nothing for a while
+            usleep(1);
+        }
+        return true;
+    }
+};
+#endif
 
 class MU: public ff_node {
 protected:
@@ -171,9 +188,9 @@ protected:
 class FU: public ff_node {
 public:
     void* svc(void* task) {
-        printf("FU (%d) got one task\n", get_my_id());
         task_t* t = (task_t*)task;
         assert(t->op != 0);
+        printf("FU (%d) got one task %d\n", get_my_id(), t->op);
         switch(t->op) {
         case 1: usleep(10); break;
         case 2: usleep(100); break;
@@ -212,8 +229,16 @@ int main(int argc, char* argv[]) {
     ff_pipeline pipe(false, 10);  // queues in the pipeline are bounded !
     ff_farm<>   farm;
     std::vector<ff_node *> w;
-    for(int i=0;i<nw;++i) 
+    for(int i=0;i<nw;++i) {
+#if defined(TEST_INNER_PIPELINE)
+        ff_pipeline* pipe = new ff_pipeline(false,1);
+        pipe->add_stage(new Prefetcher);
+        pipe->add_stage(new FU);
+        w.push_back(pipe);
+#else
         w.push_back(new FU);
+#endif
+    }
     farm.add_emitter(new Scheduler(farm.getlb(),ffalloc));
     farm.add_workers(w);
     /* -------------------- */

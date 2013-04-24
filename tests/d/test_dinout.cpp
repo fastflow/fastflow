@@ -106,7 +106,7 @@ public:
 	printf("InOut1 ending\n");
     }
 
-    virtual FFBUFFER * const get_out_buffer() const { return (FFBUFFER*)1;}
+    virtual FFBUFFER * get_out_buffer() const { return (FFBUFFER*)1;}
 
 protected:
     const std::string name1;
