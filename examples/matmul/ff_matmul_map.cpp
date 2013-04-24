@@ -25,156 +25,117 @@
  ****************************************************************************
  */
 
-/*
- * NxN integer matrix multiplication.
+/* 
+ * NxN square matrix multiplication: C = A x B
+ * 
  *
+ * Author: Massimo Torquati <torquati@di.unipi.it> <massimotor@gmail.com>
  */
 #include <vector>
 #include <iostream>
-#include <ff/partitioners.hpp>
+#include <cmath>
+
 #include <ff/map.hpp>
-  
 using namespace ff;
 
-const unsigned long N=1024;
+static long    N=0;      // matrix size
+static double* A=NULL;
+static double* B=NULL;
+static double* C=NULL;
 
-
-struct ff_task {
-    ff_task(unsigned long* A, unsigned long* B, unsigned long* C):A(A),B(B),C(C) {}
-    unsigned long* A;
-    unsigned long* B;
-    unsigned long* C;
-};
-
-class squareMatmulPartitioner: public basePartitioner {
-public:
-    typedef basePartitionList partition_t;
-
-    squareMatmulPartitioner(size_t nElements, int nThreads):
-         task(NULL), 
-         p((nElements>(size_t)nThreads) ? nThreads : nElements), 
-         q(nElements / nThreads), r(nElements % nThreads) {}
-
-    inline void getPartition(const int threadId, basePartition& P) {
-        const size_t start = (threadId * q) + ((r >= (size_t)threadId) ? threadId : r);
-        basePartitionList & pList = *(basePartitionList*)&P;
-        ff_task* t = (ff_task*)task;
-        pList[0].setData(t->A+(start*N));
-        pList[1].setData(t->B);
-        pList[2].setData(t->C+(start*N));
-        pList[0].setLength(((size_t)threadId<r)?(q+1):q);
-    }
-
-    inline void setTask(void* t) { task = (ff_task*)t; }
-    inline size_t getParts() const { return p; }
-
-protected:
-    ff_task* task;
-    const size_t p; 
-    const size_t q; 
-    const size_t r; 
-};
-
-
-// this is the map function
-void* mapF(basePartitioner*const P, int tid) {
-    squareMatmulPartitioner* const partitioner=(squareMatmulPartitioner* const)P;
-    squareMatmulPartitioner::partition_t Partition;
-    partitioner->getPartition(tid, Partition);
-    
-    unsigned long* A= (unsigned long*)Partition[0].getData();
-    unsigned long* B= (unsigned long*)Partition[1].getData();
-    unsigned long* C= (unsigned long*)Partition[2].getData();
-    unsigned long  l= Partition[0].getLength();
-
-    unsigned long _C=0;
-    for(unsigned long i=0;i<l;++i) 
-        for(unsigned long j=0;j<N;++j) {
-            for(unsigned long k=0;k<N;++k)
-#if defined(OPTIMIZE_CACHE)
-                _C += A[j*N+i]*B[i*N+k];
-            C[j*N+k]=_C;
-#else
-                _C += A[i*N+k]*B[k*N+j];
-            C[i*N+j]=_C;
-#endif
-
-            _C=0;
+// basic function, it gets in input an array of idexes of size size 
+static inline void F(long* M, size_t size) {
+    const long start=M[0];
+    const long end  =start+size;
+    for(long i=start;i<end;++i) {
+        for(long j=0;j<N;++j) {
+            for(long k=0;k<N;++k)
+               C[i*N+j] += A[i*N+k]*B[k*N+j];        
         }
-    return Partition.task;
+    }
 }
 
+// map definition
+MAPDEF(map, F, long);
 
-int main(int argc, 
-         char * argv[]) {
-    bool check=false;
-        
-    if (argc<2) {
-        std::cerr << "use: " 
-                  << argv[0] 
-                  << " nworkers\n";
+int main(int argc, char * argv[]) {
+    if (argc<3) {
+        std::cerr << "use: " << argv[0] << " nworkers size [check]\n";
         return -1;
     }
+    int    nworkers =atoi(argv[1]);
+    N               =atol(argv[2]);
+    assert(N>0);
+    bool   check    =false;  
+    if (argc==4) check=true;  // checks result
     
-    if (argc==3) check=true;
-
-    int nworkers=atoi(argv[1]);
-    
-    if (nworkers<=0) {
-        std::cerr << "Wrong parameter value\n";
-        return -1;
-    }
-
-    unsigned long* A = (unsigned long*)malloc(N*N*sizeof(unsigned long));
-    unsigned long* B = (unsigned long*)malloc(N*N*sizeof(unsigned long));
-    unsigned long* C = (unsigned long*)malloc(N*N*sizeof(unsigned long));
+    A = (double*)malloc(N*N*sizeof(double));
+    B = (double*)malloc(N*N*sizeof(double));
+    C = (double*)malloc(N*N*sizeof(double));
     assert(A && B && C);
-    
-    /* init */
-    for(unsigned long i=0;i<N;++i) 
-        for(unsigned long j=0;j<N;++j) {
-            A[i*N+j] = i+j;
-            B[i*N+j] = i*j;
+
+    for(long i=0;i<N;++i) 
+        for(long j=0;j<N;++j) {
+            A[i*N+j] = (i+j)/(double)N;
+            B[i*N+j] = i*j*3.14;
             C[i*N+j] = 0;
         }
-        
+    
+#if defined(USE_OPENMP)
     ffTime(START_TIME);
-    ff_task task(A,B,C);
-    squareMatmulPartitioner P(N,nworkers);
-    ff_map map(mapF, &P, &task);
-    map.run_and_wait_end();
-    ffTime(STOP_TIME);
-    std::cerr << "DONE, map time= " << map.ffTime() << " (ms)\n";
-    std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
+#if defined(OPTIMIZE_CACHE)
+//#pragma omp parallel for schedule(auto) 
+#pragma omp parallel for schedule(static)
+    for(long i=0;i<N;++i) 
+        for(long j=0;j<N;++j)
+            for(long k=0;k<N;++k)
+                C[j*N+k] += A[j*N+i]*B[i*N+k];
+#else 
+//#pragma omp parallel for schedule(auto) 
+#pragma omp parallel for schedule(static)
+    for(long i=0;i<N;++i) 
+        for(long j=0;j<N;++j)
+            for(long k=0;k<N;++k)
+                C[i*N+j] += A[i*N+k]*B[k*N+j];
+#endif // OPTIMIZE_CACHE
+    printf("%d Time = %g (ms)\n", nworkers,ffTime(STOP_TIME));
 
-#if 0
-    for(unsigned long i=0;i<N;++i)  {
-        for(unsigned long j=0;j<N;++j)
-            printf(" %ld", C[i*N+j]);
-        
-        printf("\n");
-    }
+#else // !USE_OPENMP
+
+#if defined(MIC_MAPPING)
+    const char worker_mapping[]="0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 148, 152, 156, 160, 164, 168, 172, 176, 180, 184, 188, 192, 196, 200, 204, 208, 212, 216, 220, 224, 228, 232, 236, 1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97, 101, 105, 109, 113, 117, 121, 125, 129, 133, 137, 141, 145, 149, 153, 157, 161, 165, 169, 173, 177, 181, 185, 189, 193, 197, 201, 205, 209, 213, 217, 221, 225, 229, 233, 237, 2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62, 66, 70, 74, 78, 82, 86, 90, 94, 98, 102, 106, 110, 114, 118, 122, 126, 130, 134, 138, 142, 146, 150, 154, 158, 162, 166, 170, 174, 178, 182, 186, 190, 194, 198, 202, 206, 210, 214, 218, 222, 226, 230, 234, 238, 3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63, 67, 71, 75, 79, 83, 87, 91, 95, 99, 103, 107, 111, 115, 119, 123, 127, 131, 135, 139, 143, 147, 151, 155, 159, 163, 167, 171, 175, 179, 183, 187, 191, 195, 199, 203, 207, 211, 215, 219, 223, 227, 231, 235, 239";
+    threadMapper::instance()->setMappingList(worker_mapping);
+#endif
+#if defined(MIC_MAPPING2)
+    const char worker_mapping[]="1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97, 101, 105, 109, 113, 117, 121, 125, 129, 133, 137, 141, 145, 149, 153, 157, 161, 165, 169, 173, 177, 181, 185, 189, 193, 197, 201, 205, 209, 213, 217, 221, 225, 229, 233, 0, 2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62, 66, 70, 74, 78, 82, 86, 90, 94, 98, 102, 106, 110, 114, 118, 122, 126, 130, 134, 138, 142, 146, 150, 154, 158, 162, 166, 170, 174, 178, 182, 186, 190, 194, 198, 202, 206, 210, 214, 218, 222, 226, 230, 234, 237, 3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63, 67, 71, 75, 79, 83, 87, 91, 95, 99, 103, 107, 111, 115, 119, 123, 127, 131, 135, 139, 143, 147, 151, 155, 159, 163, 167, 171, 175, 179, 183, 187, 191, 195, 199, 203, 207, 211, 215, 219, 223, 227, 231, 235, 238, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 148, 152, 156, 160, 164, 168, 172, 176, 180, 184, 188, 192, 196, 200, 204, 208, 212, 216, 220, 224, 228, 232, 236, 239";
+    threadMapper::instance()->setMappingList(worker_mapping);
+#endif
+
+    long M[N];
+    for(int i=0;i<N;++i) M[i]=i;
+    MAP(map, long, M, N, nworkers);
+    RUNMAP(map);
+    // here we consider only the working time in order to have a 
+    // fair comparison with OpenMP (i.e. the thread joining time is 
+    // not accounted)
+    //
+    printf("%d Time = %g (ms)\n", nworkers, MAPWTIME(map));
 #endif
 
     if (check) {
-        unsigned long R=0;
-        
-        for(unsigned long i=0;i<N;++i) 
-            for(unsigned long j=0;j<N;++j) {
-                for(unsigned long k=0;k<N;++k)
+        double R=0;
+        for(long i=0;i<N;++i)
+            for(long j=0;j<N;++j) {
+                for(long k=0;k<N;++k)
                     R += A[i*N+k]*B[k*N+j];
-                
-                if (C[i*N+j]!=R) {
-                    std::cerr << "Wrong result\n";
+
+                if (abs(C[i*N+j]-R)>1e-06) {
+                    std::cerr << "Wrong result\n";                    
                     return -1;
                 }
                 R=0;
             }
         std::cout << "OK\n";
     }
-
-
     return 0;
 }
-
-

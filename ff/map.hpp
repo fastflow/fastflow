@@ -53,6 +53,32 @@ namespace ff {
  *  @{
  */
 
+/* ---------------- basic high-level macros ----------------------- */
+
+#define MAPDEF(mapname,func, basictype)                             \
+    void* mapdef_##mapname(basePartitioner*const P,int tid) {		\
+        LinearPartitioner<basictype>* const partitioner=			\
+            (LinearPartitioner<basictype>* const)P;                 \
+        LinearPartitioner<basictype>::partition_t Partition;		\
+        partitioner->getPartition(tid, Partition);                  \
+        basictype* p = (basictype*)(Partition.getData());           \
+        size_t l = Partition.getLength();                           \
+        func(p,l);                                                  \
+        return p;                                                   \
+    }
+#define MAP(mapname, basictype, V,size,nworkers)		            \
+    LinearPartitioner<basictype> P(size,nworkers);		            \
+    ff_map _map_##mapname(mapdef_##mapname,&P,V)
+#define RUNMAP(mapname)                                             \
+    _map_##mapname.run_and_wait_end()
+#define MAPTIME(mapname)                                            \
+    _map_##mapname.ffTime()
+#define MAPWTIME(mapname)                                           \
+    _map_##mapname.ffwTime()
+    
+
+/* ---------------------------------------------------------------- */
+
 /*!
  * \class map_lb
  *  \ingroup high_level_patterns_shared_memory
@@ -255,7 +281,8 @@ public:
            ) : ff_farm<map_lb,map_gt>(false), mapP(mapP) 
     {
         add_emitter(new mapE(getlb(), task));
-        add_collector(new mapC(getgt(),reduceF));
+        if (reduceF)
+            add_collector(new mapC(getgt(),reduceF));
         std::vector<ff_node *> w;
         for(size_t i=0;i<mapP->getParts();++i) w.push_back(new mapW(mapF,mapP));
         add_workers(w);
@@ -268,7 +295,8 @@ public:
      */
     ~ff_map() {
         delete (mapE*)(getEmitter());
-        delete (mapC*)(getCollector());
+        mapC* C = (mapC*)(getCollector());
+        if (C) delete C;
         ff_node** w= getWorkers();
         int nw= getNWorkers();
         for(int i=0;i<nw;++i) delete (mapW*)(w[i]);	
@@ -287,7 +315,8 @@ public:
             error("MAP, setAffinity, invalid cpuID\n");
         }
         ((mapE*)getEmitter())->setAffinity(cpuID);
-        ((mapC*)getCollector())->setAffinity(cpuID);
+        if (getCollector()) 
+            ((mapC*)getCollector())->setAffinity(cpuID);
 
         ff_node::setAffinity(cpuID);
     }
@@ -307,22 +336,6 @@ public:
         return -1;
     }
 
-    /**
-     * TODO
-     */
-    double ffTime() {
-        return diffmsec(getgt()->getstoptime(),
-                        getlb()->getstarttime());
-    }
-    
-    /**
-     * TODO
-     */
-    double ffwTime() {
-        return diffmsec(getgt()->getwstoptime(),
-                        getlb()->getwstartime());
-    }
-    
 private:
     basePartitioner* mapP;
 };

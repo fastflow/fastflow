@@ -102,8 +102,8 @@ static inline unsigned long getusec() {
 /**
  * Compute a-b and return the difference in msec
  */
-static inline const double diffmsec(const struct timeval & a, 
-                                    const struct timeval & b) {
+static inline double diffmsec(const struct timeval & a, 
+                              const struct timeval & b) {
     long sec  = (a.tv_sec  - b.tv_sec);
     long usec = (a.tv_usec - b.tv_usec);
     
@@ -126,7 +126,7 @@ static inline bool time_compare(struct timeval & a, struct timeval & b) {
 /**
  * TODO
  */
-static inline const bool time_iszero(const struct timeval & a) {
+static inline bool time_iszero(const struct timeval & a) {
     if ((a.tv_sec==0) && (a.tv_usec==0)) return true;
     return false;
 }

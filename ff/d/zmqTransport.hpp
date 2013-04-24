@@ -290,7 +290,7 @@ public:
      * \return the process (or thread) ID
      *
      */
-    const int getProcId() const { return procId;}
+    int getProcId() const { return procId;}
 
 protected:
     const int                procId;    // Process (or thread) ID

@@ -117,7 +117,7 @@ protected:
      *
      * \return fallback as a pointer to FastFlow node
      */
-    inline ff_node * const getfallback() { return fallback;}
+    inline ff_node * getfallback() const { return fallback;}
 
     /** 
      * \brief Virtual function that can be redefined to implement a new scheduling
@@ -210,9 +210,9 @@ protected:
      *
      */
     virtual bool schedule_task(void * task, unsigned int retry=(unsigned)-1, unsigned int ticks=0) {
-        register unsigned int cnt,cnt2;
+        register unsigned int cnt; //,cnt2;
         do {
-            cnt=0,cnt2=0;
+            cnt=0;//,cnt2=0;
             do {
                 nextw = selectworker();
 #if defined(LB_CALLBACK)
@@ -430,7 +430,7 @@ public:
      *
      * \return The buffer
      */
-    FFBUFFER * const get_in_buffer() const { return buffer;}
+    FFBUFFER * get_in_buffer() const { return buffer;}
     
     /**
      *
@@ -440,7 +440,7 @@ public:
      *
      * \return the channel id
      */
-    const int get_channel_id() const { return channelid;}
+    int get_channel_id() const { return channelid;}
 
     /**
      * \brief Resets the channel id
@@ -517,7 +517,7 @@ public:
      * \return The master worker
      *
      */
-    const bool masterworker() const { return master_worker;}
+    bool masterworker() const { return master_worker;}
     
     /**
      * \brief Registers the given node into the workers' list

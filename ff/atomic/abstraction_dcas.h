@@ -105,9 +105,8 @@ typedef unsigned long long int  atom_t;
 #define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
 #define ALIGN_SINGLE_POINTER    8
 #define ALIGN_DOUBLE_POINTER    16
-#endif
-
-#if (defined __unix__ && (defined __i686__ || defined __i386__) && __GNUC__)
+//#endif
+#elif (defined __unix__ && (defined __i686__ || defined __i386__) && __GNUC__)
 // TRD : any UNIX with GCC on x86
 #if !defined(_XOPEN_SOURCE)
 #define _XOPEN_SOURCE 600
@@ -122,9 +121,8 @@ typedef unsigned long int     atom_t;
 #define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
 #define ALIGN_SINGLE_POINTER  4
 #define ALIGN_DOUBLE_POINTER  8
-#endif
-
-#if (defined __unix__ && defined __arm__ && __GNUC__)
+//#endif
+#elif (defined __unix__ && defined __arm__ && __GNUC__)
 // TRD : any UNIX with GCC on ARM
 #if !defined(_XOPEN_SOURCE)
 #define _XOPEN_SOURCE 600
@@ -272,15 +270,10 @@ typedef unsigned long int        atom_t;
     return( cas_result );
   }
 
-#endif
-
-
-
-
-
+//#endif
 
 /****************************************************************************/
-#if (defined __i686__ && __GNUC__ && !defined __pic__)
+#elif (defined __i686__ && __GNUC__ && !defined __pic__)
 
   /* TRD : any OS on x86 with GCC for statically linked code
 
@@ -316,14 +309,11 @@ typedef unsigned long int        atom_t;
     return( cas_result );
   }
 
-#endif
-
-
-
+//#endif
 
 
 /****************************************************************************/
-#if (defined __x86_64__ && __GNUC__ && defined __pic__)
+#elif (defined __x86_64__ && __GNUC__ && defined __pic__)
 
   /* TRD : any OS on x64 with GCC for position independent code (e.g. a shared object)
 
@@ -368,15 +358,11 @@ typedef unsigned long int        atom_t;
     return( cas_result );
   }
 
-#endif
-
-
-
-
+//#endif
 
 
 /****************************************************************************/
-#if (defined __i686__ && __GNUC__ && defined __pic__)
+#elif (defined __i686__ && __GNUC__ && defined __pic__)
 
   /* TRD : any OS on x86 with GCC for position independent code (e.g. a shared object)
 
@@ -421,14 +407,11 @@ typedef unsigned long int        atom_t;
     return( cas_result );
   }
 
-#endif
-
-
-
+//#endif
 
 
 /****************************************************************************/
-#if (defined __arm__ && __GNUC__)
+#elif (defined __arm__ && __GNUC__)
 
   /* TRD : any OS on any ARM with GCC
 

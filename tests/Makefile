@@ -35,9 +35,10 @@ LDFLAGS  = -L ${TBB_HOME}/build/release/
 LIBS    +=  -ltbbmalloc -ltbb 
 endif
 
-
-CC                   = gcc 
-CXX 		     = g++ 
+CC                   = gcc
+CXX 		     = g++
+#CC		     = icc  -mmic
+#CXX 		     = icpc -mmic 
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O3 -finline-functions #-DTRACE_FASTFLOW
@@ -61,7 +62,7 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I. $(INCS)
-TARGET               = test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_map test_map2 test_mapreduce test_dotprod test_sendq test_spinBarrier test_multi_input test_accelerator+pinning test_mpmc test_stencil test_dataflow test_dataflow2 test_noinput_pipe
+TARGET               = test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_map test_map2 test_mapreduce test_dotprod test_sendq test_spinBarrier test_multi_input test_accelerator+pinning test_mpmc test_stencil test_dataflow test_dataflow2 test_noinput_pipe test_stopstartthreads test_MISD
 #test_mpmc2 test_bmpmc latency_MPMC 
 
 
@@ -133,7 +134,8 @@ test_stencil:test_stencil.o
 test_dataflow:test_dataflow.o
 test_dataflow2:test_dataflow2.o
 test_noinput_pipe:test_noinput_pipe.o
-test_layer2:test_layer2.o
+test_stopstartthreads:test_stopstartthreads.o
+test_MISD:test_MISD.o
 test_uBuffer:test_uBuffer.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_torus:test_torus.cpp

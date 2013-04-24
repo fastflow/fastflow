@@ -316,7 +316,7 @@ struct descriptor1_N {
      *
      * \return The number of peers.
      */
-    inline const int getPeers() const { return peers;}
+    inline int getPeers() const { return peers;}
 
     // variables
     const std::string        name;          // name of descriptor (?)
@@ -728,7 +728,7 @@ struct descriptorN_1 {
      *
      * \return The number of peers are returned.
      */
-    inline const int getPeers() const { return peers;}
+    inline int getPeers() const { return peers;}
     
     const std::string        name;
     zmq::socket_t*           socket;
@@ -942,14 +942,14 @@ public:
      *
      * \return TODO
      */
-    inline const int getToWait() const { return 1;}
+    inline int getToWait() const { return 1;}
 
     /*
      * It put the node to performing state.
      *
      * \return TODO
      */
-    inline const int putToPerform() const { return 1;}
+    inline int putToPerform() const { return 1;}
 
     /* 
      * The communicaiton is finishe.
@@ -1106,14 +1106,14 @@ public:
      *
      * \return TODO
      */
-    inline const int getToWait() const { return 1;}
+    inline int getToWait() const { return 1;}
 
     /**
      * It puts the node to peforming state.
      *
      * \return TODO
      */
-    inline const int putToPerform() const { return 1;}
+    inline int putToPerform() const { return 1;}
 
     /**
      * It closes the communication pattern.
@@ -1289,14 +1289,14 @@ public:
      *
      * \return TODO
      */
-    inline const int getToWait() const { return desc->getPeers();}
+    inline int getToWait() const { return desc->getPeers();}
 
     /**
      * It puts the node in performing state.
      *
      * \return TODO
      */
-    inline const int putToPerform() const { return 1;}
+    inline int putToPerform() const { return 1;}
 
     /**
      * It finishes the communication process.
@@ -1464,14 +1464,14 @@ public:
      *
      * \return TODO
      */
-    inline const int getToWait() const { return 1;}
+    inline int getToWait() const { return 1;}
 
     /**
      * It places the node in the waiting state.
      *
      * \return TODO
      */
-    inline const int putToPerform() const { return 1;}
+    inline int putToPerform() const { return 1;}
 
     /**
      * It performs the completion operation.
@@ -1658,12 +1658,12 @@ public:
      *
      * \return 1 is always returned
      */
-    inline const int getToWait() const { return 1;}
+    inline int getToWait() const { return 1;}
 
     /**
      * \return TODO
      */
-    inline const int putToPerform() const { return desc->getPeers();}
+    inline int putToPerform() const { return desc->getPeers();}
 
     /**
      * It closes communication pattern
@@ -1922,7 +1922,7 @@ public:
      *
      * \return 1 is always returned.
      */
-    inline const int getToWait() const { return 1;}
+    inline int getToWait() const { return 1;}
 
     /**
      * It completes the communication.

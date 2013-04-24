@@ -40,8 +40,9 @@ using namespace ff;
 class Worker: public ff_node {
 public:
     void * svc(void * task) {
-        int * t = (int *)task;
 #if 0
+        int * t = (int *)task;
+
         std::cout << "[Worker] " << ff_node::get_my_id() 
                   << " received task " << *t << "\n";
 #endif

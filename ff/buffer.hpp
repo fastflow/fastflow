@@ -313,9 +313,7 @@ public:
      *
      *  \return The head of the buffer.
      */
-    inline void * const top() const { 
-        return buf[pread];  
-    }    
+    inline void * top() const { return buf[pread]; }    
 
     /** 
      * Reset the buffer and move \p read and \p write pointers to the beginning

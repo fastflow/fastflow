@@ -196,7 +196,12 @@ public:
         if (!skip_init) {            
             // set the initial value for the barrier 
             if (!barrier)  barrier = new BARRIER_T;
-            barrier->barrierSetup(cardinality(barrier));
+            const int nthreads = cardinality(barrier);
+            if (nthreads > MAX_NUM_THREADS) {
+                error("PIPE, too much threads, increase MAX_NUM_THREADS !\n");
+                return -1;
+            }
+            barrier->barrierSetup(nthreads);
         }
         if (!prepared) if (prepare()<0) return -1;
 
@@ -449,10 +454,6 @@ protected:
      */
     void  svc_end()  {}
     
-    /**
-     * TODO
-     */
-    int   get_my_id() const { return -1; };
 
     /**
      * TODO

@@ -274,7 +274,7 @@ public:
     /**
      * \return Returns the amount of memry allocated 
      */
-    const size_t getallocated() const { return memory_allocated; }
+    size_t getallocated() const { return memory_allocated; }
     
 private:
     size_t       memory_allocated;
@@ -442,7 +442,7 @@ private:
      *
      * \return A pointer to the segment controller.
      */
-    inline Seg_ctl * const getsegctl(Buf_ctl * buf) { 
+    inline Seg_ctl * getsegctl(Buf_ctl * buf) { 
         return *((Seg_ctl **)buf); 
     }
 
@@ -571,7 +571,8 @@ private:
             }
         }
 
-        union { Buf_ctl * buf; void * ptr; } b;
+        union { Buf_ctl * buf; void * ptr; } b={NULL};
+
         for(register unsigned i=2;i<fb_size;++i) {
             fb[i]->leak->pop(&b.ptr); 
             DBG(assert(b.ptr));
@@ -753,7 +754,8 @@ public:
         for(register unsigned i=0;i<fb_size;++i) {
             DBG(assert(fb[i]));
             if (reclaim) {
-                union { Buf_ctl * buf2; void * ptr; } b;
+                union { Buf_ctl * buf2; void * ptr; } b={NULL};
+
                 while(fb[i]->leak->pop(&b.ptr)) {   // while pop  succeedes
                     checkReclaim(getsegctl(b.buf2));                        
                 }
@@ -845,10 +847,10 @@ public:
     }
 
     /// Get the size of the SlabCache
-    inline const size_t getsize() const { return size; }
+    inline size_t getsize() const { return size; }
     /// Get the number of slabs in the cache
-    inline const size_t getnslabs() const { return nslabs;}
-    inline const size_t allocatedsize() const { 
+    inline size_t getnslabs() const { return nslabs;}
+    inline size_t allocatedsize() const { 
         return (alloc?alloc->getallocated():0);
     }
     
@@ -935,14 +937,14 @@ private:
     /**
      * TODO
      */
-    inline Seg_ctl * const getsegctl(Buf_ctl * buf) { 
+    inline Seg_ctl * getsegctl(Buf_ctl * buf) { 
         return *((Seg_ctl **)buf); 
     }
 
     /**
      * TODO
      */
-    inline SlabCache * const getslabs(Buf_ctl * buf) {
+    inline SlabCache * getslabs(Buf_ctl * buf) {
         return (getsegctl(buf))->cacheentry;
     }
     
@@ -985,6 +987,7 @@ public:
      */
     ff_allocator(size_t max_size=0, const int delayedReclaim=0) :
         alloc(0), max_size(max_size), delayedReclaim(delayedReclaim) { }
+
     /**
      * Destructor
      */
@@ -1459,7 +1462,7 @@ protected:
      *
      * \return TODO
      */
-    inline Seg_ctl * const getsegctl(Buf_ctl * buf) { 
+    inline Seg_ctl * getsegctl(Buf_ctl * buf) { 
         return *((Seg_ctl **)buf); 
     }
 
@@ -1574,9 +1577,9 @@ public:
      * \returns a \p ffa_wrapper object, that is in turn an extension of 
      * a \ff_allocator object.
      */
-    inline ffa_wrapper * const newAllocator( size_t max_size=0, 
-                                             int _nslabs[N_SLABBUFFER]=0,
-                                             bool prealloc=true ) 
+    inline ffa_wrapper * newAllocator( size_t max_size=0, 
+                                       int _nslabs[N_SLABBUFFER]=0,
+                                       bool prealloc=true ) 
     {
         FFAxThreadData * ffaxtd = newAllocator(prealloc, _nslabs, max_size);
         if (!ffaxtd) return NULL;
