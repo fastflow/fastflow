@@ -211,7 +211,7 @@ public:
     /**
      * It returns the the process identifier of the process.
      */
-    const int getProcId() const { return impl.getProcId();}
+    int getProcId() const { return impl.getProcId();}
 };
 
 /*!

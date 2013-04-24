@@ -304,7 +304,7 @@ public:
      *
      * \return The \p channelid is returned.
      */
-    const int get_channel_id() const { return channelid;}
+    int get_channel_id() const { return channelid;}
 
     /**
      * \brief Gets the number of worker threads currently running.
@@ -313,7 +313,7 @@ public:
      *
      * \return Number of worker threads
      */
-    inline const int getnworkers() const { return (int) workers.size()-neos-neosnofreeze; }
+    inline int getnworkers() const { return (int) workers.size()-neos-neosnofreeze; }
     
     /**
      * \brief Skips the first pop
@@ -331,7 +331,7 @@ public:
      *
      * \return \p buffer is returned. 
      */
-    FFBUFFER * const get_out_buffer() const { return buffer;}
+    FFBUFFER * get_out_buffer() const { return buffer;}
 
     /**
      * \brief Register the given worker to the list of workers.

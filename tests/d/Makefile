@@ -27,11 +27,13 @@ ifndef ZMQ_PATH
 $(error The ZMQ_PATH variable is not defined in your environment)
 endif
 
-CC                   = gcc 
+CC		     = gcc 
 CXX 		     = g++ 
+#CC                  = icc
+#CXX 		     = icpc 
 LINK_OPT             = 
 VERSION              = 
-OPTIMIZE_FLAGS       = -O6 -finline-functions
+OPTIMIZE_FLAGS       = -O3 -finline-functions
 CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall
 CFLAGS               =
 LDFLAGS              = -L ${ZMQ_PATH}/lib

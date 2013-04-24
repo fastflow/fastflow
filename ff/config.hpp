@@ -50,7 +50,10 @@ namespace ff {
      *
      *  @{
      */
-    enum { FF_EOS=ULONG_MAX, FF_EOS_NOFREEZE=(FF_EOS-0x1) , FF_GO_ON=(FF_EOS-0x2)};
+//    enum { FF_EOS=ULONG_MAX, FF_EOS_NOFREEZE=(FF_EOS-0x1) , FF_GO_ON=(FF_EOS-0x2)};
+static const unsigned long FF_EOS           = (ULONG_MAX);
+static const unsigned long FF_EOS_NOFREEZE  = (FF_EOS-0x1);
+static const unsigned long FF_GO_ON         = (FF_EOS-0x2);
 }
 
 #define GO_ON         (void*)ff::FF_GO_ON
@@ -70,7 +73,7 @@ namespace ff {
 
 // maximum number of threads that can be spawned
 #if !defined(MAX_NUM_THREADS)
-#define MAX_NUM_THREADS       128 
+#define MAX_NUM_THREADS       256 
 #endif
 
 // NOTE: BACKOFF_MIN/MAX are lower and upper bound backoff values.
