@@ -3,6 +3,7 @@
 #include "cuda_kernel.h"
 #include "cuda_definitions.h"
 #include <math.h>
+#include <float.h>
 #include <cutil_inline.h>
 #include "sm_11_atomic_functions.h"
 //#include <math.h>
@@ -43,7 +44,7 @@ __global__ void SPDkernel(CUDAPoint* __restrict__ noisy_vect, int n_noisy, int *
     // Run the restoration algorithm
     float S;
     float Fu; 
-    float Fu_prec = 256.0;
+    float Fu_prec = FLT_MAX; //256.0;
     unsigned char Fu_min_u = 0;
     float beta_ = beta / 2;
     for(int u=0; u<256; ++u) {
@@ -55,9 +56,10 @@ __global__ void SPDkernel(CUDAPoint* __restrict__ noisy_vect, int n_noisy, int *
 	  __powf(abs(u - neighbour_pixels[h].original), alpha);
       }
       Fu += (abs(u - pixel.grey) + (beta_) * S); // (S1 + S2));
-      if(Fu < Fu_prec)
-	Fu_min_u = u;
-      Fu_prec = Fu;
+      if(Fu < Fu_prec){
+		Fu_min_u = u;
+      	Fu_prec = Fu;
+      }      
     }
     pixel.grey = image_data[point.row*width+point.col].grey = Fu_min_u;
  

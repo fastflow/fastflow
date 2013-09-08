@@ -83,7 +83,6 @@ int main(int argc, char * argv[]) {
             C[i*N+j] = 0;
         }
 
-    ffTime(START_TIME);
     ff_farm<> farm(true, N+nworkers);    
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker);
@@ -104,15 +103,11 @@ int main(int argc, char * argv[]) {
     threadMapper::instance()->setMappingList(worker_mapping);
 #endif
 
-    // Now run the accelator asynchronusly
     farm.run_then_freeze();
     for (long i=1;i<=N;i++) farm.offload((void*)i);
     farm.offload((void *)FF_EOS);
-    farm.wait();  
-    ffTime(STOP_TIME);
-
-    printf("%d Time = %g (ms)\n",nworkers, farm.ffwTime());
-    //printf("total=%g (ms)\n", ffTime(GET_TIME));
+    farm.wait_freezing();
+    printf("%d Time = %g (ms)\n",nworkers, farm.ffTime());
 
     if (check) {
         double R=0;        

@@ -84,21 +84,19 @@ int main(int argc, char * argv[]) {
 #if defined(USE_OPENMP)
     ffTime(START_TIME);
 #if defined(OPTIMIZE_CACHE)
-//#pragma omp parallel for schedule(auto) 
-#pragma omp parallel for schedule(static)
     for(long i=0;i<N;++i) 
         for(long j=0;j<N;++j)
             for(long k=0;k<N;++k)
                 C[j*N+k] += A[j*N+i]*B[i*N+k];
 #else 
-//#pragma omp parallel for schedule(auto) 
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(runtime) num_threads(nworkers)
     for(long i=0;i<N;++i) 
         for(long j=0;j<N;++j)
             for(long k=0;k<N;++k)
                 C[i*N+j] += A[i*N+k]*B[k*N+j];
 #endif // OPTIMIZE_CACHE
-    printf("%d Time = %g (ms)\n", nworkers,ffTime(STOP_TIME));
+    ffTime(STOP_TIME);
+    printf("%d Time = %g (ms)\n", nworkers,ffTime(GET_TIME));
 
 #else // !USE_OPENMP
 
@@ -111,7 +109,7 @@ int main(int argc, char * argv[]) {
     threadMapper::instance()->setMappingList(worker_mapping);
 #endif
 
-    long M[N];
+    long *M = (long *) malloc(sizeof(long) *N);
     for(int i=0;i<N;++i) M[i]=i;
     MAP(map, long, M, N, nworkers);
     RUNMAP(map);

@@ -49,6 +49,8 @@ size_t inputsize=0;
 
 template<typename T>
 class oclTask: public baseTask {
+protected:
+    size_t s; 
 public:
     typedef T base_type;
 
@@ -58,8 +60,12 @@ public:
     void   setTask(void* t) { if (t) { task=t; s=inputsize; } }
     size_t size() const     { return s;} 
     size_t bytesize() const { return s*sizeof(base_type); }    
+#if defined(NOT_INPLACE)
+    void*  newOutPtr()    { outPtr= new T[s]; return outPtr; }
+    void   deleteOutPtr() { if (outPtr) delete [] outPtr; }
 protected:
-    size_t s; 
+    T *outPtr;
+#endif
 };
 
 class Emitter: public ff_node {
@@ -90,6 +96,7 @@ public:
         for(long i=0;i<size;++i)  printf("%.2f ", task[i]);
         printf("\n");
 #endif
+
         return GO_ON;
     }
 private:

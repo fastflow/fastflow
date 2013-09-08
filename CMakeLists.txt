@@ -33,13 +33,15 @@ INCLUDE (${CMAKE_ROOT}/Modules/CheckCXXSourceCompiles.cmake)
 INCLUDE (${CMAKE_ROOT}/Modules/TestBigEndian.cmake)
 INCLUDE (${CMAKE_ROOT}/Modules/CheckSymbolExists.cmake)
 
+message (STATUS "Detected processor is " ${CMAKE_SYSTEM_PROCESSOR})
+
 if (CMAKE_COMPILER_IS_GNUCC)
    execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion
                 OUTPUT_VARIABLE GCC_VERSION)
 	if (NOT(GCC_VERSION VERSION_GREATER 4.1))
 	   	set(GCC_TOO_OLD 1)       
         message(WARNING "GCC Version < 4.1, some targets will be skipped")
-        message(STATUS "Use GCC/CXX env variable to define a newer compiler, e.g. export GCC=/usr/bin/gcc-4.2; export CXX=/usr/bin/g++-4.2 ")
+        message(STATUS "Use CC/CXX env variable to define a newer compiler, e.g. export CC=/usr/bin/gcc-4.2; export CXX=/usr/bin/g++-4.2 ")
 	endif (NOT(GCC_VERSION VERSION_GREATER 4.1))
 else (CMAKE_COMPILER_IS_GNUCC)
 	message(WARNING "Compiler is not GCC, some advanced features
@@ -99,13 +101,16 @@ if (CMAKE_SYSTEM_NAME MATCHES "Windows")
 endif (CMAKE_SYSTEM_NAME MATCHES "Windows")
 
 
-set( FF ${PROJECT_SOURCE_DIR}/ff/ )
+set( FF ${PROJECT_SOURCE_DIR}/ff )
+
+## Experimental autoconf style configuration
+INCLUDE (cmake.modules/ffconfig.cmake)
 
 
 CHECK_INCLUDE_FILE("stdint.h"  HAVE_STDINT_H)
 
 if (NOT(HAVE_STDINT_H)) 
-  INCLUDE_DIRECTORIES(${FF}platforms/)
+  INCLUDE_DIRECTORIES(${FF}/platforms/)
 endif (NOT(HAVE_STDINT_H))
 
 #find_path(STDINT_INCLUDE_DIR stdint.h
@@ -151,20 +156,32 @@ set(FFHEADERS_AT
 set(FFHEADERS_D
     ${FF}/d/inter.hpp
 	${FF}/d/zmqImpl.hpp
-	${FF}/d/zmqTranport.hpp
+	${FF}/d/zmqTransport.hpp
   )
 
 set(FFHEADERS_PLAT
-    ${FF}/d/platform.h
+    ${FF}/platforms/platform.h
   )
 
-if (CMAKE_SYSTEM_NAME MATCHES "Windows")
-option( BUILD_EXAMPLES      "Build examples"        ON )
-MESSAGE(STATUS "Configuring >>examples<< directory")
-else (CMAKE_SYSTEM_NAME MATCHES "Windows")
-option( BUILD_EXAMPLES      "Build examples"        ON )
-MESSAGE(STATUS "Configuring >>examples<< directory")
-endif (CMAKE_SYSTEM_NAME MATCHES "Windows")
+# Examples currently not tested on arm
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
+   find_library(ARM_RT_LIBRARY rt HINT /usr/lib DOC "arm rt library")
+   if (ARM_RT_LIBRARY)
+     link_libraries(${ARM_RT_LIBRARY})
+   else (ARM_RT_LIBRARY) 
+     message(FATAL_ERROR "Cannot find RT library that is required on arm processor ${ERR_MSG}")
+   endif (ARM_RT_LIBRARY) 
+    option( BUILD_EXAMPLES      "Build examples"    ON )
+#   MESSAGE(WARNING "NOT Configuring >>examples<< directory (arm processor detected)")
+else (CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
+   if (CMAKE_SYSTEM_NAME MATCHES "Windows")
+     option( BUILD_EXAMPLES      "Build examples"        ON )
+     MESSAGE(STATUS "Configuring >>examples<< directory")
+   else (CMAKE_SYSTEM_NAME MATCHES "Windows")
+     option( BUILD_EXAMPLES      "Build examples"        ON )
+     MESSAGE(STATUS "Configuring >>examples<< directory")
+   endif (CMAKE_SYSTEM_NAME MATCHES "Windows")
+endif (CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
 
 #       NAME                "Description"           DEFAULT
 option( BUILD_TESTS         "Build tests"           ON ) 

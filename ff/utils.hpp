@@ -34,7 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <unistd.h>
+//#include <unistd.h> // Not availbe on windows - to be managed
 #include <iostream>
 //#if (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
 #include <ff/platforms/platform.h>
@@ -61,16 +61,49 @@ namespace ff {
  */
 enum { START_TIME=0, STOP_TIME=1, GET_TIME=2 };
 
-static inline ticks ticks_wait(ticks t1) {
+/*!!!----Mehdi-- required for DSRIMANAGER NODE----!!*/
+void waitCall(double milisec, double sec){
+  if(milisec!=0.0 || sec!=0.0){
+    struct timespec req = {0};
+    req.tv_sec = sec;
+    req.tv_nsec = milisec * 1000000L;
+    nanosleep(&req, (struct timespec *)NULL);
+  }
+};
+
+static inline void waitSleep(ticks TICKS2WAIT){
+    /*!!!----Mehdi--required to change busy wait with nanosleep ----!!*/ 
+    //struct timespac req = {0};
+    //req.tv_sec = static_cast<int>((static_cast<double>(TICKS2WAIT))/CLOCKS_PER_SEC);
+    //req.tv_nsec =(((static_cast<double>(TICKS2WAIT))/CLOCKS_PER_SEC)-static_cast<int>((static_cast<double>(TICKS2WAIT))/CLOCKS_PER_SEC))*1.0e9;
+    //req.tv_nsec =(((static_cast<double>(TICKS2WAIT))/CLOCKS_PER_SEC)-static_cast<int>((static_cast<double>(TICKS2WAIT))/CLOCKS_PER_SEC))*1.0e9;
+
+    /* NOTE: The following implementation is not correct because we don't take into account
+     *       the (current) CPU frequency. Anyway, this works well enough for internal FastFlow usage.
+     */ 
+    struct timespec req = {0, static_cast<long>(TICKS2WAIT)};
+    nanosleep(&req, NULL);
+};
+
+/* NOTE:  nticks should be something less than 1000000 otherwise 
+ *        better to use something else.
+ */
+static inline ticks ticks_wait(ticks nticks) {
+#if defined(FF_ESAVER)
+    waitSleep(nticks);
+    return 0;
+#else
     ticks delta;
     ticks t0 = getticks();
-    //std::cerr << "should wait " << t1 << " at " << t0 << "\n";
-    do { delta = (getticks()) - t0; } while (delta < t1);
-    return delta-t1;
+    do { delta = (getticks()) - t0; } while (delta < nticks);
+    return delta-nticks;
+#endif
 }
 
+/* NOTE: Does not make sense to use 'us' grather than or equal to 1000000 */ 
 static inline void ff_relax(unsigned long us) {
-    usleep(us);
+    struct timespec req = {0, static_cast<long>(us*1000L)};
+    nanosleep(&req, NULL);
     PAUSE();
 }
 

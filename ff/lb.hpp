@@ -100,7 +100,7 @@ protected:
     inline void push_eos(bool nofreeze=false) {
         //register int cnt=0;
         void * eos = (void *)(nofreeze?FF_EOS_NOFREEZE:FF_EOS);
-        for(register int i=0;i<nworkers;++i) {
+        for(register int i=0;i<running;++i) {
             while(!workers[i]->put(eos)) {
                 //if (sched_emitter && (++cnt>PUSH_CNT_EMIT)) { 
                 // cnt=0;sched_yield();}
@@ -109,15 +109,15 @@ protected:
             }
         }
     }
-
-    /**
-     * \brief Gets the fallback
-     *
-     * It gets the fallback in the form of FastFlow node.
-     *
-     * \return fallback as a pointer to FastFlow node
-     */
-    inline ff_node * getfallback() const { return fallback;}
+    inline void push_goon() {
+        void * goon = (void *)(GO_ON);
+        for(register int i=0;i<running;++i) {
+            while(!workers[i]->put(goon)) {
+                losetime_out();
+            }
+        }
+    }
+        
 
     /** 
      * \brief Virtual function that can be redefined to implement a new scheduling
@@ -128,7 +128,7 @@ protected:
      *
      * \return The number of worker to be selected.
      */
-    virtual inline int selectworker() { return (++nextw % nworkers); }
+    virtual inline int selectworker() { return (++nextw % running); }
 
 #if defined(LB_CALLBACK)
 
@@ -172,12 +172,6 @@ protected:
     virtual inline void losetime_out() { 
         FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
         ticks_wait(TICKS2WAIT); 
-#if 0
-        FFTRACE(register ticks t0 = getticks());
-        usleep(TICKS2WAIT);
-        FFTRACE(register ticks diff=(getticks()-t0));
-        FFTRACE(lostpushticks+=diff;++pushwait);
-#endif
     }
 
     /**
@@ -188,12 +182,6 @@ protected:
     virtual inline void losetime_in() { 
         FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
         ticks_wait(TICKS2WAIT); 
-#if 0
-        FFTRACE(register ticks t0 = getticks());
-        usleep(TICKS2WAIT);
-        FFTRACE(register ticks diff=(getticks()-t0));
-        FFTRACE(lostpopticks+=diff;++popwait);
-#endif
     }
 
     /** 
@@ -229,12 +217,7 @@ protected:
                     if (cnt == ntentative()) break; 
                 }
             } while(1);
-            if (fallback) {
-                nextw=-1;
-                //std::cerr << "exec fallback\n";
-                fallback->svc(task);
-                return false;
-            } else losetime_out();
+            losetime_out();
             //std::cerr << "-";
         } while(1);
 
@@ -262,7 +245,8 @@ protected:
             do {
                 if (++start == ite) start=availworkers.begin();
                 if((*start)->get(task)) {
-                    channelid = (*start)->get_my_id();
+                    channelid = 
+                        ((start-availworkers.begin()) >= multi_input_start) ? -1:(*start)->get_my_id();
                     return start;
                 }
                 else if (++cnt == nw) {
@@ -290,7 +274,7 @@ protected:
     virtual void broadcast_task(void * task) {
         std::vector<int> retry;
 
-        for(register int i=0;i<nworkers;++i) {
+        for(register int i=0;i<running;++i) {
             if(!workers[i]->put(task))
                 retry.push_back(i);
         }
@@ -354,9 +338,10 @@ public:
      *  \param max_num_workers The max number of workers allowed
      */
     ff_loadbalancer(int max_num_workers): 
-        nworkers(0),max_nworkers(max_num_workers),nextw(0),nextINw(0),channelid(-2),
+        nworkers(0),running(-1),max_nworkers(max_num_workers),nextw(-1),nextINw(0),channelid(-2),
         filter(NULL),workers(new ff_node*[max_num_workers]),
-        fallback(NULL),buffer(NULL),skip1pop(false),master_worker(false),multi_input(NULL),multi_input_size(-1) {
+        buffer(NULL),skip1pop(false),master_worker(false),
+        multi_input(NULL),multi_input_size(-1),multi_input_start(max_num_workers+1) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
@@ -388,25 +373,6 @@ public:
         }
         filter = f;
         filter->registerCallback(ff_send_out_emitter, this);
-
-        return 0;
-    }
-
-    /**
-     * \brief Sets fallback node
-     *
-     * It sets the fallback node.
-     *
-     * \parm fb is FastFlow node
-     *
-     * \return 0 if successful, otherwise -1
-     */
-    int set_fallback(ff_node * fb) {
-        if (fallback) {
-            error("LB, setting fallback\n");
-            return -1;
-        }
-        fallback = fb;
 
         return 0;
     }
@@ -453,11 +419,11 @@ public:
     /**
      * \brief Get the number of workers
      *
-     * It returns the number of workers
+     * It returns the number of workers running
      *
      * \return Number of worker
      */
-    inline int getnworkers() const { return nworkers;}
+    inline int getnworkers() const { return running; /* return nworkers; */}
 
     /**
      * \brief Skips first pop
@@ -483,6 +449,10 @@ public:
         master_worker=true;
         return 0;
     }
+
+    inline int getTid(ff_node *node) const {
+        return node->getTid();
+    }
     
     /**
      * \brief Sets multiple input buffers
@@ -492,10 +462,10 @@ public:
      * \return 0 if successful, otherwise -1.
      */
     int set_multi_input(ff_node **mi, int misize) {
-        if (master_worker) {
-            error("LB, master-worker and multi-input farm used together\n");
-            return -1;
-        }
+        // if (master_worker) {
+        //     error("LB, master-worker and multi-input farm used together\n");
+        //     return -1;
+        // }
         if (mi == NULL) {
             error("LB, invalid multi-input vector\n");
             return -1;
@@ -507,6 +477,12 @@ public:
         multi_input = mi;
         multi_input_size=misize;
         return 0;
+    }
+
+    inline bool ff_send_out_to(void *task, int id, 
+                               unsigned int retry=(unsigned)-1, unsigned int ticks=0) {
+        nextw = id-1;
+        return schedule_task(task,retry,ticks);
     }
 
     /**
@@ -545,7 +521,6 @@ public:
      * \return -1 ia always returned.
      */
     int deregister_worker() {
-
         return -1;
     }
 
@@ -610,23 +585,25 @@ public:
                         ret = (void*)FF_EOS;
                         break;
                     }
-                } 
+                } else 
+                    if (!inpresent) { push_goon(); push_eos(); ret=(void*)FF_EOS; break;}
                 
                 schedule_task(task);
             } while(true);
         } else {
-            int nw=0;            
+            int nw=0, neos=0;            
             // contains current worker
             std::deque<ff_node *> availworkers; 
 
-            assert( master_worker ^ ( multi_input != NULL) );
+            //assert( master_worker ^ ( multi_input != NULL) );
 
             if (master_worker) {
-                for(int i=0;i<nworkers;++i)
+                for(int i=0;i<running;++i)
                     availworkers.push_back(workers[i]);
-                nw = nworkers;
+                nw = running;
             }
             if (multi_input) {
+                multi_input_start = availworkers.size();
                 for(int i=0;i<multi_input_size;++i)
                     availworkers.push_back(multi_input[i]);
                 nw += multi_input_size;
@@ -640,28 +617,19 @@ public:
                 
                 if ((task == (void*)FF_EOS) || 
                     (task == (void*)FF_EOS_NOFREEZE)) {
-                    
-                    if (master_worker) {
-                        if ((victim == availworkers.end()) || (channelid==-1)) 
-                            push_eos((task==(void*)FF_EOS_NOFREEZE));
-                        else {
-                            if (filter) filter->eosnotify((*victim)->get_my_id());
-                            availworkers.erase(victim);
-                            start=availworkers.begin(); // restart iterator
-                            --nw;
-                        }
+                    if (channelid == -1) ++neos;
+                    if ((victim == availworkers.end()) || 
+                        (neos == multi_input_size)  )
+                        push_eos((task==(void*)FF_EOS_NOFREEZE));
+                    else {
+                        if (filter) filter->eosnotify(channelid);
+                        availworkers.erase(victim);
+                        start=availworkers.begin(); // restart iterator
+                    }
 
-                        if (!nw) {
-                            ret = task;
-                            break; // received all EOS, exit
-                        }
-                    } else {  // <---- multi_input
-                        if (!--nw) {
-                            push_eos((task==(void*)FF_EOS_NOFREEZE));
-                            ret = task;
-                            break; // received all EOS, exit
-                        }
-                        if (filter) filter->eosnotify((*victim)->get_my_id());
+                    if (!--nw) {
+                        ret = task;
+                        break; // received all EOS, exit
                     }
                 } else {
                     if (filter) {
@@ -679,7 +647,7 @@ public:
                         if (task == GO_ON) continue;
                         
                         // if the filter returns NULL we exit immediatly
-                        if (!task || (task ==(void*)FF_EOS_NOFREEZE)) { 
+                        if (task ==(void*)FF_EOS_NOFREEZE) { 
                             push_eos(true); 
                             ret = task;
                             break; 
@@ -712,7 +680,6 @@ public:
         gettimeofday(&tstart,NULL);
 
         if (filter && filter->svc_init() <0) return -1;        
-        if (fallback && fallback->svc_init()<0) return -1;
 
         return 0;
     }
@@ -725,7 +692,6 @@ public:
      */
     virtual void svc_end() {
         if (filter) filter->svc_end();
-        if (fallback) fallback->svc_end();
         gettimeofday(&tstop,NULL);
     }
 
@@ -737,7 +703,7 @@ public:
      * \return 0 if successful, otherwise -1 is returned.
      */
     int runlb(bool=false) {
-        if (this->spawn(filter?filter->getCPUId():-1)<0) {
+        if (this->spawn(filter?filter->getCPUId():-1) == -2) {
             error("LB, spawning LB thread\n");
             return -1;
         }
@@ -752,7 +718,7 @@ public:
      * \return 0 if successful, otherwise -1 is returned
      */
     int run(bool=false) {
-        if (this->spawn(filter?filter->getCPUId():-1)<0) {
+        if (this->spawn(filter?filter->getCPUId():-1) == -2) {
             error("LB, spawning LB thread\n");
             return -1;
         }
@@ -761,10 +727,11 @@ public:
             if (workers[i]->run(true)<0) {
                 error("LB, spawning worker thread\n");
                 return -1;
-            }
+            }            
         }
+        running = nworkers;
         if (isfrozen()) 
-            for(int i=0;i<nworkers;++i) workers[i]->freeze();
+            for(int i=0;i<running;++i) workers[i]->freeze();
 
         return 0;
     }
@@ -794,17 +761,16 @@ public:
      */
     int wait() {
         int ret=0;
-        for(int i=0;i<nworkers;++i)
+        for(int i=0;i<running;++i)
             if (workers[i]->wait()<0) {
                 error("LB, waiting worker thread, id = %d\n",workers[i]->get_my_id());
                 ret = -1;
             }
-
+        running = -1;
         if (ff_thread::wait()<0) {
             error("LB, waiting LB thread\n");
             ret = -1;
         }
-
         return ret;
     }
 
@@ -818,11 +784,12 @@ public:
      */
     int wait_freezing() {
         int ret=0;
-        for(int i=0;i<nworkers;++i)
+        for(int i=0;i<running;++i)
             if (workers[i]->wait_freezing()<0) {
                 error("LB, waiting freezing of worker thread, id = %d\n",workers[i]->get_my_id());
                 ret = -1;
             }
+        running = -1;
         if (ff_thread::wait_freezing()<0) {
             error("LB, waiting LB thread freezing\n");
             ret = -1;
@@ -833,7 +800,7 @@ public:
     /**
      * \brief Stops the thread
      *
-     * It stops the thread.
+     * It stops all workers and the emitter.
      */
     void stop() {
         for(int i=0;i<nworkers;++i) workers[i]->stop();
@@ -843,7 +810,7 @@ public:
     /**
      * \brief Freezes the thread
      *
-     * It freezes the thread.
+     * It freezes all workers and the emitter.
      */
     void freeze() {
         for(int i=0;i<nworkers;++i) workers[i]->freeze();
@@ -853,11 +820,14 @@ public:
     /**
      * \brief Thaws the thread
      *
-     * It thaws the thread.
+     *  If nw != -1 it thaws running threads.
      */
-    void thaw() {
-        for(int i=0;i<nworkers;++i) workers[i]->thaw();
-        ff_thread::thaw();
+    void thaw(bool _freeze=false, int nw=-1) {
+        assert(running==-1);
+        if (nw == -1 || nw > nworkers) running = nworkers;
+        else running = nw;
+        for(int i=0;i<running;++i) workers[i]->thaw(_freeze);
+        ff_thread::thaw(_freeze);
     }
 
     /**
@@ -904,19 +874,20 @@ public:
 #endif
 
 private:
-    int                nworkers;            /// Number of active workers
+    int                nworkers;            /// Number of workers
+    int                running;             /// Number of workers running
     int                max_nworkers;        /// Max number of workers allowed
     int                nextw;               // out index
     int                nextINw;             // in index, used only in master-worker mode
     int                channelid; 
     ff_node         *  filter;
     ff_node        **  workers;
-    ff_node         *  fallback;
     FFBUFFER        *  buffer;
     bool               skip1pop;
     bool               master_worker;
     ff_node        **  multi_input;
     int                multi_input_size;
+    int                multi_input_start;   // position in the availworkers array
 
     struct timeval tstart;
     struct timeval tstop;

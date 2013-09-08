@@ -42,14 +42,14 @@ struct masterStage: public ff_node {
     int svc_init() { eossent=false; return 0;}
     void * svc(void * task) {
         if (task==NULL) {
-            for(int i=0;i<bigbatchSize;++i)
+            for(long i=0;i<bigbatchSize;++i)
                 ff_send_out((void*)(i+1));
             if (numBatch>0) --numBatch;
             return GO_ON;
         }
         
         if (numBatch) {
-            for(int i=0;i<smallbatchSize;++i)
+            for(long i=0;i<smallbatchSize;++i)
                 ff_send_out((void*)(i+1));
             --numBatch;
         } else if (!eossent) {

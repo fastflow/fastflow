@@ -43,7 +43,7 @@ void unpacker(miotipo_in_t *& res) {
     else {
 	double* A = new double[SIZE_IN];
 	for(int i=0;i<SIZE_IN;++i) {
-	  A[i] = 3.14/N;  //*3.14+i;
+	    A[i] = 3.14/(double)N; 
 	}
 	res = new miotipo_in_t(A);
     }
@@ -72,9 +72,7 @@ void packer(miotipo_out_t *& res) {
 
 
 // ------------------ dnode definitions --------------
-FFdnode_out(unpacker, miotipo_in_t, zmqOnDemand);
-FFdnode(f, miotipo_in_t, miotipo_out_t, zmqOnDemand, zmqFromAny);
-FFdnode_in(packer, miotipo_out_t, zmqFromAny);
+PIPE3DEF(unpacker,f,packer, miotipo_in_t, miotipo_out_t);
 // ---------------------------------------------------
 
 

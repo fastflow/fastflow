@@ -111,12 +111,6 @@ protected:
     virtual inline void losetime_out() { 
         FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
         ticks_wait(TICKS2WAIT); 
-#if 0
-        FFTRACE(register ticks t0 = getticks());
-        usleep(TICKS2WAIT);
-        FFTRACE(register ticks diff=(getticks()-t0));
-        FFTRACE(lostpushticks+=diff;++pushwait);
-#endif
     }
     
     /**
@@ -128,12 +122,6 @@ protected:
     virtual inline void losetime_in() { 
         FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
         ticks_wait(TICKS2WAIT);
-#if 0        
-        FFTRACE(register ticks t0 = getticks());
-        usleep(TICKS2WAIT);
-        FFTRACE(register ticks diff=(getticks()-t0));
-        FFTRACE(lostpopticks+=diff;++popwait);
-#endif
     }    
 
     /**
@@ -468,7 +456,7 @@ public:
      * \return 0 if successful, otherwise -1 is returned.
      */
     int run(bool=false) {  
-        if (this->spawn(filter?filter->getCPUId():-1)<0) {
+        if (this->spawn(filter?filter->getCPUId():-1)== -2) {
             error("GT, spawning GT thread\n");
             return -1; 
         }
