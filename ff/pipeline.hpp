@@ -32,7 +32,68 @@
 #include <vector>
 #include <ff/node.hpp>
 
+#if defined( HAS_CXX11_VARIADIC_TEMPLATES )
+#include <tuple>
+#endif
+
 namespace ff {
+
+/* ---------------- basic high-level macros ----------------------- */
+
+    /* FF_PIPEA creates an n-stage accelerator pipeline (max 16 stages) 
+     * where channels have type 'type'. The functions called in each stage
+     * must have the following signature:
+     *   bool (*F)(type &)
+     * If the function F returns false an EOS is produced in the 
+     * output channel.
+     *
+     * Usage example:
+     *
+     *  struct task_t { .....};
+     *
+     *  bool F(task_t &task) { .....; return true;}
+     *  bool G(task_t &task) { .....; return true;}
+     *  bool H(task_t &task) { .....; return true;}
+     * 
+     *  FF_PIPEA(pipe1, task_t, F, G);     // 2-stage
+     *  FF_PIPEA(pipe2, task_t, F, G, H);  // 3-stage
+     *
+     *  FF_PIPEARUN(pipe1); FF_PIPEARUN(pipe2);
+     *  for(...) {
+     *     if (even_task) FF_PIPEAOFFLOAD(pipe1, new task_t(...));
+     *     else FF_PIPEAOFFLOAD(pipe2, new task_t(...));
+     *  }
+     *  FF_PIEAEND(pipe1);  FF_PIPEAEND(pipe2);
+     *  FF_PIEAWAIT(pipe1); FF_PIPEAWAIT(pipe2);
+     *
+     */
+#define FF_PIPEA(pipename, type, ...)                                   \
+    ff_pipeline _FF_node_##pipename(true);                              \
+    _FF_node_##pipename.cleanup_nodes();                                \
+    {                                                                   \
+      class _FF_pipe_stage: public ff_node {                            \
+          typedef bool (*type_f)(type &);                               \
+          type_f F;                                                     \
+      public:                                                           \
+       _FF_pipe_stage(type_f F):F(F) {}                                 \
+       void* svc(void *task) {                                          \
+          type* _ff_in = (type*)task;                                   \
+          if (!F(*_ff_in)) return NULL;                                 \
+          return task;                                                  \
+       }                                                                \
+      };                                                                \
+      ff_pipeline *p = &_FF_node_##pipename;                            \
+      FOREACHPIPE(p->add_stage, __VA_ARGS__);                           \
+    }
+
+#define FF_PIPEARUN(pipename)  _FF_node_##pipename.run()
+#define FF_PIPEAWAIT(pipename) _FF_node_##pipename.wait()
+#define FF_PIPEAOFFLOAD(pipename, task)  _FF_node_##pipename.offload(task);
+#define FF_PIPEAEND(pipename)  _FF_node_##pipename.offload(EOS)
+#define FF_PIPEAGETRESULTNB(pipename, result) _FF_node_##pipename.load_result_nb((void**)result)
+#define FF_PIPEAGETRESULT(pipename, result) _FF_node_##pipename.load_result((void**)result)
+/* ---------------------------------------------------------------- */
+
 
 /*!
  * \ingroup high_level_patterns_shared_memory
@@ -140,10 +201,12 @@ public:
      */
     ff_pipeline(bool input_ch=false,
                 int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
-                int out_buffer_entries=DEF_OUT_BUFF_ENTRIES, bool fixedsize=true):
+                int out_buffer_entries=DEF_OUT_BUFF_ENTRIES, 
+                bool fixedsize=true):
         has_input_channel(input_ch),prepared(false),
+        node_cleanup(false),fixedsize(fixedsize),
         in_buffer_entries(in_buffer_entries),
-        out_buffer_entries(out_buffer_entries),fixedsize(fixedsize) {               
+        out_buffer_entries(out_buffer_entries) {               
     }
     
     /**
@@ -151,6 +214,13 @@ public:
      */
     ~ff_pipeline() {
         if (barrier) delete barrier;
+        if (node_cleanup) {
+            while(nodes_list.size()>0) {
+                ff_node *n = nodes_list.back();
+                nodes_list.pop_back();
+                delete n;
+            }
+        }
     }
 
     /**
@@ -186,6 +256,12 @@ public:
 
         return 0;
     }
+
+    /**
+     * \brief Delete nodes when the destructor is called.
+     *
+     */
+    void cleanup_nodes() { node_cleanup = true; }
 
     /**
      * It run the Pipeline skeleton.
@@ -247,8 +323,8 @@ public:
      */
     int run_then_freeze() {
         if (isfrozen()) {
-            thaw();
-            freeze();
+            // true means that next time threads are frozen again
+            thaw(true);
             return 0;
         }
         if (!prepared) if (prepare()<0) return -1;
@@ -300,9 +376,10 @@ public:
     }
     /**
      * It Thaws all frozen stages.
+     * if _freeze is true at next step all threads are frozen again
      */
-    void thaw() {
-        for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->thaw();
+    void thaw(bool _freeze=false) {
+        for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->thaw(_freeze);
     }
     
     /** 
@@ -316,7 +393,7 @@ public:
     }
 
     /** 
-     * It offfload the given task to the pipeline 
+     * offfload the given task to the pipeline 
      */
     inline bool offload(void * task,
                         unsigned int retry=((unsigned int)-1),
@@ -512,15 +589,119 @@ protected:
 private:
     bool has_input_channel; // for accelerator
     bool prepared;
+    bool node_cleanup;
+    bool fixedsize;
     int in_buffer_entries;
     int out_buffer_entries;
     std::vector<ff_node *> nodes_list;
-    bool fixedsize;
 };
+
+
+/* ------------------------ high-level (simpler) pipeline -------------------------------- */
+
+// generic ff_node stage. It is built around the function F ( F: T* -> T* )
+template<typename T>
+class Fstage: public ff_node {
+public:
+    typedef T*(*F_t)(T*);
+    Fstage(F_t F):F(F) {}
+    inline void* svc(void *t) {	 return F((T*)t); }    
+protected:
+    F_t F;
+};
+
+#if defined( HAS_CXX11_VARIADIC_TEMPLATES )
+
+template<typename TaskType>
+class ff_pipe: public ff_pipeline {
+private:
+    typedef TaskType*(*F_t)(TaskType*);
+    
+    template<std::size_t I = 1, typename FuncT, typename... Tp>
+    inline typename std::enable_if<I == (sizeof...(Tp)-1), void>::type
+    for_each(std::tuple<Tp...> & t, FuncT f) { f(std::get<I>(t)); } // last one
+    
+    template<std::size_t I = 1, typename FuncT, typename... Tp>
+    inline typename std::enable_if<I < (sizeof...(Tp)-1), void>::type
+    for_each(std::tuple<Tp...>& t, FuncT f) {
+        f(std::get<I>(t));
+        for_each<I + 1, FuncT, Tp...>(t, f);  // all but the first
+    }
+        
+    inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }
+    inline void add2pipe(F_t F) { ff_pipeline::add_stage(new Fstage<TaskType>(F));  }
+
+    struct add_to_pipe {
+        ff_pipe *const P;
+        add_to_pipe(ff_pipe *const P):P(P) {}
+        template<typename T>
+        void operator()(T t) const { P->add2pipe(t); }
+    };
+        
+public:
+    template<typename... Arguments>
+    ff_pipe(Arguments...args) {
+        std::tuple<Arguments...> t = std::make_tuple(args...);
+        auto firstF = std::get<0>(t);
+        add2pipe(firstF);
+        for_each(t,add_to_pipe(this));
+    }
+    
+    template<typename... Arguments>
+    ff_pipe(bool input_ch, Arguments...args):ff_pipeline(input_ch) {
+        std::tuple<Arguments...> t = std::make_tuple(args...);
+        auto firstF = std::get<0>(t);
+        add2pipe(firstF);
+        for_each(t,add_to_pipe(this));
+    }
+    
+    int add_feedback() {
+        return ff_pipeline::wrap_around();
+    }
+    
+    operator ff_node* () { return this;}
+};
+#endif /* HAS_CXX11_VARIADIC_TEMPLATES */
+template<typename T>
+ff_node* toffnode(T* p) { return p;}
+template<typename T>
+ff_node* toffnode(T& p) { return (ff_node*)p;}
+
+/* --------------------------------------------------------------------------------------- */
+
+
 
 /*!
  *  @}
  */
+
+#define CONCAT(x, y)  x##y
+#define FFPIPE_1(apply, x, ...)  apply(new _FF_pipe_stage(x))
+#define FFPIPE_2(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_1(apply,  __VA_ARGS__)
+#define FFPIPE_3(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_2(apply, __VA_ARGS__)
+#define FFPIPE_4(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_3(apply,  __VA_ARGS__)
+#define FFPIPE_5(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_4(apply,  __VA_ARGS__)
+#define FFPIPE_6(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_5(apply,  __VA_ARGS__)
+#define FFPIPE_7(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_6(apply,  __VA_ARGS__)
+#define FFPIPE_8(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_7(apply,  __VA_ARGS__)
+#define FFPIPE_9(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_8(apply,  __VA_ARGS__)
+#define FFPIPE_10(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_9(apply,  __VA_ARGS__)
+#define FFPIPE_11(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_10(apply,  __VA_ARGS__)
+#define FFPIPE_12(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_11(apply,  __VA_ARGS__)
+#define FFPIPE_13(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_12(apply,  __VA_ARGS__)
+#define FFPIPE_14(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_13(apply,  __VA_ARGS__)
+#define FFPIPE_15(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_14(apply,  __VA_ARGS__)
+#define FFPIPE_16(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_15(apply,  __VA_ARGS__)
+
+#define FFPIPE_NARG(...) FFPIPE_NARG_(__VA_ARGS__, FFPIPE_RSEQ_N())
+#define FFPIPE_NARG_(...) FFPIPE_ARG_N(__VA_ARGS__) 
+#define FFPIPE_ARG_N(_1,_2,_3,_4,_5,_6,_7,_8, _9,_10,_11,_12,_13,_14,_15,_16, N, ...) N
+#define FFPIPE_RSEQ_N() 16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0
+#define FFPIPE_(N, apply, x, ...) CONCAT(FFPIPE_, N)(apply, x, __VA_ARGS__)
+#define FFCOUNT_(_0,_1,_2,_3,_4,_5,_6,_7,_8, _9,_10,_11,_12,_13,_14,_15,_16, N, ...) N
+#define FFCOUNT(...) COUNT_(X,##__VA_ARGS__, 16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
+
+#define FOREACHPIPE(apply, x, ...) FFPIPE_(FFPIPE_NARG(x, __VA_ARGS__), apply, x, __VA_ARGS__)
 
 } // namespace ff
 

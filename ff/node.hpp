@@ -296,30 +296,26 @@ private:
      *
      * \parm attr is the pthread attribute
      * \parm cpuID is the identifier the core
+     * \return -2  if error, the cpu identifier if successful
      */
-static inline void init_thread_affinity(pthread_attr_t*attr, int cpuId) {
-    /*
-    int ret;
-    if (cpuId<0)
-        ret = ff_mapThreadToCpu(threadMapper::instance()->getCoreId());
-    else
-        ret = ff_mapThreadToCpu(cpuId);
-    if (ret==EINVAL) std::cerr << "ff_mapThreadToCpu failed\n";
-    */
-    
+static inline int init_thread_affinity(pthread_attr_t*attr, int cpuId) {
     cpu_set_t cpuset;    
     CPU_ZERO(&cpuset);
 
+    int id;
     if (cpuId<0) {
-        int id = threadMapper::instance()->getCoreId();
+        id = threadMapper::instance()->getCoreId();
         CPU_SET (id, &cpuset);
-    } else 
+    } else  {
+        id = cpuId;
         CPU_SET (cpuId, &cpuset);
+    }
 
     if (pthread_attr_setaffinity_np (attr, sizeof(cpuset), &cpuset)<0) {
         perror("pthread_attr_setaffinity_np");
+        return -2;
     }
-    
+    return id;    
 }
 #elif !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
 
@@ -329,10 +325,12 @@ static inline void init_thread_affinity(pthread_attr_t*attr, int cpuId) {
  * It initializes thread affinity i.e. it defines to which core ths thread
  * should be assigned.
  *
+ * \return always return -1 because no thread mapping is done
  */
-static inline void init_thread_affinity(pthread_attr_t*,int) {
+static inline int init_thread_affinity(pthread_attr_t*,int) {
     // Just ensure that the threadMapper constructor is called.
     threadMapper::instance();
+    return -1;
 }
 #else
 /**
@@ -340,9 +338,12 @@ static inline void init_thread_affinity(pthread_attr_t*,int) {
  *
  * It initializes thread affinity i.e. it defines to which core ths thread
  * should be assigned.
+ *
+ * \return always return -1 because no thread mapping is done
  */
-static inline void init_thread_affinity(pthread_attr_t*,int) {
+static inline int init_thread_affinity(pthread_attr_t*,int) {
     // do nothing
+    return -1;
 }
 #endif /* HAVE_PTHREAD_SETAFFINITY_NP */
 
@@ -389,7 +390,7 @@ protected:
         tid((unsigned)-1),barrier(barrier),
         stp(true), // only one shot by default
         spawned(false),
-        freezing(false), frozen(false),thawed(false),
+        freezing(0), frozen(false),thawed(false),
         init_error(false) {
         
         /* Attr is NULL, default mutex attributes are used. Upon successful
@@ -414,14 +415,7 @@ protected:
      * \brief Destructor
      *
      */
-    virtual ~ff_thread() {
-        // MarcoA 27/04/12: Moved to wait
-        /*
-        if (pthread_attr_destroy(&attr)) {
-            error("ERROR: ~ff_thread: pthread_attr_destroy fails!");
-        }
-        */
-    }
+    virtual ~ff_thread() {}
     
     /**
      * \brief The life cycle of FastFlow thread
@@ -452,24 +446,24 @@ protected:
             // acquire lock. While freezing is true,
             // freeze and wait. 
             pthread_mutex_lock(&mutex);
-            if (ret != (void*)FF_EOS_NOFREEZE) {
-                while(freezing) {
+            if (ret != (void*)FF_EOS_NOFREEZE && !stp) {  // <-------------- CONTROLLARE aggiunto !stp
+                while(freezing==1) { // NOTE: freezing can change to 2
                     frozen=true; 
                     pthread_cond_signal(&cond_frozen);
                     pthread_cond_wait(&cond,&mutex);
                 }
             }
-
-            thawed=frozen;
+            
+            thawed=true;     // <----------------- CONTROLLARE !!!! era thawed = frozen;
             pthread_cond_signal(&cond);
-            frozen=false;            
+            frozen=false; 
+            if (freezing != 0) freezing = 1; // freeze again next time 
             pthread_mutex_unlock(&mutex);
 
             if (enable_cancelability()) {
                 error("ff_thread, thread_routine, could not change thread cancelability");
                 return;
             }
-
         } while(!stp);
 
         if (init_error && freezing) {
@@ -571,7 +565,9 @@ public:
      *
      * \parm cpuID is the identifier of the core.
      *
-     * \return 0 if successful, otherwise a negative value.
+     * \return the -2 in case of error, 
+     *             -1 in case the thread is not assigned to any CPU
+     *             CPU-id if successful
      */
     int spawn(int cpuId=-1) {
         if (spawned) return -1;
@@ -581,16 +577,17 @@ public:
                 return -1;
         }
 
-        init_thread_affinity(&attr, cpuId);
+        int CPUId = init_thread_affinity(&attr, cpuId);
+        if (CPUId==-2) return -2;
         if (barrier) tid=barrier->getCounter();
         if (pthread_create(&th_handle, &attr,
                            proxy_thread_routine, this) != 0) {
             perror("pthread_create: pthread creation failed.");
-            return -1;
+            return -2;
         }
         if (barrier) barrier->incCounter();
         spawned = true;
-        return 0;
+        return CPUId;
     }
    
     /**
@@ -646,7 +643,7 @@ public:
      */
     void freeze() {  
         stp=false;
-        freezing=true; 
+        freezing = 1;
     }
     
     /**
@@ -654,9 +651,10 @@ public:
      *
      * If the thread is frozen, then thaw it. 
      */
-    void thaw() {
+    void thaw(bool _freeze=false) {
         pthread_mutex_lock(&mutex);
-        freezing=false;
+        if (_freeze) freezing=2; // next time freeze again the thread
+        else freezing=0;
         assert(thawed==false);
         pthread_cond_signal(&cond);
         pthread_mutex_unlock(&mutex);
@@ -675,7 +673,7 @@ public:
      *
      * \return A booleon value shoing the status of freezing.
      */
-    bool isfrozen() { return freezing;} 
+    bool isfrozen() { return freezing>0;} 
 
     /**
      *
@@ -687,13 +685,19 @@ public:
      */
     pthread_t get_handle() const { return th_handle;}
 
+    /**
+     *  \brief Gets the internal unique thread identifier.
+     *
+     */
+    inline int getTid() const { return tid; }
+
 protected:
     unsigned        tid;
 private:
     BARRIER_T    *  barrier;            /// A \p Barrier object
     bool            stp;
     bool            spawned;
-    bool            freezing;
+    int             freezing;   // changed from bool to int
     bool            frozen;
     bool            thawed;
     bool            init_error;
@@ -948,9 +952,9 @@ protected:
      * \return If the thread does not exist then the method is returned,
      * otherwise the thread is thawed.
      */
-    virtual void thaw() { 
+    virtual void thaw(bool _freeze=false) { 
         if (!thread) return; 
-        thread->thaw();
+        thread->thaw(_freeze);
     }
     
     /**
@@ -968,13 +972,13 @@ protected:
     }
     
     /**
-     * \brief Assigns the cardinality
+     * \brief Counts how many threads there are in this node.
      *
-     * It assigns the cardinality.
+     * Counts the n. of threads that should block in the barrier.
      *
      * \parm b is the barrier.
      *
-     * \return 1 is always returned.
+     * \return always 1
      */
     virtual int  cardinality(BARRIER_T * const b) { 
         barrier = b;
@@ -991,8 +995,6 @@ protected:
     virtual void set_barrier(BARRIER_T * const b) {
         barrier = b;
     }
-    //FIXME: what is the difference between cardinality and set_barrier? They
-    //are the same functions no?
 
     /**
      * \brief Gets the time
@@ -1063,11 +1065,9 @@ public:
     virtual void eosnotify(int id=-1) {}
     
     /**
-     * \brief Gets the ID of the thread
+     * \brief Gets the ID of the ff_node 
      *
-     * It is a virtual function. It returns thread's ID. 
-     *
-     * \return The identifier of the thread
+     * \return The ID of the ff_node
      */
     virtual int get_my_id() const { return myid; };
     
@@ -1087,13 +1087,13 @@ public:
     }
     
     /** 
-     * \brief Gets ID of the CPU
+     * \brief Gets the CPU id (if set) of this node is pinned
      *
      * It gets the ID of the CPU where the thread is running.
      *
      * \return The identifier of the CPU.
      */
-    virtual int getCPUId() const { return CPUId;}
+    virtual int getCPUId() const { return CPUId; }
 
 #if defined(TEST_QUEUE_SPIN_LOCK)
     /**
@@ -1154,6 +1154,7 @@ public:
      */
     virtual inline bool  get(void **ptr) { return out->pop(ptr);}
 #endif
+
     /**
      * \brief Gets input buffer
      *
@@ -1238,6 +1239,15 @@ public:
     }
 #endif
 
+    /** \brief Resets input/output queues.
+     * 
+     *  Warning resetting queues while the node is running may produce to unexpected results.
+     */
+    void reset() {
+        if (in)  in->reset();
+        if (out) out->reset();
+    }
+
 protected:
     /**
      * \brief Protected constructor
@@ -1313,6 +1323,18 @@ private:
         callback=cb;
         callback_arg=arg;
     }
+
+    /**
+     * Sets the CPU id for this node (used only in the run-time)  
+     *
+     */
+    void  setCPUId(int id) { CPUId = id;}
+
+    /**
+     *  Returns the internal thread identifier.
+     *
+     */
+    inline int   getTid() const { return thread->getTid();} 
     
     /**
      * \brief An inner class for FastFlow's thread
@@ -1483,12 +1505,9 @@ private:
         int svc_init() {
 #if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
             int cpuId = filter->getCPUId();  
-            // std::cerr << "--> getCPUId " << cpuId << " tid " << tid << " destination " <<
-            // threadMapper::instance()->getCoreId(tid) << "\n";
-            // std::cout << " Node: mask is " << threadMapper::instance()->getMask() << "\n";
-            // std::cout.flush();
-            if (ff_mapThreadToCpu((cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId)!=0)
-                error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());
+            if (ff_mapThreadToCpu((cpuId<0) ? (cpuId=threadMapper::instance()->getCoreId(tid)) : cpuId)!=0)
+                error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());            
+            filter->setCPUId(cpuId);
 #endif
             gettimeofday(&filter->tstart,NULL);
             return filter->svc_init(); 
@@ -1511,7 +1530,11 @@ private:
          *
          * \return The status of \p spawn method.
          */
-        int run() { return ff_thread::spawn(filter->getCPUId()); }
+        int run() { 
+            int CPUId = ff_thread::spawn(filter->getCPUId());             
+            filter->setCPUId(CPUId);
+            return (CPUId==-2)?-1:0;
+        }
 
         /**
          * \brief Waits the thread

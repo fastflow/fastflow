@@ -74,7 +74,7 @@ private:
   
   Environment ();
   Environment(Environment const&){};
-  Environment& operator=(Environment const&){};
+  Environment& operator=(Environment const&){ return *this;};
   int staticSelectionPolicy(cl_device_type, Ocl_Utilities*);
    
 public:   

@@ -10,6 +10,7 @@ static double* A=NULL;
 static double* B=NULL;
 static double* C=NULL;
 
+#if !defined(USE_LAMBDA)
 class Mult {
 public:
   void operator()(tbb::blocked_range<long> r) const {
@@ -23,6 +24,7 @@ public:
     }
   }
 };
+#endif 
 
 int main(int argc, char * argv[]) {
     if (argc<3) {
@@ -51,7 +53,22 @@ int main(int argc, char * argv[]) {
     tbb::task_scheduler_init init(nworkers);
 
     ff::ffTime(ff::START_TIME);
+#if !defined(USE_LAMBDA)
     tbb::parallel_for(tbb::blocked_range<long>(0,N), Mult());
+#else
+    tbb::parallel_for(tbb::blocked_range<long>(0,N /*,
+						     std::max( N/nworkers, (long)1)*/), 
+		      [&] (const tbb::blocked_range<long>& r) {
+			  for (long i = r.begin(); i != r.end(); ++i) {
+			      for (long j = 0; j < N; ++j) {
+				  for (long k = 0; k < N; ++k) {
+				      C[i*N+j] += A[i*N+k] * B[k*N+j];
+				  }
+			      }
+			  }			  
+		      }
+		      );
+#endif
     printf("%d Time = %g (ms)\n", nworkers,ff::ffTime(ff::STOP_TIME));
 
     if (check) {

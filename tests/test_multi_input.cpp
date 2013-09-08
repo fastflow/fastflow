@@ -50,7 +50,7 @@ class Emitter1: public ff_node {
 public:
     Emitter1(int ntasks):ntasks(ntasks) {}
     void* svc(void*) {
-        for(int i=0;i<ntasks;++i)
+        for(long i=0;i<ntasks;++i)
             ff_send_out((void*)(i+10));
         return NULL;
     }

@@ -110,7 +110,7 @@ protected:
      * It construct the OpenCL node for the device.
      *
      */
-    ff_oclNode():baseclass_ocl_node_deviceId(NULL),tId(-1){ }
+    ff_oclNode():tId(-1), baseclass_ocl_node_deviceId(NULL) { }
     
     /**
      * \brief Device rules

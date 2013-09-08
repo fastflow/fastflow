@@ -1,0 +1,27 @@
+/* standard headers */
+#cmakedefine HAVE_MALLOC_H 1
+#cmakedefine HAVE_NUMA_H
+#cmakedefine HAVE_STDINT_H
+#cmakedefine HAVE_PTHREAD_H
+
+/* Compiler type */
+#cmakedefine CMAKE_COMPILER_IS_GNUCC
+#cmakedefine HAS_GCC                   /* Alias */
+#cmakedefine CMAKE_COMPILER_IS_GNUCXX 
+#cmakedefine HAS_GXX                   /* Alias */
+#cmakedefine HAS_MSVC
+#cmakedefine HAS_MSVC10
+
+/* cxx11*/
+#cmakedefine HAS_CXX11_AUTO
+#cmakedefine HAS_CXX11_NULLPTR
+#cmakedefine HAS_CXX11_LAMBDA
+#cmakedefine HAS_CXX11_STATIC_ASSERT
+#cmakedefine HAS_CXX11_RVALUE_REFERENCES
+#cmakedefine HAS_CXX11_DECLTYPE
+#cmakedefine HAS_CXX11_CSTDINT_H
+#cmakedefine HAS_CXX11_LONG_LONG
+#cmakedefine HAS_CXX11_VARIADIC_TEMPLATES
+#cmakedefine HAS_CXX11_CONSTEXPR
+#cmakedefine HAS_CXX11_SIZEOF_MEMBER
+#cmakedefine HAS_CXX11_FUNC

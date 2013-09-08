@@ -202,6 +202,12 @@ public:
     }
 #endif
 
+    // just empties the inuse bucket putting data in the cache
+    void reset() {
+        union { INTERNAL_BUFFER_T * b1; void * b2;} p;
+        while(inuse.pop(&p.b2)) release(p.b1);
+    }
+
 private:
 #if defined(UBUFFER_STATS)
     unsigned long      miss,hit;
@@ -487,6 +493,16 @@ public:
         unsigned long len = buf_r->length();
         if (buf_r == buf_w) return len;
         return len+buf_w->length();
+    }
+
+    /** 
+     *  Resets the buffer
+     */
+    inline void reset() {
+        if (buf_r) buf_r->reset();
+        if (buf_w) buf_w->reset();
+        buf_w = buf_r;
+        pool.reset();
     }
 
 private:

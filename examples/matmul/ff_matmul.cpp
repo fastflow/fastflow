@@ -38,7 +38,7 @@
  ****************************************************************************
  */
 
-//#define USE_FFA
+#define USE_FFA
 
 #include <vector>
 #include <iostream>
@@ -56,7 +56,7 @@
 
 using namespace ff;
 
-const int N=1024;
+const int N=512;
 
 static unsigned long A[N][N];
 static unsigned long B[N][N];
@@ -97,7 +97,6 @@ public:
 
     void * svc(void * task) {
         ff_task_t * t = (ff_task_t *)task;
-        
         register unsigned long _C=0;
         for(register int k=0;k<N;++k)
             _C += A[t->i][k]*B[k][t->j];
@@ -175,7 +174,7 @@ int main(int argc,
 #endif    
     
     // Here join
-    farm.wait();  
+    farm.wait_freezing();  
     std::cout << "[Main] Farm accelerator stopped\n";
     
     ffTime(STOP_TIME);

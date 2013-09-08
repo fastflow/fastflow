@@ -12,7 +12,7 @@ add_executable( test5 test5.cpp )
 add_executable( test6 test6.cpp )
 add_executable( test7 test7.cpp )
 add_executable( perf_test1 perf_test1.cpp )
-add_executable( perf_test2 perf_test2.cpp )
+#add_executable( perf_test2 perf_test2.cpp )
 add_executable( test_accelerator test_accelerator.cpp )
 add_executable( test_accelerator2 test_accelerator2.cpp )
 add_executable( test_accelerator3 test_accelerator3.cpp )
@@ -50,7 +50,7 @@ add_executable( test_accelerator_ofarm_multiple_freezing test_accelerator_ofarm_
  
 
 set( TESTS test1 test2 test3 test3b test4 test5 test6 test7
-perf_test1 perf_test2 test_accelerator test_accelerator2 test_accelerator3
+perf_test1 test_accelerator test_accelerator2 test_accelerator3
 test_accelerator_pipe+farm test_accelerator_farm+pipe test_accelerator_pipe
 test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker
 test_scheduling test_dt perf_test_alloc1 perf_test_alloc2
@@ -79,7 +79,7 @@ add_test( test_accelerator2 ${CMAKE_CURRENT_BINARY_DIR}/test_accelerator2 3 1000
 add_test( test_accelerator3 ${CMAKE_CURRENT_BINARY_DIR}/test_accelerator3 3 1000 )
 add_test( test_accelerator_farm+pipe ${CMAKE_CURRENT_BINARY_DIR}/test_accelerator_farm+pipe 1000 3 3 )
 add_test( perf_test1 ${CMAKE_CURRENT_BINARY_DIR}/perf_test1 3 100 1 10 1000 )
-add_test( perf_test2 ${CMAKE_CURRENT_BINARY_DIR}/perf_test2 3 100 1 10 1000 )
+#add_test( perf_test2 ${CMAKE_CURRENT_BINARY_DIR}/perf_test2 3 100 1 10 1000 )
 add_test( perf_test_alloc1 ${CMAKE_CURRENT_BINARY_DIR}/perf_test_alloc1 3 100 1 10 1000 )
 add_test( perf_test_alloc2 ${CMAKE_CURRENT_BINARY_DIR}/perf_test_alloc2 3 100 1 10 1000 )
 #add_test( perf_test_alloc3 ${CMAKE_CURRENT_BINARY_DIR}/perf_test_alloc3 1000000 80 2 ) # to be fixed in win

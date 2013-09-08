@@ -16,7 +16,7 @@ __kernel void fuy (__global uchar *res,
 		   const float alfa,
 		   const float beta)
 {
-  const int noisy_idx = get_global_id(0);
+  const unsigned int noisy_idx = get_global_id(0);
   const int local_idx = get_local_id(0);
   local_residuals[local_idx] = 0;
   if(noisy_idx < n_noisy) {
@@ -47,7 +47,7 @@ __kernel void fuy (__global uchar *res,
     //compute the correction
     uchar u = 0, new_val = 0;
     float S;
-    float Fu, Fu_prec = 256.0f;
+    float Fu, Fu_prec = FLT_MAX;
     float beta_ = beta / 2;
     for(int uu=0; uu<256; ++uu) {
       u = (uchar) uu;
@@ -58,9 +58,10 @@ __kernel void fuy (__global uchar *res,
       S += (float)(2-left_noisy) * native_powr(alfa, _ABS(uu - (int)left_val));
       S += (float)(2-right_noisy) * native_powr(alfa, _ABS(uu - (int)right_val));
       Fu += _ABS((float)u - (float)pixel) + (beta_) * S;
-      if(Fu < Fu_prec)
+      if(Fu < Fu_prec) {
       	new_val = u;
-      Fu_prec = Fu;
+	Fu_prec = Fu;
+      }
     }
 
     //update res
@@ -94,7 +95,7 @@ __kernel void init (__global uchar *diff,
 		    __global uchar *residual,
 		    const uint n_noisy)
 {
-  const int noisy_idx = get_global_id(0);
+  const unsigned int noisy_idx = get_global_id(0);
   if(noisy_idx < n_noisy) {
     diff[noisy_idx] = 0;
   }

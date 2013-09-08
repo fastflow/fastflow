@@ -3,6 +3,7 @@
 
 #include "pow_table.hpp"
 #include <cmath>
+#include <cfloat>
 
 inline void fuy(
 		unsigned char *res,
@@ -38,7 +39,7 @@ inline void fuy(
   //compute the correction
   unsigned char u;
   float S;
-  float Fu, Fu_min = 0.0f, Fu_prec = 256.0f;
+  float Fu, u_min = 0.0f, Fu_prec = FLT_MAX;
   float beta_ = beta / 2;
   for(int uu=0; uu<256; ++uu) {
     u = (unsigned char) uu;
@@ -49,12 +50,13 @@ inline void fuy(
     S += (float)(2-left_noisy) * pt(_ABS(uu - (int)left_val));
     S += (float)(2-right_noisy) * pt(_ABS(uu - (int)right_val));
     Fu += _ABS((float)u - (float)pixel) + (beta_) * S;
-    if(Fu < Fu_prec)
-      Fu_min = u;
-    Fu_prec = Fu;
+    if(Fu < Fu_prec) {
+      u_min = u;
+      Fu_prec = Fu;
+    }
   }
 
-  unsigned char new_val = (unsigned char)(Fu_min + 0.5f); //round
+  unsigned char new_val = (unsigned char)(u_min + 0.5f); //round
   res[idx] = new_val;
 }
 #endif 
