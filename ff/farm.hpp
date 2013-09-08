@@ -40,6 +40,44 @@
 
 namespace ff {
 
+/* ---------------- basic high-level macros ----------------------- */
+
+    /* FF_FARMA creates an accelerator farm with 'nworkers' workers. 
+     * The functions called in each worker must have the following 
+     * signature:
+     *   bool (*F)(type &)
+     * If the function F returns false an EOS is produced in the 
+     * output channel.
+     */
+
+#define FF_FARMA(farmname, F, type, nworkers, qlen)                     \
+    class _FF_node_##farmname_##F: public ff_node {                     \
+    public:                                                             \
+     void* svc(void* task) {                                            \
+        type* _ff_in = (type*)task;                                     \
+        if (!F(*_ff_in)) return NULL;                                   \
+        return task;                                                    \
+     }                                                                  \
+    };                                                                  \
+    ff_farm<> _FF_node_##farmname(true,qlen,qlen,true,nworkers,true);   \
+    _FF_node_##farmname.cleanup_workers();                              \
+    _FF_node_##farmname.set_scheduling_ondemand();                      \
+    std::vector<ff_node*> w_##farmname;                                 \
+    for(int i=0;i<nworkers;++i)                                         \
+        w_##farmname.push_back(new _FF_node_##farmname_##F);            \
+    _FF_node_##farmname.add_workers(w_##farmname);                      \
+    _FF_node_##farmname.add_collector(NULL);
+
+#define FF_FARMARUN(farmname)  _FF_node_##farmname.run()
+#define FF_FARMAOFFLOAD(farmname, task)  _FF_node_##farmname.offload(task);
+#define FF_FARMAGETRESULTNB(farmname, result) _FF_node_##farmname.load_result_nb((void**)result)
+#define FF_FARMAGETRESULT(farmname, result) _FF_node_##farmname.load_result((void**)result)
+#define FF_FARMAWAIT(farmname) _FF_node_##farmname.wait()
+#define FF_FARMAEND(farmname)  _FF_node_##farmname.offload(EOS)
+
+/* ---------------------------------------------------------------- */
+
+
 /*!
  * \ingroup high_level_patterns_shared_memory
  *
@@ -80,7 +118,7 @@ protected:
         lb->set_barrier(barrier);
         if (gt) gt->set_barrier(barrier);
 
-        return (card + 1 + (collector?1:0));
+        return (card + 1 + ((collector && !collector_removed)?1:0));
     }
 
     /**
@@ -95,7 +133,9 @@ protected:
             if (workers[i]->create_input_buffer((ondemand ? ondemand: (in_buffer_entries/nworkers + 1)), 
                                                 (ondemand ? true: fixedsize))<0) return -1;
             if (collector || lb->masterworker() || collector_removed) 
-                if (workers[i]->create_output_buffer(out_buffer_entries/nworkers + DEF_IN_OUT_DIFF, fixedsize)<0) 
+                // NOTE: force unbounded queue if masterworker
+                if (workers[i]->create_output_buffer(out_buffer_entries/nworkers + DEF_IN_OUT_DIFF, 
+                                                     (lb->masterworker()?false:fixedsize))<0)
                     return -1;
             lb->register_worker(workers[i]);
             if (collector && !collector_removed) gt->register_worker(workers[i]);
@@ -116,6 +156,14 @@ protected:
         return run(true);
     } 
 
+    template<typename T>
+    struct ff_node_F: public ff_node {
+        typedef T*(*F_t)(T*);
+        ff_node_F(F_t F):F(F) {};
+        void *svc(void *t) { return F((T*)t); }
+        F_t F;
+    };
+
 public:
     /*
      *TODO
@@ -132,6 +180,54 @@ public:
      * A typedef of Gatherer_t
      */
     typedef gt_t Gatherer_t;
+
+    /**                                                                                                                                 
+     *  \brief Constructor  
+     * 
+     *  This is the basic (the simplest) farm that can be built.
+     *  It has a default emitter and a default collector.
+     */
+    template<typename T>
+    ff_farm(T*(*F)(T*), int nw, bool input_ch=false):
+        has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
+        nworkers(0), in_buffer_entries(DEF_IN_BUFF_ENTRIES),
+        out_buffer_entries(DEF_OUT_BUFF_ENTRIES),
+        worker_cleanup(true),
+        max_nworkers(nw),
+        emitter(NULL),collector(NULL),
+        lb(new lb_t(nw)),gt(new gt_t(nw)),
+        workers(new ff_node*[nw]),fixedsize(false) {
+
+        std::vector<ff_node*> w(nw);        
+        for(int i=0;i<nw;++i) w[i]=new ff_node_F<T>(F);
+        add_workers(w);
+        add_collector(NULL);
+        if (has_input_channel) { 
+            if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
+                error("FARM, creating input buffer\n");
+            }
+        }
+    }
+
+    ff_farm(std::vector<ff_node*>& W, bool input_ch=false):
+        has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
+        nworkers(0), in_buffer_entries(DEF_IN_BUFF_ENTRIES),
+        out_buffer_entries(DEF_OUT_BUFF_ENTRIES),
+        worker_cleanup(false),
+        max_nworkers(W.size()),
+        emitter(NULL),collector(NULL),
+        lb(new lb_t(W.size())),gt(new gt_t(W.size())),
+        workers(new ff_node*[W.size()]),fixedsize(false) {
+
+        add_workers(W);
+        add_collector(NULL);
+        if (has_input_channel) { 
+            if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
+                error("FARM, creating input buffer\n");
+            }
+        }
+    }
+
 
     /**
      *  \brief Constructor
@@ -157,7 +253,7 @@ public:
         out_buffer_entries(out_buffer_entries),
         worker_cleanup(worker_cleanup),
         max_nworkers(max_num_workers),
-        emitter(NULL),collector(NULL),fallback(NULL),
+        emitter(NULL),collector(NULL),
         lb(new lb_t(max_num_workers)),gt(new gt_t(max_num_workers)),
         workers(new ff_node*[max_num_workers]),fixedsize(fixedsize) {
         for(int i=0;i<max_num_workers;++i) workers[i]=NULL;
@@ -177,16 +273,17 @@ public:
      *
      */
     ~ff_farm() { 
-        if (lb) delete lb; 
-        if (gt) delete(gt); 
+        if (lb) { delete lb; lb=NULL;}
+        if (gt) { delete gt; gt=NULL;}
         if (workers) {
             if (worker_cleanup) {
                 for(int i=0;i<max_nworkers; ++i) 
                     if (workers[i]) delete workers[i];
             }
             delete [] workers;
+            workers = NULL;
         }
-        if (barrier) delete barrier;
+        if (barrier) {delete barrier; barrier=NULL;}
     }
 
     /** 
@@ -197,33 +294,21 @@ public:
      *  there can be only one Emitter in a Farm skeleton. 
      *  
      *  \param e the \p ff_node acting as an Emitter 
-     *  \param fb an ff_node acting as a fallback (Note that it is not possible
-     *  to add a fallback funtion if the collector is present or a
-     *  master-worker configuration has been set).
      *
-     *  \return Returns the status of \p set_fallback(x) if successful,
-     *  otherwise -1 is returned.
+     *  \return Returns 0 if successful -1 otherwise
      *
      */
-    int add_emitter(ff_node * e, ff_node * fb=NULL) { 
+    int add_emitter(ff_node * e) { 
         assert(e!=NULL);
         if (emitter) return -1; 
 
-        /* NOTE: if there is a collector filter then no 
-         * fallback execution is possible 
-         */
-        if ((collector || lb->masterworker()) && fb) {
-            error("FARM, cannot add fallback function if the collector is present or master-worker configuration has been set\n");
-            return -1;
-        }
         emitter = e;
         if (in) {
             assert(has_input_channel);
             emitter->set_input_buffer(in);
         }
-        fallback=fb;
         if (lb->set_filter(emitter)) return -1;
-        return lb->set_fallback(fallback);
+        return 0;
     }
 
     /**
@@ -283,8 +368,7 @@ public:
      *  It adds the Collector filter to the farm skeleton. If no object is
      *  passed as a colelctor, than a default collector will be added (i.e.
      *  \link ff_gatherer \endlink). Note that it is not possible to add more
-     *  than one collector. And it is not possible to add a collector when a
-     *  fallback funciton is defined.
+     *  than one collector. 
      *
      *  \param c the \p ff_node acting as Collector node.
      *  \parm outpresent TODO
@@ -299,14 +383,10 @@ public:
         }
         if (!gt) return -1; 
 
-        if (fallback) {
-            error("FARM, cannot add collector filter with fallback function\n");
-            return -1;
-        }        
         collector = ((c!=NULL)?c:(ff_node*)gt);
         
         if (has_input_channel) { /* it's an accelerator */
-            if (create_output_buffer(out_buffer_entries, fixedsize)<0) return -1;
+            if (create_output_buffer(out_buffer_entries, false)<0) return -1;
         }
         
         return gt->set_filter(c);
@@ -326,11 +406,7 @@ public:
      *
      */
     int wrap_around() {
-        if (fallback) {
-            error("FARM, cannot add feedback channels if the fallback function has been set in the Emitter\n");
-            return -1;
-        }
-        if (!collector) {
+        if (!collector || collector_removed) {
             if (lb->set_masterworker()<0) return -1;
             if (!has_input_channel) lb->skipfirstpop();
             return 0;
@@ -375,10 +451,10 @@ public:
      * \return The status of \p set_multi_input(x) otherwise -1 is returned.
      */
     int set_multi_input(ff_node **mi, int misize) {
-        if (lb->masterworker()) {
-            error("FARM, master-worker paradigm and multi-input farm used together\n");
-            return -1;
-        }
+        // if (lb->masterworker()) {
+        //     error("FARM, master-worker paradigm and multi-input farm used together\n");
+        //     return -1;
+        // }
         if (mi == NULL) {
             error("FARM, invalid multi-input vector\n");
             return -1;
@@ -388,6 +464,15 @@ public:
             return -1;
         }
         return lb->set_multi_input(mi, misize);
+    }
+
+
+    /**
+     * \brief Delete workers when the destructor is called.
+     *
+     */
+    void cleanup_workers() {
+        worker_cleanup = true;
     }
 
     /**
@@ -411,6 +496,7 @@ public:
                 error("FARM, too much threads, increase MAX_NUM_THREADS !\n");
                 return -1;
             }
+
             barrier->barrierSetup(nthreads);            
         }
         
@@ -438,8 +524,12 @@ public:
      * \return If successful 0, otherwise a negative value is returned.
      */
     virtual int run_and_wait_end() {
-        if (isfrozen()) return -1; // FIX !!!!
-
+        if (isfrozen()) {
+            stop();
+            thaw();
+            if (wait()<0) return -1;
+            return 0;
+        }
         stop();
         if (run()<0) return -1;
         if (wait()<0) return -1;
@@ -450,13 +540,14 @@ public:
      * \brief Executes the farm and then freeze.
      *
      * It executs the form and then freezes the form.
+     * If workers are frozen, it is possible to wake up just a subset of them.
      *
      * \return If successful 0, otherwise a negative value
      */
-    virtual int run_then_freeze() {
+    virtual int run_then_freeze(int nw=-1) {
         if (isfrozen()) {
-            thaw();
-            freeze();
+            // true means that next time threads are frozen again
+            thaw(true, nw); 
             return 0;
         }
         if (!prepared) if (prepare()<0) return -1;
@@ -503,7 +594,7 @@ public:
     }
 
     /** 
-     * \brief Forces the thread to freeze
+     * \brief Forces the thread to freeze at next FF_EOS.
      *
      * It forces a thread to Freeze itself.
      */
@@ -517,9 +608,16 @@ public:
      *
      * If the thread is frozen, then thaw it. 
      */
-    void thaw() {
-        lb->thaw();
-        if (collector) gt->thaw();
+    void thaw(bool _freeze=false, int nw=-1) {
+
+        // TODO: 
+        if ((nw != -1) && (nw < nworkers) && collector) {
+            error("running less thread then total NOT YET SUPPORTED in case of collector present\n"); 
+            abort();
+        }
+
+        lb->thaw(_freeze, nw);
+        if (collector) gt->thaw(_freeze);
     }
 
     /**
@@ -565,7 +663,7 @@ public:
     /**
      * \brief Loads results into gatherer
      *
-     * It loads the results into the gatherer (if any).
+     * It loads the results from the gatherer (if any).
      *
      * \parm task is a void pointer
      * \parm retry is the number of tries to load the results
@@ -940,7 +1038,6 @@ protected:
 
     ff_node          *  emitter;
     ff_node          *  collector;
-    ff_node          *  fallback;
 
     lb_t             * lb;
     gt_t             * gt;

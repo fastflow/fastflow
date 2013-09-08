@@ -147,19 +147,21 @@ public:
      *
      *  \return The identifier of the core.
      */ 
+
     int getCoreId() { 
         assert(rrcnt>=0);
         int id=CList[rrcnt++];
         rrcnt &= mask;
         return id;
     }
+
     /**
      * It is used for debugging.
      *
      * \return TODO
      */
     unsigned int getMask() {
-    return mask;
+        return mask;
     }
 
     /**
@@ -179,7 +181,7 @@ public:
     int getCoreId(unsigned int tid) { 
         int id=CList[tid & mask];
         //std::cerr << "Mask is " << mask << "\n";
-       //int id = CList[tid % (mask+1)];
+        //int id = CList[tid % (mask+1)];
         return id;
     }
 

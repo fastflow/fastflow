@@ -29,7 +29,7 @@ CXX		     = g++
 #CXX 		     = icpc 
 LINK_OPT             = 
 VERSION              = 
-OPTIMIZE_FLAGS       = -O3 -finline-functions 
+OPTIMIZE_FLAGS       = -mavx -O3 -finline-functions 
 OMP_FLAGS 	     = -fopenmp #-openmp
 CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall #-DALLOCATOR_STATS #-DTRACE_FASTFLOW
 CFLAGS               =
@@ -38,9 +38,9 @@ INCS                 = -I../../
 LIBS                 = -lpthread
 
 INCLUDES             = -I. $(INCS)
-TBB_INCLUDES         = -I /opt/intel/composer_xe_2013/tbb/include/
-TBB_LIBS             = -L /opt/intel/composer_xe_2013/tbb/lib/intel64 -ltbb
-TARGET               = ff_matmul ff_matmul_v2 ff_matmul_map ff_matmul_map_omp tbb_matmul ff_streamMM matmul
+TBB_INCLUDES         = -I /opt/local/include/tbb/
+TBB_LIBS             = -L /opt/local/lib/ -ltbb
+TARGET               = ff_matmul ff_matmul_v2 ff_matmul_map ff_matmul_forall ff_matmul_map_omp tbb_matmul ff_streamMM matmul
 
 all: $(TARGET)
 
@@ -52,6 +52,9 @@ ff_matmul_v2:ff_matmul_v2.cpp
 
 ff_matmul_map:ff_matmul_map.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+ff_matmul_forall:ff_matmul_forall.cpp
+	$(CXX) -std=c++11 $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 ff_matmul_map_omp:ff_matmul_map.cpp
 	$(CXX) -DUSE_OPENMP $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS) $(OMP_FLAGS)

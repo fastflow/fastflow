@@ -52,22 +52,22 @@ Environment::Environment(){
     pthread_mutex_init(&mutex_set_policy, NULL);
     nodeId =0;
     
-    cl_int status;
+    //cl_int status;
     cl_platform_id *platforms = NULL;
     cl_uint numPlatforms;
     
-    status = clGetPlatformIDs(0, NULL, &(numPlatforms));
+    clGetPlatformIDs(0, NULL, &(numPlatforms));
     platforms =new cl_platform_id[numPlatforms];
-    status = clGetPlatformIDs(numPlatforms, platforms,NULL);
+    clGetPlatformIDs(numPlatforms, platforms,NULL);
     
-    for (int i = 0; i<numPlatforms; i++){
+    for (unsigned i = 0; i<numPlatforms; i++){
         cl_uint numDevices;
-        status = clGetDeviceIDs(platforms[i],CL_DEVICE_TYPE_ALL,0,NULL,&(numDevices));
+        clGetDeviceIDs(platforms[i],CL_DEVICE_TYPE_ALL,0,NULL,&(numDevices));
         cl_device_id* deviceIds =new cl_device_id[numDevices];
         // Fill in CLDevice with clGetDeviceIDs()
-        status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL,numDevices,deviceIds,NULL);
+        clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL,numDevices,deviceIds,NULL);
         
-        for(int j=0; j<numDevices; j++){
+        for(unsigned j=0; j<numDevices; j++){
             // estimating max number of thread per device 
             cl_ulong memSize;
             cl_device_type d;
@@ -104,7 +104,7 @@ Environment::Environment(){
 int Environment::staticSelectionPolicy(cl_device_type d, Ocl_Utilities* ocl_utilities){// need to be replace
     float proportion=1;
     int i=-1;
-    int size =Environment::instance()->clDevices.size();
+    //int size =Environment::instance()->clDevices.size();
     for(std::vector<CLDevice*>::iterator iter=Environment::instance()->clDevices.begin(); 
         iter< Environment::instance()->clDevices.end(); ++iter){
         
@@ -134,7 +134,7 @@ Environment * Environment::instance(){
             m_Environment = new Environment();
         pthread_mutex_unlock(&instanceMutex);
     }
-    else return m_Environment; 
+    return m_Environment; 
 }
 
 /**

@@ -52,6 +52,8 @@ void* mapF(basePartitioner*const P, int tid) {
     return p;  // returns the partition pointer !!!
 }
 
+long f(long v) { return v+1;}
+
 
 int main(int argc, char * argv[]) {
     
@@ -98,13 +100,21 @@ int main(int argc, char * argv[]) {
     mapSA.offload(EOS);
     mapSA.wait();
 
-    int* oneTask=new int[arraySize];
-    for(int j=0;j<arraySize;++j) oneTask[j]=j;
+    long *oneTask=new long[arraySize];
+    for(long j=0;j<arraySize;++j) oneTask[j]=j;
+#if __cplusplus > 199711L
+    FF_MAP(map, oneTask,arraySize, f, nworkers);
+#else
     ff_map mapOneShot(mapF,&P, oneTask);
     mapOneShot.run_and_wait_end();
+#endif
+
+
+    //ff_map mapOneShot(mapF,&P, oneTask);
+    //mapOneShot.run_and_wait_end();
     // print the result
     printf("\nmapOneShot:\n");
-    for(int j=0;j<arraySize;++j) printf("%d ", oneTask[j]);
+    for(int j=0;j<arraySize;++j) printf("%ld ", oneTask[j]);
     printf("\n");
 
     std::cerr << "DONE\n";

@@ -93,7 +93,7 @@ struct ntype {							        \
     zmqTransport::msg_t* msg1;						\
     ntype(const unsigned sz=size1):sz(sz),msg1(NULL) {}			\
     ntype(type1 name1,const unsigned sz=size1):				\
-      name1(name1),sz(sz),msg1(NULL) {}					\
+          name1(name1),sz(sz),msg1(NULL) {}				\
     void prepareOUT(svector<iovec>& v, int& nnull) {			\
       struct iovec iov1={name1,sz};					\
         v.push_back(iov1);						\
@@ -143,6 +143,8 @@ struct ntype {							        \
 	if (msg2) delete msg2;						\
     }									\
 }
+
+
 
 
 /* ++++++++++ distributed vs non-distributed version ++++++++++ */
@@ -328,6 +330,89 @@ public:								        \
     }									\
 }
 
+#if !defined(FF_OCL)
+#define FFDNODE_FNAME(fname, typein, typeout, COMM_IN, COMM_OUT)	\
+class FFdnode_##fname: public ff_dnode<COMM_OUT> {			\
+    typedef COMM_OUT::TransportImpl        transport_t;			\
+protected:								\
+    static void callback(void *e, void* ptr) {				\
+	if (ptr == NULL) return;					\
+	delete (typeout*)ptr;						\
+    }									\
+public:								        \
+    FFdnode_##fname(unsigned nHosts, const std::string& name,		\
+		    const std::string& address,				\
+		    transport_t* const transp, const bool skip=false):	\
+        nHosts(nHosts), name(name), address(address),                   \
+	transp(transp), skip(skip) {}					\
+									\
+    int svc_init() {							\
+	if (!skip) FFD_INIT_SENDER(COMM_OUT);				\
+	return 0;							\
+    }									\
+    void * svc(void * task) {						\
+        typein * tin = (typein*)task;					\
+	typeout* res;							\
+	fname(*tin,res);					        \
+	tin->cleanup();							\
+	delete (typein*)task;						\
+	return res;							\
+    }									\
+    void prepare(svector<iovec>& v, void* ptr, const int sender=-1) {	\
+	typeout* t = (typeout*)ptr;					\
+	int nnull=0;							\
+	t->prepareOUT(v, nnull);					\
+	for(int i=0;i<nnull;++i)					\
+	    setCallbackArg(NULL);					\
+	setCallbackArg(ptr);						\
+    }									\
+protected:								\
+    const unsigned    nHosts;						\
+    const std::string name;						\
+    const std::string address;						\
+    transport_t   * transp;						\
+    const bool skip;							\
+}
+
+#define FFOCLMAP_FNAME(fname, typein, typeout)
+
+#else
+#define FFDNODE_FNAME(fname, typein, typeout, COMM_IN, COMM_OUT)   
+#define FFOCLMAP_FNAME(fname, typein, typeout)				\
+class oclTask: public baseTask {					\
+protected:								\
+ size_t s;								\
+public:									\
+ typedef double base_type;						\
+									\
+ oclTask():s(0) {}							\
+ oclTask(base_type* t, size_t s):baseTask(t),s(s) {}			\
+ /* FIX: SIZE is global !!!!!!!!!!! <------------------ */		\
+ void   setTask(void* t) { if (t) { task=t; s= SIZE; } }		\
+ size_t size() const     { return s;}					\
+ size_t bytesize() const { return s*sizeof(base_type); }		\
+ void*  newOutPtr()    { outPtr= new base_type[s]; return outPtr; }	\
+ void   deleteOutPtr() { if (outPtr) delete [] outPtr; }		\
+protected:								\
+ base_type *outPtr;							\
+};									\
+									\
+template<typename T>							\
+class FFOclMap_##fname: public ff_mapOCL<T> {				\
+public:									\
+    typedef typename T::base_type base_type;				\
+ FFOclMap_##fname(std::string code):ff_mapOCL<T>(code) {};		\
+    void * svc(void * task) {						\
+      typein * tin = (typein*)task;					\
+      base_type *r = (base_type*)ff_mapOCL<T>::svc(tin);		\
+      tin->cleanup();							\
+      delete (typein*)task;						\
+      return (new typeout(r));						\
+  }									\
+}
+#endif
+
+
 #define FFdnode(fname, typein, typeout, COMM_IN, COMM_OUT)              \
 class GWin_##fname: public ff_dinout<COMM_IN, COMM_IN> {		\
     typedef COMM_IN::TransportImpl        transport_t;			\
@@ -496,48 +581,8 @@ protected:								\
     const std::string address;						\
     transport_t   * transp;						\
 };									\
-									\
-class FFdnode_##fname: public ff_dnode<COMM_OUT> {			\
-    typedef COMM_OUT::TransportImpl        transport_t;			\
-protected:								\
-    static void callback(void *e, void* ptr) {				\
-	if (ptr == NULL) return;					\
-	delete (typeout*)ptr;						\
-    }									\
-public:								        \
-    FFdnode_##fname(unsigned nHosts, const std::string& name,		\
-		    const std::string& address,				\
-		    transport_t* const transp, const bool skip=false):	\
-        nHosts(nHosts), name(name), address(address),                   \
-	transp(transp), skip(skip) {}					\
-									\
-    int svc_init() {							\
-	if (!skip) FFD_INIT_SENDER(COMM_OUT);				\
-	return 0;							\
-    }									\
-    void * svc(void * task) {						\
-        typein * tin = (typein*)task;					\
-	typeout* res;							\
-	fname(*tin,res);					        \
-	tin->cleanup();							\
-	delete (typein*)task;						\
-	return res;							\
-    }									\
-    void prepare(svector<iovec>& v, void* ptr, const int sender=-1) {	\
-	typeout* t = (typeout*)ptr;					\
-	int nnull=0;							\
-	t->prepareOUT(v, nnull);					\
-	for(int i=0;i<nnull;++i)					\
-	    setCallbackArg(NULL);					\
-	setCallbackArg(ptr);						\
-    }									\
-protected:								\
-    const unsigned    nHosts;						\
-    const std::string name;						\
-    const std::string address;						\
-    transport_t   * transp;						\
-    const bool skip;							\
-}
+FFDNODE_FNAME(fname, typein, typeout, COMM_IN, COMM_OUT);		\
+FFOCLMAP_FNAME(fname, typein, typeout)
 
 
 #define FFnode_out(uname,typeout)                                       \
@@ -693,14 +738,30 @@ protected:								\
     __ffdfarm.set_scheduling_ondemand();				\
     __ffdfarm.run_and_wait_end()
 
+/* TODO: farm cleanup */
+#define FFOclMap_farmrun(pardegree, nodename, chnameIN, addressIN,	\
+			 chnameOUT,addressOUT, transport)		\
+    ff_farm<>   __ffdfarm;						\
+    std::vector<ff_node*> w_ffdfarm;					\
+    for(int i=0;i<pardegree;++i)					\
+	w_ffdfarm.push_back(new FFOclMap_##nodename<oclTask>(nodename));	\
+    __ffdfarm.add_emitter(new INd_##nodename(1,chnameIN,addressIN,	\
+					     transport));		\
+    __ffdfarm.add_collector(new OUTd_##nodename(1,chnameOUT,		\
+						addressOUT,transport));	\
+    __ffdfarm.add_workers(w_ffdfarm);					\
+    /* scheduling policy */						\
+    __ffdfarm.set_scheduling_ondemand();				\
+    __ffdfarm.run_and_wait_end()
+
 
 /* ------------------------ high-level patterns --------------------------- */
-
 
 #define PIPE3DEF(first,middle,last, typein, typeout)			\
     FFdnode_out(first, typein, zmqOnDemand);				\
     FFdnode(middle, typein,typeout,zmqOnDemand, zmqFromAny);		\
     FFdnode_in(last, typeout, zmqFromAny)
+
 
 
 // TODO: pipe cleanup
@@ -870,6 +931,29 @@ protected:								\
 			&FFd_transport);				   \
     }									   \
     }
+
+#define FFd_PIPE3MAP(hostid, first, middle, last,address1,address2,par1,par2) \
+    switch(hostid) {							   \
+    case -1: {								   \
+	FFdnode_out_run(first, par1,"A",address1,&FFd_transport);	   \
+    } break;								   \
+    case -2: {								   \
+	FFdnode_in_run(last, par1, "B",address2,&FFd_transport);	   \
+    } break;								   \
+    case -3: {								   \
+	FFdgw_in_run(middle,par1,					   \
+		     "A",address1,"A",address2,&FFd_transport);		   \
+    } break;								   \
+    case -4: {								   \
+	FFdgw_out_run(middle,par1,					   \
+		      "B",address1,"B",address2,&FFd_transport);	   \
+    } break;								   \
+    default: {								   \
+	FFOclMap_farmrun(par2, middle,"A",address1,"B",address2,	   \
+			 &FFd_transport);				   \
+    }									   \
+    }
+
 #endif /* DNODE_FARM */
 #endif /* FFDISTRIBUTED */
 

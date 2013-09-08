@@ -37,6 +37,11 @@
 #include <ff/farm.hpp>
 #include <ff/partitioners.hpp>
 
+// see http://www.stroustrup.com/C++11FAQ.html#11
+#if __cplusplus > 199711L
+#include <ff/parallel_for.hpp>
+#endif
+
 #if defined(FF_OCL)
 #include <ff/oclnode.hpp>
 #endif
@@ -75,7 +80,15 @@ namespace ff {
     _map_##mapname.ffTime()
 #define MAPWTIME(mapname)                                           \
     _map_##mapname.ffwTime()
+
     
+#if __cplusplus > 199711L
+#define FF_MAP(mapname, V,size,func,nworkers)                           \
+    FF_PARFOR_BEGIN(mapname, i, 0, size, 1, (size/nworkers), nworkers) { \
+        V[i]=func(i);                                                   \
+    } FF_PARFOR_END(mapname)
+#endif
+
 
 /* ---------------------------------------------------------------- */
 
@@ -651,7 +664,8 @@ protected:
         clReleaseEvent(events[0]);					
         clReleaseEvent(events[1]);					
          
-        return (ff_ocl<T>::oneshot?NULL:task);
+        //return (ff_ocl<T>::oneshot?NULL:task);
+        return (ff_ocl<T>::oneshot?NULL:outPtr);
     }   
 };
 
@@ -777,7 +791,8 @@ protected:
         clReleaseEvent(events[0]);					
         clReleaseEvent(events[1]);					
 
-        return (ff_ocl<T>::oneshot?NULL:task);
+        //return (ff_ocl<T>::oneshot?NULL:task);
+        return (ff_ocl<T>::oneshot?NULL:outPtr);
     }									
 };
 
@@ -1038,7 +1053,8 @@ protected:
         cudaMemcpyAsync(outPtr, out_buffer, Task.bytesize(), cudaMemcpyDeviceToHost, stream); 
         cudaStreamSynchronize(stream); 
         
-        return (oneshot?NULL:task);
+        //return (oneshot?NULL:task);
+        return (oneshot?NULL:outPtr);
     }   
 
     void svc_end() {

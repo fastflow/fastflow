@@ -1,3 +1,14 @@
+* 08/09/13 - v.2.0.2
+   - introduced FF_ESAVER (Energy SAVER) compiler flag (experimental) (thanks to Mehdi Goli )
+   - ff_relax now uses nanosleep instead of usleep
+   - first full porting to ARM processor (thanks to Mauro Mulatero)	
+   - added new interfaces for the ff_farm
+   - added a new construct ff_pipe only for C++11
+   - fixed some problems with cmake
+   - added ff_send_out_to as a method of the ff_loadbalancer class
+   - added parallel_for.hpp which implements 'OpenMP-like' parallel_for 
+   - added cleanup_workers method in the farm skeleton
+   - removed fallback function in the farm emitter
    - removed many warnings when compiling with the Intel compiler
    - fixed get_my_id() problem for pipeline
 * 23/12/13 - v.2.0.1
