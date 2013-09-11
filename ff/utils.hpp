@@ -56,11 +56,12 @@ namespace ff {
  * @{
  */
 
-/**
- * TODO
- */
 enum { START_TIME=0, STOP_TIME=1, GET_TIME=2 };
 
+/* TODO: - nanosleep on Window
+ *       - test on Apple
+ */
+#if defined(__linux__)
 /*!!!----Mehdi-- required for DSRIMANAGER NODE----!!*/
 void waitCall(double milisec, double sec){
   if(milisec!=0.0 || sec!=0.0){
@@ -84,12 +85,13 @@ static inline void waitSleep(ticks TICKS2WAIT){
     struct timespec req = {0, static_cast<long>(TICKS2WAIT)};
     nanosleep(&req, NULL);
 };
+#endif /* __linux__ */
 
 /* NOTE:  nticks should be something less than 1000000 otherwise 
  *        better to use something else.
  */
 static inline ticks ticks_wait(ticks nticks) {
-#if defined(FF_ESAVER)
+#if defined(__linux__) && defined(FF_ESAVER)
     waitSleep(nticks);
     return 0;
 #else
@@ -102,8 +104,12 @@ static inline ticks ticks_wait(ticks nticks) {
 
 /* NOTE: Does not make sense to use 'us' grather than or equal to 1000000 */ 
 static inline void ff_relax(unsigned long us) {
+#if defined(__linux__)
     struct timespec req = {0, static_cast<long>(us*1000L)};
     nanosleep(&req, NULL);
+#else
+    usleep(us);
+#endif
     PAUSE();
 }
 
