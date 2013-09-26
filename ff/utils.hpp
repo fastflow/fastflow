@@ -63,7 +63,7 @@ enum { START_TIME=0, STOP_TIME=1, GET_TIME=2 };
  */
 #if defined(__linux__)
 /*!!!----Mehdi-- required for DSRIMANAGER NODE----!!*/
-void waitCall(double milisec, double sec){
+static inline void waitCall(double milisec, double sec){
   if(milisec!=0.0 || sec!=0.0){
     struct timespec req = {0};
     req.tv_sec = sec;
