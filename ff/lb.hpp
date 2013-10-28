@@ -66,6 +66,7 @@ namespace ff {
  */
 
 class ff_loadbalancer: public ff_thread {
+    template <typename T1, typename T2>  friend class ff_farm;
 public:    
 
     // NOTE:
@@ -329,6 +330,22 @@ protected:
         return ((ff_loadbalancer *)obj)->schedule_task(task, retry, ticks);
     }
 
+
+    int set_internal_multi_input(ff_node **mi, int misize) {
+        if (mi == NULL) {
+            error("LB, invalid internal multi-input vector\n");
+            return -1;
+        }
+        if (misize <= 0) {
+            error("LB, invalid internal multi-input vector size\n");
+            return -1;
+        }
+        int_multi_input = mi;
+        int_multi_input_size=misize;
+        return 0;
+    }
+
+
 public:
     /** 
      *  \brief Default constructor 
@@ -341,7 +358,8 @@ public:
         nworkers(0),running(-1),max_nworkers(max_num_workers),nextw(-1),nextINw(0),channelid(-2),
         filter(NULL),workers(new ff_node*[max_num_workers]),
         buffer(NULL),skip1pop(false),master_worker(false),
-        multi_input(NULL),multi_input_size(-1),multi_input_start(max_num_workers+1) {
+        multi_input(NULL),multi_input_size(-1),multi_input_start(max_num_workers+1),
+        int_multi_input(NULL), int_multi_input_size(-1) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
@@ -478,7 +496,6 @@ public:
         multi_input_size=misize;
         return 0;
     }
-
     inline bool ff_send_out_to(void *task, int id, 
                                unsigned int retry=(unsigned)-1, unsigned int ticks=0) {
         nextw = id-1;
@@ -543,7 +560,7 @@ public:
         }
 
         gettimeofday(&wtstart,NULL);
-        if (!master_worker && (multi_input_size<=0)) {
+        if (!master_worker && (multi_input_size<=0) && (int_multi_input_size<=0)) {
             do {
                 if (inpresent) {
                     if (!skipfirstpop) pop(&task);
@@ -602,12 +619,19 @@ public:
                     availworkers.push_back(workers[i]);
                 nw = running;
             }
+            if (int_multi_input) {
+                assert(!master_worker);
+                for(int i=0;i<int_multi_input_size;++i)
+                    availworkers.push_back(int_multi_input[i]);
+                nw += int_multi_input_size;
+            }
             if (multi_input) {
                 multi_input_start = availworkers.size();
                 for(int i=0;i<multi_input_size;++i)
                     availworkers.push_back(multi_input[i]);
                 nw += multi_input_size;
             } 
+
             std::deque<ff_node *>::iterator start(availworkers.begin());
             std::deque<ff_node *>::iterator victim(availworkers.begin());
             do {
@@ -627,9 +651,13 @@ public:
                         start=availworkers.begin(); // restart iterator
                     }
 
-                    if (!--nw) {
-                        ret = task;
-                        break; // received all EOS, exit
+                    if (master_worker || 
+                        (channelid==-1 && multi_input_size>0) || 
+                        (channelid>=0 && int_multi_input_size>0)) { 
+                        if (!--nw) {
+                            ret = task;
+                            break; // received all EOS, exit
+                        }
                     }
                 } else {
                     if (filter) {
@@ -774,60 +802,101 @@ public:
         return ret;
     }
 
+
+    inline int wait_lb_freezing() {
+        if (ff_thread::wait_freezing()<0) {
+            error("LB, waiting LB thread freezing\n");
+            return -1;
+        }
+        running = -1;
+        return 0;
+    }
+
     /**
      * \brief Waits for freezing
      *
-     * It waits for the freezing thread.
+     * It waits for the freezing of all threads.
      *
      * \return 0 if successful, otherwise -1 is returned.
      *
      */
-    int wait_freezing() {
-        int ret=0;
+    inline int wait_freezing() {
+        int ret = 0;
         for(int i=0;i<running;++i)
             if (workers[i]->wait_freezing()<0) {
                 error("LB, waiting freezing of worker thread, id = %d\n",workers[i]->get_my_id());
                 ret = -1;
             }
-        running = -1;
         if (ff_thread::wait_freezing()<0) {
             error("LB, waiting LB thread freezing\n");
             ret = -1;
         }
+        running = -1;
         return ret;
     }
+
+    /**
+     * \brief Waits for freezing for one single worker thread
+     *
+     */
+    inline int wait_freezing(const int n) {
+        assert(n<nworkers);
+        if (workers[n]->wait_freezing()<0) {
+            error("LB, waiting freezing of worker thread, id = %d\n",workers[n]->get_my_id());
+            return -1;
+        }
+        return 0;
+    }
+
 
     /**
      * \brief Stops the thread
      *
      * It stops all workers and the emitter.
      */
-    void stop() {
+    inline void stop() {
         for(int i=0;i<nworkers;++i) workers[i]->stop();
         ff_thread::stop();
     }
 
     /**
-     * \brief Freezes the thread
+     * \brief Freezes all threads registered with the lb and the lb itself
      *
      * It freezes all workers and the emitter.
      */
-    void freeze() {
+    inline void freeze() {
         for(int i=0;i<nworkers;++i) workers[i]->freeze();
         ff_thread::freeze();
     }
 
     /**
-     * \brief Thaws the thread
-     *
-     *  If nw != -1 it thaws running threads.
+     * \brief Freezes one worker thread
      */
-    void thaw(bool _freeze=false, int nw=-1) {
+    inline void freeze(const int n) {
+        assert(n<nworkers);
+        workers[n]->freeze();
+    }
+
+    /**
+     * \brief Thaws all thread register with the lb and the lb itself
+     *
+     * 
+     */
+    inline void thaw(bool _freeze=false, int nw=-1) {
         assert(running==-1);
         if (nw == -1 || nw > nworkers) running = nworkers;
         else running = nw;
+        ff_thread::thaw(_freeze); // NOTE:start scheduler first
         for(int i=0;i<running;++i) workers[i]->thaw(_freeze);
-        ff_thread::thaw(_freeze);
+    }
+
+    /**
+     * \brief Thaws one single worker thread 
+     *
+     */
+    inline void thaw(const int n, bool _freeze=false) {
+        assert(n<nworkers);
+        workers[n]->thaw(_freeze);
     }
 
     /**
@@ -888,6 +957,8 @@ private:
     ff_node        **  multi_input;
     int                multi_input_size;
     int                multi_input_start;   // position in the availworkers array
+    ff_node        **  int_multi_input;
+    int                int_multi_input_size;
 
     struct timeval tstart;
     struct timeval tstop;

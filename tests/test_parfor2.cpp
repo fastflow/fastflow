@@ -37,14 +37,14 @@
 using namespace ff;
 
 int main(int argc, char *argv[]) {
-    if (argc<4) {
-	printf("use: %s size nworkers ntimes\n", argv[0]);
-	return -1;
+    if (argc<5) {
+        printf("use: %s size nworkers ntimes chunk\n", argv[0]);
+        return -1;
     }
     const long size     = atol(argv[1]);
     const int  nworkers = atoi(argv[2]);
     const int  ntimes   = atoi(argv[3]);
-
+    const int  chunk    = atoi(argv[4]);
     long *A = new long[size];
 
     FF_PARFOR_INIT(pf1, nworkers);
@@ -53,14 +53,18 @@ int main(int argc, char *argv[]) {
     long sum=0.0;
     for(int k=0;k<ntimes; ++k) {
 
-        FF_PARFOR_START(pf1, j,0,size,1, std::max((size/nworkers),(long)1), std::min(k+1, nworkers)) {
+        for(int j = 0; j< size; ++j) 
+            A[j] = j+k;
+
+        FF_PARFOR_START(pf1, j,0,size,1, 1, std::min(k+1, nworkers)) {
             A[j]=j+k;
         } FF_PARFOR_STOP(pf1);
         printf("pf1 done using %d workers\n", std::min(k+1,nworkers));
 
-        FF_PARFORREDUCE_START(pf2, sum, 0, i,0,size,1, std::max(size/nworkers/4,(long)1), std::min(k+2,nworkers)) { 
+
+        FF_PARFORREDUCE_BEGIN(pf2, sum, 0, i,0,size,1, chunk, std::min(k+2,nworkers)) { 
             sum += A[i];
-        } FF_PARFORREDUCE_STOP(pf2, sum, +);    
+        } FF_PARFORREDUCE_END(pf2, sum, +);    
         printf("pf2 done using %d workers\n", std::min(k+2,nworkers));
         
     } // k

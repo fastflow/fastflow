@@ -72,9 +72,19 @@
 #include <algorithm>
 
 #include <ff/utils.hpp>
-#if !defined(USE_OPENMP)
+#if defined(USE_TBB) 
+#include <numeric>
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_reduce.h>
+#include <tbb/blocked_range.h>
+#include <tbb/task_scheduler_init.h>
+#endif
+
+#if !defined(USE_OPENMP) && !defined(USE_TBB)
 #include <ff/parallel_for.hpp>
 #endif
+
+
 using namespace ff;
 
 #if defined(STATIC_DECL)
@@ -91,6 +101,8 @@ static FF_PARFORREDUCE_DECL(reduce,double)=NULL;
 int n, m, mits;
 double tol, relax, alpha;
 int NUMTHREADS;
+
+static long chunk=1;
 
 
 /* 
@@ -146,15 +158,14 @@ static inline void jacobi_omp ( const int n, const int m, double dx, double dy, 
 
 	/* copy new solution into old */
 //#pragma omp parallel for schedule(static) num_threads(NUMTHREADS)
-#pragma omp parallel for schedule(auto) num_threads(NUMTHREADS)
+#pragma omp parallel for schedule(runtime) num_threads(NUMTHREADS)
     for (int j=0; j<m; j++)
 	  for (int i=0; i<n; i++)
 		uold[i + m*j] = u[i + m*j];
 
-
 	/* compute stencil, residual and update */
 //#pragma omp parallel for reduction(+:Error) schedule(static) private(resid) num_threads(NUMTHREADS)
-#pragma omp parallel for reduction(+:Error) schedule(auto) private(resid) num_threads(NUMTHREADS)
+#pragma omp parallel for reduction(+:Error) schedule(runtime) private(resid) num_threads(NUMTHREADS)
 	for (int j=1; j<m-1; j++)
 	  for (int i=1; i<n-1; i++){
 		resid =(
@@ -174,7 +185,6 @@ static inline void jacobi_omp ( const int n, const int m, double dx, double dy, 
 	/* error check */
 	k++;
 	Error = sqrt(Error) /(n*m);
-
   } /* while */
 
   printf("Total Number of Iterations %d\n", k);
@@ -183,7 +193,80 @@ static inline void jacobi_omp ( const int n, const int m, double dx, double dy, 
   free(uold);
 
 } 	
-#else 
+#elif defined(USE_TBB)
+static inline void jacobi_tbb ( const int n, const int m, double dx, double dy, double alpha, 
+	double omega, double *u, double *f, double tol, int maxit )
+{
+  int k;
+  double Error, resid, ax, ay, b;
+
+
+  tbb::affinity_partitioner ap;
+
+  double *uold;
+
+  /* wegen Array-Kompatibilitaet, werden die Zeilen und Spalten (im Kopf)
+	 getauscht, zB uold[spalten_num][zeilen_num]; bzw. wir tuen so, als ob wir das
+	 gespiegelte Problem loesen wollen */
+
+  uold = (double *)malloc(sizeof(double) * n *m);
+
+
+
+  ax = 1.0/(dx * dx); /* X-direction coef */
+  ay = 1.0/(dy*dy); /* Y_direction coef */
+  b = -2.0/(dx*dx)-2.0/(dy*dy) - alpha; /* Central coeff */
+
+  Error = 10.0 * tol;
+
+  k = 1;
+  while (k <= maxit && Error > tol) {
+    
+    Error = 0.0;
+
+    /* copy new solution into old */
+    tbb::parallel_for(tbb::blocked_range<long>(0, m, m/NUMTHREADS),
+		      [&] (const tbb::blocked_range<long>& r) {
+			for (long j=r.begin();j!=r.end();++j) {
+			  for (int i=0; i<n; i++)
+			    uold[i + m*j] = u[i + m*j];
+			}
+		      }, ap);
+
+    /* compute stencil, residual and update */
+    Error += tbb::parallel_reduce(tbb::blocked_range<long>(1, m-1), //,(m-2)/NUMTHREADS),
+    				  double(0),
+    				  [&] (tbb::blocked_range<long> &r, double in) -> double {
+    				    for (long j=r.begin();j!=r.end();++j) {
+    				      for (int i=1; i<n-1; i++){
+    				      	double resid =(
+    				      		ax * (uold[i-1 + m*j] + uold[i+1 + m*j])
+    				      		+ ay * (uold[i + m*(j-1)] + uold[i + m*(j+1)])
+    				      		+ b * uold[i + m*j] - f[i + m*j]
+    				      		) / b;
+					
+    				      	/* update solution */
+    				      	u[i + m*j] = uold[i + m*j] - omega * resid;
+    				      	in+=resid*resid;
+    				      }
+    				    }
+    				    return in;
+    				  }, std::plus<double>(), ap );
+    
+    /* error check */
+    k++;
+    Error = sqrt(Error) /(n*m);
+    
+  } /* while */
+
+  printf("Total Number of Iterations %d\n", k);
+  printf("Residual                   %.15f\n\n", Error);
+
+  free(uold);
+
+} 	
+#else  // FF
+
 static inline void jacobi_ff ( const int n, const int m, double dx, double dy, double alpha, 
 	double omega, double *u, double *f, double tol, int maxit )
 {
@@ -218,13 +301,13 @@ static inline void jacobi_ff ( const int n, const int m, double dx, double dy, d
 	Error = 0.0;
 
 	/* copy new solution into old */
-	FF_PARFOR_START(loop, j,0,m,1, std::min(m/NUMTHREADS/10,2), NUMTHREADS) {
+	FF_PARFOR_START(loop, j,0,m,1, chunk, NUMTHREADS) { //(m/NUMTHREADS),NUMTHREADS) {
 	    for (int i=0; i<n; i++)
 		uold[i + m*j] = u[i + m*j];
 	} FF_PARFOR_STOP(loop);
 
 	/* compute stencil, residual and update */
-	FF_PARFORREDUCE_START(reduce, Error, 0.0, j,1,m-1,1, std::min(m/NUMTHREADS/10,2), NUMTHREADS) { 
+	FF_PARFORREDUCE_START(reduce, Error, 0.0, j,1,m-1,1, chunk, NUMTHREADS) { //(m-2)/NUMTHREADS, NUMTHREADS) { 
 	    double resid;
 	    for (int i=1; i<n-1; i++){
 		resid =(
@@ -245,13 +328,7 @@ static inline void jacobi_ff ( const int n, const int m, double dx, double dy, d
 	/* error check */
 	k++;
 	Error = sqrt(Error) /(n*m);
-
   } /* while */
-
-#if !defined(STATIC_DECL)
-   FF_PARFOR_DONE(loop);
-   FF_PARFORREDUCE_DONE(reduce);
-#endif
 
   printf("Total Number of Iterations %d\n", k);
   printf("Residual                   %.15f\n\n", Error);
@@ -348,6 +425,7 @@ int main(int argc, char **argv){
    tol = atof(argv[5]);
    mits = atoi(argv[6]);
    NUMTHREADS = atoi(argv[7]);
+   if (argc==9) chunk = atoi(argv[8]);
 
    //printf("-> %d, %d, %g, %g, %g, %d\n",
    //	    n, m, alpha, relax, tol, mits);
@@ -361,7 +439,7 @@ int main(int argc, char **argv){
 #if defined(USE_OPENMP)
    /* OpenMP */
 
-   printf("OpenMP run using %d threads\n", NUMTHREADS);
+   printf("OpenMP runs using %d threads\n", NUMTHREADS);
    ffTime(START_TIME);
    /* Solve Helmholtz equation */
    jacobi_omp(n, m, dx, dy, alpha, relax, u,f, tol, mits);
@@ -369,6 +447,17 @@ int main(int argc, char **argv){
    dt = ffTime(GET_TIME); 
 
    printf("omp elapsed time : %12.6f  (ms)\n", dt);
+#elif defined(USE_TBB)
+   tbb::task_scheduler_init init(NUMTHREADS);
+
+   printf("TBB runs using %d threads\n", NUMTHREADS);
+   ffTime(START_TIME);
+   /* Solve Helmholtz equation */
+   jacobi_tbb(n, m, dx, dy, alpha, relax, u,f, tol, mits);
+   ffTime(STOP_TIME);
+   dt = ffTime(GET_TIME); 
+
+   printf("TBB elapsed time : %12.6f  (ms)\n", dt);
 #else
    /* FastFlow */
 
@@ -377,7 +466,7 @@ int main(int argc, char **argv){
   FF_PARFORREDUCE_ASSIGN(reduce, double, NUMTHREADS); 
 #endif
 
-   printf("\n\nFastFlow run using %d threads\n", NUMTHREADS);
+   printf("\n\nFastFlow runs using %d threads\n", NUMTHREADS);
    ffTime(START_TIME);
    /* Solve Helmholtz equation */
    jacobi_ff(n, m, dx, dy, alpha, relax, u,f, tol, mits);
