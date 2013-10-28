@@ -30,6 +30,7 @@
  */
 
 #include <vector>
+#include <functional>
 #include <ff/node.hpp>
 
 #if defined( HAS_CXX11_VARIADIC_TEMPLATES )
@@ -213,6 +214,7 @@ public:
      * Destructor
      */
     ~ff_pipeline() {
+        if (end_callback) end_callback(end_callback_param);
         if (barrier) delete barrier;
         if (node_cleanup) {
             while(nodes_list.size()>0) {
@@ -252,7 +254,7 @@ public:
         if (set_output_buffer(get_in_buffer())<0)
             return -1;
 
-        nodes_list[0]->skip1pop = true;
+        nodes_list[0]->skipfirstpop(true);
 
         return 0;
     }
@@ -349,7 +351,7 @@ public:
     /**
      * It waits for freezing.
      */
-    int wait_freezing(/* timeval */ ) {
+    inline int wait_freezing(/* timeval */ ) {
         int ret=0;
         for(unsigned int i=0;i<nodes_list.size();++i)
             if (nodes_list[i]->wait_freezing()<0) {
@@ -364,28 +366,28 @@ public:
     /**
      * It stops all stages.
      */
-    void stop() {
+    inline void stop() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->stop();
     }
 
     /**
      * It freeze all stages.
      */
-    void freeze() {
+    inline void freeze() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->freeze();
     }
     /**
      * It Thaws all frozen stages.
      * if _freeze is true at next step all threads are frozen again
      */
-    void thaw(bool _freeze=false) {
+    inline void thaw(bool _freeze=false) {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->thaw(_freeze);
     }
     
     /** 
      * It checks if the pipeline is frozen 
      */
-    bool isfrozen() { 
+    inline const bool isfrozen() { 
         int nstages=static_cast<int>(nodes_list.size());
         for(int i=0;i<nstages;++i) 
             if (!nodes_list[i]->isfrozen()) return false;
@@ -600,17 +602,27 @@ private:
 /* ------------------------ high-level (simpler) pipeline -------------------------------- */
 
 // generic ff_node stage. It is built around the function F ( F: T* -> T* )
-template<typename T>
-class Fstage: public ff_node {
-public:
-    typedef T*(*F_t)(T*);
-    Fstage(F_t F):F(F) {}
-    inline void* svc(void *t) {	 return F((T*)t); }    
-protected:
-    F_t F;
-};
+// template<typename T>
+// class Fstage: public ff_node {
+// public:
+//     typedef T*(*F_t)(T*);
+//     Fstage(F_t F):F(F) {}
+//     inline void* svc(void *t) {	 return F((T*)t); }    
+// protected:
+//     F_t F;
+// };
 
 #if defined( HAS_CXX11_VARIADIC_TEMPLATES )
+
+// NOTE: std::function can introduce a bit of extra overhead. Think about on how to avoid functionals.
+template<typename T>
+class Fstage2: public ff_node {
+public:
+    Fstage2(std::function<T*(T*)> F):F(F) {}
+    inline void* svc(void *t) {	 return F((T*)t); }    
+protected:
+    std::function<T*(T*)> F;
+};
 
 template<typename TaskType>
 class ff_pipe: public ff_pipeline {
@@ -627,9 +639,11 @@ private:
         f(std::get<I>(t));
         for_each<I + 1, FuncT, Tp...>(t, f);  // all but the first
     }
-        
+      
+  
     inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }
-    inline void add2pipe(F_t F) { ff_pipeline::add_stage(new Fstage<TaskType>(F));  }
+    //    inline void add2pipe(F_t F) { ff_pipeline::add_stage(new Fstage<TaskType>(F));  }
+    inline void add2pipe(std::function<TaskType*(TaskType*)> F) { ff_pipeline::add_stage(new Fstage2<TaskType>(F));  }
 
     struct add_to_pipe {
         ff_pipe *const P;

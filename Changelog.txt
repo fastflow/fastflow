@@ -1,4 +1,8 @@
 * 08/09/13 - v.2.0.2
+   - added the possibility to freeze and thaw one single worker thread
+     in a task-farm skeleton (see tests/test_stopstartthreads2.cpp)
+   - added end_callback in case an external tool wants to be notified 
+     of the skeleton tree termination
    - introduced FF_ESAVER (Energy SAVER) compiler flag (experimental) (thanks to Mehdi Goli )
    - ff_relax now uses nanosleep instead of usleep
    - first full porting to ARM processor (thanks to Mauro Mulatero)	

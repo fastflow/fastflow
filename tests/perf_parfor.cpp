@@ -25,7 +25,7 @@
  ****************************************************************************
  */
 
-/*
+/* Very simple performance test for the FF_PARFOR
  *
  */
 
@@ -34,7 +34,7 @@
 
 #include <ff/parallel_for.hpp>
 
-#if defined(TBB)
+#if defined(USE_TBB)
 #include <tbb/tbb.h>
 #include <tbb/tbb_thread.h>
 #include <tbb/parallel_for.h>
@@ -97,11 +97,11 @@ int main(int argc, char *argv[]) {
     const long numtasks = atol(argv[1]);
     const int  nworkers = atoi(argv[2]);
     const int  nticks   = atoi(argv[3]);
-    int   chunk = std::min((int)(numtasks/nworkers),1);
+    int   chunk = std::max((int)(numtasks/nworkers),1);
     if (argc == 5) 
         chunk = atoi(argv[4]);
     
-#if defined(OPENMP)
+#if defined(USE_OPENMP)
     ffTime(START_TIME);
 #pragma omp parallel for schedule(runtime) num_threads(nworkers)
     for(long j=0;j<numtasks;++j) {
@@ -109,7 +109,7 @@ int main(int argc, char *argv[]) {
     }
     ffTime(STOP_TIME);
     printf("%d Time  = %g (ms)\n", nworkers, ffTime(GET_TIME));
-#elif defined(TBB)
+#elif defined(USE_TBB)
     tbb::task_scheduler_init init(nworkers);
     tbb::affinity_partitioner ap;
     

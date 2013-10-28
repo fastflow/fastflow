@@ -207,7 +207,7 @@ struct iovec
 //#if (!defined(_FF_SYSTEM_HAVE_WIN_PTHREAD))
 //#endif
 #include<algorithm>
-#elif defined(__GNUC__) && (defined(__linux) || defined(__APPLE__))
+#elif defined(__GNUC__) && (defined(__linux__) || defined(__APPLE__))
 #include <sys/time.h>
 #include <unistd.h>
 #include <stdlib.h>

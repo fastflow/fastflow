@@ -25,16 +25,17 @@
  ****************************************************************************
  */
 
-/*
+/* Very simple performance test for the FF_PARFOR
  *
  */
 
 #include <cstdlib>
 #include <omp.h>
+#include <mm_malloc.h>
 
 #include <ff/parallel_for.hpp>
 
-#if defined(TBB)
+#if defined(USE_TBB)
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 #include <tbb/task_scheduler_init.h>
@@ -44,22 +45,21 @@
 using namespace ff;
 
 int main(int argc, char *argv[]) {
-    if (argc<4) {
-        printf("use: %s numtasks nworkers ticks [chunk=(numtasks/nworkers)]\n", argv[0]);
+    if (argc<3) {
+        printf("use: %s numtasks nworkers [chunk=(numtasks/nworkers)]\n", argv[0]);
         return -1;
     }
     const long numtasks = atol(argv[1]);
     const int  nworkers = atoi(argv[2]);
-    const int  nticks   = atoi(argv[3]);
-    int   chunk = std::min((int)(numtasks/nworkers),1);
-    if (argc == 5) 
-        chunk = atoi(argv[4]);
+    int   chunk = std::max((int)(numtasks/nworkers),1);
+    if (argc == 4) 
+        chunk = atoi(argv[3]);
 
-
-    long *V = new long[numtasks];
+    long *V;
+    posix_memalign((void**)&V, 64, numtasks*sizeof(long));
+    //long *V = new long[numtasks];
     
-
-#if defined(OPENMP)
+#if defined(USE_OPENMP)
     ffTime(START_TIME);
 #pragma omp parallel for schedule(runtime) num_threads(nworkers)
     for(long j=0;j<numtasks;++j) {
@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
     }
     ffTime(STOP_TIME);
     printf("%d Time  = %g (ms)\n", nworkers, ffTime(GET_TIME));
-#elif defined(TBB)
+#elif defined(USE_TBB)
 
     tbb::task_scheduler_init init(nworkers);
     tbb::affinity_partitioner ap;

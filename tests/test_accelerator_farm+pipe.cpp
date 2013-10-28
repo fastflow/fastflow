@@ -252,7 +252,7 @@ int main(int argc, char * argv[]) {
     }
 
     std::cerr << "DONE, time= " << farm.ffTime() << " (ms)\n";
-    farm.ffStats(std::cout);
+    //farm.ffStats(std::cout);
 
     return 0;
 }

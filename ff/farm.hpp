@@ -164,6 +164,23 @@ protected:
         F_t F;
     };
 
+    /* just a node interface for the input and output buffers */
+    class internal_node:public ff_node {
+    public:
+        internal_node(int id, FFBUFFER *in, FFBUFFER *out) {
+            set_id(id);
+            set_input_buffer(in);
+            set_output_buffer(out);
+        }
+        void *svc(void*) {return NULL;}        
+    };
+
+    inline void skipfirstpop(bool sk)   { 
+        if (sk) lb->skipfirstpop();
+        skip1pop=sk;
+    }
+
+    
 public:
     /*
      *TODO
@@ -273,6 +290,10 @@ public:
      *
      */
     ~ff_farm() { 
+        if (end_callback) { 
+            end_callback(end_callback_param);
+            end_callback = NULL;
+        }
         if (lb) { delete lb; lb=NULL;}
         if (gt) { delete gt; gt=NULL;}
         if (workers) {
@@ -283,6 +304,11 @@ public:
             delete [] workers;
             workers = NULL;
         }
+        for(size_t i=0;i<internalSupportNodes.size();++i) {
+            delete internalSupportNodes.back();
+            internalSupportNodes.pop_back();
+        }
+
         if (barrier) {delete barrier; barrier=NULL;}
     }
 
@@ -405,24 +431,37 @@ public:
      * \return 0 if successful, otherwise -1 is returned.
      *
      */
-    int wrap_around() {
+    int wrap_around(bool multi_input=false) {
         if (!collector || collector_removed) {
             if (lb->set_masterworker()<0) return -1;
             if (!has_input_channel) lb->skipfirstpop();
             return 0;
         }
 
-        if (create_input_buffer(in_buffer_entries, false)<0) {
-            error("FARM, creating input buffer\n");
-            return -1;
-        }
-        
-        if (set_output_buffer(get_in_buffer())<0) {
-            error("FARM, setting output buffer\n");
-            return -1;
+        if (!multi_input) {
+            if (create_input_buffer(in_buffer_entries, false)<0) {
+                error("FARM, creating input buffer\n");
+                return -1;
+            }
+            if (set_output_buffer(get_in_buffer())<0) {
+                error("FARM, setting output buffer\n");
+                return -1;
+            }
+            lb->skipfirstpop();
+        } else {
+            if (create_output_buffer(out_buffer_entries, false)<0) {
+                error("FARM, creating output buffer for multi-input configuration\n");
+                return -1;
+            }
+            internalSupportNodes.push_back(new internal_node(0, NULL,get_out_buffer()));
+            if (set_output_buffer(get_out_buffer())<0) {
+                error("FARM, setting output buffer for multi-input configuration\n");
+                return -1;
+            }
+            if (lb->set_internal_multi_input(&internalSupportNodes.front(), internalSupportNodes.size())<0)
+                return -1;
         }
 
-        lb->skipfirstpop();
         return 0;
     }
 
@@ -487,6 +526,10 @@ public:
      *
      */
     int run(bool skip_init=false) {
+#if 0
+        if(is_profiling_root() )
+            DSRIManger::instance()->config_and_run(this);
+#endif        
         if (!skip_init) {
             // set the initial value for the barrier 
 
@@ -566,6 +609,10 @@ public:
         int ret=0;
         if (lb->wait()<0) ret=-1;
         if (collector) if (gt->wait()<0) ret=-1;
+#if 0
+        if(is_profiling_root()) 
+            DSRIManger::instance()->finalise();
+#endif
         return ret;
     }
 
@@ -576,7 +623,7 @@ public:
      *
      * \return 0 if successful otherwise -1 is returned.
      */
-    int wait_freezing(/* timeval */ ) {
+    inline int wait_freezing(/* timeval */ ) {
         int ret=0;
         if (lb->wait_freezing()<0) ret=-1;
         if (collector) if (gt->wait_freezing()<0) ret=-1;
@@ -588,7 +635,7 @@ public:
      *
      * It forces the thread to stop at the next EOS signal. 
      */
-    void stop() {
+    inline void stop() {
         lb->stop();
         if (collector) gt->stop();
     }
@@ -598,7 +645,7 @@ public:
      *
      * It forces a thread to Freeze itself.
      */
-    void freeze() {
+    inline void freeze() {
         lb->freeze();
         if (collector) gt->freeze();
     }
@@ -608,14 +655,12 @@ public:
      *
      * If the thread is frozen, then thaw it. 
      */
-    void thaw(bool _freeze=false, int nw=-1) {
-
+    inline void thaw(bool _freeze=false, int nw=-1) {
         // TODO: 
         if ((nw != -1) && (nw < nworkers) && collector) {
             error("running less thread then total NOT YET SUPPORTED in case of collector present\n"); 
             abort();
         }
-
         lb->thaw(_freeze, nw);
         if (collector) gt->thaw(_freeze);
     }
@@ -627,7 +672,7 @@ public:
      *
      * \return The status of \p isfrozen().
      */
-    bool isfrozen() { return lb->isfrozen(); }
+    inline const bool isfrozen() { return lb->isfrozen(); }
 
     /**
      * \breif Offloads teh task to farm
@@ -832,6 +877,7 @@ public:
         return diffmsec(getwstoptime(),lb->getwstartime());
     }
 
+
 #if defined(TRACE_FASTFLOW)
     /**
      * \brief Prints FastFlow trace
@@ -847,6 +893,7 @@ public:
         if (collector) gt->ffStats(out);
     }
 #else
+
     /**
      * \brief Prints FastFlow message
      *
@@ -858,9 +905,8 @@ public:
     void ffStats(std::ostream & out) { 
         out << "FastFlow trace not enabled\n";
     }
-
 #endif
-    
+
 protected:
 
     /**
@@ -898,7 +944,6 @@ protected:
      *
      * \return An integer value showing the id of the thread.
      *
-     * FIXME: Why -1 is returned? I think it should return the id??
      */
     int get_my_id() const { return -1; };
 
@@ -907,7 +952,6 @@ protected:
      *
      * It sets the affinity of the farm
      *
-     * FIXME: Why the message is displayed? It should set the affinity. No?
      */
     void setAffinity(int) { 
         error("FARM, setAffinity: cannot set affinity for the farm\n");
@@ -920,7 +964,6 @@ protected:
      *
      * \return The identifier of the core
      *
-     * FIXME: why -1? it should return the id of the core.
      */
     int getCPUId() const { return -1;}
 
@@ -1042,6 +1085,7 @@ protected:
     lb_t             * lb;
     gt_t             * gt;
     ff_node         ** workers;
+    std::vector<ff_node*> internalSupportNodes;
     bool               fixedsize;
 };
 
@@ -1635,8 +1679,7 @@ public:
      * It skips the first pop.
      */
     inline void skipfirstpop(bool sk)   {
-        if (sk)
-            lb->skipfirstpop();
+        if (sk) lb->skipfirstpop();
     }
 
     /**

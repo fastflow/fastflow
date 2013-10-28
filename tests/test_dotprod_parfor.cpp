@@ -133,11 +133,14 @@ int main(int argc, char * argv[]) {
         A[j]=j*3.14; B[j]=2.1*j;
     } FF_PARFOR_END(init);
 
+    //auto Fsum = [](double& v, double elem) { v += elem; };
+        
     ff::ffTime(ff::START_TIME);    
     for(int z=0;z<NTIMES;++z) {
         // do work
         FF_PARFORREDUCE_START(dp, sum, 0.0, i,0,arraySize,1, CHUNKSIZE, nworkers) { 
             sum += A[i]*B[i];
+        //} FF_PARFORREDUCE_F_STOP(dp, sum, Fsum);    // this is just a different form
         } FF_PARFORREDUCE_STOP(dp, sum, +);    
     }
     ffTime(STOP_TIME);

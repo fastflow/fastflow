@@ -514,6 +514,7 @@ public:
     }
     stat_windows = (vector<Stat_Window<double> *> *)task;
 
+    printf("******************************* BEGIN ************************\n");
     //farm-accelerated statistics
     St->run_then_freeze();
     for(int i=0; i<n_monitors; ++i) {
@@ -524,6 +525,8 @@ public:
     //synchronize
     St->offload((void *)FF_EOS);
     St->wait_freezing();
+
+    printf("******************************* FINE ************************\n");
     return GO_ON;
   }
 

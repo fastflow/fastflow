@@ -146,7 +146,7 @@ namespace ff {
     forall_##name.add_emitter(                                                    \
           new forall_Scheduler(forall_##name.getlb(),begin,end, step,chunk,nw));  \
     forall_##name.wrap_around();                                                  \
-    auto name_ovar = var; var=identity; /* icc does not support [var=identity]*/  \
+    auto ovar_##name = var; var=identity; /* icc does not support [var=identity]*/  \
     auto F_##name =[&,var](const long start, const long stop,                     \
                            const int _ff_thread_id) mutable ->                    \
         decltype(var) {                                                           \
@@ -163,9 +163,8 @@ namespace ff {
         forall_##name.add_workers(forall_w_##name);                               \
         if (forall_##name.run_and_wait_end()<0) {                                 \
             error("running forall_##name\n");                                     \
-            return -1;                                                            \
         }                                                                         \
-        var = ovar;                                                               \
+        var = ovar_##name;                                                        \
         for(int i=0;i<nw_##name;++i)                                              \
             var op##= ((forallreduce_W<decltype(var)>*)                           \
                                  (forall_w_##name[i]))->getres();                 \
@@ -183,8 +182,11 @@ namespace ff {
     ff_forall_farm<int> *name = new ff_forall_farm<int>(nw);                      \
     WARMUP(name)
 
+
 #define FF_PARFOR_DECL(name)      ff_forall_farm<int> * name
-#define FF_PARFOR_ASSIGN(name,nw) name=new ff_forall_farm<int>(nw)
+#define FF_PARFOR_ASSIGN(name,nw)                                                 \
+    name=new ff_forall_farm<int>(nw);                                             \
+    WARMUP(name)
 
 #define FF_PARFOR_DONE(name)                                                      \
     {                                                                             \
@@ -199,7 +201,9 @@ namespace ff {
     WARMUP(name)
 
 #define FF_PARFORREDUCE_DECL(name,type)      ff_forall_farm<type> * name
-#define FF_PARFORREDUCE_ASSIGN(name,type,nw) name=new ff_forall_farm<type>(nw)
+#define FF_PARFORREDUCE_ASSIGN(name,type,nw)                                      \
+    name=new ff_forall_farm<type>(nw);                                            \
+    WARMUP(name)
     
 #define FF_PARFORREDUCE_DONE(name)                                                \
     {                                                                             \
@@ -233,7 +237,7 @@ namespace ff {
     
 #define FF_PARFORREDUCE_START(name, var,identity, idx,begin,end,step, chunk, nw)  \
     name->setloop(begin,end,step,chunk,nw);                                       \
-    auto name_ovar = var; var=identity; /* icc does not support [var=identity]*/  \
+    auto ovar_##name = var; var=identity; /* icc does not support [var=identity]*/  \
     auto F_##name =[&,var](const long start, const long stop,                     \
                            const int _ff_thread_id) mutable ->                    \
         decltype(var) {                                                           \
@@ -247,9 +251,21 @@ namespace ff {
         if (name->run_then_freeze(name->getnw())<0)                               \
             error("running ff_forall_farm (name)\n");                             \
         name->wait_freezing();                                                    \
-        var = name_ovar;                                                          \
+        var = ovar_##name;                                                          \
         for(int i=0;i<name->getnw();++i)  {                                       \
             var op##= name->getres(i);                                            \
+        }
+
+#define FF_PARFORREDUCE_F_STOP(name, var, F)                                      \
+          return var;                                                             \
+        };                                                                        \
+        name->setF(F_##name);                                                     \
+        if (name->run_then_freeze(name->getnw())<0)                               \
+            error("running ff_forall_farm (name)\n");                             \
+        name->wait_freezing();                                                    \
+        var = ovar_##name;                                                        \
+        for(int i=0;i<name->getnw();++i)  {                                       \
+            F(var,name->getres(i));                                               \
         }
 
 
@@ -316,9 +332,9 @@ protected:
     virtual inline long init_data(long start, long stop) {
         const long numtasks  = std::ceil((stop-start)/(double)step);
         long totalnumtasks   = std::ceil(numtasks/(double)chunk);
+        const long tt        = totalnumtasks;
         long ntxw = totalnumtasks / nw;
         long r    = totalnumtasks % nw;
-        long tt   = totalnumtasks;
 
         if (ntxw == 0 && r>1) {
             ntxw = 1, r = 0;
@@ -337,7 +353,8 @@ protected:
 
         if (totalnumtasks) {
             assert(totalnumtasks==1);
-            data[nw-1].first += totalnumtasks;
+            // try to keep the n. of tasks per worker as smaller as possible
+            if (ntxw > 1) data[nw-1].first += totalnumtasks;
             data[nw-1].second.end = stop;
         } 
         
@@ -361,10 +378,21 @@ public:
 
     void* svc(void* t) {
         if (t==NULL) {
-            bool skip1=false,skip2=false,skip3=false;
             if (totaltasks==0) return NULL;
+            if ((totaltasks/nw) == 1) {
+                for(int wid=0;wid<nw;++wid)
+                    if (data[wid].first) {
+                        taskv[wid].set(data[wid].second.start, data[wid].second.end);
+                        lb->ff_send_out_to(&taskv[wid], wid);
+                    } 
+                return NULL;
+            }
+            {
+            long remaining = totaltasks;
+            bool skip1=false,skip2=false,skip3=false;
             const long endchunk = (chunk-1)*step + 1;
             int jump = 0;
+            
         moretask:
             for(int wid=0;wid<nw;++wid) {
                 if (data[wid].first) {
@@ -372,8 +400,7 @@ public:
                     long end   = std::min(start+endchunk, data[wid].second.end);
                     taskv[wid+jump].set(start, end);
                     lb->ff_send_out_to(&taskv[wid+jump], wid);
-                    
-                    --data[wid].first;
+                    --remaining, --data[wid].first;
                     (data[wid].second).start = (end-1)+step;  
                     active[wid]=true;
                 } else {
@@ -386,11 +413,12 @@ public:
             jump+=nw;
             assert((jump / nw) <= 8);
             // heuristic: try to assign more task at the very beginning
-            if (!skip1 && totaltasks>=10*nw)  { skip1=true; goto moretask;}
-            if (!skip2 && totaltasks>=100*nw) { skip1=false; skip2=true; goto moretask;}
-            if (!skip3 && totaltasks>=1000*nw){ skip1=false; skip2=false; skip3=true; goto moretask;}
+            if (!skip1 && totaltasks>=4*nw)  { skip1=true; goto moretask;}
+            if (!skip2 && totaltasks>=64*nw) { skip1=false; skip2=true; goto moretask;}
+            if (!skip3 && totaltasks>=1024*nw){ skip1=false; skip2=false; skip3=true; goto moretask;}
 
-            return GO_ON;
+            return (remaining<=0)?NULL:GO_ON;
+            }
         }
         if (--totaltasks <=0) return NULL;
         auto task = (forall_task_t*)t;
@@ -417,14 +445,13 @@ public:
         return GO_ON;
     }
 
-    // void  svc_end() {
-    //     assert(totaltasks<=0);
-    // }
-
-    inline void setloop(long start, long stop, long _step, long _chunk, int _nw) {
+    inline bool setloop(long start, long stop, long _step, long _chunk, int _nw) {
         step=_step, chunk=_chunk, nw = _nw;
         totaltasks = init_data(start,stop);
         assert(totaltasks>=1);        
+        // if we have only 1 task per worker, the scheduler exits immediatly so we have to wait all workers
+        // otherwise is sufficient to wait only for the scheduler
+        return ((totaltasks/nw) == 1); 
     }
 
 protected:
@@ -434,6 +461,119 @@ protected:
     long             totaltasks;  // total n. of tasks
     int              nw;          // num. of workers
 };
+
+
+#if 0
+// FIX: it does not work correctly in all cases
+class forall_Scheduler2: public ff_node {
+protected:
+    std::vector<bool> active;
+    std::vector<std::pair<long,forall_task_t> > data;
+    std::vector<forall_task_t> taskv;
+protected:
+    // initialize the data vector
+    virtual inline long init_data(long start, long stop) {
+        const long numtasks  = std::ceil((stop-start)/(double)step);
+        long totalnumtasks   = std::ceil(numtasks/(double)chunk);
+        long ntxw = totalnumtasks;
+        long r    = 0;
+        long tt   = totalnumtasks;
+
+        if (ntxw == 0 && r>1) {
+            ntxw = 1, r = 0;
+        }
+        data.resize(1);
+        taskv.resize(8*nw); // 8 is the maximum n. of jumps, see the heuristic below
+        
+        long end, t=0, e;
+        t       = ntxw;
+        e       = start + (t*chunk - 1)*step + 1;
+        end     = (e<stop) ? e : stop;
+        data[0] = std::make_pair(t, forall_task_t(start,end));
+
+        // printf("Scheduler2:\n");
+        // printf("%ld <%ld,%ld>\n", data[0].first, data[0].second.start, data[0].second.end);
+        // printf("totaltasks=%ld\n", tt);
+
+        return tt;
+    }    
+
+public:
+    forall_Scheduler2(ff_loadbalancer* lb, long start, long stop, long step, long chunk, int nw):
+        active(nw),lb(lb),step(step),chunk(chunk),totaltasks(0),nw(nw) {
+        totaltasks = init_data(start,stop);
+        assert(totaltasks>=1);
+        for(int wid=0;wid<nw;++wid) active[wid]=false;
+    }
+    forall_Scheduler2(ff_loadbalancer* lb, int nw):active(nw),lb(lb),step(1),chunk(1),totaltasks(0),nw(nw) {
+        totaltasks = init_data(0,0);
+        assert(totaltasks==0);
+        for(int wid=0;wid<nw;++wid) active[wid]=false;
+    }
+
+    void* svc(void* t) {
+        if (t==NULL) {
+            if (totaltasks==0) return NULL;
+            bool skip1=false,skip2=false,skip3=false;
+            long remaining = totaltasks;
+            const long endchunk = (128-1)*step + 1; //(chunk-1)*step + 1;
+            int jump = 0;
+        moretask:
+            for(int wid=0;wid<nw;++wid) {
+                if (data[0].first<=0) return NULL;
+                long start = data[0].second.start;
+                long end   = std::min(start+endchunk, data[0].second.end);
+                taskv[wid+jump].set(start, end);
+                lb->ff_send_out_to(&taskv[wid+jump], wid);
+                --remaining, --data[0].first;
+                (data[0].second).start = (end-1)+step;  
+                active[wid]=true;
+            }
+            jump+=nw;
+            assert((jump / nw) <= 8);
+            // heuristic: try to assign more task at the very beginning
+            if (!skip1 && totaltasks>=10*nw)  { skip1=true; goto moretask;}
+            if (!skip2 && totaltasks>=100*nw) { skip1=false; skip2=true; goto moretask;}
+            if (!skip3 && totaltasks>=1000*nw){ skip1=false; skip2=false; skip3=true; goto moretask;}
+
+            return (remaining<=0)?NULL:GO_ON;
+        }
+        if (--totaltasks <=0) return NULL;
+        auto task = (forall_task_t*)t;
+        const long endchunk = (chunk-1)*step + 1;
+        const int wid = lb->get_channel_id();        
+        if (data[0].first) {
+            long start = data[0].second.start;
+            long end   = std::min(start+endchunk, data[0].second.end);
+            task->set(start, end);
+            lb->ff_send_out_to(task, wid);
+            --data[0].first;
+            (data[0].second).start = (end-1)+step;
+            return GO_ON;
+        }
+        if (active[wid]) {
+            lb->ff_send_out_to(EOS, wid); // the thread is terminated
+            active[wid]=false;
+        }
+        return GO_ON;
+
+    }
+
+    inline bool setloop(long start, long stop, long _step, long _chunk, int _nw) {
+        step=_step, chunk=_chunk, nw = _nw;
+        totaltasks = init_data(start,stop);
+        assert(totaltasks>=1);        
+        return true;
+    }
+
+protected:
+    ff_loadbalancer* lb;
+    long             step;        // for step
+    long             chunk;       // a chunk of indexes
+    long             totaltasks;  // total n. of tasks
+    int              nw;          // num. of workers
+};
+#endif
 
 template <typename Tres>
 class ff_forall_farm: public ff_farm<> {
@@ -447,7 +587,7 @@ protected:
 public:
     Tres t; // not used
 
-    ff_forall_farm(int nw):ff_farm<>(false,100*nw,100*nw,true,nw,true),nw(nw) {
+    ff_forall_farm(int nw):ff_farm<>(false,100*nw,100*nw,true,nw,true),nw(nw),waitall(true) {
         std::vector<ff_node *> forall_w;
         auto donothing=[](const long,const long, const int) -> int {
             return 0;
@@ -461,7 +601,7 @@ public:
             error("running base forall farm\n");
         } else ff_farm<>::wait_freezing();
     }
-    int run_then_freeze(int nw=-1) {        
+    inline int run_then_freeze(int nw=-1) {        
         resetqueues((nw == -1)?getNWorkers():nw);
         // the scheduler skips the first pop
         getlb()->skipfirstpop();
@@ -470,6 +610,11 @@ public:
     int run_and_wait_end() {
         resetqueues((nw == -1)?getNWorkers():nw);
         return ff_farm<>::run_and_wait_end();
+    }
+
+    inline int wait_freezing() {
+        if (waitall) return ff_farm<>::wait_freezing();
+        return getlb()->wait_lb_freezing();
     }
 
     inline void setF(std::function<Tres(const long,const long,const int)>  _F) { 
@@ -481,7 +626,7 @@ public:
         assert(nw<=getNWorkers());
         nw=_nw;
         forall_Scheduler *sched = (forall_Scheduler*)getEmitter();
-        sched->setloop(begin,end,step,chunk,nw);
+        waitall = sched->setloop(begin,end,step,chunk,nw);
     }
     inline int getnw() const { return nw; }
     
@@ -490,6 +635,7 @@ public:
     }
 protected:
     int nw;
+    bool waitall;
 };
 
 } // namespace ff

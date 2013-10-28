@@ -1,0 +1,125 @@
+/* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+/* ***************************************************************************
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License version 2 as 
+ *  published by the Free Software Foundation.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  As a special exception, you may use this file as part of a free software
+ *  library without restriction.  Specifically, if other files instantiate
+ *  templates or use macros or inline functions from this file, or you compile
+ *  this file and link it with other files to produce an executable, this
+ *  file does not by itself cause the resulting executable to be covered by
+ *  the GNU General Public License.  This exception does not however
+ *  invalidate any other reasons why the executable file might be covered by
+ *  the GNU General Public License.
+ *
+ ****************************************************************************
+ */
+
+/**
+ *
+ * This is a basic test for testing the capability of starting and stopping 
+ * farm's workers in the load-balancer thread.
+ *
+ */
+#include <vector>
+#include <cstdio>
+#include <ff/farm.hpp>
+
+using namespace ff;
+
+class Emitter: public ff_node {
+protected:
+    void stop_workers() {
+        int nw = farm->getNWorkers();
+        for(int i=0; i<nw;++i)  {
+            farm->getlb()->ff_send_out_to(EOS, i);
+        }
+        for(int i=0;i<nw;++i) {
+            farm->getlb()->wait_freezing(i);
+        }
+    }
+    void wakeup_workers(bool freeze=true) {
+        for(int i=0;i<farm->getNWorkers();++i)
+            farm->getlb()->thaw(i,freeze);
+    }
+public:
+    Emitter(ff_farm<> *farm):farm(farm) {}
+    
+    int svc_init() {
+        // set freezing flag to all workers
+        for(int i=0;i<farm->getNWorkers();++i)
+            farm->getlb()->freeze(i);
+        return 0;
+    }
+    void *svc(void *) {
+        // first of all stop workers
+        stop_workers();
+        
+        for(int i=0;i<10; ++i) {
+            printf("iter %d\n", i);
+            usleep(i*10000);
+
+            // restart all workers
+            wakeup_workers();
+            
+            // do something here
+            for(int j=0;j<farm->getNWorkers();++j)
+                farm->getlb()->ff_send_out_to(new int(j), j);
+            
+            // put workers to sleep
+            stop_workers();
+        }
+        // restart workers before sending EOS
+        wakeup_workers(false);
+        return NULL;
+    }
+    
+    void svc_end() {
+        printf("Emitter exiting\n");
+    }
+private:
+    ff_farm<> *farm;
+};
+
+
+class Worker:public ff_node {
+public:
+    void *svc(void *t) {
+        printf("worker %d received %d\n", get_my_id(), *(int*)t);
+        return GO_ON;
+    }
+    void svc_end() {
+        printf("worker %d going to sleep\n", get_my_id());
+    }
+};
+
+int main(int argc, char *argv[]) {
+    if (argc<2) {
+        printf("use: %s nworkers\n",argv[0]);
+        return -1;
+    }
+    
+    const int nworkers = atoi(argv[1]);
+    
+    ff_farm<> farm;
+    std::vector<ff_node*> w;
+    for(int i=0;i<nworkers;++i)
+        w.push_back(new Worker);
+    farm.add_workers(w);
+    farm.add_emitter(new Emitter(&farm));
+    
+    farm.run();
+    farm.getlb()->waitlb();
+
+    return 0;
+}

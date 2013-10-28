@@ -307,6 +307,7 @@ public:
      * \return TODO
      */
     ~ff_map() {
+        if (end_callback) end_callback(end_callback_param);
         delete (mapE*)(getEmitter());
         mapC* C = (mapC*)(getCollector());
         if (C) delete C;
