@@ -446,7 +446,8 @@ protected:
             // acquire lock. While freezing is true,
             // freeze and wait. 
             pthread_mutex_lock(&mutex);
-            if (ret != (void*)FF_EOS_NOFREEZE && !stp) {  // <-------------- CONTROLLARE aggiunto !stp
+            if (ret != (void*)FF_EOS_NOFREEZE && !stp) {
+                if (freezing == 0 && ret == (void*)FF_EOS) stp = true;
                 while(freezing==1) { // NOTE: freezing can change to 2
                     frozen=true; 
                     pthread_cond_signal(&cond_frozen);
@@ -454,9 +455,9 @@ protected:
                 }
             }
             
-            thawed=true;     // <----------------- CONTROLLARE !!!! era thawed = frozen;
-            pthread_cond_signal(&cond);
-            frozen=false; 
+            //thawed=true;
+            //pthread_cond_signal(&cond);
+            //frozen=false; 
             if (freezing != 0) freezing = 1; // freeze again next time 
             pthread_mutex_unlock(&mutex);
 
@@ -621,7 +622,7 @@ public:
      *
      * \return 0 if successful, otherwise a negative value.
      */
-    int wait_freezing() {
+    inline int wait_freezing() {
         pthread_mutex_lock(&mutex);
         while(!frozen) pthread_cond_wait(&cond_frozen,&mutex);
         pthread_mutex_unlock(&mutex);
@@ -634,14 +635,14 @@ public:
      * It forces the thread to stop at next EOS or next thawing.
      *
      */
-    void stop() { stp = true; };
+    inline void stop() { stp = true; };
 
     /**
      * \brief Forces the thread to freeze
      *
      * It forces the thread to freeze himself.
      */
-    void freeze() {  
+    inline void freeze() {  
         stp=false;
         freezing = 1;
     }
@@ -651,18 +652,19 @@ public:
      *
      * If the thread is frozen, then thaw it. 
      */
-    void thaw(bool _freeze=false) {
+    inline void thaw(bool _freeze=false) {
         pthread_mutex_lock(&mutex);
         if (_freeze) freezing=2; // next time freeze again the thread
         else freezing=0;
-        assert(thawed==false);
+        //assert(thawed==false);
+        frozen=false; 
         pthread_cond_signal(&cond);
         pthread_mutex_unlock(&mutex);
 
-        pthread_mutex_lock(&mutex);
-        while(!thawed) pthread_cond_wait(&cond, &mutex);
-        thawed=false;
-        pthread_mutex_unlock(&mutex);
+        //pthread_mutex_lock(&mutex);
+        //while(!thawed) pthread_cond_wait(&cond, &mutex);
+        //thawed=false;
+        //pthread_mutex_unlock(&mutex);
     }
 
     /**
@@ -673,7 +675,7 @@ public:
      *
      * \return A booleon value shoing the status of freezing.
      */
-    bool isfrozen() { return freezing>0;} 
+    inline const bool isfrozen() { return freezing>0;} 
 
     /**
      *
@@ -965,7 +967,7 @@ protected:
      * \return If the thread does not exists then false is returned, otherwise
      * the status of \p isfrozen() is returned.
      */
-    virtual bool isfrozen() { 
+    virtual const bool isfrozen() { 
         if (!thread) 
             return false;
         return thread->isfrozen();
@@ -1212,14 +1214,14 @@ public:
     /**
      * \brief Create OCL
      *
-     * It creates OCL. FIXME: How it creates?
+     * It creates OCL.
      */
     virtual inline void svc_createOCL()  {} 
 
     /**
      * \brief Releases OCL
      *
-     * It releases OCL. FIXME: How it releases?
+     * It releases OCL.
      */
     virtual inline void svc_releaseOCL() {}
 
@@ -1248,6 +1250,13 @@ public:
         if (out) out->reset();
     }
 
+    virtual void registerEndCallback(void(*cb)(void*), void *param=NULL) {
+        assert(cb != NULL);
+        end_callback=cb;
+        end_callback_param = param;
+    }
+
+
 protected:
     /**
      * \brief Protected constructor
@@ -1256,7 +1265,8 @@ protected:
      */
     ff_node():in(0),out(0),myid(-1),CPUId(-1),
               myoutbuffer(false),myinbuffer(false),
-              skip1pop(false), in_active(true), thread(NULL),callback(NULL),barrier(NULL) {
+              skip1pop(false), in_active(true), thread(NULL),callback(NULL),barrier(NULL),
+              end_callback(NULL), end_callback_param(NULL) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
@@ -1273,6 +1283,7 @@ protected:
      *  the working thread.
      */
     virtual  ~ff_node() {
+        if (end_callback) end_callback(end_callback_param);
         if (in && myinbuffer) delete in;
         if (out && myoutbuffer) delete out;
         if (thread) delete thread;
@@ -1543,7 +1554,7 @@ private:
          *
          * \return The staus of \p wait() method.
          */
-        int wait() { return ff_thread::wait();}
+        inline int wait() { return ff_thread::wait();}
 
         /**
          * \brief Waits for freezing
@@ -1552,14 +1563,14 @@ private:
          *
          * \return The status of \p wait_freezing() method.
          */
-        int wait_freezing() { return ff_thread::wait_freezing();}
+        inline int wait_freezing() { return ff_thread::wait_freezing();}
 
         /**
          * \brief Freezes the thread
          *
          * It freezes the thread.
          */
-        void freeze() { ff_thread::freeze();}
+        inline void freeze() { ff_thread::freeze();}
 
         /**
          * \brief Checks if the thread is frozen
@@ -1568,7 +1579,7 @@ private:
          *
          * \return the status of the \p isfrozen() method.
          */
-        bool isfrozen() { return ff_thread::isfrozen();}
+        const bool isfrozen() { return ff_thread::isfrozen();}
 
         /**
          * \brief Gets the ID of the thread
@@ -1598,6 +1609,8 @@ private:
     bool (*callback)(void *,unsigned int,unsigned int, void *);
     void            * callback_arg;
     BARRIER_T       * barrier;      /// A \p Barrier object
+    void (*end_callback)(void*);  
+    void *end_callback_param;
     struct timeval tstart;
     struct timeval tstop;
     struct timeval wtstart;

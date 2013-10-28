@@ -74,6 +74,20 @@ int main() {
     k=-1; // reset k
 
     /* ------------------------------------------- */
+    {
+    // functions may also be lambda functions
+    auto lambda1 = [] (myTask *in) -> myTask* {
+        return f1(in);
+    };
+    ff_pipe<myTask> pipe1(lambda1,f2,f3);
+    pipe1.run_and_wait_end();
+    printf("done 1st with lambda\n\n");
+    }
+    /* ------------------------------------------- */
+
+    k=-1; // reset k
+
+    /* ------------------------------------------- */
     // ...with some more stages
     ff_pipe<myTask> pipe2(f1,f2,f2,f2,f3);
     pipe2.run_and_wait_end();

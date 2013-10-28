@@ -3,7 +3,7 @@ CXXFLAGS = -w  # disable warnings
 
 FF_ROOT  = ../../
 CUDAFLAGS= # -arch=compute_30 -code=sm_30 
-LDFLAGS  = #-L /usr/local/cuda/lib64/  
+LDFLAGS  = -L /usr/local/cuda/lib  
 OPTFLAGS = -O3
 LIBS     = -lcuda -lcudart -lpthread 
 INCLUDES = -I$(FF_ROOT)
