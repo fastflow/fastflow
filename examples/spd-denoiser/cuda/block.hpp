@@ -42,7 +42,9 @@ void build_blocks(
 		  to_be_copied_in_src=end_block_-start_block_;
 	  }
 	  long long to_be_copied = (std::min)(free_elem_in_dest, to_be_copied_in_src);
-	  copy(start_block_,end_block_, back_inserter(noisy_sets[i_block]));
+	  copy(start_block_,start_block_+to_be_copied, back_inserter(noisy_sets[i_block]));
+	  start_block_+=to_be_copied;
+//	  copy(start_block_,end_block_, back_inserter(noisy_sets[i_block]));
 	  free_elem_in_dest-=to_be_copied;
 	  n_stored+=to_be_copied;
 	  to_be_copied_in_src-=to_be_copied;	 

@@ -156,13 +156,23 @@ protected:
         return run(true);
     } 
 
+    // template<typename T>
+    // struct ff_node_F: public ff_node {
+    //     typedef T*(*F_t)(T*,ff_node*const);
+    //     ff_node_F(F_t F):F(F) {};
+    //     inline void *svc(void *t) { return F((T*)t,this); }
+    //     F_t F;
+    // };
+
+#if defined( HAS_CXX11_VARIADIC_TEMPLATES )
+    // NOTE: std::function can introduce a bit of extra overhead. 
     template<typename T>
     struct ff_node_F: public ff_node {
-        typedef T*(*F_t)(T*);
-        ff_node_F(F_t F):F(F) {};
-        void *svc(void *t) { return F((T*)t); }
-        F_t F;
+        ff_node_F(std::function<T*(T*,ff_node*const)> F):F(F) {};
+        inline void *svc(void *t) { return F((T*)t,this); }
+        std::function<T*(T*,ff_node*const)> F;
     };
+#endif
 
     /* just a node interface for the input and output buffers */
     class internal_node:public ff_node {
@@ -204,8 +214,9 @@ public:
      *  This is the basic (the simplest) farm that can be built.
      *  It has a default emitter and a default collector.
      */
+#if defined( HAS_CXX11_VARIADIC_TEMPLATES )
     template<typename T>
-    ff_farm(T*(*F)(T*), int nw, bool input_ch=false):
+    ff_farm(const std::function<T*(T*,ff_node*const)> &F, int nw, bool input_ch=false):
         has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
         nworkers(0), in_buffer_entries(DEF_IN_BUFF_ENTRIES),
         out_buffer_entries(DEF_OUT_BUFF_ENTRIES),
@@ -225,6 +236,7 @@ public:
             }
         }
     }
+#endif
 
     ff_farm(std::vector<ff_node*>& W, bool input_ch=false):
         has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
@@ -244,7 +256,6 @@ public:
             }
         }
     }
-
 
     /**
      *  \brief Constructor
@@ -281,7 +292,7 @@ public:
             }
         }
     }
-    
+
     /** 
      * \brief Destructor
      *
@@ -1089,6 +1100,7 @@ protected:
     bool               fixedsize;
 };
 
+
 /*!
  * \ingroup high_level_patterns_shared_memory
  *  
@@ -1469,6 +1481,7 @@ protected:
     ff_node* C_f;
 };
 
+
 /*!
  * \ingroup streaming_network_arbitrary_shared_memory
  *
@@ -1737,6 +1750,7 @@ public:
 private:
     ff_loadbalancer* lb;
 };
+
 
 /*!
  *  @}

@@ -84,12 +84,19 @@ int main(int argc, char * argv[]) {
 #if defined(USE_OPENMP)
     ffTime(START_TIME);
 #if defined(OPTIMIZE_CACHE)
+    //#pragma omp parallel for schedule(auto) 
+    //#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(auto) 
+    //#pragma omp parallel for schedule(static)
     for(long i=0;i<N;++i) 
         for(long j=0;j<N;++j)
             for(long k=0;k<N;++k)
                 C[j*N+k] += A[j*N+i]*B[i*N+k];
 #else 
-#pragma omp parallel for schedule(runtime) num_threads(nworkers)
+    // With runtime scheduling the type of scheduling is taken from the content of the environment variable OMP_SCHEDULE. 
+    // This allows to test different scheduling types without recompiling the application.
+    // OMP_SCHEDULE="schedule[,chunk_size]"
+    #pragma omp parallel for schedule(runtime) num_threads(nworkers)
     for(long i=0;i<N;++i) 
         for(long j=0;j<N;++j)
             for(long k=0;k<N;++k)
