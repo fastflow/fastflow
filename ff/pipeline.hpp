@@ -618,10 +618,10 @@ private:
 template<typename T>
 class Fstage2: public ff_node {
 public:
-    Fstage2(std::function<T*(T*)> F):F(F) {}
-    inline void* svc(void *t) {	 return F((T*)t); }    
+    Fstage2(const std::function<T*(T*,ff_node*const)> &F):F(F) {}
+    inline void* svc(void *t) {	 return F((T*)t, this); }
 protected:
-    std::function<T*(T*)> F;
+    std::function<T*(T*,ff_node*const)> F;
 };
 
 template<typename TaskType>
@@ -643,7 +643,7 @@ private:
   
     inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }
     //    inline void add2pipe(F_t F) { ff_pipeline::add_stage(new Fstage<TaskType>(F));  }
-    inline void add2pipe(std::function<TaskType*(TaskType*)> F) { ff_pipeline::add_stage(new Fstage2<TaskType>(F));  }
+    inline void add2pipe(std::function<TaskType*(TaskType*,ff_node*const)> F) { ff_pipeline::add_stage(new Fstage2<TaskType>(F));  }
 
     struct add_to_pipe {
         ff_pipe *const P;

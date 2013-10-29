@@ -26,54 +26,43 @@
  */
 
 /*
- * Very basic test for the FastFlow pipeline (actually a 2-stage torus).
+ * Very basic test for the FastFlow pipeline (1-stage pipeline).
  *
  */
 
-#include <iostream>
+#include <cstdio>
 #include <ff/pipeline.hpp>
 
 using namespace ff;
 
-
-// generic stage
 class Stage: public ff_node {
 public:
-    Stage(unsigned int streamlen):streamlen(streamlen),sum(0)  {}
+    Stage():counter(0) {}
 
-    void * svc(void * task) {
-        printf("SONO PARTITO.....\n");
+    int svc_init() {
+        printf("Hello, I'm Stage\n");
+        return 0;
+    }
+    void * svc(void *) {
+        if (++counter > 10) return NULL;
+        printf("Hi!\n");
         return GO_ON;
     }
     void  svc_end() {
-        printf("ESCO\n");
+        printf("Goodbay....\n");
     }
-
 private:
-    unsigned int streamlen;
-    unsigned int sum;
+    long counter;
 };
 
 
-int main(int argc, char * argv[]) {
-    if (argc!=2) {
-        std::cerr << "use: "  << argv[0] << " streamlen\n";
-        return -1;
-    }
-    
-    // bild a 2-stage pipeline
+int main() {
     ff_pipeline pipe;
-    pipe.add_stage(new Stage(atoi(argv[1])));
-
-    ffTime(START_TIME);
+    pipe.add_stage(new Stage);
     if (pipe.run_and_wait_end()<0) {
         error("running pipeline\n");
         return -1;
     }
-    ffTime(STOP_TIME);
-
     std::cerr << "DONE, pipe  time= " << pipe.ffTime() << " (ms)\n";
-    std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
-    pipe.ffStats(std::cerr);
     return 0;
 }

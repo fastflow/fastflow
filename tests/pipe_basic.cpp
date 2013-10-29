@@ -47,16 +47,16 @@ struct myTask {
 // pointer and return a task pointer.
 // memory management is up to the user
 
-myTask* f1(myTask* in) {
+myTask* f1(myTask* in, ff_node*const) {
     if (++k == 10) { printf("f1 END\n"); return NULL;}
     if (in==NULL) return new myTask(k+5, new int[k+5]{});
     return in;
 }
-myTask* f2(myTask *in) {
+myTask* f2(myTask *in, ff_node*const) {
     for(int i=0;i<in->n;++i) in->V[i]++;
     return in;
 }
-myTask* f3(myTask *in) {
+myTask* f3(myTask *in, ff_node*const) {
     printf("f3 received: ");
     for(int i=0;i<in->n;++i) printf(" %d ", in->V[i]);
     printf("\n");
@@ -75,13 +75,13 @@ int main() {
 
     /* ------------------------------------------- */
     {
-    // functions may also be lambda functions
-    auto lambda1 = [] (myTask *in) -> myTask* {
-        return f1(in);
-    };
-    ff_pipe<myTask> pipe1(lambda1,f2,f3);
-    pipe1.run_and_wait_end();
-    printf("done 1st with lambda\n\n");
+        // functions may also be lambda functions
+        auto lambda1 = [] (myTask *in,ff_node*const) -> myTask* {
+            return f1(in,nullptr);
+        };
+        ff_pipe<myTask> pipe1(lambda1,f2,f3);
+        pipe1.run_and_wait_end();
+        printf("done 1st with lambda\n\n");
     }
     /* ------------------------------------------- */
 
