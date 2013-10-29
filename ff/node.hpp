@@ -743,6 +743,7 @@ private:
     template <typename lb_t, typename gt_t> 
     friend class ff_farm;
     friend class ff_pipeline;
+    friend class ff_map;
     friend class ff_loadbalancer;
     friend class ff_gatherer;
 
@@ -1241,6 +1242,32 @@ public:
     }
 #endif
 
+    /**
+     * \brief Sends out the task
+     *
+     * It allows to queue tasks without returning from the \p svc method 
+     *
+     * \parm task a pointer to the task
+     * \parm retry number of tries to push the task to the buffer
+     * \parm ticks number of ticks to wait
+     * 
+     * \return If call back is defined, then returns the status of \p callback
+     * function. Otherwise, if tries to push an element with the number of
+     * \retry and if succesfful \p true is returned, and if after the number of
+     * \retry the push is not successful \p false is returned.
+     */
+    virtual bool ff_send_out(void * task, 
+                             unsigned int retry=((unsigned int)-1),
+                             unsigned int ticks=(TICKS2WAIT)) { 
+        if (callback) return  callback(task,retry,ticks,callback_arg);
+
+        for(unsigned int i=0;i<retry;++i) {
+            if (push(task)) return true;
+            ticks_wait(ticks);
+        }     
+        return false;
+    }
+
     /** \brief Resets input/output queues.
      * 
      *  Warning resetting queues while the node is running may produce to unexpected results.
@@ -1255,7 +1282,6 @@ public:
         end_callback=cb;
         end_callback_param = param;
     }
-
 
 protected:
     /**
@@ -1288,32 +1314,6 @@ protected:
         if (out && myoutbuffer) delete out;
         if (thread) delete thread;
     };
-    
-    /**
-     * \brief Sends out the task
-     *
-     * It allows to queue tasks without returning from the \p svc method 
-     *
-     * \parm task a pointer to the task
-     * \parm retry number of tries to push the task to the buffer
-     * \parm ticks number of ticks to wait
-     * 
-     * \return If call back is defined, then returns the status of \p callback
-     * function. Otherwise, if tries to push an element with the number of
-     * \retry and if succesfful \p true is returned, and if after the number of
-     * \retry the push is not successful \p false is returned.
-     */
-    virtual bool ff_send_out(void * task, 
-                             unsigned int retry=((unsigned int)-1),
-                             unsigned int ticks=(TICKS2WAIT)) { 
-        if (callback) return  callback(task,retry,ticks,callback_arg);
-
-        for(unsigned int i=0;i<retry;++i) {
-            if (push(task)) return true;
-            ticks_wait(ticks);
-        }     
-        return false;
-    }
     
     virtual inline void input_active(const bool onoff) {
         if (in_active != onoff)

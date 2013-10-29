@@ -6,6 +6,7 @@
 #include "control_structures.hpp"
 #include "pow_table.hpp"
 #include "utils.hpp"
+#include <float.h>
 //#include <cmath>
 
 
@@ -84,7 +85,8 @@ inline void fuy(
   //compute the correction
   grayscale u = 0;
   float S;
-  float Fu, Fu_min = 0.0f, Fu_prec = 256.0f;
+  float Fu, Fu_min = 0.0f;
+  float Fu_prec = FLT_MAX; //256.0;
   float beta_ = beta / 2;
   for(int uu=0; uu<256; ++uu) {
     u = (grayscale) uu;
@@ -94,9 +96,10 @@ inline void fuy(
     for(unsigned int h=0; h<nc; ++h)
       S += (2-fc[h].noisy) * pt((grayscale)_ABS(((long)u - (long)fc[h].value)));
     Fu += ((grayscale)_ABS((long)u - (long)pixel) + (beta_) * S);
-    if(Fu < Fu_prec)
-      Fu_min = u;
-    Fu_prec = Fu;
+    if(Fu < Fu_prec){
+       Fu_min = u;
+       Fu_prec = Fu;
+    }
   }
 
   //actual correction
