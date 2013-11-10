@@ -435,6 +435,13 @@ public:
     void reset_channel_id() { channelid=-2;}
 
     /**
+     *  \brief Resets input buffer
+     *  
+     *   Warning resetting the buffer while the node is running may produce unexpected results.
+     */
+    void reset() { if (buffer) buffer->reset();}
+
+    /**
      * \brief Get the number of workers
      *
      * It returns the number of workers running
@@ -735,6 +742,7 @@ public:
             error("LB, spawning LB thread\n");
             return -1;
         }
+        running = nworkers;
         return 0;
     }
 

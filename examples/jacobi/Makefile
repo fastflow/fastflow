@@ -40,12 +40,17 @@ LIBS                 = -lpthread
 INCLUDES             = -I. $(INCS)
 TBB_INCLUDES         = -I /opt/local/include/tbb/
 TBB_LIBS             = -L /opt/local/lib/ -ltbb
-TARGET               = jacobi_omp jacobi_ff
+TARGET               = jacobi_omp jacobi_ff jacobi_stencil
 
 all: $(TARGET)
 
 jacobi_ff:jacobi.cpp
-	$(CXX) -std=c++0x -DNO_DEFAULT_MAPPING -DSTATIC_DECL $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+#	$(CXX) -std=c++0x -DNO_DEFAULT_MAPPING -DSTATIC_DECL $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+	$(CXX) -std=c++0x -DSTATIC_DECL $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+jacobi_stencil:jacobi_stencil.cpp
+#	$(CXX) -std=c++0x -DNO_DEFAULT_MAPPING $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 jacobi_omp:jacobi.cpp
 	$(CXX) -DUSE_OPENMP $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS) $(OMP_FLAGS)

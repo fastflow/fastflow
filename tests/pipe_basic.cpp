@@ -63,6 +63,8 @@ myTask* f3(myTask *in, ff_node*const) {
     return in;
 }
 
+typedef std::function<myTask*(myTask*,ff_node*const)> func_t;
+
 int main() {
     /* ------------------------------------------- */
     // Basic 3-stage pipeline f1;f2;f3
@@ -108,7 +110,7 @@ int main() {
 
     /* ------------------------------------------- */
     // farm introduction. The pipeline has also a feedback channel.
-    ff_pipe<myTask> pipe4(f1,new ff_farm<>(f2,3),new ff_farm<>(f3,2));
+    ff_pipe<myTask> pipe4(f1,new ff_farm<>((func_t)f2,3),new ff_farm<>((func_t)f3,2));
     pipe4.add_feedback();
     pipe4.run_and_wait_end();
     printf("done 4th\n\n");
@@ -128,9 +130,9 @@ int main() {
         Emitter(std::function<void*()> F):F(F) {}
         void *svc(void*) { return F(); }
     };
-    ff_farm<> farm1(f1,2);
-    ff_farm<> farm2(f2,3);
-    ff_farm<> farm3(f3,2);
+    ff_farm<> farm1((func_t)f1,2);
+    ff_farm<> farm2((func_t)f2,3);
+    ff_farm<> farm3((func_t)f3,2);
     ff_pipe<myTask> pipe5(&farm1,&farm2,&farm3);
     farm1.add_emitter(new Emitter(lambda));
     farm1.remove_collector();
@@ -147,7 +149,7 @@ int main() {
     /* ------------------------------------------- */
     // MDF-like pattern. Pipeline of 2 stages: sequential    
     // and farm-with-feedback.
-    ff_farm<> farm0(f2, 3);
+    ff_farm<> farm0((func_t)f2, 3);
     ff_pipe<myTask> pipe6(f1,&farm0);
     struct Scheduler:public ff_node {
         ff_loadbalancer* lb;
