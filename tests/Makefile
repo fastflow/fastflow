@@ -75,7 +75,7 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I. $(INCS)
-TARGET               = simplest test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_map test_map2 test_mapreduce test_dotprod test_sendq test_spinBarrier test_multi_input test_multi_input2 test_multi_input3 test_accelerator+pinning test_mpmc test_stencil test_dataflow test_dataflow2 test_noinput_pipe test_stopstartthreads test_stopstartthreads2 test_MISD test_parfor test_parfor2 test_dotprod_parfor test_lb_affinity test_farm test_pipe farm_basic pipe_basic perf_parfor perf_parfor2
+TARGET               = simplest test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_map test_map2 test_mapreduce test_dotprod test_sendq test_spinBarrier test_multi_input test_multi_input2 test_multi_input3 test_accelerator+pinning test_mpmc test_stencil test_dataflow test_dataflow2 test_noinput_pipe test_stopstartthreads test_stopstartthreads2 test_MISD test_parfor test_parfor2 test_dotprod_parfor test_lb_affinity test_farm test_pipe farm_basic pipe_basic perf_parfor perf_parfor2 test_graphsearch
 #test_mpmc2 test_bmpmc latency_MPMC 
 
 
@@ -136,7 +136,8 @@ test_pipe+masterworker:test_pipe+masterworker.o
 test_dt:test_dt.o
 test_scheduling:test_scheduling.o
 test_sendq:test_sendq.o
-test_map:test_map.o
+test_map:test_map.cpp
+	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_map2:test_map2.o
 test_mapreduce:test_mapreduce.o
 test_dotprod:test_dotprod.o
@@ -155,13 +156,15 @@ test_MISD:test_MISD.o
 test_lb_affinity:test_lb_affinity.o
 test_farm:test_farm.o
 farm_basic:farm_basic.cpp
-	$(CXX) -std=c++0x -DHAS_CXX11_LAMBDA $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+	$(CXX) -std=c++0x -DHAS_CXX11_VARIADIC_TEMPLATES -DHAS_CXX11_LAMBDA $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 pipe_basic:pipe_basic.cpp
 	$(CXX) -std=c++0x -DHAS_CXX11_VARIADIC_TEMPLATES $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_pipe:test_pipe.o
 test_parfor:test_parfor.cpp
 	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_parfor2:test_parfor2.cpp
+	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+test_graphsearch:test_graphsearch.cpp
 	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_dotprod_parfor:test_dotprod_parfor.cpp
 	$(CXX) -std=c++0x -DNO_DEFAULT_MAPPING $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)

@@ -172,9 +172,18 @@ protected:
      *
      *  \return TODO
      */
-    int freeze_and_run(bool=false) {
-        freeze();
+    int freeze_and_run(bool skip_init=false) {
         int nstages=static_cast<int>(nodes_list.size());
+        if (!skip_init) {            
+            // set the initial value for the barrier 
+            if (!barrier)  barrier = new BARRIER_T;
+            const int nthreads = cardinality(barrier);
+            if (nthreads > MAX_NUM_THREADS) {
+                error("PIPE, too much threads, increase MAX_NUM_THREADS !\n");
+                return -1;
+            }
+            barrier->barrierSetup(nthreads);
+        }
         if (!prepared) if (prepare()<0) return -1;
         for(int i=0;i<nstages;++i) {
             nodes_list[i]->set_id(i);
@@ -224,6 +233,13 @@ public:
             }
         }
     }
+
+    /** WARNING: if these methods are called after prepare (i.e. after having called
+     *  run_and_wait_end/run_then_freeze/run/....) they have no effect.
+     *
+     */
+    void setXNodeInputQueueLength(int sz) { in_buffer_entries = sz; }
+    void setXNodeOutputQueueLength(int sz) { out_buffer_entries = sz;}
 
     /**
      *  It adds a stage to the Pipeline
@@ -283,29 +299,13 @@ public:
         }
         if (!prepared) if (prepare()<0) return -1;
 
-        if (has_input_channel) {
-            /* freeze_and_run is required because in the pipeline 
-             * where there are not any manager threads,
-             * which allow to freeze other threads before starting the 
-             * computation
-             */
-            for(int i=0;i<nstages;++i) {
-                nodes_list[i]->set_id(i);
-                if (nodes_list[i]->freeze_and_run(true)<0) {
+        for(int i=0;i<nstages;++i) {
+            nodes_list[i]->set_id(i);
+            if (nodes_list[i]->run(true)<0) {
                 error("ERROR: PIPE, running stage %d\n", i);
                 return -1;
-                }
             }
-        }  else {
-            for(int i=0;i<nstages;++i) {
-                nodes_list[i]->set_id(i);
-                if (nodes_list[i]->run(true)<0) {
-                    error("ERROR: PIPE, running stage %d\n", i);
-                    return -1;
-                }
-            }
-        }
-
+        }        
         return 0;
     }
 
@@ -323,15 +323,20 @@ public:
     /**
      * It run and then freeze.
      */
-    int run_then_freeze() {
+    virtual int run_then_freeze() {
         if (isfrozen()) {
             // true means that next time threads are frozen again
             thaw(true);
             return 0;
         }
         if (!prepared) if (prepare()<0) return -1;
-        freeze();
-        return run();
+        //freeze();
+        //return run();
+        /* freeze_and_run is required because in the pipeline 
+         * there isn't no manager thread, which allows to freeze other 
+         * threads before starting the computation
+         */
+        return freeze_and_run();
     }
     
     /**

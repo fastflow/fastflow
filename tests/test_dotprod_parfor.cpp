@@ -82,7 +82,7 @@ int main(int argc, char * argv[]) {
 
         // do work
 #pragma omp parallel for default(shared)                                \
-    schedule(runtime)                                                    \
+    schedule(runtime)                                                   \
     reduction(+:sum)                                                    \
     num_threads(nworkers)
         for(long i=0;i<arraySize;++i)
@@ -147,7 +147,7 @@ int main(int argc, char * argv[]) {
     printf("ff %d Time = %g ntimes=%d\n", nworkers, ffTime(GET_TIME), NTIMES);
     FF_PARFORREDUCE_DONE(dp);
 #endif
-
+    
     printf("Sum =%g\n", sum);
     return 0;
 }

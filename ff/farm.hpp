@@ -152,6 +152,7 @@ protected:
      * \return The status of the run function
      */
     int freeze_and_run(bool=false) {
+        if (!prepared) if (prepare()<0) return -1;
         freeze();
         return run(true);
     } 
@@ -238,7 +239,7 @@ public:
     }
 #endif
 
-    ff_farm(std::vector<ff_node*>& W, bool input_ch=false):
+    ff_farm(std::vector<ff_node*>& W, ff_node *const Emitter=NULL, ff_node *const Collector=NULL, bool input_ch=false):
         has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
         nworkers(0), in_buffer_entries(DEF_IN_BUFF_ENTRIES),
         out_buffer_entries(DEF_OUT_BUFF_ENTRIES),
@@ -248,8 +249,15 @@ public:
         lb(new lb_t(W.size())),gt(new gt_t(W.size())),
         workers(new ff_node*[W.size()]),fixedsize(false) {
 
+        assert(W.size()>0);
         add_workers(W);
-        add_collector(NULL);
+
+        if (Emitter) add_emitter(Emitter); 
+
+        // add default collector even if Collector is NULL, 
+        // if you don't want the collector you have to call remove_collector
+        add_collector(Collector); 
+
         if (has_input_channel) { 
             if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
                 error("FARM, creating input buffer\n");
@@ -794,6 +802,17 @@ public:
      */
     int getNWorkers() const { return nworkers;}
 
+
+    /** \brief Resets input/output queues.
+     * 
+     *  Warning resetting queues while the node is running may produce unexpected results.
+     */
+    void reset() {
+        if (lb)  lb->reset();
+        if (gt)  gt->reset();
+        for(int i=0;i<nworkers;++i) workers[i]->reset();
+    }
+
     /**
      * \brief Gets the starting time
      *
@@ -1174,7 +1193,7 @@ public:
     ofarm_gt(int max_num_workers):
         ff_gatherer(max_num_workers),dead(max_num_workers) {
         dead.resize(max_num_workers);
-        reset();
+        revive();
     }
 
     /**
@@ -1200,12 +1219,11 @@ public:
     inline void set_dead(int v)   { dead[v]=true;}
 
     /**
-     * \brief Resets
-     *
+     * 
      * It makes the element in the dead vector as false i.e. makes it alive.
      *
      */
-    inline void reset() {
+    inline void revive() {
         for(size_t i=0;i<dead.size();++i) dead[i]=false;
     }
 private:
@@ -1353,7 +1371,7 @@ private:
             int ret = 0;
             if (C_f) ret = C_f->svc_init();
             nextone=0;
-            gt->reset();
+            gt->revive();
             gt->set_victim(nextone);
             return ret;
         }

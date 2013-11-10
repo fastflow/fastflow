@@ -42,7 +42,10 @@ double swps3_dynProgrFloatAltivec(const char *db, int dbLen, void* profile, Opti
 void *swps3_createProfileByteAltivec(const char *query, int queryLen, SBMatrix matrix);
 void *swps3_createProfileShortAltivec(const char *query, int queryLen, SBMatrix matrix);
 void *swps3_createProfileFloatAltivec(const char *query, int queryLen, SBMatrix matrix);
-
+  
+void swps3_freeProfileByteAltivec(void *profile);
+void swps3_freeProfileShortAltivec(void *profile);
+void swps3_freeProfileFloatAltivec(void *profile);
 #ifdef __cplusplus
 }
 #endif

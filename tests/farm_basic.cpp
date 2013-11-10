@@ -35,7 +35,7 @@ using namespace ff;
 struct ff_task {};
 
 // just a function
-ff_task *F(ff_task *t) {
+ff_task *F(ff_task *t, ff_node*const) {
     printf("hello I've got one task\n");
     return t;
 }
@@ -52,7 +52,7 @@ int main() {
     /* ------------------------------------------- */
     // First version using functional replication
     // NOTE: no data stream in input to the farm
-    ff_farm<> farm(F, 5);
+    ff_farm<> farm((std::function<ff_task*(ff_task*,ff_node*const)>)F, 5);
     farm.run_and_wait_end();    
     printf("done 1st\n\n");
     /* ------------------------------------------- */
@@ -61,7 +61,7 @@ int main() {
     // As in the previous case but the farm is set up
     // as a software accelerator. The stream of tasks
     // is generated from the main.
-    ff_farm<> farmA(F, 5,true);
+    ff_farm<> farmA((std::function<ff_task*(ff_task*,ff_node*const)>)F, 5,true);
     farmA.run();
     for(int i=0;i<10;++i) farmA.offload(new long(i));
     farmA.offload(EOS);
@@ -76,7 +76,7 @@ int main() {
     std::vector<ff_node*> W;
     for(int i=0;i<4;++i) W.push_back(new seq);
     ff_farm<> farm_wo_collector(W);
-    farm_wo_collector.remove_collector(); // the collector is removed
+    farm_wo_collector.remove_collector(); 
     farm_wo_collector.run_and_wait_end();
     printf("done 3nd\n\n");
     /* ------------------------------------------- */

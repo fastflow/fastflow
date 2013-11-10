@@ -42,6 +42,8 @@
 #if defined(__SSE2__)
 #include "DynProgr_sse_byte.h"
 #include "DynProgr_sse_short.h"
+#elif defined(__ALTIVEC__)
+#include "DynProgr_altivec.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,7 +83,12 @@ unsigned int qCount,dCount,qResidues,dResidues;
 class Worker: public ff_node {
 public:
     Worker(SWType  type, Options options, SBMatrix matrix):
-        oldquery(NULL),profileByte(NULL),profileShort(NULL),
+        oldquery(NULL),
+#ifdef __SSE2__
+        profileByte(NULL), profileShort(NULL),
+#elif defined(__ALTIVEC__)
+        profileByte(NULL), profileShort(NULL), profileFloat(NULL),
+#endif
         type(type),options(options),matrix(matrix) {}
 
 
@@ -110,7 +117,11 @@ public:
 
 #if defined(__SSE2__)
             swps3_freeProfileByteSSE(profileByte);
-            swps3_freeProfileShortSSE(profileShort);	
+            swps3_freeProfileShortSSE(profileShort);
+#elif defined(__ALTIVEC__)
+            swps3_freeProfileByteAltivec(profileByte);
+            swps3_freeProfileShortAltivec(profileShort);
+            swps3_freeProfileFloatAltivec(profileFloat);
 #endif
         }
 
@@ -120,6 +131,10 @@ public:
 #if defined(__SSE2__)
             profileByte = swps3_createProfileByteSSE( query, queryLen, matrix );
             profileShort = swps3_createProfileShortSSE( query, queryLen, matrix );	
+#elif defined(__ALTIVEC__)
+            profileByte = swps3_createProfileByteAltivec(query, queryLen, matrix);
+            profileShort = swps3_createProfileShortAltivec(query, queryLen, matrix);
+            profileFloat = swps3_createProfileFloatAltivec(query, queryLen, matrix);
 #endif
             oldquery = query; 
         }
@@ -131,7 +146,19 @@ public:
                 assert(score >= 250 && "score too low");
             }	   
         }
+
+#elif defined(__ALTIVEC__)
+        if(type == ALTIVEC) {
+#if 0
+            score = swps3_dynProgrFloatAltivec(task->dbdata, task->dbLen, profileFloat, &options);
+#else
+            score = swps3_dynProgrByteAltivec(task->dbdata, task->dbLen, profileByte, &options);
+            if(score >= DBL_MAX)
+                score = swps3_dynProgrShortAltivec(task->dbdata, task->dbLen, profileShort, &options);
+        }
 #endif
+#endif /* __ALTIVEC__ */
+
         if(type == SCALAR)
             score = swps3_alignScalar( dmatrix, query, queryLen, task->dbdata, task->dbLen, &options);
     
@@ -165,8 +192,12 @@ public:
 
 private:
     char         * oldquery;
+#ifdef __SSE2__    
     ProfileByte  * profileByte;
     ProfileShort * profileShort;
+#elif defined(__ALTIVEC__)
+    void *profileByte, *profileShort, *profileFloat;
+#endif
     double         dmatrix[MATRIX_DIM*MATRIX_DIM];
     SWType         type;
     Options        options;
@@ -269,6 +300,8 @@ int main( int argc, char * argv[] ){
 	char * matrixFile = NULL, * queryFile = NULL, * dbFile = NULL;
 #if defined(__SSE2__)
 	SWType type = SSE2;
+#elif defined(__ALTIVEC__)
+    SWType type = ALTIVEC;
 #else
 	SWType type = SCALAR;
 #endif
@@ -344,14 +377,7 @@ int main( int argc, char * argv[] ){
 	
 	// create and add to the farm the emitter object
 	Emitter E(queryFile,dbFile);
-	Worker * fallback= NULL;
-
-    /* If you don't want to use a fallback function in the
-     * emitter thread, just comment the following line
-     */
-    fallback = new Worker(type,options,matrix);
-
-	farm.add_emitter(&E, fallback);
+	farm.add_emitter(&E);
     
 	// let's start
 	if (farm.run_and_wait_end()<0) {

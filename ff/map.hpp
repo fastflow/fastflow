@@ -81,8 +81,7 @@ namespace ff {
 #define MAPWTIME(mapname)                                           \
     _map_##mapname.ffwTime()
 
-    
-#if __cplusplus > 199711L
+#if __cplusplus >= 201103L
 #define FF_MAP(mapname, V,size,func,nworkers)                           \
     FF_PARFOR_BEGIN(mapname, i, 0, size, 1, (size/nworkers), nworkers) { \
         V[i]=func(i);                                                   \

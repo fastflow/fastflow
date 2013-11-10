@@ -464,6 +464,14 @@ public:
     }
 
     /**
+     *  \brief Resets output buffer
+     *  
+     *   Warning resetting the buffer while the node is running may produce unexpected results.
+     */
+    void reset() { if (buffer) buffer->reset();}
+
+
+    /**
      * \brief Start counting time
      *
      * It defines the counting of start time.

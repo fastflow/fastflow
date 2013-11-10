@@ -1270,9 +1270,9 @@ public:
 
     /** \brief Resets input/output queues.
      * 
-     *  Warning resetting queues while the node is running may produce to unexpected results.
+     *  Warning resetting queues while the node is running may produce unexpected results.
      */
-    void reset() {
+    virtual void reset() {
         if (in)  in->reset();
         if (out) out->reset();
     }
