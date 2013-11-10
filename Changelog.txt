@@ -1,3 +1,7 @@
+   - fixed some problems with the current version in the SWPS3 example 
+     (thanks to Maurizio Drocco)
+   - introduced the ff_mdf/stencil2D/ff_graphsearch patterns (experimental)
+   - fixed a bug in the pipeline when used as an accelerator
 * 08/09/13 - v.2.0.2
    - added the possibility to freeze and thaw one single worker thread
      in a task-farm skeleton (see tests/test_stopstartthreads2.cpp)

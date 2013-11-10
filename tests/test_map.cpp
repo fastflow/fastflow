@@ -101,10 +101,11 @@ int main(int argc, char * argv[]) {
     mapSA.wait();
 
     long *oneTask=new long[arraySize];
+
     for(long j=0;j<arraySize;++j) oneTask[j]=j;
-#if __cplusplus > 199711L
     FF_MAP(map, oneTask,arraySize, f, nworkers);
-#else
+
+#if 0
     ff_map mapOneShot(mapF,&P, oneTask);
     mapOneShot.run_and_wait_end();
 #endif

@@ -116,7 +116,7 @@ template<typename V> static inline V vec_addx(V a, V b)
  * Saturated addition for floating point data types
  */
 typedef vector float v_float_t;
-template<> static inline v_float_t vec_addx<v_float_t>(v_float_t a, v_float_t b)
+template<> /*static*/ inline v_float_t vec_addx<v_float_t>(v_float_t a, v_float_t b)
 {
 	return vec_add(a,b);
 }
@@ -133,7 +133,7 @@ template<typename V> static inline V vec_subx(V a, V b)
  * Saturated substraction for floating point data types
  */
 typedef vector float v_float_t;
-template<> static inline v_float_t vec_subx<v_float_t>(v_float_t a, v_float_t b)
+template<> /*static*/ inline v_float_t vec_subx<v_float_t>(v_float_t a, v_float_t b)
 {
 	return vec_sub(a,b);
 }
@@ -806,3 +806,32 @@ EXPORT void *swps3_createProfileFloatAltivec(const char *query, int queryLen, SB
 	return swps3_createProfileAltivec<float, vector float>(query, queryLen, matrix);
 }
 
+/**
+ * C version for deallocation of a 8-bit integer profile.
+ *
+ * \param profile	A profile data structure.
+ */
+EXPORT void swps3_freeProfileByteAltivec(void *profile)
+{
+  freeProfile<int8_t, vector int8_t>((Profile<int8_t, vector int8_t> *)profile);
+}
+
+/**
+ * C version for deallocation of a 16-bit integer profile.
+ *
+ * \param profile	A profile data structure.
+ */
+EXPORT void swps3_freeProfileShortAltivec(void *profile)
+{
+  freeProfile<int16_t, vector int16_t>((Profile<int16_t, vector int16_t> *)profile);
+}
+
+/**
+ * C version for deallocation of a 32-bit floating point profile.
+ *
+ * \param profile	A profile data structure.
+ */
+EXPORT void swps3_freeProfileFloatAltivec(void *profile)
+{
+  freeProfile<float, vector float>((Profile<float, vector float> *)profile);
+}
