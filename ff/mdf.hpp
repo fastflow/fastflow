@@ -242,7 +242,7 @@ protected:
         typedef std::priority_queue<hash_task_t*, std::vector<hash_task_t*>, CompareTask> priority_queue_t;
         
     protected:
-        enum { UNBLOCK_SIZE=16, TASK_PER_WORKER=64};
+        enum { UNBLOCK_SIZE=16, TASK_PER_WORKER=128};
         enum { RELAX_MIN_BACKOFF=1, RELAX_MAX_BACKOFF=32};
 
 #if !defined(DONT_USE_FFALLOC)
@@ -397,7 +397,7 @@ protected:
             if (ffalloc->init(nslabs)<0) abort();
 #endif            
             
-            LOWER_TH = TASK_PER_WORKER*maxnw;
+            LOWER_TH = std::max(1024, TASK_PER_WORKER*maxnw); //FIX: potrebbe comunque stallare ..
             UPPER_TH = LOWER_TH+TASK_PER_WORKER;
         }
         ~Scheduler() {
@@ -442,11 +442,11 @@ protected:
                     return ((task_numb!=task_completed)?GO_ON:NULL);
                 }
                 ++task_numb;
-                if ((task_numb-task_completed)>(unsigned long)LOWER_TH) {
-                    ff_node::input_active(false); // stop receiving from input channel
-                }
                 insertTask(msg);
                 schedule_task(0);
+                if ((task_numb-task_completed)>(unsigned long)LOWER_TH) {
+                    ff_node::input_active(false); // stop receiving from input channel
+                } 
                 return GO_ON;     
             }            
             hash_task_t * t = (hash_task_t *)task;
@@ -496,7 +496,7 @@ public:
            int maxnw=ff_numCores(), void (*schedRelaxF)(unsigned long)=NULL):
         farmworkers(maxnw),pipe(false,outstandingTasks) { //NOTE: pipe has fixed size queue by default 
         GD<T1> *_gd   = new GD<T1>(F,args);
-        _gd->setMaxTasks(outstandingTasks);
+        _gd->setMaxTasks(outstandingTasks+16); // NOTE: TASKS must be greater than pipe's queue!
         farm = new ff_farm<>(false,640*maxnw,1024*maxnw,true,maxnw,true);
 	    
         std::vector<ff_node *> w;
@@ -514,6 +514,7 @@ public:
             pipe.wait_freezing();
             _gd->activate(true);
             gd = _gd;
+            reset();
         }
     }
     ~ff_mdf() {
@@ -543,7 +544,6 @@ public:
     }
     
     virtual inline int run_and_wait_end() {
-        reset();
         gd->thaw(true);
         farm->thaw(true,farmworkers);
         gd->wait_freezing();
