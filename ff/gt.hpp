@@ -151,42 +151,6 @@ protected:
         return -1;
     }
 
-
-    /**
-     *
-     * \brief It gathers all tasks.
-     *
-     * It is a virtual function, and gathers results from the workers. 
-     *
-     * \return It returns 0 if the tasks from all the workers are collected.
-     * Otherwise a negative value is returned.
-     *
-     */
-    virtual int all_gather(void *task, void **V) {
-        V[channelid]=task;
-        int nw=getnworkers();
-        svector<ff_node*> _workers(nw);
-        for(int i=0;i<nworkers;++i) 
-            if (!offline[i]) _workers.push_back(workers[i]);
-        svector<int> retry(nw);
-
-        for(register int i=0;i<nw;++i) {
-            if(i!=channelid && !_workers[i]->get(&V[i]))
-                retry.push_back(i);
-        }
-        while(retry.size()) {
-            channelid = retry.back();
-            if(_workers[channelid]->get(&V[channelid]))
-                retry.pop_back();
-            else losetime_in();
-        }
-        for(register int i=0;i<nw;++i)
-            if (V[i] == (void *)FF_EOS || V[i] == (void*)FF_EOS_NOFREEZE)
-                return -1;
-        FFTRACE(taskcnt+=nw-1);
-        return 0;
-    }
-
     /**
      * \brief Pushes the task in the tasks queue.
      *
@@ -460,6 +424,41 @@ public:
             error("GT, spawning GT thread\n");
             return -1; 
         }
+        return 0;
+    }
+
+    /**
+     *
+     * \brief It gathers all tasks.
+     *
+     * It is a virtual function, and gathers results from the workers. 
+     *
+     * \return It returns 0 if the tasks from all the workers are collected.
+     * Otherwise a negative value is returned.
+     *
+     */
+    virtual int all_gather(void *task, void **V) {
+        V[channelid]=task;
+        int nw=getnworkers();
+        svector<ff_node*> _workers(nw);
+        for(int i=0;i<nworkers;++i) 
+            if (!offline[i]) _workers.push_back(workers[i]);
+        svector<int> retry(nw);
+
+        for(register int i=0;i<nw;++i) {
+            if(i!=channelid && !_workers[i]->get(&V[i]))
+                retry.push_back(i);
+        }
+        while(retry.size()) {
+            channelid = retry.back();
+            if(_workers[channelid]->get(&V[channelid]))
+                retry.pop_back();
+            else losetime_in();
+        }
+        for(register int i=0;i<nw;++i)
+            if (V[i] == (void *)FF_EOS || V[i] == (void*)FF_EOS_NOFREEZE)
+                return -1;
+        FFTRACE(taskcnt+=nw-1);
         return 0;
     }
 
