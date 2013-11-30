@@ -264,28 +264,6 @@ protected:
         return ite;
     }
 
-    /** 
-     * \brief Send the same task to all workers 
-     *
-     * \parm task is a void pointer
-     *
-     * It sends the same task to all workers.
-     *
-     */
-    virtual void broadcast_task(void * task) {
-        std::vector<int> retry;
-
-        for(register int i=0;i<running;++i) {
-            if(!workers[i]->put(task))
-                retry.push_back(i);
-        }
-        while(retry.size()) {
-            if(workers[retry.back()]->put(task))
-                retry.pop_back();
-            else losetime_out();
-        }
-    }
-    
     /**
      * \brief Pop a task from buffer
      *
@@ -507,6 +485,28 @@ public:
                                unsigned int retry=(unsigned)-1, unsigned int ticks=0) {
         nextw = id-1;
         return schedule_task(task,retry,ticks);
+    }
+
+    /** 
+     * \brief Send the same task to all workers 
+     *
+     * \parm task is a void pointer
+     *
+     * It sends the same task to all workers.
+     *
+     */
+    inline void broadcast_task(void * task) {
+        std::vector<int> retry;
+
+        for(register int i=0;i<running;++i) {
+            if(!workers[i]->put(task))
+                retry.push_back(i);
+        }
+        while(retry.size()) {
+            if(workers[retry.back()]->put(task))
+                retry.pop_back();
+            else losetime_out();
+        }
     }
 
     /**
