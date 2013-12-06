@@ -110,6 +110,10 @@ static const unsigned long FF_GO_ON         = (FF_EOS-0x2);
 //#include <ff/config.h>
 //#endif // NO_CMAKE_CONFIG
 
+#if defined(USE_CMAKE_CONFIG)
+#include <cmake.modules/ffconfig.h>
+#endif
+
 /*!
  *  @}
  *  \endlink

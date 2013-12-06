@@ -22,7 +22,7 @@ ENDIF()
 
 project( mc-fastflow )
 
-cmake_minimum_required( VERSION 2.6 )
+cmake_minimum_required( VERSION 2.8 )
 
 SET( CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake.modules )
 
@@ -34,19 +34,27 @@ INCLUDE (${CMAKE_ROOT}/Modules/TestBigEndian.cmake)
 INCLUDE (${CMAKE_ROOT}/Modules/CheckSymbolExists.cmake)
 
 message (STATUS "Detected processor is " ${CMAKE_SYSTEM_PROCESSOR})
-
-if (CMAKE_COMPILER_IS_GNUCC)
-   execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion
-                OUTPUT_VARIABLE GCC_VERSION)
-	if (NOT(GCC_VERSION VERSION_GREATER 4.1))
-	   	set(GCC_TOO_OLD 1)       
-        message(WARNING "GCC Version < 4.1, some targets will be skipped")
-        message(STATUS "Use CC/CXX env variable to define a newer compiler, e.g. export CC=/usr/bin/gcc-4.2; export CXX=/usr/bin/g++-4.2 ")
-	endif (NOT(GCC_VERSION VERSION_GREATER 4.1))
-else (CMAKE_COMPILER_IS_GNUCC)
-	message(WARNING "Compiler is not GCC, some advanced features
-   will not be enabled")
-endif (CMAKE_COMPILER_IS_GNUCC)
+MESSAGE( STATUS "CMAKE_C_COMPILER: " ${CMAKE_C_COMPILER} )
+MESSAGE( STATUS "CMAKE_CXX_COMPILER: " ${CMAKE_CXX_COMPILER} )
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    MESSAGE( STATUS "C++ Compiler is Clang")
+    ADD_DEFINITIONS(-stdlib=libc++ -std=gnu++11)  # Or -std=c++11
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    MESSAGE( STATUS "C++ Compiler is GNU")
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GXX_VERSION)
+    if (NOT(GXX_VERSION VERSION_GREATER 4.1))
+       set(GCC_TOO_OLD 1)       
+       message(WARNING "g++ Version < 4.1, some targets will be skipped")
+       message(STATUS "Use CC/CXX env variable to define a newer compiler, e.g. export CC=/usr/bin/gcc-4.2; export CXX=/usr/bin/g++-4.2 ")
+    else (NOT(GXX_VERSION VERSION_GREATER 4.1))
+           ADD_DEFINITIONS(-std=c++0x)  # Or -std=c++11
+    endif  (NOT(GXX_VERSION VERSION_GREATER 4.1))    
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+     MESSAGE( STATUS "C++ Compiler is Intel")
+     MESSAGE( WARNING "Compliance check not fully implemented yet")
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+     MESSAGE( STATUS "C++ Compiler is Visual Studio")
+endif()
 
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
   if(CMAKE_CL_64)
@@ -66,6 +74,8 @@ endif (CMAKE_SYSTEM_NAME MATCHES "Windows")
 #else (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
 #  MESSAGE(STATUS (${CMAKE_SYSTEM} " system: using Windows native threads]")
 #endif (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
+
+ADD_DEFINITIONS(-DUSE_CMAKE_CONFIG)
 
 find_package(Threads)
 if (NOT(CMAKE_HAVE_PTHREAD_H))
