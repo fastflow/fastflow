@@ -262,6 +262,7 @@ private:
         INTERNAL_BUFFER_T * t = pool.next_w(size);
         assert(t); // if (!t) return false; // EWOULDBLOCK
         buf_w = t;
+        in_use_buffers++;
         buf_w->multipush(multipush_buf,MULTIPUSH_BUFFER_SIZE);
         mcnt=0;
 #if defined(UBUFFER_STATS)
@@ -281,7 +282,7 @@ public:
      *  \param fillcache a flag.
      */
     uSWSR_Ptr_Buffer(unsigned long n, const bool fixedsize=false, const bool fillcache=false):
-        buf_r(0),buf_w(0),size(n),fixedsize(fixedsize),
+        buf_r(0),buf_w(0),in_use_buffers(1),size(n),fixedsize(fixedsize),
         pool(CACHE_SIZE,fillcache,size) {
         init_unlocked(P_lock); init_unlocked(C_lock);
 #if defined(UBUFFER_STATS)
@@ -368,6 +369,7 @@ public:
             INTERNAL_BUFFER_T * t = pool.next_w(size);
             assert(t); //if (!t) return false; // EWOULDBLOCK
             buf_w = t;
+            in_use_buffers++;
 #if defined(UBUFFER_STATS)
             atomic_long_inc(&numBuffers);
 #endif
@@ -435,6 +437,7 @@ public:
                 if (tmp) {
                     // there is another buffer, release the current one 
                     pool.release(buf_r); 
+                    in_use_buffers--;
                     buf_r = tmp;                    
 
 #if defined(UBUFFER_STATS)
@@ -484,15 +487,16 @@ public:
     }
     
     /**
-     * It returns the length of the queue. Note that this is not the real queue
-     * length but just a rough estimation.
+     * It returns the length of the queue. 
+     * Note that this is just a rough estimation of the actual queue length.
      *
      * \return TODO
      */
     inline unsigned long length() const {
         unsigned long len = buf_r->length();
         if (buf_r == buf_w) return len;
-        return len+buf_w->length();
+        assert(in_use_buffers>2);
+        return len+(in_use_buffers-2)*size+buf_w->length();
     }
 
     /** 
@@ -531,6 +535,7 @@ private:
     void  * multipush_buf[MULTIPUSH_BUFFER_SIZE];
     int     mcnt;
 #endif
+    unsigned long       in_use_buffers; // used to estimate queue length
     const unsigned long	size;
     const bool			fixedsize;
     BufferPool			pool;
