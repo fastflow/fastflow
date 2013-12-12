@@ -338,13 +338,16 @@ public:
     }
 
     /** 
-     * It returns the length of the buffer (i.e. the actual number of elements
-     * it contains) 
+     * It returns the length of the buffer 
+     * (i.e. the actual number of elements it contains) 
      */
     inline unsigned long length() const {
-        long len = pwrite-pread;
-        if (len>=0) return len;
-        return size+len;
+        long tpread=pread, tpwrite=pwrite;
+        long len = tpwrite-tpread;
+        if (len>0) return (unsigned long)len;
+        if (len<0) return (unsigned long)(size+len);
+        if (buf[tpwrite]==NULL) return 0;
+        return size;  
     }
 
 };
@@ -462,9 +465,15 @@ public:
      * TODO
      */
     inline unsigned long length() const {
-        long len = pwrite-pread;
-        if (len>=0) return len;
-        return size+len;
+        // long len = pwrite-pread;
+        // if (len>=0) return len;
+        //return size+len;
+        long tpread=pread, tpwrite=pwrite;
+        long len = tpwrite-tpread;
+        if (len>0) return (unsigned long)len;
+        if (len<0) return (unsigned long)(size+len);
+        if (buf[tpwrite]==NULL) return 0;
+        return size;  
     }
 };
 

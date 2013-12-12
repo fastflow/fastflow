@@ -1,3 +1,5 @@
+   - better estimation of the bounded and unbounded SPSC queue length. 
+     Thanks to M. Moniruzzaman (moniruzzaman@hlrs.de) for the patch.
    - fixed some problems with the current version in the SWPS3 example 
      (thanks to Maurizio Drocco)
    - introduced the ff_mdf/stencil2D/ff_graphsearch patterns (experimental)
