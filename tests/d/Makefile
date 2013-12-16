@@ -38,7 +38,7 @@ CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall
 CFLAGS               =
 LDFLAGS              = -L ${ZMQ_PATH}/lib
 INCS                 = -I../.. -I${ZMQ_PATH}/include
-LIBS                 = -lzmq -lpthread
+LIBS                 = -lzmq -lpthread -lrt
 ARCH                 = -march=$(shell uname -m)
 OS   		     = $(shell uname)
 ifeq ($(ARCH),-march=x86_64)

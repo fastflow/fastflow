@@ -47,7 +47,7 @@ public:
 
     void * svc(void* task) {
 	if (task==NULL) {
-	    for(unsigned i=1;i<=ntasks;++i)
+	    for(unsigned long i=1;i<=ntasks;++i)
 		ff_send_out((void*)i);
 	    return GO_ON;
 	}
