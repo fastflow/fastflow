@@ -3,12 +3,12 @@
  *             host0                           host1
  *       --------------------             -------------------
  *      |                    |           |                   |
- *      |                    |  UNICAST  |                   |
+ *      |                    |   COMM1   |                   |
  *    --|-> Node0 --> Node1 -|---------- |-> Node2 --> Node3 |--
  *   |  |                    |           |                   |  |
  *   |  |    (ff_pipeline)   |           |   (ff_pipeline)   |  |
  *   |   --------------------             -------------------   |
- *   |                          UNICAST                         |
+ *   |                           COMM                           |
  *    ----------------------------------------------------------
  *
  *
@@ -32,12 +32,12 @@
 #include <ff/pipeline.hpp>
 #include <ff/utils.hpp>
 
-const long int ROUNDTRIP_COUNT=100;
+const long int ROUNDTRIP_COUNT=5000;
 
 using namespace ff;
 
-//#define COMM zmq1_1
-#define COMM zmqOnDemand
+#define COMM1 zmq1_1  
+#define COMM  zmq1_1 // zmqOnDemand
 
 class Node0: public ff_dnode<COMM> {
 public:    
@@ -60,7 +60,11 @@ public:
 	    ff_send_out((void*)data);
 	    return GO_ON;
 	}
-	if (cnt > ROUNDTRIP_COUNT) return NULL; // generates EOS
+	if (++cnt >= ROUNDTRIP_COUNT) {
+	    //printf("EXIT, sending EOS\n");
+	    ff_send_out((void*)FF_EOS);
+	    return GO_ON; 
+	}
 	COMM::TransportImpl::msg_t* msg=(COMM::TransportImpl::msg_t*)task;
 	assert(size == msg->size());
 	delete msg;
@@ -69,7 +73,6 @@ public:
 	for(unsigned i=0;i<size;++i) data[i]='a';
 #endif
 	ff_send_out((void*)data);
-	++cnt;
 	return GO_ON;
     }
     void svc_end() {
@@ -92,7 +95,7 @@ private:
 };
 
 
-class Node1: public ff_dnode<COMM> {
+class Node1: public ff_dnode<COMM1> {
 protected:
     static void callback(void * e,void*) {
 	delete [] ((char*)e);
@@ -102,7 +105,7 @@ public:
 	size(size),name(name), address(address), transp(transp) {}
 
     int svc_init() {
-      ff_dnode<COMM>::init(name, address, 1,transp,true, 0, callback);  
+      ff_dnode<COMM1>::init(name, address, 1,transp,true, 0, callback);  
       printf("Node1 start\n");
       return 0;
     }
@@ -121,7 +124,7 @@ private:
 };
 
     
-class Node2: public ff_dnode<COMM> {
+class Node2: public ff_dnode<COMM1> {
 public:
     typedef zmqTransport::msg_t msg_t;
     
@@ -129,12 +132,12 @@ public:
 	size(size),name(name),address(address),transp(transp) {}
     
     int svc_init() {
-	ff_dnode<COMM>::init(name,address, 1, transp, false, 0);  
+	ff_dnode<COMM1>::init(name,address, 1, transp, false, 0);  
 	printf("Node2 start\n");
 	return 0;
     }
     void * svc(void *task) { 
-	COMM::TransportImpl::msg_t* msg=(COMM::TransportImpl::msg_t*)task;
+	COMM1::TransportImpl::msg_t* msg=(COMM1::TransportImpl::msg_t*)task;
 	assert(size == msg->size());
 	return task;
     }
@@ -169,7 +172,9 @@ public:
 	printf("Node3 start\n");
 	return 0;
     }    
-    void* svc(void *task) { return task;}
+    void* svc(void *task) { 
+      return task;
+    }
 
     void prepare(svector<iovec>& v, void* ptr, const int sender=-1) {
 	// just send the data not the message
