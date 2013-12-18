@@ -1633,6 +1633,23 @@ private:
 #endif
 };
 
+/* just a node interface for the input and output buffers */
+struct ff_buffernode: ff_node {
+    ff_buffernode(int nentries, bool fixedsize=true) {
+        set_id(-1);
+        create_input_buffer(nentries,fixedsize);
+        set_output_buffer(ff_node::get_in_buffer());
+    }
+    ff_buffernode(int id, FFBUFFER *in, FFBUFFER *out) {
+        set_id(id);
+        set_input_buffer(in);
+        set_output_buffer(out);
+    }
+    void* svc(void*){return NULL;}
+};
+
+
+
 /*!
  *  @}
  *  \endlink
