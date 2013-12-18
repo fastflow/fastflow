@@ -1,3 +1,5 @@
+   - ff_buffernode introduced and fixed some issues with ff_monode
+   - more low-level examples showing how to build "complex" graph of nodes
    - better estimation of the bounded and unbounded SPSC queue length. 
      Thanks to M. Moniruzzaman (moniruzzaman@hlrs.de) for the patch.
    - fixed some problems with the current version in the SWPS3 example 
