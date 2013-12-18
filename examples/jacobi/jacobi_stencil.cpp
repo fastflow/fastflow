@@ -289,17 +289,13 @@ int main(int argc, char **argv){
    initialize(n, m, alpha, &dx, &dy, u, f);
    double *uold = (double *)malloc(sizeof(double) * n *m);
 
-#if !defined(FUNCTIONS)
    stencil = new stencil2D<double>(u,uold,m,n,n,NUMTHREADS,1,1,false,CHUNKSIZE);
-#endif
 
    ffTime(START_TIME);
    /* Solve Helmholtz equation */
-#if defined(FUNCTIONS)
-   jacobi_functions(n, m, dx, dy, alpha, relax, u,f, tol, mits);
-#else
+
    jacobi(n, m, dx, dy, alpha, relax, u,f, tol, mits);
-#endif
+
    ffTime(STOP_TIME);
    dt = ffTime(GET_TIME); 
 

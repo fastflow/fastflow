@@ -175,17 +175,6 @@ protected:
     };
 #endif
 
-    /* just a node interface for the input and output buffers */
-    class internal_node:public ff_node {
-    public:
-        internal_node(int id, FFBUFFER *in, FFBUFFER *out) {
-            set_id(id);
-            set_input_buffer(in);
-            set_output_buffer(out);
-        }
-        void *svc(void*) {return NULL;}        
-    };
-
     inline void skipfirstpop(bool sk)   { 
         if (sk) lb->skipfirstpop();
         skip1pop=sk;
@@ -472,7 +461,7 @@ public:
                 error("FARM, creating output buffer for multi-input configuration\n");
                 return -1;
             }
-            internalSupportNodes.push_back(new internal_node(0, NULL,get_out_buffer()));
+            internalSupportNodes.push_back(new ff_buffernode(0, NULL,get_out_buffer()));
             if (set_output_buffer(get_out_buffer())<0) {
                 error("FARM, setting output buffer for multi-input configuration\n");
                 return -1;
@@ -1533,12 +1522,16 @@ protected:
      *
      * It creates the input buffer to the node.
      *
-     * \return 0 if successful, otherwise -1 is returned.
+     * \return >=0 if successful, otherwise -1 is returned.
      */
-    int create_input_buffer(int, bool =true) {
+    int create_input_buffer(int nentries, bool fixedsize=true) {
         std::vector<ff_node*> w;
         if (set_input(w)<0) return -1;
-        if (w.size()==0) return -1;
+        if (w.size()==0) {
+            int r = ff_node::create_input_buffer(nentries, fixedsize);
+            if (r!=0) return r;
+            return 1;
+        }
         for(size_t i=0;i<w.size();++i)
             gt->register_worker(w[i]);
 
@@ -1605,12 +1598,31 @@ public:
     int run(bool skip_init=false) {
         if (!gt) return -1;
         gt->set_filter(this);
+
+        std::vector<ff_node*> w;
+        if (set_input(w)<0) {
+            error("ff_minode, run, set_input failed\n");
+            return -1;
+        }
+        if (w.size()==0) {
+            error("ff_minode, run, set_input returned 0 workers\n");
+            return -1;
+        }
+        for(size_t i=0;i<w.size();++i)
+            gt->register_worker(w[i]);
+        
         if (gt->run()<0) {
             error("ff_minode, running gather module\n");
             return -1;
         }
         return 0;
     }
+
+    /**
+     * \brief Gets the channel id from which the data has just been received
+     *
+     */
+    int get_channel_id() const { return gt->get_channel_id();}
 
     /**
      * \brief Gets the gatherer
@@ -1713,6 +1725,15 @@ public:
         if (sk) lb->skipfirstpop();
     }
 
+    /**
+     * \brief Sends one task to a specific node id.
+     *
+     */
+    inline bool ff_send_out_to(void *task, int id, 
+                               unsigned int retry=(unsigned)-1, unsigned int ticks=0) {
+        return lb->ff_send_out_to(task,id,retry,ticks);
+    }
+    
     /**
      * \brief Executes the farm
      *

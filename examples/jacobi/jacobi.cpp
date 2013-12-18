@@ -187,7 +187,7 @@ static inline void jacobi_omp ( const int n, const int m, double dx, double dy, 
 	Error = sqrt(Error) /(n*m);
   } /* while */
 
-  printf("Total Number of Iterations %d\n", k);
+  printf("Total Number of Iterations %d\n", k-1);
   printf("Residual                   %.15f\n\n", Error);
 
   free(uold);
@@ -259,7 +259,7 @@ static inline void jacobi_tbb ( const int n, const int m, double dx, double dy, 
     
   } /* while */
 
-  printf("Total Number of Iterations %d\n", k);
+  printf("Total Number of Iterations %d\n", k-1);
   printf("Residual                   %.15f\n\n", Error);
 
   free(uold);
@@ -330,7 +330,7 @@ static inline void jacobi_ff ( const int n, const int m, double dx, double dy, d
 	Error = sqrt(Error) /(n*m);
   } /* while */
 
-  printf("Total Number of Iterations %d\n", k);
+  printf("Total Number of Iterations %d\n", k-1);
   printf("Residual                   %.15f\n\n", Error);
 
   free(uold);  

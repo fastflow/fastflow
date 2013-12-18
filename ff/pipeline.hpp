@@ -262,7 +262,7 @@ public:
             return -1;
         }
 
-        fixedsize=false; // NOTE: force unbounded size for the queues!
+        fixedsize=false; // NOTE: forces unbounded size for the queues!
 
         if (create_input_buffer(out_buffer_entries, fixedsize)<0)
             return -1;
@@ -555,7 +555,8 @@ protected:
      * TODO
      */
     int create_input_buffer(int nentries, bool fixedsize) { 
-        if (in) return -1;
+        if (in) return -1;  
+
         if (nodes_list[0]->create_input_buffer(nentries, fixedsize)<0) {
             error("PIPE, creating input buffer for node 0\n");
             return -1;

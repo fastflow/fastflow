@@ -143,19 +143,8 @@ int main(int argc, char * argv[]) {
         return 0;
     }
 
-    /* The mapping policy is very simple: the emitter is mapped along on CPU 0, 
-     * the workers on the remaining cores.
-     */
-    
-    // the worker_mapping array, should be dinamically built
-    const char worker_mapping[] = "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15, 17,18,19,20,21,22,23,24,25,26,27,28,29,30,31";
-
-    threadMapper::instance()->setMappingList(worker_mapping);  
-    
     ff_farm<> farm;    
     Emitter E(n, b);
-    E.setAffinity(0); // the emitter is statically mapped on core 0
-
     farm.add_emitter(&E);
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker);
