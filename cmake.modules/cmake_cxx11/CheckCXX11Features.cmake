@@ -15,12 +15,17 @@
 #
 # Original script by Rolf Eike Beer
 # Modifications by Andreas Weis
+# Modifications by Marco Aldinucci
 #
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8.3)
 
 SET(CHECK_CXX11_OLD_CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
 IF(CMAKE_COMPILER_IS_GNUCXX)
 	SET(CMAKE_CXX_FLAGS "-std=c++0x")
+endif()
+
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    SET(CMAKE_CXX_FLAGS "-stdlib=libc++ -std=gnu++11")
 endif()
 
 MACRO(CXX11_CHECK_FEATURE FEATURE_NAME FEATURE_NUMBER RESULT_VAR)
