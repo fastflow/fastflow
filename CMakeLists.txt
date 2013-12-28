@@ -38,7 +38,9 @@ MESSAGE( STATUS "CMAKE_C_COMPILER: " ${CMAKE_C_COMPILER} )
 MESSAGE( STATUS "CMAKE_CXX_COMPILER: " ${CMAKE_CXX_COMPILER} )
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     MESSAGE( STATUS "C++ Compiler is Clang")
-    ADD_DEFINITIONS(-stdlib=libc++ -std=gnu++11)  # Or -std=c++11
+    SET(FFCM_HAS_CLANGXX "TRUE")
+   SET(CMAKE_CXX_FLAGS "-stdlib=libc++ -std=gnu++11")
+#    ADD_DEFINITIONS(-stdlib=libc++ -std=gnu++11)  # Or -std=c++11
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     MESSAGE( STATUS "C++ Compiler is GNU")
     execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GXX_VERSION)
