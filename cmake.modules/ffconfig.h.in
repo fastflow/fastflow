@@ -9,6 +9,7 @@
 #cmakedefine HAS_GCC                   /* Alias */
 #cmakedefine CMAKE_COMPILER_IS_GNUCXX 
 #cmakedefine HAS_GXX                   /* Alias */
+#cmakedefine HAS_CLANGXX
 #cmakedefine HAS_MSVC
 #cmakedefine HAS_MSVC10
 
