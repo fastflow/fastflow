@@ -86,6 +86,8 @@ namespace ff {
     FF_PARFOR_BEGIN(mapname, i, 0, size, 1, (size/nworkers), nworkers) { \
         V[i]=func(i);                                                   \
     } FF_PARFOR_END(mapname)
+#else
+#pragma message( "C++11 features not supported: FF_MAP cannot be compiled")
 #endif
 
 
