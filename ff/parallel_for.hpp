@@ -397,7 +397,7 @@ public:
             for(int wid=0;wid<nw;++wid) {
                 if (data[wid].first) {
                     long start = data[wid].second.start;
-                    long end   = std::min(start+endchunk, data[wid].second.end);
+                    long end   = (std::min)(start+endchunk, data[wid].second.end);
                     taskv[wid+jump].set(start, end);
                     lb->ff_send_out_to(&taskv[wid+jump], wid);
                     --remaining, --data[wid].first;
@@ -428,7 +428,7 @@ public:
         for(int cnt=0;cnt<nw;++cnt) { 
             if (data[id].first) {
                 long start = data[id].second.start;
-                long end   = std::min(start+endchunk, data[id].second.end);
+                long end   = (std::min)(start+endchunk, data[id].second.end);
                 task->set(start, end);
                 lb->ff_send_out_to(task, wid);
                 --data[id].first;
