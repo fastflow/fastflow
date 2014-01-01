@@ -38,8 +38,10 @@
 #include <ff/partitioners.hpp>
 
 // see http://www.stroustrup.com/C++11FAQ.html#11
-#if __cplusplus > 199711L
+#if (__cplusplus >= 201103L) || (defined(HAS_CXX11_AUTO) && defined(HAS_CXX11_LAMBDA))
 #include <ff/parallel_for.hpp>
+#else
+#pragma message("C++ >= 201103L required, build will fail")
 #endif
 
 #if defined(FF_OCL)
@@ -81,13 +83,16 @@ namespace ff {
 #define MAPWTIME(mapname)                                           \
     _map_##mapname.ffwTime()
 
+
+
 #if (__cplusplus >= 201103L) || (defined(HAS_CXX11_AUTO) && defined(HAS_CXX11_LAMBDA))
-#define FF_MAP(mapname, V,size,func,nworkers)                           \
-    FF_PARFOR_BEGIN(mapname, i, 0, size, 1, (size/nworkers), nworkers) { \
-        V[i]=func(i);                                                   \
+#define FF_MAP(mapname,V,size,func,nworkers)                        \
+	auto _grain = size/nworkers;										\
+    FF_PARFOR_BEGIN(mapname, i, 0, size, 1, _grain, nworkers) {		\
+        V[i]=func(i);                                               \
     } FF_PARFOR_END(mapname)
 #else
-#pragma message( "C++11 features not supported: FF_MAP cannot be compiled")
+#pragma message("C++ >= 201103L required, build will fail")
 #endif
 
 
