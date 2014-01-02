@@ -147,6 +147,8 @@ public:
         }
         init_unlocked(P_lock); 
         init_unlocked(C_lock);
+        // Avoid unused private field warning on padding vars
+        (void) padding1; (void) padding2 ; (void) padding3; (void) padding4;
     }
 
     /**

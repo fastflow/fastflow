@@ -33,15 +33,15 @@ static inline long F(long i) { return i+1; }
 static inline long G(long i) { return i*2; }
 
 #if !defined(SEQUENTIAL)
-struct task_t {
-    task_t(long r):r(r) {}
+struct fftask_t {
+    fftask_t(long r):r(r) {}
     long r;
 };
-static inline bool wrapF(task_t &t) { 
+static inline bool wrapF(fftask_t &t) { 
     t.r = F(t.r);
     return true;
 }
-static inline bool wrapG(task_t &t) { 
+static inline bool wrapG(fftask_t &t) { 
     t.r = G(t.r);
     return true;
 }
@@ -59,11 +59,11 @@ int main(int argc, char * argv[]) {
     for(long i=0;i<streamlen;++i)
         printf("%ld ", G(F(i)));
 #else
-    FF_PIPEA(pipe, task_t, wrapF, wrapG);
+    FF_PIPEA(pipe, fftask_t, wrapF, wrapG);
     FF_PIPEARUN(pipe);
-    task_t *r = NULL;
+    fftask_t *r = NULL;
     for(long i=0;i<streamlen;++i) {
-        FF_PIPEAOFFLOAD(pipe, new task_t(i));
+        FF_PIPEAOFFLOAD(pipe, new fftask_t(i));
         if (FF_PIPEAGETRESULTNB(pipe, &r)) printf("%ld ", r->r);
     }
     FF_PIPEAEND(pipe);

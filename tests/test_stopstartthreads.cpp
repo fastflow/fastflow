@@ -43,8 +43,8 @@ using namespace ff;
 
 typedef enum {WAIT=1, WORK} op_t;
 
-struct task_t {
-    task_t(op_t op, unsigned iter):op(op),iter(iter) {}
+struct fftask_t {
+    fftask_t(op_t op, unsigned iter):op(op),iter(iter) {}
     op_t     op;
     unsigned iter;
 };
@@ -73,7 +73,7 @@ void BCAST_SIGNAL() {
 class Worker: public ff_node {
 public:
     void* svc(void* t) {
-        task_t* task = (task_t*)t;
+        fftask_t* task = (fftask_t*)t;
         if (task->op == WAIT) {
             printf("[%d] I have to wait! Waiting to be woken up\n", get_my_id());
             WAIT_SIGNAL();
@@ -113,7 +113,7 @@ public:
     Emitter(int ntasks,int nworkers,myScheduler* lb):
         ntasks(ntasks),nworkers(nworkers),getback(0),lb(lb) {}
     
-    void ff_sendout(int idx, task_t* task) {
+    void ff_sendout(int idx, fftask_t* task) {
         if (idx<0) { 
             ff_send_out((void*)task); 
             return; 
@@ -126,12 +126,12 @@ public:
         if (!t) {
             // send all task to the workers
             for(int i=0;i<ntasks;++i)
-                ff_sendout(-1, new task_t(WORK,i));
+                ff_sendout(-1, new fftask_t(WORK,i));
 
             // put all workers but 0 and 1 to sleep
             waiting = true;
             for(int i=2;i<nworkers;++i) 
-                ff_sendout(i, new task_t(WAIT,0));
+                ff_sendout(i, new fftask_t(WAIT,0));
             return GO_ON;
         }
         
@@ -140,7 +140,7 @@ public:
 
         sleep(2);
         printf("checking now who is sleeping\n");
-        lb->broadcast(new task_t(WAIT, 0));
+        lb->broadcast(new fftask_t(WAIT, 0));
 
         sleep(2);
         printf("waking up all threads now!\n");
