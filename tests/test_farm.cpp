@@ -36,11 +36,11 @@ static inline long Func(long r, long i) {
 }
 
 #if !defined(SEQUENTIAL)
-struct task_t {
-    task_t(long r, long i):r(r),i(i) {}
+struct fftask_t {
+    fftask_t(long r, long i):r(r),i(i) {}
     long r, i;
 };
-static inline bool Wrapper(task_t &t) {
+static inline bool Wrapper(fftask_t &t) {
     t.r = Func(t.r, t.i);
     return true;
 }
@@ -69,11 +69,11 @@ int main(int argc, char * argv[]) {
     } while( ++i< (10*1e6) );
 #else
     long i=0;
-    task_t *r = NULL;
-    FF_FARMA(farmA, Wrapper, task_t, nworkers, nworkers);
+    fftask_t *r = NULL;
+    FF_FARMA(farmA, Wrapper, fftask_t, nworkers, nworkers);
     FF_FARMARUN(farmA);
     do {
-        FF_FARMAOFFLOAD(farmA, new task_t(random(),i+1));
+        FF_FARMAOFFLOAD(farmA, new fftask_t(random(),i+1));
         if (FF_FARMAGETRESULTNB(farmA, &r)) {
             if (r->r == number) {
                 printf("found %ld in i %ld iterations\n",number, i);

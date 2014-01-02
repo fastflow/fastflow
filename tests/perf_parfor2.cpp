@@ -30,7 +30,9 @@
  */
 
 #include <cstdlib>
+#if defined(USE_OPENMP)
 #include <omp.h>
+#endif
 #include <mm_malloc.h>
 
 #include <ff/parallel_for.hpp>

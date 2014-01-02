@@ -119,6 +119,7 @@ public:
 
 #if defined(UBUFFER_STATS)
         miss=0;hit=0;
+        (void)padding1;        
 #endif
     }
     
@@ -288,6 +289,9 @@ public:
 #if defined(UBUFFER_STATS)
         atomic_long_set(&numBuffers,0);
 #endif
+        // Avoid unused private field warning on padding fields
+        (void)padding1; (void)padding2; (void)padding3; (void)padding4;
+        
     }
     
     /** Destructor */

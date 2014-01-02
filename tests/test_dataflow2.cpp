@@ -51,8 +51,8 @@
 
 using namespace ff;
 
-struct task_t {
-    task_t(int op, long t):op(op),t(t) {}
+struct fftask_t {
+    fftask_t(int op, long t):op(op),t(t) {}
     int op;
     long t;
 };
@@ -94,15 +94,15 @@ public:
     }
 
     void* svc(void*) {       
-        task_t* t;
+        fftask_t* t;
         for(long i=1;i<=numtasks;++i) {
             
-            t = new task_t(1,i%10);
-            t = new (MALLOC(sizeof(task_t))) task_t(1,i%10);
+            t = new fftask_t(1,i%10);
+            t = new (MALLOC(sizeof(fftask_t))) fftask_t(1,i%10);
             
             while (!ff_send_out(t, 1)) ff_relax(1);
         }
-        t = new task_t(0,-1);
+        t = new fftask_t(0,-1);
         while (!ff_send_out(t, 1)) ff_relax(1);
         return NULL;
     }
@@ -146,7 +146,7 @@ public:
             return GO_ON;
         }
         // this is a real task
-        task_t* t = (task_t*)task;
+        fftask_t* t = (fftask_t*)task;
         if (lb->get_channel_id() == -1) {  // ... received from input channel
             if (t->op == 0) { // is this the end ?
                 finished=true;
@@ -188,7 +188,7 @@ protected:
 class FU: public ff_node {
 public:
     void* svc(void* task) {
-        task_t* t = (task_t*)task;
+        fftask_t* t = (fftask_t*)task;
         assert(t->op != 0);
         printf("FU (%d) got one task %d\n", get_my_id(), t->op);
         switch(t->op) {
@@ -213,7 +213,7 @@ int main(int argc, char* argv[]) {
 
     // prepare the instruction allocator
     ff_allocator* ffalloc=new ff_allocator();
-    int slab = ffalloc->getslabs(sizeof(task_t));
+    int slab = ffalloc->getslabs(sizeof(fftask_t));
     int nslabs[N_SLABBUFFER];
     if (slab<0) {                               
         if (ffalloc->init()<0) abort();         

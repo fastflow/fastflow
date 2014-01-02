@@ -3,6 +3,7 @@
 #cmakedefine HAVE_NUMA_H
 #cmakedefine HAVE_STDINT_H
 #cmakedefine HAVE_PTHREAD_H
+#cmakedefine HAVE_OMP_H
 
 /* Compiler type */
 #cmakedefine CMAKE_COMPILER_IS_GNUCC

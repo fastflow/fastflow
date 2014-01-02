@@ -125,6 +125,9 @@ public:
      */
     SWSR_Ptr_Buffer(unsigned long n, const bool=true):
         pread(0),pwrite(0),size(n),buf(0) {
+        // Avoid unused private field warning on padding1, padding2
+        (void)padding1;
+        (void)padding2;
     }
     
     /** 
@@ -380,6 +383,9 @@ public:
      */
     Lamport_Buffer(unsigned long n, const bool=true):
         pread(0),pwrite(0),size(n),buf(0) {
+        // Avoid unused private field warning on padding1, padding2
+        (void)padding1;
+        (void)padding2;
     }
     
     /**
