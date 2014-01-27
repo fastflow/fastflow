@@ -1,16 +1,17 @@
 /* standard headers */
-/* #undef HAVE_MALLOC_H */
+#define HAVE_MALLOC_H 1
 /* #undef HAVE_NUMA_H */
 #define HAVE_STDINT_H
 #define HAVE_PTHREAD_H
+#define HAVE_OMP_H
 
 /* Compiler type */
-/* #undef CMAKE_COMPILER_IS_GNUCC */
-/* #undef HAS_GCC */
-/* #undef CMAKE_COMPILER_IS_GNUCXX */
+#define CMAKE_COMPILER_IS_GNUCC
+#define HAS_GCC                   /* Alias */
+#define CMAKE_COMPILER_IS_GNUCXX 
 /* #undef HAS_GXX */
-#define HAS_CLANGXX
-/* #undef HAS_MSVC */
+/* #undef HAS_CLANGXX */
+#define HAS_MSVC
 /* #undef HAS_MSVC10 */
 
 /* cxx11*/

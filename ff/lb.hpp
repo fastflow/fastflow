@@ -308,18 +308,12 @@ protected:
         return ((ff_loadbalancer *)obj)->schedule_task(task, retry, ticks);
     }
 
-
-    int set_internal_multi_input(ff_node **mi, int misize) {
-        if (mi == NULL) {
-            error("LB, invalid internal multi-input vector\n");
-            return -1;
-        }
-        if (misize <= 0) {
+    int set_internal_multi_input(svector<ff_node*> &mi) {
+        if (mi.size() == 0) {
             error("LB, invalid internal multi-input vector size\n");
             return -1;
         }
         int_multi_input = mi;
-        int_multi_input_size=misize;
         return 0;
     }
 
@@ -336,8 +330,8 @@ public:
         nworkers(0),running(-1),max_nworkers(max_num_workers),nextw(-1),nextINw(0),channelid(-2),
         filter(NULL),workers(new ff_node*[max_num_workers]),
         buffer(NULL),skip1pop(false),master_worker(false),
-        multi_input(NULL),multi_input_size(-1),multi_input_start(max_num_workers+1),
-        int_multi_input(NULL), int_multi_input_size(-1) {
+        multi_input(256),multi_input_start(max_num_workers+1),
+        int_multi_input(256) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
@@ -464,23 +458,20 @@ public:
      *
      * \return 0 if successful, otherwise -1.
      */
-    int set_multi_input(ff_node **mi, int misize) {
-        // if (master_worker) {
-        //     error("LB, master-worker and multi-input farm used together\n");
-        //     return -1;
-        // }
-        if (mi == NULL) {
-            error("LB, invalid multi-input vector\n");
+    int set_input(svector<ff_node*> &mi) {
+        if (mi.size() == 0) {
+            error("LB, set_input, invalid multi-input vector size\n");
             return -1;
         }
-        if (misize <= 0) {
-            error("LB, invalid multi-input vector size\n");
-            return -1;
-        }
-        multi_input = mi;
-        multi_input_size=misize;
+        multi_input += mi;
         return 0;
     }
+
+    int set_input(ff_node * node) {
+        multi_input.push_back(node);
+        return 0;
+    }
+
     inline bool ff_send_out_to(void *task, int id, 
                                unsigned int retry=(unsigned)-1, unsigned int ticks=0) {
         nextw = id-1;
@@ -567,7 +558,7 @@ public:
         }
 
         gettimeofday(&wtstart,NULL);
-        if (!master_worker && (multi_input_size<=0) && (int_multi_input_size<=0)) {
+        if (!master_worker && (multi_input.size()==0) && (int_multi_input.size()==0)) {
             do {
                 if (inpresent) {
                     if (!skipfirstpop) pop(&task);
@@ -615,7 +606,7 @@ public:
                 schedule_task(task);
             } while(true);
         } else {
-            int nw=0, neos=0;            
+            size_t nw=0, neos=0;            
             // contains current worker
             std::deque<ff_node *> availworkers; 
 
@@ -626,19 +617,23 @@ public:
                     availworkers.push_back(workers[i]);
                 nw = running;
             }
-            if (int_multi_input) {
+            if (int_multi_input.size()>0) {
                 assert(!master_worker);
-                for(int i=0;i<int_multi_input_size;++i)
+                for(size_t i=0;i<int_multi_input.size();++i)
                     availworkers.push_back(int_multi_input[i]);
-                nw += int_multi_input_size;
+                nw += int_multi_input.size();
             }
-            if (multi_input) {
+            if (multi_input.size()>0) {
                 multi_input_start = availworkers.size();
-                for(int i=0;i<multi_input_size;++i)
+                for(size_t i=0;i<multi_input.size();++i)
                     availworkers.push_back(multi_input[i]);
-                nw += multi_input_size;
+                nw += multi_input.size();
             } 
-
+            if (master_worker && inpresent) {
+                assert(multi_input.size() == 0);
+                assert(int_multi_input.size() == 0);
+                nw += 1;
+            }
             std::deque<ff_node *>::iterator start(availworkers.begin());
             std::deque<ff_node *>::iterator victim(availworkers.begin());
             do {
@@ -650,7 +645,7 @@ public:
                     (task == (void*)FF_EOS_NOFREEZE)) {
                     if (channelid == -1) ++neos;
                     if ((victim == availworkers.end()) || 
-                        (neos == multi_input_size)  )
+                        (neos == multi_input.size())  )
                         push_eos((task==(void*)FF_EOS_NOFREEZE));
                     else {
                         if (filter) filter->eosnotify(channelid);
@@ -659,8 +654,8 @@ public:
                     }
 
                     if (master_worker || 
-                        (channelid==-1 && multi_input_size>0) || 
-                        (channelid>=0 && int_multi_input_size>0)) { 
+                        (channelid==-1 && multi_input.size()>0) || 
+                        (channelid>=0 && int_multi_input.size()>0)) { 
                         if (!--nw) {
                             ret = task;
                             break; // received all EOS, exit
@@ -962,11 +957,9 @@ private:
     FFBUFFER        *  buffer;
     bool               skip1pop;
     bool               master_worker;
-    ff_node        **  multi_input;
-    int                multi_input_size;
+    svector<ff_node*>  multi_input;
     int                multi_input_start;   // position in the availworkers array
-    ff_node        **  int_multi_input;
-    int                int_multi_input_size;
+    svector<ff_node*>  int_multi_input;
 
     struct timeval tstart;
     struct timeval tstop;

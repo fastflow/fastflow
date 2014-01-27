@@ -112,7 +112,7 @@ protected:
      */
     inline int cardinality(BARRIER_T * const barrier)  { 
         int card=0;
-        for(int i=0;i<nworkers;++i) 
+        for(size_t i=0;i<workers.size();++i) 
             card += workers[i]->cardinality(barrier);
         
         lb->set_barrier(barrier);
@@ -129,7 +129,8 @@ protected:
      * \return 0 if successful, otherwise a negative value is returned.
      */
     inline int prepare() {
-        for(int i=0;i<nworkers;++i) {
+        size_t nworkers = workers.size();
+        for(size_t i=0;i<nworkers;++i) {
             if (workers[i]->create_input_buffer((ondemand ? ondemand: (in_buffer_entries/nworkers + 1)), 
                                                 (ondemand ? true: fixedsize))<0) return -1;
             if (collector || lb->masterworker() || collector_removed) 
@@ -208,13 +209,13 @@ public:
     template<typename T>
     ff_farm(const std::function<T*(T*,ff_node*const)> &F, int nw, bool input_ch=false):
         has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
-        nworkers(0), in_buffer_entries(DEF_IN_BUFF_ENTRIES),
+        in_buffer_entries(DEF_IN_BUFF_ENTRIES),
         out_buffer_entries(DEF_OUT_BUFF_ENTRIES),
         worker_cleanup(true),
         max_nworkers(nw),
         emitter(NULL),collector(NULL),
         lb(new lb_t(nw)),gt(new gt_t(nw)),
-        workers(new ff_node*[nw]),fixedsize(false) {
+        workers(nw),fixedsize(false) {
 
         std::vector<ff_node*> w(nw);        
         for(int i=0;i<nw;++i) w[i]=new ff_node_F<T>(F);
@@ -230,13 +231,13 @@ public:
 
     ff_farm(std::vector<ff_node*>& W, ff_node *const Emitter=NULL, ff_node *const Collector=NULL, bool input_ch=false):
         has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
-        nworkers(0), in_buffer_entries(DEF_IN_BUFF_ENTRIES),
+        in_buffer_entries(DEF_IN_BUFF_ENTRIES),
         out_buffer_entries(DEF_OUT_BUFF_ENTRIES),
         worker_cleanup(false),
         max_nworkers(W.size()),
         emitter(NULL),collector(NULL),
         lb(new lb_t(W.size())),gt(new gt_t(W.size())),
-        workers(new ff_node*[W.size()]),fixedsize(false) {
+        workers(W.size()),fixedsize(false) {
 
         assert(W.size()>0);
         add_workers(W);
@@ -273,14 +274,13 @@ public:
             int max_num_workers=DEF_MAX_NUM_WORKERS,
             bool fixedsize=false):  // NOTE: by default all the internal farm queues are unbounded !
         has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
-        nworkers(0),
         in_buffer_entries(in_buffer_entries),
         out_buffer_entries(out_buffer_entries),
         worker_cleanup(worker_cleanup),
         max_nworkers(max_num_workers),
         emitter(NULL),collector(NULL),
         lb(new lb_t(max_num_workers)),gt(new gt_t(max_num_workers)),
-        workers(new ff_node*[max_num_workers]),fixedsize(fixedsize) {
+        workers(max_num_workers),fixedsize(fixedsize) {
         for(int i=0;i<max_num_workers;++i) workers[i]=NULL;
 
         if (has_input_channel) { 
@@ -304,13 +304,9 @@ public:
         }
         if (lb) { delete lb; lb=NULL;}
         if (gt) { delete gt; gt=NULL;}
-        if (workers) {
-            if (worker_cleanup) {
-                for(int i=0;i<max_nworkers; ++i) 
-                    if (workers[i]) delete workers[i];
-            }
-            delete [] workers;
-            workers = NULL;
+        if (worker_cleanup) {
+            for(int i=0;i<max_nworkers; ++i) 
+                if (workers[i]) delete workers[i];
         }
         for(size_t i=0;i<internalSupportNodes.size();++i) {
             delete internalSupportNodes.back();
@@ -334,9 +330,16 @@ public:
      */
     int add_emitter(ff_node * e) { 
         assert(e!=NULL);
-        if (emitter) return -1; 
-
+        if (emitter) {
+            error("FARM, add_emitter: emitter already present\n");
+            return -1; 
+        }
+        if (e->isMultiInput()) {
+            error("FARM, add_emitter: the node is a multi-input node, please do use ff_node instead together with ff_farm::setMultiInput() method\n");
+            return -1;
+        }
         emitter = e;
+
         if (in) {
             assert(has_input_channel);
             emitter->set_input_buffer(in);
@@ -380,19 +383,18 @@ public:
      *  \return 0 if successsful, otherwise -1 is returned.
      */
     int add_workers(std::vector<ff_node *> & w) { 
-        if ((nworkers+w.size())> (unsigned int)max_nworkers) {
+        if ((workers.size()+w.size())> (size_t)max_nworkers) {
             error("FARM, try to add too many workers, please increase max_nworkers\n");
             return -1; 
         }
-        if ((nworkers+w.size())==0) {
+        if (w.size()==0) {
             error("FARM, try to add zero workers!\n");
             return -1; 
         }        
-        for(unsigned int i=nworkers;i<(nworkers+w.size());++i) {
-            workers[i] = w[i];
-            workers[i]->set_id(i);
+        for(size_t i=0;i<w.size();++i) {
+            workers.push_back(w[i]);
+            (workers.back())->set_id(i);
         }
-        nworkers+= (unsigned int) w.size();
         return 0;
     }
 
@@ -466,7 +468,7 @@ public:
                 error("FARM, setting output buffer for multi-input configuration\n");
                 return -1;
             }
-            if (lb->set_internal_multi_input(&internalSupportNodes.front(), internalSupportNodes.size())<0)
+            if (lb->set_internal_multi_input(internalSupportNodes)<0)
                 return -1;
         }
 
@@ -488,29 +490,25 @@ public:
     }
 
     /**
-     * \brief Sets multiple input
+     * \brief Sets multiple input nodes
      *
      * It sets multiple inputs to the node.
      *
-     * \parm mi is a pointer of \p ff_node
-     * \parm misize is the size of the input queue
      *
-     * \return The status of \p set_multi_input(x) otherwise -1 is returned.
+     * \return The status of \p set_input(x) otherwise -1 is returned.
      */
-    int set_multi_input(ff_node **mi, int misize) {
-        // if (lb->masterworker()) {
-        //     error("FARM, master-worker paradigm and multi-input farm used together\n");
-        //     return -1;
-        // }
-        if (mi == NULL) {
-            error("FARM, invalid multi-input vector\n");
-            return -1;
-        }
-        if (misize <= 0) {
-            error("FARM, invalid multi-input vector size\n");
-            return -1;
-        }
-        return lb->set_multi_input(mi, misize);
+    inline int set_input(svector<ff_node *> & w) { 
+        assert(isMultiInput());
+        return lb->set_input(w);
+    }
+
+    inline int set_input(ff_node *node) { 
+        assert(isMultiInput());
+        return lb->set_input(node);
+    }
+
+    inline void setMultiInput() { 
+        ff_node::setMultiInput();        
     }
 
 
@@ -665,7 +663,7 @@ public:
      */
     inline void thaw(bool _freeze=false, int nw=-1) {
         // TODO: 
-        if ((nw != -1) && (nw < nworkers) && collector) {
+        if ((nw != -1) && ((size_t)nw < workers.size()) && collector) {
             error("running less thread then total NOT YET SUPPORTED in case of collector present\n"); 
             abort();
         }
@@ -780,7 +778,8 @@ public:
      *
      * \return A list of workers is returned.
      */
-    ff_node** getWorkers() const { return workers; }
+    const svector<ff_node*>& getWorkers() const { return workers; }
+
 
     /**
      * \brief Gets the number of workers
@@ -789,7 +788,17 @@ public:
      *
      * \return An integet value showing the number of workers.
      */
-    int getNWorkers() const { return nworkers;}
+    size_t getNWorkers() const { return workers.size();}
+
+    inline void get_out_nodes(svector<ff_node*>&w) {
+        if (collector && !collector_removed) {
+            w.push_back(collector);
+            return;
+        }
+        w = workers;
+    }
+        
+
 
 
     /** \brief Resets input/output queues.
@@ -799,7 +808,7 @@ public:
     void reset() {
         if (lb)  lb->reset();
         if (gt)  gt->reset();
-        for(int i=0;i<nworkers;++i) workers[i]->reset();
+        for(size_t i=0;i<workers.size();++i) workers[i]->reset();
     }
 
     /**
@@ -826,10 +835,10 @@ public:
     const struct timeval  getstoptime()  const {
         if (collector) return gt->getstoptime();
         const struct timeval zero={0,0};
-        std::vector<struct timeval > workertime(nworkers+1,zero);
-        for(int i=0;i<nworkers;++i)
+        std::vector<struct timeval > workertime(workers.size()+1,zero);
+        for(size_t i=0;i<workers.size();++i)
             workertime[i]=workers[i]->getstoptime();
-        workertime[nworkers]=lb->getstoptime();
+        workertime[workers.size()]=lb->getstoptime();
         std::vector<struct timeval >::iterator it=
             std::max_element(workertime.begin(),workertime.end(),time_compare);
         return (*it);
@@ -858,11 +867,11 @@ public:
     const struct timeval  getwstoptime() const {
         if (collector) return gt->getwstoptime();
         const struct timeval zero={0,0};
-        std::vector<struct timeval > workertime(nworkers+1,zero);
-        for(int i=0;i<nworkers;++i) {
+        std::vector<struct timeval > workertime(workers.size()+1,zero);
+        for(size_t i=0;i<workers.size();++i) {
             workertime[i]=workers[i]->getwstoptime();
-            }
-        workertime[nworkers]=lb->getwstoptime();
+        }
+        workertime[workers.size()]=lb->getwstoptime();
         std::vector<struct timeval >::iterator it=
             std::max_element(workertime.begin(),workertime.end(),time_compare);
         return (*it);
@@ -908,7 +917,7 @@ public:
     void ffStats(std::ostream & out) { 
         out << "--- farm:\n";
         lb->ffStats(out);
-        for(int i=0;i<nworkers;++i) workers[i]->ffStats(out);
+        for(size_t i=0;i<workers.size();++i) workers[i]->ffStats(out);
         if (collector) gt->ffStats(out);
     }
 #else
@@ -1030,7 +1039,7 @@ protected:
      *  \return If successful 0, otherwise a negative value.
      */
     int create_output_buffer(int nentries, bool fixedsize=false) {
-        if (!collector) {
+        if (!collector && !collector_removed) {
             error("FARM with no collector, cannot create output buffer\n");
             return -1;
         }        
@@ -1040,7 +1049,7 @@ protected:
         }
         if (ff_node::create_output_buffer(nentries, fixedsize)<0) return -1;
         gt->set_out_buffer(out);
-        if ((ff_node*)gt != collector) collector->set_output_buffer(out);
+        if (collector && ((ff_node*)gt != collector)) collector->set_output_buffer(out);
         return 0;
     }
 
@@ -1092,7 +1101,6 @@ protected:
     bool prepared;
     bool collector_removed;
     int ondemand;          // if >0, emulates on-demand scheduling
-    int nworkers;
     int in_buffer_entries;
     int out_buffer_entries;
     bool worker_cleanup;
@@ -1103,8 +1111,8 @@ protected:
 
     lb_t             * lb;
     gt_t             * gt;
-    ff_node         ** workers;
-    std::vector<ff_node*> internalSupportNodes;
+    svector<ff_node*>  workers;
+    svector<ff_node*>  internalSupportNodes;
     bool               fixedsize;
 };
 
@@ -1254,7 +1262,7 @@ private:
          *
          * \parm nw is the number of workers
          */
-        void setnworkers(int nw) { nworkers=nw;}
+        void setnworkers(size_t nw) { nworkers=nw;}
 
         /**
          * \brief Sets filter
@@ -1311,8 +1319,7 @@ private:
             if (E_f) E_f->svc_end();
         }
     private:
-        int nworkers;
-        int nextone;
+        size_t nworkers, nextone;
         ofarm_lb * lb;
         ff_node* E_f;
     };
@@ -1338,7 +1345,7 @@ private:
          *
          * \parm nw is the number of workers
          */
-        void setnworkers(int nw) { nworkers=nw;}
+        void setnworkers(size_t nw) { nworkers=nw;}
 
         /**
          * \brief Sets filter
@@ -1388,7 +1395,7 @@ private:
          */
         void eosnotify(int id) { 
             gt->set_dead(id);
-            if (nextone == id) {
+            if (nextone == (size_t)id) {
                 nextone= (nextone+1) % nworkers;
                 gt->set_victim(nextone);
             }
@@ -1403,8 +1410,7 @@ private:
             if (C_f) C_f->svc_end();
         }
     private:
-        int nworkers;
-        int nextone;
+        size_t nworkers, nextone;
         ofarm_gt * gt;
         ff_node* C_f;
     };
@@ -1524,19 +1530,12 @@ protected:
      *
      * \return >=0 if successful, otherwise -1 is returned.
      */
-    int create_input_buffer(int nentries, bool fixedsize=true) {
-        std::vector<ff_node*> w;
-        if (set_input(w)<0) return -1;
-        if (w.size()==0) {
+    int create_input_buffer(int nentries, bool fixedsize=true) {      
+        if (inputNodes.size()==0) {
             int r = ff_node::create_input_buffer(nentries, fixedsize);
             if (r!=0) return r;
             return 1;
         }
-        for(size_t i=0;i<w.size();++i)
-            gt->register_worker(w[i]);
-
-        if (ff_node::skipfirstpop()) gt->skipfirstpop();
-
         return 0;
     }
 
@@ -1562,7 +1561,7 @@ public:
      *
      */
     ff_minode(int max_num_workers=ff_farm<>::DEF_MAX_NUM_WORKERS):
-        ff_node(), gt(new ff_gatherer(max_num_workers)) {}
+        ff_node(), gt(new ff_gatherer(max_num_workers)) { ff_node::setMultiInput(); }
 
     /**
      * \brief Destructor 
@@ -1578,7 +1577,22 @@ public:
      *
      * It is a virtual function to set the input buffer.
      */
-    virtual int set_input(std::vector<ff_node *> & w)=0;
+    virtual inline int set_input(svector<ff_node *> & w) { 
+        inputNodes += w;
+        return 0; 
+    }
+
+    virtual inline int set_input(ff_node *node) { 
+        inputNodes.push_back(node); 
+        return 0;
+    }
+
+    virtual bool isMultiInput() const { return true;}
+
+
+    virtual inline void get_out_nodes(svector<ff_node*>&w) {
+        w.push_back(this);
+    }
 
     /**
      * \brief Skip first pop
@@ -1599,18 +1613,9 @@ public:
         if (!gt) return -1;
         gt->set_filter(this);
 
-        std::vector<ff_node*> w;
-        if (set_input(w)<0) {
-            error("ff_minode, run, set_input failed\n");
-            return -1;
-        }
-        if (w.size()==0) {
-            error("ff_minode, run, set_input returned 0 workers\n");
-            return -1;
-        }
-        for(size_t i=0;i<w.size();++i)
-            gt->register_worker(w[i]);
-        
+        for(size_t i=0;i<inputNodes.size();++i)
+            gt->register_worker(inputNodes[i]);
+        if (ff_node::skipfirstpop()) gt->skipfirstpop();       
         if (gt->run()<0) {
             error("ff_minode, running gather module\n");
             return -1;
@@ -1645,6 +1650,7 @@ public:
 #endif
 
 private:
+    svector<ff_node*> inputNodes;
     ff_gatherer* gt;
 };
 
@@ -1714,7 +1720,22 @@ public:
      *
      * It is a virtual function which sets the output buffer.
      */
-    virtual int set_output(std::vector<ff_node *> & w)=0;
+    virtual inline int set_output(svector<ff_node *> & w) {
+        for(size_t i=0;i<w.size();++i)
+            outputNodes.push_back(w[i]);
+        return 0; 
+    }
+
+    virtual inline int set_output(ff_node *node) { 
+        outputNodes.push_back(node); 
+        return 0;
+    }
+
+    virtual bool isMultiOutput() const { return true;}
+
+    virtual inline void get_out_nodes(svector<ff_node*>&w) {
+        w = outputNodes;
+    }
 
     /**
      * \brief Skips the first pop
@@ -1747,18 +1768,9 @@ public:
         if (!lb) return -1;
         lb->set_filter(this);
 
-        std::vector<ff_node*> w;
-        if (set_output(w)<0) {
-            error("ff_monode, run, set_output failed\n");
-            return -1;
-        }
-        if (w.size()==0) {
-            error("ff_monode, run, set_output returned 0 workers\n");
-            return -1;
-        }
-        for(size_t i=0;i<w.size();++i)
-            lb->register_worker(w[i]);
-        
+        for(size_t i=0;i<outputNodes.size();++i)
+            lb->register_worker(outputNodes[i]);
+        if (ff_node::skipfirstpop()) lb->skipfirstpop();       
         if (lb->runlb()<0) {
             error("ff_monode, running loadbalancer module\n");
             return -1;
@@ -1787,6 +1799,7 @@ public:
 #endif
 
 private:
+    svector<ff_node*> outputNodes;
     ff_loadbalancer* lb;
 };
 

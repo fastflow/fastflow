@@ -1,26 +1,31 @@
-New ideas and features:
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^ New ideas and features: ^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- configure 
-  by using cmake, still work in progress
-- ordered farm (DONE)
-  ff_ofarm pattern
-- threads mapper (DONE)
-  in the release 2.0.0
-- more applications 
-- deadlock avoidance for skeleton with cycles (DONE)
+- configure by using cmake ( ** ON GOING ** )
+- ordered farm ( ** DONE ** ) 
+     ff_ofarm pattern
+- threads mapper ( ** DONE ** )
+     in the release 2.0.0
+- more applications (ideas/volunteers are welcome)
+- deadlock avoidance for skeleton with cycles ( ** DONE ** )
      The channels are now implemented using by default unbounded queue 
      (ubuffer.hpp)
      Bounded queue can be used by defining FF_BOUNDED_BUFFER in node.hpp.
 
 - add the possibility to define fallback function
   even if there are feedback channels due to 
-  master-worker configuration (ABORTED)
+  master-worker configuration ( ** ABORTED ** )
 - give the possibility to define a user-level 
   collection policy (in the same way as in the scheduling
-  policy) (DONE)
+  policy) ( ** DONE ** )
 - dynamic reconfiguration of the number of workers in the farm pattern
-  (ON GOING)
-- blocking run-time (using mutex) for coarse-grain applications 
+  ( ** ON GOING ** )
+  NOTE: starting from 2.0.2 it is possible to start and put to sleep and then
+        restart again when needed at run-time farm's workers.
+- blocking run-time (using mutex) for coarse-grain applications  
+- revise the management of multi-input in the farm and pipeline, in the current 
+  version (2.0.2) is is not homogeneous
 
 Massimo Torquati
 

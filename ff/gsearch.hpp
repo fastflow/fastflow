@@ -206,7 +206,7 @@ public:
     
     // One shot search. It returns just one result (valid only if the return value is true)
     inline bool search(T *const st, T* const search, T *&result, const int nw=-1) {
-        if (nw > W.size()) {
+        if (nw > (int)W.size()) {
             error("ff_graphsearch:search: nw too big, using nw=%d\n", W.size());
         }
         found = 0;
@@ -229,7 +229,7 @@ public:
     
     /// One shot search. It returns all results.
     inline bool search(T *const st, T* const search, std::deque<T*> &result, const int nw=-1) {
-        if (nw > W.size()) {
+        if (nw > (int)W.size()) {
             error("ff_graphsearch:search: nw too big, using nw=%d\n", W.size());
         }
         found = 0;

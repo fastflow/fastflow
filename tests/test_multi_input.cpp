@@ -37,7 +37,7 @@
  *                                    |
  *                                     --- NOTE: no collector present here !
  *
- * DefEmitter is the default emitter for the farm template.
+ * DefEmitter is the default emitter
  */
 
 #include <iostream>
@@ -58,17 +58,14 @@ private:
     int ntasks;
 };
 
-class Worker1: public ff_node {
-public:
-    void* svc(void* task) {
-        return task;
-    }
+struct Worker1: ff_node {
+    void* svc(void* task) { return task; }
 };
 
-class Worker2: public ff_node {
-public:
-    void* svc(void* task) {
-        return GO_ON;
+struct Worker2: ff_node {
+    void* svc(void* task) { 
+        printf("Worker2: %d got %ld\n", get_my_id(), (long)task);
+        return GO_ON; 
     }
 };
 
@@ -96,12 +93,14 @@ int main(int argc, char* argv[]) {
     farm1.remove_collector();
 
     w.clear();
-    for(int i=0;i<nworkers;++i) {
+    for(int i=0;i<nworkers;++i) 
         w.push_back(new Worker2);
-    }
-    farm2.add_workers(w);
-    farm2.set_multi_input(farm1.getWorkers(),farm1.getNWorkers());
 
+    farm2.add_workers(w);
+    // set_multi_input is no longer supported, 
+    //farm2.set_multi_input(farm1.getWorkers());
+    farm2.setMultiInput();
+    
     pipe.run_and_wait_end();
 
     printf("Time= %.2f (ms)\n", pipe.ffwTime());

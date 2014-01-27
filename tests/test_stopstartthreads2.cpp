@@ -40,16 +40,16 @@ using namespace ff;
 class Emitter: public ff_node {
 protected:
     void stop_workers() {
-        int nw = farm->getNWorkers();
-        for(int i=0; i<nw;++i)  {
+        size_t nw = farm->getNWorkers();
+        for(size_t i=0; i<nw;++i)  {
             farm->getlb()->ff_send_out_to(EOS, i);
         }
-        for(int i=0;i<nw;++i) {
+        for(size_t i=0;i<nw;++i) {
             farm->getlb()->wait_freezing(i);
         }
     }
     void wakeup_workers(bool freeze=true) {
-        for(int i=0;i<farm->getNWorkers();++i)
+        for(size_t i=0;i<farm->getNWorkers();++i)
             farm->getlb()->thaw(i,freeze);
     }
 public:
@@ -57,7 +57,7 @@ public:
     
     int svc_init() {
         // set freezing flag to all workers
-        for(int i=0;i<farm->getNWorkers();++i)
+        for(size_t i=0;i<farm->getNWorkers();++i)
             farm->getlb()->freeze(i);
         return 0;
     }
@@ -73,7 +73,7 @@ public:
             wakeup_workers();
             
             // do something here
-            for(int j=0;j<farm->getNWorkers();++j)
+            for(size_t j=0;j<farm->getNWorkers();++j)
                 farm->getlb()->ff_send_out_to(new int(j), j);
             
             // put workers to sleep

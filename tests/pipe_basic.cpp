@@ -136,9 +136,9 @@ int main() {
     ff_pipe<myTask> pipe5(&farm1,&farm2,&farm3);
     farm1.add_emitter(new Emitter(lambda));
     farm1.remove_collector();
-    farm2.set_multi_input(farm1.getWorkers(),farm1.getNWorkers());
+    farm2.setMultiInput();
     farm2.remove_collector();
-    farm3.set_multi_input(farm2.getWorkers(),farm2.getNWorkers());
+    farm3.setMultiInput();
     farm3.remove_collector();
     pipe5.run_and_wait_end();
     printf("done 5th\n\n");

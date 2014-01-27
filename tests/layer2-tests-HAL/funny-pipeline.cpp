@@ -41,6 +41,7 @@
 
 #include <ff/node.hpp>
 #include <ff/farm.hpp>  // for ff_minode ff_monode
+#include <ff/svector.hpp>
 
 using namespace ff;
 
@@ -83,13 +84,6 @@ public:
         ff_send_out_to(task, 0); 
         return GO_ON;
     }
-    // this is pure virtual in ff_monode
-    int set_output(std::vector<ff_node*>& w) {
-        w = nodes;
-        return 0;
-    }
-
-    void fill_nodes(std::vector<ff_node*>& w) { nodes = w;}
 
     int create_input_buffer(int nentries, bool fixedsize=true) {
         return ff_node::create_input_buffer(nentries,fixedsize);
@@ -102,8 +96,6 @@ public:
         return ff_monode::run(); 
     }
     int wait()  { return ff_monode::wait(); }
-protected:
-  std::vector<ff_node*> nodes;
 };
 /* --------------------------------------- */
 class C: public ff_minode {
@@ -123,12 +115,6 @@ public:
             ff_send_out((void*)FF_EOS);
         }
     }
-    // this is pure virtual in ff_minode
-   int set_input(std::vector<ff_node*>& w) {
-        w = nodes;
-        return 0;
-    }
-    void fill_nodes(std::vector<ff_node*>& w) { nodes = w;}
     
     int create_input_buffer(int nentries, bool fixedsize=true) {
         return ff_minode::create_input_buffer(nentries,fixedsize);
@@ -141,8 +127,6 @@ public:
         return ff_minode::run(); 
     }
     int wait()  { return ff_minode::wait(); }
-protected:
-  std::vector<ff_node*> nodes;
 };
 /* --------------------------------------- */
 
@@ -170,7 +154,7 @@ public:
 int main() {
     A a;  B b;
     C c;  D d;
-    ff_buffernode buf(100);
+    ff_buffernode buf(100); // this is just a buffer
 
     // create input buffer for each node
     a.create_input_buffer(100);
@@ -180,15 +164,15 @@ int main() {
     
     //set output buffer for each node
     a.set_output_buffer(b.get_in_buffer());
-    std::vector<ff_node*> w;
+    svector<ff_node*> w;
     w.push_back(&a);
     w.push_back(&buf);
-    b.fill_nodes(w);
+    b.set_output(w);
     c.set_output_buffer(d.get_in_buffer());
     w.clear();
     w.push_back(&buf);
     w.push_back(&d); 
-    c.fill_nodes(w);
+    c.set_input(w);
     d.set_output_buffer(c.get_in_buffer());
     
     a.skipfirstpop(true);  

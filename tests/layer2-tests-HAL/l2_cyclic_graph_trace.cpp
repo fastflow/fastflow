@@ -62,7 +62,9 @@ using namespace ff;
 class E: public ff_monode {
 public:
 
-    E(std::vector<ff_node*>& w,long id, long ntasks, long niterations):workers(w),id(id),ntasks(ntasks),niterations(niterations) {}
+    E(svector<ff_node*>& w,long id, long ntasks, long niterations):id(id),ntasks(ntasks),niterations(niterations) {
+        set_output(w);
+    }
     
     int svc_init() {
         printf("E1 initialised: sending %ld tasks\n",ntasks);
@@ -82,11 +84,6 @@ public:
         else return GO_ON;                
     }
 
-    int set_output(std::vector<ff_node*>& w) {
-        w = workers;
-        return 0;
-    }
-
     int create_input_buffer(int nentries, bool fixedsize=true) {
         return ff_monode::create_input_buffer(nentries, fixedsize);
     }
@@ -95,8 +92,6 @@ public:
         return ff_monode::wait(); 
     }
 
-protected:
-    std::vector<ff_node*> workers;
 private:
     long id;
     long ntasks;
@@ -138,10 +133,6 @@ public:
         return ff_node::set_output_buffer(o); 
     }
 
-    
-
-protected:
-    std::vector<ff_node*> workers;
 private:
     long id;
     long received;
@@ -152,7 +143,8 @@ private:
 class C: public ff_minode {
 public:
 
-    C(std::vector<ff_node*>& w,long id):workers(w),id(id) {
+    C(svector<ff_node*>& w,long id):id(id) {
+        set_input(w);
     }
     
     int svc_init() {
@@ -172,11 +164,6 @@ public:
         return GO_ON;                
     }
 
-    int set_input(std::vector<ff_node*>& w) {
-        w = workers;
-        return 0;
-    }
-
     int create_input_buffer(int nentries, bool fixedsize=true) {
         return ff_minode::create_input_buffer(nentries, fixedsize);
     }
@@ -185,8 +172,6 @@ public:
         return ff_minode::wait(); 
     }
    
-protected:
-    std::vector<ff_node*> workers;
 private:
     long id;
     long received;
@@ -205,7 +190,7 @@ int main(int argc, char ** argv) {
     
     
     // Crete 6 generic nodes - 1 in channel 1 out channel
-    std::vector<N*> n;
+    svector<N*> n;
     for (int i=0;i<6;++i) {
         N *p = new N(i);
         p->create_input_buffer(100);
@@ -213,13 +198,12 @@ int main(int argc, char ** argv) {
     }
     // Create 2 emitters e1,e2 and the links 
     // e1->n1, e1->n2, e2->n3, e2->n4
-    std::vector<ff_node*> we[2];
+    svector<ff_node*> we[2];
     we[0].push_back(n[0]);
     we[0].push_back(n[1]);
-    //std::vector<ff_node*> we2;
     we[1].push_back(n[2]);
     we[1].push_back(n[3]);
-    std::vector<E*> e;
+    svector<E*> e;
     for (int i=0;i<2;++i) {
         E *p = new E(we[i],i /* id */,ntasks,niterations);
         // Emitters starts the game, they do not wait for the first input
@@ -242,10 +226,10 @@ int main(int argc, char ** argv) {
     
     n[1]->create_output_buffer(100);
     n[2]->create_output_buffer(100);
-    std::vector<ff_node*> wc;
+    svector<ff_node*> wc;
     wc.push_back(n[1]);
     wc.push_back(n[2]);
-    std::vector<C*> c;
+    svector<C*> c;
     c.push_back(new C(wc,0 /* id */));
     c[0]->create_input_buffer(10);
  

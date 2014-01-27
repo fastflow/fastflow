@@ -102,8 +102,31 @@ int main() {
     for(int i=0;i<4;++i) W.push_back(new seq);
     farm2.add_workers(W);
     farm2.run_and_wait_end();
-    printf("done 4rd\n\n");
+    printf("done 4th\n\n");
     /* ------------------------------------------- */
+
+    /* ------------------------------------------- */
+    // Another version using a lambda function to define the Emitter thread,
+    // which generates the stream. No collector present.
+
+    // just an ff_node
+    struct MyNode: ff_node {
+        void *svc(void *t) {
+            printf("worker %d got one task\n", get_my_id());
+            return t;
+        }
+    };
+    const int K2 = 20;
+    auto lambda2 = [K2]() -> void* {
+        static int k = 0;
+        if (k++ == K2) return NULL;
+        return new int(k);
+    };
+    W.clear();
+    for(int i=0;i<7;++i) W.push_back(new MyNode);
+    ff_farm<> farm3(W, new Emitter(lambda2));
+    farm3.run_and_wait_end();
+    printf("done 5th\n\n");
 #endif 
 
     return 0;

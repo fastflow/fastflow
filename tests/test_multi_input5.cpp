@@ -24,92 +24,88 @@
  *
  ****************************************************************************
  */
-
-/* Author: Massimo Torquati
- * 
- *  Using ff_monode (multi-output node) as a pipeline stage. 
+/* Author: Massimo
+ * Date  : January 2014
  *
- *    -----            ------            ------ 
- *   |  A  |--------> |  B   |--------> |  C   |
- *   |     |          |      |          |      |
- *    -----            ------            ------ 
- *        ^              |           
- *         \             |           
- *          -------------            
+ */
+/*  
+ *         
+ *    Stage0 -----> Stage1 -----> Stage2 -----> Stage3
+ *    ^  ^ ^             |          |              | 
+ *     \  \ \------------           |              |
+ *      \  \-------------------------              |
+ *       \-----------------------------------------                                              
  *
  */
 
-#include <ff/node.hpp>
 #include <ff/pipeline.hpp>
-#include <ff/farm.hpp>  // for ff_monode
+#include <ff/farm.hpp> 
 
 using namespace ff;
+long const int NUMTASKS=100;
 
-#define NUMTASKS 10
-
-/* --------------------------------------- */
-class A: public ff_node {
-public:
+struct Stage0: ff_minode {
+    int svc_init() { counter=0; return 0;}
     void *svc(void *task) {
-        static long k=1;
         if (task==NULL) {
-            ff_send_out((void*)k);
+            for(long i=1;i<=NUMTASKS;++i)
+                ff_send_out((void*)i);
             return GO_ON;
         }
-        printf("A received %ld back from B\n", (long)task);
-        if (k++==NUMTASKS) return NULL;
-        return (void*)k;
+        printf("STAGE0 got back %ld from %d\n", (long)task, get_channel_id());
+        ++counter;
+        if (counter == NUMTASKS) return NULL;
+        return GO_ON;
     }
+    long counter;
 };
-/* --------------------------------------- */
 
-class B: public ff_monode {
-public:
+struct Stage1: ff_monode {
     void *svc(void *task) {
-        const long t = (long)task;
-        printf("B got %ld from A\n", t);
-        if (t & 0x1) {
-            printf("B sending %ld to C\n", t);
-            ff_send_out_to(task, 1); 
+        if ((long)task & 0x1) {
+            ff_send_out_to(task, 0); // sends odd tasks back
+        } else {
+            ff_send_out_to(task, 1);
         }
-        printf("B sending %ld back\n", t);
-        ff_send_out_to(task, 0); 
         return GO_ON;
     }
-    
-    // void eosnotify(int) {
-    //     ff_send_out_to((void*)EOS, 1);
-    // }
-
-
-};
-/* --------------------------------------- */
-
-class C: public ff_node {
-public:
-    void *svc(void *t) { 
-        printf("C got %ld\n", (long)t);
-        return GO_ON;
+    void eosnotify(int) {
+        ff_send_out((void*)EOS);
     }
 };
-/* --------------------------------------- */
+struct Stage2: ff_monode {
+    void *svc(void *task) {
+        if ((long)task <= (NUMTASKS/2)) {
+            ff_send_out_to(task, 0); // sends even tasks less than back
+        } else 
+            ff_send_out_to(task, 1);
+        return GO_ON;
+    }
+    void eosnotify(int) {
+        ff_send_out((void*)EOS);
+    }
+};
+struct Stage3: ff_node {
+    void *svc(void *task) { 
+        assert(((long)task & ~0x1) && (long)task>(NUMTASKS/2));
+        return task; 
+    }
+};
 
 int main() {
-    A a;  B b;  C c;
-
-    ff_pipeline pipe1;
-    pipe1.add_stage(&a);
-    pipe1.add_stage(&b);
-    pipe1.wrap_around();
-    pipe1.setMultiOutput();
+    Stage0 s0; Stage1 s1; Stage2 s2; Stage3 s3;
 
     ff_pipeline pipe;
-    pipe.add_stage(&pipe1);
-    pipe.add_stage(&c);
+    pipe.add_stage(&s0);
+    pipe.add_stage(&s1);
+    pipe.wrap_around(true);
+    pipe.add_stage(&s2);
+    pipe.wrap_around(true);
+    pipe.add_stage(&s3);
+    pipe.wrap_around();
 
     pipe.run_and_wait_end();
+
     printf("DONE\n");
-    
     return 0;
 }
-

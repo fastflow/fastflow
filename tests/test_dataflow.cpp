@@ -53,11 +53,12 @@ using namespace ff;
  */
 class MU: public ff_minode {
 public:
-    MU(int numtasks, std::vector<ff_node*> & w):
-        numtasks(numtasks), k(0), workers(w) {}
+    MU(int numtasks):
+        numtasks(numtasks), k(0) {}
 
     void* svc(void* task) {
         if (task==NULL) {
+            printf("MU starting producing tasks\n");
             for(long i=1;i<=numtasks;++i)
                 ff_send_out((void*)i);
             return GO_ON;
@@ -68,38 +69,23 @@ public:
         else if (++k == numtasks) return NULL;
         return GO_ON;
     }
-
-    /* this allows to add the input channels by the user */
-    int set_input(std::vector<ff_node*>& w) {
-        printf("called set_input\n");
-        w = workers;
-        return 0;
-    }
 private:
     long numtasks;
     long k;
-    std::vector<ff_node*> workers;
 };
 
-class Scheduler: public ff_node {
-public:
-    void* svc(void* task) {
-
-
-        
+struct Scheduler: public ff_node {
+    void* svc(void* task) {        
         return task;
     }
 };
 
-
-class FU: public ff_node {
-public:
+struct FU: public ff_node {
     void* svc(void* task) {
-	printf("FU (%d) got one task\n", get_my_id());
-	return task;
+        printf("FU (%d) got one task\n", get_my_id());
+        return task;
     }
 };
-
 
 
 int main(int argc, char* argv[]) {
@@ -109,22 +95,25 @@ int main(int argc, char* argv[]) {
     }
     int nw=atoi(argv[1]);
     int numtasks=atoi(argv[2]); 
-
+    
     ff_pipeline pipe;
     ff_farm<>   farm;
+
     std::vector<ff_node *> w;
     for(int i=0;i<nw;++i) 
-	w.push_back(new FU);
+        w.push_back(new FU);
     farm.add_emitter(new Scheduler);
     farm.add_workers(w);
-    pipe.add_stage(new MU(numtasks, w));
+
+    pipe.add_stage(new MU(numtasks));
     pipe.add_stage(&farm);
-
-    /* -------------------- */
+    
+    /* this is needed to allow the creation of output buffer in the 
+     * farm workers 
+     */
     farm.remove_collector();
-    pipe.wrap_around();
-    /* -------------------- */
 
+    pipe.wrap_around();    
     pipe.run_and_wait_end();
 
     return 0;

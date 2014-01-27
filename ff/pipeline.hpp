@@ -29,9 +29,9 @@
  ****************************************************************************
  */
 
-#include <vector>
 #include <functional>
 #include <ff/node.hpp>
+#include <ff/svector.hpp>
 
 #if defined( HAS_CXX11_VARIADIC_TEMPLATES )
 #include <tuple>
@@ -129,14 +129,31 @@ protected:
         // create input FFBUFFER
         int nstages=static_cast<int>(nodes_list.size());
         for(int i=1;i<nstages;++i) {
-            if (nodes_list[i]->create_input_buffer(in_buffer_entries, fixedsize)<0) {
-                error("PIPE, creating input buffer for node %d\n", i);
-                return -1;
+            if (nodes_list[i]->isMultiInput()) {
+                if (nodes_list[i-1]->create_output_buffer(out_buffer_entries, 
+                                                          fixedsize)<0)
+                    return -1;
+                svector<ff_node*> w(256);
+                nodes_list[i-1]->get_out_nodes(w);
+                if (w.size() == 0)
+                    nodes_list[i]->set_input(nodes_list[i-1]);
+                else
+                    nodes_list[i]->set_input(w);
+            } else {
+                if (nodes_list[i]->create_input_buffer(in_buffer_entries, fixedsize)<0) {
+                    error("PIPE, creating input buffer for node %d\n", i);
+                    return -1;
+                }
             }
         }
         
         // set output buffer
         for(int i=0;i<(nstages-1);++i) {
+            if (nodes_list[i+1]->isMultiInput()) continue;
+            if (nodes_list[i]->isMultiOutput()) {
+                nodes_list[i]->set_output(nodes_list[i+1]);
+                continue;
+            }
             if (nodes_list[i]->set_output_buffer(nodes_list[i+1]->get_in_buffer())<0) {
                 error("PIPE, setting output buffer to node %d\n", i);
                 return -1;
@@ -185,8 +202,9 @@ protected:
             barrier->barrierSetup(nthreads);
         }
         if (!prepared) if (prepare()<0) return -1;
+        int startid = (get_my_id()>0)?get_my_id():0;
         for(int i=0;i<nstages;++i) {
-            nodes_list[i]->set_id(i);
+            nodes_list[i]->set_id(i+startid);
             if (nodes_list[i]->freeze_and_run(true)<0) {
                 error("ERROR: PIPE, (freezing and) running stage %d\n", i);
                 return -1;
@@ -232,6 +250,10 @@ public:
                 delete n;
             }
         }
+        for(size_t i=0;i<internalSupportNodes.size();++i) {
+            delete internalSupportNodes.back();
+            internalSupportNodes.pop_back();
+        }
     }
 
     /** WARNING: if these methods are called after prepare (i.e. after having called
@@ -247,30 +269,59 @@ public:
      *  \param s a ff_node that is the stage to be added to the skeleton. The
      *  stage contains the task that has to be executed.
      */
-    int add_stage(ff_node * s) {        
-        nodes_list.push_back(s);
+    int add_stage(ff_node * s) {
+        if (nodes_list.size()==0 && s->isMultiInput())
+            ff_node::setMultiInput();
+        nodes_list.push_back(s);        
         return 0;
     }
+
+    inline void setMultiOutput() { 
+        ff_node::setMultiOutput();        
+    }
+
 
     /**
      * The last stage output queue will be connected 
      * to the first stage input queue (feedback channel).
      */
-    int wrap_around() {
+    int wrap_around(bool multi_input=false) {
         if (nodes_list.size()<2) {
             error("PIPE, too few pipeline nodes\n");
             return -1;
         }
 
         fixedsize=false; // NOTE: forces unbounded size for the queues!
+        int last = static_cast<int>(nodes_list.size())-1;
+        if (nodes_list[0]->isMultiInput()) {
+            if (nodes_list[last]->isMultiOutput()) {
+                ff_node *t = new ff_buffernode(out_buffer_entries,fixedsize);
+                if (!t) return -1;
+                t->set_id(last); // NOTE: that's not the real node id !
+                internalSupportNodes.push_back(t);
+                nodes_list[0]->set_input(t);
+                nodes_list[last]->set_output(t);
+            } else {
+                if (create_output_buffer(out_buffer_entries, fixedsize)<0)
+                    return -1;
+                svector<ff_node*> w(256);
+                this->get_out_nodes(w);
+                nodes_list[0]->set_input(w);
+            }
+            if (!multi_input) nodes_list[0]->skipfirstpop(true);
 
-        if (create_input_buffer(out_buffer_entries, fixedsize)<0)
-            return -1;
-        
-        if (set_output_buffer(get_in_buffer())<0)
-            return -1;
-
-        nodes_list[0]->skipfirstpop(true);
+        } else {
+            if (create_input_buffer(out_buffer_entries, fixedsize)<0)
+                return -1;
+            
+            if (nodes_list[last]->isMultiOutput()) 
+                nodes_list[last]->set_output(nodes_list[0]);
+            else 
+                if (set_output_buffer(get_in_buffer())<0)
+                    return -1;            
+            
+            nodes_list[0]->skipfirstpop(true);
+        }
 
         return 0;
     }
@@ -279,7 +330,17 @@ public:
      * \brief Delete nodes when the destructor is called.
      *
      */
-    void cleanup_nodes() { node_cleanup = true; }
+    inline void cleanup_nodes() { node_cleanup = true; }
+
+
+    inline void get_out_nodes(svector<ff_node*>&w) {
+        assert(nodes_list.size()>0);
+        int last = static_cast<int>(nodes_list.size())-1;
+        nodes_list[last]->get_out_nodes(w);
+        if (w.size()==0) 
+            w.push_back(nodes_list[last]);
+    }
+
 
     /**
      * It run the Pipeline skeleton.
@@ -299,8 +360,9 @@ public:
         }
         if (!prepared) if (prepare()<0) return -1;
 
+        int startid = (get_my_id()>0)?get_my_id():0;
         for(int i=0;i<nstages;++i) {
-            nodes_list[i]->set_id(i);
+            nodes_list[i]->set_id(i+startid);
             if (nodes_list[i]->run(true)<0) {
                 error("ERROR: PIPE, running stage %d\n", i);
                 return -1;
@@ -561,7 +623,9 @@ protected:
             error("PIPE, creating input buffer for node 0\n");
             return -1;
         }
-        ff_node::set_input_buffer(nodes_list[0]->get_in_buffer());
+        if (!nodes_list[0]->isMultiInput()) 
+            ff_node::set_input_buffer(nodes_list[0]->get_in_buffer());
+
         return 0;
     }
     
@@ -594,6 +658,15 @@ protected:
         return 0;
     }
 
+    inline int set_input(ff_node *node) { 
+        return nodes_list[0]->set_input(node);
+    }
+
+    inline int set_output(ff_node *node) {
+        int last = static_cast<int>(nodes_list.size())-1;
+        return nodes_list[last]->set_output(node);
+    }
+
 private:
     bool has_input_channel; // for accelerator
     bool prepared;
@@ -601,7 +674,8 @@ private:
     bool fixedsize;
     int in_buffer_entries;
     int out_buffer_entries;
-    std::vector<ff_node *> nodes_list;
+    svector<ff_node *> nodes_list;
+    svector<ff_node*>  internalSupportNodes;
 };
 
 
