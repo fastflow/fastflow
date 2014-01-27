@@ -26,7 +26,8 @@
  */
 
 /*  
- *     2-stages pipeline                         ____________________
+ *     2-stages pipeline:  pipe(farm1, farm2)
+ *                                               ____________________
  *                                              |                    |
  *                     --> Worker1 -->          |       --> Worker2--|
  *                    |               |         v      |             ^
@@ -37,7 +38,7 @@
  *                                    |
  *                                     --- NOTE: no collector present here !
  *
- * DefEmitter is the default emitter for the farm template.
+ * 
  */
 
 #include <iostream>
@@ -65,25 +66,23 @@ public:
         int wid = lb->get_channel_id();
         if (wid == -1) {
             printf("TASK FROM INPUT %ld\n", (long)(t));
-            // task caming from Worker1 workers
+            // task caming from farm1's workers
             return t;
         }
-        printf("got back a task from Worker2 id=%d\n", wid);
+        printf("got back a task from Worker2(%d)\n", wid);
         return GO_ON;
     }
 private:
     ff_loadbalancer *lb;
 };
 
-class Worker1: public ff_node {
-public:
+struct Worker1: ff_node {
     void* svc(void* task) {
         return task;
     }
 };
 
-class Worker2: public ff_node {
-public:
+struct Worker2: ff_node {
     void* svc(void* task) {
         return task;
     }
@@ -113,13 +112,16 @@ int main(int argc, char* argv[]) {
     farm1.remove_collector();
 
     w.clear();
-    for(int i=0;i<nworkers;++i) {
+    for(int i=0;i<nworkers;++i)
         w.push_back(new Worker2);
-    }
+    
     farm2.add_emitter(new Emitter2(farm2.getlb()));
     farm2.add_workers(w);
     farm2.wrap_around();
-    farm2.set_multi_input(farm1.getWorkers(),farm1.getNWorkers());
+
+    // set_multi_input is no longer supported, 
+    //farm2.set_multi_input(farm1.getWorkers());
+    farm2.setMultiInput();
 
     pipe.run_and_wait_end();
 

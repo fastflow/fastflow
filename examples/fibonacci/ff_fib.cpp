@@ -1,17 +1,5 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-/*!
- *  \link
- *  \file ff_fib.cpp 
- *  \ingroup application_level
- *
- *  \brief This file contains the implementation of fibonacci program written
- *  in FastFlow with skeletal programming patterns.
- *
- *  It computes the n-th Fibonacci sequence number using a 
- *  simple stream parallel approach
- */
-
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as 
@@ -38,7 +26,20 @@
  ****************************************************************************
  */
 
-//#include <unistd.h>
+/*!
+ *  \link
+ *  \file ff_fib.cpp 
+ *  \ingroup application_level
+ *
+ *  \brief This file contains the implementation of fibonacci program written
+ *  in FastFlow with skeletal programming patterns.
+ *
+ *  It computes the n-th Fibonacci sequence number using a 
+ *  simple stream parallel approach
+ *
+ */
+
+
 #include <stdlib.h>
 #include <iostream>
 #include <stdint.h>
@@ -56,13 +57,16 @@ inline uint64_t fib(uint64_t n) {
  *  \class Worker
  *  \ingroup application_level
  *
- *  \breif It defines the workers of the form.
+ *  \breif It defines the workers of the farm.
  *
  *  This class is defined in \ref ff_fib.cpp
  */
 
-class Worker: public ff_node {
-public:
+struct Worker:  ff_node {
+    int svc_init() {
+        printf("Worker %d is on core %d\n", get_my_id(), ff_getMyCpu());
+        return 0;
+    }
     void * svc(void * task) {
         return (void*)fib((uint64_t)task);
     }
@@ -79,32 +83,37 @@ public:
 
 class Emitter: public ff_node {
 private:
-    inline void generate_stream(int k) {
-    if (k<=b) {
-        ff_send_out((void*)k);
-        ++streamlen;
-        return;
-    }
-    generate_stream(k-1);
-    generate_stream(k-2);
+    inline void generate_stream(size_t k) {
+        if (k<=b) {
+            ff_send_out((void*)k);
+            ++streamlen;
+            return;
+        }
+        generate_stream(k-1);
+        generate_stream(k-2);
     }
 public:
-    Emitter(int n, int b):n(n),b(b),streamlen(0),result(0) {};
+    Emitter(size_t n, size_t b):n(n),b(b),streamlen(0),result(0) {};
 
+    int svc_init() {
+        printf("Emitter is on core %d\n", ff_getMyCpu());
+        return 0;
+    }    
     void * svc(void * task) {
-    if (task==NULL) generate_stream(n);
-    else {
-        result +=(uint64_t)task;
-        if (--streamlen == 0) return NULL;
+        if (task==NULL) generate_stream(n);
+        else {
+            result +=(uint64_t)task;
+            if (--streamlen == 0) return NULL;
+        }
+        return GO_ON;
     }
-    return GO_ON;
-    }
-
+    
     uint64_t get_result() const { return result; }
+
 private:
-    int n;
-    int b;
-    int streamlen;
+    size_t n;
+    size_t b;
+    size_t streamlen;
     uint64_t result;
 };
 
@@ -115,11 +124,11 @@ void usage(char * name) {
 
 int main(int argc, char * argv[]) {
     bool check=false;
-    int n,b=20; 
+    size_t n,b=20; 
 #ifdef HAVE_SYSCONF_NPROCESSORS
-    int nworkers = sysconf(_SC_NPROCESSORS_ONLN);
+    size_t nworkers = sysconf(_SC_NPROCESSORS_ONLN);
 #else
-    int nworkers = 2;
+    size_t nworkers = 2;
 #endif
 
     if (argc>=3) {
@@ -143,11 +152,18 @@ int main(int argc, char * argv[]) {
         return 0;
     }
 
+    int numCores = ff_numCores();
+
     ff_farm<> farm;    
     Emitter E(n, b);
+    E.setAffinity(nworkers % numCores);
     farm.add_emitter(&E);
     std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
+    for(size_t i=0;i<nworkers;++i) {
+        Worker *n = new Worker;
+        n->setAffinity(i % numCores);
+        w.push_back(n);
+    }
     farm.add_workers(w);
     farm.wrap_around();
     if (farm.run_and_wait_end()<0) {
@@ -157,8 +173,8 @@ int main(int argc, char * argv[]) {
 
     std::cout << "fib(" << n << ")= " << E.get_result() << "\n";
     printf("Time: %g (ms)\n", farm.ffTime());
-    printf("n. of workers used: %d\n", nworkers);
-    printf("n-stop value used is: %d\n", b);
+    printf("n. of workers used: %ld\n", nworkers);
+    printf("n-stop value used is: %ld\n", b);
 
     if (check && n>30) {
         if (fib(n) != E.get_result()) {
