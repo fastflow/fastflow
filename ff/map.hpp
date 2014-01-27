@@ -87,10 +87,12 @@ namespace ff {
 
 #if (__cplusplus >= 201103L) || (defined(HAS_CXX11_AUTO) && defined(HAS_CXX11_LAMBDA))
 #define FF_MAP(mapname,V,size,func,nworkers)                        \
-	auto _grain = size/nworkers;										\
-    FF_PARFOR_BEGIN(mapname, i, 0, size, 1, _grain, nworkers) {		\
+	{                                                               \
+     auto _grain = size/nworkers;                                   \
+     FF_PARFOR_BEGIN(mapname, i, 0, size, 1, _grain, nworkers) {	\
         V[i]=func(i);                                               \
-    } FF_PARFOR_END(mapname)
+     } FF_PARFOR_END(mapname)                                       \
+    }
 #else
 #pragma message("C++ >= 201103L required, build will fail")
 #endif
@@ -317,9 +319,8 @@ public:
         delete (mapE*)(getEmitter());
         mapC* C = (mapC*)(getCollector());
         if (C) delete C;
-        ff_node** w= getWorkers();
-        int nw= getNWorkers();
-        for(int i=0;i<nw;++i) delete (mapW*)(w[i]);	
+        const svector<ff_node*>& w= getWorkers();
+        for(size_t i=0;i<w.size();++i) delete (mapW*)(w[i]);	
     }
 
     int   get_my_id() const { return -1; };

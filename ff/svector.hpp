@@ -115,7 +115,7 @@ public:
      */
     svector& operator=(const svector & v) {
         len=0;
-        if(!v.len) first=0; 
+        if(!v.len) first=NULL; 
         else {
             const_iterator i1=v.begin();
             const_iterator i2=v.end();
@@ -123,6 +123,16 @@ public:
             first=(vector_type*)::malloc((i2-i1)*sizeof(vector_type));
             while(i1!=i2) push_back(*(i1++));
         }
+        return *this;
+    }
+
+    /**
+     * Overloading of operator +=
+     */
+    svector& operator+=(const svector & v) {
+        const_iterator i1=v.begin();
+        const_iterator i2=v.end();
+        while(i1!=i2) push_back(*(i1++));
         return *this;
     }
 
@@ -170,6 +180,14 @@ public:
     inline vector_type& back() { 
         return first[len-1]; 
         //return *(vector_type *)0;
+    }
+
+    inline vector_type& front() {
+        return first[0];
+    }
+
+    inline const vector_type& front() const {
+        return first[0];
     }
 
     /**
@@ -229,6 +247,9 @@ public:
      */
     const_iterator end() const { return first+len; }
     
+    
+
+
     /**
      * Overloading of operator []
      */

@@ -34,13 +34,14 @@
 
 #include <stdlib.h>
 #include <iostream>
-#include "ff/platforms/platform.h"
+#include <ff/platforms/platform.h>
 #include <ff/cycle.h>
 #include <ff/utils.hpp>
 #include <ff/buffer.hpp>
 #include <ff/ubuffer.hpp>
 #include <ff/mapper.hpp>
 #include <ff/config.hpp>
+#include <ff/svector.hpp>
 
 namespace ff {
 
@@ -869,6 +870,28 @@ protected:
     }
 
     /**
+     *  used for multi input node (ff_minode) 
+     * 
+     *
+     */
+    virtual inline int set_input(svector<ff_node *> & w) { return -1;}
+    virtual inline int set_input(ff_node *) { return -1;}
+    virtual inline bool isMultiInput() const { return multiInput;}
+    virtual inline void setMultiInput()      { multiInput = true; }
+
+    /**
+     *  used for multi output node (ff_monode) 
+     * 
+     *
+     */
+    virtual inline int set_output(svector<ff_node *> & w) { return -1;}
+    virtual inline int set_output(ff_node *) { return -1;}
+    virtual inline bool isMultiOutput() const { return multiOutput;}
+    virtual inline void setMultiOutput()      { multiOutput = true; }
+
+    virtual inline void get_out_nodes(svector<ff_node*>&w) {}
+
+    /**
      * \brief Executes the FastFlow thread
      *
      * It executes the FastFlow thread.
@@ -1291,7 +1314,9 @@ protected:
      */
     ff_node():in(0),out(0),myid(-1),CPUId(-1),
               myoutbuffer(false),myinbuffer(false),
-              skip1pop(false), in_active(true), thread(NULL),callback(NULL),barrier(NULL),
+              skip1pop(false), in_active(true), 
+              multiInput(false), multiOutput(false), 
+              thread(NULL),callback(NULL),barrier(NULL),
               end_callback(NULL), end_callback_param(NULL) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
@@ -1605,6 +1630,8 @@ private:
     bool              myinbuffer;
     bool              skip1pop;
     bool              in_active;    // allows to disable/enable input tasks receiving   
+    bool              multiInput;   // if the node is a multi input node this is true
+    bool              multiOutput;  // if the node is a multi output node this is true
     thWorker        * thread;       /// A \p thWorker object, which extends the \p ff_thread class 
     bool (*callback)(void *,unsigned int,unsigned int, void *);
     void            * callback_arg;

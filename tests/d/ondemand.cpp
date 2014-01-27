@@ -16,6 +16,8 @@ typedef zmqTransportMsg_t msg_t;
 int main(int argc, char * argv[]) {    
     if (argc != 5) {
 	std::cerr << "use: " << argv[0] << " name 1|0 nhosts master-host:port\n";
+	std::cerr << "  1|0   : 1 for the master 0 for other hosts\n";
+	std::cerr << "  nhosts: is the number of hosts for the master and the hostID for the others\n";
 	return -1;
     }
     

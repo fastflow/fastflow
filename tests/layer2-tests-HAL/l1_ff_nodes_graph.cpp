@@ -44,13 +44,16 @@
 #include <ff/node.hpp>
 #include <ff/farm.hpp>
 #include <ff/spin-lock.hpp>
+#include <ff/svector.hpp>
 
 using namespace ff;
 
 class A: public ff_monode {
 public:
 
-    A(std::vector<ff_node*>& w,long ntasks):workers(w),ntasks(ntasks) {}
+    A(svector<ff_node*>& w,long ntasks):ntasks(ntasks) {
+        set_output(w);
+    }
 
     int svc_init() {
         printf("A initialised: sending %ld tasks\n",ntasks);
@@ -64,18 +67,10 @@ public:
         return NULL;
     }
 
-    /* This allows to add the input channels */
-    int set_output(std::vector<ff_node*>& w) {
-        w = workers;
-        return 0;
-    }
-
     int wait() { 
         return ff_monode::wait();
     }
 
-protected:
-    std::vector<ff_node*> workers;
 private:
     long ntasks;
 };
@@ -83,7 +78,9 @@ private:
 
 class B: public ff_monode {
 public:
-    B(std::vector<ff_node*>& w):workers(w) {}
+    B(svector<ff_node*>& w) { 
+        set_output(w);
+    }
 
     int svc_init() {
         printf("B initialised: should receive half of the tasks (+/-1)\n");
@@ -96,20 +93,11 @@ public:
         return t;                
     }
 
-    /* this allows to add the input channels */
-    int set_output(std::vector<ff_node*>& w) {
-        w = workers;
-        return 0;
-    }
-
     int wait() { return ff_monode::wait(); }
 
     int create_input_buffer(int nentries, bool fixedsize=true) {
         return ff_node::create_input_buffer(nentries, fixedsize);
     }
-
-protected:
-    std::vector<ff_node*> workers;
 };
 
 class C: public ff_node {
@@ -147,7 +135,6 @@ public:
     }
 
 protected:
-    std::vector<ff_node*> workers;
     lock_t lock;
 private:
     long received;
@@ -176,12 +163,12 @@ int main() {
     D d;
     d.create_input_buffer(100);
 
-    std::vector<ff_node*> wB;
+    svector<ff_node*> wB;
     wB.push_back(&d);
     wB.push_back(&c);
     B b(wB);
     b.create_input_buffer(100);
-    std::vector<ff_node*> wA;
+    svector<ff_node*> wA;
     wA.push_back(&b);
     wA.push_back(&c);
     A a(wA,ntasks);
