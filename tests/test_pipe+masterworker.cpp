@@ -50,17 +50,16 @@
 
 using namespace ff;
 
-class Worker1: public ff_node {
-public:
+struct  Worker1: ff_node {
     void * svc(void * task) {
         usleep(10000);
         return task;
     }
 };
 
-class Worker2: public ff_node {
-public:
+struct Worker2: ff_node {
     void * svc(void * task) {
+        printf("W2(%d) got %ld\n", get_my_id(), *(long*)task);
         usleep(500);
         return task;
     }
@@ -68,20 +67,36 @@ public:
 
 class Emitter: public ff_node {
 public:
+    Emitter(ff_loadbalancer *const lb):eosarrived(false),numtasks(0),lb(lb) {}
     void * svc(void * task) {
-        int * t = (int *)task;
-        if (*t % 2)  return GO_ON;
-        ++(*t);
+        long * t = (long *)task;
+        if (*t % 2)  {
+            if (lb->get_channel_id()>=0) { // received from workers
+                if (--numtasks == 0 && eosarrived) return NULL;
+            }
+            return GO_ON;
+        }
+        ++(*t), ++numtasks;
         return task;
     }
+    void eosnotify(int id) {
+        if (id == -1) {
+            eosarrived= true;
+            if (numtasks==0) lb->broadcast_task(EOS);
+        }
+    }
+protected:
+    bool eosarrived;
+    long numtasks;
+    ff_loadbalancer *const lb;
 };
 
 class Start: public ff_node {
 public:
     Start(int streamlen):streamlen(streamlen) {}
     void* svc(void*) {    
-        for (int j=0;j<streamlen;j++) {
-            int * ii = new int(j);
+        for (long j=0;j<streamlen;j++) {
+            long * ii = new long(j);
             ff_send_out(ii);            
         }
         return NULL;
@@ -123,9 +138,8 @@ int main(int argc,
 
     pipe.add_stage(&farm1);
 
-
     ff_farm<> farm2;
-    Emitter emitter;
+    Emitter emitter(farm2.getlb());
     farm2.add_emitter(&emitter);
 
     w.clear();
@@ -133,7 +147,7 @@ int main(int argc,
     farm2.add_workers(w);
 
     // set master_worker mode 
-    farm2.wrap_around();
+    farm2.wrap_around(true);
 
     pipe.add_stage(&farm2);
     pipe.run_and_wait_end();

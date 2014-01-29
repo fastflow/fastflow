@@ -57,24 +57,54 @@
 using namespace ff;
 
 // generic worker
-class Worker: public ff_node {
-public:
+struct Worker: ff_node {
+    Worker(int id):id(id) {}
     void * svc(void * task) {
-        std::cerr << "sleeping....\n";
+        printf("FARM(%d) W(%d): got %ld, now sleeping for a while....\n", id,get_my_id(), *(long*)task);
         usleep(10000);
         return task;
+    }
+    int id;
+
+    void svc_end() {
+        printf("FARM(%d) W(%d) EXITING\n",id,get_my_id());
     }
 };
 
 class Emitter: public ff_node {
 public:
-    void * svc(void * task) {
-        int * t = (int *)task;
+    Emitter(int id, ff_loadbalancer *const lb):eosarrived(false),_id(id), numtasks(0),lb(lb) {}
 
-        if (*t % 2)  return GO_ON;
+    int svc_init(){
+        printf("Emitter %d started\n", _id);
+        return 0;
+    }
+
+    void * svc(void * task) {
+        long * t = (long *)task;
+
+        if (*t % 2)  {
+            if (lb->get_channel_id()>=0) { // received from workers
+                if (--numtasks == 0 && eosarrived)
+                    return NULL;
+            }
+            return GO_ON;
+        }
+        ++numtasks;
         ++(*t);
         return task;
     }
+    void eosnotify(int id) {
+        if (id == -1) {
+            eosarrived= true;
+            if (numtasks==0) lb->broadcast_task(EOS);
+        }
+    }
+protected:
+    bool eosarrived;
+    int _id;
+    long numtasks;
+    ff_loadbalancer *const lb;
 };
 
 
@@ -83,8 +113,8 @@ public:
     mainEmitter(int streamlen):streamlen(streamlen) {}
 
     void * svc(void *) {
-        for(int i=1;i<=streamlen;++i)
-            ff_send_out(new int(i));
+        for(long i=1;i<=streamlen;++i)
+            ff_send_out(new long(i));
         return NULL;
     }
 private:
@@ -114,19 +144,21 @@ int main(int argc,
     ff_farm<> mainFarm;
     mainEmitter mainE(streamlen);
     mainFarm.add_emitter(&mainE);
+    mainFarm.set_scheduling_ondemand();
 
     std::vector<ff_node *> w;
     std::vector<ff_node *> w2;
     for(int i=0;i<nworkers;++i) {
-        Emitter * e = new Emitter;
         ff_farm<> * W = new ff_farm<>;
+        Emitter * e = new Emitter(i,W->getlb());
         W->add_emitter(e);
         
-        w.push_back(new Worker);
-        //w.push_back(new Worker);
+        w.push_back(new Worker(i));
+        w.push_back(new Worker(i));
+
         W->add_workers(w);
         w.clear();
-        W->wrap_around();
+        W->wrap_around(true);
 
         w2.push_back(W);
     }

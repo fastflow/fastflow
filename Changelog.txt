@@ -1,4 +1,8 @@
 * 27/01/14 - v.2.0.3
+   - parallel_for/reduce: fixed some issues and optimized the case when it is 
+     used with just 1 thread
+   - ff_send_out_to modified in order to better work with ondemand scheduling
+     policy
    - changed some int types with size_t, moved to svector whenever possible
    - more possible combinations of farm, pipeline and feedback using 
      ff_minode and ff_monode

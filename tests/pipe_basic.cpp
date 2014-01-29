@@ -147,10 +147,10 @@ int main() {
     k=-1; // reset k
 
     /* ------------------------------------------- */
-    // MDF-like pattern. Pipeline of 2 stages: sequential    
+    // Pipeline of 3 stages: sequential, sequential     
     // and farm-with-feedback.
-    ff_farm<> farm0((func_t)f2, 3);
-    ff_pipe<myTask> pipe6(f1,&farm0);
+    ff_farm<> farm0((func_t)f3, 3);
+    ff_pipe<myTask> pipe6(f1,f2,&farm0);
     struct Scheduler:public ff_node {
         ff_loadbalancer* lb;
         Scheduler(ff_loadbalancer* lb):lb(lb) {}
@@ -161,6 +161,9 @@ int main() {
             }
             return GO_ON;
         }            
+        void eosnotify(int id) {
+            if (id==-1) lb->broadcast_task(EOS);
+        }
     };
     farm0.add_emitter(new Scheduler(farm0.getlb()));
     farm0.remove_collector();

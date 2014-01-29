@@ -77,7 +77,7 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I. $(INCS)
-TARGET               = simplest test1 test2 test3 test3b test4 test5 test6 test7 perf_test1 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_map test_map2 test_mapreduce test_dotprod test_sendq test_spinBarrier test_multi_input test_multi_input2 test_multi_input3 test_multi_input4 test_multi_input5 test_multi_input6 test_accelerator+pinning test_mpmc test_stencil test_dataflow test_dataflow2 test_noinput_pipe test_stopstartthreads test_stopstartthreads2 test_MISD test_parfor test_parfor2 test_dotprod_parfor test_lb_affinity test_farm test_pipe farm_basic pipe_basic perf_parfor perf_parfor2 test_graphsearch test_multi_output
+TARGET               = simplest test1 test2 test3 test3b test3_farm test4 test5 test6 test7 perf_test1 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_map test_map2 test_mapreduce test_dotprod test_sendq test_spinBarrier test_multi_input test_multi_input2 test_multi_input3 test_multi_input4 test_multi_input5 test_multi_input6 test_multi_input7 test_accelerator+pinning test_mpmc test_stencil test_dataflow test_dataflow2 test_noinput_pipe test_stopstartthreads test_stopstartthreads2 test_MISD test_parfor test_parfor2 test_dotprod_parfor test_lb_affinity test_farm test_pipe farm_basic pipe_basic perf_parfor perf_parfor2 test_graphsearch test_multi_output
 #test_mpmc2 test_bmpmc latency_MPMC 
 
 
@@ -114,6 +114,7 @@ test1:test1.o
 test2:test2.o
 test3:test3.o
 test3b:test3b.o
+test3_farm:test3_farm.o
 test4:test4.o
 test5:test5.o
 test6:test6.o
@@ -130,6 +131,7 @@ test_accelerator+pinning:test_accelerator+pinning.o
 test_ofarm:test_ofarm.o
 test_accelerator_ofarm:test_accelerator_ofarm.o
 test_accelerator_ofarm_multiple_freezing:test_accelerator_ofarm_multiple_freezing.o
+test_accelerator_masterworker:test_accelerator_masterworker.o
 test_farm+pipe:test_farm+pipe.o
 test_freeze:test_freeze.o
 test_masterworker:test_masterworker.o
@@ -154,6 +156,7 @@ test_multi_input3:test_multi_input3.o
 test_multi_input4:test_multi_input4.o
 test_multi_input5:test_multi_input5.o
 test_multi_input6:test_multi_input6.o
+test_multi_input7:test_multi_input7.o
 test_multi_output:test_multi_output.o
 test_stencil:test_stencil.cpp
 	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)

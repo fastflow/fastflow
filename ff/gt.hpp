@@ -83,7 +83,7 @@ protected:
      *
      */
     virtual inline int selectworker() { 
-        do nextr = (nextr+1) % nworkers;
+        do nextr = (nextr+1) % workers.size(); // FIX: introduce running !
         while(offline[nextr]);
         return nextr;
     }
@@ -100,7 +100,7 @@ protected:
      *
      * The number of tentative before wasting some times and than retry 
      */
-    virtual inline unsigned int ntentative() { return nworkers;}
+    virtual inline size_t ntentative() { return getnworkers();}
 
     /**
      * \brief Loses the time out.
@@ -216,7 +216,7 @@ public:
      *  It creates \p max_num_workers and \p NULL pointers to worker objects.
      */
     ff_gatherer(int max_num_workers):
-        max_nworkers(max_num_workers),nworkers(0),nextr(0),
+        max_nworkers(max_num_workers), nextr(0),
         neos(0),neosnofreeze(0),channelid(-1),
         filter(NULL), workers(max_nworkers), offline(max_nworkers), buffer(NULL),
         skip1pop(false) {
@@ -256,7 +256,7 @@ public:
      *
      * \return The \p channelid is returned.
      */
-    int get_channel_id() const { return channelid;}
+    ssize_t get_channel_id() const { return channelid;}
 
     /**
      * \brief Gets the number of worker threads currently running.
@@ -265,7 +265,7 @@ public:
      *
      * \return Number of worker threads
      */
-    inline int getnworkers() const { return (int) workers.size()-neos-neosnofreeze; }
+    inline size_t getnworkers() const { return (size_t)(workers.size()-neos-neosnofreeze); }
     
     /**
      * \brief Skips the first pop
@@ -293,12 +293,11 @@ public:
      * \return 0 if successful, or -1 if not successful.
      */
     int  register_worker(ff_node * w) {
-        if (nworkers>=max_nworkers) {
-            error("GT, max number of workers reached (max=%d)\n",max_nworkers);
+        if (workers.size()>=max_nworkers) {
+            error("GT, max number of workers reached (max=%ld)\n",max_nworkers);
             return -1;
         }
         workers.push_back(w);
-        ++nworkers;
         return 0;
     }
 
@@ -385,7 +384,7 @@ public:
                     push(task);
                 }
             }
-        } while((neos<nworkers) && (neosnofreeze<nworkers));
+        } while((neos<workers.size()) && (neosnofreeze<workers.size()));
 
         if (outpresent) {
             // push EOS
@@ -395,8 +394,8 @@ public:
 
         gettimeofday(&wtstop,NULL);
         wttime+=diffmsec(wtstop,wtstart);
-        if (neos>=nworkers) neos=0;
-        if (neosnofreeze>=nworkers) neosnofreeze=0;
+        if (neos>=workers.size()) neos=0;
+        if (neosnofreeze>=workers.size()) neosnofreeze=0;
 
         return ret;
     }
@@ -439,14 +438,14 @@ public:
      */
     virtual int all_gather(void *task, void **V) {
         V[channelid]=task;
-        int nw=getnworkers();
+        size_t nw=getnworkers();
         svector<ff_node*> _workers(nw);
-        for(int i=0;i<nworkers;++i) 
+        for(size_t i=0;i<workers.size();++i) 
             if (!offline[i]) _workers.push_back(workers[i]);
         svector<int> retry(nw);
 
-        for(register int i=0;i<nw;++i) {
-            if(i!=channelid && !_workers[i]->get(&V[i]))
+        for(register size_t i=0;i<nw;++i) {
+            if(i!=(size_t)channelid && !_workers[i]->get(&V[i]))
                 retry.push_back(i);
         }
         while(retry.size()) {
@@ -455,7 +454,7 @@ public:
                 retry.pop_back();
             else losetime_in();
         }
-        for(register int i=0;i<nw;++i)
+        for(register size_t i=0;i<nw;++i)
             if (V[i] == (void *)FF_EOS || V[i] == (void*)FF_EOS_NOFREEZE)
                 return -1;
         FFTRACE(taskcnt+=nw-1);
@@ -515,13 +514,12 @@ public:
 #endif
 
 private:
-    int               max_nworkers;
-    int               nworkers; // this is the # of workers initially registered
-    int               nextr;
+    size_t            max_nworkers;
+    ssize_t           nextr;
 
-    int               neos;
-    int               neosnofreeze;
-    int               channelid;
+    size_t            neos;
+    size_t            neosnofreeze;
+    ssize_t           channelid;
 
     ff_node         * filter;
     svector<ff_node*> workers;
