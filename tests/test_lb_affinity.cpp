@@ -70,7 +70,7 @@ public:
                     worker_task->core = targetcore;
                     worker_task->mnode = targetmnode;
                     worker_task->done = 0;
-                    bool res = lb->ff_send_out_to(worker_task, targetworker, 0 /* retry - total */);
+                    bool res = lb->ff_send_out_to(worker_task, targetworker);
                     if (res) 
                         printf("sent to worker %d on core %d mnode %d\n",
                                worker_task->sourceW,

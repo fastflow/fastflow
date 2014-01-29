@@ -444,7 +444,7 @@ public:
     int wrap_around(bool multi_input=false) {
         if (!collector || collector_removed) {
             if (lb->set_masterworker()<0) return -1;
-            if (!has_input_channel) lb->skipfirstpop();
+            if (!multi_input && !has_input_channel) lb->skipfirstpop();
             return 0;
         }
 
@@ -1750,9 +1750,8 @@ public:
      * \brief Sends one task to a specific node id.
      *
      */
-    inline bool ff_send_out_to(void *task, int id, 
-                               unsigned int retry=(unsigned)-1, unsigned int ticks=0) {
-        return lb->ff_send_out_to(task,id,retry,ticks);
+    inline bool ff_send_out_to(void *task, int id) {
+        return lb->ff_send_out_to(task,id);
     }
     
     /**

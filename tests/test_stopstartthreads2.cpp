@@ -40,30 +40,31 @@ using namespace ff;
 class Emitter: public ff_node {
 protected:
     void stop_workers() {
-        size_t nw = farm->getNWorkers();
+        size_t nw = lb->getnworkers();
         for(size_t i=0; i<nw;++i)  {
-            farm->getlb()->ff_send_out_to(EOS, i);
+            lb->ff_send_out_to(EOS, i);
         }
         for(size_t i=0;i<nw;++i) {
-            farm->getlb()->wait_freezing(i);
+            lb->wait_freezing(i);
         }
     }
     void wakeup_workers(bool freeze=true) {
-        for(size_t i=0;i<farm->getNWorkers();++i)
-            farm->getlb()->thaw(i,freeze);
+        for(size_t i=0;i<lb->getnworkers();++i)
+            lb->thaw(i,freeze);
     }
 public:
-    Emitter(ff_farm<> *farm):farm(farm) {}
+    Emitter(ff_loadbalancer *const lb):lb(lb) {}
     
     int svc_init() {
         // set freezing flag to all workers
-        for(size_t i=0;i<farm->getNWorkers();++i)
-            farm->getlb()->freeze(i);
+        for(size_t i=0;i<lb->getnworkers();++i)
+            lb->freeze(i);
+
+        stop_workers();
+
         return 0;
     }
     void *svc(void *) {
-        // first of all stop workers
-        stop_workers();
         
         for(int i=0;i<10; ++i) {
             printf("iter %d\n", i);
@@ -73,8 +74,8 @@ public:
             wakeup_workers();
             
             // do something here
-            for(size_t j=0;j<farm->getNWorkers();++j)
-                farm->getlb()->ff_send_out_to(new int(j), j);
+            for(size_t j=0;j<lb->getnworkers();++j)
+                lb->ff_send_out_to(new int(j), j);
             
             // put workers to sleep
             stop_workers();
@@ -88,7 +89,7 @@ public:
         printf("Emitter exiting\n");
     }
 private:
-    ff_farm<> *farm;
+    ff_loadbalancer *const lb;
 };
 
 
@@ -116,7 +117,7 @@ int main(int argc, char *argv[]) {
     for(int i=0;i<nworkers;++i)
         w.push_back(new Worker);
     farm.add_workers(w);
-    farm.add_emitter(new Emitter(&farm));
+    farm.add_emitter(new Emitter(farm.getlb()));
     
     farm.run();
     farm.getlb()->waitlb();
