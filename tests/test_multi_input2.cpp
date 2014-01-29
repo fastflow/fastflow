@@ -61,7 +61,7 @@ private:
 
 class Emitter2: public ff_node {
 public:
-    Emitter2(ff_loadbalancer *lb):lb(lb) {}
+    Emitter2(ff_loadbalancer *lb, long nworkers):neos(0),nworkers(nworkers), lb(lb) {}
     void* svc(void* t) {
         int wid = lb->get_channel_id();
         if (wid == -1) {
@@ -72,8 +72,14 @@ public:
         printf("got back a task from Worker2(%d)\n", wid);
         return GO_ON;
     }
+    void eosnotify(int id) {
+        if (id != -1) return;
+        if (++neos == nworkers) lb->broadcast_task(EOS);        
+    }
 private:
-    ff_loadbalancer *lb;
+    int  neos;
+    long nworkers;
+    ff_loadbalancer *lb;    
 };
 
 struct Worker1: ff_node {
@@ -115,7 +121,7 @@ int main(int argc, char* argv[]) {
     for(int i=0;i<nworkers;++i)
         w.push_back(new Worker2);
     
-    farm2.add_emitter(new Emitter2(farm2.getlb()));
+    farm2.add_emitter(new Emitter2(farm2.getlb(),nworkers));
     farm2.add_workers(w);
     farm2.wrap_around();
 

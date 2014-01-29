@@ -26,9 +26,26 @@
  */
 
 /*
- * Very basic test for the FastFlow farm in the master-worker configuration.
+ * Master-worker in accelerator configuration.
+ * TODO: getting back results from the accelerator by using get_results.
  *
- */
+ *
+ *                 ------------------------                  
+ *   main         |              -----     |
+ *    |           |        -----|     |    |
+ *    |           v       |     |  W  |----
+ *    |         -----     |      -----
+ *    |------> |  E  |----|        .
+ *    |        |     |    |        .
+ *    |         -----     |        .
+ *    |           ^       |      -----
+ *    |           |        -----|  W  | ---
+ *    -           |             |     |    |
+ *                |              -----     |
+ *                 ------------------------    
+ *
+ *
+ */      
 #include <vector>
 #include <iostream>
 #include <ff/farm.hpp>
@@ -37,23 +54,43 @@
 
 using namespace ff;
 
-// generic worker
-class Worker: public ff_node {
-public:
-    void * svc(void * task) {
-        usleep(10000);
+struct W: ff_node {
+    void *svc(void *task){
+        printf("W(%d) got task %ld\n", get_my_id(), *(long*)task);
         return task;
     }
 };
 
-class Emitter: public ff_node {
+class E: public ff_node {
 public:
-    void * svc(void * task) {
-        int * t = (int *)task;
-        if (*t % 2)  return GO_ON;
-        ++(*t);
-        return task;
+    E(ff_loadbalancer *const lb):lb(lb) {}
+    int svc_init() {
+        eosreceived=false, numtasks=0;
+        return 0;
     }
+    void *svc(void *task) {	
+        if (lb->get_channel_id() == -1) {
+            ++numtasks;
+            return task;
+        }        
+        if (--numtasks == 0 && eosreceived) return NULL;
+        return GO_ON;	
+    }
+    void eosnotify(int id) {
+        if (id == -1)  {
+            eosreceived = true;
+            if (numtasks == 0) {
+                printf("BROADCAST\n");
+                fflush(stdout);
+                lb->broadcast_task(EOS);
+            }
+        }
+    }
+private:
+    bool eosreceived;
+    long numtasks;
+protected:
+    ff_loadbalancer *const lb;
 };
 
 
@@ -78,11 +115,11 @@ int main(int argc,
     }
 
     ff_farm<> farm(true /* accelerator set */);
-    Emitter emitter;
+    E emitter(farm.getlb());
     farm.add_emitter(&emitter);
 
     std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
+    for(int i=0;i<nworkers;++i) w.push_back(new W);
     farm.add_workers(w);
 
     // set master_worker mode 
@@ -99,7 +136,6 @@ int main(int argc,
             // Here offloading computation onto the farm
             farm.offload(ii); 
         }
-        std::cout << "[Main] EOS arrived\n";
         void * eos = (void *)FF_EOS;
         farm.offload(eos);    
         // Here join

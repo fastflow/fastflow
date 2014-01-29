@@ -116,7 +116,7 @@ namespace ff {
     {                                                                             \
         std::vector<ff_node *> forall_w_##name;                                   \
         for(int i=0;i<nw_##name;++i)                                              \
-            forall_w_##name.push_back(new forallreduce_W<int>(F_##name)); \
+            forall_w_##name.push_back(new forallreduce_W<int>(F_##name));         \
         forall_##name.add_workers(forall_w_##name);                               \
         if (forall_##name.run_and_wait_end()<0) {                                 \
             error("running forall_##name\n");                                     \
@@ -186,13 +186,14 @@ namespace ff {
 #define FF_PARFOR_ASSIGN(name,nw)                                                 \
     name=new ff_forall_farm<int>(nw)
 
-#define FF_PARFOR_DONE(name)                                                      \
-    {                                                                             \
-        auto donothing=[](const long,const long, const int) ->                    \
-            int { return 0;};                                                     \
-        name->setF(donothing);                                                    \
-        name->run_and_wait_end();                                                 \
-    }
+#define FF_PARFOR_DONE(name)  name->wait()
+
+    // {                                                                             
+    //     auto donothing=[](const long,const long, const int) ->                    
+    //         int { return 0;};                                                     
+    //     name->setF(donothing);                                                    
+    //     name->run_and_wait_end();                                                 
+    // }
 
 #define FF_PARFORREDUCE_INIT(name, type, nw)                                      \
     ff_forall_farm<type> *name = new ff_forall_farm<type>(nw)
@@ -201,13 +202,14 @@ namespace ff {
 #define FF_PARFORREDUCE_ASSIGN(name,type,nw)                                      \
     name=new ff_forall_farm<type>(nw)
     
-#define FF_PARFORREDUCE_DONE(name)                                                \
-    {                                                                             \
-        auto donothing=[](const long,const long,const int) ->                     \
-            decltype(name->t) { return 0;  };                                     \
-        name->setF(donothing);                                                    \
-        name->run_and_wait_end();                                                 \
-    }
+#define FF_PARFORREDUCE_DONE(name) name->wait()
+
+    // {                                                                             
+    //     auto donothing=[](const long,const long,const int) ->                     
+    //         decltype(name->t) { return 0;  };                                     
+    //     name->setF(donothing);                                                    
+    //     name->run_and_wait_end();                                                 
+    // }
 
 #define FF_PARFOR_START(name, idx, begin, end, step, chunk, nw)                   \
     name->setloop(begin,end,step,chunk,nw);                                       \
@@ -227,9 +229,11 @@ namespace ff {
     return 0;                                                                     \
     };                                                                            \
     name->setF(F_##name);                                                         \
-    if (name->run_then_freeze(name->getnw())<0)                                   \
-        error("running ff_forall_farm (name)\n");                                 \
-    name->wait_freezing()
+    if (name->getnw()>1) {                                                        \
+      if (name->run_then_freeze(name->getnw())<0)                                 \
+          error("running ff_forall_farm (name)\n");                               \
+      name->wait_freezing();                                                      \
+    } else F_##name(name->startIdx(),name->stopIdx(),0) 
     
 #define FF_PARFORREDUCE_START(name, var,identity, idx,begin,end,step, chunk, nw)  \
     name->setloop(begin,end,step,chunk,nw);                                       \
@@ -244,26 +248,36 @@ namespace ff {
           return var;                                                             \
         };                                                                        \
         name->setF(F_##name);                                                     \
-        if (name->run_then_freeze(name->getnw())<0)                               \
-            error("running ff_forall_farm (name)\n");                             \
-        name->wait_freezing();                                                    \
-        var = ovar_##name;                                                        \
-        for(size_t i=0;i<name->getnw();++i)  {                                    \
-            var op##= name->getres(i);                                            \
+        if (name->getnw()>1) {                                                    \
+          if (name->run_then_freeze(name->getnw())<0)                             \
+              error("running ff_forall_farm (name)\n");                           \
+          name->wait_freezing();                                                  \
+          var = ovar_##name;                                                      \
+          for(size_t i=0;i<name->getnw();++i)  {                                  \
+              var op##= name->getres(i);                                          \
+          }                                                                       \
+        } else {                                                                  \
+          var = ovar_##name;                                                      \
+          var op##= F_##name(name->startIdx(),name->stopIdx(),0);                 \
         }
+
 
 #define FF_PARFORREDUCE_F_STOP(name, var, F)                                      \
           return var;                                                             \
         };                                                                        \
         name->setF(F_##name);                                                     \
-        if (name->run_then_freeze(name->getnw())<0)                               \
-            error("running ff_forall_farm (name)\n");                             \
-        name->wait_freezing();                                                    \
-        var = ovar_##name;                                                        \
-        for(size_t i=0;i<name->getnw();++i)  {                                    \
-            F(var,name->getres(i));                                               \
+        if (name->getnw()>1) {                                                    \
+          if (name->run_then_freeze(name->getnw())<0)                             \
+              error("running ff_forall_farm (name)\n");                           \
+          name->wait_freezing();                                                  \
+          var = ovar_##name;                                                      \
+          for(size_t i=0;i<name->getnw();++i)  {                                  \
+             F(var,name->getres(i));                                              \
+          }                                                                       \
+        } else {                                                                  \
+            var = ovar_##name;                                                    \
+            F(var,F_##name(name->startIdx(),name->stopIdx(),0));                  \
         }
-
 
 /* gets the working time of a parallel for/reduce */
 #define FF_PARFOR_WTIME(name)   forall_##name.ffwTime()
@@ -326,36 +340,36 @@ protected:
 protected:
     // initialize the data vector
     virtual inline size_t init_data(long start, long stop) {
-        const long numtasks  = std::ceil((stop-start)/(double)step);
-        long totalnumtasks   = std::ceil(numtasks/(double)chunk);
+        const long numtasks  = std::ceil((stop-start)/(double)_step);
+        long totalnumtasks   = std::ceil(numtasks/(double)_chunk);
         const long tt        = totalnumtasks;
-        size_t ntxw = totalnumtasks / nw;
-        size_t r    = totalnumtasks % nw;
+        size_t ntxw = totalnumtasks / _nw;
+        size_t r    = totalnumtasks % _nw;
 
         if (ntxw == 0 && r>=1) {
             ntxw = 1, r = 0;
         }
-        data.resize(nw);
-        taskv.resize(8*nw); // 8 is the maximum n. of jumps, see the heuristic below
+        data.resize(_nw);
+        taskv.resize(8*_nw); // 8 is the maximum n. of jumps, see the heuristic below
         
         long end, t=0, e;
-        for(size_t i=0;i<nw && totalnumtasks>0;++i, totalnumtasks-=t) {
+        for(size_t i=0;i<_nw && totalnumtasks>0;++i, totalnumtasks-=t) {
             t       = ntxw + ((r>1 && (i<r))?1:0);
-            e       = start + (t*chunk - 1)*step + 1;
+            e       = start + (t*_chunk - 1)*_step + 1;
             end     = (e<stop) ? e : stop;
             data[i] = std::make_pair(t, forall_task_t(start,end));
-            start   = (end-1)+step;
+            start   = (end-1)+_step;
         }
 
         if (totalnumtasks) {
             assert(totalnumtasks==1);
             // try to keep the n. of tasks per worker as smaller as possible
-            if (ntxw > 1) data[nw-1].first += totalnumtasks;
-            data[nw-1].second.end = stop;
+            if (ntxw > 1) data[_nw-1].first += totalnumtasks;
+            data[_nw-1].second.end = stop;
         } 
 
         // printf("init_data\n");
-        // for(size_t i=0;i<nw;++i) {
+        // for(size_t i=0;i<_nw;++i) {
         //     printf("W=%d %ld <%ld,%ld>\n", i, data[i].first, data[i].second.start, data[i].second.end);
         // }
         // printf("totaltasks=%ld\n", tt);
@@ -364,11 +378,12 @@ protected:
     }    
 public:
     forall_Scheduler(ff_loadbalancer* lb, long start, long stop, long step, long chunk, size_t nw):
-        active(nw),lb(lb),step(step),chunk(chunk),totaltasks(0),nw(nw) {
+        active(nw),lb(lb),_start(start),_stop(stop),_step(step),_chunk(std::max((long)1,chunk)),totaltasks(0),_nw(nw) {
         totaltasks = init_data(start,stop);
         assert(totaltasks>=1);
     }
-    forall_Scheduler(ff_loadbalancer* lb, size_t nw):active(nw),lb(lb),step(1),chunk(1),totaltasks(0),nw(nw) {
+    forall_Scheduler(ff_loadbalancer* lb, size_t nw):
+        active(nw),lb(lb),_start(0),_stop(0),_step(1),_chunk(1),totaltasks(0),_nw(nw) {
         totaltasks = init_data(0,0);
         assert(totaltasks==0);
     }
@@ -376,8 +391,8 @@ public:
     void* svc(void* t) {
         if (t==NULL) {
             if (totaltasks==0) return NULL;
-            if ((totaltasks/nw) == 1 || (totaltasks == 1)) {
-                for(size_t wid=0;wid<nw;++wid)
+            if ((totaltasks/_nw) == 1 || (totaltasks == 1)) {
+                for(size_t wid=0;wid<_nw;++wid)
                     if (data[wid].first) {
                         taskv[wid].set(data[wid].second.start, data[wid].second.end);
                         lb->ff_send_out_to(&taskv[wid], wid);
@@ -387,18 +402,18 @@ public:
             {
             size_t remaining = totaltasks;
             bool skip1=false,skip2=false,skip3=false;
-            const long endchunk = (chunk-1)*step + 1;
+            const long endchunk = (_chunk-1)*_step + 1;
             int jump = 0;
             
         moretask:
-            for(size_t wid=0;wid<nw;++wid) {
+            for(size_t wid=0;wid<_nw;++wid) {
                 if (data[wid].first) {
                     long start = data[wid].second.start;
                     long end   = (std::min)(start+endchunk, data[wid].second.end);
                     taskv[wid+jump].set(start, end);
                     lb->ff_send_out_to(&taskv[wid+jump], wid);
                     --remaining, --data[wid].first;
-                    (data[wid].second).start = (end-1)+step;  
+                    (data[wid].second).start = (end-1)+_step;  
                     active[wid]=true;
                 } else {
                     // if we do not have task at the beginning the thread is terminated
@@ -407,33 +422,33 @@ public:
                     skip1=skip2=skip3=true;
                 }
             }
-            jump+=nw;
-            assert((jump / nw) <= 8);
+            jump+=_nw;
+            assert((jump / _nw) <= 8);
             // heuristic: try to assign more task at the very beginning
-            if (!skip1 && totaltasks>=4*nw)  { skip1=true; goto moretask;}
-            if (!skip2 && totaltasks>=64*nw) { skip1=false; skip2=true; goto moretask;}
-            if (!skip3 && totaltasks>=1024*nw){ skip1=false; skip2=false; skip3=true; goto moretask;}
+            if (!skip1 && totaltasks>=4*_nw)   { skip1=true; goto moretask;}
+            if (!skip2 && totaltasks>=64*_nw)  { skip1=false; skip2=true; goto moretask;}
+            if (!skip3 && totaltasks>=1024*_nw){ skip1=false; skip2=false; skip3=true; goto moretask;}
 
             return (remaining<=0)?NULL:GO_ON;
             }
         }
         if (--totaltasks <=0) return NULL;
         auto task = (forall_task_t*)t;
-        const long endchunk = (chunk-1)*step + 1;
+        const long endchunk = (_chunk-1)*_step + 1;
         const int wid = lb->get_channel_id();
         int id  = wid;
-        for(size_t cnt=0;cnt<nw;++cnt) { 
+        for(size_t cnt=0;cnt<_nw;++cnt) { 
             if (data[id].first) {
                 long start = data[id].second.start;
                 long end   = (std::min)(start+endchunk, data[id].second.end);
                 task->set(start, end);
                 lb->ff_send_out_to(task, wid);
                 --data[id].first;
-                (data[id].second).start = (end-1)+step;
+                (data[id].second).start = (end-1)+_step;
                 return GO_ON;
             }
             // no task available, trying to steal a task 
-            id = (id+1) % nw;
+            id = (id+1) % _nw;
         } 
         if (active[wid]) {
             lb->ff_send_out_to(EOS, wid); // the thread is terminated
@@ -442,21 +457,25 @@ public:
         return GO_ON;
     }
 
-    inline bool setloop(long start, long stop, long _step, long _chunk, size_t _nw) {
-        step=_step, chunk=_chunk, nw = _nw;
+    inline bool setloop(long start, long stop, long step, long chunk, size_t nw) {
+        _start=start, _stop=stop, _step=step, _chunk=std::max((long)1,chunk), _nw=nw;
         totaltasks = init_data(start,stop);
         assert(totaltasks>=1);        
         // if we have only 1 task per worker, the scheduler exits immediatly so we have to wait all workers
         // otherwise is sufficient to wait only for the scheduler
-        return ((totaltasks/nw) == 1 || (totaltasks==1)); 
+        return ((totaltasks/_nw) == 1 || (totaltasks==1)); 
     }
+
+    inline long startIdx() const { return _start;}
+    inline long stopIdx()  const { return _stop;}
+    inline long stepIdx()  const { return _step;}
 
 protected:
     ff_loadbalancer* lb;
-    long             step;        // for step
-    long             chunk;       // a chunk of indexes
-    size_t           totaltasks;  // total n. of tasks
-    size_t           nw;          // num. of workers
+    long             _start,_stop,_step;  // for step
+    long             _chunk;              // a chunk of indexes
+    size_t           totaltasks;          // total n. of tasks
+    size_t           _nw;                 // num. of workers
 };
 
 
@@ -630,6 +649,9 @@ public:
     inline Tres getres(int i) {
         return  ((forallreduce_W<Tres>*)(getWorkers()[i]))->getres();
     }
+    inline long startIdx(){ return ((const forall_Scheduler*)getEmitter())->startIdx(); }
+    inline long stopIdx() { return ((const forall_Scheduler*)getEmitter())->stopIdx(); }
+    inline long stepIdx() { return ((const forall_Scheduler*)getEmitter())->stepIdx(); }
 protected:
     size_t nw;
     bool   waitall;
