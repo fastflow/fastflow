@@ -463,12 +463,17 @@ public:
         assert(totaltasks>=1);        
         // if we have only 1 task per worker, the scheduler exits immediatly so we have to wait all workers
         // otherwise is sufficient to wait only for the scheduler
-        return ((totaltasks/_nw) == 1 || (totaltasks==1)); 
+        if ( (totaltasks/_nw) <= 1 || (totaltasks==1) ) {
+           _nw = totaltasks;
+           return true;
+        }
+        return false;
     }
 
     inline long startIdx() const { return _start;}
     inline long stopIdx()  const { return _stop;}
     inline long stepIdx()  const { return _step;}
+    inline size_t running() const { return _nw; }
 
 protected:
     ff_loadbalancer* lb;
@@ -603,25 +608,26 @@ protected:
 public:
     Tres t; // not used
 
-    ff_forall_farm(size_t nw):ff_farm<>(false,100*nw,100*nw,true,nw,true),nw(nw),waitall(true) {
+    ff_forall_farm(size_t maxnw):ff_farm<>(false,100*maxnw,100*maxnw,true,maxnw,true),waitall(true) {
         std::vector<ff_node *> forall_w;
         auto donothing=[](const long,const long, const int) -> int {
             return 0;
         };
-        for(size_t i=0;i<nw;++i)
+        for(size_t i=0;i<maxnw;++i)
             forall_w.push_back(new forallreduce_W<Tres>(donothing));
-        ff_farm<>::add_emitter(new forall_Scheduler(getlb(),nw));
+        ff_farm<>::add_emitter(new forall_Scheduler(getlb(),maxnw));
         ff_farm<>::add_workers(forall_w);
         ff_farm<>::wrap_around();
         if (ff_farm<>::run_then_freeze()<0) {
             error("running base forall farm\n");
         } else ff_farm<>::wait_freezing();
     }
-    inline int run_then_freeze(int nw_=-1) {        
-        resetqueues((nw_ == -1)?getNWorkers():nw_);
+    inline int run_then_freeze(ssize_t nw_=-1) {
+        const ssize_t nwtostart = (nw_ == -1)?getNWorkers():nw_;
+        resetqueues(nwtostart);
         // the scheduler skips the first pop
         getlb()->skipfirstpop();
-        return ff_farm<>::run_then_freeze(nw_);
+        return ff_farm<>::run_then_freeze(nwtostart);
     }
     int run_and_wait_end() {
         resetqueues(getNWorkers());
@@ -638,13 +644,13 @@ public:
         const svector<ff_node*> &nodes = getWorkers();
         for(size_t i=0;i<nw;++i) ((forallreduce_W<Tres>*)nodes[i])->setF(_F);
     }
-    inline void setloop(long begin,long end,long step,long chunk,size_t _nw) {
-        assert(_nw<=getNWorkers());
-        nw=_nw;
+    inline void setloop(long begin,long end,long step,long chunk, size_t nw) {
+        assert(nw<=getNWorkers());
         forall_Scheduler *sched = (forall_Scheduler*)getEmitter();
         waitall = sched->setloop(begin,end,step,chunk,nw);
     }
-    inline size_t getnw() const { return nw; }
+    // return the number of workers running or supposed to run
+    inline size_t getnw() { return ((const forall_Scheduler*)getEmitter())->running(); }
     
     inline Tres getres(int i) {
         return  ((forallreduce_W<Tres>*)(getWorkers()[i]))->getres();
@@ -653,7 +659,6 @@ public:
     inline long stopIdx() { return ((const forall_Scheduler*)getEmitter())->stopIdx(); }
     inline long stepIdx() { return ((const forall_Scheduler*)getEmitter())->stepIdx(); }
 protected:
-    size_t nw;
     bool   waitall;
 };
 
