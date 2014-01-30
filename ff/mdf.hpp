@@ -423,7 +423,7 @@ protected:
             if (task_set) icl_hash_destroy(address_set,NULL,NULL);
             task_set    = icl_hash_create( UPPER_TH*8, ulong_hash_function, ulong_key_compare ); 
             address_set = icl_hash_create( 0x01<<12, address_hash_function, address_key_compare);
-
+            
             return 0;
         }
         void* svc(void* task) {
@@ -459,6 +459,8 @@ protected:
             if(task_numb==task_completed && gd_ended)  return NULL;
             return GO_ON;
         }
+        
+        void eosnotify(int id) { lb->broadcast_task(EOS);}
 
         int wait_freezing() {
             return lb->wait_lb_freezing();
@@ -504,7 +506,7 @@ public:
         for(int i=0;i<maxnw;++i) w.push_back(new Worker);
         farm->add_workers(w);
         farm->add_emitter(sched = new Scheduler(farm->getlb(), maxnw, schedRelaxF));
-        farm->wrap_around();
+        farm->wrap_around(true);
 	    
         pipe.add_stage(_gd);
         pipe.add_stage(farm);
@@ -526,7 +528,7 @@ public:
     template<typename... Param>
     inline void AddTask(std::vector<param_info> &P, void(*F)(Param...), Param... args) {	
         worker_task_t<Param...> *wtask = new worker_task_t<Param...>(F, args...);
-        gd->alloc_and_send(P,wtask);	    
+        gd->alloc_and_send(P,wtask);
     }
 
     void setNumWorkers(int nw) { 
