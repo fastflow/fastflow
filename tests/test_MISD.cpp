@@ -94,13 +94,18 @@ private:
 
 
 int main(int argc, char* argv[]) {    
-    if (argc<3) {
-        printf("use: %s #w1 #w2 #ntasks\n", argv[0]);
-        return -1;
+    int nw1 = 2;
+    int nw2 = 3;
+    int ntasks = 1000;
+    if (argc>1) {
+        if (argc<3) {
+            printf("use: %s #w1 #w2 #ntasks\n", argv[0]);
+            return -1;
+        }
+        nw1   = atoi(argv[1]);
+        nw2   = atoi(argv[2]);
+        ntasks= atoi(argv[3]);
     }
-    int nw1   = atoi(argv[1]);
-    int nw2   = atoi(argv[2]);
-    int ntasks= atoi(argv[3]);
     
     ff_farm<myScheduler> farm;   
     Emitter E(nw1, nw2, ntasks, farm.getlb());

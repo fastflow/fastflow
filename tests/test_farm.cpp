@@ -47,14 +47,16 @@ static inline bool Wrapper(fftask_t &t) {
 #endif
 
 int main(int argc, char * argv[]) {
-
-    if (argc<3) {
-        printf("use: %s nworkers number\n",argv[0]);
-        return -1;
+    int nworkers = 3;
+    long number = 111;
+    if (argc>1) {
+        if (argc<3) {
+            printf("use: %s nworkers number\n",argv[0]);
+            return -1;
+        }
+        nworkers=atoi(argv[1]);
+        number  =atol(argv[2]);
     }
-    int    nworkers=atoi(argv[1]);
-    long   number  =atol(argv[2]);
-
     srandom(131071);
     
 #if defined(SEQUENTIAL)

@@ -105,13 +105,15 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-    if (argc<2) {
-        printf("use: %s nworkers\n",argv[0]);
-        return -1;
+    int nworkers = 3;
+    if (argc>1) {
+        if (argc!=2) {
+            printf("use: %s nworkers\n",argv[0]);
+            return -1;
+        }
+        
+        nworkers = atoi(argv[1]);
     }
-    
-    const int nworkers = atoi(argv[1]);
-    
     ff_farm<> farm;
     std::vector<ff_node*> w;
     for(int i=0;i<nworkers;++i)

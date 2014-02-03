@@ -334,6 +334,10 @@ static inline void jacobi_ff ( const int n, const int m, double dx, double dy, d
   printf("Residual                   %.15f\n\n", Error);
 
   free(uold);  
+#if !defined(STATIC_DECL)
+  FF_PARFOR_DONE(loop);
+  FF_PARFORREDUCE_DONE(reduce);
+#endif
 } 	
 #endif
 
@@ -474,6 +478,11 @@ int main(int argc, char **argv){
    dt = ffTime(GET_TIME); 
 
    printf("ff elapsed time : %12.6f (ms)\n", dt);
+
+#if defined(STATIC_DECL)
+   FF_PARFOR_DONE(loop);
+   FF_PARFORREDUCE_DONE(reduce);
+#endif
 #endif
 
    mflops = (0.000001*mits*(m-2)*(n-2)*13) / (dt/1000.0);

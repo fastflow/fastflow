@@ -94,24 +94,26 @@ private:
 
 
 int main(int argc, char * argv[]) {
-
-    if (argc<3) {
-        std::cerr << "use: " 
-                  << argv[0] 
-                  << " nworkers streamlen\n";
-        return -1;
+    int nworkers = 3;
+    int streamlen = 1000;
+    if (argc>1) {
+        if (argc<3) {
+            std::cerr << "use: " 
+                      << argv[0] 
+                      << " nworkers streamlen\n";
+            return -1;
+        }
+               
+        nworkers=atoi(argv[1]);
+        streamlen=atoi(argv[2]);
     }
-
-    srandom(131071);
-    
-    int nworkers=atoi(argv[1]);
-    int streamlen=atoi(argv[2]);
 
     if (nworkers<=0 || streamlen<=0) {
         std::cerr << "Wrong parameters values\n";
         return -1;
     }
-
+    srandom(131071);
+        
     ff_pipeline pipe;
     
     Start start(streamlen);

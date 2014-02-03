@@ -634,7 +634,7 @@ public:
                     availworkers.push_back(multi_input[i]);
                 nw += multi_input.size();
             } 
-            if (master_worker && inpresent) {
+            if ((master_worker || int_multi_input.size()>0) && inpresent) {
                 assert(multi_input.size() == 0);
                 nw += 1;
             }

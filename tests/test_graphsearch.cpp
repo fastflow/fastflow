@@ -36,11 +36,14 @@ using namespace ff;
 
 
 int main(int argc, char *argv[]) {
-    if (argc<2) {
-	printf("use: %s string\n", argv[0]);
-	return -1;
+    std::string input = "abc";
+    if (argc>1) {
+        if (argc<2) {
+            printf("use: %s string\n", argv[0]);
+            return -1;
+        }
+        input = std::string(argv[1]);
     }
-    const std::string input(argv[1]);
 
     // create some nodes
     gnode_t<std::string> *node1  = new gnode_t<std::string>(1,  "aaa");

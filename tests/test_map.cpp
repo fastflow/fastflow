@@ -56,16 +56,18 @@ long f(long v) { return v+1;}
 
 
 int main(int argc, char * argv[]) {
-    
-    if (argc<3) {
-        std::cerr << "use: " 
-                  << argv[0] 
-                  << " arraysize nworkers\n";
-        return -1;
+    int arraySize = 1000;
+    int nworkers  = 3;
+    if (argc>1) {
+        if (argc<3) {
+            std::cerr << "use: " 
+                      << argv[0] 
+                      << " arraysize nworkers\n";
+            return -1;
+        }
+        arraySize= atoi(argv[1]);
+        nworkers = atoi(argv[2]);
     }
-    int arraySize= atoi(argv[1]);
-    int nworkers = atoi(argv[2]);
-
     if (nworkers<=0) {
         std::cerr << "Wrong parameters values\n";
         return -1;

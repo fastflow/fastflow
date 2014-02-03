@@ -92,17 +92,21 @@ public:
 
 
 int main(int argc, char * argv[]) {
-    if (argc!=2) {
-        std::cerr << "use: "  << argv[0] << " streamlen\n";
-        return -1;
+    int streamlen = 1000;
+    if (argc>1) {
+        if (argc!=2) {
+            std::cerr << "use: "  << argv[0] << " streamlen\n";
+            return -1;
+        }
+        streamlen = atoi(argv[1]);
     }
     
     // build a 2-stage pipeline
     ff_pipeline pipe;
     ff_farm<> f1, f2;
-    vector<ff_node *> w1(1, new Stage(atoi(argv[1])));
-    vector<ff_node *> w2(1, new Stage(atoi(argv[1])));
-    f1.add_emitter(new Emitter(atoi(argv[1])));
+    vector<ff_node *> w1(1, new Stage(streamlen));
+    vector<ff_node *> w2(1, new Stage(streamlen));
+    f1.add_emitter(new Emitter(streamlen));
     f1.add_workers(w1);
     f1.add_collector(new Collector());
     f2.add_workers(w2);
