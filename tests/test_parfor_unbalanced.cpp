@@ -37,8 +37,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ff/utils.hpp>
-#if !defined(USE_OPENMP)
+#if !defined(USE_OPENMP) && !defined(USE_TBB)
 #include <ff/parallel_for.hpp>
+#endif
+#if defined(USE_TBB)
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
+#include <tbb/task_scheduler_init.h>
 #endif
 
 using namespace ff;
@@ -82,43 +87,57 @@ int main(int argc, char *argv[]) {
     double dt=0.0;
     srandom(seed);
     SRandom(random());
-
+#if !defined(USE_OPENMP) && !defined(USE_TBB) 
     FF_PARFOR_INIT(pf, nthreads);
+#endif
+#if defined(USE_TBB)
+    tbb::task_scheduler_init init(nthreads);
+    tbb::affinity_partitioner ap;
+#endif
 
     for(int k=0; k<seqIter; ++k) { // external sequential loop
-	unsigned long iter=0;
-	long _N = std::max((long)(Random()*N),(long)MAX_PARALLELISM);
-	
-	//printf("n=%ld\n", _N);
-
-	long *V;
-	posix_memalign((void**)&V, 64, (_N+1)*sizeof(long));
-
-	for (long i=1; i<=_N;++i) {
-	    double c = ceil((_N/MAX_PARALLELISM)*powf(i,-1.1));	
-	    V[i] = (long)(c);
-	    iter += (long)(c);
-	    //printf("%ld\n", V[i]);
-	}
-	//printf("_N=%ld iter=%ld\n", _N, iter);
-
-	ffTime(START_TIME);
+        unsigned long iter=0;
+        long _N = std::max((long)(Random()*N),(long)MAX_PARALLELISM);
+        
+        //printf("n=%ld\n", _N);
+        
+        long *V;
+        posix_memalign((void**)&V, 64, (_N+1)*sizeof(long));
+        
+        for (long i=1; i<=_N;++i) {
+            double c = ceil((_N/MAX_PARALLELISM)*powf(i,-1.1));	
+            V[i] = (long)(c);
+            iter += (long)(c);
+            //printf("%ld\n", V[i]);
+        }
+        //printf("_N=%ld iter=%ld\n", _N, iter);
+        
+        ffTime(START_TIME);
 #if defined(USE_OPENMP)
 #pragma omp parallel for schedule(runtime) num_threads(nthreads)
-	for(long i=1;i<=_N;++i) {
-	  compute(10000*V[i]);
-	}
+        for(long i=1;i<=_N;++i) {
+            compute(10000*V[i]);
+        }
+#elif defined(USE_TBB)
+        tbb::parallel_for(tbb::blocked_range<long>(1, _N+1),
+                          [&] (tbb::blocked_range<long> &r) {
+                              for(long j=r.begin(); j!=r.end(); ++j) {
+                                  compute(10000*V[j]);
+                              }
+                          },ap);
 #else
-	FF_PARFOR_START(pf, i,1,_N,1, chunk, nthreads) {
-	  compute(10000*V[i]);
-	} FF_PARFOR_STOP(pf);
+        FF_PARFOR_START(pf, i,1,_N+1,1, chunk, nthreads) {
+            compute(10000*V[i]);
+        } FF_PARFOR_STOP(pf);
 #endif
-	ffTime(STOP_TIME);
-	free(V);
-	dt += ffTime(GET_TIME); 
+        ffTime(STOP_TIME);
+        free(V);
+        dt += ffTime(GET_TIME); 
     }
     printf("%d Time=%g (ms)\n", nthreads, dt);
-
+ 
+#if !defined(USE_OPENMP) && !defined(USE_TBB)
     FF_PARFOR_DONE(pf);
+#endif
     return 0;
 }
