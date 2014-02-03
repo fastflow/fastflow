@@ -78,13 +78,14 @@ public:
 
 
 int main(int argc, char * argv[]) {
-    int nworkers  = 0;
-
-    if (argc != 2) {
-        std::cerr << "use:\n" << " " << argv[0] << " num-farm-workers\n";
-        return -1;
+    int nworkers  = 3;
+    if (argc>1) {
+        if (argc != 2) {
+            std::cerr << "use:\n" << " " << argv[0] << " num-farm-workers\n";
+            return -1;
+        }
+        nworkers  =atoi(argv[1]);
     }
-    nworkers  =atoi(argv[1]);
 
     ff_farm<> farm;
     Emitter E;

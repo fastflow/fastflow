@@ -97,14 +97,17 @@ private:
 };
 
 int main(int argc, char* argv[]) {
-    
-    if (argc < 3) {
-        printf("use: %s num-threads num-barriers\n", argv[0]);
-        return -1;
+    int nthreads = 17;
+    int nbarriers= 15;
+    if (argc>1) {
+        if (argc < 3) {
+            printf("use: %s num-threads num-barriers\n", argv[0]);
+            return -1;
+        }
+        nthreads=atoi(argv[1]);
+        assert(nthreads>0);
+        nbarriers=atoi(argv[2]);
     }
-    int nthreads=atoi(argv[1]);
-    assert(nthreads>0);
-    int nbarriers=atoi(argv[2]);
 #if defined(USE_PTHREAD_BARRIER)
     pthread_barrier_init(&bar, NULL, nthreads);
 #else

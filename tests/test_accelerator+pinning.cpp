@@ -547,15 +547,18 @@ private:
 
 
 int main(int argc, char * argv[]) {
-  //check parameters
-  if(argc < 4) {
-    cerr << "usage: " << argv[0] << " nworkers1 nworkers2 nsims" << endl;
-    exit(1);
-  }
-  int nworkers1 = atoi(argv[1]);
-  int nworkers2 = atoi(argv[2]);
-  int nsims = atoi(argv[3]);
-
+    int nworkers1 = 3;
+    int nworkers2 = 5;
+    int nsims = 3;
+    if (argc>1) {
+	if(argc < 4) {
+	    cerr << "usage: " << argv[0] << " nworkers1 nworkers2 nsims" << endl;
+	    exit(1);
+	}
+	nworkers1 = atoi(argv[1]);
+	nworkers2 = atoi(argv[2]);
+	nsims = atoi(argv[3]);
+    }
   //sim. pipe
   TasksGenerator E(nsims);
   Acc1Engine Sm(nworkers1);

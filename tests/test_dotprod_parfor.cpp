@@ -45,17 +45,21 @@
 using namespace ff;
 
 int main(int argc, char * argv[]) {    
-    if (argc<3) {
-        printf("use: %s arraysize nworkers [ntimes] [CHUNKSIZE]\n", argv[0]);
-        return -1;
-    }
-    int arraySize= atoi(argv[1]);
-    int nworkers = atoi(argv[2]);
-    int NTIMES   = 1;
+    int arraySize= 10000000;
+    int nworkers = 3;
+    int NTIMES   = 5;
     int CHUNKSIZE= std::min(10000, arraySize/nworkers);
-
-    if (argc>=4) NTIMES = atoi(argv[3]);
-    if (argc==5) CHUNKSIZE = atoi(argv[4]);
+    if (argc>1) {
+        if (argc<3) {
+            printf("use: %s arraysize nworkers [ntimes] [CHUNKSIZE]\n", argv[0]);
+            return -1;
+        }
+        arraySize= atoi(argv[1]);
+        nworkers = atoi(argv[2]);
+    
+        if (argc>=4) NTIMES = atoi(argv[3]);
+        if (argc==5) CHUNKSIZE = atoi(argv[4]);
+    }
 
     if (nworkers<=0) {
         printf("Wrong parameters values\n");

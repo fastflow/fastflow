@@ -114,6 +114,7 @@ std::deque<void*> * b;
 #endif // USE_DEQUE
 
 int WARMUP=0;            // number of tasks for the warm-up
+int size=0;              // buffer size
 int ntasks=0;            // total number of tasks
 int cpu_P=-1, cpu_C=-1;  // cpu's number
 #if defined(PAPI_PERF)
@@ -372,26 +373,30 @@ void * C(void *) {
 int main(int argc, char * argv[]) {
     std::cout << "Num of cores " <<  ff_numCores() << "\n";
     std::cout << "Frequency " <<  ff_getCpuFreq() << "\n";
-    if (argc!=3) {
-        if (argc == 5) {
-            cpu_P = atoi(argv[3]);
-            cpu_C = atoi(argv[4]);
-            int nc = ff_numCores();
-            if (cpu_P < 0 || cpu_P >= nc) {
-                std::cerr << "Wrong producer thread CPU number, range is [0 - " << nc << "[\n";
+    size=1024;
+    ntasks=1000000;
+    if (argc>1) {
+        if (argc!=3) {
+            if (argc == 5) {
+                cpu_P = atoi(argv[3]);
+                cpu_C = atoi(argv[4]);
+                int nc = ff_numCores();
+                if (cpu_P < 0 || cpu_P >= nc) {
+                    std::cerr << "Wrong producer thread CPU number, range is [0 - " << nc << "[\n";
+                    return -1;
+                }
+                if (cpu_C < 0 || cpu_C >= nc) {
+                    std::cerr << "Wrong consumer thread CPU number, range is [0 - " << nc << "[\n";
+                    return -1;
+                }
+            } else {        
+                std::cerr << "use: " << argv[0] << " (base-)buffer-size ntasks [#P-core] [#C-core]\n";
                 return -1;
             }
-            if (cpu_C < 0 || cpu_C >= nc) {
-                std::cerr << "Wrong consumer thread CPU number, range is [0 - " << nc << "[\n";
-                return -1;
-            }
-        } else {        
-            std::cerr << "use: " << argv[0] << " (base-)buffer-size ntasks [#P-core] [#C-core]\n";
-            return -1;
         }
+        size = atoi(argv[1]);
+        ntasks= atoi(argv[2]);
     }
-    int  size = atoi(argv[1]);
-    ntasks= atoi(argv[2]);
 
 #if defined(COMPUTES)
     if (sizeof(double) != sizeof(long)) {

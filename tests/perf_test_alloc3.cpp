@@ -239,18 +239,23 @@ private:
 
 
 int main(int argc, char * argv[]) {    
-    if (argc<5) {
-        std::cerr 
-            << "use: "  << argv[0] 
-            << " ntasks num-integer-x-item batchsize #n\n";
-        return -1;
-    }
+    unsigned int ntasks         = 10000000;
+    unsigned int itemsize       = 32;
+    unsigned int batch          = 128;
+    int nworkers                = 3;
+    if (argc>1) {
+        if (argc<5) {
+            std::cerr 
+                << "use: "  << argv[0] 
+                << " ntasks num-integer-x-item batchsize #n\n";
+            return -1;
+        }
     
-    unsigned int ntasks         = atoi(argv[1]);
-    unsigned int itemsize       = atoi(argv[2]);
-    unsigned int batch          = atoi(argv[3]);    
-    int nworkers                = atoi(argv[4]);    
-
+        ntasks         = atoi(argv[1]);
+        itemsize       = atoi(argv[2]);
+        batch          = atoi(argv[3]);    
+        nworkers       = atoi(argv[4]);    
+    }
     // arguments check
     if (nworkers<0 || !ntasks) {
         std::cerr << "Wrong parameters values\n";

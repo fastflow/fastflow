@@ -37,14 +37,21 @@
 using namespace ff;
 
 int main(int argc, char *argv[]) {
-    if (argc<5) {
-        printf("use: %s size nworkers ntimes chunk\n", argv[0]);
-        return -1;
+    long size     = 1000000;
+    int  nworkers = 3;
+    int  ntimes   = 3;
+    int  chunk    = 111;
+    
+    if (argc>1) {
+        if (argc<5) {
+            printf("use: %s size nworkers ntimes chunk\n", argv[0]);
+            return -1;
+        }
+        size     = atol(argv[1]);
+        nworkers = atoi(argv[2]);
+        ntimes   = atoi(argv[3]);
+        chunk    = atoi(argv[4]);
     }
-    const long size     = atol(argv[1]);
-    const int  nworkers = atoi(argv[2]);
-    const int  ntimes   = atoi(argv[3]);
-    const int  chunk    = atoi(argv[4]);
     long *A = new long[size];
 
     FF_PARFOR_INIT(pf1, nworkers);

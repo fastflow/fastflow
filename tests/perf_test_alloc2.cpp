@@ -329,18 +329,23 @@ private:
 };
 
 int main(int argc, char * argv[]) {    
-    if (argc<5) {
-        std::cerr 
-            << "use: "  << argv[0] 
-            << " ntasks num-integer-x-item #n nticks\n";
-        return -1;
+    unsigned int ntasks         = 1000000;
+    unsigned int itemsize       = 16;
+    int nworkers                = 3;
+    long long    nticks         = 1000;
+    if (argc>1) {
+        if (argc<5) {
+            std::cerr 
+                << "use: "  << argv[0] 
+                << " ntasks num-integer-x-item #n nticks\n";
+            return -1;
+        }
+        
+        ntasks         = atoi(argv[1]);
+        itemsize       = atoi(argv[2]);
+        nworkers       = atoi(argv[3]);    
+        nticks         = strtoll(argv[4],NULL,10);
     }
-    
-    unsigned int ntasks         = atoi(argv[1]);
-    unsigned int itemsize       = atoi(argv[2]);
-    int nworkers                = atoi(argv[3]);    
-    long long    nticks         = strtoll(argv[4],NULL,10);
-
 	std::cerr << "ticks " << nticks << "\n";
 	// arguments check
     if (nworkers<0 || !ntasks) {

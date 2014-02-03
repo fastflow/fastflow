@@ -123,12 +123,14 @@ public:
 
 
 int main(int argc, char * argv[]) {
-    if (argc!=2) {
-        std::cerr << "use: "  << argv[0] << " streamlen\n";
-        return -1;
+    int streamlen = 1000;
+    if (argc>1) {
+        if (argc!=2) {
+            std::cerr << "use: "  << argv[0] << " streamlen\n";
+            return -1;
+        }
+        streamlen=atoi(argv[1]);
     }
-
-    int streamlen=atoi(argv[1]);
 
     // init allocator
     ffalloc.init();

@@ -24,7 +24,9 @@
  *
  ****************************************************************************
  */
-
+/* Author: Massimo Torquati
+ * Date:   June 2013
+ */
 /* Very simple performance test for the FF_PARFOR
  *
  */
@@ -47,16 +49,20 @@
 using namespace ff;
 
 int main(int argc, char *argv[]) {
-    if (argc<3) {
-        printf("use: %s numtasks nworkers [chunk=(numtasks/nworkers)]\n", argv[0]);
-        return -1;
+    int  nworkers = 3;
+    long numtasks = 10000000*nworkers;
+    int   chunk = 100;
+    if (argc>1) {
+        if (argc<3) {
+            printf("use: %s numtasks nworkers [chunk=(numtasks/nworkers)]\n", argv[0]);
+            return -1;
+        }
+        numtasks = atol(argv[1]);
+        nworkers = atoi(argv[2]);
+        if (argc == 4) 
+            chunk = atoi(argv[3]);
     }
-    const long numtasks = atol(argv[1]);
-    const int  nworkers = atoi(argv[2]);
-    int   chunk = std::max((int)(numtasks/nworkers),1);
-    if (argc == 4) 
-        chunk = atoi(argv[3]);
-
+    
     long *V;
     posix_memalign((void**)&V, 64, numtasks*sizeof(long));
     //long *V = new long[numtasks];

@@ -129,22 +129,24 @@ private:
 int main(int argc, char * argv[]) {
     void * result = NULL;
 
-    int mstreamlen= 0;
-    int nworkers  = 0;
-    int iterations= 0;
+    int mstreamlen= 1000;
+    int nworkers  = 3;
+    int iterations= 3;
     int priority  = 0;
 
-    if (argc != 4 && argc != 5) {
-        std::cerr << "use:\n" << " " << argv[0] << " max-stream-length num-farm-workers iterations [priority]\n";
-        std::cerr << " NOTE: <priority> values less then 0 require CAP_SYS_NICE capability\n\n";
-        return -1;
-    }
-    mstreamlen=atoi(argv[1]);
-    nworkers  =atoi(argv[2]);
-    iterations=atoi(argv[3]);
-
-    if (argc == 5) {
-        priority=atoi(argv[4]);
+    if (argc>1) {
+        if (argc != 4 && argc != 5) {
+            std::cerr << "use:\n" << " " << argv[0] << " max-stream-length num-farm-workers iterations [priority]\n";
+            std::cerr << " NOTE: <priority> values less then 0 require CAP_SYS_NICE capability\n\n";
+            return -1;
+        }        
+        mstreamlen=atoi(argv[1]);
+        nworkers  =atoi(argv[2]);
+        iterations=atoi(argv[3]);
+        
+        if (argc == 5) {
+            priority=atoi(argv[4]);
+        }
     }
 
     srandom(::getpid()+(getusec()%4999)); // init seed

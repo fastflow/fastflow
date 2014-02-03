@@ -74,14 +74,18 @@ void usage(char * name) {
 }
 
 int main(int argc, char * argv[]) {
-    if (argc!=3) {
-        usage(argv[0]);
-        return -1;
+    unsigned int nstages = 7;
+    nticks = 1000;
+    if (argc>1) {
+        if (argc!=3) {
+            usage(argv[0]);
+            return -1;
+        }
+        
+        nstages  = atoi(argv[1]);
+        nticks   = atoi(argv[2]);
     }
 
-    unsigned int nstages  = atoi(argv[1]);
-    nticks                = atoi(argv[2]);
-    
     numBatch=((NUMTASKS-bigbatchSize)/smallbatchSize);
     
     if (nstages<2) {

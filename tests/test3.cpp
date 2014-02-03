@@ -68,15 +68,11 @@ private:
 
 
 int main(int argc, char * argv[]) {
-    if (argc!=2) {
-        std::cerr << "use: "  << argv[0] << " streamlen\n";
-        return -1;
-    }
-    
+    int streamlen = 1000;
     // bild a 2-stage pipeline
     ff_pipeline pipe;
-    pipe.add_stage(new Stage(atoi(argv[1])));
-    pipe.add_stage(new Stage(atoi(argv[1])));
+    pipe.add_stage(new Stage(streamlen));
+    pipe.add_stage(new Stage(streamlen));
 
     pipe.wrap_around();
 

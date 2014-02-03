@@ -24,7 +24,9 @@
  *
  ****************************************************************************
  */
-
+/* Author: Massimo Torquati
+ * Date:   June 2013
+ */
 /* Very simple performance test for the FF_PARFOR
  *
  */
@@ -92,17 +94,22 @@ static inline void compute(long id, int nticks) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc<4) {
-        printf("use: %s numtasks nworkers ticks [chunk=(numtasks/nworkers)]\n", argv[0]);
-        return -1;
-    }
-    const long numtasks = atol(argv[1]);
-    const int  nworkers = atoi(argv[2]);
-    const int  nticks   = atoi(argv[3]);
-    int   chunk = std::max((int)(numtasks/nworkers),1);
-    if (argc == 5) 
-        chunk = atoi(argv[4]);
+    long numtasks = 1000000;
+    int  nworkers = 3;
+    int  nticks   = 1000;
+    int  chunk    = std::max((int)(numtasks/nworkers),1);
     
+    if (argc>1) {
+        if (argc<4) {
+            printf("use: %s numtasks nworkers ticks [chunk=(numtasks/nworkers)]\n", argv[0]);
+            return -1;
+        }
+        numtasks = atol(argv[1]);
+        nworkers = atoi(argv[2]);
+        nticks   = atoi(argv[3]);
+        if (argc == 5) 
+            chunk = atoi(argv[4]);
+    }
 #if defined(USE_OPENMP)
     ffTime(START_TIME);
 #pragma omp parallel for schedule(runtime) num_threads(nworkers)

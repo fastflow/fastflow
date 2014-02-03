@@ -25,6 +25,12 @@
  ****************************************************************************
  */
 
+/*
+ * NOTE: Should be rewritten using the stencil pattern !!!!
+ *
+ *
+ */
+
 /* square matrices */
 
 #include <cstdio>
@@ -138,14 +144,17 @@ protected:
 
 
 int main(int argc, char* argv[]) {
-    if (argc<3) {
-        printf("use: %s matsize nworkers\n", argv[0]);
-        return -1;
+    size_t size = 512;
+    int    nw   = 3;
+    if (argc>1) {
+        if (argc<3) {
+            printf("use: %s matsize nworkers\n", argv[0]);
+            return -1;
+        }
+        
+        size=atoi(argv[1]);
+        nw  =atoi(argv[2]);
     }
-
-    size_t size=atoi(argv[1]);
-    int    nw  =atoi(argv[2]);
-
     IN  = new double[(size+2)*(size+2)];
     OUT = new double[(size+2)*(size+2)];
 
