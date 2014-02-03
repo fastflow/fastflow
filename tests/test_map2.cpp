@@ -90,16 +90,20 @@ private:
 };
 
 int main(int argc, char * argv[]) {
-    
-    if (argc<4) {
-        std::cerr << "use: " 
-                  << argv[0] 
-                  << " arraysize nworkers streamlen\n";
-        return -1;
+    long  arraySize=1000000;
+    int nworkers =3;
+    int streamlen=100;
+    if (argc>1) {
+        if (argc<4) {
+            std::cerr << "use: " 
+                      << argv[0] 
+                      << " arraysize nworkers streamlen\n";
+            return -1;
+        }
+        arraySize=atoi(argv[1]);
+        nworkers =atoi(argv[2]);
+        streamlen=atoi(argv[3]);
     }
-    int arraySize=atoi(argv[1]);
-    int nworkers =atoi(argv[2]);
-    int streamlen=atoi(argv[3]);
     if (nworkers<=0 || streamlen<=0) {
         std::cerr << "Wrong parameters values\n";
         return -1;

@@ -74,14 +74,16 @@ struct Worker2: ff_node {
 
 
 int main(int argc, char* argv[]) {
-
-    if (argc < 3) {
-        std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";
-        return -1;
+    int nworkers=3;
+    int ntasks=1000;
+    if (argc>1) {
+        if (argc < 3) {
+            std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";
+            return -1;
+        }
+        nworkers  =atoi(argv[1]);
+        ntasks    =atoi(argv[2]);
     }
-    int nworkers  =atoi(argv[1]);
-    int ntasks    =atoi(argv[2]);
-
     ff_pipeline pipe;
     ff_farm<> farm1;
     ff_farm<> farm2;

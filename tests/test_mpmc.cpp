@@ -204,14 +204,18 @@ int main(int argc, char * argv[]) {
     cds::threading::pthread::Manager::init();
     cds::threading::pthread::Manager::attachThread();
 #endif
-
-    if (argc<4) {
-        std::cerr << "use: " << argv[0] << " ntasks #P #C [nqueues]\n";        
-        return -1;
+    ntasks = 10000;
+    int numP = 3;
+    int numC = 4;
+    if (argc>1) {
+        if (argc<4) {
+            std::cerr << "use: " << argv[0] << " ntasks #P #C [nqueues]\n";        
+            return -1;
+        }
+        ntasks= atoi(argv[1]);
+        numP  = atoi(argv[2]);
+        numC  = atoi(argv[3]);
     }
-    ntasks= atoi(argv[1]);
-    int numP  = atoi(argv[2]);
-    int numC  = atoi(argv[3]);
     if ((numP <=0) || (numC<=0)) {
         std::cerr << "Error: #P >0 #C >0 \n";
         return -1;

@@ -89,13 +89,17 @@ struct FU: public ff_node {
 
 
 int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";
-        return -1;
+    int nw=3;
+    int numtasks=1000;
+    if (argc>1) {
+        if (argc < 3) {
+            std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";
+            return -1;
+        }
+        nw=atoi(argv[1]);
+        numtasks=atoi(argv[2]); 
     }
-    int nw=atoi(argv[1]);
-    int numtasks=atoi(argv[2]); 
-    
+
     ff_pipeline pipe;
     ff_farm<>   farm;
 

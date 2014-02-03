@@ -48,19 +48,20 @@ public:
 };
 
 
-int main(int argc, 
-         char * argv[]) {
-
-    if (argc<3) {
-        std::cerr << "use: " 
-                  << argv[0] 
-                  << " nstages streamlen\n";
-        return -1;
+int main(int argc, char * argv[]) {
+    int nstages = 3;
+    int streamlen=1000;
+    if (argc>1) {
+        if (argc<3) {
+            std::cerr << "use: " 
+                      << argv[0] 
+                      << " nstages streamlen\n";
+            return -1;
+        }
+        
+        nstages=atoi(argv[1]);
+        streamlen=atoi(argv[2]);
     }
-    
-    int nstages=atoi(argv[1]);
-    int streamlen=atoi(argv[2]);
-
     if (nstages<=0 || streamlen<=0) {
         std::cerr << "Wrong parameters values\n";
         return -1;

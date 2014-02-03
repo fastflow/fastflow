@@ -113,16 +113,17 @@ public:
 int main(int argc, char * argv[]) {
     void * result = NULL;
 
-    int streamlen= 0;
-    int nworkers  = 0;
-
-    if (argc != 3) {
-        std::cerr << "use:\n" << " " << argv[0] << " stream-length num-farm-workers\n";
-        return -1;
+    int streamlen= 1000;
+    int nworkers  = 3;
+    if (argc>1) {
+        if (argc != 3) {
+            std::cerr << "use:\n" << " " << argv[0] << " stream-length num-farm-workers\n";
+            return -1;
+        }
+        streamlen=atoi(argv[1]);
+        nworkers  =atoi(argv[2]);
     }
-    streamlen=atoi(argv[1]);
-    nworkers  =atoi(argv[2]);
-     
+
     ff_farm<> farm_1(false, IN_QUEUE_SIZE, OUT_QUEUE_SIZE);
     Emitter E;
     Collector C;

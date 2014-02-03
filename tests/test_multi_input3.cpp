@@ -70,6 +70,9 @@ public:
         printf("got back a task from Collector\n");
         return GO_ON;
     }
+    void eosnotify(int) {
+        lb->broadcast_task((void*)EOS);
+    }
 private:
     ff_loadbalancer *lb;
 };
@@ -84,20 +87,23 @@ public:
 class Worker2: public ff_node {
 public:
     void* svc(void* task) {
+        printf("Worker2(%d): TASK COMPUTED\n", get_my_id());
         return task;
     }
 };
 
 
 int main(int argc, char* argv[]) {
-
-    if (argc < 3) {
-        std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";
-        return -1;
+    int nworkers = 3;
+    int ntasks = 1000;
+    if (argc>1) {
+        if (argc < 3) {
+            std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";
+            return -1;
+        }
+        nworkers  =atoi(argv[1]);
+        ntasks    =atoi(argv[2]);
     }
-    int nworkers  =atoi(argv[1]);
-    int ntasks    =atoi(argv[2]);
-
     ff_pipeline pipe;
     ff_farm<> farm1;
     ff_farm<> farm2;

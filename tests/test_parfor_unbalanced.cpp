@@ -62,19 +62,25 @@ inline static void compute(long end) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc<5) {
-        printf(" use: %s seed seqIter maxN numthreads [chunk=1]\n", argv[0]);
-        printf("      %s 7919 100 100000 4\n", argv[0]);
-        return -1;
-    }
     long chunk = 1;
-    if (argc == 6) chunk = atoi(argv[5]);
-    srandom(atol(argv[1]));
-    long seqIter=atol(argv[2]);
-    long N = atol(argv[3]);
-    int nthreads = atoi(argv[4]);
+    long seed = 7919;
+    long seqIter=100;
+    long N = 10000;
+    int nthreads = 3;
+    if (argc>1) {
+        if (argc<5) {
+            printf(" use: %s seed seqIter maxN numthreads [chunk=1]\n", argv[0]);
+            printf("      %s 7919 100 100000 4\n", argv[0]);
+            return -1;
+        }
+        if (argc == 6) chunk = atoi(argv[5]);
+        seed=atol(argv[1]);
+        seqIter=atol(argv[2]);
+        N = atol(argv[3]);
+        nthreads = atoi(argv[4]);
+    }
     double dt=0.0;
-
+    srandom(seed);
     SRandom(random());
 
     FF_PARFOR_INIT(pf, nthreads);

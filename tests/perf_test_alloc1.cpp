@@ -213,19 +213,26 @@ private:
 
 
 int main(int argc, char * argv[]) {    
-    if (argc<6) {
-        std::cerr 
-            << "use: "  << argv[0] 
-            << " num-buffer-entries streamlen num-integer-x-item #n nticks\n";
-        return -1;
-    }
-    
-    unsigned int buffer_entries = atoi(argv[1]);
-    unsigned int streamlen      = atoi(argv[2]);
-    unsigned int itemsize       = atoi(argv[3]);
-    int nworkers                = atoi(argv[4]);    
-    long long nticks   = strtol(argv[5],NULL,10) ;
+    unsigned int buffer_entries = 128;
+    unsigned int streamlen      = 1000000;
+    unsigned int itemsize       = 32;
+    int nworkers                = 3;
+    long long nticks            = 1000;
 
+    if (argc>1) {
+        if (argc<6) {
+            std::cerr 
+                << "use: "  << argv[0] 
+                << " num-buffer-entries streamlen num-integer-x-item #n nticks\n";
+            return -1;
+        }
+        
+        buffer_entries = atoi(argv[1]);
+        streamlen      = atoi(argv[2]);
+        itemsize       = atoi(argv[3]);
+        nworkers       = atoi(argv[4]);    
+        nticks         = atol(argv[5]);
+    }
     // arguments check
     if (nworkers<0 || !streamlen || nticks<0) {
         std::cerr << "Wrong parameters values\n";

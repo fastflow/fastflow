@@ -75,20 +75,21 @@ private:
     int ntask;
 };
 
-int main(int argc, 
-         char * argv[]) {
-
-    if (argc<4) {
-        std::cerr << "use: " 
-                  << argv[0] 
-                  << " nworkers streamlen iteration\n";
-        return -1;
+int main(int argc, char * argv[]) {
+    int nworkers = 3;
+    int streamlen= 1000;
+    int iterations = 3;
+    if (argc>1) {
+        if (argc<4) {
+            std::cerr << "use: " 
+                      << argv[0] 
+                      << " nworkers streamlen iteration\n";
+            return -1;
+        }        
+        nworkers=atoi(argv[1]);
+        streamlen=atoi(argv[2]);
+        iterations=atoi(argv[3]);
     }
-    
-    int nworkers=atoi(argv[1]);
-    int streamlen=atoi(argv[2]);
-    int iterations=atoi(argv[3]);
-
     if (nworkers<=0 || streamlen<=0 || iterations<=0) {
         std::cerr << "Wrong parameters values\n";
         return -1;

@@ -82,15 +82,21 @@ void usage(char * name) {
 }
 
 int main(int argc, char * argv[]) {
-    if (argc!=5) {	
-	usage(argv[0]);
-	return -1;
+    unsigned int buffer_entries = 512;
+    unsigned int numtasks       = 10000000;
+    unsigned int nworkers       = 3;
+    long long nticks            = 1000;
+    if (argc>1) {
+        if (argc!=5) {	
+            usage(argv[0]);
+            return -1;
+        }
+        
+        buffer_entries = atoi(argv[1]);
+        numtasks       = atoi(argv[2]); 
+        nworkers       = atoi(argv[3]);
+        nticks         = atoi(argv[4]);
     }
-	
-    unsigned int buffer_entries = atoi(argv[1]);
-    unsigned int numtasks       = atoi(argv[2]); 
-    unsigned int nworkers       = atoi(argv[3]);
-    long long nticks         = atoi(argv[4]);
 
     ff_farm<> farm(false, nworkers*buffer_entries);    
     Emitter E(numtasks);

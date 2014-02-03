@@ -84,12 +84,14 @@ public:
 };
 
 int main(int argc, char * argv[]) {
-    if (argc < 2) {
-        printf("use: %s numtasks\n", argv[0]);
-        return -1;
+    int streamlen = 1000;
+    if (argc>1) {
+        if (argc != 2) {
+            printf("use: %s numtasks\n", argv[0]);
+            return -1;
+        }
+        streamlen=atoi(argv[1]); 
     }
-    int streamlen=atoi(argv[1]); 
-
     ff_pipeline pipe(false, 10,10,true);
     pipe.add_stage(new Stage1(streamlen));
     pipe.add_stage(new Stage2());

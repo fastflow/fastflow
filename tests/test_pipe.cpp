@@ -48,12 +48,14 @@ static inline bool wrapG(fftask_t &t) {
 #endif
 
 int main(int argc, char * argv[]) {
-
-    if (argc<2) {
-        printf("use: %s streamlen\n",argv[0]);
-        return -1;
+    long streamlen=1000;
+    if (argc>1) {
+        if (argc!=2) {
+            printf("use: %s streamlen\n",argv[0]);
+            return -1;
+        }
+        streamlen  =atol(argv[1]);
     }
-    long   streamlen  =atol(argv[1]);
 
 #if defined(SEQUENTIAL)
     for(long i=0;i<streamlen;++i)

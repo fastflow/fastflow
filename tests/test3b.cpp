@@ -103,28 +103,32 @@ public:
         return GO_ON;
     }
     void svc_end() {
-        printf("%f\n",somma);
+        printf("%g\n",somma);
     }
 private:
     double somma;
 };
 
 int main(int argc, char * argv[]) {
-    if (argc<6 && (argc==3 && atoi(argv[1]))<=0) {
-        std::cerr << "use: "  << argv[0] << " 0|1 streamlen c1 c2 c3\n";
-        std::cerr << "    0 pipeline version\n";
-        std::cerr << "    1 sequential version\n";
-        std::cerr << " c1-3 are core ids for the 3 pipeline stages\n";
-        return -1;
+    int seq = 0;
+    int streamlen = 10000;
+    if (argc>1) {
+        if (argc<6 && (argc==3 && atoi(argv[1]))<=0) {
+            std::cerr << "use: "  << argv[0] << " 0|1 streamlen c1 c2 c3\n";
+            std::cerr << "    0 pipeline version\n";
+            std::cerr << "    1 sequential version\n";
+            std::cerr << " c1-3 are core ids for the 3 pipeline stages\n";
+            return -1;
+        }
+        
+        seq = atoi(argv[1]);
+        streamlen=atoi(argv[2]);
+        if (argc>3) {
+            stage1 = atoi(argv[3]);
+            stage2 = atoi(argv[4]);
+            stage3 = atoi(argv[5]);
+        }
     }
-    int seq = atoi(argv[1]);
-    int streamlen=atoi(argv[2]);
-    if (argc>3) {
-        stage1 = atoi(argv[3]);
-        stage2 = atoi(argv[4]);
-        stage3 = atoi(argv[5]);
-    }
-
     if (seq) {
         ffTime(START_TIME);
 

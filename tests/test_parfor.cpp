@@ -67,14 +67,18 @@ private:
 #endif 
 
 int main(int argc, char* argv[]) {
-    if (argc < 4) {
-        printf("use: %s numworkers size chunk\n", argv[0]);
-        return -1;
+    int nw = 3;
+    long size= 500;
+    long chunk=100;
+    if (argc>1) {
+        if (argc < 4) {
+            printf("use: %s numworkers size chunk\n", argv[0]);
+            return -1;
+        }
+        nw    =atoi(argv[1]);
+        size  =atol(argv[2]); 
+        chunk =atol(argv[3]); 
     }
-    int  nw    =atoi(argv[1]);
-    long size  =atol(argv[2]); 
-    long chunk =atol(argv[3]); 
-
     long *V = new long[size];
     for(int i=0;i<size;++i) {
         V[i] = 1000;

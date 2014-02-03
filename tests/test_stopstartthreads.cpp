@@ -159,18 +159,22 @@ private:
 
 
 int main(int argc, char* argv[]) {    
-    if (argc<3) {
-        printf("use: %s nworkers ntask\n", argv[0]);
-        return -1;
-    }
+    int nworkers = 3;
+    int ntask = 1000;
+    if (argc>1) {
+        if (argc<3) {
+            printf("use: %s nworkers ntask\n", argv[0]);
+            return -1;
+        }
     
-    int nworkers=atoi(argv[1]);
-    if (nworkers<=2) {
-        printf("for this test nworkers shoud be greater than 2\n");
-        return -1;
+        nworkers=atoi(argv[1]);
+        if (nworkers<=2) {
+            printf("for this test nworkers shoud be greater than 2\n");
+            return -1;
+        }
+        
+        ntask=atoi(argv[2]);
     }
-    
-    int ntask=atoi(argv[2]);
     if (nworkers<=0 || ntask<=0) {
         std::cerr << "Wrong parameters values\n";
         return -1;
