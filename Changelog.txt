@@ -1,4 +1,7 @@
 * 27/01/14 - v.2.0.3
+   - fixed possible node termination problem (in case the freezing flag was set)
+   - commented out the optimization heuristic in the parallel_for pattern 
+     since it does not work well with high unbalanced loop iterations
    - parallel_for/reduce: fixed some issues and optimized the case when it is 
      used with just 1 thread
    - ff_send_out_to modified in order to better work with ondemand scheduling
