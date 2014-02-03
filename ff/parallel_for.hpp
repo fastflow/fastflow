@@ -54,21 +54,36 @@ namespace ff {
 
     /* -------------------- Parallel For/Reduce Macros -------------------- */
     /* Usage example:
-     *                                 // loop parallelization using 3 workers
-     *  for(int i=0;i<N;++i)           FF_PARFOR_BEGIN(for,i,0,N,1,1,3) {
-     *    A[i]=f(i)            ---->      A[i]=f(i);
-     *                                 } FF_PARFOR_END(for);
+     *                              // loop parallelization using 3 workers
+     *                              // and a minimum task grain of 2
+     *                              wthread = 3;
+     *                              grain = 2;
+     *  for(int i=0;i<N;++i)        FF_PARFOR_BEGIN(for,i,0,N,1,grain,wthread) {
+     *    A[i]=f(i)          ---->    A[i]=f(i);
+     *                              } FF_PARFOR_END(for);
      * 
      *   parallel for + reduction:
      *     
-     *  s=0;                           // loop parallelization using 3 workers
-     *  for(int i=0;i<N;++i)           FF_PARFOR_BEGIN(for,s,i,0,N,1,1,3) {
-     *    s*=f(i)              ---->      s*=f(i);
-     *                                 } FF_PARFOR_END(for,s,*);
+     *  s=4;                         
+     *  for(int i=0;i<N;++i)        FF_PARFORREDUCE_BEGIN(for,s,0,i,0,N,1,grain,wthread) {
+     *    s*=f(i)            ---->    s*=f(i);
+     *                              } FF_PARFORREDUCE_END(for,s,*);
      *
+     *                          
+     *                              FF_PARFOR_INIT(pf,maxwthread);
+     *                              ....
+     *  while(k<nTime) {            while(k<nTime) {
+     *    for(int i=0;i<N;++i)        FF_PARFORREDUCE_START(pf,s,0,i,0,N,1,grain,wthread) {
+     *      s*=f(i,k);       ---->       s*=f(i,k);
+     *  }                             } FF_PARFORREDUCE_STOP(pf,s,*);
+     *                             }
+     *                             ....
      *
-     *  NOTE: inside the body of the PARFOR it is possible to use the 
-     *        'ff_thread_id' const integer variable to identify the thread id 
+     *                             FF_PARFOR_DON(pf);
+     *
+     * 
+     *  NOTE: inside the body of the PARFOR/PARFORREDUCE, it is possible to use the 
+     *        '_ff_thread_id' const integer variable to identify the thread id 
      *        running the sequential portion of the loop.
      */
 
@@ -186,7 +201,7 @@ namespace ff {
 #define FF_PARFOR_ASSIGN(name,nw)                                                 \
     name=new ff_forall_farm<int>(nw)
 
-#define FF_PARFOR_DONE(name)  name->wait()
+#define FF_PARFOR_DONE(name)  name->stop(); name->wait(); delete name
 
     // {                                                                             
     //     auto donothing=[](const long,const long, const int) ->                    
@@ -202,7 +217,7 @@ namespace ff {
 #define FF_PARFORREDUCE_ASSIGN(name,type,nw)                                      \
     name=new ff_forall_farm<type>(nw)
     
-#define FF_PARFORREDUCE_DONE(name) name->wait()
+#define FF_PARFORREDUCE_DONE(name) name->stop(); name->wait(); delete name
 
     // {                                                                             
     //     auto donothing=[](const long,const long,const int) ->                     
@@ -342,7 +357,7 @@ protected:
     virtual inline size_t init_data(long start, long stop) {
         const long numtasks  = std::ceil((stop-start)/(double)_step);
         long totalnumtasks   = std::ceil(numtasks/(double)_chunk);
-        const long tt        = totalnumtasks;
+        long tt     = totalnumtasks;
         size_t ntxw = totalnumtasks / _nw;
         size_t r    = totalnumtasks % _nw;
 
@@ -365,6 +380,7 @@ protected:
             assert(totalnumtasks==1);
             // try to keep the n. of tasks per worker as smaller as possible
             if (ntxw > 1) data[_nw-1].first += totalnumtasks;
+            else --tt;
             data[_nw-1].second.end = stop;
         } 
 
@@ -391,7 +407,7 @@ public:
     void* svc(void* t) {
         if (t==NULL) {
             if (totaltasks==0) return NULL;
-            if ((totaltasks/_nw) == 1 || (totaltasks == 1)) {
+            if ( (totaltasks/(double)_nw) <= 1.0 || (totaltasks==1) ) {
                 for(size_t wid=0;wid<_nw;++wid)
                     if (data[wid].first) {
                         taskv[wid].set(data[wid].second.start, data[wid].second.end);
@@ -401,11 +417,10 @@ public:
             }
             {
             size_t remaining = totaltasks;
-            bool skip1=false,skip2=false,skip3=false;
             const long endchunk = (_chunk-1)*_step + 1;
             int jump = 0;
-            
-        moretask:
+            //bool skip1=false,skip2=false,skip3=false;            
+      //moretask:
             for(size_t wid=0;wid<_nw;++wid) {
                 if (data[wid].first) {
                     long start = data[wid].second.start;
@@ -419,15 +434,20 @@ public:
                     // if we do not have task at the beginning the thread is terminated
                     lb->ff_send_out_to(EOS, wid);
                     active[wid]=false;
-                    skip1=skip2=skip3=true;
+                    //skip1=skip2=skip3=true;
                 }
             }
+#if 0
+            // January 2014 (massimo): this heuristic does not work very well in case of big
+            // load imbalance between iterations thus I decided to comment it out 
+
             jump+=_nw;
             assert((jump / _nw) <= 8);
             // heuristic: try to assign more task at the very beginning
             if (!skip1 && totaltasks>=4*_nw)   { skip1=true; goto moretask;}
             if (!skip2 && totaltasks>=64*_nw)  { skip1=false; skip2=true; goto moretask;}
             if (!skip3 && totaltasks>=1024*_nw){ skip1=false; skip2=false; skip3=true; goto moretask;}
+#endif
 
             return (remaining<=0)?NULL:GO_ON;
             }
@@ -463,7 +483,7 @@ public:
         assert(totaltasks>=1);        
         // if we have only 1 task per worker, the scheduler exits immediatly so we have to wait all workers
         // otherwise is sufficient to wait only for the scheduler
-        if ( (totaltasks/_nw) <= 1 || (totaltasks==1) ) {
+        if ( (totaltasks/(double)_nw) <= 1.0 || (totaltasks==1) ) {
            _nw = totaltasks;
            return true;
         }

@@ -467,8 +467,8 @@ protected:
                 return;
             }
         } while(!stp);
-
-        if (init_error && freezing) {
+        
+        if (freezing) {
             pthread_mutex_lock(&mutex);
             frozen=true;
             pthread_cond_signal(&cond_frozen);
