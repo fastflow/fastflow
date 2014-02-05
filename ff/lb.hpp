@@ -204,6 +204,7 @@ protected:
             cnt=0;//,cnt2=0;
             do {
                 nextw = selectworker();
+                if (nextw<0) return false;
 #if defined(LB_CALLBACK)
                 task = callback(nextw, task);
 #endif
@@ -429,6 +430,16 @@ public:
     inline size_t getnworkers() const { return (size_t)running;} 
 
     /**
+     * \brief Get the number of workers
+     *
+     * It returns the number of total workers registered
+     *
+     * \return Number of worker
+     */
+    inline size_t getNWorkers() const { return workers.size();}
+
+
+    /**
      * \brief Skips first pop
      *
      * It sets \p skip1pop to \p true
@@ -479,8 +490,7 @@ public:
     }
 
     inline bool ff_send_out_to(void *task, int id) {
-        nextw = id-1;
-        return schedule_task(task,0,0);
+        return workers[id]->put(task);
     }
 
     /** 
@@ -608,7 +618,8 @@ public:
                 } else 
                     if (!inpresent) { push_goon(); push_eos(); ret=(void*)FF_EOS; break;}
                 
-                schedule_task(task);
+                const bool r = schedule_task(task);
+                assert(r); (void)r;
             } while(true);
         } else {
             size_t nw=0;            
