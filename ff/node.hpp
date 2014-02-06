@@ -676,7 +676,7 @@ public:
      *
      * \return A booleon value shoing the status of freezing.
      */
-    inline const bool isfrozen() { return freezing>0;} 
+    inline bool isfrozen() const { return freezing>0;} 
 
     /**
      *
@@ -991,7 +991,7 @@ protected:
      * \return If the thread does not exists then false is returned, otherwise
      * the status of \p isfrozen() is returned.
      */
-    virtual const bool isfrozen() { 
+    virtual bool isfrozen() const { 
         if (!thread) 
             return false;
         return thread->isfrozen();
@@ -1604,7 +1604,7 @@ private:
          *
          * \return the status of the \p isfrozen() method.
          */
-        const bool isfrozen() { return ff_thread::isfrozen();}
+        bool isfrozen() const { return ff_thread::isfrozen();}
 
         /**
          * \brief Gets the ID of the thread

@@ -454,7 +454,7 @@ public:
     /** 
      * It checks if the pipeline is frozen 
      */
-    inline const bool isfrozen() { 
+    inline bool isfrozen() const { 
         int nstages=static_cast<int>(nodes_list.size());
         for(int i=0;i<nstages;++i) 
             if (!nodes_list[i]->isfrozen()) return false;
