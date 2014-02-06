@@ -327,6 +327,24 @@ struct forall_task_t {
     long end;
 };
 
+//  used just to redefine losetime_in
+class foralllb_t: public ff_loadbalancer {
+protected:
+    virtual inline void losetime_in() { 
+        if ((int)(getnworkers())>=ncores) {
+            FFTRACE(lostpopticks+=(100*TICKS2WAIT);++popwait);
+            ff_relax(0);
+            return;
+        }                
+        FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
+        ticks_wait(TICKS2WAIT); 
+    }
+public:
+    foralllb_t(size_t n):ff_loadbalancer(n),ncores(ff_numCores()) {}
+private:
+    const int ncores;
+};
+
 // parallel for/reduce  worker node
 template<typename Tres>
 class forallreduce_W: public ff_node {
@@ -496,7 +514,7 @@ public:
     inline size_t running() const { return _nw; }
 
 protected:
-    ff_loadbalancer* lb;
+    ff_loadbalancer *lb;
     long             _start,_stop,_step;  // for step
     long             _chunk;              // a chunk of indexes
     size_t           totaltasks;          // total n. of tasks
@@ -504,120 +522,8 @@ protected:
 };
 
 
-#if 0
-// FIX: it does not work correctly in all cases
-class forall_Scheduler2: public ff_node {
-protected:
-    std::vector<bool> active;
-    std::vector<std::pair<long,forall_task_t> > data;
-    std::vector<forall_task_t> taskv;
-protected:
-    // initialize the data vector
-    virtual inline size_t init_data(long start, long stop) {
-        const long numtasks  = std::ceil((stop-start)/(double)step);
-        long totalnumtasks   = std::ceil(numtasks/(double)chunk);
-        long ntxw = totalnumtasks;
-        long r    = 0;
-        long tt   = totalnumtasks;
-
-        if (ntxw == 0 && r>1) {
-            ntxw = 1, r = 0;
-        }
-        data.resize(1);
-        taskv.resize(8*nw); // 8 is the maximum n. of jumps, see the heuristic below
-        
-        long end, t=0, e;
-        t       = ntxw;
-        e       = start + (t*chunk - 1)*step + 1;
-        end     = (e<stop) ? e : stop;
-        data[0] = std::make_pair(t, forall_task_t(start,end));
-
-        // printf("Scheduler2:\n");
-        // printf("%ld <%ld,%ld>\n", data[0].first, data[0].second.start, data[0].second.end);
-        // printf("totaltasks=%ld\n", tt);
-
-        return tt;
-    }    
-
-public:
-    forall_Scheduler2(ff_loadbalancer* lb, long start, long stop, long step, long chunk, int nw):
-        active(nw),lb(lb),step(step),chunk(chunk),totaltasks(0),nw(nw) {
-        totaltasks = init_data(start,stop);
-        assert(totaltasks>=1);
-        for(int wid=0;wid<nw;++wid) active[wid]=false;
-    }
-    forall_Scheduler2(ff_loadbalancer* lb, int nw):active(nw),lb(lb),step(1),chunk(1),totaltasks(0),nw(nw) {
-        totaltasks = init_data(0,0);
-        assert(totaltasks==0);
-        for(int wid=0;wid<nw;++wid) active[wid]=false;
-    }
-
-    void* svc(void* t) {
-        if (t==NULL) {
-            if (totaltasks==0) return NULL;
-            bool skip1=false,skip2=false,skip3=false;
-            long remaining = totaltasks;
-            const long endchunk = (128-1)*step + 1; //(chunk-1)*step + 1;
-            int jump = 0;
-        moretask:
-            for(int wid=0;wid<nw;++wid) {
-                if (data[0].first<=0) return NULL;
-                long start = data[0].second.start;
-                long end   = std::min(start+endchunk, data[0].second.end);
-                taskv[wid+jump].set(start, end);
-                lb->ff_send_out_to(&taskv[wid+jump], wid);
-                --remaining, --data[0].first;
-                (data[0].second).start = (end-1)+step;  
-                active[wid]=true;
-            }
-            jump+=nw;
-            assert((jump / nw) <= 8);
-            // heuristic: try to assign more task at the very beginning
-            if (!skip1 && totaltasks>=10*nw)  { skip1=true; goto moretask;}
-            if (!skip2 && totaltasks>=100*nw) { skip1=false; skip2=true; goto moretask;}
-            if (!skip3 && totaltasks>=1000*nw){ skip1=false; skip2=false; skip3=true; goto moretask;}
-
-            return (remaining<=0)?NULL:GO_ON;
-        }
-        if (--totaltasks <=0) return NULL;
-        auto task = (forall_task_t*)t;
-        const long endchunk = (chunk-1)*step + 1;
-        const int wid = lb->get_channel_id();        
-        if (data[0].first) {
-            long start = data[0].second.start;
-            long end   = std::min(start+endchunk, data[0].second.end);
-            task->set(start, end);
-            lb->ff_send_out_to(task, wid);
-            --data[0].first;
-            (data[0].second).start = (end-1)+step;
-            return GO_ON;
-        }
-        if (active[wid]) {
-            lb->ff_send_out_to(EOS, wid); // the thread is terminated
-            active[wid]=false;
-        }
-        return GO_ON;
-
-    }
-
-    inline bool setloop(long start, long stop, long _step, long _chunk, int _nw) {
-        step=_step, chunk=_chunk, nw = _nw;
-        totaltasks = init_data(start,stop);
-        assert(totaltasks>=1);        
-        return true;
-    }
-
-protected:
-    ff_loadbalancer* lb;
-    long             step;        // for step
-    long             chunk;       // a chunk of indexes
-    long             totaltasks;  // total n. of tasks
-    int              nw;          // num. of workers
-};
-#endif
-
 template <typename Tres>
-class ff_forall_farm: public ff_farm<> {
+class ff_forall_farm: public ff_farm<foralllb_t> {
 protected:
     // allows to remove possible EOS still in the input/output queues 
     // of workers
@@ -628,34 +534,34 @@ protected:
 public:
     Tres t; // not used
 
-    ff_forall_farm(size_t maxnw):ff_farm<>(false,100*maxnw,100*maxnw,true,maxnw,true),waitall(true) {
+    ff_forall_farm(size_t maxnw):ff_farm<foralllb_t>(false,100*maxnw,100*maxnw,true,maxnw,true),waitall(true) {
         std::vector<ff_node *> forall_w;
         auto donothing=[](const long,const long, const int) -> int {
             return 0;
         };
         for(size_t i=0;i<maxnw;++i)
             forall_w.push_back(new forallreduce_W<Tres>(donothing));
-        ff_farm<>::add_emitter(new forall_Scheduler(getlb(),maxnw));
-        ff_farm<>::add_workers(forall_w);
-        ff_farm<>::wrap_around();
-        if (ff_farm<>::run_then_freeze()<0) {
+        ff_farm<foralllb_t>::add_emitter(new forall_Scheduler(getlb(),maxnw));
+        ff_farm<foralllb_t>::add_workers(forall_w);
+        ff_farm<foralllb_t>::wrap_around();
+        if (ff_farm<foralllb_t>::run_then_freeze()<0) {
             error("running base forall farm\n");
-        } else ff_farm<>::wait_freezing();
+        } else ff_farm<foralllb_t>::wait_freezing();
     }
     inline int run_then_freeze(ssize_t nw_=-1) {
         const ssize_t nwtostart = (nw_ == -1)?getNWorkers():nw_;
         resetqueues(nwtostart);
         // the scheduler skips the first pop
         getlb()->skipfirstpop();
-        return ff_farm<>::run_then_freeze(nwtostart);
+        return ff_farm<foralllb_t>::run_then_freeze(nwtostart);
     }
     int run_and_wait_end() {
         resetqueues(getNWorkers());
-        return ff_farm<>::run_and_wait_end();
+        return ff_farm<foralllb_t>::run_and_wait_end();
     }
 
     inline int wait_freezing() {
-        if (waitall) return ff_farm<>::wait_freezing();
+        if (waitall) return ff_farm<foralllb_t>::wait_freezing();
         return getlb()->wait_lb_freezing();
     }
 

@@ -71,7 +71,7 @@ public:
 
     // NOTE:
     //  - TICKS2WAIT should be a valued profiled for the application
-    //    Consider to redifine loosetime_in and loosetime_out for your app.
+    //    Consider to redifine losetime_in and losetime_out for your app.
     //
     enum {TICKS2WAIT=1000};
 protected:
@@ -167,7 +167,7 @@ protected:
     /**
      * \brief Loses some time before sending the message to output buffer
      *
-     * It looses some time before the message is sent to the output buffer.
+     * It loses some time before the message is sent to the output buffer.
      *
      */
     virtual inline void losetime_out() { 
@@ -178,7 +178,7 @@ protected:
     /**
      * \brief Losses time before sending the message to input buffer
      *
-     * It looses time before the message is sent to the input buffer.
+     * It loses time before the message is sent to the input buffer.
      */
     virtual inline void losetime_in() { 
         FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
