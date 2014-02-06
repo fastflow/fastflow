@@ -678,7 +678,7 @@ public:
      *
      * \return The status of \p isfrozen().
      */
-    inline const bool isfrozen() { return lb->isfrozen(); }
+    inline bool isfrozen() const { return lb->isfrozen(); }
 
     /**
      * \breif Offloads teh task to farm
