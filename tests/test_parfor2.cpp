@@ -69,9 +69,9 @@ int main(int argc, char *argv[]) {
         printf("pf1 done using %d workers\n", std::min(k+1,nworkers));
 
 
-        FF_PARFORREDUCE_BEGIN(pf2, sum, 0, i,0,size,1, chunk, std::min(k+2,nworkers)) { 
+        FF_PARFORREDUCE_START(pf2, sum, 0, i,0,size,1, chunk, std::min(k+2,nworkers)) { 
             sum += A[i];
-        } FF_PARFORREDUCE_END(pf2, sum, +);    
+        } FF_PARFORREDUCE_STOP(pf2, sum, +);    
         printf("pf2 done using %d workers\n", std::min(k+2,nworkers));
         
     } // k

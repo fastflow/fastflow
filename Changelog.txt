@@ -1,4 +1,7 @@
 * 27/01/14 - v.2.0.3
+   - fixed an issue in the ofarm skeleton
+   - ParallelForReduce optimized for the case when it is called multiple times 
+     in a sequential loop
    - fixed possible node termination problem (in case the freezing flag was set)
    - commented out the optimization heuristic in the parallel_for pattern 
      since it does not work well with high unbalanced loop iterations
