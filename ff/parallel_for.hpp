@@ -97,14 +97,10 @@ namespace ff {
      *  nw   : n. of worker threads
      */
 #define FF_PARFOR_BEGIN(name, idx, begin, end, step, chunk, nw)                   \
-    ff_farm<>   forall_##name;                                                    \
-    forall_##name.cleanup_workers();                                              \
-    const int nw_##name = nw;                                                     \
-    forall_##name.add_emitter(                                                    \
-          new forall_Scheduler(forall_##name.getlb(),begin,end, step,chunk,nw));  \
-    forall_##name.wrap_around();                                                  \
+    ff_forall_farm<int> name(nw,true);                                            \
+    name.setloop(begin,end,step,chunk,nw);                                        \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,     \
-                         const int _ff_thread_id) -> int  {                       \
+                         const int _ff_thread_id, const int) -> int  {            \
         PRAGMA_IVDEP                                                              \
         for(long idx=ff_start_##idx;idx<ff_stop_##idx;idx+=step) 
 
@@ -114,14 +110,10 @@ namespace ff {
      * the loop.
      */
 #define FF_PARFOR2_BEGIN(name, idx, begin, end, step, chunk, nw)                  \
-    ff_farm<>   forall_##name;                                                    \
-    forall_##name.cleanup_workers();                                              \
-    const int nw_##name = nw;                                                     \
-    forall_##name.add_emitter(                                                    \
-          new forall_Scheduler(forall_##name.getlb(),begin,end, step,chunk,nw));  \
-    forall_##name.wrap_around();                                                  \
+    ff_forall_farm<int> name(nw,true);                                            \
+    name.setloop(begin,end,step,chunk, nw);                                       \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,     \
-                         const int _ff_thread_id) -> int  {                       \
+                         const int _ff_thread_id, const int) -> int  {            \
     /* here you have to define the for loop using ff_start/stop_idx  */
 
 
@@ -129,14 +121,12 @@ namespace ff {
     return 0;                                                                     \
     };                                                                            \
     {                                                                             \
-        std::vector<ff_node *> forall_w_##name;                                   \
-        for(int i=0;i<nw_##name;++i)                                              \
-            forall_w_##name.push_back(new forallreduce_W<int>(F_##name));         \
-        forall_##name.add_workers(forall_w_##name);                               \
-        if (forall_##name.run_and_wait_end()<0) {                                 \
-            error("running forall_##name\n");                                     \
+      if (name.getnw()>1) {                                                       \
+        name.setF(F_##name);                                                      \
+        if (name.run_and_wait_end()<0) {                                          \
+            error("running parallel for\n");                                      \
         }                                                                         \
-        /*forall_##name.~ff_farm<>();*/                                           \
+      } else F_##name(name.startIdx(),name.stopIdx(),0,0);                        \
     }
 
     /* ---------------------------------------------- */
@@ -155,34 +145,32 @@ namespace ff {
      *  op      : reduce operation (+ * ....) 
      */
 #define FF_PARFORREDUCE_BEGIN(name, var,identity, idx,begin,end,step, chunk, nw)  \
-    ff_farm<>   forall_##name;                                                    \
-    forall_##name.cleanup_workers();                                              \
-    const int nw_##name = nw;                                                     \
-    forall_##name.add_emitter(                                                    \
-          new forall_Scheduler(forall_##name.getlb(),begin,end, step,chunk,nw));  \
-    forall_##name.wrap_around();                                                  \
-    auto ovar_##name = var; var=identity; /* icc does not support [var=identity]*/  \
-    auto F_##name =[&,var](const long start, const long stop,                     \
-                           const int _ff_thread_id) mutable ->                    \
-        decltype(var) {                                                           \
+    ff_forall_farm<decltype(var)> name(nw,true);                                  \
+    name.setloop(begin,end,step,chunk,nw);                                        \
+    auto ovar_##name = var; auto idtt_##name =identity;                           \
+    auto F_##name =[&](const long start, const long stop,const int _ff_thread_id, \
+                       const decltype(var) _var) mutable ->  decltype(var) {      \
+        auto var = _var;                                                          \
         PRAGMA_IVDEP                                                              \
-          for(long idx=start;idx<stop;idx+=step) 
+          for(long idx=start;idx<stop;idx+=step)
 
 #define FF_PARFORREDUCE_END(name, var, op)                                        \
           return var;                                                             \
         };                                                                        \
     {                                                                             \
-        std::vector<ff_node *> forall_w_##name;                                   \
-        for(int i=0;i<nw_##name;++i)                                              \
-          forall_w_##name.push_back(new forallreduce_W<decltype(var)>(F_##name)); \
-        forall_##name.add_workers(forall_w_##name);                               \
-        if (forall_##name.run_and_wait_end()<0) {                                 \
+        if (name.getnw()>1) {                                                     \
+          name.setF(F_##name,idtt_##name);                                        \
+          if (name.run_and_wait_end()<0) {                                        \
             error("running forall_##name\n");                                     \
+          }                                                                       \
+          var = ovar_##name;                                                      \
+          for(size_t i=0;i<name.getnw();++i)  {                                   \
+              var op##= name.getres(i);                                           \
+          }                                                                       \
+        } else {                                                                  \
+          var = ovar_##name;                                                      \
+          var op##= F_##name(name.startIdx(),name.stopIdx(),0,idtt_##name);       \
         }                                                                         \
-        var = ovar_##name;                                                        \
-        for(int i=0;i<nw_##name;++i)                                              \
-            var op##= ((forallreduce_W<decltype(var)>*)                           \
-                                 (forall_w_##name[i]))->getres();                 \
     }
 
     /* ---------------------------------------------- */
@@ -197,46 +185,28 @@ namespace ff {
     ff_forall_farm<int> *name = new ff_forall_farm<int>(nw);
 
 
-#define FF_PARFOR_DECL(name)      ff_forall_farm<int> * name
-#define FF_PARFOR_ASSIGN(name,nw)                                                 \
-    name=new ff_forall_farm<int>(nw)
-
-#define FF_PARFOR_DONE(name)  name->stop(); name->wait(); delete name
-
-    // {                                                                             
-    //     auto donothing=[](const long,const long, const int) ->                    
-    //         int { return 0;};                                                     
-    //     name->setF(donothing);                                                    
-    //     name->run_and_wait_end();                                                 
-    // }
+#define FF_PARFOR_DECL(name)       ff_forall_farm<int> * name
+#define FF_PARFOR_ASSIGN(name,nw)  name=new ff_forall_farm<int>(nw)
+#define FF_PARFOR_DONE(name)       name->stop(); name->wait(); delete name
 
 #define FF_PARFORREDUCE_INIT(name, type, nw)                                      \
     ff_forall_farm<type> *name = new ff_forall_farm<type>(nw)
 
 #define FF_PARFORREDUCE_DECL(name,type)      ff_forall_farm<type> * name
-#define FF_PARFORREDUCE_ASSIGN(name,type,nw)                                      \
-    name=new ff_forall_farm<type>(nw)
-    
-#define FF_PARFORREDUCE_DONE(name) name->stop(); name->wait(); delete name
-
-    // {                                                                             
-    //     auto donothing=[](const long,const long,const int) ->                     
-    //         decltype(name->t) { return 0;  };                                     
-    //     name->setF(donothing);                                                    
-    //     name->run_and_wait_end();                                                 
-    // }
+#define FF_PARFORREDUCE_ASSIGN(name,type,nw) name=new ff_forall_farm<type>(nw)
+#define FF_PARFORREDUCE_DONE(name)           name->stop();name->wait();delete name
 
 #define FF_PARFOR_START(name, idx, begin, end, step, chunk, nw)                   \
     name->setloop(begin,end,step,chunk,nw);                                       \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,     \
-                         const int _ff_thread_id) -> int  {                       \
+                         const int _ff_thread_id, const int) -> int  {            \
         PRAGMA_IVDEP                                                              \
         for(long idx=ff_start_##idx;idx<ff_stop_##idx;idx+=step) 
 
 #define FF_PARFOR2_START(name, idx, begin, end, step, chunk, nw)                  \
     name->setloop(begin,end,step,chunk,nw);                                       \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,     \
-                         const int _ff_thread_id) -> int  {                       \
+                         const int _ff_thread_id, const int) -> int  {            \
     /* here you have to define the for loop using ff_start/stop_idx  */
 
 
@@ -248,21 +218,21 @@ namespace ff {
       if (name->run_then_freeze(name->getnw())<0)                                 \
           error("running ff_forall_farm (name)\n");                               \
       name->wait_freezing();                                                      \
-    } else F_##name(name->startIdx(),name->stopIdx(),0) 
+    } else F_##name(name->startIdx(),name->stopIdx(),0,0) 
     
 #define FF_PARFORREDUCE_START(name, var,identity, idx,begin,end,step, chunk, nw)  \
     name->setloop(begin,end,step,chunk,nw);                                       \
-    auto ovar_##name = var; var=identity; /* icc does not support [var=identity]*/  \
-    auto F_##name =[&,var](const long start, const long stop,                     \
-                           const int _ff_thread_id) mutable ->                    \
-        decltype(var) {                                                           \
+    auto ovar_##name = var; auto idtt_##name =identity;                           \
+    auto F_##name =[&](const long start, const long stop,const int _ff_thread_id, \
+                       const decltype(var) _var) mutable ->  decltype(var) {      \
+        auto var = _var;                                                          \
         PRAGMA_IVDEP                                                              \
-          for(long idx=start;idx<stop;idx+=step) 
+        for(long idx=start;idx<stop;idx+=step) 
 
 #define FF_PARFORREDUCE_STOP(name, var, op)                                       \
           return var;                                                             \
         };                                                                        \
-        name->setF(F_##name);                                                     \
+        name->setF(F_##name,idtt_##name);                                         \
         if (name->getnw()>1) {                                                    \
           if (name->run_then_freeze(name->getnw())<0)                             \
               error("running ff_forall_farm (name)\n");                           \
@@ -273,14 +243,14 @@ namespace ff {
           }                                                                       \
         } else {                                                                  \
           var = ovar_##name;                                                      \
-          var op##= F_##name(name->startIdx(),name->stopIdx(),0);                 \
+          var op##= F_##name(name->startIdx(),name->stopIdx(),0,idtt_##name);     \
         }
 
 
 #define FF_PARFORREDUCE_F_STOP(name, var, F)                                      \
           return var;                                                             \
         };                                                                        \
-        name->setF(F_##name);                                                     \
+          name->setF(F_##name,idtt_##name);                                       \
         if (name->getnw()>1) {                                                    \
           if (name->run_then_freeze(name->getnw())<0)                             \
               error("running ff_forall_farm (name)\n");                           \
@@ -291,27 +261,10 @@ namespace ff {
           }                                                                       \
         } else {                                                                  \
             var = ovar_##name;                                                    \
-            F(var,F_##name(name->startIdx(),name->stopIdx(),0));                  \
+            F(var,F_##name(name->startIdx(),name->stopIdx(),0,idtt_##name));      \
         }
 
-/* gets the working time of a parallel for/reduce */
-#define FF_PARFOR_WTIME(name)   forall_##name.ffwTime()
-/* gets the total time of a parallel for/reduce */
-#define FF_PARFOR_TIME(name)    forall_##name.ffTime()
-
-
     /* ------------------------------------------------------------------- */
-
-    /* helper define */
-#define WARMUP(name)                                                              \
-    {                                                                             \
-        auto donothing=[](const long,const long, const int) ->                    \
-            int { return 0;};                                                     \
-        name->setF(donothing);                                                    \
-        if (name->run_then_freeze(name->getnw())<0)                               \
-            error("running ff_forall_farm (name)\n");                             \
-        name->wait_freezing();                                                    \
-    }
 
 
 
@@ -348,20 +301,21 @@ private:
 // parallel for/reduce  worker node
 template<typename Tres>
 class forallreduce_W: public ff_node {
+    typedef std::function<Tres(const long,const long, const int, const Tres)> F_t;
 public:
-    forallreduce_W(std::function<Tres(const long,const long,const int)> F):F(F) {}
+    forallreduce_W(F_t F):F(F) {}
 
     inline void* svc(void* t) {
         auto task = (forall_task_t*)t;
-        res = F(task->start,task->end,get_my_id());
+        res = F(task->start,task->end,get_my_id(),res);
         return t;
     }
-    void setF(std::function<Tres(const long,const long,const int)> _F) { 
-        F=_F;
+    void setF(F_t _F, const Tres idtt) { 
+        F=_F, res=idtt;
     }
     Tres getres() const { return res; }
 protected:
-    std::function<Tres(const long,const long,const int)> F;
+    F_t  F;
     Tres res;
 };
 // parallel for/reduce task scheduler
@@ -524,6 +478,7 @@ protected:
 
 template <typename Tres>
 class ff_forall_farm: public ff_farm<foralllb_t> {
+    typedef std::function<Tres(const long,const long, const int, const Tres)> F_t;
 protected:
     // allows to remove possible EOS still in the input/output queues 
     // of workers
@@ -534,9 +489,10 @@ protected:
 public:
     Tres t; // not used
 
-    ff_forall_farm(size_t maxnw):ff_farm<foralllb_t>(false,100*maxnw,100*maxnw,true,maxnw,true),waitall(true) {
+    ff_forall_farm(size_t maxnw,const bool skipwarmup=false):
+        ff_farm<foralllb_t>(false,100*maxnw,100*maxnw,true,maxnw,true),waitall(true) {
         std::vector<ff_node *> forall_w;
-        auto donothing=[](const long,const long, const int) -> int {
+        auto donothing=[](const long,const long,const int,const Tres) -> int {
             return 0;
         };
         for(size_t i=0;i<maxnw;++i)
@@ -544,9 +500,11 @@ public:
         ff_farm<foralllb_t>::add_emitter(new forall_Scheduler(getlb(),maxnw));
         ff_farm<foralllb_t>::add_workers(forall_w);
         ff_farm<foralllb_t>::wrap_around();
-        if (ff_farm<foralllb_t>::run_then_freeze()<0) {
-            error("running base forall farm\n");
-        } else ff_farm<foralllb_t>::wait_freezing();
+        if (!skipwarmup) {
+            if (ff_farm<foralllb_t>::run_then_freeze()<0) {
+                error("running base forall farm\n");
+            } else ff_farm<foralllb_t>::wait_freezing();
+        }
     }
     inline int run_then_freeze(ssize_t nw_=-1) {
         const ssize_t nwtostart = (nw_ == -1)?getNWorkers():nw_;
@@ -565,10 +523,10 @@ public:
         return getlb()->wait_lb_freezing();
     }
 
-    inline void setF(std::function<Tres(const long,const long,const int)>  _F) { 
+    inline void setF(F_t  _F, const Tres idtt=(Tres)0) { 
         const size_t nw = getNWorkers();
         const svector<ff_node*> &nodes = getWorkers();
-        for(size_t i=0;i<nw;++i) ((forallreduce_W<Tres>*)nodes[i])->setF(_F);
+        for(size_t i=0;i<nw;++i) ((forallreduce_W<Tres>*)nodes[i])->setF(_F, idtt);
     }
     inline void setloop(long begin,long end,long step,long chunk, size_t nw) {
         assert(nw<=getNWorkers());

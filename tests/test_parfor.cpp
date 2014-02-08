@@ -92,8 +92,8 @@ int main(int argc, char* argv[]) {
         //printf("I'm thread %d\n", _ff_thread_id);
         usleep(V[i]);
     } FF_PARFOR_END(test1);    
-    printf("Time =%g\n", FF_PARFOR_TIME(test1));
-    printf("wTime=%g\n", FF_PARFOR_WTIME(test1));
+    printf("Time =%g\n", test1.ffTime());
+    printf("wTime=%g\n", test1.ffwTime());
 
 #if defined(ON_DEMAND)
     ff_farm<>   farm;
