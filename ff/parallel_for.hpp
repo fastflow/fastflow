@@ -36,6 +36,7 @@
 // #endif
 // #endif
 
+#include <algorithm>
 #include <vector>
 #include <cmath>
 #include <functional>
@@ -318,6 +319,12 @@ protected:
     F_t  F;
     Tres res;
 };
+
+static inline bool data_cmp(std::pair<long,forall_task_t> &a,
+                            std::pair<long,forall_task_t> &b) {
+    return a.first<b.first;
+}
+
 // parallel for/reduce task scheduler
 class forall_Scheduler: public ff_node {
 protected:
@@ -391,8 +398,8 @@ public:
             size_t remaining = totaltasks;
             const long endchunk = (_chunk-1)*_step + 1;
             int jump = 0;
-            //bool skip1=false,skip2=false,skip3=false;            
-      //moretask:
+            bool skip1=false; // ,skip2=false,skip3=false; 
+      moretask:
             for(size_t wid=0;wid<_nw;++wid) {
                 if (data[wid].first) {
                     long start = data[wid].second.start;
@@ -406,20 +413,20 @@ public:
                     // if we do not have task at the beginning the thread is terminated
                     lb->ff_send_out_to(EOS, wid);
                     active[wid]=false;
-                    //skip1=skip2=skip3=true;
+                    skip1=true; //skip2=skip3=true;
                 }
             }
-#if 0
-            // January 2014 (massimo): this heuristic does not work very well in case of big
-            // load imbalance between iterations thus I decided to comment it out 
+            // January 2014 (massimo): this heuristic maight not be the best option in presence 
+            // of very high load imbalance between iterations. 
+            // Update: removed skip2 and skip3 so that it is less aggressive !
 
             jump+=_nw;
             assert((jump / _nw) <= 8);
             // heuristic: try to assign more task at the very beginning
             if (!skip1 && totaltasks>=4*_nw)   { skip1=true; goto moretask;}
-            if (!skip2 && totaltasks>=64*_nw)  { skip1=false; skip2=true; goto moretask;}
-            if (!skip3 && totaltasks>=1024*_nw){ skip1=false; skip2=false; skip3=true; goto moretask;}
-#endif
+
+            //if (!skip2 && totaltasks>=64*_nw)  { skip1=false; skip2=true; goto moretask;}
+            //if (!skip3 && totaltasks>=1024*_nw){ skip1=false; skip2=false; skip3=true; goto moretask;}
 
             return (remaining<=0)?NULL:GO_ON;
             }
@@ -429,19 +436,33 @@ public:
         const long endchunk = (_chunk-1)*_step + 1;
         const int wid = lb->get_channel_id();
         int id  = wid;
-        for(size_t cnt=0;cnt<_nw;++cnt) { 
-            if (data[id].first) {
-                long start = data[id].second.start;
-                long end   = (std::min)(start+endchunk, data[id].second.end);
-                task->set(start, end);
-                lb->ff_send_out_to(task, wid);
-                --data[id].first;
-                (data[id].second).start = (end-1)+_step;
-                return GO_ON;
-            }
-            // no task available, trying to steal a task 
-            id = (id+1) % _nw;
-        } 
+
+        if (data[id].first) {
+        go:
+            long start = data[id].second.start;
+            long end   = std::min(start+endchunk, data[id].second.end);
+            task->set(start, end);
+            lb->ff_send_out_to(task, wid);
+            --data[id].first;
+            (data[id].second).start = (end-1)+_step;
+            return GO_ON;
+        }
+        // finds the id with the highest number of tasks
+        id = (std::max_element(data.begin(),data.end(),data_cmp) - data.begin());
+        if (data[id].first) {
+            if (data[id].first==1) goto go;
+
+            // steal half of the tasks
+            size_t q = data[id].first >> 1;
+            size_t r = data[id].first & 0x1; 
+            data[id].first  = q;
+            data[wid].first = q+r;
+            data[wid].second.end   = data[id].second.end;
+            data[id].second.end    = data[id].second.start + _chunk*q;
+            data[wid].second.start = data[id].second.end;
+            id = wid;
+            goto go;
+        }
         if (active[wid]) {
             lb->ff_send_out_to(EOS, wid); // the thread is terminated
             active[wid]=false;
