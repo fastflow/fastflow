@@ -662,13 +662,8 @@ public:
      * If the thread is frozen, then thaw it. 
      */
     inline void thaw(bool _freeze=false, int nw=-1) {
-        // TODO: 
-        if ((nw != -1) && ((size_t)nw < workers.size()) && collector) {
-            error("running less thread then total NOT YET SUPPORTED in case of collector present\n"); 
-            abort();
-        }
         lb->thaw(_freeze, nw);
-        if (collector) gt->thaw(_freeze);
+        if (collector) gt->thaw(_freeze, nw);
     }
 
     /**

@@ -1,4 +1,7 @@
 * 27/01/14 - v.2.0.3
+   - added the possibility to freeze and thaw all farm threads and then 
+     restart a lower number of workers in a farm having a collector thread.
+     (see tests/test_stopstartall.cpp)
    - fixed an issue in the ofarm skeleton
    - ParallelForReduce optimized for the case when it is called multiple times 
      in a sequential loop
