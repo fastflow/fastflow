@@ -176,9 +176,9 @@ protected:
     }
 
     /**
-     * \brief Losses time before sending the message to input buffer
+     * \brief Loses time before retrying to get a message from the input buffer
      *
-     * It loses time before the message is sent to the input buffer.
+     * It loses time before retrying to get a message from the input buffer.
      */
     virtual inline void losetime_in() { 
         FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
@@ -904,7 +904,7 @@ public:
     }
 
     /**
-     * \brief Thaws all thread register with the lb and the lb itself
+     * \brief Thaws all threads register with the lb and the lb itself
      *
      * 
      */

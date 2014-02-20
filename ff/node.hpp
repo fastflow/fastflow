@@ -1180,6 +1180,27 @@ public:
      */
     virtual inline bool  get(void **ptr) { return out->pop(ptr);}
 #endif
+    
+    /**
+     * \brief Loses some time before sending the message to output buffer
+     *
+     * It loses some time before the message is sent to the output buffer.
+     *
+     */
+    virtual inline void losetime_out(void) {
+        FFTRACE(lostpushticks+=ff_node::TICKS2WAIT; ++pushwait);
+        ticks_wait(ff_node::TICKS2WAIT);
+    }
+
+    /**
+     * \brief Loses time before retrying to get a message from the input buffer
+     *
+     * It loses time before retrying to get a message from the input buffer.
+     */
+    virtual inline void losetime_in(void) {
+        FFTRACE(lostpopticks+=ff_node::TICKS2WAIT; ++popwait);
+        ticks_wait(ff_node::TICKS2WAIT);
+    }
 
     /**
      * \brief Gets input buffer
@@ -1286,6 +1307,7 @@ public:
 
         for(unsigned int i=0;i<retry;++i) {
             if (push(task)) return true;
+            FFTRACE(lostpushticks+=ticks; ++pushwait);
             ticks_wait(ticks);
         }     
         return false;
@@ -1400,18 +1422,9 @@ private:
          * \return \p true is always returned.
          */
         inline bool push(void * task) {
-            //register int cnt = 0;
             /* NOTE: filter->push and not buffer->push because of the filter can be a dnode
              */
-            while (! filter->push(task)) { 
-                // if (ch->thxcore>1) {
-                // if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
-                //    else ticks_wait(TICKS2WAIT);
-                //} else 
-
-                FFTRACE(filter->lostpushticks+=ff_node::TICKS2WAIT; ++filter->pushwait);
-                ticks_wait(ff_node::TICKS2WAIT);
-            }
+            while (! filter->push(task)) filter->losetime_out();
             return true;
         }
         
@@ -1425,20 +1438,12 @@ private:
          * \return \p true is always returned.
          */
         inline bool pop(void ** task) {
-            //register int cnt = 0;
             /* 
              * NOTE: filter->pop and not buffer->pop because of the filter can be a dnode
              */
             while (! filter->pop(task)) {
                 if (!filter->in_active) { *task=NULL; return false;}
-
-                //if (ch->thxcore>1) {
-                //if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
-                //else ticks_wait(TICKS2WAIT);
-                //} else 
-
-                FFTRACE(filter->lostpopticks+=ff_node::TICKS2WAIT; ++filter->popwait);
-                ticks_wait(ff_node::TICKS2WAIT);
+                filter->losetime_in();
             } 
             return true;
         }
