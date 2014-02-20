@@ -83,7 +83,8 @@ protected:
      *
      */
     virtual inline int selectworker() { 
-        do nextr = (nextr+1) % workers.size(); // FIX: introduce running !
+        do 
+            nextr = (nextr+1) % running;
         while(offline[nextr]);
         return nextr;
     }
@@ -216,7 +217,7 @@ public:
      *  It creates \p max_num_workers and \p NULL pointers to worker objects.
      */
     ff_gatherer(int max_num_workers):
-        max_nworkers(max_num_workers), nextr(0),
+        running(-1),max_nworkers(max_num_workers), nextr(0),
         neos(0),neosnofreeze(0),channelid(-1),
         filter(NULL), workers(max_nworkers), offline(max_nworkers), buffer(NULL),
         skip1pop(false) {
@@ -265,8 +266,18 @@ public:
      *
      * \return Number of worker threads
      */
-    inline size_t getnworkers() const { return (size_t)(workers.size()-neos-neosnofreeze); }
+    inline size_t getnworkers() const { return (size_t)(running-neos-neosnofreeze); }
     
+    /**
+     * \brief Get the number of workers
+     *
+     * It returns the number of total workers registered
+     *
+     * \return Number of worker
+     */
+    inline size_t getNWorkers() const { return workers.size();}
+
+
     /**
      * \brief Skips the first pop
      *
@@ -384,7 +395,7 @@ public:
                     push(task);
                 }
             }
-        } while((neos<workers.size()) && (neosnofreeze<workers.size()));
+        } while((neos<(size_t)running) && (neosnofreeze<(size_t)running));
 
         if (outpresent) {
             // push EOS
@@ -394,8 +405,8 @@ public:
 
         gettimeofday(&wtstop,NULL);
         wttime+=diffmsec(wtstop,wtstart);
-        if (neos>=workers.size()) neos=0;
-        if (neosnofreeze>=workers.size()) neosnofreeze=0;
+        if (neos>=(size_t)running) neos=0;
+        if (neosnofreeze>=(size_t)running) neosnofreeze=0;
 
         return ret;
     }
@@ -423,7 +434,15 @@ public:
             error("GT, spawning GT thread\n");
             return -1; 
         }
+        running = workers.size();
         return 0;
+    }
+
+
+    inline int wait_freezing() {
+        int r = ff_thread::wait_freezing();
+        running = -1;
+        return r;
     }
 
     /**
@@ -440,7 +459,7 @@ public:
         V[channelid]=task;
         size_t nw=getnworkers();
         svector<ff_node*> _workers(nw);
-        for(size_t i=0;i<workers.size();++i) 
+        for(ssize_t i=0;i<running;++i) 
             if (!offline[i]) _workers.push_back(workers[i]);
         svector<int> retry(nw);
 
@@ -459,6 +478,18 @@ public:
                 return -1;
         FFTRACE(taskcnt+=nw-1);
         return 0;
+    }
+
+    /**
+     * \brief Thaws all threads register with the gt and the gt itself
+     *
+     * 
+     */
+    inline void thaw(bool _freeze=false, ssize_t nw=-1) {
+        assert(running==-1);
+        if (nw == -1 || (size_t)nw > workers.size()) running = workers.size();
+        else running = nw;
+        ff_thread::thaw(_freeze); // NOTE:start scheduler first
     }
 
     /**
@@ -514,6 +545,7 @@ public:
 #endif
 
 private:
+    ssize_t           running;       /// Number of workers running
     size_t            max_nworkers;
     ssize_t           nextr;
 

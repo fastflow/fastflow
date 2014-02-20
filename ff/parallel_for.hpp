@@ -286,15 +286,16 @@ class foralllb_t: public ff_loadbalancer {
 protected:
     virtual inline void losetime_in() { 
         if ((int)(getnworkers())>=ncores) {
-            FFTRACE(lostpopticks+=(100*TICKS2WAIT);++popwait);
+            //FFTRACE(lostpopticks+=(100*TICKS2WAIT);++popwait); // FIX
             ff_relax(0);
             return;
-        }                
-        FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
-        ticks_wait(TICKS2WAIT); 
+        }    
+        //FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
+        PAUSE();            
     }
 public:
     foralllb_t(size_t n):ff_loadbalancer(n),ncores(ff_numCores()) {}
+    int getNCores() const { return ncores;}
 private:
     const int ncores;
 };
@@ -303,19 +304,26 @@ private:
 template<typename Tres>
 class forallreduce_W: public ff_node {
     typedef std::function<Tres(const long,const long, const int, const Tres)> F_t;
+protected:
+    virtual inline void losetime_in(void) {
+        //FFTRACE(lostpopticks+=ff_node::TICKS2WAIT; ++popwait); // FIX
+        if (aggressive) PAUSE();
+        else ff_relax(0);
+    }
 public:
-    forallreduce_W(F_t F):F(F) {}
+    forallreduce_W(F_t F):aggressive(true),F(F) {}
 
     inline void* svc(void* t) {
         auto task = (forall_task_t*)t;
         res = F(task->start,task->end,get_my_id(),res);
         return t;
     }
-    void setF(F_t _F, const Tres idtt) { 
-        F=_F, res=idtt;
+    void setF(F_t _F, const Tres idtt, bool a=true) { 
+        F=_F, res=idtt, aggressive=a;
     }
     Tres getres() const { return res; }
 protected:
+    bool aggressive;
     F_t  F;
     Tres res;
 };
@@ -509,9 +517,10 @@ protected:
     }
 public:
     Tres t; // not used
-
+    int numCores;
     ff_forall_farm(size_t maxnw,const bool skipwarmup=false):
         ff_farm<foralllb_t>(false,100*maxnw,100*maxnw,true,maxnw,true),waitall(true) {
+        numCores = ((foralllb_t*const)getlb())->getNCores();
         std::vector<ff_node *> forall_w;
         auto donothing=[](const long,const long,const int,const Tres) -> int {
             return 0;
@@ -547,7 +556,8 @@ public:
     inline void setF(F_t  _F, const Tres idtt=(Tres)0) { 
         const size_t nw = getNWorkers();
         const svector<ff_node*> &nodes = getWorkers();
-        for(size_t i=0;i<nw;++i) ((forallreduce_W<Tres>*)nodes[i])->setF(_F, idtt);
+        const bool mode = (nw <= numCores)?true:false;
+        for(size_t i=0;i<nw;++i) ((forallreduce_W<Tres>*)nodes[i])->setF(_F, idtt, mode);
     }
     inline void setloop(long begin,long end,long step,long chunk, size_t nw) {
         assert(nw<=getNWorkers());
