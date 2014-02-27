@@ -24,6 +24,8 @@
 // Author: Marco Aldinucci - aldinuc@di.unito.it
 // Note: Porting to FF or the QT Mandelbrot example
 // Date: Dec 2009
+
+extern int nworkers;
  
 #include <QtGui>
 
@@ -200,7 +202,7 @@ void RenderThread::run()
   struct timeval t0,t1;
 
    // FF-additional code - Create and start the accelerator
-  int nworkers = sysconf(_SC_NPROCESSORS_ONLN);
+  //int nworkers = sysconf(_SC_NPROCESSORS_ONLN);
   ff_farm<> farm(true /* accelerator set */, 256*nworkers);
   std::vector<ff_node *> w;
   for(int i=0;i<nworkers;++i) w.push_back(new Worker(this));
