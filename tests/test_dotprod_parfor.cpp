@@ -24,7 +24,10 @@
  *
  ****************************************************************************
  */
-
+/* Author: Massimo
+ * Date  : May 2013
+ *         February 2014
+ */
 /*
  * The program computes the dot-product of 2 arrays.
  *  compile with -DUSE_OPENMP for the OpenMP version
@@ -74,9 +77,8 @@ int main(int argc, char * argv[]) {
 
     double sum = 5.0;
 #if defined(USE_OPENMP)
-
     // init data
-    #pragma omp parallel for schedule(static,(arraySize/nworkers))
+#pragma omp parallel for schedule(runtime)
     for(long j=0;j<arraySize;++j) {
         A[j]=j*3.14; B[j]=2.1*j;
     }
@@ -84,7 +86,6 @@ int main(int argc, char * argv[]) {
     ff::ffTime(ff::START_TIME);
     for(int z=0;z<NTIMES;++z) {
 
-        // do work
 #pragma omp parallel for default(shared)                                \
     schedule(runtime)                                                   \
     reduction(+:sum)                                                    \
@@ -99,18 +100,17 @@ int main(int argc, char * argv[]) {
 
 #elif defined(USE_TBB)
 
-
     tbb::task_scheduler_init init(nworkers);
     tbb::affinity_partitioner ap;
 
     // init data
-    tbb::parallel_for(tbb::blocked_range<long>(0, arraySize, (arraySize/nworkers)),
+    tbb::parallel_for(tbb::blocked_range<long>(0, arraySize, CHUNKSIZE),
                       [&] (tbb::blocked_range<long> &r) {
                           for(long j=r.begin(); j!=r.end(); ++j) {
                               A[j]=j*3.14; B[j]=2.1*j;
                           }
                       },ap);
-
+    
     ff::ffTime(ff::START_TIME);
     for(int z=0;z<NTIMES;++z) {
         // do work
@@ -129,11 +129,25 @@ int main(int argc, char * argv[]) {
     printf("tbb %d Time = %g ntimes=%d\n", nworkers, ffTime(GET_TIME), NTIMES);
 
 #else // (default) FastFlow version
+
+#if 1  
+    parallel_for(0,arraySize, [&](long j) { A[j]=j*3.14; B[j]=2.1*j;});
+    auto Fsum = [](double& v, double elem) { v += elem; };
+    ParallelForReduce<double> pfr(nworkers);
     
+    ff::ffTime(ff::START_TIME);    
+    for(int z=0;z<NTIMES;++z) {
+        pfr.parallel_reduce(sum, 0.0, 
+                            0, arraySize,1,CHUNKSIZE,
+                            [&](long i, double& sum) {sum += A[i]*B[i];}, Fsum);
+    }
+    ffTime(STOP_TIME);
+    printf("ff %d Time = %g ntimes=%d\n", nworkers, ffTime(GET_TIME), NTIMES);        
+#else  // using macroes
     FF_PARFORREDUCE_INIT(dp, double, nworkers);
 
     // init data
-    FF_PARFOR_BEGIN(init, j,0,arraySize,1, (arraySize/nworkers),nworkers) {
+    FF_PARFOR_BEGIN(init, j,0,arraySize,1, CHUNKSIZE, nworkers) {
         A[j]=j*3.14; B[j]=2.1*j;
     } FF_PARFOR_END(init);
 
@@ -150,6 +164,8 @@ int main(int argc, char * argv[]) {
     ffTime(STOP_TIME);
     printf("ff %d Time = %g ntimes=%d\n", nworkers, ffTime(GET_TIME), NTIMES);
     FF_PARFORREDUCE_DONE(dp);
+#endif // if 1
+
 #endif
     
     printf("Sum =%g\n", sum);

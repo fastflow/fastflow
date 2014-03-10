@@ -1,7 +1,5 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-#ifndef _FF_STENCIL_HPP_
-#define _FF_STENCIL_HPP_
 /* ***************************************************************************
  *
  *  This program is free software; you can redistribute it and/or modify it
@@ -19,6 +17,9 @@
  *
  ****************************************************************************
  */
+
+#ifndef FF_STENCIL_HPP
+#define FF_STENCIL_HPP
 
 #include <cstdio>
 #include <cstdlib>
@@ -387,4 +388,4 @@ protected:
     
 } // namespace
 
-#endif /*  _FF_STENCIL_HPP_ */
+#endif /* FF_STENCIL_HPP */

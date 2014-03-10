@@ -11,8 +11,8 @@
  *
  */
 
-#ifndef _FF_NODE_HPP_
-#define _FF_NODE_HPP_
+#ifndef FF_NODE_HPP
+#define FF_NODE_HPP
 
 /* ***************************************************************************
  *
@@ -87,11 +87,11 @@ public:
      */
     Barrier():_barrier(0),threadCounter(0) {
         if (pthread_mutex_init(&bLock,NULL)!=0) {
-            error("ERROR: Barrier: pthread_mutex_init fails!\n");
+            error("FATAL ERROR: Barrier: pthread_mutex_init fails!\n");
             abort();
         }
         if (pthread_cond_init(&bCond,NULL)!=0) {
-            error("ERROR: Barrier: pthread_cond_init fails!\n");
+            error("FATAL ERROR: Barrier: pthread_cond_init fails!\n");
             abort();
         }
     }
@@ -399,15 +399,15 @@ protected:
          * unlocked. 
          * */
         if (pthread_mutex_init(&mutex,NULL)!=0) {
-            error("ERROR: ff_thread: pthread_mutex_init fails!\n");
+            error("FATAL ERROR: ff_thread: pthread_mutex_init fails!\n");
             abort();
         }
         if (pthread_cond_init(&cond,NULL)!=0) {
-            error("ERROR: ff_thread: pthread_cond_init fails!\n");
+            error("FATAL ERROR: ff_thread: pthread_cond_init fails!\n");
             abort();
         }
         if (pthread_cond_init(&cond_frozen,NULL)!=0) {
-            error("ERROR: ff_thread: pthread_cond_init fails!\n");
+            error("FATAL ERROR: ff_thread: pthread_cond_init fails!\n");
             abort();
         }
     }
@@ -600,6 +600,7 @@ public:
      * \return 0 if successful.
      */
     int wait() {
+        int r=0;
         stp=true;
         if (isfrozen()) {
             wait_freezing();
@@ -611,9 +612,10 @@ public:
         }
         if (pthread_attr_destroy(&attr)) {
             error("ERROR: ff_thread.wait: pthread_attr_destroy fails!");
+            r=-1;
         }
         spawned=false;
-        return 0;
+        return r;
     }
 
     /**
@@ -915,7 +917,7 @@ protected:
      */
     virtual int freeze_and_run(bool=false) {
         thread = new thWorker(this);
-        if (!thread) return -1;
+        if (!thread) return 0;
         freeze();
         return thread->run();
     }
@@ -929,7 +931,7 @@ protected:
      * value.
      */
     virtual int  wait() { 
-        if (!thread) return -1;
+        if (!thread) return 0;
         return thread->wait(); 
     }
     
@@ -942,7 +944,7 @@ protected:
      * negative value.
      */
     virtual int  wait_freezing() { 
-        if (!thread) return -1;
+        if (!thread) return 0;
         return thread->wait_freezing(); 
     }
     
@@ -992,8 +994,7 @@ protected:
      * the status of \p isfrozen() is returned.
      */
     virtual bool isfrozen() const { 
-        if (!thread) 
-            return false;
+        if (!thread) return false;
         return thread->isfrozen();
     }
     
@@ -1584,7 +1585,7 @@ private:
          *
          * \return The staus of \p wait() method.
          */
-        inline int wait() { return ff_thread::wait();}
+        virtual inline int wait() { return ff_thread::wait();}
 
         /**
          * \brief Waits for freezing
@@ -1593,14 +1594,14 @@ private:
          *
          * \return The status of \p wait_freezing() method.
          */
-        inline int wait_freezing() { return ff_thread::wait_freezing();}
+        virtual inline int wait_freezing() { return ff_thread::wait_freezing();}
 
         /**
          * \brief Freezes the thread
          *
          * It freezes the thread.
          */
-        inline void freeze() { ff_thread::freeze();}
+        virtual inline void freeze() { ff_thread::freeze();}
 
         /**
          * \brief Checks if the thread is frozen
@@ -1689,4 +1690,4 @@ struct ff_buffernode: ff_node {
 
 } // namespace ff
 
-#endif /* _FF_NODE_HPP_ */
+#endif /* FF_NODE_HPP */

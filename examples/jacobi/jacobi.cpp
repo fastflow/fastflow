@@ -157,14 +157,12 @@ static inline void jacobi_omp ( const int n, const int m, double dx, double dy, 
 	Error = 0.0;
 
 	/* copy new solution into old */
-//#pragma omp parallel for schedule(static) num_threads(NUMTHREADS)
 #pragma omp parallel for schedule(runtime) num_threads(NUMTHREADS)
     for (int j=0; j<m; j++)
 	  for (int i=0; i<n; i++)
 		uold[i + m*j] = u[i + m*j];
 
 	/* compute stencil, residual and update */
-//#pragma omp parallel for reduction(+:Error) schedule(static) private(resid) num_threads(NUMTHREADS)
 #pragma omp parallel for reduction(+:Error) schedule(runtime) private(resid) num_threads(NUMTHREADS)
 	for (int j=1; j<m-1; j++)
 	  for (int i=1; i<n-1; i++){

@@ -8,9 +8,6 @@
  *  \brief This file contains the thread mapper definition used in FastFlow
  */
   
-#ifndef __THREAD_MAPPER_HPP_
-#define __THREAD_MAPPER_HPP_
-
 /* ***************************************************************************
  *
  *  This program is free software; you can redistribute it and/or modify it
@@ -28,6 +25,8 @@
  *
  ****************************************************************************
  */
+#ifndef FF_THREAD_MAPPER_HPP
+#define FF_THREAD_MAPPER_HPP
 
 #include <stdlib.h>
 #include <ff/svector.hpp>
@@ -210,4 +209,4 @@ protected:
  * \link
  */
 
-#endif /* __THREAD_MAPPER_HPP_ */
+#endif /* FF_THREAD_MAPPER_HPP */

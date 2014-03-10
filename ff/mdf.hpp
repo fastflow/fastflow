@@ -7,8 +7,8 @@
  *  \brief This file implements the macro dataflow pattern.
  */
  
-#ifndef _FF_MDF_HPP_
-#define _FF_MDF_HPP_
+#ifndef FF_MDF_HPP
+#define FF_MDF_HPP
 /* ***************************************************************************
  *
  *  This program is free software; you can redistribute it and/or modify it
@@ -394,7 +394,10 @@ protected:
             ffalloc=new ff_allocator;
             assert(ffalloc);
             int nslabs[N_SLABBUFFER]={0,2048,512,64,0,0,0,0,0 };
-            if (ffalloc->init(nslabs)<0) abort();
+            if (ffalloc->init(nslabs)<0) {
+                error("FATAL ERROR: allocator init failed\n");
+                abort();
+            }
 #endif            
             
             LOWER_TH = std::max(1024, TASK_PER_WORKER*maxnw); //FIX: potrebbe comunque stallare ..
@@ -566,4 +569,4 @@ protected:
 
 } // namespace
 
-#endif /* _FF_MDF_HPP_ */
+#endif /* FF_MDF_HPP */
