@@ -8,8 +8,6 @@
  *  \brief This file contains general settings for the FastFlow framework.
  */
 
-#ifndef _FF_CONFIG_HPP_
-#define _FF_CONFIG_HPP_
 /* ***************************************************************************
  *
  *  This program is free software; you can redistribute it and/or modify it
@@ -27,6 +25,9 @@
  *
  ****************************************************************************
  */
+
+#ifndef FF_CONFIG_HPP
+#define FF_CONFIG_HPP
 
 #include <limits.h>
 
@@ -119,4 +120,4 @@ static const unsigned long FF_GO_ON         = (FF_EOS-0x2);
  *  \endlink
  */
 
-#endif /* _FF_CONFIG_HPP_ */
+#endif /* FF_CONFIG_HPP */

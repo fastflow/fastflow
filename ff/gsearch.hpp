@@ -8,8 +8,8 @@
  *  \brief This file implements the graph search skeleton.
  */
  
-#ifndef _FF_GSEARCH_HPP_
-#define _FF_GSEARCH_HPP_
+#ifndef FF_GSEARCH_HPP
+#define FF_GSEARCH_HPP
 /* ***************************************************************************
  *
  *  This program is free software; you can redistribute it and/or modify it
@@ -60,7 +60,7 @@ public:
     /// returns the base element of the node
     inline const T& getElement() const { return elem;}
     /// returns the node identifier
-    inline const unsigned long getId() const { return nodeid; }
+    inline unsigned long getId() const { return nodeid; }
 
 protected:
     const unsigned long  nodeid;    /// node's identifier
@@ -270,4 +270,4 @@ public:
 
 } // namespace
 
-#endif /* _FF_GSEARCH_HPP_ */
+#endif /* FF_GSEARCH_HPP */

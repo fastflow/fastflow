@@ -1,4 +1,17 @@
 * 27/01/14 - v.2.0.3
+   - added the ff_realNumCores() and the ff_numSockets() utility functions
+   - a new lock-free task scheduling for the ParallelFor has been implemented. 
+     The new scheduling policy is used when the scheduler thread (i.e. farm's emitter 
+     thread) is not being started. This scheduling may be enabled at compile time 
+     by compiling with the flag -DNO_PARFOR_SCHEDULER_THREAD or at run-time by  
+     calling ParallelFor::disableScheduler.
+   - added atomic_flag-based spin-lock (only for C++11-compliant compilers) 
+   - defined ParallelFor and ParallelForReduce classes
+   - removed initial underscore in the preprocessor conditional guards in 
+     order to be compliant to the C++ standard
+   - more work on parallel_for pattern to avoid starting the scheduler thread
+     when there are not enough cores
+   - fixed bug in the forall_Scheduler::init_data method
    - added the possibility to freeze and thaw all farm threads and then 
      restart a lower number of workers in a farm having a collector thread.
      (see tests/test_stopstartall.cpp)

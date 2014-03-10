@@ -7,9 +7,7 @@
  *
  *  \brief This file describes the map skeleton.
  */
- 
-#ifndef _FF_MAP_HPP_
-#define _FF_MAP_HPP_
+
 /* ***************************************************************************
  *
  *  This program is free software; you can redistribute it and/or modify it
@@ -28,6 +26,9 @@
  ****************************************************************************
  */
 
+ 
+#ifndef FF_MAP_HPP
+#define FF_MAP_HPP
 
 #include <vector>
 #include <ff/svector.hpp>
@@ -826,7 +827,7 @@ struct name {                                                    \
 
 
 #define NEWMAP(name, task_t, f, input, sz)               \
-    ff_mapCUDA<task_t,mapf> *name =                      \
+    ff_mapCUDA<task_t,f> *name =                         \
         new ff_mapCUDA<task_t, f>(new f, input, sz)
 #define NEWMAPONSTREAM(task_t, f)                        \
     new ff_mapCUDA<task_t, f>(new f)
@@ -1085,10 +1086,6 @@ private:
 };
 
 #endif /* FF_CUDA */
-
-
-
-
     
 /*!
 *  @}
@@ -1097,4 +1094,4 @@ private:
     
 } // namespace ff
 
-#endif /* _FF_MAP_HPP_ */
+#endif /* FF_MAP_HPP */

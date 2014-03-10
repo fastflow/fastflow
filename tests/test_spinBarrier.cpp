@@ -65,7 +65,7 @@ public:
 
 #if 0
     int svc_init() {
-        printf("thread %d running on cpu %d\n", get_my_id(), ff_getMyCpu());
+        printf("thread %d running on cpu %d\n", get_my_id(), ff_getMyCore());
         return 0;
     }
 #endif

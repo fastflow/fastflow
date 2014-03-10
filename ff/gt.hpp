@@ -9,8 +9,6 @@
  *  workers.
  */
 
-#ifndef _FF_GT_HPP_
-#define _FF_GT_HPP_
 /* ***************************************************************************
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -29,6 +27,9 @@
  *
  ****************************************************************************
  */
+
+#ifndef FF_GT_HPP
+#define FF_GT_HPP
 
 #include <iostream>
 #include <deque>
@@ -585,4 +586,4 @@ private:
 
 } // namespace ff
 
-#endif /*  _FF_GT_HPP_ */
+#endif /* FF_GT_HPP */

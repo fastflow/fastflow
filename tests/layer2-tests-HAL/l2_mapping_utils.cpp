@@ -63,7 +63,7 @@ public:
 
         DPRINT( "Worker ["<< ff_node::get_my_id() <<"] is mapped to the POSIX thread ID as : " << ff_getThreadID() );
 
-        DPRINT( "Worker ["<< ff_node::get_my_id() <<"] is mapped to the core ID : " << ff_getMyCpu() );
+        DPRINT( "Worker ["<< ff_node::get_my_id() <<"] is mapped to the core ID : " << ff_getMyCore() );
 
         return task;
     }
@@ -84,7 +84,7 @@ public:
         
         DPRINT( "Collector [" << ff_node::get_my_id() << "] is mapped to the POSIX thread ID as : " << ff_getThreadID() );
         
-        DPRINT( "Collector [" << ff_node::get_my_id() << "] is mapped to the core ID : " << ff_getMyCpu() );
+        DPRINT( "Collector [" << ff_node::get_my_id() << "] is mapped to the core ID : " << ff_getMyCore() );
         
         return task;
     }
@@ -104,7 +104,7 @@ public:
 
         DPRINT( "Emitter [" << ff_node::get_my_id() << "] is mapped to the POSIX thread ID as : " << ff_getThreadID() );
         
-        DPRINT( "Emitter [" << ff_node::get_my_id() <<"] is mapped to the core ID : " << ff_getMyCpu() );
+        DPRINT( "Emitter [" << ff_node::get_my_id() <<"] is mapped to the core ID : " << ff_getMyCore() );
         
         return task;
     }
@@ -130,7 +130,7 @@ int main(int argc, char * argv[]) {
               << ff_getCpuFreq() << "\n";
 
     std::cout << "The core ID where the main function is running : "
-              << ff_getMyCpu() << "\n";
+              << ff_getMyCore() << "\n";
 
     std::cout << "The cache line size of the core : " << cache_line_size() << "\n";
 
