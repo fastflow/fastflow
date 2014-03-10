@@ -71,8 +71,18 @@ int main(int argc, char * argv[]) {
             C[i*N+j] = 0;
         }
     
+#if 1
+    ParallelFor pf(nworkers);
+    ffTime(START_TIME);
+    pf.parallel_for(0,N,1,chunk,[&](long i) {
+            for(long j=0;j<N;++j) {
+                PRAGMA_IVDEP
+                for(long k=0;k<N;++k)
+                    C[i*N+j] += A[i*N+k]*B[k*N+j];
+            }
+        });
+#else
     FF_PARFOR_INIT(forall, nworkers);
-
     ffTime(START_TIME);
     // parameters: name, for index, size, chunk size, n. of workers
     FF_PARFOR_START(forall, i,0,N,1, chunk,nworkers) {
@@ -82,6 +92,7 @@ int main(int argc, char * argv[]) {
                 C[i*N+j] += A[i*N+k]*B[k*N+j];
         }
     } FF_PARFOR_STOP(forall);
+#endif
     ffTime(STOP_TIME);
     printf("%d Time = %g (ms)\n", nworkers, ffTime(GET_TIME));
 

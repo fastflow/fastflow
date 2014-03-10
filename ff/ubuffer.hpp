@@ -9,9 +9,6 @@
  *  FastFlow
  *
  */
- 
-#ifndef __uSWSR_PTR_BUFFER_HPP_
-#define __uSWSR_PTR_BUFFER_HPP_
 
 /* ***************************************************************************
  *
@@ -30,7 +27,9 @@
  *
  ****************************************************************************
  */
-
+/* Author: Massimo Torquati
+ *
+ */
 /**
  * Single-Writer/Single-Reader (SWSR) lock-free (wait-free) unbounded FIFO
  * queue.  No lock is needed around pop and push methods!!
@@ -63,6 +62,11 @@
  *     structures.
  *
  */
+
+ 
+#ifndef FF_uSWSR_PTR_BUFFER_HPP
+#define FF_uSWSR_PTR_BUFFER_HPP
+
 #include <assert.h>
 #include <cassert>
 #include <new>
@@ -522,10 +526,14 @@ private:
     long padding2[longxCacheLine-1];
 
     /* ----- two-lock used only in the mp_push and mc_pop methods ------- */
-    lock_t P_lock;
-    long padding3[longxCacheLine-sizeof(lock_t)];
-    lock_t C_lock;
-    long padding4[longxCacheLine-sizeof(lock_t)];
+    union {
+        lock_t P_lock;
+        char padding3[CACHE_LINE_SIZE];
+    };
+    union {
+        lock_t C_lock;
+        char padding4[CACHE_LINE_SIZE];
+    };
     /* -------------------------------------------------------------- */
 #if defined(UBUFFER_STATS)
     atomic_long_t numBuffers;
@@ -552,4 +560,4 @@ private:
 
 } // namespace ff
 
-#endif /* __uSWSR_PTR_BUFFER_HPP_ */
+#endif /* FF_uSWSR_PTR_BUFFER_HPP */

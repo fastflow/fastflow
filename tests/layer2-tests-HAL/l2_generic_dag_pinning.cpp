@@ -99,8 +99,8 @@ public:
 
     void* svc(void *t) {
         long data = (long) t;
-        printf("N%ld running on core [%d] received task [%ld]\n",id,ff_getMyCpu(),data);
-        int nextcore = 1+ff_getMyCpu()%ff_numCores();
+        printf("N%ld running on core [%d] received task [%ld]\n",id,ff_getMyCore(),data);
+        int nextcore = 1+ff_getMyCore()%ff_numCores();
         ff_mapThreadToCpu(nextcore);
         printf("Now pinning N%ld on core [%d]\n", id, nextcore);  
         ++received;

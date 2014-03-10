@@ -88,12 +88,20 @@ int main(int argc, char* argv[]) {
         V[(size/2+(size/4)-1)-j] = V[i];
     }
 
+    ffTime(START_TIME);
+#if 0
+    parallel_for(0,size,1,chunk, 
+                 [&](long i) { 
+                     usleep(V[i]); 
+                 }, nw);
+#else
     FF_PARFOR_BEGIN(test1, i,0,size,1, chunk,nw) {
         //printf("I'm thread %d\n", _ff_thread_id);
         usleep(V[i]);
     } FF_PARFOR_END(test1);    
-    printf("Time =%g\n", test1.ffTime());
-    printf("wTime=%g\n", test1.ffwTime());
+#endif
+    ffTime(STOP_TIME);
+    printf("Time =%g\n", ffTime(GET_TIME));
 
 #if defined(ON_DEMAND)
     ff_farm<>   farm;

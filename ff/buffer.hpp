@@ -1,8 +1,5 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-#ifndef __SWSR_PTR_BUFFER_HPP_
-#define __SWSR_PTR_BUFFER_HPP_
-
 /*!
  *  \link
  *  \file buffer.hpp
@@ -44,6 +41,12 @@
  *
  ****************************************************************************
  */
+/* Author: Massimo Torquati
+ *
+ */
+
+#ifndef FF_SWSR_PTR_BUFFER_HPP
+#define FF_SWSR_PTR_BUFFER_HPP
 
 #include <stdlib.h>
 #include <string.h>
@@ -490,4 +493,4 @@ public:
 
 } // namespace ff
 
-#endif /* __SWSR_PTR_BUFFER_HPP_ */
+#endif /* FF_SWSR_PTR_BUFFER_HPP */

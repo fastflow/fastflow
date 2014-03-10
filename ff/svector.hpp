@@ -10,9 +10,6 @@
  *
  */
 
-#ifndef _FF_SVECTOR_HPP_
-#define _FF_SVECTOR_HPP_
-
 /* ***************************************************************************
  *
  *  This program is free software; you can redistribute it and/or modify it
@@ -30,7 +27,8 @@
  *
  ****************************************************************************
  */
-
+#ifndef FF_SVECTOR_HPP
+#define FF_SVECTOR_HPP
 
 /* Simple yet efficient dynamic vector */
 
@@ -277,4 +275,4 @@ private:
 
 } // namespace ff
 
-#endif /* _FF_SVECTOR_HPP_ */
+#endif /* FF_SVECTOR_HPP */

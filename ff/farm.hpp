@@ -8,9 +8,7 @@
  *
  *  \brief This file describes the farm skeleton.
  */
- 
-#ifndef _FF_FARM_HPP_
-#define _FF_FARM_HPP_
+
 /* ***************************************************************************
  *  
  *  This program is free software; you can redistribute it and/or modify it
@@ -28,6 +26,13 @@
  *
  ****************************************************************************
  */
+ 
+#ifndef FF_FARM_HPP
+#define FF_FARM_HPP
+
+#if defined( HAS_CXX11_VARIADIC_TEMPLATES )
+#include <functional>
+#endif
 
 #include <iostream>
 #include <vector>
@@ -1805,4 +1810,4 @@ private:
 
 } // namespace ff
 
-#endif /* _FF_FARM_HPP_ */
+#endif /* FF_FARM_HPP */

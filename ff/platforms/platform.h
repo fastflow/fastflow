@@ -1,6 +1,4 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
-#ifndef _FF_PLATFORM_HPP_
-#define _FF_PLATFORM_HPP_
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU Lesser General Public License version 3 as 
@@ -18,6 +16,9 @@
  *
  ****************************************************************************
  */
+
+#ifndef FF_PLATFORM_HPP
+#define FF_PLATFORM_HPP
 
 // APPLE specific backward compatibility 
 
@@ -223,6 +224,6 @@ inline static void posix_memalign_free(void* mem)
 #   error "unknown platform"
 #endif
 
-#endif //_FF_PLATFORM_HPP_
+#endif /* FF_PLATFORM_HPP */
 
 

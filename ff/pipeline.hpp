@@ -8,9 +8,6 @@
  * \brief This file describes the pipeline skeleton.
  *
  */
-
-#ifndef _FF_PIPELINE_HPP_
-#define _FF_PIPELINE_HPP_
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU Lesser General Public License version 3 as 
@@ -28,6 +25,9 @@
  *
  ****************************************************************************
  */
+
+#ifndef FF_PIPELINE_HPP
+#define FF_PIPELINE_HPP
 
 #include <functional>
 #include <ff/node.hpp>
@@ -375,7 +375,10 @@ public:
      * It run and wait all threads to finish.
      */
     int run_and_wait_end() {
-        if (isfrozen()) return -1; // FIX !!!!
+        if (isfrozen()) {  // TODO 
+            error("PIPE: Error: feature not yet supported\n");
+            return -1;
+        } 
         stop();
         if (run()<0) return -1;           
         if (wait()<0) return -1;
@@ -799,4 +802,4 @@ ff_node* toffnode(T& p) { return (ff_node*)p;}
 
 } // namespace ff
 
-#endif /* _FF_PIPELINE_HPP_ */
+#endif /* FF_PIPELINE_HPP */

@@ -8,9 +8,7 @@
  *  \brief Contains the \p ff_loadbalancer class and methods used to model the \a Emitter node,
  *  which is used to distribute tasks among workers.
  */
- 
-#ifndef _FF_LB_HPP_
-#define _FF_LB_HPP_
+
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU Lesser General Public License version 3 as 
@@ -28,6 +26,10 @@
  *
  ****************************************************************************
  */
+
+ 
+#ifndef FF_LB_HPP
+#define FF_LB_HPP
 
 #include <iostream>
 #include <deque>
@@ -75,22 +77,6 @@ public:
     //
     enum {TICKS2WAIT=1000};
 protected:
-    /**
-     * \brief Sends a task to a worker.
-     *
-     * It pushes a task to worker.
-     *
-     * \param task the task to be sent
-     * \param idx ID of the worker.
-     *
-     * \return The status of pushing the task to worker, which can either be \p
-     * true or \p false
-     *
-     */
-    inline bool push_task(void * task, int idx) {
-        return workers[idx]->put(task);
-    }
-    
     /**
      * \brief Pushes EOS to the worker
      *
@@ -438,6 +424,8 @@ public:
      */
     inline size_t getNWorkers() const { return workers.size();}
 
+    // AGGIUNTO
+    const svector<ff_node*>& getWorkers() const { return workers; }
 
     /**
      * \brief Skips first pop
@@ -660,8 +648,11 @@ public:
                     (task == (void*)FF_EOS_NOFREEZE)) {
                     if (filter) filter->eosnotify(channelid);
                     if ((victim != availworkers.end())) {
-                        availworkers.erase(victim);
-                        start=availworkers.begin(); // restart iterator
+                        if (channelid>0 && (task != (void*)FF_EOS_NOFREEZE) &&
+                            (!workers[channelid]->isfrozen())) {
+                            availworkers.erase(victim);
+                            start=availworkers.begin(); // restart iterator
+                        }
                     }
 
                     //if (master_worker || 
@@ -755,13 +746,61 @@ public:
      *
      * \return 0 if successful, otherwise -1 is returned.
      */
-    int runlb(bool=false) {
+    int runlb(bool=false, ssize_t nw=-1) {
         if (this->spawn(filter?filter->getCPUId():-1) == -2) {
             error("LB, spawning LB thread\n");
             return -1;
         }
-        running = workers.size();
+        running = (nw<=0)?workers.size():nw;
         return 0;
+    }
+
+    // AGGIUNTI
+    int runWorkers(ssize_t nw=-1) {
+        running = (nw<=0)?workers.size():nw;
+        if (isfrozen()) {
+            for(size_t i=0;i<(size_t)running;++i) {
+                if (workers[i]->freeze_and_run()<0) {
+                    error("LB, spawning worker thread\n");
+                    return -1;
+                }            
+            }
+        } else {
+            for(size_t i=0;i<(size_t)running;++i) {
+                if (workers[i]->run()<0) {
+                    error("LB, spawning worker thread\n");
+                    return -1;
+                }            
+            }
+        }
+        return 0;
+    }
+    int thawWorkers(bool _freeze=false, ssize_t nw=-1) {
+        assert(running==-1);
+        if (nw == -1 || (size_t)nw > workers.size()) running = workers.size();
+        else running = nw;
+        for(ssize_t i=0;i<running;++i) workers[i]->thaw(_freeze);
+        return 0;
+    }
+    inline int wait_freezingWorkers() {
+        int ret = 0;
+        for(ssize_t i=0;i<running;++i)
+            if (workers[i]->wait_freezing()<0) {
+                error("LB, waiting freezing of worker thread, id = %d\n",workers[i]->get_my_id());
+                ret = -1;
+            }
+        running = -1;
+        return ret;
+    }
+    inline int waitWorkers() {
+        int ret=0;
+        for(size_t i=0;i<workers.size();++i)
+            if (workers[i]->wait()<0) {
+                error("LB, waiting worker thread, id = %d\n",workers[i]->get_my_id());
+                ret = -1;
+            }
+        running = -1;
+        return ret;
     }
 
     /**
@@ -771,22 +810,27 @@ public:
      *
      * \return 0 if successful, otherwise -1 is returned
      */
-    int run(bool=false) {
+    virtual int run(bool=false) {
+        running = workers.size();
         if (this->spawn(filter?filter->getCPUId():-1) == -2) {
             error("LB, spawning LB thread\n");
             return -1;
+        }        
+        if (isfrozen()) {
+            for(size_t i=0;i<workers.size();++i) {
+                if (workers[i]->freeze_and_run(true)<0) {
+                    error("LB, spawning worker thread\n");
+                    return -1;
+                }            
+            }                
+        } else {            
+            for(size_t i=0;i<workers.size();++i) {
+                if (workers[i]->run(true)<0) {
+                    error("LB, spawning worker thread\n");
+                    return -1;
+                }            
+            }                
         }
-
-        for(size_t i=0;i<workers.size();++i) {
-            if (workers[i]->run(true)<0) {
-                error("LB, spawning worker thread\n");
-                return -1;
-            }            
-        }
-        running = workers.size();
-        if (isfrozen()) 
-            for(ssize_t i=0;i<running;++i) workers[i]->freeze();
-        
         return 0;
     }
 
@@ -813,7 +857,7 @@ public:
      *
      * \return 0 if successful, otherwise -1 is returned.
      */
-    int wait() {
+    virtual int wait() {
         int ret=0;
         for(size_t i=0;i<workers.size();++i)
             if (workers[i]->wait()<0) {
@@ -846,7 +890,7 @@ public:
      * \return 0 if successful, otherwise -1 is returned.
      *
      */
-    inline int wait_freezing() {
+    virtual inline int wait_freezing() {
         int ret = 0;
         for(ssize_t i=0;i<running;++i)
             if (workers[i]->wait_freezing()<0) {
@@ -908,7 +952,7 @@ public:
      *
      * 
      */
-    inline void thaw(bool _freeze=false, ssize_t nw=-1) {
+    virtual inline void thaw(bool _freeze=false, ssize_t nw=-1) {
         assert(running==-1);
         if (nw == -1 || (size_t)nw > workers.size()) running = workers.size();
         else running = nw;
@@ -1007,4 +1051,4 @@ private:
 
 } // namespace ff
 
-#endif  /* _FF_LB_HPP_ */
+#endif  /* FF_LB_HPP */

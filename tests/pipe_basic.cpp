@@ -49,7 +49,12 @@ struct myTask {
 
 myTask* f1(myTask* in, ff_node*const) {
     if (++k == 10) { printf("f1 END\n"); return NULL;}
-    if (in==NULL) return new myTask(k+5, new int[k+5]{});
+    if (in==NULL) {
+        //int *V = new int[k+5]{}; brace-init does not work with Intel compiler 
+        int *V = new int[k+5];
+        for(int i=0;i<(k+5);++i) V[i]=0;
+        return new myTask(k+5, V);
+    }
     return in;
 }
 myTask* f2(myTask *in, ff_node*const) {
@@ -123,7 +128,9 @@ int main() {
     auto lambda = []() -> void* {
         static int k = 0;
         if (k++ == 10) { printf("Emitter END\n"); return NULL;}
-        return new myTask(k+5, new int[k+5]{});
+        int *V = new int[k+5];
+        for(int i=0;i<(k+5);++i) V[i]=0;
+        return new myTask(k+5, V);
     };
     struct Emitter:public ff_node {
         std::function<void*()> F;

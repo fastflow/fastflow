@@ -26,6 +26,7 @@
  */
 /* Author: Massimo Torquati
  * Date:   January 2014
+ *
  */
 /*
  * Unbalanced parallel for computation
@@ -67,18 +68,16 @@ inline static void compute(long end) {
 }
 
 int main(int argc, char *argv[]) {
-    long chunk = 1;
     long seed = 7919;
     long seqIter=100;
     long N = 10000;
     int nthreads = 3;
     if (argc>1) {
         if (argc<5) {
-            printf(" use: %s seed seqIter maxN numthreads [chunk=1]\n", argv[0]);
+            printf(" use: %s seed seqIter maxN numthreads\n", argv[0]);
             printf("      %s 7919 100 100000 4\n", argv[0]);
             return -1;
         }
-        if (argc == 6) chunk = atoi(argv[5]);
         seed=atol(argv[1]);
         seqIter=atol(argv[2]);
         N = atol(argv[3]);
@@ -88,7 +87,8 @@ int main(int argc, char *argv[]) {
     srandom(seed);
     SRandom(random());
 #if !defined(USE_OPENMP) && !defined(USE_TBB) 
-    FF_PARFOR_INIT(pf, nthreads);
+    ParallelFor ffpf(nthreads);
+    ffpf.disableScheduler();
 #endif
 #if defined(USE_TBB)
     tbb::task_scheduler_init init(nthreads);
@@ -114,30 +114,24 @@ int main(int argc, char *argv[]) {
         
         ffTime(START_TIME);
 #if defined(USE_OPENMP)
-#pragma omp parallel for schedule(runtime) num_threads(nthreads)
+#pragma omp parallel for schedule(dynamic,1) num_threads(nthreads)
         for(long i=1;i<=_N;++i) {
             compute(10000*V[i]);
         }
 #elif defined(USE_TBB)
-        tbb::parallel_for(tbb::blocked_range<long>(1, _N+1),
+        tbb::parallel_for(tbb::blocked_range<long>(1, _N+1,1),
                           [&] (tbb::blocked_range<long> &r) {
                               for(long j=r.begin(); j!=r.end(); ++j) {
                                   compute(10000*V[j]);
                               }
                           },ap);
 #else
-        FF_PARFOR_START(pf, i,1,_N+1,1, chunk, nthreads) {
-            compute(10000*V[i]);
-        } FF_PARFOR_STOP(pf);
+        ffpf.parallel_for(1,_N+1,1,1,[V](long i){compute(10000*V[i]);}, nthreads);
 #endif
         ffTime(STOP_TIME);
         free(V);
         dt += ffTime(GET_TIME); 
     }
     printf("%d Time=%g (ms)\n", nthreads, dt);
- 
-#if !defined(USE_OPENMP) && !defined(USE_TBB)
-    FF_PARFOR_DONE(pf);
-#endif
     return 0;
 }
