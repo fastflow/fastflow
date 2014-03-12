@@ -118,7 +118,7 @@ namespace ff {
     name.setloop(begin,end,step,chunk,nw);                                        \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,     \
                          const int _ff_thread_id, const int) {                    \
-        PRAGMA_IVDEP                                                              \
+        PRAGMA_IVDEP;                                                             \
         for(long idx=ff_start_##idx;idx<ff_stop_##idx;idx+=step) 
 
     /* This is equivalent to the above one except that the user has to define
@@ -166,7 +166,7 @@ namespace ff {
     auto idtt_##name =identity;                                                   \
     auto F_##name =[&](const long start,const long stop,const int _ff_thread_id,  \
                        decltype(var) &var) {                                      \
-        PRAGMA_IVDEP                                                              \
+        PRAGMA_IVDEP;                                                             \
         for(long idx=start;idx<stop;idx+=step)
 
 #define FF_PARFORREDUCE_END(name, var, op)                                        \
@@ -230,7 +230,7 @@ namespace ff {
     name->setloop(begin,end,step,chunk,nw);                                       \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,     \
                          const int _ff_thread_id, const int) {                    \
-        PRAGMA_IVDEP                                                              \
+        PRAGMA_IVDEP;                                                             \
         for(long idx=ff_start_##idx;idx<ff_stop_##idx;idx+=step) 
 
 #define FF_PARFOR2_START(name, idx, begin, end, step, chunk, nw)                  \
