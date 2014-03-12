@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
     ffTime(START_TIME);
 #if 0
     parallel_for(0,size,1,chunk, 
-                 [&](long i) { 
+                 [&](const long i) { 
                      usleep(V[i]); 
                  }, nw);
 #else

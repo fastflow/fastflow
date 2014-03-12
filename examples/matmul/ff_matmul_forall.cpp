@@ -38,63 +38,59 @@
 
 using namespace ff;
 
-static long    N=0;      // matrix size
-static double* A=NULL;
-static double* B=NULL;
-static double* C=NULL;
-
-
 int main(int argc, char * argv[]) {
     if (argc<3) {
-        std::cerr << "use: " << argv[0] << " nworkers size [chunk check]\n";
+        std::cerr << "use: " << argv[0] << " nworkers size [chunk=-1 K=5 check=0]\n";
         return -1;
     }
+    int    chunk    = -1;
+    bool   check    = false;  
+    int    K        = 5;
     int    nworkers =atoi(argv[1]);
-    N               =atol(argv[2]);
+    long   N        =atol(argv[2]);
     assert(N>0);
-    int chunk = (N/nworkers);
-    if (argc>=4)
-        chunk    =atoi(argv[3]);
-    bool   check    =false;  
-    if (argc==5) check=true;  // checks result
+    if (argc>=4)  chunk    =atoi(argv[3]);
+    if (argc>=5)  K        =atoi(argv[4]);
+    if (argc==6) {
+        check=true;  // checks result
+        if (K>1) printf("K is reset to 1 because of checking results\n");
+        K=1;         // reset K
+    }
    
-    /* init data */
-    A = (double*)malloc(N*N*sizeof(double));
-    B = (double*)malloc(N*N*sizeof(double));
-    C = (double*)malloc(N*N*sizeof(double));
+    double *A = (double*)malloc(N*N*sizeof(double));
+    double *B = (double*)malloc(N*N*sizeof(double));
+    double *C = (double*)malloc(N*N*sizeof(double));
     assert(A && B && C);
 
-    for(long i=0;i<N;++i) 
-        for(long j=0;j<N;++j) {
-            A[i*N+j] = (i+j)/(double)N;
-            B[i*N+j] = i*j*3.14;
-            C[i*N+j] = 0;
-        }
-    
-#if 1
     ParallelFor pf(nworkers);
-    ffTime(START_TIME);
-    pf.parallel_for(0,N,1,chunk,[&](long i) {
+
+    // init data
+    pf.parallel_for(0,N,1,chunk, [&](const long i) {
             for(long j=0;j<N;++j) {
-                PRAGMA_IVDEP
-                for(long k=0;k<N;++k)
-                    C[i*N+j] += A[i*N+k]*B[k*N+j];
+                A[i*N+j] = (i+j)/(double)N;
+                B[i*N+j] = i*j*3.14;
+                C[i*N+j] = 0;
             }
-        });
-#else
-    FF_PARFOR_INIT(forall, nworkers);
+        },nworkers);
+    
     ffTime(START_TIME);
-    // parameters: name, for index, size, chunk size, n. of workers
-    FF_PARFOR_START(forall, i,0,N,1, chunk,nworkers) {
-        for(long j=0;j<N;++j) {
-            #pragma ivdep 
-            for(long k=0;k<N;++k)
-                C[i*N+j] += A[i*N+k]*B[k*N+j];
-        }
-    } FF_PARFOR_STOP(forall);
+    for(int q=0;q<K;++q) {
+        pf.parallel_for(0,N,1,chunk,[&A,&B,&C,N](long i) {
+                //helping compiler vectorization
+#if defined(__ITEL_COMPILER)
+                double *restrct _A = A, *restric _B=B, *restrict _C=C;
+#else
+                double *__restrict__ _A = A, *__restrict__ _B=B, *__restrict__ _C=C;
 #endif
+                for(long j=0;j<N;++j) {
+                    PRAGMA_IVDEP;
+                    for(long k=0;k<N;++k)
+                        _C[i*N+j] += _A[i*N+k]*_B[k*N+j];
+                }
+            },nworkers);
+    }
     ffTime(STOP_TIME);
-    printf("%d Time = %g (ms)\n", nworkers, ffTime(GET_TIME));
+    printf("%d Time = %g (ms) K=%d\n", nworkers, ffTime(GET_TIME)/(1.0*K), K);
 
     // checking the result
     if (check) {
@@ -103,7 +99,7 @@ int main(int argc, char * argv[]) {
             for(long j=0;j<N;++j) {
                 for(long k=0;k<N;++k)
                     R += A[i*N+k]*B[k*N+j];
-
+                
                 if (abs(C[i*N+j]-R)>1e-06) {
                     std::cerr << "Wrong result\n";                    
                     return -1;

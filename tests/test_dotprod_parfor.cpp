@@ -105,7 +105,7 @@ int main(int argc, char * argv[]) {
 
     // init data
     tbb::parallel_for(tbb::blocked_range<long>(0, arraySize, CHUNKSIZE),
-                      [&] (tbb::blocked_range<long> &r) {
+                      [&] (const tbb::blocked_range<long> &r) {
                           for(long j=r.begin(); j!=r.end(); ++j) {
                               A[j]=j*3.14; B[j]=2.1*j;
                           }
@@ -115,7 +115,7 @@ int main(int argc, char * argv[]) {
     for(int z=0;z<NTIMES;++z) {
         // do work
         sum += tbb::parallel_reduce(tbb::blocked_range<long>(0, arraySize, CHUNKSIZE), double(0),
-                                    [=] (tbb::blocked_range<long> &r, double in) {
+                                    [=] (const tbb::blocked_range<long> &r, double in) {
                                         return std::inner_product(A+r.begin(),
                                                                   A+r.end(),
                                                                   B+r.begin(),
@@ -131,15 +131,16 @@ int main(int argc, char * argv[]) {
 #else // (default) FastFlow version
 
 #if 1  
-    parallel_for(0,arraySize, [&](long j) { A[j]=j*3.14; B[j]=2.1*j;});
-    auto Fsum = [](double& v, double elem) { v += elem; };
+    parallel_for(0,arraySize,1,CHUNKSIZE, [&](const long j) { A[j]=j*3.14; B[j]=2.1*j;});
+    auto Fsum = [](double& v, const double elem) { v += elem; };
     ParallelForReduce<double> pfr(nworkers);
     
     ff::ffTime(ff::START_TIME);    
     for(int z=0;z<NTIMES;++z) {
         pfr.parallel_reduce(sum, 0.0, 
                             0, arraySize,1,CHUNKSIZE,
-                            [&](long i, double& sum) {sum += A[i]*B[i];}, Fsum);
+                            [&](const long i, double& sum) {sum += A[i]*B[i];}, 
+                            Fsum);
     }
     ffTime(STOP_TIME);
     printf("ff %d Time = %g ntimes=%d\n", nworkers, ffTime(GET_TIME), NTIMES);        
