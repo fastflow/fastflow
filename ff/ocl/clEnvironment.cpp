@@ -50,7 +50,7 @@ Environment* Environment::m_Environment = NULL;
  */
 Environment::Environment(){
     if (pthread_mutex_init(&mutex_set_policy, NULL)!=0) {
-        error("FATAL ERROR: Environment: pthread_mutex_init fails!\n");
+        ff::error("FATAL ERROR: Environment: pthread_mutex_init fails!\n");
         abort();
     }
 
