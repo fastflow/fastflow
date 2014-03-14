@@ -6,6 +6,7 @@
 //#include <string>
 #include <stdlib.h>
 #include <iostream>
+#include <unistd.h>
 using namespace std;
 
 //funzioni per il cheking dei parametri
@@ -81,7 +82,7 @@ void get_arguments(char *argv[], int argc, arguments &args) {
 #if (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
   int opterr = 0;
 #else
-  opterr = 0;
+  int opterr = 0;
 #endif
 
   while((opt = getopt(argc, argv, options)) != -1) {
