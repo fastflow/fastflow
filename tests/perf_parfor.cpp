@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
     long numtasks = 1000000;
     int  nworkers = 3;
     int  nticks   = 1000;
-    int  chunk    = std::max((int)(numtasks/nworkers),1);
+    int  chunk    = -1;
     
     if (argc>1) {
         if (argc<4) {

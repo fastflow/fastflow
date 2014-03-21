@@ -2,6 +2,7 @@
 ^ New ideas and features: ^
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+- optimize Barrier both for standard multi-core and for Xeon Phi 
 - configure by using cmake ( ** ON GOING ** )
 - ordered farm ( ** DONE ** ) 
      ff_ofarm pattern

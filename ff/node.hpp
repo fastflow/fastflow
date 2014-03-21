@@ -55,47 +55,15 @@ namespace ff {
  *  \class Barrier
  *  \ingroup streaming_network_arbitrary_shared_memory
  *
- *  \brief Models a classical mutex
- *
- *  This class models a classical \a Mutex. This class provides the
- *  methods necessary to implement a low-level \p pthread mutex.
+ *  \brief Just a wrapper around POSIX barrier 
  *
  *  This class is defined in \ref node.hpp
  */
-
 class Barrier {
 public:
-    /**
-     * \brief Creates instance of barrier
-     *
-     * It creates an instance of barrier.
-     *
-     * \return A pointer to the barrier.
-     */
-    static inline Barrier * instance() {
-        static Barrier b;
-        return &b;
-    }
+    Barrier():threadCounter(0),_barrier(0) { }
+    ~Barrier() { if (_barrier>0) pthread_barrier_destroy(&bar); }
 
-    /**
-     *  \brief Constructor
-     *
-     *  It checks whether the mutex variable(s) and the conditional variable(s)
-     *  can be properly initialised. In case initialization fails, the program
-     *  is aborted.
-     *
-     */
-    Barrier():_barrier(0),threadCounter(0) {
-        if (pthread_mutex_init(&bLock,NULL)!=0) {
-            error("FATAL ERROR: Barrier: pthread_mutex_init fails!\n");
-            abort();
-        }
-        if (pthread_cond_init(&bCond,NULL)!=0) {
-            error("FATAL ERROR: Barrier: pthread_cond_init fails!\n");
-            abort();
-        }
-    }
-    
     /**
      * \brief Setup barrier 
      *
@@ -104,9 +72,27 @@ public:
      * \parm init determine the barrier
      *
      */
-    inline void barrierSetup(int init) {
-        if (!_barrier && init>0) _barrier = init;
-        return;
+    inline int barrierSetup(size_t init) {
+        assert(init>0);
+        if (_barrier == init) return 0;
+        if (_barrier==0) {
+            if (pthread_barrier_init(&bar,NULL,init) != 0) {
+                error("ERROR: pthread_barrier_init failed\n");
+                return -1;
+            }
+            _barrier = init;
+            return 0;
+        }
+        if (pthread_barrier_destroy(&bar) != 0) {
+            error("ERROR: pthread_barrier_destroy failed\n");
+            return -1;
+        }
+        if (pthread_barrier_init(&bar,NULL,init) == 0) {
+            _barrier = init;
+            return 0;
+        }
+        error("ERROR: pthread_barrier_init failed\n");
+        return -1;
     }
 
     /** 
@@ -115,15 +101,13 @@ public:
      * It performs the barrier operation and waits on the condition variable.
      * 
      */
-    inline void doBarrier(int) {
-        pthread_mutex_lock(&bLock);
-        if (!--_barrier) pthread_cond_broadcast(&bCond);
-        else {
-            pthread_cond_wait(&bCond, &bLock);
-            assert(_barrier==0);
-        }
-        pthread_mutex_unlock(&bLock);
+    inline void doBarrier(size_t) {  
+        pthread_barrier_wait(&bar); 
     }
+
+    
+    // TODO: better move counter methods in a different class
+
    
     /**
      * \brief Get the thread counter
@@ -132,57 +116,41 @@ public:
      *
      * \return An integet value, showing the counter of the pthread.
      */
-    unsigned getCounter() const { return threadCounter;}
+    inline size_t getCounter() const { return threadCounter;}
 
     /**
      * \brief Increments the counter
      *
      * It increaments the counter of the pthread.
      */
-    void     incCounter()       { ++threadCounter;}
+    inline void     incCounter()       { ++threadCounter;}
 
     /**
      * \brief Decrements the counter
      *
      * It decremetns the counter of the pthread.
      */
-    void     decCounter()       { --threadCounter;}
+    inline void     decCounter()       { --threadCounter;}
 
 private:
-    int _barrier;           
-    // _barrier represent the number of threads in the barrier. This is just a
-    // counter, and is used to set the ff_node::tid value.
-    unsigned threadCounter;
-    pthread_mutex_t bLock;  // Mutex variable
-    pthread_cond_t  bCond;  // Condition variable
+    // This is just a counter, and is used to set the ff_node::tid value.
+    size_t            threadCounter;
+    // it is the number of threads in the barrier. 
+    size_t _barrier;
+    pthread_barrier_t bar;
 };
  
 /*!
  *  \class spinBarrier
  *  \ingroup streaming_network_arbitrary_shared_memory
  *
- *  \brief Models a classical \a Mutex.
- *
- *  This class provides the methods necessary to implement a low-level
- *  pthread mutex.
+ *  \brief Models a spin-loop barrier.
  *
  *  This class is defined in file \ref node.hpp
  *
  */ 
 class spinBarrier {
 public:
-    /**
-     * \brief Gets an instance of the spinBarrier
-     *
-     * It gets a static instance of the spinBarrier object.
-     *
-     * \return A pointer to the spinBarrier.
-     */
-    static inline spinBarrier * instance() {
-        static spinBarrier b;
-        return &b;
-    }
-
     /**
      *  \brief Constructor
      *
@@ -191,11 +159,11 @@ public:
      *  \parm MAX_NUM_THREADS maximum number of threads
      *
      */
-    spinBarrier(const int maxNThreads=MAX_NUM_THREADS):_barrier(0),threadCounter(0),maxNThreads(maxNThreads) {
+    spinBarrier(const size_t maxNThreads=MAX_NUM_THREADS):_barrier(0),threadCounter(0),maxNThreads(maxNThreads) {
         atomic_long_set(&B[0],0);
         atomic_long_set(&B[1],0);
         barArray=new bool[maxNThreads];
-        for(int i=0;i<maxNThreads;++i) barArray[i]=false;
+        for(size_t i=0;i<maxNThreads;++i) barArray[i]=false;
     }
 
     /**
@@ -218,9 +186,9 @@ public:
      * \parm init initializes the barrier
      * 
      */
-    inline void barrierSetup(int init) {
+    inline int barrierSetup(size_t init) {
         if (!_barrier && init>0) _barrier = init; 
-        return;
+        return 0;
     }
 
     /**
@@ -231,18 +199,22 @@ public:
      * \parm tid is the thread id.
      *
      */
-    inline void doBarrier(int tid) {
+    inline void doBarrier(size_t tid) {
         assert(tid<maxNThreads);
         const int whichBar = (barArray[tid] ^= true); // computes % 2
         long c = atomic_long_inc_return(&B[whichBar]);
-        if (c == _barrier) 
+        if ((size_t)c == _barrier) {
             atomic_long_set(&B[whichBar], 0);
-        else
-            while(c) { 
-                c= atomic_long_read(&B[whichBar]);
-                PAUSE();
-            }
+            return;
+        }
+        // spin-wait
+        while(c) { 
+            c= atomic_long_read(&B[whichBar]);
+            PAUSE();  // TODO: define a spin policy !
+        }
     }
+
+    // TODO: better move counter methods in a different class
 
     /**
      * \brief Gets counter
@@ -251,33 +223,33 @@ public:
      *
      * \return An integer value showing the counter of the thread.
      */
-    unsigned long getCounter() const { return threadCounter;}
+    inline size_t getCounter() const { return threadCounter;}
 
     /**
      * \brief Increments counter
      * 
      * It increments the thread counter.
      */
-    void          incCounter()       { ++threadCounter;}
+    inline void   incCounter()       { ++threadCounter;}
 
     /**
      * \brief Decrements counter
      *
      * It decrements the thread counter.
      */
-    void          decCounter()       { --threadCounter;}
+    inline void   decCounter()       { --threadCounter;}
     
 private:
-    long _barrier;
+    size_t _barrier;
     /* 
-     * _barrier represents the number of threads in the barrier. This is just a
-     * counter, it is used to set the ff_node::tid value.
+     * _barrier represents the number of threads in the barrier. 
+     * This is just a counter, it is used to set the ff_node::tid value.
      */
-    unsigned long threadCounter;
+    size_t threadCounter;
     /* 
      * maximum number of threads
      */
-    const long maxNThreads;
+    const size_t maxNThreads;
     /* 
      * each thread has an entry in the barArray, it is used to 
      * point to the current barrier counter either B[0] or B[1]
@@ -447,7 +419,7 @@ protected:
             // acquire lock. While freezing is true,
             // freeze and wait. 
             pthread_mutex_lock(&mutex);
-            if (ret != (void*)FF_EOS_NOFREEZE && !stp) {
+            if (ret != EOS_NOFREEZE && !stp) {
                 if (freezing == 0 && ret == (void*)FF_EOS) stp = true;
                 while(freezing==1) { // NOTE: freezing can change to 2
                     frozen=true; 
@@ -679,6 +651,9 @@ public:
      * \return A booleon value shoing the status of freezing.
      */
     inline bool isfrozen() const { return freezing>0;} 
+
+
+    inline bool iswaiting() const { return frozen;}
 
     /**
      *
@@ -997,6 +972,8 @@ protected:
         if (!thread) return false;
         return thread->isfrozen();
     }
+
+
     
     /**
      * \brief Counts how many threads there are in this node.
@@ -1046,6 +1023,17 @@ protected:
     }
 
 public:
+
+
+
+    // TOGLIERE
+    virtual bool iswaiting() const { 
+        if (!thread) return false;
+        return thread->iswaiting();
+    }
+
+
+
     
     /**
      * Defines the number of ticks to wait.
@@ -1502,13 +1490,14 @@ private:
                 if (inpresent) {
                     if (!skipfirstpop) pop(&task); 
                     else skipfirstpop=false;
-                    if ((task == (void*)FF_EOS) || 
-                        (task == (void*)FF_EOS_NOFREEZE)) {
+                    if ((task == EOS) || 
+                        (task == EOS_NOFREEZE)) {
                         ret = task;
                         filter->eosnotify();
-                        if (outpresent)  push(task);
+                        if (outpresent && (task == (void*)FF_EOS))  push(task); // only EOS is propagated
                         break;
                     }
+                    if (task == GO_OUT) break;
                 }
                 FFTRACE(++filter->taskcnt);
                 FFTRACE(register ticks t0 = getticks());
@@ -1520,15 +1509,16 @@ private:
                 filter->tickstot +=diff;
                 filter->ticksmin=(std::min)(filter->ticksmin,diff); // (std::min) for win portability)
                 filter->ticksmax=(std::max)(filter->ticksmax,diff);
-#endif                
-                if (!ret || (ret == (void*)FF_EOS) || (ret == (void*)FF_EOS_NOFREEZE)) {
+#endif           
+                if (ret == GO_OUT) break;     
+                if (!ret || (ret == EOS) || (ret == EOS_NOFREEZE)) {
                     // NOTE: The EOS is gonna be produced in the output queue
                     // and the thread exits even if there might be some tasks
                     // in the input queue !!!
-                    if (!ret) ret = (void *)FF_EOS;
+                    if (!ret) ret = EOS;
                     exit=true;
                 }
-                if (outpresent && (ret != GO_ON)) push(ret);
+                if (outpresent && (ret != GO_ON && ret != EOS_NOFREEZE)) push(ret);
             } while(!exit);
             
             gettimeofday(&filter->wtstop,NULL);

@@ -339,8 +339,9 @@ public:
         }
 #if defined(SWSR_MULTIPUSH)        
         mcnt   = 0;
-#endif        
-        memset(buf,0,size*sizeof(void*));
+#endif  
+        if (size<=512) for(unsigned long i=0;i<size;++i) buf[i]=0;
+        else memset(buf,0,size*sizeof(void*));
     }
 
     /** 
@@ -467,7 +468,8 @@ public:
      */
     inline void reset() { 
         pread=pwrite=0; 
-        memset(buf,0,size*sizeof(void*));
+        if (size<=512) for(unsigned long i=0;i<size;++i) buf[i]=0;
+        else memset(buf,0,size*sizeof(void*));
     }
 
     /**

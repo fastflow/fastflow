@@ -1,4 +1,8 @@
 * 27/01/14 - v.2.0.3
+   - introduced GO_OUT: a new reserved message (see config.hpp)
+   - optimized ParallelFor and ParallelReduce computation when executed inside
+     a serial loop
+   - changed the Barrier implementation (spinBarrier still the same)
    - added the ff_realNumCores() and the ff_numSockets() utility functions
    - a new lock-free task scheduling for the ParallelFor has been implemented. 
      The new scheduling policy is used when the scheduler thread (i.e. farm's emitter 

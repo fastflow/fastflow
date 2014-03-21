@@ -117,6 +117,7 @@ int WARMUP=0;            // number of tasks for the warm-up
 int size=0;              // buffer size
 int ntasks=0;            // total number of tasks
 int cpu_P=-1, cpu_C=-1;  // cpu's number
+Barrier *bar = NULL;
 #if defined(PAPI_PERF)
 static int EventSet = PAPI_NULL;
 #endif
@@ -194,7 +195,7 @@ void * P(void *) {
 #endif
     for(int i=0;i<WARMUP;++i) PUSH(i);
 
-    Barrier::instance()->doBarrier(0);
+    bar->doBarrier(0);
     ffTime(START_TIME);
 
     for(int i=WARMUP;i<ntasks;++i) PUSH(i);
@@ -273,7 +274,7 @@ void * C(void *) {
     }
 #endif // PAPI_PERF
 
-    Barrier::instance()->doBarrier(1);
+    bar->doBarrier(1);
    
     while(!end) {
     retry:
@@ -524,7 +525,8 @@ int main(int argc, char * argv[]) {
     b = new std::deque<void*>;
 #endif
 
-    Barrier::instance()->barrierSetup(2);
+    bar = new Barrier;
+    bar->barrierSetup(2);
 
     ffTime(START_TIME);
 

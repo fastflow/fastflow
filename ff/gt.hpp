@@ -353,12 +353,12 @@ public:
                 nextr = gather_task(&task); 
             else skipfirstpop=false;
 
-            if (task == (void *)FF_EOS) {
+            if (task == EOS) {
                 if (filter) filter->eosnotify(workers[nextr]->get_my_id());
                 offline[nextr]=true;
                 ++neos;
                 ret=task;
-            } else if (task == (void *)FF_EOS_NOFREEZE) {
+            } else if (task == EOS_NOFREEZE) {
                 if (filter) filter->eosnotify(workers[nextr]->get_my_id());
                 offline[nextr]=true;
                 ++neosnofreeze;
@@ -380,25 +380,19 @@ public:
 
                 // if the filter returns NULL we exit immediatly
                 if (task == GO_ON) continue;
-                
-                // if the filter returns NULL we exit immediatly
-                if (task ==(void*)FF_EOS_NOFREEZE) { 
+                if ((task == GO_OUT) || (task == EOS_NOFREEZE) ) {
                     ret = task;
-                    break; 
+                    break;   // exiting from the loop without sending the task
                 }
-                if (!task || task==(void*)FF_EOS) {
-                    ret = (void*)FF_EOS;
+                if (!task || (task == EOS)) {
+                    ret = EOS;
                     break;
                 }                
-                if (outpresent) {
-                    //if (filter) filter->push(task);
-                    //else 
-                    push(task);
-                }
+                if (outpresent) push(task);
             }
         } while((neos<(size_t)running) && (neosnofreeze<(size_t)running));
 
-        if (outpresent) {
+        if (outpresent && (ret != GO_OUT && ret != EOS_NOFREEZE)) {
             // push EOS
             task = ret;
             push(task);
@@ -475,7 +469,7 @@ public:
             else losetime_in();
         }
         for(register size_t i=0;i<nw;++i)
-            if (V[i] == (void *)FF_EOS || V[i] == (void*)FF_EOS_NOFREEZE)
+            if (V[i] == EOS || V[i] == EOS_NOFREEZE)
                 return -1;
         FFTRACE(taskcnt+=nw-1);
         return 0;
