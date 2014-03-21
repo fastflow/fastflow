@@ -86,7 +86,7 @@ protected:
      */
     inline void push_eos(bool nofreeze=false) {
         //register int cnt=0;
-        void * eos = (void *)(nofreeze?FF_EOS_NOFREEZE:FF_EOS);
+        void * eos = nofreeze?EOS_NOFREEZE:EOS;
         for(register ssize_t i=0;i<running;++i) {
             while(!workers[i]->put(eos)) {
                 //if (sched_emitter && (++cnt>PUSH_CNT_EMIT)) { 
@@ -308,7 +308,7 @@ protected:
         void *task;
         for(size_t i=0;i<W.size();++i) {
             do ; while(!W[i]->get(&task));
-            assert((task == (void*)FF_EOS) || (task == (void*)FF_EOS_NOFREEZE));
+            assert((task == (void*)FF_EOS) || (task == EOS_NOFREEZE));
         }
     }
     
@@ -567,13 +567,12 @@ public:
                     if (!skipfirstpop) pop(&task);
                     else skipfirstpop=false;
                     
-                    if (task == (void*)FF_EOS) {
+                    if (task == EOS) {
                         if (filter) filter->eosnotify();
                         push_eos(); 
                         break;
-                    } else if (task == (void*)FF_EOS_NOFREEZE) {
+                    } else if (task == EOS_NOFREEZE) {
                         if (filter) filter->eosnotify();
-                        push_eos(true);
                         ret = task;
                         break;
                     }
@@ -590,17 +589,15 @@ public:
                     ticksmin=(std::min)(ticksmin,diff);
                     ticksmax=(std::max)(ticksmax,diff);
 #endif  
-                    if (task == GO_ON) continue;
-
-                    // if the filter returns NULL we exit immediatly
-                    if (task ==(void*)FF_EOS_NOFREEZE) { 
-                        push_eos(true); 
+                    if (task == GO_ON) continue; // going to get another task
+                    if ((task == GO_OUT) || (task == EOS_NOFREEZE)) {
                         ret = task;
-                        break; 
+                        break; // exiting from the loop without sending out the task
                     }
-                    if (!task || task==(void*)FF_EOS) {
+                    // if the filter returns NULL we exit immediatly
+                    if (!task || task==EOS) {
                         push_eos();
-                        ret = (void*)FF_EOS;
+                        ret = EOS;
                         break;
                     }
                 } else 
@@ -644,11 +641,11 @@ public:
                     victim=collect_task(&task, availworkers, start);
                 } else skipfirstpop=false;
                 
-                if ((task == (void*)FF_EOS) || 
-                    (task == (void*)FF_EOS_NOFREEZE)) {
+                if ((task == EOS) || 
+                    (task == EOS_NOFREEZE)) {
                     if (filter) filter->eosnotify(channelid);
                     if ((victim != availworkers.end())) {
-                        if (channelid>0 && (task != (void*)FF_EOS_NOFREEZE) &&
+                        if (channelid>0 && (task != EOS_NOFREEZE) &&
                             (!workers[channelid]->isfrozen())) {
                             availworkers.erase(victim);
                             start=availworkers.begin(); // restart iterator
@@ -662,8 +659,8 @@ public:
                         // this conditions means there is a loop
                         // so in this case I don't want to send an additional
                         // EOS since I have already received all of them
-                        if (!master_worker && int_multi_input.size()==0) {
-                            push_eos((task==(void*)FF_EOS_NOFREEZE));
+                        if (!master_worker && (task==EOS) && (int_multi_input.size()==0)) {
+                            push_eos();
                         }
                         ret = task;
                         break; // received all EOS, exit
@@ -683,13 +680,11 @@ public:
 #endif  
 
                         if (task == GO_ON) continue;
-                        
-                        // if the filter returns NULL we exit immediatly
-                        if (task ==(void*)FF_EOS_NOFREEZE) { 
-                            push_eos(true); 
+                        if ((task == GO_OUT) || (task == EOS_NOFREEZE)){
                             ret = task;
-                            break; 
+                            break; // exiting from the loop without sending out the task
                         }
+                        // if the filter returns NULL we exit immediatly
                         if (!task || (task==(void*)FF_EOS)) {
                             push_eos();
                             // try to remove the additional EOS due to 
@@ -776,7 +771,6 @@ public:
         return 0;
     }
     int thawWorkers(bool _freeze=false, ssize_t nw=-1) {
-        assert(running==-1);
         if (nw == -1 || (size_t)nw > workers.size()) running = workers.size();
         else running = nw;
         for(ssize_t i=0;i<running;++i) workers[i]->thaw(_freeze);
@@ -953,7 +947,6 @@ public:
      * 
      */
     virtual inline void thaw(bool _freeze=false, ssize_t nw=-1) {
-        assert(running==-1);
         if (nw == -1 || (size_t)nw > workers.size()) running = workers.size();
         else running = nw;
         ff_thread::thaw(_freeze); // NOTE:start scheduler first

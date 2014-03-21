@@ -25,35 +25,45 @@
 
 CC		     = gcc
 CXX		     = g++
-#CC                  = icc  
-#CXX 		     = icpc 
+#CC                  = icc
+#CXX 		     = icpc
 LINK_OPT             = 
 VERSION              = 
-OPTIMIZE_FLAGS       = -mavx -O3 -finline-functions
-OMP_FLAGS 	     = -fopenmp #-openmp
+OPTIMIZE_FLAGS       = -O3 -finline-functions -fargument-noalias-global
+OMP_FLAGS 	     = -fopenmp -lrt -ldl #-openmp
 CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall #-DALLOCATOR_STATS #-DTRACE_FASTFLOW
 CFLAGS               =
 LDFLAGS              = 
 INCS                 = -I../../
 LIBS                 = -lpthread
+INTEL_LIBS           = -L /opt/intel/tbb/lib/intel64/gcc4.4 -ltbb -lrt -ldl
+INTEL_LIBS_MIC       = -L /opt/intel/tbb/lib/mic -ltbb  
 
 INCLUDES             = -I. $(INCS)
+INTEL_INCLUDES       = -I /opt/intel/tbb/include
 TBB_INCLUDES         = -I /opt/local/include/tbb/
-TBB_LIBS             = -L /opt/local/lib/ -ltbb
-TARGET               = jacobi_omp jacobi_ff jacobi_stencil
+
+TARGET               = jacobi_omp jacobi_omp_mic jacobi_ff jacobi_ff_mic  jacobi_tbb jacobi_tbb_mic jacobi_stencil
 
 all: $(TARGET)
 
 jacobi_ff:jacobi.cpp
-#	$(CXX) -std=c++0x -DNO_DEFAULT_MAPPING -DSTATIC_DECL $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-	$(CXX) -std=c++0x -DSTATIC_DECL $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+	$(CXX) -std=c++0x -DNO_PARFOR_SCHEDULER_THREAD $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+jacobi_ff_mic:jacobi.cpp
+	$(CXX) -mmic -std=c++0x -DNO_PARFOR_SCHEDULER_THREAD  $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+jacobi_tbb:jacobi.cpp
+	$(CXX) -std=c++0x -DUSE_TBB -DUSE_LAMBDA -DHAS_CXX11_AUTO -DHAS_CXX11_LAMBDA $(INCLUDES) $(INTEL_INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS) $(INTEL_LIBS)
+jacobi_tbb_mic:jacobi.cpp
+	$(CXX) -mmic -std=c++0x -DUSE_TBB -DUSE_LAMBDA -DHAS_CXX11_AUTO -DHAS_CXX11_LAMBDA $(INCLUDES) $(INTEL_INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS) $(INTEL_LIBS_MIC)
 
 jacobi_stencil:jacobi_stencil.cpp
-#	$(CXX) -std=c++0x -DNO_DEFAULT_MAPPING $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 jacobi_omp:jacobi.cpp
-	$(CXX) -DUSE_OPENMP $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS) $(OMP_FLAGS)
+	$(CXX) -std=c++0x -DUSE_OPENMP $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS) $(OMP_FLAGS)
+jacobi_omp_mic:jacobi.cpp
+	$(CXX) -mmic -std=c++0x -DUSE_OPENMP $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS) $(OMP_FLAGS)
 
 clean: 
 	-rm -fr *.o *~

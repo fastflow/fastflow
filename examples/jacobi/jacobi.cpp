@@ -61,8 +61,10 @@
   REVISION HISTORY:
 **************************************************************************/
 
-/* Minor modifications to the original code and the FastFlow code done
- * by Massimo Torquati <torquati@di.unipi.it>
+/* Minor modifications (mainly for auto vectorization of loops) 
+ * to the original code and added the FastFlow and TBB parallel loops code
+ *   
+ *  Author: Massimo Torquati <torquati@di.unipi.it>
  *
  */
 
@@ -80,18 +82,9 @@
 #include <tbb/task_scheduler_init.h>
 #endif
 
-#if !defined(USE_OPENMP) && !defined(USE_TBB)
 #include <ff/parallel_for.hpp>
-#endif
-
 
 using namespace ff;
-
-#if defined(STATIC_DECL)
-static FF_PARFOR_DECL(loop)=NULL;
-static FF_PARFORREDUCE_DECL(reduce,double)=NULL;
-#endif
-
 
 #define U(i,j) u[(i)*n+(j)]
 #define F(i,j) f[(i)*n+(j)]
@@ -128,14 +121,13 @@ static long chunk=1;
 *****************************************************************
 */
 #if defined(USE_OPENMP)
-static inline void jacobi_omp ( const int n, const int m, double dx, double dy, double alpha, 
-	double omega, double *u, double *f, double tol, int maxit )
+static inline void jacobi_omp ( const int n, const int m, const double dx, const double dy, const double alpha, 
+				const double omega, double * __restrict__ u, double * __restrict__ f, const double tol, const int maxit )
 {
   int k;
-  double Error, resid, ax, ay, b;
+  double Error, resid;
 
-
-  double *uold;
+  double *__restrict__ uold;
 
   /* wegen Array-Kompatibilitaet, werden die Zeilen und Spalten (im Kopf)
 	 getauscht, zB uold[spalten_num][zeilen_num]; bzw. wir tuen so, als ob wir das
@@ -143,11 +135,9 @@ static inline void jacobi_omp ( const int n, const int m, double dx, double dy, 
 
   uold = (double *)malloc(sizeof(double) * n *m);
 
-
-
-  ax = 1.0/(dx * dx); /* X-direction coef */
-  ay = 1.0/(dy*dy); /* Y_direction coef */
-  b = -2.0/(dx*dx)-2.0/(dy*dy) - alpha; /* Central coeff */
+  const double ax = 1.0/(dx * dx); /* X-direction coef */
+  const double ay = 1.0/(dy*dy); /* Y_direction coef */
+  const double b = -2.0/(dx*dx)-2.0/(dy*dy) - alpha; /* Central coeff */
 
   Error = 10.0 * tol;
 
@@ -156,30 +146,48 @@ static inline void jacobi_omp ( const int n, const int m, double dx, double dy, 
 
 	Error = 0.0;
 
+	//unsigned long t1 = getusec();
 	/* copy new solution into old */
 #pragma omp parallel for schedule(runtime) num_threads(NUMTHREADS)
-    for (int j=0; j<m; j++)
+	for (int j=0; j<m; j++) {
+	  double * __restrict__ _uold=uold;
+	  double * __restrict__ _u   =u;
+	  const int mj = m*j;	  
+          PRAGMA_IVDEP;
 	  for (int i=0; i<n; i++)
-		uold[i + m*j] = u[i + m*j];
-
+	    _uold[i + mj] = _u[i + mj];
+	}
+	//unsigned long t2 = getusec();
 	/* compute stencil, residual and update */
 #pragma omp parallel for reduction(+:Error) schedule(runtime) private(resid) num_threads(NUMTHREADS)
-	for (int j=1; j<m-1; j++)
-	  for (int i=1; i<n-1; i++){
-		resid =(
-			ax * (uold[i-1 + m*j] + uold[i+1 + m*j])
-			+ ay * (uold[i + m*(j-1)] + uold[i + m*(j+1)])
-			+ b * uold[i + m*j] - f[i + m*j]
-			) / b;
+	for (int j=1; j<m-1; j++) {
+	  double * __restrict__ _uold=uold;
+	  double * __restrict__ _u   =u;
+	  double * __restrict__ _f   =f;				    
+
+	  const int  _n = n-1;
+	  const int mj = m*j;
+	  const int mjp1 = m*(j+1);
+	  const int mjm1 = m*(j-1);
+
+	  PRAGMA_IVDEP;
+	  for (int i=1; i<_n; i++){
+	    resid =(
+		    ax * (_uold[i-1 + mj] + _uold[i+1 + mj])
+		    + ay * (_uold[i + mjm1] + _uold[i + mjp1])
+		    + b * _uold[i + mj] - _f[i + mj]
+		    ) / b;
 		
-		/* update solution */
-		u[i + m*j] = uold[i + m*j] - omega * resid;
-
-		/* accumulate residual error */
-		Error =Error + resid*resid;
-
+	    /* update solution */
+	    _u[i + mj] = _uold[i + mj] - omega * resid;
+	    
+	    /* accumulate residual error */
+	    Error =Error + resid*resid;
+	    
 	  }
-
+	}
+	//unsigned long t3 = getusec();
+	//printf("%d %g  %g\n", k, (double)((t2-t1))/1000.0, (double)((t3-t2))/1000.0);
 	/* error check */
 	k++;
 	Error = sqrt(Error) /(n*m);
@@ -189,31 +197,68 @@ static inline void jacobi_omp ( const int n, const int m, double dx, double dy, 
   printf("Residual                   %.15f\n\n", Error);
 
   free(uold);
-
 } 	
+
 #elif defined(USE_TBB)
-static inline void jacobi_tbb ( const int n, const int m, double dx, double dy, double alpha, 
-	double omega, double *u, double *f, double tol, int maxit )
+
+static inline void jacobi_tbb ( const int n, const int m, const double dx, const double dy, const double alpha, 
+				const double omega, double * __restrict__ u, double * __restrict__ f, const double tol, const int maxit )
 {
   int k;
-  double Error, resid, ax, ay, b;
-
+  double Error;
 
   tbb::affinity_partitioner ap;
 
-  double *uold;
+  double *__restrict__ uold;
 
   /* wegen Array-Kompatibilitaet, werden die Zeilen und Spalten (im Kopf)
-	 getauscht, zB uold[spalten_num][zeilen_num]; bzw. wir tuen so, als ob wir das
-	 gespiegelte Problem loesen wollen */
-
+     getauscht, zB uold[spalten_num][zeilen_num]; bzw. wir tuen so, als ob wir das
+     gespiegelte Problem loesen wollen */
+  
   uold = (double *)malloc(sizeof(double) * n *m);
 
+  const double ax = 1.0/(dx * dx); /* X-direction coef */
+  const double ay = 1.0/(dy*dy); /* Y_direction coef */
+  const double b = -2.0/(dx*dx)-2.0/(dy*dy) - alpha; /* Central coeff */
 
-
-  ax = 1.0/(dx * dx); /* X-direction coef */
-  ay = 1.0/(dy*dy); /* Y_direction coef */
-  b = -2.0/(dx*dx)-2.0/(dy*dy) - alpha; /* Central coeff */
+  auto Fcopy = [&uold,&u,n,m] (const tbb::blocked_range<long>& r) {
+    double * __restrict__ _uold=uold;
+    double * __restrict__ _u   =u;
+    
+    for (long j=r.begin();j!=r.end();++j) {
+      const long _n = n;
+      const long mj = m*j;
+      PRAGMA_IVDEP;
+      for (long i=0; i<_n; i++)
+	_uold[i + mj] = _u[i + mj];
+    }
+  };
+  auto Freduce = [&uold,&u,f,n,m,ax,ay,b,omega](const tbb::blocked_range<long> &r, double in) -> double {
+    double * __restrict__ _uold=uold;
+    double * __restrict__ _u   =u;
+    double * __restrict__ _f   =f;				    
+    
+    for (long j=r.begin();j!=r.end();++j) {
+      const long _n = n-1;
+      const long mj = m*j;
+      const long mjp1 = m*(j+1);
+      const long mjm1 = m*(j-1);
+      
+      PRAGMA_IVDEP;
+      for (long i=1; i<_n; i++){
+	const double resid =(
+			     ax * (_uold[i-1 + mj] + _uold[i+1 + mj])
+			     + ay * (_uold[i + mjm1] + _uold[i + mjp1])
+			     + b * _uold[i + mj] - _f[i + mj]
+			     ) / b;
+	
+	/* update solution */
+	_u[i + mj] = _uold[i + mj] - omega * resid;
+	in+=resid*resid;
+      }
+    }
+    return in;
+  };
 
   Error = 10.0 * tol;
 
@@ -222,35 +267,15 @@ static inline void jacobi_tbb ( const int n, const int m, double dx, double dy, 
     
     Error = 0.0;
 
+    //unsigned long t1 = getusec();
     /* copy new solution into old */
-    tbb::parallel_for(tbb::blocked_range<long>(0, m, m/NUMTHREADS),
-		      [&] (const tbb::blocked_range<long>& r) {
-			for (long j=r.begin();j!=r.end();++j) {
-			  for (int i=0; i<n; i++)
-			    uold[i + m*j] = u[i + m*j];
-			}
-		      }, ap);
-
+    tbb::parallel_for(tbb::blocked_range<long>(0, m), Fcopy, ap);
+    //unsigned long t2 = getusec();
     /* compute stencil, residual and update */
-    Error += tbb::parallel_reduce(tbb::blocked_range<long>(1, m-1), //,(m-2)/NUMTHREADS),
-    				  double(0),
-    				  [&] (tbb::blocked_range<long> &r, double in) -> double {
-    				    for (long j=r.begin();j!=r.end();++j) {
-    				      for (int i=1; i<n-1; i++){
-    				      	double resid =(
-    				      		ax * (uold[i-1 + m*j] + uold[i+1 + m*j])
-    				      		+ ay * (uold[i + m*(j-1)] + uold[i + m*(j+1)])
-    				      		+ b * uold[i + m*j] - f[i + m*j]
-    				      		) / b;
-					
-    				      	/* update solution */
-    				      	u[i + m*j] = uold[i + m*j] - omega * resid;
-    				      	in+=resid*resid;
-    				      }
-    				    }
-    				    return in;
-    				  }, std::plus<double>(), ap );
-    
+    Error += tbb::parallel_reduce(tbb::blocked_range<long>(1, m-1),double(0),
+				  Freduce, std::plus<double>(), ap );
+    //unsigned long t3 = getusec();
+    //printf("%d %g  %g\n", k, (double)((t2-t1))/1000.0, (double)((t3-t2))/1000.0);
     /* error check */
     k++;
     Error = sqrt(Error) /(n*m);
@@ -261,18 +286,18 @@ static inline void jacobi_tbb ( const int n, const int m, double dx, double dy, 
   printf("Residual                   %.15f\n\n", Error);
 
   free(uold);
-
 } 	
 #else  // FF
 
-static inline void jacobi_ff ( const int n, const int m, double dx, double dy, double alpha, 
-	double omega, double *u, double *f, double tol, int maxit )
+static inline void jacobi_ff (ParallelForReduce<double> &pfr, 
+			      const int n, const int m, const double dx, const double dy, const double alpha, 
+			      double omega, double * __restrict__ u, double * __restrict__ f, const double tol, const int maxit )
 {
   int k;
-  double Error, ax, ay, b;
+  double Error;
 
 
-  double *uold;
+  double * __restrict__ uold;
 
   /* wegen Array-Kompatibilitaet, werden die Zeilen und Spalten (im Kopf)
 	 getauscht, zB uold[spalten_num][zeilen_num]; bzw. wir tuen so, als ob wir das
@@ -280,62 +305,70 @@ static inline void jacobi_ff ( const int n, const int m, double dx, double dy, d
 
   uold = (double *)malloc(sizeof(double) * n *m);
 
-
-
-  ax = 1.0/(dx * dx); /* X-direction coef */
-  ay = 1.0/(dy*dy); /* Y_direction coef */
-  b = -2.0/(dx*dx)-2.0/(dy*dy) - alpha; /* Central coeff */
+  const double ax = 1.0/(dx * dx); /* X-direction coef */
+  const double ay = 1.0/(dy*dy); /* Y_direction coef */
+  const double b = -2.0/(dx*dx)-2.0/(dy*dy) - alpha; /* Central coeff */
 
   Error = 10.0 * tol;
 
-#if !defined(STATIC_DECL)
-  FF_PARFOR_INIT(loop, NUMTHREADS);
-  FF_PARFORREDUCE_INIT(reduce, double, NUMTHREADS); 
-#endif
+  auto Fsum = [](double& v, const double elem) { v += elem; };
+  auto Fcopy = [&uold,&u,n,m](const long j) {
+    double * __restrict__ _uold=uold;
+    double * __restrict__ _u   =u;
+    const int _n = n;
+    const int mj = m*j;
+    PRAGMA_IVDEP;
+    for (int i=0; i<_n; i++)
+      _uold[i + mj] = _u[i + mj];
+  };
+  auto Freduce = [&uold,&u,f,n,m,ax,ay,b,omega](const long j, double& Error) {
+    double * __restrict__ _uold=uold;
+    double * __restrict__ _u   =u;
+    double * __restrict__ _f   =f;
+    
+    const long _n   = n-1;
+    const long mj   = m*j;
+    const long mjp1 = mj+m;
+    const long mjm1 = mj-m;
+    
+    PRAGMA_IVDEP;
+    for (long i=1; i<_n; i++){
+      const double resid =(
+			   ax * (_uold[i-1 + mj] + _uold[i+1 + mj])
+			   + ay * (_uold[i + mjm1] + _uold[i + mjp1])
+			   + b * _uold[i + mj] - _f[i + mj]
+			   ) / b;
+      
+      /* update solution */
+      _u[i + mj] = _uold[i + mj] - omega * resid;
+      
+      /* accumulate residual error */
+      Error += resid*resid;	      
+    }
+  };
 
   k = 1;
   while (k <= maxit && Error > tol) {
+    Error = 0.0;
+    //unsigned long t1 = getusec();
+    /* copy new solution into old */
+    pfr.parallel_for(0,m,1, chunk, Fcopy,NUMTHREADS);
+    //unsigned long t2 = getusec();
 
-	Error = 0.0;
+    /* compute stencil, residual and update */
+    pfr.parallel_reduce(Error, 0.0, 1,m-1,1, chunk,Freduce,Fsum,NUMTHREADS);
 
-	/* copy new solution into old */
-	FF_PARFOR_START(loop, j,0,m,1, chunk, NUMTHREADS) { //(m/NUMTHREADS),NUMTHREADS) {
-	    for (int i=0; i<n; i++)
-		uold[i + m*j] = u[i + m*j];
-	} FF_PARFOR_STOP(loop);
-
-	/* compute stencil, residual and update */
-	FF_PARFORREDUCE_START(reduce, Error, 0.0, j,1,m-1,1, chunk, NUMTHREADS) { //(m-2)/NUMTHREADS, NUMTHREADS) { 
-	    double resid;
-	    for (int i=1; i<n-1; i++){
-		resid =(
-			ax * (uold[i-1 + m*j] + uold[i+1 + m*j])
-			+ ay * (uold[i + m*(j-1)] + uold[i + m*(j+1)])
-			+ b * uold[i + m*j] - f[i + m*j]
-			) / b;
-		
-		/* update solution */
-		u[i + m*j] = uold[i + m*j] - omega * resid;
-		
-		/* accumulate residual error */
-		Error =Error + resid*resid;
-		
-	    }
-	} FF_PARFORREDUCE_STOP(reduce, Error, +);
-
-	/* error check */
-	k++;
-	Error = sqrt(Error) /(n*m);
+    //unsigned long t3 = getusec();
+    //printf("%d %g  %g\n", k, (double)((t2-t1))/1000.0, (double)((t3-t2))/1000.0);    
+    /* error check */
+    k++;
+    Error = sqrt(Error) /(n*m);
   } /* while */
 
   printf("Total Number of Iterations %d\n", k-1);
   printf("Residual                   %.15f\n\n", Error);
 
   free(uold);  
-#if !defined(STATIC_DECL)
-  FF_PARFOR_DONE(loop);
-  FF_PARFORREDUCE_DONE(reduce);
-#endif
 } 	
 #endif
 
@@ -433,8 +466,8 @@ int main(int argc, char **argv){
    //	    n, m, alpha, relax, tol, mits);
    //printf("-> NUMTHREADS=%d\n", NUMTHREADS);
 
-   u = (double *) malloc(n*m*sizeof(double));
-   f = (double *) malloc(n*m*sizeof(double));
+   u = (double *)malloc(n*m*sizeof(double));
+   f = (double *)malloc(n*m*sizeof(double));
 
    initialize(n, m, alpha, &dx, &dy, u, f);
 
@@ -463,24 +496,21 @@ int main(int argc, char **argv){
 #else
    /* FastFlow */
 
-#if defined(STATIC_DECL)
-  FF_PARFOR_ASSIGN(loop, NUMTHREADS);
-  FF_PARFORREDUCE_ASSIGN(reduce, double, NUMTHREADS); 
+#if defined(__MIC__)
+    const char worker_mapping[]="1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97, 101, 105, 109, 113, 117, 121, 125, 129, 133, 137, 141, 145, 149, 153, 157, 161, 165, 169, 173, 177, 181, 185, 189, 193, 197, 201, 205, 209, 213, 217, 221, 225, 229, 233, 0, 2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62, 66, 70, 74, 78, 82, 86, 90, 94, 98, 102, 106, 110, 114, 118, 122, 126, 130, 134, 138, 142, 146, 150, 154, 158, 162, 166, 170, 174, 178, 182, 186, 190, 194, 198, 202, 206, 210, 214, 218, 222, 226, 230, 234, 237, 3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63, 67, 71, 75, 79, 83, 87, 91, 95, 99, 103, 107, 111, 115, 119, 123, 127, 131, 135, 139, 143, 147, 151, 155, 159, 163, 167, 171, 175, 179, 183, 187, 191, 195, 199, 203, 207, 211, 215, 219, 223, 227, 231, 235, 238, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 148, 152, 156, 160, 164, 168, 172, 176, 180, 184, 188, 192, 196, 200, 204, 208, 212, 216, 220, 224, 228, 232, 236, 239";
+    threadMapper::instance()->setMappingList(worker_mapping);
 #endif
 
-   printf("\n\nFastFlow runs using %d threads\n", NUMTHREADS);
-   ffTime(START_TIME);
-   /* Solve Helmholtz equation */
-   jacobi_ff(n, m, dx, dy, alpha, relax, u,f, tol, mits);
-   ffTime(STOP_TIME);
-   dt = ffTime(GET_TIME); 
+    ParallelForReduce<double> pfr(NUMTHREADS, true);
 
-   printf("ff elapsed time : %12.6f (ms)\n", dt);
+    printf("\n\nFastFlow runs using %d threads\n", NUMTHREADS);
+    ffTime(START_TIME);
+    /* Solve Helmholtz equation */
+    jacobi_ff(pfr, n, m, dx, dy, alpha, relax, u,f, tol, mits);
+    ffTime(STOP_TIME);
+    dt = ffTime(GET_TIME); 
+    printf("ff elapsed time : %12.6f (ms)\n", dt);
 
-#if defined(STATIC_DECL)
-   FF_PARFOR_DONE(loop);
-   FF_PARFORREDUCE_DONE(reduce);
-#endif
 #endif
 
    mflops = (0.000001*mits*(m-2)*(n-2)*13) / (dt/1000.0);

@@ -38,8 +38,10 @@
 #include <ff/farm.hpp>
 #include <ff/partitioners.hpp>
 
-// see http://www.stroustrup.com/C++11FAQ.html#11
-#if (__cplusplus >= 201103L) || (defined(HAS_CXX11_AUTO) && defined(HAS_CXX11_LAMBDA))
+// NOTE: A better check would be needed !
+// both GNU g++ and Intel icpc define __GXX_EXPERIMENTAL_CXX0X__ if -std=c++0x or -std=c++11 is used 
+// (icpc -E -dM -std=c++11 -x c++ /dev/null | grep GXX_EX)
+#if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_AUTO) && defined(HAS_CXX11_LAMBDA))
 #include <ff/parallel_for.hpp>
 #else
 #pragma message("C++ >= 201103L required, build will fail")

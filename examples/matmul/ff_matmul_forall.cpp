@@ -57,10 +57,22 @@ int main(int argc, char * argv[]) {
         K=1;         // reset K
     }
    
+#if 0
+    double *A = (double*)_mm_malloc(N*N*sizeof(double),64);
+    double *B = (double*)_mm_malloc(N*N*sizeof(double),64);
+    double *C = (double*)_mm_malloc(N*N*sizeof(double),64);
+#endif
     double *A = (double*)malloc(N*N*sizeof(double));
     double *B = (double*)malloc(N*N*sizeof(double));
     double *C = (double*)malloc(N*N*sizeof(double));
+
+
     assert(A && B && C);
+
+#if defined(__MIC__)
+    const char worker_mapping[]="1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97, 101, 105, 109, 113, 117, 121, 125, 129, 133, 137, 141, 145, 149, 153, 157, 161, 165, 169, 173, 177, 181, 185, 189, 193, 197, 201, 205, 209, 213, 217, 221, 225, 229, 233, 0, 2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62, 66, 70, 74, 78, 82, 86, 90, 94, 98, 102, 106, 110, 114, 118, 122, 126, 130, 134, 138, 142, 146, 150, 154, 158, 162, 166, 170, 174, 178, 182, 186, 190, 194, 198, 202, 206, 210, 214, 218, 222, 226, 230, 234, 237, 3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63, 67, 71, 75, 79, 83, 87, 91, 95, 99, 103, 107, 111, 115, 119, 123, 127, 131, 135, 139, 143, 147, 151, 155, 159, 163, 167, 171, 175, 179, 183, 187, 191, 195, 199, 203, 207, 211, 215, 219, 223, 227, 231, 235, 238, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 148, 152, 156, 160, 164, 168, 172, 176, 180, 184, 188, 192, 196, 200, 204, 208, 212, 216, 220, 224, 228, 232, 236, 239";
+    threadMapper::instance()->setMappingList(worker_mapping);
+#endif
 
     ParallelFor pf(nworkers);
 
@@ -73,21 +85,25 @@ int main(int argc, char * argv[]) {
             }
         },nworkers);
     
+    auto lambda = [&A,&B,&C,N](const long i) {
+        //helping compiler vectorization
+#if defined(__ITEL_COMPILER)
+        double *restrct _A = A, *restric _B=B, *restrict _C=C;
+#else
+        double *__restrict__ _A = A, *__restrict__ _B=B, *__restrict__ _C=C;
+#endif
+        const long _N = N;
+        const long iN = i*_N;
+        
+        for(long j=0;j<_N;++j) {
+            for(long k=0;k<_N;++k)
+                _C[iN+j] += _A[iN+k]*_B[k*_N+j];
+        }
+    };
+
     ffTime(START_TIME);
     for(int q=0;q<K;++q) {
-        pf.parallel_for(0,N,1,chunk,[&A,&B,&C,N](long i) {
-                //helping compiler vectorization
-#if defined(__ITEL_COMPILER)
-                double *restrct _A = A, *restric _B=B, *restrict _C=C;
-#else
-                double *__restrict__ _A = A, *__restrict__ _B=B, *__restrict__ _C=C;
-#endif
-                for(long j=0;j<N;++j) {
-                    PRAGMA_IVDEP;
-                    for(long k=0;k<N;++k)
-                        _C[i*N+j] += _A[i*N+k]*_B[k*N+j];
-                }
-            },nworkers);
+        pf.parallel_for(0,N,1,chunk,lambda,nworkers);
     }
     ffTime(STOP_TIME);
     printf("%d Time = %g (ms) K=%d\n", nworkers, ffTime(GET_TIME)/(1.0*K), K);
