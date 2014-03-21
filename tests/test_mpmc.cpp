@@ -86,6 +86,7 @@ int nqueues=4;
 int ntasks=0;                   // total number of tasks
 atomic_long_t counter;           
 std::vector<long> results;
+Barrier *bar = NULL;
 
 // for statistics
 long taskC[MAX_NUM_THREADS]={0};
@@ -150,7 +151,7 @@ void * P(void * arg) {
     cds::threading::pthread::Manager::attachThread();
 #endif
 
-    Barrier::instance()->doBarrier(myid);
+    bar->doBarrier(myid);
     do; while(PUSH(myid));
 
 #if defined(HAVE_CDSLIB)
@@ -171,7 +172,7 @@ void * C(void * arg) {
     cds::threading::pthread::Manager::attachThread();
 #endif
 
-    Barrier::instance()->doBarrier(myid);
+    bar->doBarrier(myid);
     while(1) {
         if (!QUEUE_POP(&task.b))  {
             PAUSE();
@@ -270,7 +271,8 @@ int main(int argc, char * argv[]) {
 	C_handle = (pthread_t *) malloc(sizeof(pthread_t)*numC);
 	
     // define the number of threads that are going to partecipate....
-    Barrier::instance()->barrierSetup(numP+numC+1);
+    bar = new Barrier;
+    bar->barrierSetup(numP+numC+1);
 
     int * idC;
 	idC = (int *) malloc(sizeof(int)*numC);
@@ -290,7 +292,7 @@ int main(int argc, char * argv[]) {
     }
 
     ffTime(START_TIME);
-    Barrier::instance()->doBarrier(numP+numC);
+    bar->doBarrier(numP+numC);
 
     // wait all producers
     for(int i=0;i<numP;++i) {

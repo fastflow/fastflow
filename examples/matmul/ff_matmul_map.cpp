@@ -60,50 +60,49 @@ MAPDEF(map, F, long);
 
 int main(int argc, char * argv[]) {
     if (argc<3) {
-        std::cerr << "use: " << argv[0] << " nworkers size [check]\n";
+        std::cerr << "use: " << argv[0] << " nworkers size [K=5 check=false]\n";
         return -1;
     }
     int    nworkers =atoi(argv[1]);
     N               =atol(argv[2]);
+    int K=5;
     assert(N>0);
     bool   check    =false;  
-    if (argc==4) check=true;  // checks result
+    if (argc>=4)  K        =atoi(argv[3]);
+    if (argc==5) {
+        check=true;  // checks result
+        if (K>1) printf("K is reset to 1 because of checking results\n");
+        K=1;         // reset K
+    }
     
     A = (double*)malloc(N*N*sizeof(double));
     B = (double*)malloc(N*N*sizeof(double));
     C = (double*)malloc(N*N*sizeof(double));
     assert(A && B && C);
 
+    
+#if defined(USE_OPENMP)
+
+    #pragma omp parallel for schedule(runtime) num_threads(nworkers)
     for(long i=0;i<N;++i) 
         for(long j=0;j<N;++j) {
             A[i*N+j] = (i+j)/(double)N;
             B[i*N+j] = i*j*3.14;
             C[i*N+j] = 0;
         }
-    
-#if defined(USE_OPENMP)
+
+
     ffTime(START_TIME);
-#if defined(OPTIMIZE_CACHE)
-    //#pragma omp parallel for schedule(auto) 
-    //#pragma omp parallel for schedule(static)
-#pragma omp parallel for schedule(auto) 
-    //#pragma omp parallel for schedule(static)
-    for(long i=0;i<N;++i) 
-        for(long j=0;j<N;++j)
-            for(long k=0;k<N;++k)
-                C[j*N+k] += A[j*N+i]*B[i*N+k];
-#else 
-    // With runtime scheduling the type of scheduling is taken from the content of the environment variable OMP_SCHEDULE. 
-    // This allows to test different scheduling types without recompiling the application.
-    // OMP_SCHEDULE="schedule[,chunk_size]"
-    #pragma omp parallel for schedule(runtime) num_threads(nworkers)
-    for(long i=0;i<N;++i) 
-        for(long j=0;j<N;++j)
-            for(long k=0;k<N;++k)
-                C[i*N+j] += A[i*N+k]*B[k*N+j];
-#endif // OPTIMIZE_CACHE
+    for(int q=0;q<K;++q) {
+#pragma omp parallel for schedule(runtime) num_threads(nworkers)
+        for(long i=0;i<N;++i) 
+            for(long j=0;j<N;++j)
+                for(long k=0;k<N;++k)
+                    C[i*N+j] += A[i*N+k]*B[k*N+j];
+    }
+
     ffTime(STOP_TIME);
-    printf("%d Time = %g (ms)\n", nworkers,ffTime(GET_TIME));
+    printf("%d Time = %g (ms) K=%d\n", nworkers,ffTime(GET_TIME)/(1.0*K),K);
 
 #else // !USE_OPENMP
 

@@ -26,8 +26,6 @@
  */
 
 /*
- * This tests shows how to use FF_PARFOR_INIT/DONE together with 
- * FF_PARFOR_START/STOP. 
  *
  */
 
@@ -38,10 +36,10 @@ using namespace ff;
 
 int main(int argc, char *argv[]) {
     long size     = 1000000;
+    long chunk    = 111;
     int  nworkers = 3;
     int  ntimes   = 3;
-    int  chunk    = 111;
-    
+
     if (argc>1) {
         if (argc<5) {
             printf("use: %s size nworkers ntimes chunk\n", argv[0]);
@@ -50,36 +48,24 @@ int main(int argc, char *argv[]) {
         size     = atol(argv[1]);
         nworkers = atoi(argv[2]);
         ntimes   = atoi(argv[3]);
-        chunk    = atoi(argv[4]);
+        chunk    = atol(argv[4]);
     }
     long *A = new long[size];
 
-    FF_PARFOR_INIT(pf1, nworkers);
-    FF_PARFORREDUCE_INIT(pf2, long, nworkers);
-
+    ParallelForReduce<long> pfr(nworkers, true);
+    
     long sum=0.0;
     for(int k=0;k<ntimes; ++k) {
+        auto loop1 = [&A,k](const long j) {A[j]=j+k;};
+        auto loop2 = [&A](const long i, long& sum) { sum += A[i];};
+        auto Fsum = [](long& v, const long elem) { v += elem; };
 
-        for(int j = 0; j< size; ++j) 
-            A[j] = j+k;
-
-        FF_PARFOR_START(pf1, j,0,size,1, 1, std::min(k+1, nworkers)) {
-            A[j]=j+k;
-        } FF_PARFOR_STOP(pf1);
-        printf("pf1 done using %d workers\n", std::min(k+1,nworkers));
-
-
-        FF_PARFORREDUCE_START(pf2, sum, 0, i,0,size,1, chunk, std::min(k+2,nworkers)) { 
-            sum += A[i];
-        } FF_PARFORREDUCE_STOP(pf2, sum, +);    
-        printf("pf2 done using %d workers\n", std::min(k+2,nworkers));
-        
-    } // k
-    
+        pfr.parallel_for(0L,size,1L,chunk,loop1,std::min(k+1, nworkers));
+        printf("loop1 using %d workers\n", std::min(k+1,nworkers));
+        pfr.parallel_reduce(sum,0L,0L,size,1L,chunk,loop2,Fsum,std::min(k+2,nworkers));
+        printf("loop2 using %d workers\n", std::min(k+2,nworkers));        
+    }
     printf("loop done\n");
-
-    FF_PARFOR_DONE(pf1);
-    FF_PARFORREDUCE_DONE(pf2);
 
     printf("sum = %ld\n", sum);
     return 0;

@@ -45,8 +45,6 @@
 #include <ff/atomic/abstraction_dcas.h>
 
 // NOTE: A better check would be needed !
-//
-// NOTE: A better check would be needed !
 // both GNU g++ and Intel icpc define __GXX_EXPERIMENTAL_CXX0X__ if -std=c++0x or -std=c++11 is used 
 // (icpc -E -dM -std=c++11 -x c++ /dev/null | grep GXX_EX)
 #if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))

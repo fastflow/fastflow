@@ -45,19 +45,15 @@ using namespace ff;
 
 #if defined(USE_PTHREAD_BARRIER)
 #include <pthread.h>
-pthread_barrier_t bar;
+static Barrier bar;
 #else
-spinBarrier bar;
+static spinBarrier bar;
 #endif
 
 // global array
 int* data=NULL;
 
-#if defined(USE_PTHREAD_BARRIER)
-#define BARRIER   pthread_barrier_wait(&bar)
-#else
 #define BARRIER   bar.doBarrier(get_my_id())
-#endif
 
 class Thread: public ff_node {
 public:
@@ -108,11 +104,7 @@ int main(int argc, char* argv[]) {
         assert(nthreads>0);
         nbarriers=atoi(argv[2]);
     }
-#if defined(USE_PTHREAD_BARRIER)
-    pthread_barrier_init(&bar, NULL, nthreads);
-#else
     bar.barrierSetup(nthreads);
-#endif
     data = (int*)malloc(sizeof(int)*nthreads);
     assert(data);
     
