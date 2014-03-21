@@ -33,11 +33,11 @@
 #include <iostream>
 #include <unistd.h>
 
-int nworkers = -1;
+int nworkers = 1;
 
 int main(int argc, char *argv[])
 {
-  if (argc > 0) {
+  if (argc > 1) {
     std::string p1 = std::string (argv[1]);
     if (p1 == "-h") {
       std::cout << "usage: mandelbrot [-n workers]\n";
@@ -45,9 +45,10 @@ int main(int argc, char *argv[])
     } else if ((argc==3) && (p1=="-n")) {
       nworkers = atoi(argv[2]); 
       
-    } else {
-      nworkers = sysconf(_SC_NPROCESSORS_ONLN);
-    }
+    } 
+    //else {
+    //  nworkers = sysconf(_SC_NPROCESSORS_ONLN);
+    //}
   }
   std::cout << "N workers " << nworkers << "\n";
   // -----------
