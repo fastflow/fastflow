@@ -1,3 +1,5 @@
+* 24/01/14 - v.2.0.4
+   - stencilReduceCUDA added 
 * 27/01/14 - v.2.0.3
    - introduced GO_OUT: a new reserved message (see config.hpp)
    - optimized ParallelFor and ParallelReduce computation when executed inside
