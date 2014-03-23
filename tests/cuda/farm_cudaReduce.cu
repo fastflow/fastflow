@@ -26,7 +26,12 @@
  */
 /* Author: Maurizio Drocco
  *         drocco@di.unito.it
+ *        
  */
+
+/*
+    
+*/
 
 
 #if !defined(FF_CUDA)
@@ -40,26 +45,31 @@ using namespace ff;
 #include <iostream>
 using namespace std;
 
-FFMAPFUNC(mapF, unsigned int, in,
-		return in + 1;
+FFREDUCEFUNC(reduceF, unsigned int, x, y,
+		return x + y;
 );
 
-// this is global just to keep things simple
+struct myTask {
+	unsigned int *in, out;
+};
+
+// this is gobal just to keep things simple
 size_t inputsize=0;
 
-class cudaTask: public baseCUDATask<unsigned int, unsigned int, unsigned char, unsigned char, int, char, char> {
+class cudaTask: public baseCUDATask<unsigned int/*, unsigned int*/> {
 public:
-	void setTask(void* t) {
+
+    void setTask(void* t) {
     	if (t) {
-    		cudaTask *t_ = (cudaTask *)t;
+    		myTask *t_ = (myTask *)t;
     		setInPtr(t_->in);
-    		setOutPtr(t_->in);
-    		//setOutPtr(t_->out);
     		setSizeIn(inputsize);
     	}
     }
 
-	unsigned int *in, *out;
+    void afterMR(void *t) {
+        ((myTask*)t)->out = getReduceVar();
+    }
 };
 
 class Emitter: public ff_node {
@@ -68,9 +78,8 @@ public:
 
     void* svc(void*) {
         for(int i=0;i<streamlen;++i) {
-        	cudaTask *task = new cudaTask();
+        	myTask *task = new myTask();
             task->in = new unsigned int[size];
-            //task->out = new unsigned int[size];
             for(size_t j=0;j<size;++j)
             	task->in[j]=j+i;
             ff_send_out(task);
@@ -88,10 +97,11 @@ public:
     Collector(size_t size):size(size) {}
 
     void* svc(void* t) {
-        cudaTask* task = (cudaTask*)t;
+        myTask* task = (myTask*)t;
 #if defined(CHECK)
         for(long i=0;i<size;++i)  printf("%d ", task->in[i]);
-        printf("\n");
+                printf("\n");
+        cout << "reduce result = " << task->out << endl;
 #endif
         return GO_ON;
     }
@@ -118,7 +128,7 @@ int main(int argc, char * argv[]) {
 
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i)
-        w.push_back(new FFMAPCUDA(cudaTask, mapF)());
+        w.push_back(new FFREDUCECUDA(cudaTask, reduceF)());
     farm.add_workers(w);
     farm.run_and_wait_end();
 

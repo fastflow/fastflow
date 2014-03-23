@@ -8,6 +8,9 @@
  *  \brief This file contains the thread mapper definition used in FastFlow
  */
   
+#ifndef __THREAD_MAPPER_HPP_
+#define __THREAD_MAPPER_HPP_
+
 /* ***************************************************************************
  *
  *  This program is free software; you can redistribute it and/or modify it
@@ -25,13 +28,15 @@
  *
  ****************************************************************************
  */
-#ifndef FF_THREAD_MAPPER_HPP
-#define FF_THREAD_MAPPER_HPP
 
 #include <stdlib.h>
 #include <ff/svector.hpp>
 #include <ff/utils.hpp>
 #include <ff/mapping_utils.hpp>
+
+#if defined(FF_CUDA) 
+#include <cuda.h>
+#endif
 
 namespace ff {
 
@@ -194,6 +199,18 @@ public:
         return ((unsigned)cpuId < num_cores);
     }
 
+#if defined(FF_CUDA) 
+    inline int getNumCUDADevices() const {
+        int deviceCount=0;
+        cudaError_t error_id = cudaGetDeviceCount(&deviceCount);
+        if (error_id != cudaSuccess) {
+            error("getNumCUDADevices: cannot get the number of cuda devices\n");
+            return -1;
+        }
+        return deviceCount;
+    }
+#endif
+
 protected:
     long rrcnt;
     unsigned int mask;
@@ -209,4 +226,4 @@ protected:
  * \link
  */
 
-#endif /* FF_THREAD_MAPPER_HPP */
+#endif /* __THREAD_MAPPER_HPP_ */
