@@ -24,59 +24,61 @@
  *
  ****************************************************************************
  */
-/* Author: Massimo Torquati
- *         torquati@di.unipi.it  massimotor@gmail.com
+/* Author: Maurizio Drocco
+ *         drocco@di.unito.it
  */
-
 
 #if !defined(FF_CUDA)
 #define FF_CUDA
 #endif
 
-#include <ff/map.hpp>
-
+#include <ff/farm.hpp>
+#include <ff/stencilReduceCUDA.hpp>
 using namespace ff;
 
-FFMAPFUNC(mapf, float, elem, return (elem+1.0) );
+#include <iostream>
+using namespace std;
 
-template<typename T>
-class cudaTask: public baseTask {
+FFMAPFUNC(mapF, unsigned int, in, return in + 1;);
+
+// this is global just to keep things simple
+size_t inputsize = 0;
+
+class cudaTask: public baseCUDATask<unsigned int, unsigned int, unsigned char,
+		unsigned char, int, char, char> {
 public:
-    typedef T base_type;
+	void setTask(void* t) {
+		if (t) {
+			cudaTask *t_ = (cudaTask *) t;
+			setInPtr(t_->in);
+			setOutPtr(t_->in);
+			//setOutPtr(t_->out);
+			setSizeIn(inputsize);
+		}
+	}
 
-    cudaTask():s(0) {}
-    cudaTask(base_type* t, size_t s):baseTask(t),s(s) {}
-    size_t size() const     { return s;} 
-    size_t bytesize() const { return s*sizeof(base_type); }    
-
-    /* the map works in place on the input vector */
-
-protected:
-    size_t s; 
+	unsigned int *in, *out;
 };
 
 int main(int argc, char * argv[]) {
-    if (argc<2) {
-        printf("use %s arraysize\n", argv[0]);
-        return -1;
-    }
+	if (argc < 2) {
+		printf("use %s arraysize\n", argv[0]);
+		return -1;
+	}
+	inputsize = atoi(argv[1]);
 
-    size_t size     =atoi(argv[1]);
+	cudaTask *task = new cudaTask();
+	task->in = new unsigned int[inputsize];
+	for (size_t j = 0; j < inputsize; ++j)
+		task->in[j] = j;
 
-    /* init data */
-    float *M        = new float[size];
-    for(size_t j=0;j<size;++j) M[j]=j;
+	FFMAPCUDA(cudaTask, mapF) *myMap = new FFMAPCUDA(cudaTask, mapF)(*task);
+	myMap->run_and_wait_end();
 
-    NEWMAP(cudamap, cudaTask<float>, mapf, M, size);
-    cudamap->run_and_wait_end();
-    
-#if defined(CHECK)
-    for(long i=0;i<size;++i)  printf("%.2f ", M[i]);
-    printf("\n");
-#endif
+	for (long i = 0; i < inputsize; ++i)
+		printf("%d ", task->in[i]);
+	printf("\n");
 
-    printf("DONE\n");
-    DELETEMAP(cudamap);
-
-    return 0;
+	printf("DONE\n");
+	return 0;
 }
