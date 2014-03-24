@@ -1,0 +1,4 @@
+TODO
+
+- Multiple video output format: same as input file
+  - Currently only DIVX is supported (due to problems with OpenCV)
