@@ -1,7 +1,3 @@
-project( denoiser )
-
-cmake_minimum_required( VERSION 2.8 )
-
 #include FF
 #include_directories (../../../)
 include_directories (
@@ -12,14 +8,13 @@ include_directories (
   ${CMAKE_CURRENT_SOURCE_DIR}/cuda/gaussian
   )
 
-
 set(CUDA_NVCC_FLAGS -Xcompiler -use_fast_math)
 
 if(APPLE)
-	SET(CMAKE_CXX_FLAGS " -stdlib=libstdc++")
+	#SET(CMAKE_CXX_FLAGS " -stdlib=libstdc++")
         set(CUDA_NVCC_FLAGS -ccbin /usr/bin/clang++ -Xcompiler -stdlib=libstdc++ -gencode arch=compute_30,code=sm_30)
 elseif(APPLE)
-   # 	ADD_DEFINITIONS(-std=c++0x)  
+   # 	ADD_DEFINITIONS(-std=c++0x)
 endif(APPLE)
 
 # END ----------------------------------------------------------------------------
@@ -36,7 +31,7 @@ find_package(OpenCV)
 set (SRCS_FF mainFF.cpp parameters.cpp)
 include_directories (./)
 ADD_DEFINITIONS(
-   # -std=c++11
+   -std=c++11
    # Other flags
    -DNO_DEFAULT_MAPPING -finline-functions
 )
@@ -63,5 +58,7 @@ if((CUDA_FOUND) AND NOT (APPLE))
   target_link_libraries ( denoiser_cuda_auto ${OpenCV_LIBS} )
   
 else((CUDA_FOUND) AND NOT (APPLE))
+if(NOT (APPLE))
   message (WARNING "Cuda not found: can't configure CUDA-enabled denoiser")
+endif(NOT (APPLE))
 endif((CUDA_FOUND) AND NOT (APPLE))
