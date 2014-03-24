@@ -33,19 +33,19 @@ OPTIMIZE_FLAGS       = -O3 -finline-functions
 CXXFLAGS             = -DNO_CMAKE_CONFIG -std=c++0x #-Wall
 CFLAGS               =
 LDFLAGS              = 
-INCS                 = -I. -I../../../../fastflow-dev `pkg-config --cflags opencv`
+INCS                 = -I. -I../../.. `pkg-config --cflags opencv`
 LIBS                 = -lpthread `pkg-config --libs opencv`
-OBJ = parameters.gcc.o mainFF.gcc.o
+OBJ 		     = parameters.gcc.o mainFF.gcc.o
 DEPS                 =
 
 #CUDA
-CXX_CUDA_STENCIL 	 		= nvcc
+CXX_CUDA_STENCIL 	    = nvcc
 OPTIMIZE_FLAGS_CUDA_STENCIL = 
 CXXFLAGS_CUDA_STENCIL       = -DNO_CMAKE_CONFIG
 INCS_CUDA_STENCIL           = $(INCS) -I/usr/local/cuda-6.0/include 
-LIBS_CUDA_STENCIL    		= $(LIBS) -L/usr/local/cuda-6.0/lib64 -lcuda -lcudart
-OBJ_CUDA_STENCIL 			= parameters.cuda.o mainCUDAAUTO.cuda.o
-DEPS_CUDA_STENCIL    		=
+LIBS_CUDA_STENCIL    	    = $(LIBS) -L/usr/local/cuda-6.0/lib64 -lcuda -lcudart
+OBJ_CUDA_STENCIL            = parameters.cuda.o mainCUDAAUTO.cuda.o
+DEPS_CUDA_STENCIL    	    =
 
 TARGET               = denoiser denoiser_cuda_stencil
 
