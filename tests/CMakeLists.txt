@@ -40,6 +40,10 @@ add_executable( test_dotprod test_dotprod.cpp )
 add_executable( test_ofarm test_ofarm.cpp )
 add_executable( test_accelerator_ofarm test_accelerator_ofarm.cpp )
 add_executable( test_accelerator_ofarm_multiple_freezing test_accelerator_ofarm_multiple_freezing.cpp )
+add_executable( test_parfor test_parfor.cpp )
+add_executable( test_parfor2 test_parfor2.cpp )
+add_executable( test_dotprod_parfor test_dotprod_parfor.cpp )
+
 
 #if (NOT(GCC_TOO_OLD))
 #  add_executable( test_mpmc test_mpmc.cpp)
@@ -106,6 +110,9 @@ add_test( test_dotprod ${CMAKE_CURRENT_BINARY_DIR}/test_dotprod 10485760 3 )
 add_test( test_ofarm ${CMAKE_CURRENT_BINARY_DIR}/test_ofarm 3 1000 )
 add_test( test_accelerator_ofarm ${CMAKE_CURRENT_BINARY_DIR}/test_accelerator_ofarm 3 1000 )
 add_test( test_accelerator_ofarm_multiple_freezing ${CMAKE_CURRENT_BINARY_DIR}/test_accelerator_ofarm_multiple_freezing 3 1000 )
+add_test( test_parfor ${CMAKE_CURRENT_BINARY_DIR}/test_parfor )
+add_test( test_parfor2 ${CMAKE_CURRENT_BINARY_DIR}/test_parfor )
+add_test( test_dotprod_parfor ${CMAKE_CURRENT_BINARY_DIR}/test_dotprod_parfor )
 
 #layer2 tests
 
