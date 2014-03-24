@@ -90,12 +90,8 @@ namespace ff {
 
 #if (__cplusplus >= 201103L) || (defined(HAS_CXX11_AUTO) && defined(HAS_CXX11_LAMBDA))
 #define FF_MAP(mapname,V,size,func,nworkers)                        \
-	{                                                               \
-     auto _grain = size/nworkers;                                   \
-     FF_PARFOR_BEGIN(mapname, i, 0, size, 1, _grain, nworkers) {	\
-        V[i]=func(i);                                               \
-     } FF_PARFOR_END(mapname)                                       \
-    }
+    parallel_for(0,size,[&V](const long i) { V[i]=func(i);},nworkers);
+
 #else
 #pragma message("C++ >= 201103L required, build will fail")
 #endif
