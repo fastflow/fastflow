@@ -1,0 +1,36 @@
+=========
+Running
+=========
+
+Usage: ./denoiser [options] <file>
+Input is taken from camera if no <file> is specified
+Allowed options:
+-h		this help message
+-N arg		noise type (1 = Salt & Pepper / 2 = Gaussian)
+-v		verbose mode
+-s		show input and output bitmaps
+-n arg		noise-% (1 <= arg <= 99)
+-a arg		alpha (1 < arg <= 2) [default: 1.3]
+-b arg		beta (0.5 <= arg <= 10) [default: 5]
+-w arg		control-window size (3 <= arg <= 79) [default: 79]
+-c arg		max cycles of restoration (1 <= arg <= 2000) [default: 200]
+-f		fix n. of cycles to max cycles
+-F arg		max n. frames
+-o arg		output filename (<filename>.avi)
+-p arg		parallel configuration filename
+
+
+Examples:
+denoiser/build$ ./denoiser -v -N1 -n20 -F100 -s ../test/test.avi
+denoiser/build$ ./denoiser -v -N1 -n20 -F100 -s ../test/lena512.bmp
+denoiser/build$ ./denoiser -v -N1 -n20 -F100 -s  
+
+=========
+API
+=========
+
+- Doxygen generated (using optionally graphviz)
+
+denoiser/doc/doxygen$ doxygen conf
+
+will create denoiser/doc/doxygen/html/index.html
