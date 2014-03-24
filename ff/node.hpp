@@ -59,6 +59,94 @@ namespace ff {
  *
  *  This class is defined in \ref node.hpp
  */
+
+#if defined(__APPLE__)
+class Barrier {
+public:
+    /**
+     *  \brief Constructor
+     *
+     *  It checks whether the mutex variable(s) and the conditional variable(s)
+     *  can be properly initialised. In case initialization fails, the program
+     *  is aborted.
+     *
+     */
+    Barrier():threadCounter(0),_barrier(0) {
+        if (pthread_mutex_init(&bLock,NULL)!=0) {
+            error("FATAL ERROR: Barrier: pthread_mutex_init fails!\n");
+            abort();
+        }
+        if (pthread_cond_init(&bCond,NULL)!=0) {
+            error("FATAL ERROR: Barrier: pthread_cond_init fails!\n");
+            abort();
+        }
+    }
+    
+    /**
+     * \brief Setup barrier 
+     *
+     * It initialize barrier.
+     *
+     * \parm init determine the barrier
+     *
+     */
+    inline void barrierSetup(size_t init) {
+        if (!_barrier && init>0) _barrier = init;
+        return;
+    }
+
+    /** 
+     * \brief Performs barrier operation
+     *
+     * It performs the barrier operation and waits on the condition variable.
+     * 
+     */
+    inline void doBarrier(size_t) {
+        pthread_mutex_lock(&bLock);
+        if (!--_barrier) pthread_cond_broadcast(&bCond);
+        else {
+            pthread_cond_wait(&bCond, &bLock);
+            assert(_barrier==0);
+        }
+        pthread_mutex_unlock(&bLock);
+    }
+
+    // TODO: better move counter methods in a different class
+   
+    /**
+     * \brief Get the thread counter
+     *
+     * It gets the counter of the pthread.
+     *
+     * \return An integet value, showing the counter of the pthread.
+     */
+    inline size_t getCounter() const { return threadCounter;}
+
+    /**
+     * \brief Increments the counter
+     *
+     * It increaments the counter of the pthread.
+     */
+    inline void   incCounter()       { ++threadCounter;}
+
+    /**
+     * \brief Decrements the counter
+     *
+     * It decremetns the counter of the pthread.
+     */
+    inline void   decCounter()       { --threadCounter;}
+
+private:
+    // This is just a counter, and is used to set the ff_node::tid value.
+    size_t            threadCounter;
+    // it is the number of threads in the barrier. 
+    size_t _barrier;
+    pthread_mutex_t bLock;  // Mutex variable
+    pthread_cond_t  bCond;  // Condition variable
+};
+
+#else
+
 class Barrier {
 public:
     Barrier():threadCounter(0),_barrier(0) { }
@@ -139,7 +227,10 @@ private:
     size_t _barrier;
     pthread_barrier_t bar;
 };
- 
+
+#endif 
+
+
 /*!
  *  \class spinBarrier
  *  \ingroup streaming_network_arbitrary_shared_memory
