@@ -67,7 +67,7 @@ public:
 	  return fixed_cycles || (std::abs)(getReduceVar() - old_reduceVar) / old_reduceVar >= EPS;
 	}
 
-  void endMR() {
+  void endMR(void*) {
 		cudaMemcpy(out, getEnv2DevicePtr(), height * width * sizeof(unsigned char), cudaMemcpyDeviceToHost);
 		free(diff);
 	}

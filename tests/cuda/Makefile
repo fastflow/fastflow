@@ -8,7 +8,8 @@ OPTFLAGS = -DCHECK -g -G #-O3
 LIBS     = -lcudart -lpthread #-lcuda
 INCLUDES = -I$(FF_ROOT)
 
-TARGETS  = cudaMap farm_cudaMap farm_cudaStencil cudaMapManaged farm_cudaReduce
+TARGETS  = cudaMap farm_cudaMap farm_cudaStencil farm_cudaReduce dotProduct
+#cudaMapManaged 
 
 .PHONY: all clean cleanall 
 .SUFFIXES: .cu 
@@ -18,8 +19,8 @@ all: 	$(TARGETS)
 cudaMap: cudaMap.cu
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
-cudaMapManaged: cudaMapManaged.cu
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+#cudaMapManaged: cudaMapManaged.cu
+#	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 farm_cudaMap: farm_cudaMap.cu
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
@@ -28,6 +29,9 @@ farm_cudaStencil: farm_cudaStencil.cu
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 farm_cudaReduce: farm_cudaReduce.cu
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+dotProduct: dotProduct.cu
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 clean: 
