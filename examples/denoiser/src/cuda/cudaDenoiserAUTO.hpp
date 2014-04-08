@@ -36,7 +36,7 @@ kernel_params(kernel_params_),
     unsigned int height = this->height;
     unsigned int width = this->width;
     memcpy(out, in, height * width * sizeof(unsigned char));
-	FFSTENCILREDUCECUDA(DenoiserCUDAtaskType, DenoiserCUDAmapF, reduceF)::svc(task);
+    FFSTENCILREDUCECUDA(DenoiserCUDAtaskType, DenoiserCUDAmapF, reduceF)::svc(task);
     return this->getIter();
   }
 

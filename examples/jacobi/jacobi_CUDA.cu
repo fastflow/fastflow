@@ -61,10 +61,16 @@
   REVISION HISTORY:
 **************************************************************************/
 
-/* Minor modifications to the original code and the FastFlow code done
- * by Massimo Torquati <torquati@di.unipi.it>
+/* Minor modifications (mainly for auto vectorization of loops) 
+ * to the original code and added the FastFlow and TBB parallel loops code
+ *   
+ *  Author: Massimo Torquati <torquati@di.unipi.it>
  *
  */
+
+#if !defined(FF_CUDA)
+#define FF_CUDA
+#endif
 
 #include <cstdio>
 #include <cmath>
@@ -72,48 +78,168 @@
 #include <algorithm>
 
 #include <ff/utils.hpp>
-#include <ff/stencilReduce.hpp>
+#include <ff/stencilReduceCUDA.hpp>
 
 using namespace ff;
 
-int NUMTHREADS;
-long CHUNKSIZE=-1;
-
-
-stencil2D<double> *stencil=NULL;
-
 #define U(i,j) u[(i)*n+(j)]
 #define F(i,j) f[(i)*n+(j)]
-#define NUM_ARGS  6
-#define NUM_TIMERS 1
 
-int n, m, mits;
-double tol, relax, alpha;
+struct const_t {
+    const_t(int n, int m, float ax, float ay, float b, float omega):
+	n(n),m(m),ax(ax),ay(ay),b(b),omega(omega) {}
+
+    int n,m;
+    float ax, ay, b,omega;
+};
+
+// name, outT,inT,in,env1T,env1,env2T,env2,env3T,env3,env4T,env4
+FFMAPFUNC4(mapF, float, int, idx, float, U, float, UOLD, float, F, const_t, CONST, 
+	   const int    n    = CONST->n;
+	   const float ax    = CONST->ax;
+	   const float ay    = CONST->ay;
+	   const float b     = CONST->b;
+	   const float omega = CONST->omega;	  	  
+	   const int left    = idx - 1;
+	   const int right   = idx + 1;
+	   const int up      = idx - n;
+	   const int down    = idx + n;
+	   
+	   float resid = (
+	  		  ax * (UOLD[left] + UOLD[right])
+	  		  + ay * (UOLD[down] + UOLD[up])
+	  		  + b * UOLD[idx] - F[idx]
+			  ) / b;
+	   
+	   U[idx] = UOLD[idx] - omega * resid;
+	   return resid*resid;
+);
+
+FFREDUCEFUNC(reduceF, float, x, y, 
+	     return x+y;
+);
+
+    
+class jacobiCUDATask: public baseCUDATask<int, float, float, float, float, const_t> {
+public:		      
+  jacobiCUDATask(int n, int m, float dx, float dy, float alpha, float omega,
+		 float *u, float *f, float tol):n(n),m(m),dx(dx),dy(dy),
+						alpha(alpha),omega(omega),u(u),f(f),
+						tol(tol),Error(0.0),resid(0.0) { 
+    
+    
+    const float ax = 1.0/(dx * dx); /* X-direction coef */
+    const float ay = 1.0/(dy*dy); /* Y_direction coef */
+    const float b = -2.0/(dx*dx)-2.0/(dy*dy) - alpha; /* Central coeff */
+    
+    
+    Const   = new const_t(n,m,ax,ay,b,omega);     // TODO: free
+    Indexes = new int[(n-2)*(m-2)];               // TODO: free
+    Residual = new float[(n-2)*(m-2)];            // TODO: free
+    uold     = (float*)malloc(m*n*sizeof(float));// TODO: free
+    memcpy(uold, u, m*n*sizeof(float));
+    
+    int k=0;
+    for (int j=1; j<m-1; j++)
+      for (int i=1; i<n-1; i++) {
+	Indexes[k] = i+m*j;
+	Residual[k] = 0.0;
+	k++;
+      }
+    
+  }
+  jacobiCUDATask():m(-1),n(-1),dx(0.0),dy(0.0),
+		   alpha(0.0),omega(0.0),u(NULL),f(NULL),
+		   tol(0.0),Error(0.0),resid(0.0) { }
+  
+
+    jacobiCUDATask & operator=(const jacobiCUDATask &t) { 
+	n=t.n; m=t.m; dx=t.dx; dy=t.dy; alpha=t.alpha; omega=t.omega;
+	u=t.u; f=t.f; tol=t.tol; Error=t.Error; resid=t.resid;
+	Indexes=t.Indexes;
+	Residual=t.Residual;
+	uold=t.uold;
+	Const=t.Const;
+        return *this; 
+    }
+
+    void cleanMemory() {
+      if (Const) delete Const; 
+      if (Indexes) delete [] Indexes;
+      if (Residual) delete [] Residual;
+      if (uold) free(uold);
+      Const = NULL, Indexes=NULL, Residual=NULL, uold=NULL;
+    }	 
+    
+
+    void setTask(void* t) {
+	const jacobiCUDATask &task = *(jacobiCUDATask*)t;
+
+	this->operator=(task);
+
+	setInPtr(Indexes);
+	setSizeIn((n-2)*(m-2));
+	setOutPtr(Residual);
+	setSizeOut((n-2)*(m-2));
+	
+	setEnv1Ptr(u);
+	setSizeEnv1(m*n);
+	setEnv2Ptr(uold);
+	setSizeEnv2(m*n);       
+	setEnv3Ptr(f);
+	setSizeEnv3(m*n);
+	setEnv4Ptr(Const);
+	setSizeEnv4(1);
+    }
+    
+    void beforeMR() { setReduceVar(0.0); }
+
+    bool iterCondition(float E, size_t iter) { 
+	Iter  = iter;
+	Error = sqrt(E) / (n*m);
+	return ( Error > tol);  
+    }
+
+    void swap() {
+	float *tmp = getEnv1DevicePtr();       // U
+	setEnv1DevicePtr(getEnv2DevicePtr());  // U=UOLD
+	setEnv2DevicePtr(tmp);                 // UOLD=U
+    }    
+    
+    void endMR(void *t) {
+        jacobiCUDATask &task = *(jacobiCUDATask*)t;
 
 
+        task.setResid(getReduceVar());
+	task.setError(Error);    
+	task.setIter(Iter);
 
-/* 
-      subroutine jacobi (n,m,dx,dy,alpha,omega,u,f,tol,maxit)
-******************************************************************
-* Subroutine HelmholtzJ
-* Solves poisson equation on rectangular grid assuming : 
-* (1) Uniform discretization in each direction, and 
-* (2) Dirichlect boundary conditions 
-* 
-* Jacobi method is used in this routine 
-*
-* Input : n,m   Number of grid points in the X/Y directions 
-*         dx,dy Grid spacing in the X/Y directions 
-*         alpha Helmholtz eqn. coefficient 
-*         omega Relaxation factor 
-*         f(n,m) Right hand side function 
-*         u(n,m) Dependent variable/Solution
-*         tol    Tolerance for iterative solver 
-*         maxit  Maximum number of iterations 
-*
-* Output : u(n,m) - Solution 
-*****************************************************************
-*/
+	task.cleanMemory();
+    }
+
+    float getError() const { return Error;}
+    float getResid() const { return resid;}
+    size_t getIter() const { return Iter; }
+    void   setError(float e) { Error = e;}
+    void   setResid(float r) { resid = r;}
+    void   setIter(size_t i) { Iter  = i;}
+private:
+    int n, m;
+    float dx, dy, alpha, omega;
+    float *u;
+    float *f;
+    float tol;
+    float Error;
+    float resid;
+    size_t Iter;
+
+protected:
+    const_t *Const;
+    int     *Indexes;
+    float   *Residual;
+    float   *uold;
+};
+
 
 
 /******************************************************
@@ -124,11 +250,11 @@ double tol, relax, alpha;
 void initialize(  
                 int n,    
                 int m,
-                double alpha,
-                double *dx,
-                double *dy,
-                double *u,
-                double *f)
+                float alpha,
+                float *dx,
+                float *dy,
+                float *u,
+                float *f)
 {
   int xx,yy;
 
@@ -156,13 +282,13 @@ void initialize(
 void error_check(
                  int n,
                  int m,
-                 double alpha,
-                 double dx,
-                 double dy,
-                 double *u,
-                 double *f)
+                 float alpha,
+                 float dx,
+                 float dy,
+                 float *u,
+                 float *f)
 {
-  double xx, yy, temp, error;
+  float xx, yy, temp, error;
 
   dx = 2.0 / (n-1);
   dy = 2.0 / (n-2);
@@ -177,98 +303,21 @@ void error_check(
     }
   }
 
- error = sqrt(error)/(n*m);
+  error = sqrt(error)/(n*m);
 
   printf("Solution Error : %g\n", error);
 
 }
 
-static inline void jacobi( const int n, const int m, double dx, double dy, double alpha, 
-			   double omega, double *u, double *f, double tol, int maxit )
-{
-  double ax, ay, b;
-
-  /* wegen Array-Kompatibilitaet, werden die Zeilen und Spalten (im Kopf)
-	 getauscht, zB uold[spalten_num][zeilen_num]; bzw. wir tuen so, als ob wir das
-	 gespiegelte Problem loesen wollen */
-
-  ax = 1.0/(dx * dx); /* X-direction coef */
-  ay = 1.0/(dy*dy); /* Y_direction coef */
-  b = -2.0/(dx*dx)-2.0/(dy*dy) - alpha; /* Central coeff */
-
-  // initialize uold
-  auto initUold = [u] (ParallelForReduce<double> &loopInit, double *M, size_t Xsize, size_t Ysize) {
-      loopInit.parallel_for(0, Xsize, 1, CHUNKSIZE, [&](const long j) {
-	      for(size_t i=0;i<Xsize;++i) {
-		  M[i + Xsize*j] = u[i+Xsize*j];
-	      }
-	  }, NUMTHREADS);
-  };
-  // pre-computation function
-  auto reset = [](double *, const long, const long,double& Error) { Error = 0; };
-
-  struct {
-      double ax,ay,b,omega;
-      double *f;
-  } p = {ax,ay,b,omega,f};
-  // stencil function
-  auto stencilF = [&p](ParallelForReduce<double> &loopCompute, double *in, double *out, 
-		       const size_t Xsize, const size_t Xstart, const size_t Xstop,
-		       const size_t Ysize, const size_t Ystart, const size_t Ystop, 
-		       double &Error) {
-    double Err = Error;  // to avoid compiler warning
-    auto Fsum  = [](double& v, const double elem) { v += elem; };
-
-    loopCompute.parallel_reduce(Err,0.0,1,Xstop,1, CHUNKSIZE, [&](const long j, double& Err) {
-	    double resid;
-	    for(size_t i=1;i<Ystop;++i) {
-		resid = (p.ax * (in[i-1 + Xsize*j] + in[i+1 + Xsize*j])
-			 + p.ay * (in[i + Xsize*(j-1)] + in[i + Xsize*(j+1)])
-			 + p.b * in[i + Xsize*j] - p.f[i + Xsize*j]
-			 ) / p.b;	
-		
-		out[i+Xsize*j] = (in[i+ Xsize*j] - p.omega*resid);
-		
-		Err = Err + resid*resid;
-	    }
-	}, Fsum, NUMTHREADS);
-    Error = Err;
-  };
-  
-  // reduce operation
-  auto reduceOp = [](double& E, double V) { E += V; };
-  
-  // condition function
-  struct {
-    double tol;
-    const int n,m;
-  } p2 = {tol,n,m};
-
-  auto condF = [&p2](double E, const size_t) -> bool { 
-    return ( (sqrt(E)/(p2.m*p2.n)) > p2.tol); 
-  };
-
-  stencil->initOutFuncAll(initUold);
-  stencil->preFunc(reset);
-  stencil->computeFuncAll(stencilF, 1,m-1,1, 1,n-1,1);
-  stencil->reduceFunc(condF, maxit, reduceOp, 0.0);
-  stencil->run_and_wait_end();
-
-  printf("Total Number of Iterations %ld\n", stencil->getIter());  
-  printf("Residual                   %.15f\n\n", (sqrt(stencil->getReduceVar())/(m*n)));
-
-} 	
-
-
-
-
 int main(int argc, char **argv){
-    double *u, *f, dx, dy;
-    double dt, mflops;
+    float *u, *f, dx, dy;
+    float dt, mflops;
+    int n, m, mits;
+    float tol, relax, alpha;
 
-    if (argc<9) {
-	printf("use:%s n m alpha relax tot mits nthreadds chunksize\n", argv[0]);
-	printf(" example %s 5000 5000 0.8 1.0 1e-7 1000 4 1000\n",argv[0]);
+    if (argc<7) {
+	printf("use:%s n m alpha relax tot mits\n", argv[0]);
+	printf(" example %s 5000 5000 0.8 1.0 1e-7 1000\n",argv[0]);
 	return -1;
     }
 
@@ -278,37 +327,33 @@ int main(int argc, char **argv){
    relax = atof(argv[4]);
    tol = atof(argv[5]);
    mits = atoi(argv[6]);
-   NUMTHREADS = atoi(argv[7]);
-   CHUNKSIZE  = atoi(argv[8]);
 
-   //printf("-> %d, %d, %g, %g, %g, %d\n",
-   //	    n, m, alpha, relax, tol, mits);
-   //printf("-> NUMTHREADS=%d\n", NUMTHREADS);
-
-   u = (double *) malloc(n*m*sizeof(double));
-   f = (double *) malloc(n*m*sizeof(double));
+   u = (float *)malloc(n*m*sizeof(float));
+   f = (float *)malloc(n*m*sizeof(float));
 
    initialize(n, m, alpha, &dx, &dy, u, f);
-   double *uold = (double *)malloc(sizeof(double) * n *m);
 
-   stencil = new stencil2D<double>(u,uold,m,n,n,NUMTHREADS,1,1,false,CHUNKSIZE);
 
+   jacobiCUDATask jt(n, m, dx, dy, alpha, relax,u,f,tol);
+   FFSTENCILREDUCECUDA(jacobiCUDATask, mapF, reduceF) jacobi(jt, mits);
+
+   printf("Jacobi started\n");
    ffTime(START_TIME);
    /* Solve Helmholtz equation */
-
-   jacobi(n, m, dx, dy, alpha, relax, u,f, tol, mits);
-
+   jacobi.run_and_wait_end();
    ffTime(STOP_TIME);
    dt = ffTime(GET_TIME); 
 
-   printf("elapsed time : %12.6f  (ms)\n", dt);
+   printf("Total Number of Iterations %d\n", (int)jt.getIter());
+   printf("Residual                   %.15f\n\n", jt.getError());
 
+   printf("elapsed time : %12.6f  (ms)\n", dt);
 
    mflops = (0.000001*mits*(m-2)*(n-2)*13) / (dt/1000.0);
    printf(" MFlops       : %12.6g (%d, %d, %d, %g)\n",mflops, mits, m, n, (dt/1000.0));
 
    error_check(n, m, alpha, dx, dy, u, f);
-   free(uold);
+   
    return 0;
 }
 

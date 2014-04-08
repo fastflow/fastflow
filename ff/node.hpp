@@ -71,7 +71,7 @@ public:
      *  is aborted.
      *
      */
-    Barrier():threadCounter(0),_barrier(0) {
+    Barrier(const size_t=MAX_NUM_THREADS):threadCounter(0),_barrier(0) {
         if (pthread_mutex_init(&bLock,NULL)!=0) {
             error("FATAL ERROR: Barrier: pthread_mutex_init fails!\n");
             abort();
@@ -149,7 +149,7 @@ private:
 
 class Barrier {
 public:
-    Barrier():threadCounter(0),_barrier(0) { }
+    Barrier(const size_t=MAX_NUM_THREADS):threadCounter(0),_barrier(0) { }
     ~Barrier() { if (_barrier>0) pthread_barrier_destroy(&bar); }
 
     /**
