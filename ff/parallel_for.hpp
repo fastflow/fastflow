@@ -67,6 +67,11 @@
 #define PRAGMA_IVDEP
 #endif
 
+#if !defined(FF_PARFOR_BARRIER)
+#define FF_PARFOR_BARRIER Barrier   
+// if spinwait=true, try also to compile with -DFF_PARFOR_BARRIER=spinBarrier
+#endif
+
 namespace ff {
 
     /* -------------------- Parallel For/Reduce Macros -------------------- */
@@ -619,20 +624,12 @@ public:
             if (!eossent[wid]) {
                 lb->ff_send_out_to(workersspinwait?EOS_NOFREEZE:GO_OUT, wid);
                 eossent[wid]=true;
-                //printf("SCHED EXIT, GO_OUT to %d\n",wid);
-            } //else printf("SCHED_EXIT\n");
-            //fflush(stdout);
+            }
             return GO_OUT;
         }
         if (nextTask((forall_task_t*)t, wid)) lb->ff_send_out_to(t, wid);
         else  {
             if (!eossent[wid]) {
-
-                //auto task = (forall_task_t*)t;
-                //printf("SCHED GO_OUT to %d (%ld) [%ld,%ld[\n", wid, totaltasks, task->start.load(), task->end);
-                //fflush(stdout);
-                
-
                 lb->ff_send_out_to((workersspinwait?EOS_NOFREEZE:GO_OUT), wid); 
                 eossent[wid]=true;
             }
@@ -680,7 +677,7 @@ protected:
         workerlosetime_in(aggressive);
     }
 public:
-    forallreduce_W(forall_Scheduler *const sched, Barrier *const loopbar, F_t F):
+    forallreduce_W(forall_Scheduler *const sched,FF_PARFOR_BARRIER *const loopbar, F_t F):
         sched(sched),loopbar(loopbar), schedRunning(true), 
         spinwait(false), aggressive(true),F(F) {}
     
@@ -689,9 +686,6 @@ public:
     inline void* svc(void* t) {
         auto task = (forall_task_t*)t;
         auto myid = get_my_id();
-
-        //printf("Worker%d (%ld,%ld(\n", myid, task->start.load(),task->end);
-        //fflush(stdout);
 
         F(task->start,task->end,myid,res);
         if (schedRunning) return t;
@@ -716,7 +710,7 @@ public:
 
 private:
     forall_Scheduler *const sched;
-    Barrier *const loopbar;
+    FF_PARFOR_BARRIER *const loopbar;
     bool schedRunning;    
 protected:
     bool spinwait,aggressive;
@@ -737,15 +731,15 @@ protected:
 private:
     Tres t; // not used
     size_t numCores;
-    Barrier loopbar;
+    FF_PARFOR_BARRIER loopbar;
 public:
 
     ff_forall_farm(ssize_t maxnw, const bool spinwait=false, const bool skipwarmup=false):
         ff_farm<foralllb_t>(false,8*ff_farm<>::DEF_MAX_NUM_WORKERS,8*ff_farm<>::DEF_MAX_NUM_WORKERS,
-                            true, ff_farm<>::DEF_MAX_NUM_WORKERS,true),
+                            true, ff_farm<>::DEF_MAX_NUM_WORKERS,true),loopbar((maxnw<=0?ff_farm<>::DEF_MAX_NUM_WORKERS+1:(size_t)(maxnw+1))),
         skipwarmup(skipwarmup),spinwait(spinwait) {
         numCores = ((foralllb_t*const)getlb())->getNCores();
-        if (maxnw<0) maxnw=numCores;
+        if (maxnw<=0) maxnw=numCores;
         std::vector<ff_node *> forall_w;
         auto donothing=[](const long,const long,const int,const Tres) -> int {
             return 0;
@@ -854,7 +848,7 @@ public:
     inline int wait_freezing() {
         if (startScheduler(getnw())) return getlb()->wait_lb_freezing();
         if (spinwait) { 
-            loopbar.doBarrier(getnw()+1); 
+            loopbar.doBarrier(getnw()); 
             return 0;
         }
         return getlb()->wait_freezingWorkers();
@@ -970,21 +964,21 @@ public:
     inline void parallel_for(long first, long last, const Function& f, 
                              const long nw=-1) {
         FF_PARFOR_START(pf, parforidx,first,last,1,-1,nw) {
-            f(parforidx);            
+            f(parforidx,_ff_thread_id);            
         } FF_PARFOR_STOP(pf);
     }
     template <typename Function>
     inline void parallel_for(long first, long last, long step, const Function& f, 
                              const long nw=-1) {
         FF_PARFOR_START(pf, parforidx,first,last,step,-1,nw) {
-            f(parforidx);            
+            f(parforidx,_ff_thread_id);            
         } FF_PARFOR_STOP(pf);
     }
     template <typename Function>
     inline void parallel_for(long first, long last, long step, long grain, 
                              const Function& f, const long nw=-1) {
         FF_PARFOR_START(pf, parforidx,first,last,step,grain,nw) {
-            f(parforidx);            
+            f(parforidx,_ff_thread_id);            
         } FF_PARFOR_STOP(pf);
     }    
 };
