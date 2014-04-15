@@ -46,6 +46,7 @@
  *   2-stage pipeline: 
  *     - the first stage is a farm with no Emitter and Collector
  *     - the second stage is a farm with the Collector and feedback channel
+ *     - the Collector C uses the gather-all
  *
  */
 
@@ -80,31 +81,45 @@ public:
     E(ff_loadbalancer *const lb):neos(0),numtasks(0),lb(lb) {}
 
     void *svc(void *task) {
-        long t = (long)task;
         if (lb->get_channel_id() == -1) {
+            long t = (long)task;
             if (t == 1) return GO_ON;            
             ++numtasks;
             printf("INPUT: sending %ld to worker\n", t);
-            return task;
+            lb->broadcast_task((void*)t);
+            return GO_ON;
         }
-        printf("BACK: got  %ld from %d (numtasks=%ld)\n", t,lb->get_channel_id(),numtasks);
-        if ((t != 1) && (t & 0x1)) return task;
+        long t = (long)(((long**)task)[0]);
+        printf("BACK: got  %ld from collector (numtasks=%ld)\n", t,numtasks);
+        
+        if ((t != 1) && (t & 0x1)) {
+            lb->broadcast_task((void*)t);
+            return GO_ON;
+        }
         --numtasks;
-        if (numtasks == 0 && neos==FARM1WORKERS) return NULL;
+        if (numtasks == 0) return NULL;
         return GO_ON;
-    }
-
-    void eosnotify(int id) {
-        if (id != -1) return; 
-        ++neos;
-        if ((neos == FARM1WORKERS) && (numtasks==0))
-            lb->broadcast_task(EOS);
     }
 
 protected:
     int neos;
     long numtasks;
     ff_loadbalancer *const lb;
+};
+
+class C: public ff_node {
+public:
+    C(ff_gatherer *const gt):gt(gt) {}
+
+    void *svc(void *task) {
+        long **V = new long*[FARM1WORKERS];
+        
+        gt->all_gather(task, (void**)&V[0]);
+        return V;
+    }
+
+protected:
+    ff_gatherer *const gt;
 };
 
 
@@ -127,7 +142,7 @@ int main(int argc, char *argv[]) {
     w.push_back(new W2);
     farm2.add_workers(w);
     farm2.add_emitter(new E(farm2.getlb()));
-    farm2.add_collector(NULL);
+    farm2.add_collector(new C(farm2.getgt()));
     farm2.setMultiInput();
     farm2.wrap_around(true);
 
