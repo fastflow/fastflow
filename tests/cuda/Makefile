@@ -8,7 +8,7 @@ OPTFLAGS = -DCHECK -g -G #-O3
 LIBS     = -lcudart -lpthread #-lcuda
 INCLUDES = -I$(FF_ROOT)
 
-TARGETS  = cudaMap cudaMapAccelerator farm_cudaMap farm_cudaStencil farm_cudaReduce dotProduct
+TARGETS  = cudaMap cudaMapAccelerator farm_cudaMap farm_cudaStencil farm_cudaReduce dotProduct test_pool1CUDA test_pool2CUDA
 #cudaMapManaged 
 
 .PHONY: all clean cleanall 

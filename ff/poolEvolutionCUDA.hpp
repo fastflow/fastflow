@@ -89,14 +89,21 @@ public :
     
     }
     // constructor : to be used in streaming applications
-    poolEvolution (size_t maxp,                                // parallelism degree 
-                   void (*sel)(const std::vector<T> & pop, 
-                               std::vector<T> &out),        // the selection function
-                   void (*fil)(const std::vector<T> &pop,
-                               std::vector<T> &out),        // the filter function
-                   bool (*term)(const std::vector<T> &pop))    // the termination function
-        :pE(0),pF(1),pT(1),pS(1),selection(sel),filter(fil),termination(term),
+    poolEvolutionCUDA (void (*sel)(const std::vector<T> & pop, 
+                                      std::vector<T> &out),        // the selection function
+                       void (*fil)(const std::vector<T> &pop,
+                                      std::vector<T> &out),        // the filter function
+                       bool (*term)(const std::vector<T> &pop))    // the termination function
+        :pE(0),pF(1),pT(1),pS(1),input(NULL),selection(sel),filter(fil),termination(term),
          pipeevol(true),mapEvol(NULL) { 
+        mapEvol = new ff_mapCUDA<cudaEvolTask,kernelEvol>;
+        pipeevol.add_stage(mapEvol);
+        if (pipeevol.run_then_freeze()<0) {
+            error("poolEvolutionCUDA: running pipeevol\n");
+            abort();
+        }
+        pipeevol.offload(GO_OUT);
+        pipeevol.wait_freezing();
     }
     
     ~poolEvolutionCUDA() {

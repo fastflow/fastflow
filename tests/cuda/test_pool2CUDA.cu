@@ -56,8 +56,11 @@ struct Element {
     Element(size_t n): number(n),nmutations(0) {}
 
     __host__ __device__ Element() {}
+
+    __host__ __device__ Element(const Element& E):number(E.number),nmutations(E.nmutations) {}
+    __device__ Element(volatile const Element& E):number(E.number),nmutations(E.nmutations) {}
     
-    __host__ __device__ volatile Element& operator=(volatile Element& E) volatile {
+    __device__ volatile Element& operator=(volatile Element& E) volatile {
         number = E.number;
         nmutations = E.nmutations;
         return *this;
@@ -70,7 +73,6 @@ struct Element {
     size_t number;
     size_t nmutations;
 };
-
 
 
 FFMAPFUNC(evolMap, Element, individual,
@@ -162,21 +164,19 @@ struct PrintPop: ff_node {
 
 
 int main(int argc, char* argv[]) {
-    int nw       = 3;
     long maxsize = 500;
 
     if (argc>1) {
         if (argc < 3) {
-            printf("use: %s evolution_par_degree size [debug=0|1]\n", argv[0]);
+            printf("use: %s size [debug=0|1]\n", argv[0]);
             return -1;
         }
-        nw       =atoi(argv[1]);
-        maxsize  =atol(argv[2]); 
-        if (argc==4) debug=atoi(argv[3]);
+        maxsize  =atol(argv[1]); 
+        debug    =atoi(argv[2]);
     }
     
     BuildPop bp(maxsize);
-    poolEvolutionCUDA<Element, evolMap> pool(selection,evolution,filter,termination);
+    poolEvolutionCUDA<Element, evolMap> pool(selection,filter,termination);
     PrintPop pp;
 
     ff_pipeline pipe;

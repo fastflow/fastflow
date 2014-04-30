@@ -46,8 +46,11 @@ struct Element {
     Element(size_t n): number(n),nmutations(0) {}
 
     __host__ __device__ Element() {}
+
+    __host__ __device__ Element(const Element& E):number(E.number),nmutations(E.nmutations) {}
+    __device__ Element(volatile const Element& E):number(E.number),nmutations(E.nmutations) {}
     
-    __host__ __device__ volatile Element& operator=(volatile Element& E) volatile {
+    __device__ volatile Element& operator=(volatile Element& E) volatile {
         number = E.number;
         nmutations = E.nmutations;
         return *this;
