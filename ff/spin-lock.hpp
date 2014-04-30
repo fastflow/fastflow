@@ -207,10 +207,7 @@ ALIGN_TO_PRE(CACHE_LINE_SIZE) struct AtomicFlagWrapper {
         F.clear(mo);
     }
     
-    union {
-        std::atomic_flag F;
-        char padding[64];
-    };    
+    std::atomic_flag F;
 }ALIGN_TO_POST(CACHE_LINE_SIZE);
 
 typedef AtomicFlagWrapper lock_t[1];

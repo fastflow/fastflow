@@ -1,4 +1,6 @@
 * 24/01/14 - v.2.0.4
+   - added the poolEvolutionCUDA pattern with some simple tests (beta version)
+   - added the poolEvolution pattern with some simple tests (beta version)
    - stencilReduceCUDA added 
    - moved stencil.hpp to stencilReduce.hpp
 * 27/01/14 - v.2.0.3

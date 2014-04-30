@@ -286,7 +286,7 @@ __global__ void reduceCUDAKernel(kernelF K, T *output, T *input, Tenv1 *env1, Te
     unsigned int i = blockIdx.x*blockSize*2 + threadIdx.x;
     unsigned int gridSize = blockSize*2*gridDim.x;
     
-    T result = 0;
+    T result;
     
     if(i < size) {
         result = input[i];
@@ -348,7 +348,7 @@ public:
     typedef typename taskT::Tenv5 Tenv5;
     typedef typename taskT::Tenv6 Tenv6;
     
-    ff_stencilReduceCUDA(size_t maxIter_ = 1, Tout identityValue_ = (Tout)0) :
+    ff_stencilReduceCUDA(size_t maxIter_ = 1, Tout identityValue_ = Tout()) :
         oneShot(NULL), identityValue(identityValue_), iter(0), maxIter(maxIter_) {
         maxThreads = maxBlocks = 0;
         oldSize_in = oldSize_out = oldSize_env1 = oldSize_env2 = oldSize_env3 = oldSize_env4 = oldSize_env5 = oldSize_env6 = 0;
@@ -363,7 +363,7 @@ public:
         env3_buffer = NULL;   env4_buffer = NULL;
         env5_buffer = NULL;   env6_buffer = NULL;
     }
-    ff_stencilReduceCUDA(const taskT &task, size_t maxIter_ = 1, Tout identityValue_ = (Tout)0) :
+    ff_stencilReduceCUDA(const taskT &task, size_t maxIter_ = 1, Tout identityValue_ = Tout()) :
         oneShot(&task), identityValue(identityValue_), iter(0), maxIter(maxIter_) {
         maxThreads = maxBlocks = 0;
         oldSize_in = oldSize_out = oldSize_env1 = oldSize_env2 = oldSize_env3 = oldSize_env4 = oldSize_env5 = oldSize_env6 = 0;
@@ -462,7 +462,6 @@ protected:
             oldSize_in = Task.getBytesizeIn();
         }
         Task.setInDevicePtr(in_buffer);
-        // ci sono dei problemi di cast in (Tin)identityValue se Tin e Tout non sono tipi primitivi
         //initCUDAKernel<Tin><<<blockcnt_r, thxblock_r, 0, stream>>>(Task.getInDevicePtr(), (Tin)identityValue, padded_size);
         cudaMemcpyAsync(in_buffer, inPtr, Task.getBytesizeIn(),
                         cudaMemcpyHostToDevice, stream);
@@ -534,8 +533,7 @@ protected:
             cudaMemcpyAsync(env6_buffer, env6Ptr, Task.getBytesizeEnv6(), cudaMemcpyHostToDevice, stream);
         }
         
-        //TODO: in-place
-
+        //TODO: in-place        
         if ((void*)inPtr != (void*)outPtr) {
             if (oldSize_out < Task.getBytesizeOut()) {
                 if (out_buffer) {
@@ -548,16 +546,9 @@ protected:
                 //init kernels
                 initCUDAKernel<Tout><<<blockcnt_r, thxblock_r, 0, stream>>>(out_buffer, (Tout)identityValue, padded_size);
             }
-            Task.setOutDevicePtr(out_buffer);
-        }
-
-        
-        //allocate memory for reduce
-        Tout *reduceBlocksPtr, *reduce_buffer;
-        reduceBlocksPtr = (Tout *)malloc(blockcnt_r * sizeof(Tout));
-        if (cudaMalloc(&reduce_buffer, blockcnt_r * sizeof(Tout)) != cudaSuccess)
-            error("mapCUDA error while allocating memory on device (reduce buffer)\n");
-        
+        } else out_buffer = in_buffer;
+        Task.setOutDevicePtr(out_buffer);
+               
         iter = 0;        
         if(isPureMap()) {
             Task.swap();			// because of the next swap op
@@ -575,34 +566,20 @@ protected:
             cudaMemcpyAsync(Task.getOutPtr(), Task.getOutDevicePtr(), Task.getBytesizeOut(), cudaMemcpyDeviceToHost, stream);
             cudaStreamSynchronize(stream);
             
-        } else if(isPureReduce()) {
-            Task.beforeMR();
-            //Reduce
-            //CUDA: blockwise reduce
-            reduceCUDAKernel<TkernelReduce, Tout, Tenv1, Tenv2, Tenv3, Tenv4, Tenv5, Tenv6><<<blockcnt_r, thxblock_r, thxblock_r * sizeof(Tout), stream>>>(*kernelReduce, reduce_buffer, (Tout *)Task.getInDevicePtr(), Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr(), padded_size, thxblock_r, false);
-            //copy reduce-blocks back to host
-            cudaMemcpyAsync(reduceBlocksPtr, reduce_buffer, blockcnt_r * sizeof(Tout), cudaMemcpyDeviceToHost, stream);
-            cudaStreamSynchronize(stream);
-            //host: reduce blocks into reduceVar
-            reduceVar = identityValue;
-            for(size_t i=0; i<blockcnt_r; ++i)
-                reduceVar = hostReduce->K(reduceVar, reduceBlocksPtr[i], Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr());
-            Task.setReduceVar(reduceVar);            
-            Task.afterMR(task?task:(void*)oneShot);
-        }
-        else {
-            Task.swap();			// because of the next swap op
-            do {
-                Task.swap();
-                
+        } else {
+
+            //allocate memory for reduce
+            Tout *reduceBlocksPtr, *reduce_buffer;
+            reduceBlocksPtr = (Tout *)malloc(blockcnt_r * sizeof(Tout));
+            if (cudaMalloc(&reduce_buffer, blockcnt_r * sizeof(Tout)) != cudaSuccess)
+                error("mapCUDA error while allocating memory on device (reduce buffer)\n");
+
+
+            if(isPureReduce()) {
                 Task.beforeMR();
-                
-                //CUDA Map
-                mapCUDAKernel<TkernelMap, Tin, Tout, Tenv1, Tenv2, Tenv3, Tenv4, Tenv5, Tenv6><<<blockcnt, thxblock, 0, stream>>>(*kernelMap, Task.getInDevicePtr(), Task.getOutDevicePtr(), Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr(), size);
-                
                 //Reduce
                 //CUDA: blockwise reduce
-                reduceCUDAKernel<TkernelReduce, Tout, Tenv1, Tenv2, Tenv3, Tenv4, Tenv5, Tenv6><<<blockcnt_r, thxblock_r, thxblock_r * sizeof(Tout), stream>>>(*kernelReduce, reduce_buffer, Task.getOutDevicePtr(), Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr(), padded_size, thxblock_r, false);
+                reduceCUDAKernel<TkernelReduce, Tout, Tenv1, Tenv2, Tenv3, Tenv4, Tenv5, Tenv6><<<blockcnt_r, thxblock_r, thxblock_r * sizeof(Tout), stream>>>(*kernelReduce, reduce_buffer, (Tout *)Task.getInDevicePtr(), Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr(), padded_size, thxblock_r, false);
                 //copy reduce-blocks back to host
                 cudaMemcpyAsync(reduceBlocksPtr, reduce_buffer, blockcnt_r * sizeof(Tout), cudaMemcpyDeviceToHost, stream);
                 cudaStreamSynchronize(stream);
@@ -610,17 +587,41 @@ protected:
                 reduceVar = identityValue;
                 for(size_t i=0; i<blockcnt_r; ++i)
                     reduceVar = hostReduce->K(reduceVar, reduceBlocksPtr[i], Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr());
-                Task.setReduceVar(reduceVar);
-                Task.afterMR(task?task:(void*)oneShot);                
-            } while (Task.iterCondition(reduceVar, ++iter) && iter < maxIter);
-            
-            cudaMemcpyAsync(Task.getOutPtr(), Task.getOutDevicePtr(), Task.getBytesizeOut(), cudaMemcpyDeviceToHost, stream);
-            cudaStreamSynchronize(stream);            
+                Task.setReduceVar(reduceVar);            
+                Task.afterMR(task?task:(void*)oneShot);
+            }
+            else {
+                Task.swap();			// because of the next swap op
+                do {
+                    Task.swap();
+                    
+                    Task.beforeMR();
+                    
+                    //CUDA Map
+                    mapCUDAKernel<TkernelMap, Tin, Tout, Tenv1, Tenv2, Tenv3, Tenv4, Tenv5, Tenv6><<<blockcnt, thxblock, 0, stream>>>(*kernelMap, Task.getInDevicePtr(), Task.getOutDevicePtr(), Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr(), size);
+                    
+                    //Reduce
+                    //CUDA: blockwise reduce
+                    reduceCUDAKernel<TkernelReduce, Tout, Tenv1, Tenv2, Tenv3, Tenv4, Tenv5, Tenv6><<<blockcnt_r, thxblock_r, thxblock_r * sizeof(Tout), stream>>>(*kernelReduce, reduce_buffer, Task.getOutDevicePtr(), Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr(), padded_size, thxblock_r, false);
+                    //copy reduce-blocks back to host
+                    cudaMemcpyAsync(reduceBlocksPtr, reduce_buffer, blockcnt_r * sizeof(Tout), cudaMemcpyDeviceToHost, stream);
+                    cudaStreamSynchronize(stream);
+                    //host: reduce blocks into reduceVar
+                    reduceVar = identityValue;
+                    for(size_t i=0; i<blockcnt_r; ++i)
+                        reduceVar = hostReduce->K(reduceVar, reduceBlocksPtr[i], Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr());
+                    Task.setReduceVar(reduceVar);
+                    Task.afterMR(task?task:(void*)oneShot);                
+                } while (Task.iterCondition(reduceVar, ++iter) && iter < maxIter);
+                
+                cudaMemcpyAsync(Task.getOutPtr(), Task.getOutDevicePtr(), Task.getBytesizeOut(), cudaMemcpyDeviceToHost, stream);
+                cudaStreamSynchronize(stream);            
+            }
+            free(reduceBlocksPtr);
+            cudaFree(reduce_buffer);
         }
 
         Task.endMR(task?task:(void*)oneShot);
-        free(reduceBlocksPtr);
-        cudaFree(reduce_buffer);
 
         return (oneShot?NULL:task);
     }
@@ -690,20 +691,20 @@ template<typename taskT, typename TkernelMap>
 class ff_mapCUDA: public ff_stencilReduceCUDA<taskT, TkernelMap, dummyReduceF<taskT>, dummyHostReduceF<taskT> > {
     bool isPureMap() {return true;}
 public:
-    ff_mapCUDA(size_t maxIter = 1, typename taskT::Tout identityValue = (typename taskT::Tout)0) :
-    	ff_stencilReduceCUDA<taskT, TkernelMap, dummyReduceF<taskT>, dummyHostReduceF<taskT> >(maxIter, identityValue) {}
-    ff_mapCUDA(const taskT &task, size_t maxIter = 1, typename taskT::Tout identityValue = (typename taskT::Tout)0) :
-        	ff_stencilReduceCUDA<taskT, TkernelMap, dummyReduceF<taskT>, dummyHostReduceF<taskT> >(task, maxIter, identityValue) {}
+    ff_mapCUDA(size_t maxIter = 1) :
+    	ff_stencilReduceCUDA<taskT, TkernelMap, dummyReduceF<taskT>, dummyHostReduceF<taskT> >(maxIter) {}
+    ff_mapCUDA(const taskT &task, size_t maxIter = 1) :
+        	ff_stencilReduceCUDA<taskT, TkernelMap, dummyReduceF<taskT>, dummyHostReduceF<taskT> >(task, maxIter) {}
 };
     
 template<typename taskT, typename TkernelReduce, typename ThostReduce>
 class ff_reduceCUDA: public ff_stencilReduceCUDA<taskT, dummyMapF<taskT>, TkernelReduce, ThostReduce> {
     bool isPureReduce() {return true;}
 public:
-    ff_reduceCUDA(size_t maxIter = 1, typename taskT::Tout identityValue = (typename taskT::Tout)0) :
-    	ff_stencilReduceCUDA<taskT, dummyMapF<taskT>, TkernelReduce, ThostReduce>(maxIter, identityValue) {}
-    ff_reduceCUDA(const taskT &task, size_t maxIter = 1, typename taskT::Tout identityValue = (typename taskT::Tout)0) :
-    	ff_stencilReduceCUDA<taskT, dummyMapF<taskT>, TkernelReduce, ThostReduce>(task, maxIter, identityValue) {}
+    ff_reduceCUDA(size_t maxIter = 1) :
+    	ff_stencilReduceCUDA<taskT, dummyMapF<taskT>, TkernelReduce, ThostReduce>(maxIter) {}
+    ff_reduceCUDA(const taskT &task, size_t maxIter = 1) :
+    	ff_stencilReduceCUDA<taskT, dummyMapF<taskT>, TkernelReduce, ThostReduce>(task, maxIter) {}
 };
 
     
