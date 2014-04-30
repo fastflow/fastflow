@@ -60,7 +60,7 @@ namespace ff {
  *  This class is defined in \ref node.hpp
  */
 
-#if defined(__APPLE__)
+#if (defined(__APPLE__) || defined(_MSC_VER))
 class Barrier {
 public:
     /**
