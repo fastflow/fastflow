@@ -44,6 +44,8 @@ inline static int posix_memalign(void **memptr, size_t alignment, size_t size)
 #if (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
 #pragma unmanaged
 
+#define NOMINMAX
+
 #include "ff/platforms/pthread_minport_windows.h"
 #define INLINE __forceinline
 #define NOINLINE __declspec(noinline)
@@ -53,6 +55,9 @@ inline static int posix_memalign(void **memptr, size_t alignment, size_t size)
 // Only x86 and x86_64 are currently supported for Windows OS
 INLINE void WMB() {} 
 INLINE void PAUSE() {}
+
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
 
 INLINE static int posix_memalign(void **memptr,size_t alignment, size_t sz)
 {

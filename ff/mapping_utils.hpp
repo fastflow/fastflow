@@ -171,7 +171,8 @@ static inline int ff_realNumCores() {
     if (fscanf(f, "%d", &n) == EOF) { pclose(f); return n;}
     pclose(f);
 #else
-#warning "ff_realNumCores not supported on this platform"
+#pragma message ("ff_realNumCores not supported on this platform")
+	n = 1;
 #endif
     return n;
 }
@@ -191,7 +192,8 @@ static inline int ff_numSockets() {
     if (fscanf(f, "%d", &n) == EOF) { pclose(f); return n;}
     pclose(f);
 #else
-#warning "ff_numSockets not supported on this platform"
+#pragma message ("ff_numSockets not supported on this platform")
+	n = 1;
 #endif
     return n;
 }
