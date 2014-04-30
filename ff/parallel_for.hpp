@@ -998,7 +998,7 @@ public:
     // to restore the usage of the scheduler thread just pass 'false' as 
     // parameter
     inline void disableScheduler(bool onoff=true) { 
-        pfr->removeSched(onoff);
+        pfr->disableScheduler(onoff);
     }
 
     /* -------------------- parallel_for -------------------- */
