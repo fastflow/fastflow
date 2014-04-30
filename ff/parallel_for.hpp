@@ -751,9 +751,7 @@ public:
         numCores = ((foralllb_t*const)getlb())->getNCores();
         if (maxnw<=0) maxnw=numCores;
         std::vector<ff_node *> forall_w;
-        auto donothing=[](const long,const long,const int,const Tres) -> int {
-            return 0;
-        };
+        auto donothing=[](const long,const long,const int,const Tres) -> void { };
         forall_Scheduler *sched = new forall_Scheduler(getlb(),maxnw);
         ff_farm<foralllb_t>::add_emitter(sched);
         for(size_t i=0;i<(size_t)maxnw;++i)
