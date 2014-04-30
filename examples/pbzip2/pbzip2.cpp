@@ -127,7 +127,7 @@
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #else
-#define PRIu64 "Lu"
+#define PRIu64 "llu"
 #define strncasecmp(x,y,z) strncmpi(x,y,z)
 #endif
 #ifdef __osf__
@@ -335,7 +335,7 @@ int producer_decompress(int hInfile, OFF_T fileSize, queue *fifo)
 	ret = lseek(hInfile, 0, SEEK_SET);
 	if (ret != 0)
 	{
-		fprintf(stderr, "pbzip2: *ERROR: Could not seek to beginning of file [%"PRIu64"]!  Skipping...\n", (unsigned long long)ret);
+		fprintf(stderr, "pbzip2: *ERROR: Could not seek to beginning of file [%" PRIu64 "]!  Skipping...\n", (unsigned long long)ret);
 		close(hInfile);
 		allDone = 1;
 		return -1;
@@ -362,7 +362,7 @@ int producer_decompress(int hInfile, OFF_T fileSize, queue *fifo)
 		if (currentByte == 0)
 		{
 			#ifdef PBZIP_DEBUG
-			fprintf(stderr, " -> Bytes To Read: %"PRIu64" bytes...\n", inSize);
+			fprintf(stderr, " -> Bytes To Read: %" PRIu64 " bytes...\n", inSize);
 			#endif
 
 			// read file data
@@ -374,14 +374,14 @@ int producer_decompress(int hInfile, OFF_T fileSize, queue *fifo)
 			// located between two buffer boundaries
 			memcpy(FileData, FileData+inSize-(strlen(bz2Header)-1), strlen(bz2Header)-1);
 			#ifdef PBZIP_DEBUG
-			fprintf(stderr, " -> Bytes To Read: %"PRIu64" bytes...\n", inSize-(strlen(bz2Header)-1));
+			fprintf(stderr, " -> Bytes To Read: %" PRIu64 " bytes...\n", inSize-(strlen(bz2Header)-1));
 			#endif
 
 			// read file data minus overflow from previous buffer
 			ret = read(hInfile, (char *) FileData+strlen(bz2Header)-1, inSize-(strlen(bz2Header)-1));
 		}
 		#ifdef PBZIP_DEBUG
-		fprintf(stderr, " -> Total Bytes Read: %"PRIu64" bytes...\n\n", ret);
+		fprintf(stderr, " -> Total Bytes Read: %" PRIu64 " bytes...\n\n", ret);
 		#endif
 		if (ret < 0)
 		{
@@ -408,7 +408,7 @@ int producer_decompress(int hInfile, OFF_T fileSize, queue *fifo)
 				startByte = startPointer - FileData + currentByte - (strlen(bz2Header) - 1);
 			#ifdef PBZIP_DEBUG
 			fprintf(stderr, " Found substring at: %x\n", startPointer);
-			fprintf(stderr, " startByte = %"PRIu64"\n", startByte);
+			fprintf(stderr, " startByte = %" PRIu64 "\n", startByte);
 			fprintf(stderr, " bz2NumBlocks = %d\n", bz2NumBlocks);
 			#endif
 
@@ -483,8 +483,8 @@ int producer_decompress(int hInfile, OFF_T fileSize, queue *fifo)
 			bz2BlockList[i].dataSize = bz2BlockList[i+1].dataStart - bz2BlockList[i].dataStart;
 		}
 		#ifdef PBZIP_DEBUG
-		fprintf(stderr, " bz2BlockList[%d].dataStart = %"PRIu64"\n", i, bz2BlockList[i].dataStart);
-		fprintf(stderr, " bz2BlockList[%d].dataSize = %"PRIu64"\n", i, bz2BlockList[i].dataSize);
+		fprintf(stderr, " bz2BlockList[%d].dataStart = %" PRIu64 "\n", i, bz2BlockList[i].dataStart);
+		fprintf(stderr, " bz2BlockList[%d].dataSize = %" PRIu64 "\n", i, bz2BlockList[i].dataSize);
 		#endif
 	}
 
@@ -500,7 +500,7 @@ int producer_decompress(int hInfile, OFF_T fileSize, queue *fifo)
 		#endif
 		if (ret != bz2BlockList[i].dataStart)
 		{
-			fprintf(stderr, "pbzip2: *ERROR: Could not seek to beginning of file [%"PRIu64"]!  Skipping...\n", (unsigned long long)ret);
+			fprintf(stderr, "pbzip2: *ERROR: Could not seek to beginning of file [%" PRIu64 "]!  Skipping...\n", (unsigned long long)ret);
 			close(hInfile);
 			allDone = 1;
 			return -1;
@@ -510,7 +510,7 @@ int producer_decompress(int hInfile, OFF_T fileSize, queue *fifo)
 		inSize = bz2BlockList[i].dataSize;
 
 		#ifdef PBZIP_DEBUG
-		fprintf(stderr, " -> Bytes To Read: %"PRIu64" bytes...\n", inSize);
+		fprintf(stderr, " -> Bytes To Read: %" PRIu64 " bytes...\n", inSize);
 		#endif
 
 		if (QuietMode != 1)
@@ -518,7 +518,7 @@ int producer_decompress(int hInfile, OFF_T fileSize, queue *fifo)
 			// give warning to user if block is larger than 250 million bytes
 			if (inSize > 250000000)
 			{
-				fprintf(stderr, "pbzip2:  *WARNING: Compressed block size is large [%"PRIu64" bytes].\n", (unsigned long long)inSize);
+				fprintf(stderr, "pbzip2:  *WARNING: Compressed block size is large [%" PRIu64 " bytes].\n", (unsigned long long)inSize);
 				fprintf(stderr, "          If program aborts, use regular BZIP2 to decompress.\n");
 			}
 		}
@@ -540,7 +540,7 @@ int producer_decompress(int hInfile, OFF_T fileSize, queue *fifo)
 		// read file data
 		ret = read(hInfile, (char *) FileData, inSize);
 		#ifdef PBZIP_DEBUG
-		fprintf(stderr, " -> Total Bytes Read: %"PRIu64" bytes...\n\n", ret);
+		fprintf(stderr, " -> Total Bytes Read: %" PRIu64 " bytes...\n\n", ret);
 		#endif
 		// check to make sure all the data we expected was read in
 		if (ret == 0)
@@ -584,7 +584,7 @@ int producer_decompress(int hInfile, OFF_T fileSize, queue *fifo)
 			pthread_cond_wait (fifo->notFull, fifo->mut);
 		}
 		#ifdef PBZIP_DEBUG
-		fprintf(stderr, "producer:  Buffer: %x  Size: %"PRIu64"   Block: %d\n", FileData, inSize, blockNum);
+		fprintf(stderr, "producer:  Buffer: %x  Size: %" PRIu64 "   Block: %d\n", FileData, inSize, blockNum);
 		#endif
 
 		queueAdd(fifo, FileData, inSize, blockNum);
@@ -865,7 +865,7 @@ void *fileWriter(void *outname)
 		close(hOutfile);
 	if ((QuietMode != 1) && (allDone == 0))
 	{
-		fprintf(stderr, "    Output Size: %"PRIu64" bytes\n", (unsigned long long)CompressedSize);
+		fprintf(stderr, "    Output Size: %" PRIu64 " bytes\n", (unsigned long long)CompressedSize);
 	}
 
 	return (NULL);
@@ -916,7 +916,7 @@ int directcompress(int hInfile, OFF_T fileSize, int blockSize, char *OutFilename
 			inSize = bytesLeft;
 
 		#ifdef PBZIP_DEBUG
-		fprintf(stderr, " -> Bytes To Read: %"PRIu64" bytes...\n", inSize);
+		fprintf(stderr, " -> Bytes To Read: %" PRIu64 " bytes...\n", inSize);
 		#endif
 
 		// allocate memory to read in file
@@ -1044,7 +1044,7 @@ int directcompress(int hInfile, OFF_T fileSize, int blockSize, char *OutFilename
 		close(hOutfile);
 	if (QuietMode != 1)
 	{
-		fprintf(stderr, "    Output Size: %"PRIu64" bytes\n", (unsigned long long)CompressedSize);
+		fprintf(stderr, "    Output Size: %" PRIu64 " bytes\n", (unsigned long long)CompressedSize);
 	}
 
 	allDone = 1;
@@ -1316,7 +1316,7 @@ int producer(int hInfile, int blockSize, queue *fifo)
 		inSize = blockSize;
 
 		#ifdef PBZIP_DEBUG
-		fprintf(stderr, " -> Bytes To Read: %"PRIu64" bytes...\n", inSize);
+		fprintf(stderr, " -> Bytes To Read: %" PRIu64 " bytes...\n", inSize);
 		#endif
 
 		pthread_mutex_lock(MemMutex);
@@ -1380,7 +1380,7 @@ int producer(int hInfile, int blockSize, queue *fifo)
 				fprintf(stderr, "pbzip2: producer: *ERROR: pthread_cond_wait error = %d\n", pret);
 		}
 		#ifdef PBZIP_DEBUG
-		fprintf(stderr, "producer:  Buffer: %x  Size: %"PRIu64"   Block: %d\n", FileData, inSize, blockNum);
+		fprintf(stderr, "producer:  Buffer: %x  Size: %" PRIu64 "   Block: %d\n", FileData, inSize, blockNum);
 		#endif
 
 		queueAdd(fifo, FileData, inSize, blockNum);
@@ -2645,7 +2645,7 @@ int main(int argc, char* argv[])
 			if (decompress == 1)
 				fprintf(stderr, " BWT Block Size: %c00k\n", BWTblockSizeChar);
 			if (strcmp(InFilename, "-") != 0) 
-				fprintf(stderr, "     Input Size: %"PRIu64" bytes\n", (unsigned long long)fileSize);
+				fprintf(stderr, "     Input Size: %" PRIu64 " bytes\n", (unsigned long long)fileSize);
 		}
 
 		if (decompress == 1)
@@ -2709,7 +2709,7 @@ int main(int argc, char* argv[])
 				}
 				if (QuietMode != 1)
 				{
-					fprintf(stderr, "    Output Size: %"PRIu64" bytes\n", (unsigned long long)sizeof(bz2HeaderZero));
+					fprintf(stderr, "    Output Size: %" PRIu64 " bytes\n", (unsigned long long)sizeof(bz2HeaderZero));
 					fprintf(stderr, "-------------------------------------------\n");
 				}
 				continue;
