@@ -1199,7 +1199,7 @@ public:
      *
      * \return \p true if successful, otherwise \p false.
      */
-    inline bool set_victim(int v) { 
+    inline bool set_victim(size_t v) { 
         if (dead[v]) return false; 
         victim=v; 
         return true;
@@ -1626,7 +1626,7 @@ public:
      * \brief Gets the channel id from which the data has just been received
      *
      */
-    int get_channel_id() const { return gt->get_channel_id();}
+    ssize_t get_channel_id() const { return gt->get_channel_id();}
 
     /**
      * \brief Gets the gatherer
