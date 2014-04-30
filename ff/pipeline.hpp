@@ -471,18 +471,15 @@ public:
                         unsigned int retry=((unsigned int)-1),
                         unsigned int ticks=ff_node::TICKS2WAIT) { 
         FFBUFFER * inbuffer = get_in_buffer();
-        if (inbuffer) {
-            for(unsigned int i=0;i<retry;++i) {
-                if (inbuffer->push(task)) return true;
-                ticks_wait(ticks);
-            }     
-            return false;
-        }
-        
-        if (!has_input_channel) 
-            error("PIPE: accelerator is not set, offload not available\n");
-        else
-            error("PIPE: input buffer creation failed\n");
+        assert(inbuffer != NULL);
+        // if (!has_input_channel) 
+        //     error("PIPE: accelerator is not set, offload not available\n");
+        // else
+        //     error("PIPE: input buffer creation failed\n");
+        for(unsigned int i=0;i<retry;++i) {
+            if (inbuffer->push(task)) return true;
+            ticks_wait(ticks);
+        }     
         return false;
     }    
     

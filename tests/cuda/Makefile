@@ -8,7 +8,7 @@ OPTFLAGS = -DCHECK -g -G #-O3
 LIBS     = -lcudart -lpthread #-lcuda
 INCLUDES = -I$(FF_ROOT)
 
-TARGETS  = cudaMap farm_cudaMap farm_cudaStencil farm_cudaReduce dotProduct
+TARGETS  = cudaMap cudaMapAccelerator farm_cudaMap farm_cudaStencil farm_cudaReduce dotProduct
 #cudaMapManaged 
 
 .PHONY: all clean cleanall 
@@ -17,6 +17,9 @@ TARGETS  = cudaMap farm_cudaMap farm_cudaStencil farm_cudaReduce dotProduct
 all: 	$(TARGETS)
 
 cudaMap: cudaMap.cu
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+cudaMapAccelerator: cudaMapAccelerator.cu
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 #cudaMapManaged: cudaMapManaged.cu
@@ -32,6 +35,12 @@ farm_cudaReduce: farm_cudaReduce.cu
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 dotProduct: dotProduct.cu
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+test_pool1CUDA: test_pool1CUDA.cu
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+test_pool2CUDA: test_pool2CUDA.cu
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 clean: 
