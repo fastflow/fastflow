@@ -456,7 +456,7 @@ public:
         svector<ff_node*> _workers(nw);
         for(ssize_t i=0;i<running;++i) 
             if (!offline[i]) _workers.push_back(workers[i]);
-        svector<int> retry(nw);
+        svector<size_t> retry(nw);
 
         for(register size_t i=0;i<nw;++i) {
             if(i!=(size_t)channelid && !_workers[i]->get(&V[i]))
