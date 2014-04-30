@@ -362,6 +362,11 @@ public:
         env1_buffer = NULL;   env2_buffer = NULL;
         env3_buffer = NULL;   env4_buffer = NULL;
         env5_buffer = NULL;   env6_buffer = NULL;
+
+                
+        if (cudaStreamCreate(&stream) != cudaSuccess)
+            error("mapCUDA, error creating stream\n");
+        
     }
     ff_stencilReduceCUDA(const taskT &task, size_t maxIter_ = 1, Tout identityValue_ = Tout()) :
         oneShot(&task), identityValue(identityValue_), iter(0), maxIter(maxIter_) {
@@ -378,8 +383,23 @@ public:
         env3_buffer = NULL;   env4_buffer = NULL;
         env5_buffer = NULL;   env6_buffer = NULL;
         Task.setTask((void *)&task);
+        
+        if (cudaStreamCreate(&stream) != cudaSuccess)
+            error("mapCUDA, error creating stream\n");
     }
-    virtual ~ff_stencilReduceCUDA() {}
+    virtual ~ff_stencilReduceCUDA() {
+        if ((void *)Task.getInDevicePtr() != (void *)Task.getOutDevicePtr())
+            if (Task.getOutDevicePtr()) cudaFree(Task.getOutDevicePtr());
+        if (Task.getInDevicePtr()) cudaFree(Task.getInDevicePtr());
+        if(Task.getEnv1DevicePtr()) cudaFree(Task.getEnv1DevicePtr());
+        if(Task.getEnv2DevicePtr()) cudaFree(Task.getEnv2DevicePtr());
+        if(Task.getEnv3DevicePtr()) cudaFree(Task.getEnv3DevicePtr());
+        if(Task.getEnv4DevicePtr()) cudaFree(Task.getEnv4DevicePtr());
+        if(Task.getEnv5DevicePtr()) cudaFree(Task.getEnv5DevicePtr());
+        if(Task.getEnv6DevicePtr()) cudaFree(Task.getEnv6DevicePtr());
+        if(cudaStreamDestroy(stream) != cudaSuccess)
+            error("mapCUDA, error destroying stream\n");
+    }
 
     virtual void setMaxThreads(const size_t mt) { maxThreads = mt; } 
 
@@ -408,9 +428,6 @@ protected:
         
         maxBlocks = deviceProp.maxGridSize[0];
         
-        if (cudaStreamCreate(&stream) != cudaSuccess)
-            error("mapCUDA, error creating stream\n");
-        
         // allocate memory on device having the initial size
         //			if (cudaMalloc(&in_buffer, Task.getBytesizeIn()) != cudaSuccess)
         //			error("mapCUDA error while allocating memory on device\n");
@@ -419,19 +436,6 @@ protected:
         return 0;
     }
 
-    inline void svc_end() {
-        if ((void *)Task.getInDevicePtr() != (void *)Task.getOutDevicePtr())
-            if (Task.getOutDevicePtr()) cudaFree(Task.getOutDevicePtr());
-        if (Task.getInDevicePtr()) cudaFree(Task.getInDevicePtr());
-        if(Task.getEnv1DevicePtr()) cudaFree(Task.getEnv1DevicePtr());
-        if(Task.getEnv2DevicePtr()) cudaFree(Task.getEnv2DevicePtr());
-        if(Task.getEnv3DevicePtr()) cudaFree(Task.getEnv3DevicePtr());
-        if(Task.getEnv4DevicePtr()) cudaFree(Task.getEnv4DevicePtr());
-        if(Task.getEnv5DevicePtr()) cudaFree(Task.getEnv5DevicePtr());
-        if(Task.getEnv6DevicePtr()) cudaFree(Task.getEnv6DevicePtr());
-        if(cudaStreamDestroy(stream) != cudaSuccess)
-            error("mapCUDA, error destroying stream\n");
-    }
     
     inline void *svc(void *task) {
         if (task) Task.setTask(task);
@@ -546,8 +550,9 @@ protected:
                 //init kernels
                 initCUDAKernel<Tout><<<blockcnt_r, thxblock_r, 0, stream>>>(out_buffer, (Tout)identityValue, padded_size);
             }
-        } else out_buffer = in_buffer;
-        Task.setOutDevicePtr(out_buffer);
+            Task.setOutDevicePtr(out_buffer);
+        } else Task.setOutDevicePtr((Tout*)in_buffer); 
+
                
         iter = 0;        
         if(isPureMap()) {
