@@ -972,19 +972,26 @@ public:
     inline void parallel_for(long first, long last, const Function& f, 
                              const long nw=-1) {
         FF_PARFOR_START(pf, parforidx,first,last,1,-1,nw) {
-            f(parforidx,_ff_thread_id);            
+            f(parforidx);            
         } FF_PARFOR_STOP(pf);
     }
     template <typename Function>
     inline void parallel_for(long first, long last, long step, const Function& f, 
                              const long nw=-1) {
         FF_PARFOR_START(pf, parforidx,first,last,step,-1,nw) {
-            f(parforidx,_ff_thread_id);            
+            f(parforidx);            
         } FF_PARFOR_STOP(pf);
     }
     template <typename Function>
     inline void parallel_for(long first, long last, long step, long grain, 
                              const Function& f, const long nw=-1) {
+        FF_PARFOR_START(pf, parforidx,first,last,step,grain,nw) {
+            f(parforidx);            
+        } FF_PARFOR_STOP(pf);
+    }    
+    template <typename Function>
+    inline void parallel_for_thid(long first, long last, long step, long grain, 
+                                  const Function& f, const long nw=-1) {
         FF_PARFOR_START(pf, parforidx,first,last,step,grain,nw) {
             f(parforidx,_ff_thread_id);            
         } FF_PARFOR_STOP(pf);
@@ -1032,6 +1039,15 @@ public:
         } FF_PARFOR_STOP(pfr);
     }    
 
+    template <typename Function>
+    inline void parallel_for_thid(long first, long last, long step, long grain, 
+                                  const Function& f, const long nw=-1) {
+        FF_PARFOR_T_START(pfr,T, parforidx,first,last,step,grain,nw) {
+            f(parforidx,_ff_thread_id);            
+        } FF_PARFOR_STOP(pfr);
+    }    
+
+
     /* ------------------ parallel_reduce ------------------- */
 
     template <typename Function, typename Value, typename FReduction>
@@ -1059,6 +1075,15 @@ public:
                                 const long nw=-1) {
         FF_PARFORREDUCE_START(pfr, var, identity, parforidx,first,last,step,grain,nw) {
             body(parforidx, var);            
+        } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
+    }
+    template <typename Function, typename Value, typename FReduction>
+    inline void parallel_reduce_thid(Value& var, const Value& identity, 
+                                long first, long last, long step, long grain, 
+                                const Function& body, const FReduction& finalreduce,
+                                const long nw=-1) {
+        FF_PARFORREDUCE_START(pfr, var, identity, parforidx,first,last,step,grain,nw) {
+            body(parforidx, var, _ff_thread_id);            
         } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
     }
 };
