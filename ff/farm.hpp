@@ -30,10 +30,6 @@
 #ifndef FF_FARM_HPP
 #define FF_FARM_HPP
 
-#if defined( HAS_CXX11_VARIADIC_TEMPLATES )
-#include <functional>
-#endif
-
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -42,6 +38,9 @@
 #include <ff/gt.hpp>
 #include <ff/node.hpp>
 
+#if defined( HAS_CXX11_VARIADIC_TEMPLATES )
+#include <functional>
+#endif
 
 namespace ff {
 

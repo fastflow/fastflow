@@ -81,7 +81,8 @@ private:
     /*  Michael and Scott 2-locks MPMC queue.                             */    
     /*                                                                    */
     /*                                                                    */    
-    union {
+	/*
+	union {
         lock_t P_lock;
         char padding3[CACHE_LINE_SIZE];
     };
@@ -89,7 +90,15 @@ private:
         lock_t C_lock;
         char padding4[CACHE_LINE_SIZE];
     };
-    
+    */
+	ALIGN_TO_PRE(CACHE_LINE_SIZE)
+	lock_t P_lock;
+	ALIGN_TO_POST(CACHE_LINE_SIZE)
+
+	ALIGN_TO_PRE(CACHE_LINE_SIZE)
+		lock_t C_lock;
+	ALIGN_TO_POST(CACHE_LINE_SIZE)
+
     /* -------------------------------------------------------------- */
 
     // internal cache
@@ -153,7 +162,7 @@ public:
         init_unlocked(P_lock); 
         init_unlocked(C_lock);
         // Avoid unused private field warning on padding vars
-        (void) padding1; (void) padding2 ; (void) padding3; (void) padding4;
+        //(void) padding1; (void) padding2 ; (void) padding3; (void) padding4;
     }
 
     /**
@@ -225,7 +234,7 @@ public:
         if (!data) return false;
         Node* n = mp_allocnode();
         n->data = data; n->next = NULL;
-        spin_lock(P_lock);
+        ff::spin_lock(P_lock);
         tail->next = n;
         tail       = n;
         spin_unlock(P_lock);

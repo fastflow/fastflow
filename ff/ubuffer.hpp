@@ -294,7 +294,7 @@ public:
         atomic_long_set(&numBuffers,0);
 #endif
         // Avoid unused private field warning on padding fields
-        (void)padding1; (void)padding2; (void)padding3; (void)padding4;
+        //(void)padding1; (void)padding2; (void)padding3; (void)padding4;
         
     }
     
@@ -526,14 +526,13 @@ private:
     long padding2[longxCacheLine-1];
 
     /* ----- two-lock used only in the mp_push and mc_pop methods ------- */
-    union {
-        lock_t P_lock;
-        char padding3[CACHE_LINE_SIZE];
-    };
-    union {
-        lock_t C_lock;
-        char padding4[CACHE_LINE_SIZE];
-    };
+	ALIGN_TO_PRE(CACHE_LINE_SIZE)
+		lock_t P_lock;
+	ALIGN_TO_POST(CACHE_LINE_SIZE)
+
+	ALIGN_TO_PRE(CACHE_LINE_SIZE)
+		lock_t C_lock;
+	ALIGN_TO_POST(CACHE_LINE_SIZE)
     /* -------------------------------------------------------------- */
 #if defined(UBUFFER_STATS)
     atomic_long_t numBuffers;
