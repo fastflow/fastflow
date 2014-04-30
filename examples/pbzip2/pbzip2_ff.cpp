@@ -143,7 +143,7 @@
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #else
-#define PRIu64 "Lu"
+#define PRIu64 "llu"
 #define strncasecmp(x,y,z) strncmpi(x,y,z)
 #endif
 #ifdef __osf__
@@ -469,7 +469,7 @@ public:
 			close(hOutfile);
 		if ((QuietMode != 1))
 		{
-			fprintf(stderr, "    Output Size: %"PRIu64" bytes\n", (unsigned long long)CompressedSize);
+			fprintf(stderr, "    Output Size: %" PRIu64 " bytes\n", (unsigned long long)CompressedSize);
 		}
 		
 		OutputBuffer.clear();
@@ -529,7 +529,7 @@ int directcompress(int hInfile, OFF_T fileSize, int blockSize, char *OutFilename
 			inSize = bytesLeft;
 
 		#ifdef PBZIP_DEBUG
-		fprintf(stderr, " -> Bytes To Read: %"PRIu64" bytes...\n", inSize);
+		fprintf(stderr, " -> Bytes To Read: %" PRIu64 " bytes...\n", inSize);
 		#endif
 
 		// allocate memory to read in file
@@ -653,7 +653,7 @@ int directcompress(int hInfile, OFF_T fileSize, int blockSize, char *OutFilename
 		close(hOutfile);
 	if (QuietMode != 1)
 	{
-		fprintf(stderr, "    Output Size: %"PRIu64" bytes\n", (unsigned long long)CompressedSize);
+		fprintf(stderr, "    Output Size: %" PRIu64 " bytes\n", (unsigned long long)CompressedSize);
 	}
 
 	return 0;
@@ -939,7 +939,7 @@ public:
 			inSize = blockSize;
 			
                         #ifdef PBZIP_DEBUG
-			fprintf(stderr, " -> Bytes To Read: %"PRIu64" bytes...\n", inSize);
+			fprintf(stderr, " -> Bytes To Read: %" PRIu64 " bytes...\n", inSize);
                         #endif
 			
 			WHY_THIS_ONE(pthread_mutex_lock(MemMutex));
@@ -1027,7 +1027,7 @@ public:
 		ret = lseek(hInfile, 0, SEEK_SET);
 		if (ret != 0)
 		{
-			fprintf(stderr, "pbzip2_ff: *ERROR: Could not seek to beginning of file [%"PRIu64"]!  Skipping...\n", (unsigned long long)ret);
+			fprintf(stderr, "pbzip2_ff: *ERROR: Could not seek to beginning of file [%" PRIu64 "]!  Skipping...\n", (unsigned long long)ret);
 			close(hInfile);
 			return -1;
 		}
@@ -1052,7 +1052,7 @@ public:
 			if (currentByte == 0)
 			{
 #ifdef PBZIP_DEBUG
-				fprintf(stderr, " -> Bytes To Read: %"PRIu64" bytes...\n", inSize);
+				fprintf(stderr, " -> Bytes To Read: %" PRIu64 " bytes...\n", inSize);
 #endif
 				
 				// read file data
@@ -1064,14 +1064,14 @@ public:
 				// located between two buffer boundaries
 				memcpy(FileData, FileData+inSize-(strlen(bz2Header)-1), strlen(bz2Header)-1);
 #ifdef PBZIP_DEBUG
-				fprintf(stderr, " -> Bytes To Read: %"PRIu64" bytes...\n", inSize-(strlen(bz2Header)-1));
+				fprintf(stderr, " -> Bytes To Read: %" PRIu64 " bytes...\n", inSize-(strlen(bz2Header)-1));
 #endif
 				
 				// read file data minus overflow from previous buffer
 				ret = read(hInfile, (char *) FileData+strlen(bz2Header)-1, inSize-(strlen(bz2Header)-1));
 			}
 #ifdef PBZIP_DEBUG
-			fprintf(stderr, " -> Total Bytes Read: %"PRIu64" bytes...\n\n", ret);
+			fprintf(stderr, " -> Total Bytes Read: %" PRIu64 " bytes...\n\n", ret);
 #endif
 			if (ret < 0)
 			{
@@ -1097,7 +1097,7 @@ public:
 					startByte = startPointer - FileData + currentByte - (strlen(bz2Header) - 1);
 #ifdef PBZIP_DEBUG
 				fprintf(stderr, " Found substring at: %x\n", startPointer);
-				fprintf(stderr, " startByte = %"PRIu64"\n", startByte);
+				fprintf(stderr, " startByte = %" PRIu64 "\n", startByte);
 				fprintf(stderr, " bz2NumBlocks = %d\n", bz2NumBlocks);
 #endif
 				
@@ -1158,8 +1158,8 @@ public:
 				bz2BlockList[i].dataSize = bz2BlockList[i+1].dataStart - bz2BlockList[i].dataStart;
 			}
 #ifdef PBZIP_DEBUG
-			fprintf(stderr, " bz2BlockList[%d].dataStart = %"PRIu64"\n", i, bz2BlockList[i].dataStart);
-			fprintf(stderr, " bz2BlockList[%d].dataSize = %"PRIu64"\n", i, bz2BlockList[i].dataSize);
+			fprintf(stderr, " bz2BlockList[%d].dataStart = %" PRIu64 "\n", i, bz2BlockList[i].dataStart);
+			fprintf(stderr, " bz2BlockList[%d].dataSize = %" PRIu64 "\n", i, bz2BlockList[i].dataSize);
 #endif
 		}
 
@@ -1184,7 +1184,7 @@ public:
 #endif
 			if (ret != bz2BlockList[i].dataStart)
 			{
-				fprintf(stderr, "pbzip2_ff: *ERROR: Could not seek to beginning of file [%"PRIu64"]!  Skipping...\n", (unsigned long long)ret);
+				fprintf(stderr, "pbzip2_ff: *ERROR: Could not seek to beginning of file [%" PRIu64 "]!  Skipping...\n", (unsigned long long)ret);
 				close(hInfile);
 				return -1;
 			}
@@ -1193,7 +1193,7 @@ public:
 			inSize = bz2BlockList[i].dataSize;
 			
 #ifdef PBZIP_DEBUG
-			fprintf(stderr, " -> Bytes To Read: %"PRIu64" bytes...\n", inSize);
+			fprintf(stderr, " -> Bytes To Read: %" PRIu64 " bytes...\n", inSize);
 #endif
 			
 			if (QuietMode != 1)
@@ -1201,7 +1201,7 @@ public:
 				// give warning to user if block is larger than 250 million bytes
 				if (inSize > 250000000)
 				{
-					fprintf(stderr, "pbzip2_ff:  *WARNING: Compressed block size is large [%"PRIu64" bytes].\n", (unsigned long long)inSize);
+					fprintf(stderr, "pbzip2_ff:  *WARNING: Compressed block size is large [%" PRIu64 " bytes].\n", (unsigned long long)inSize);
 					fprintf(stderr, "          If program aborts, use regular BZIP2 to decompress.\n");
 				}
 			}
@@ -1222,7 +1222,7 @@ public:
 			// read file data
 			ret = read(hInfile, (char *) FileData, inSize);
                         #ifdef PBZIP_DEBUG
-			fprintf(stderr, " -> Total Bytes Read: %"PRIu64" bytes...\n\n", ret);
+			fprintf(stderr, " -> Total Bytes Read: %" PRIu64 " bytes...\n\n", ret);
                         #endif
 			// check to make sure all the data we expected was read in
 			if (ret == 0)
@@ -2426,7 +2426,7 @@ int main(int argc, char* argv[])
 			if (decompress == 1)
 				fprintf(stderr, " BWT Block Size: %c00k\n", BWTblockSizeChar);
 			if (strcmp(InFilename, "-") != 0) 
-				fprintf(stderr, "     Input Size: %"PRIu64" bytes\n", (unsigned long long)fileSize);
+				fprintf(stderr, "     Input Size: %" PRIu64 " bytes\n", (unsigned long long)fileSize);
 		}
 
 		if (decompress == 1)
@@ -2490,7 +2490,7 @@ int main(int argc, char* argv[])
 				}
 				if (QuietMode != 1)
 				{
-					fprintf(stderr, "    Output Size: %"PRIu64" bytes\n", (unsigned long long)sizeof(bz2HeaderZero));
+					fprintf(stderr, "    Output Size: %" PRIu64 " bytes\n", (unsigned long long)sizeof(bz2HeaderZero));
 					fprintf(stderr, "-------------------------------------------\n");
 				}
 				continue;
