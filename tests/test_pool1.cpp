@@ -57,9 +57,12 @@ bool termination(const std::vector<Element> &P) {
 }
 
 // selects all odd elements that have a number of mutation less than MAXMUTATIONS
-void selection(const std::vector<Element> &P, std::vector<Element> &output) {
-    for(size_t i=0;i<(P.size()/2); ++i)
-        output.push_back(P[i]);     
+void selection(std::vector<Element>::const_iterator P_start, 
+               std::vector<Element>::const_iterator P_stop, 
+               std::vector<Element> &output) {
+    size_t size = P_stop-P_start;
+    for(size_t i=0;i<(size/2);++i)
+        output.push_back(P_start[i]);     
 }
 
 const Element& evolution(Element & individual) {
@@ -69,11 +72,13 @@ const Element& evolution(Element & individual) {
 }
 
 // remove at most K elements randomly
-void filter(const std::vector<Element> &P, std::vector<Element> & output) {
-
-    size_t size = P.size();
+void filter(std::vector<Element>::const_iterator P_start, 
+            std::vector<Element>::const_iterator P_stop, 
+            std::vector<Element> & output) {
+    
+    size_t size = P_stop-P_start;
     if (size<K) { output.clear(); return; }
-    output = P;
+    output.insert(output.begin(),P_start,P_stop);
 
     for(size_t i=0;i<K;++i) {
         auto r = random() % size;

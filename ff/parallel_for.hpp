@@ -241,7 +241,15 @@ namespace ff {
     name->setloop(begin,end,step,chunk,nw);                                       \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,     \
                          const int _ff_thread_id, const int) {                    \
+    /* here you have to define the for loop using ff_start/stop_##idx  */
+
+/* this is equivalent to FF_PARFOR2_START but the start/stop indexes have a fixed name */
+#define FF_PARFOR_START_IDX(name, idx, begin, end, step, chunk, nw)               \
+    name->setloop(begin,end,step,chunk,nw);                                       \
+    auto F_##name = [&] (const long ff_start_idx, const long ff_stop_idx,         \
+                         const int _ff_thread_id, const int) {                    \
     /* here you have to define the for loop using ff_start/stop_idx  */
+
 
 // just another variat that may be used together with FF_PARFORREDUCE_INIT
 #define FF_PARFOR_T_START(name, type, idx, begin, end, step, chunk, nw)           \
@@ -251,6 +259,12 @@ namespace ff {
         PRAGMA_IVDEP;                                                             \
         for(long idx=ff_start_##idx;idx<ff_stop_##idx;idx+=step) 
 
+
+#define FF_PARFOR_T_START_IDX(name, type, idx, begin, end,step,chunk, nw)         \
+    name->setloop(begin,end,step,chunk,nw);                                       \
+    auto F_##name = [&] (const long ff_start_idx, const long ff_stop_idx,         \
+                         const int _ff_thread_id, const type&) {                  \
+    /* here you have to use the fixed indexes ff_idx_start, ff_idx_stop */
 
 #define FF_PARFOR_STOP(name)                                                      \
     };                                                                            \
@@ -996,6 +1010,14 @@ public:
             f(parforidx,_ff_thread_id);            
         } FF_PARFOR_STOP(pf);
     }    
+
+    template <typename Function>
+    inline void parallel_for_idx(long first, long last, long step, long grain, 
+                                  const Function& f, const long nw=-1) {
+        FF_PARFOR_START_IDX(pf,parforidx,first,last,step,grain,nw) {
+            f(ff_start_idx, ff_stop_idx,_ff_thread_id);            
+        } FF_PARFOR_STOP(pf);
+    }    
 };
 
 //! ParallelForReduce class
@@ -1047,6 +1069,15 @@ public:
         } FF_PARFOR_STOP(pfr);
     }    
 
+    template <typename Function>
+    inline void parallel_for_idx(long first, long last, long step, long grain, 
+                                  const Function& f, const long nw=-1) {
+
+        FF_PARFOR_T_START_IDX(pfr,T, parforidx,first,last,step,grain,nw) {
+            f(ff_start_idx, ff_stop_idx,_ff_thread_id);            
+        } FF_PARFOR_STOP(pfr);
+    }    
+
 
     /* ------------------ parallel_reduce ------------------- */
 
@@ -1087,7 +1118,6 @@ public:
         } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
     }
 };
-
 
 } // namespace ff
 
