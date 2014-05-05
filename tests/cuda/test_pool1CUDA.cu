@@ -79,26 +79,29 @@ bool termination(const std::vector<Element> &P) {
     return true;
 }
 
-// selects all odd elements that have a number of mutation less than MAXMUTATIONS
-void selection(const std::vector<Element> &P, std::vector<Element> &output) {
-    for(size_t i=0;i<(P.size()/2); ++i)
-        output.push_back(P[i]);     
+void selection(std::vector<Element>::const_iterator P_start, 
+               std::vector<Element>::const_iterator P_stop, 
+               std::vector<Element> &output) {
+    size_t size = P_stop-P_start;
+    for(size_t i=0;i<(size/2);++i)
+        output.push_back(P_start[i]);     
 }
 
 
 // remove at most KELEM elements randomly
-void filter(const std::vector<Element> &P, std::vector<Element> & output) {
-
-    size_t size = P.size();
+void filter(std::vector<Element>::const_iterator P_start, 
+            std::vector<Element>::const_iterator P_stop, 
+            std::vector<Element> & output) {
+    
+    size_t size = P_stop-P_start;
     if (size<KELEM) { output.clear(); return; }
-    output = P;
+    output.insert(output.begin(),P_start,P_stop);
 
     for(size_t i=0;i<KELEM;++i) {
         size_t r = random() % size;
         output.erase(output.begin()+r);
     }
 }
-
 
 template<typename T>
 void printPopulation(std::vector<T> &P) {
