@@ -44,6 +44,9 @@ namespace ff {
 template<typename T, typename kernelEvol>
 class poolEvolutionCUDA : public ff_node {
 public:
+    typedef typename std::vector<T>::iterator       iter_t;
+    typedef typename std::vector<T>::const_iterator const_iter_t;
+
     struct cudaEvolTask: public baseCUDATask<T> {
         void setTask(void *t) {
             cudaEvolTask *task=(cudaEvolTask *)t;
@@ -59,9 +62,10 @@ public:
 protected:
     size_t pE,pF,pT,pS;
     std::vector<T>  *input;
-    std::vector<T>   buffer;
-    void (*selection)(const std::vector<T> &pop,std::vector<T> &out);
-    void (*filter)(const std::vector<T> &pop,std::vector<T> &out);
+    std::vector<T>                buffer;
+    std::vector<std::vector<T> >  bufferPool;
+    void (*selection)(const_iter_t start, const_iter_t stop, std::vector<T> &out);
+    void (*filter)(const_iter_t start, const_iter_t stop, std::vector<T> &out);
     bool (*termination)(const std::vector<T> &pop); 
     ff_pipeline pipeevol;
 
@@ -70,9 +74,9 @@ protected:
 public :
     // constructor : to be used in non-streaming applications
     poolEvolutionCUDA (std::vector<T> & pop,                       // the initial population
-                       void (*sel)(const std::vector<T> &pop, 
+                       void (*sel)(const_iter_t start, const_iter_t stop,
                                    std::vector<T> &out),           // the selection function
-                       void (*fil)(const std::vector<T> &pop,
+                       void (*fil)(const_iter_t start, const_iter_t stop,
                                    std::vector<T> &out),           // the filter function
                        bool (*term)(const std::vector<T> &pop))    // the termination function
         :pE(0),pF(1),pT(1),pS(1),input(&pop),selection(sel),filter(fil),termination(term),
@@ -89,10 +93,10 @@ public :
     
     }
     // constructor : to be used in streaming applications
-    poolEvolutionCUDA (void (*sel)(const std::vector<T> & pop, 
-                                      std::vector<T> &out),        // the selection function
-                       void (*fil)(const std::vector<T> &pop,
-                                      std::vector<T> &out),        // the filter function
+    poolEvolutionCUDA (void (*sel)(const_iter_t start, const_iter_t stop,
+                                   std::vector<T> &out),           // the selection function
+                       void (*fil)(const_iter_t start, const_iter_t stop,
+                                   std::vector<T> &out),           // the filter function
                        bool (*term)(const std::vector<T> &pop))    // the termination function
         :pE(0),pF(1),pT(1),pS(1),input(NULL),selection(sel),filter(fil),termination(term),
          pipeevol(true),mapEvol(NULL) { 
@@ -115,7 +119,8 @@ public :
     const std::vector<T>& get_result() { return *input; }
     
     void setParEvolution(size_t pardegree)   { pE = pardegree; }
-    void setParTermination(size_t pardegree) { pT = pardegree; }
+    // currently the termination condition is computed sequentially
+    void setParTermination(size_t )          { pT = 1; }
     void setParSelection(size_t pardegree)   { pS = pardegree; }
     void setParFilter (size_t pardegree)     { pF = pardegree; }
     
@@ -144,16 +149,19 @@ protected:
 
         pipeevol.run_then_freeze();
         while(!termination(*input)) {
+            // selection phase
             buffer.clear();
-            selection(*input, buffer);	    
+            selection(input->begin(),input->end(), buffer);
 
+            // evolution phase
             evolTask.buffer = buffer.data();
             evolTask.size   = buffer.size();
             pipeevol.offload((void*)pevolTask);
             pipeevol.load_result((void**)&pevolTask);
 
+            // filtering phase
             input->clear();
-            filter(buffer, *input);
+            filter(buffer.begin(),buffer.end(), *input);
         }
         if (task) ff_send_out(task);
         pipeevol.offload(GO_OUT);
