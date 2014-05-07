@@ -135,11 +135,11 @@ protected:
     inline int prepare() {
         size_t nworkers = workers.size();
         for(size_t i=0;i<nworkers;++i) {
-            if (workers[i]->create_input_buffer((ondemand ? ondemand: (in_buffer_entries/nworkers + 1)), 
+            if (workers[i]->create_input_buffer((int) (ondemand ? ondemand: (in_buffer_entries/nworkers + 1)), 
                                                 (ondemand ? true: fixedsize))<0) return -1;
             if (collector || lb->masterworker() || collector_removed) 
                 // NOTE: force unbounded queue if masterworker
-                if (workers[i]->create_output_buffer(out_buffer_entries/nworkers + DEF_IN_OUT_DIFF, 
+                if (workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
                                                      (lb->masterworker()?false:fixedsize))<0)
                     return -1;
             lb->register_worker(workers[i]);
@@ -395,9 +395,9 @@ public:
             error("FARM, try to add zero workers!\n");
             return -1; 
         }        
-        for(size_t i=0;i<w.size();++i) {
+        for(int i=0;i<w.size();++i) {
             workers.push_back(w[i]);
-            (workers.back())->set_id(i);
+			(workers.back())->set_id(i);
         }
         return 0;
     }
@@ -1134,7 +1134,7 @@ protected:
      *
      * \return An integer value showing the worker.
      */
-    inline int selectworker() { return victim; }
+    inline size_t selectworker() { return victim; }
 public:
     /**
      * \brief Constructos
@@ -1153,9 +1153,9 @@ public:
      *
      * \parm v is the number of the worker.
      */
-    void set_victim(int v) { victim=v;}
+    void set_victim(size_t v) { victim=v;}
 private:
-    int victim;
+    size_t victim;
 };
 
 /*!
@@ -1176,7 +1176,7 @@ protected:
      *
      * \return An integet value showing he id of the worker
      */
-    inline int selectworker() { return victim; }
+    inline ssize_t selectworker() { return victim; }
 public:
     /**
      * \brief Constructor
@@ -1223,7 +1223,7 @@ public:
         for(size_t i=0;i<dead.size();++i) dead[i]=false;
     }
 private:
-    int victim;
+    size_t victim;
     svector<bool> dead;
 };
 

@@ -83,7 +83,7 @@ protected:
      * \return The next worker to be selected.
      *
      */
-    virtual inline int selectworker() { 
+    virtual inline ssize_t selectworker() { 
         do 
             nextr = (nextr+1) % running;
         while(offline[nextr]);
@@ -136,7 +136,7 @@ protected:
      * \return It returns the workers with a taks if successful. Otherwise -1
      * is returned.
      */
-    virtual int gather_task(void ** task) {
+    virtual ssize_t gather_task(void ** task) {
         register unsigned int cnt;
         do {
             cnt=0;

@@ -644,7 +644,7 @@ public:
 
         int CPUId = init_thread_affinity(&attr, cpuId);
         if (CPUId==-2) return -2;
-        if (barrier) tid=barrier->getCounter();
+        if (barrier) tid= (unsigned) barrier->getCounter();
         if (pthread_create(&th_handle, &attr,
                            proxy_thread_routine, this) != 0) {
             perror("pthread_create: pthread creation failed.");
@@ -1168,7 +1168,7 @@ public:
      * \param id is the ID of the input channel, it makes sense only for N-to-1
      * input channels.
      */
-    virtual void eosnotify(int id=-1) {}
+    virtual void eosnotify(ssize_t id=-1) {}
     
     /**
      * \brief Gets the ID of the ff_node 
