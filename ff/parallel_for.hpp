@@ -392,8 +392,8 @@ protected:
 protected:
     // initialize the data vector
     virtual inline size_t init_data(long start, long stop) {
-        const long numtasks  = std::ceil((stop-start)/(double)_step);
-        long totalnumtasks   = std::ceil(numtasks/(double)_chunk);
+        const long numtasks  = std::lrint(std::ceil((stop-start)/(double)_step));
+        long totalnumtasks   = std::lrint(std::ceil(numtasks/(double)_chunk));
         long tt     = totalnumtasks;
         size_t ntxw = totalnumtasks / _nw;
         size_t r    = totalnumtasks % _nw;
@@ -477,7 +477,7 @@ public:
                 long start = data[wid].task.start;
                 long end   = std::min(start+endchunk, data[wid].task.end);
                 taskv[wid+jump].set(start, end);
-                lb->ff_send_out_to(&taskv[wid+jump], wid);
+                lb->ff_send_out_to(&taskv[wid+jump], (int) wid);
                 --remaining, --data[wid].ntask;
                 (data[wid].task).start = (end-1)+_step;  
                 eossent[wid]=false;
@@ -651,7 +651,7 @@ public:
             }
             return GO_OUT;
         }
-        if (nextTask((forall_task_t*)t, wid)) lb->ff_send_out_to(t, wid);
+        if (nextTask((forall_task_t*)t, (const int) wid)) lb->ff_send_out_to(t, (int) wid);
         else  {
             if (!eossent[wid]) {
                 lb->ff_send_out_to((workersspinwait?EOS_NOFREEZE:GO_OUT), wid); 

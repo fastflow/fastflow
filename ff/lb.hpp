@@ -115,7 +115,7 @@ protected:
      *
      * \return The number of worker to be selected.
      */
-    virtual inline int selectworker() { return (++nextw % running); }
+    virtual inline size_t selectworker() { return (++nextw % running); }
 
 #if defined(LB_CALLBACK)
 
@@ -148,7 +148,7 @@ protected:
      *
      * \return The number of workers.
      */
-    virtual inline unsigned int ntentative() { return running;}
+    virtual inline size_t ntentative() { return running;}
 
     /**
      * \brief Loses some time before sending the message to output buffer
@@ -389,7 +389,7 @@ public:
      *
      * \return the channel id
      */
-    int get_channel_id() const { return channelid;}
+    ssize_t get_channel_id() const { return channelid;}
 
     /**
      * \brief Resets the channel id
@@ -490,7 +490,7 @@ public:
      *
      */
     inline void broadcast_task(void * task) {
-        std::vector<int> retry;
+        std::vector<size_t> retry;
 
         for(register ssize_t i=0;i<running;++i) {
             if(!workers[i]->put(task))
