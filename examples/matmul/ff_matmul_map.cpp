@@ -46,7 +46,7 @@ static double* C=NULL;
 // basic function, it gets in input an array of idexes of size size 
 static inline void F(long* M, size_t size) {
     const long start=M[0];
-    const long end  =start+size;
+    const long end  =start+ (long) size;
     for(long i=start;i<end;++i) {
         for(long j=0;j<N;++j) {
             for(long k=0;k<N;++k)

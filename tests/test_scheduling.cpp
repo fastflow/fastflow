@@ -69,7 +69,7 @@ private:
 class my_loadbalancer: public ff_loadbalancer {
 protected:
     // implement your policy...
-    inline int selectworker() { return victim; }
+    inline size_t selectworker() { return victim; }
 
 public:
     // this is necessary because ff_loadbalancer has non default parameters....
