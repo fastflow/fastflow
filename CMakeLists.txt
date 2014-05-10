@@ -40,6 +40,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     MESSAGE( STATUS "C++ Compiler is Clang")
     SET(FFCM_HAS_CLANGXX "TRUE")
    SET(CMAKE_CXX_FLAGS "-stdlib=libc++ -std=gnu++11")
+   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
 #    ADD_DEFINITIONS(-stdlib=libc++ -std=gnu++11)  # Or -std=c++11
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     MESSAGE( STATUS "C++ Compiler is GNU")
