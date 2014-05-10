@@ -43,7 +43,7 @@ add_executable( test_accelerator_ofarm_multiple_freezing test_accelerator_ofarm_
 add_executable( test_parfor test_parfor.cpp )
 add_executable( test_parfor2 test_parfor2.cpp )
 add_executable( test_dotprod_parfor test_dotprod_parfor.cpp )
-
+add_executable( test_devicequery test_devicequery.cpp )
 
 #if (NOT(GCC_TOO_OLD))
 #  add_executable( test_mpmc test_mpmc.cpp)
@@ -61,7 +61,7 @@ test_scheduling test_dt perf_test_alloc1 perf_test_alloc2
 perf_test_alloc3 perf_test_noalloc test_uBuffer test_torus
 test_map test_map2 test_mapreduce test_dotprod 
 test_spinBarrier test_multi_input test_ofarm test_accelerator_ofarm
-test_accelerator_ofarm_multiple_freezing )
+test_accelerator_ofarm_multiple_freezing test_devicequery)
 #if (NOT(GCC_TOO_OLD))
 #  set(TESTS ${TESTS}  test_mpmc)
 #endif (NOT(GCC_TOO_OLD))
