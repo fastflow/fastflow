@@ -166,14 +166,18 @@ static inline int ff_numCores() {
 static inline int ff_realNumCores() {
     int  n=-1;
 #if defined(__linux__)
-    FILE       *f;    
-    f = popen("cat /proc/cpuinfo|egrep 'core id|physical id'|tr -d '\n'|sed 's/physical/\\nphysical/g'|grep -v ^$|sort|uniq|wc -l", "r");
-    if (fscanf(f, "%d", &n) == EOF) { pclose(f); return n;}
-    pclose(f);
-#else
+    char inspect[]="cat /proc/cpuinfo|egrep 'core id|physical id'|tr -d '\n'|sed 's/physical/\\nphysical/g'|grep -v ^$|sort|uniq|wc -l";
+#elif defined (__APPLE__)
+    char inspect[]="sysctl hw.physicalcpu | awk '{print $2}'";
+#else 
+    char inspect[]="";
+    n=1;
 #pragma message ("ff_realNumCores not supported on this platform")
-	n = 1;
 #endif
+    FILE       *f; 
+    f = popen(inspect, "r");
+    fscanf(f, "%d", &n);
+    pclose(f);
     return n;
 }
 
@@ -185,16 +189,20 @@ static inline int ff_realNumCores() {
  *  \return An integer value showing the number of sockets.
  */
 static inline int ff_numSockets() {
-    int  n=-1;
+   int  n=-1;
 #if defined(__linux__)
-    FILE       *f;    
-    f = popen("cat /proc/cpuinfo|grep 'physical id'|sort|uniq|wc -l", "r");
-    if (fscanf(f, "%d", &n) == EOF) { pclose(f); return n;}
-    pclose(f);
-#else
-#pragma message ("ff_numSockets not supported on this platform")
-	n = 1;
+    char inspect[]="cat /proc/cpuinfo|grep 'physical id'|sort|uniq|wc -l";
+#elif defined (__APPLE__)
+    char inspect[]="sysctl hw.packages | awk '{print $2}'";
+#else 
+    char inspect[]="";
+    n=1;
+#pragma message ("ff_realNumCores not supported on this platform")
 #endif
+    FILE       *f; 
+    f = popen(inspect, "r");
+    fscanf(f, "%d", &n);
+    pclose(f);
     return n;
 }
 
