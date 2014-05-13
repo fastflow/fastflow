@@ -45,32 +45,20 @@
 
 namespace ff {
 
-/*!
- *  \ingroup streaming_network_arbitrary_shared_memory
- *
- *  @{
- */
 
 /*!
  *  \class Barrier
- *  \ingroup streaming_network_arbitrary_shared_memory
+ *  \ingroup aux_classes
  *
- *  \brief Just a wrapper around POSIX barrier 
- *
- *  This class is defined in \ref node.hpp
+ *  \brief Barrier - Used only to start all nodes synchronously. 
+ *  
+ *  An auxiliary class in \ref building_blocks
  */
 
 #if (defined(__APPLE__) || defined(_MSC_VER))
 class Barrier {
 public:
-    /**
-     *  \brief Constructor
-     *
-     *  It checks whether the mutex variable(s) and the conditional variable(s)
-     *  can be properly initialised. In case initialization fails, the program
-     *  is aborted.
-     *
-     */
+   
     Barrier(const size_t=MAX_NUM_THREADS):threadCounter(0),_barrier(0) {
         if (pthread_mutex_init(&bLock,NULL)!=0) {
             error("FATAL ERROR: Barrier: pthread_mutex_init fails!\n");
@@ -82,25 +70,13 @@ public:
         }
     }
     
-    /**
-     * \brief Setup barrier 
-     *
-     * It initialize barrier.
-     *
-     * \parm init determine the barrier
-     *
-     */
+   
     inline void barrierSetup(size_t init) {
         if (!_barrier && init>0) _barrier = init;
         return;
     }
 
-    /** 
-     * \brief Performs barrier operation
-     *
-     * It performs the barrier operation and waits on the condition variable.
-     * 
-     */
+   
     inline void doBarrier(size_t) {
         pthread_mutex_lock(&bLock);
         if (!--_barrier) pthread_cond_broadcast(&bCond);
@@ -113,27 +89,11 @@ public:
 
     // TODO: better move counter methods in a different class
    
-    /**
-     * \brief Get the thread counter
-     *
-     * It gets the counter of the pthread.
-     *
-     * \return An integet value, showing the counter of the pthread.
-     */
+    
     inline size_t getCounter() const { return threadCounter;}
 
-    /**
-     * \brief Increments the counter
-     *
-     * It increaments the counter of the pthread.
-     */
     inline void   incCounter()       { ++threadCounter;}
 
-    /**
-     * \brief Decrements the counter
-     *
-     * It decremetns the counter of the pthread.
-     */
     inline void   decCounter()       { --threadCounter;}
 
 private:
@@ -152,14 +112,6 @@ public:
     Barrier(const size_t=MAX_NUM_THREADS):threadCounter(0),_barrier(0) { }
     ~Barrier() { if (_barrier>0) pthread_barrier_destroy(&bar); }
 
-    /**
-     * \brief Setup barrier 
-     *
-     * It initialize barrier.
-     *
-     * \parm init determine the barrier
-     *
-     */
     inline int barrierSetup(size_t init) {
         assert(init>0);
         if (_barrier == init) return 0;
@@ -183,41 +135,17 @@ public:
         return -1;
     }
 
-    /** 
-     * \brief Performs barrier operation
-     *
-     * It performs the barrier operation and waits on the condition variable.
-     * 
-     */
     inline void doBarrier(size_t) {  
         pthread_barrier_wait(&bar); 
     }
 
-    
     // TODO: better move counter methods in a different class
 
-   
-    /**
-     * \brief Get the thread counter
-     *
-     * It gets the counter of the pthread.
-     *
-     * \return An integet value, showing the counter of the pthread.
-     */
+  
     inline size_t getCounter() const { return threadCounter;}
 
-    /**
-     * \brief Increments the counter
-     *
-     * It increaments the counter of the pthread.
-     */
     inline void     incCounter()       { ++threadCounter;}
 
-    /**
-     * \brief Decrements the counter
-     *
-     * It decremetns the counter of the pthread.
-     */
     inline void     decCounter()       { --threadCounter;}
 
 private:
@@ -230,26 +158,9 @@ private:
 
 #endif 
 
-
-/*!
- *  \class spinBarrier
- *  \ingroup streaming_network_arbitrary_shared_memory
- *
- *  \brief Models a spin-loop barrier.
- *
- *  This class is defined in file \ref node.hpp
- *
- */ 
 class spinBarrier {
 public:
-    /**
-     *  \brief Constructor
-     *
-     *  It creates an instnce of the spin barrier.
-     *
-     *  \parm MAX_NUM_THREADS maximum number of threads
-     *
-     */
+   
     spinBarrier(const size_t maxNThreads=MAX_NUM_THREADS):_barrier(0),threadCounter(0),maxNThreads(maxNThreads) {
         atomic_long_set(&B[0],0);
         atomic_long_set(&B[1],0);
@@ -257,39 +168,16 @@ public:
         for(size_t i=0;i<maxNThreads;++i) barArray[i]=false;
     }
 
-    /**
-     * \brief Destructor
-     *
-     * It deletes the elements in the barrier array.
-     *
-     */
     ~spinBarrier() {
         if (barArray != NULL) delete [] barArray;
         barArray=NULL;
     }
     
-    /**
-     *
-     * \brief Setsup the barrier 
-     *
-     * It setup the barrier.
-     *
-     * \parm init initializes the barrier
-     * 
-     */
     inline int barrierSetup(size_t init) {
         if (!_barrier && init>0) _barrier = init; 
         return 0;
     }
 
-    /**
-     * \brief Performs the barrier
-     *
-     * It performs the barrier.
-     *
-     * \parm tid is the thread id.
-     *
-     */
     inline void doBarrier(size_t tid) {
         assert(tid<maxNThreads);
         const int whichBar = (barArray[tid] ^= true); // computes % 2
@@ -307,44 +195,16 @@ public:
 
     // TODO: better move counter methods in a different class
 
-    /**
-     * \brief Gets counter
-     *
-     * It gets the counter of the thread.
-     *
-     * \return An integer value showing the counter of the thread.
-     */
     inline size_t getCounter() const { return threadCounter;}
 
-    /**
-     * \brief Increments counter
-     * 
-     * It increments the thread counter.
-     */
     inline void   incCounter()       { ++threadCounter;}
 
-    /**
-     * \brief Decrements counter
-     *
-     * It decrements the thread counter.
-     */
     inline void   decCounter()       { --threadCounter;}
     
 private:
     size_t _barrier;
-    /* 
-     * _barrier represents the number of threads in the barrier. 
-     * This is just a counter, it is used to set the ff_node::tid value.
-     */
     size_t threadCounter;
-    /* 
-     * maximum number of threads
-     */
     const size_t maxNThreads;
-    /* 
-     * each thread has an entry in the barArray, it is used to 
-     * point to the current barrier counter either B[0] or B[1]
-     */
     bool* barArray;          
     atomic_long_t B[2];
 };
@@ -358,8 +218,8 @@ private:
      * It initializes thread affinity i.e. which cpu the thread should be
      * assigned.
      *
-     * \parm attr is the pthread attribute
-     * \parm cpuID is the identifier the core
+     * \param attr is the pthread attribute
+     * \param cpuID is the identifier the core
      * \return -2  if error, the cpu identifier if successful
      */
 static inline int init_thread_affinity(pthread_attr_t*attr, int cpuId) {
@@ -628,7 +488,7 @@ public:
      *
      * It create a new FastFlow thread
      *
-     * \parm cpuID is the identifier of the core.
+     * \param cpuID is the identifier of the core.
      *
      * \return the -2 in case of error, 
      *             -1 in case the thread is not assigned to any CPU
@@ -655,13 +515,7 @@ public:
         return CPUId;
     }
    
-    /**
-     * \brief Waits for thread termination
-     *
-     * It defines the wait for thread termination.
-     * 
-     * \return 0 if successful.
-     */
+  
     int wait() {
         int r=0;
         stp=true;
@@ -788,20 +642,42 @@ static void * proxy_thread_routine(void * arg) {
 }
 
 /*!
+ *  \ingroup building_blocks
+ *
+ *  @{
+ */
+
+/*!
  *  \class ff_node
  *  \ingroup streaming_network_arbitrary_shared_memory
  *
- *  \brief Describes the FastFlow node
+ *  \brief The FastFlow abstract contanier for a parallel activity (actor).
  *
- *  This class describes the \p ff_node, which is the basic building
- *  block of every skeleton in stream programming. It is used to encapsulate
- *  sequential portions of code implementing functions. \p ff_node defines 3
- *  methods; two optional and one mandatory. The optional methods are (1) \p
- *  svc_init and (2) \p svc_end. The mandatory method is \p svc (pure virtual
- *  method). The \p svc_init method is called once at node initialization,
- *  while the \p svn_end method is called once when the end-of-stream (EOS) is
- *  received in input or when the \p svc method returns \p NULL. the \p svc
- *  method is called each time an input task is ready to be procedded.
+ * Implements \p ff_node, i.e. the general container for a parallel
+ * activity. From the orchestration viewpoint, the process model to
+ * be employed is a CSP/Actor hybrid model where activities (\p
+ * ff_nodes) are named and the data paths between processes are
+ * clearly identified. \p ff_nodes synchronise each another via
+ * abstract units of SPSC communications and synchronisation (namely
+ * 1:1 channels), which models data dependency between two
+ * \p ff_nodes.  It is used to encapsulate
+ * sequential portions of code implementing functions. 
+ *
+ * \p In a multicore, a ff_node is implemented as non-blocking thread. 
+ * It is not and should
+ * not be confused with a task. Typically a \p ff_node uses the 100% of one CPU
+ * context (i.e. one core, either physical or HT, if any). Overall, the number of
+ * ff_nodes running should not exceed the number of logical cores of the platform.
+ * 
+ * \p A ff_node behaves as a loop that gets an input (i.e. the parameter of \p svc 
+ * method) and produces one or more outputs (i.e. return parameter of \p svc method 
+ * or parameter of the \p ff_send_out method that can be called in the \p svc method). 
+ * The loop complete on the output of the special value "end-of_stream" (EOS). 
+ * The EOS is propagated across channels to the next \p ff_node.  
+ * 
+ * Key methods are: \p svc_init, \p svc_end (optional), and \p svc (pure virtual, 
+ * mandatory). The \p svc_init method is called once at node initialization,
+ * while the \p svn_end method is called after a EOS task has been returned. 
  *
  *  This class is defined in \ref node.hpp
  */
@@ -817,68 +693,51 @@ private:
     friend class ff_gatherer;
 
 protected:
-    /**
-     * \brief Sets the node identifer
-     *
-     * It sets node identifier.
-     *
-     * \parm id is the identifier of the node.
-     */
+    
     void set_id(int id) { myid = id;}
 
-    /**
-     *  \brief Pushes to output buffer
-     *
-     *  It is a virtual method. It pushes data into the output buffer.
-     *
-     *  \param ptr pointer to the data to be pushed out.
-     *
-     *  \return Boolean value showing the status of push operation.
-     */
     virtual inline bool push(void * ptr) { return out->push(ptr); }
     
-    /**
-     *  \brief Pops the data from input buffer
-     *
-     *  It is a virtual method. It pops data from the input buffer.
-     *
-     *  \param ptr pointer to the location where the data is located
-     *
-     *  \return A boolean value showing the status of the pop operation.
-     */
     virtual inline bool pop(void ** ptr) { 
         if (!in_active) return false; // it does not want to receive data
         return in->pop(ptr);
     }
 
     /**
-     * \brief Skips the first element popped
+     * \brief Sets the skip-the-first-element mode true or false
      *
-     * It skips the first element popped.
+     * Setting it to true let the \p ff_node execute the \p svc method spontaneusly 
+     * before receiving a task on the input channel. \p skipfirstpop makes it possible
+     * to define a "producer" node that starts the network.
      *
-     * \parm sk Boolean value showing if the first element should be skipped.
+     * \param sk Boolean value showing if the first element should be skipped
+     *
      */
     virtual inline void skipfirstpop(bool sk)   { skip1pop=sk;}
 
-    /**
-     * \brief Gets the status of \p skipfirstpop
-     *
-     * It returns the status of \p ski1pop 
+    /** 
+     * \brief Gets the status of skip-the-first-element mode
      * 
-     * \return A booleon value showing the status of \p ski1pop
+     * If true the \p ff_node execute the \p svc method spontaneusly 
+     * before receiving a task on the input channel. \p skipfirstpop makes it possible
+     * to define a "producer" node that starts the network.
+     * 
+     * \return true if skip-the-first-element mode is set, false otherwise
+     * 
+     * \example l1_ff_nodes_graph.cpp
      */
     bool skipfirstpop() const { return skip1pop; }
     
     /** 
-     * \brief Creates the input buffer
+     * \brief Creates the input channel 
      *
-     *  It create an input buffer for the \p ff_node. 
+     *  It create an input channel for the \p ff_node. 
      *
-     *  \param nentries the size of the buffer
-     *  \param fixedsize flag to decide whether the buffer is resizable.
-     *  Default is \p true
+     *  \param nentries: the number of elements of the buffer
+     *  \param fixedsize flag to decide whether the buffer is bound or unbound.
+     *  Default is \p true.
      *
-     *  \return 0 if successful, otherwise a negative value.
+     *  \return 0 if successful, -1 otherwise
      */
     virtual int create_input_buffer(int nentries, bool fixedsize=true) {
         if (in) return -1;
@@ -889,15 +748,15 @@ protected:
     }
     
     /** 
-     *  \brief Creates the output buffer
+     *  \brief Creates the output channel
      *
      *  It creates an output buffer for the \p ff_node. 
      *
-     *  \param nentries the size of the buffer 
-     *  \param fixedsize flag to decide whether the buffer is resizable.
-     *  Default is \p false .
+     *  \param nentries: the number of elements of the buffer
+     *  \param fixedsize flag to decide whether the buffer is bound or unbound.
+     *  Default is \p true.
      *
-     *  \return 0 if successful, otherwise a negative value.
+     *  \return 0 if successful, -1 otherwise
      */
     virtual int create_output_buffer(int nentries, bool fixedsize=false) {
         if (out) return -1;
@@ -908,13 +767,14 @@ protected:
     }
 
     /** 
-     *  \brief Sets the output buffer
+     *  \brief Assign the output channelname to a channel
      *
-     *  It sets the output buffer for the ff_node.
+     * Attach the output of a \p ff_node to an existing channel, typically the input 
+     * channel of another \p ff_node
      *
-     *  \param o a buffer object of type \p FFBUFFER
+     *  \param o reference to a channel of type \p FFBUFFER
      *
-     *  \return 0 if successful, otherwise a negative value is returned.
+     *  \return 0 if successful, -1 otherwise
      */
     virtual int set_output_buffer(FFBUFFER * const o) {
         if (myoutbuffer) return -1;
@@ -923,9 +783,10 @@ protected:
     }
 
     /** 
-     *  \brief Sets the input buffer
+     *  \brief Assign the input channelname to a channel
      *
-     *  It sets the input buffer for the ff_node.
+     * Attach the input of a \p ff_node to an existing channel, typically the output 
+     * channel of another \p ff_node
      *
      *  \param i a buffer object of type \p FFBUFFER
      *
@@ -1071,7 +932,7 @@ protected:
      *
      * Counts the n. of threads that should block in the barrier.
      *
-     * \parm b is the barrier.
+     * \param b is the barrier.
      *
      * \return always 1
      */
@@ -1085,7 +946,7 @@ protected:
      *
      * It sets the barrier.
      *
-     * \parmm b is the barrier.
+     * \param b is the barrier.
      */
     virtual void set_barrier(BARRIER_T * const b) {
         barrier = b;
@@ -1137,7 +998,7 @@ public:
      * It is a pure virtual function. If \p svc returns a NULL value then
      * End-Of-Stream (EOS) is produced on the output channel.
      *
-     * \parm task is the input data stream.
+     * \param task is the input data stream.
      */
     virtual void* svc(void * task) = 0;
     
@@ -1208,7 +1069,7 @@ public:
      * It tries to acquire the lock, pushes the task to the input queue and
      * then releaes the lock
      *
-     * \parm ptr is pointing to the task
+     * \param ptr is pointing to the task
      *
      * \return The status of \p push operation as Boolean value
      */
@@ -1225,7 +1086,7 @@ public:
      * It tries to acquire the lock, pop the data from the output queue and
      * then releases the lock. 
      *
-     * \parm ptr is pointing to the task
+     * \param ptr is pointing to the task
      *
      * \return The status of \p pop operation as Boolean value
      */
@@ -1241,7 +1102,7 @@ public:
      *
      * It pushes task without using locks.
      *
-     * \parm ptr is a pointer to the task
+     * \param ptr is a pointer to the task
      *
      * \return The status of \p push as Boolean value
      */
@@ -1254,29 +1115,20 @@ public:
      *
      * It pops the task without acquiring the lock.
      *
-     * \parm ptr is a pointer to the task
+     * \param ptr is a pointer to the task
      *
      * \return The status of \p pop operation as Boolean value
      */
     virtual inline bool  get(void **ptr) { return out->pop(ptr);}
 #endif
     
-    /**
-     * \brief Loses some time before sending the message to output buffer
-     *
-     * It loses some time before the message is sent to the output buffer.
-     *
-     */
+   
     virtual inline void losetime_out(void) {
         FFTRACE(lostpushticks+=ff_node::TICKS2WAIT; ++pushwait);
         ticks_wait(ff_node::TICKS2WAIT);
     }
 
-    /**
-     * \brief Loses time before retrying to get a message from the input buffer
-     *
-     * It loses time before retrying to get a message from the input buffer.
-     */
+    
     virtual inline void losetime_in(void) {
         FFTRACE(lostpopticks+=ff_node::TICKS2WAIT; ++popwait);
         ticks_wait(ff_node::TICKS2WAIT);
@@ -1336,18 +1188,9 @@ public:
      */
     virtual const struct timeval getwstoptime() const { return wtstop;}    
 
-    /**
-     * \brief Create OCL
-     *
-     * It creates OCL.
-     */
+    
     virtual inline void svc_createOCL()  {} 
 
-    /**
-     * \brief Releases OCL
-     *
-     * It releases OCL.
-     */
     virtual inline void svc_releaseOCL() {}
 
 #if defined(TRACE_FASTFLOW)
@@ -1371,14 +1214,14 @@ public:
      *
      * It allows to queue tasks without returning from the \p svc method 
      *
-     * \parm task a pointer to the task
-     * \parm retry number of tries to push the task to the buffer
-     * \parm ticks number of ticks to wait
+     * \param task a pointer to the task
+     * \param retry number of tries to push the task to the buffer
+     * \param ticks number of ticks to wait
      * 
      * \return If call back is defined, then returns the status of \p callback
      * function. Otherwise, if tries to push an element with the number of
-     * \retry and if succesfful \p true is returned, and if after the number of
-     * \retry the push is not successful \p false is returned.
+     * XXX and if succesfful \p true is returned, and if after the number of
+     * XXX the push is not successful \p false is returned.
      */
     virtual bool ff_send_out(void * task, 
                              unsigned int retry=((unsigned int)-1),
@@ -1454,8 +1297,8 @@ private:
      *
      * It registers the call back method and arguments.
      *
-     * \parm cb is the callback function
-     * \parm arg is a pointer to arguments
+     * \param cb is the callback function
+     * \param arg is a pointer to arguments
      */
     void registerCallback(bool (*cb)(void *,unsigned int,unsigned int,void *), void * arg) {
         callback=cb;
@@ -1486,7 +1329,7 @@ private:
          *
          * It is contructor to create FastFlow thread.
          *
-         * \parm filter is a pointer to FastFlow's node
+         * \param filter is a pointer to FastFlow's node
          *
          */
         thWorker(ff_node * const filter):
@@ -1497,7 +1340,7 @@ private:
          *
          * It pushes the task to the \p filter
          *
-         * \parm task is a pointer to the task.
+         * \param task is a pointer to the task.
          *
          * \return \p true is always returned.
          */
@@ -1533,7 +1376,7 @@ private:
          *
          * It pushes the task in the filter.
          *
-         * \parm ptr is a pointer to the task.
+         * \paramptr is a pointer to the task.
          */
         inline bool put(void * ptr) { return filter->put(ptr);}
 

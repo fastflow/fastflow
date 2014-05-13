@@ -99,6 +99,34 @@ LEVEL 1
   *
   */
 
+/*!
+  * \defgroup core_patterns Core patterns
+  *
+  * \brief brief description
+  *
+  * Full description
+  *
+  */
+
+/*!
+  * \defgroup building_blocks Building blocks
+  *
+  * \brief brief description
+  *
+  * Full description
+  *
+  */
+
+/*!
+  * \defgroup aux_classes Auxiliary classes and functions
+  *
+  * \brief brief description
+  *
+  * Full description
+  *
+  */
+
+
  /*!
   * \defgroup high_level_patterns_shared_memory High-level patterns for shared memory
   * \ingroup high_level_patterns
