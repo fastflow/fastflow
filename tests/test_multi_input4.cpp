@@ -51,7 +51,7 @@ struct Stage2: ff_minode {
         if (get_channel_id()==0) return task; // FIX!!!
         return GO_ON;
     }
-    void eosnotify(int) {
+    void eosnotify(ssize_t) {
         ff_send_out((void*)EOS);
     }
 };

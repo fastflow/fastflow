@@ -35,8 +35,8 @@ using namespace ff;
 struct ff_task {};
 
 // just a function
-ff_task *F(ff_task *t, ff_node*const) {
-    printf("hello I've got one task\n");
+ff_task *F(ff_task *t, ff_node*const node) {
+    printf("hello I've got one task my id is=%d\n", node->get_my_id());
     return t;
 }
 
@@ -85,6 +85,7 @@ int main() {
     /* ------------------------------------------- */
     // Version using a lambda function to define the Emitter thread,
     // which generates the stream. No collector present.
+#if 0
     ff_farm<> farm2;
     const int K = 10;
     auto lambda = [K]() -> void* {
@@ -102,6 +103,28 @@ int main() {
     for(int i=0;i<4;++i) W.push_back(new seq);
     farm2.add_workers(W);
     farm2.run_and_wait_end();
+#else
+    const int K = 10;
+    int k = 0;
+    auto lambda = [K,&k]() -> void* {
+        if (k++ == K) return NULL;
+        return new int(k);
+    };
+    auto myF=[](ff_task *t,ff_node*const node)->ff_task*{ 
+        printf("hello I've got one task my id is=%d\n", node->get_my_id());
+        return t;
+    };
+    struct Emitter:public ff_node {
+        std::function<void*()> F;
+        Emitter(std::function<void*()> F):F(F) {}
+        void *svc(void*) { return F(); }
+    };
+    ff_farm<> farm2((std::function<ff_task*(ff_task*,ff_node*const)>)myF,4);
+
+    farm2.remove_collector();
+    farm2.add_emitter(new Emitter(lambda));
+    farm2.run_and_wait_end();
+#endif
     printf("done 4th\n\n");
     /* ------------------------------------------- */
 

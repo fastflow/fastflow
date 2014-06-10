@@ -56,14 +56,14 @@ int main(int argc, char *argv[]) {
     
     long sum=0.0;
     for(int k=0;k<ntimes; ++k) {
-        auto loop1 = [&A,k](const long j) {A[j]=j+k;};
+        auto loop1 = [&A,k](const long j) { A[j]=j+k; };
         auto loop2 = [&A](const long i, long& sum) { sum += A[i];};
         auto Fsum = [](long& v, const long elem) { v += elem; };
 
         pfr.parallel_for(0L,size,1L,chunk,loop1,std::min(k+1, nworkers));
-        printf("loop1 using %d workers\n", std::min(k+1,nworkers));
-        pfr.parallel_reduce(sum,0L,0L,size,1L,chunk,loop2,Fsum,std::min(k+2,nworkers));
-        printf("loop2 using %d workers\n", std::min(k+2,nworkers));        
+        printf("loop1 using %d workers\n", nworkers);
+        pfr.parallel_reduce(sum,0L,0L,size,1L,chunk,loop2,Fsum,nworkers);
+        printf("loop2 using %d workers\n", nworkers);
     }
     printf("loop done\n");
 

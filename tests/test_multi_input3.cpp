@@ -70,7 +70,7 @@ public:
         printf("got back a task from Collector\n");
         return GO_ON;
     }
-    void eosnotify(int) {
+    void eosnotify(ssize_t) {
         lb->broadcast_task((void*)EOS);
     }
 private:

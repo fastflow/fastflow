@@ -91,16 +91,25 @@ int main(int argc, char *argv[]) {
     printf("%d Time  = %g (ms)\n", nworkers, ffTime(GET_TIME));
 #else
 
+#if 0
+    // macroes interface
     FF_PARFOR_INIT(pf, nworkers);
-
     ffTime(START_TIME);
     FF_PARFOR_START(pf, j,0,numtasks,1, chunk, nworkers) {
         V[j]=j;
     } FF_PARFOR_STOP(pf);
     ffTime(STOP_TIME);
     printf("%d Time  = %g (ms)\n", nworkers, ffTime(GET_TIME));
-
     FF_PARFOR_DONE(pf);
+#else
+    ParallelFor pf(nworkers);
+    ffTime(START_TIME);
+    pf.parallel_for(0,numtasks,1,chunk, [&V](const long j) {
+            V[j]=j;
+        });
+    ffTime(STOP_TIME);
+    printf("%d Time  = %g (ms)\n", nworkers, ffTime(GET_TIME));
+#endif
 #endif
     return 0;
 }
