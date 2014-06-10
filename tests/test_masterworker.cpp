@@ -76,7 +76,7 @@ public:
         if (--numtasks == 0 && eosreceived) return NULL;
         return GO_ON;	
     }
-    void eosnotify(int id) {
+    void eosnotify(ssize_t id) {
         if (id == -1)  {
             eosreceived = true;
             if (numtasks == 0) {

@@ -26,6 +26,26 @@
  ****************************************************************************
  */
 
+/*
+ * The PoolEvolution pattern models the evolution of a population. 
+ * In the pattern, a “candidate selection” function (s) selects a subset of objects belonging 
+ * to an unstructured object pool (P). 
+ * The selected objects are processed by means of an “evolution” function (e). 
+ * The evolution function may produce any number of new/modified  objects out of the input one. 
+ * The set of objects computed by the evolution function on the selected object are filtered 
+ * through a “filter” function (f) and eventually inserted into the object pool. 
+ * At any insertion/extraction into/from the object pool a “termination” function (t) is 
+ * evaluated on the object pool, to determine whether the evolution process has to be stopped or 
+ * continued for further iterations.
+ * A pool evolution pattern therefore computes P as result of the following algorithm:
+ *
+ *  while not( t(P) ) do
+ *    N  = e ( s(P) )
+ *    P += f (N, P)
+ *  end while
+ *
+ */
+
 #ifndef FF_POOL_HPP
 #define FF_POOL_HPP
 
@@ -35,44 +55,56 @@
 
 namespace ff {
 
-template<typename T>
+template<typename T, typename env_t=char>
 class poolEvolution : public ff_node {
 public:
-    typedef typename std::vector<T>::iterator       iter_t;
-    typedef typename std::vector<T>::const_iterator const_iter_t;
+
+    typedef void     (*selection_t)  (ParallelForReduce<T> &, std::vector<T> &, std::vector<T> &, env_t &);
+    typedef const T& (*evolution_t)  (T&);
+    typedef void     (*filtering_t)  (ParallelForReduce<T> &, std::vector<T> &, std::vector<T> &, env_t &);
+    typedef bool     (*termination_t)(const std::vector<T> &pop, env_t &);
+
 protected:
-    size_t maxp,pE,pF,pT,pS;
+    size_t maxp,pE;
+    env_t  env;
     std::vector<T>               *input;
     std::vector<T>                buffer;
-    std::vector<std::vector<T> >  bufferPool;
-    void (*selection)(const_iter_t start, const_iter_t stop, std::vector<T> &out);
-    const T& (*evolution)(T& individual);
-    void (*filter)(const_iter_t start, const_iter_t stop, std::vector<T> &out);
-    bool (*termination)(const std::vector<T> &pop); 
+
+    selection_t   selection;
+    evolution_t   evolution;
+    filtering_t   filter;
+    termination_t termination;
+
     ParallelForReduce<T> loopevol;
+
 public :
+
+    /* selection_t is the selection function type, it takes the popolution and returns a sub-population 
+     * evolution_t is the evolution function type, it works on the single element 
+     * filtering_t is the filter function type, it takes the population produced at the previous step and 
+     * produces a new population 
+     */
+
     // constructor : to be used in non-streaming applications
     poolEvolution (size_t maxp,                                // maximum parallelism degree 
                    std::vector<T> & pop,                       // the initial population
-                   void (*sel)(const_iter_t start, const_iter_t stop,
-                               std::vector<T> &out),           // the selection function
-                   const T& (*evol)(T& individual),            // the evolution function
-                   void (*fil)(const_iter_t start, const_iter_t stop,
-                               std::vector<T> &out),           // the filter function
-                   bool (*term)(const std::vector<T> &pop))    // the termination function
-        :maxp(maxp), pE(maxp),pF(1),pT(1),pS(1),input(&pop),selection(sel),evolution(evol),filter(fil),termination(term),
+                   selection_t sel                 ,           // the selection function
+                   evolution_t evol,                           // the evolution function
+                   filtering_t fil,                            // the filter function
+                   termination_t term,                         // the termination function
+                   const env_t &E= env_t())
+        :maxp(maxp), pE(maxp),env(E),input(&pop),selection(sel),evolution(evol),filter(fil),termination(term),
          loopevol(maxp) { 
         loopevol.disableScheduler(true);
     }
     // constructor : to be used in streaming applications
     poolEvolution (size_t maxp,                                // maximum parallelism degree 
-                   void (*sel)(const_iter_t start, const_iter_t stop,
-                               std::vector<T> &out),           // the selection function
-                   const T& (*evol)(T& individual),            // the evolution function
-                   void (*fil)(const_iter_t start, const_iter_t stop,
-                               std::vector<T> &out),        // the filter function
-                   bool (*term)(const std::vector<T> &pop))    // the termination function
-        :maxp(maxp), pE(maxp),pF(1),pT(1),pS(1),input(NULL),selection(sel),evolution(evol),filter(fil),termination(term),
+                   selection_t sel                 ,           // the selection function
+                   evolution_t evol,                           // the evolution function
+                   filtering_t fil,                            // the filter function
+                   termination_t term,                         // the termination function
+                   const env_t &E= env_t())
+        :maxp(maxp), pE(maxp),env(E),input(NULL),selection(sel),evolution(evol),filter(fil),termination(term),
          loopevol(maxp) { 
         loopevol.disableScheduler(true);
     }
@@ -86,18 +118,8 @@ public :
             error("setParEvolution: pardegree too high, it should be less than or equal to %ld\n",maxp);
         else pE = pardegree;        
     }
-    // currently the termination condition is computed sequentially
-    void setParTermination(size_t )          { pT = 1; }
-    void setParSelection(size_t pardegree)   { 
-        if (pardegree>maxp)
-            error("setParSelection: pardegree too high, it should be less than or equal to %ld\n",maxp);
-        else pS = pardegree;
-    }
-    void setParFilter (size_t pardegree)     { 
-        if (pardegree>maxp)
-            error("setParFilter: pardegree too high, it should be less than or equal to %ld\n",maxp);
-        else pS = pardegree;
-    }
+
+    const env_t& getEnv() const { return env;}
         
     int run_and_wait_end() {
         // TODO:
@@ -117,29 +139,10 @@ protected:
     void* svc(void * task) {
         if (task) input = ((std::vector<T>*)task);
 
-        size_t max_pS_pF = std::max(pS,pF);
-        bufferPool.resize(max_pS_pF);
-        
-        while(!termination(*input)) {
+        while(!termination(*input,env)) {
             // selection phase
-            buffer.clear();
-            if (pS==1) 
-                selection(input->begin(),input->end(), buffer);
-            else {
-                for(size_t i=0;i<pS;++i) bufferPool[i].clear();
-
-                auto S = [&](const long start, const long stop, const int thread_id) {
-                    printf("Selection: %d (%ld,%ld(\n", thread_id, start, stop);
-
-                    auto begin = input->begin()+start;
-                    auto end   = input->begin()+start+stop;
-                    selection(begin,end, bufferPool[thread_id]);
-                };
-                loopevol.parallel_for_idx(0,input->size(),1,-1,S,pS); // TODO: static and dynamic scheduling
-
-                for(size_t i=0;i<pS;++i)
-                    buffer.insert( buffer.end(), bufferPool[i].begin(), bufferPool[i].end());
-            }
+            buffer.clear();            
+            selection(loopevol, *input, buffer, env);
 
             // evolution phase
             auto E = [&](const long i) {
@@ -148,21 +151,9 @@ protected:
             loopevol.parallel_for(0,buffer.size(),E, pE); // TODO: static and dynamic scheduling
 
             // filtering phase
-            input->clear();
-            if (pF==1)
-                filter(buffer.begin(),buffer.end(), *input);
-            else {
-                for(size_t i=0;i<pF;++i) bufferPool[i].clear();
+            filter(loopevol, *input, buffer, env);
 
-                auto F = [&](const long start, const long stop, const int thread_id) {
-                    auto begin = buffer.begin()+start;
-                    auto end   = buffer.begin()+start+stop;
-                    filter(begin, end, bufferPool[thread_id]);
-                };
-                loopevol.parallel_for_idx(0,buffer.size(),1,-1,F,pF); // TODO: static and dynamic scheduling
-                for(size_t i=0;i<pF;++i)
-                    input->insert( input->end(), bufferPool[i].begin(), bufferPool[i].end());
-            }
+            input->swap(buffer);
         }
         return (task?input:NULL);
     }

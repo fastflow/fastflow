@@ -60,12 +60,12 @@ public:
 
 class myScheduler: public ff_loadbalancer {
 protected:
-    inline int selectworker() { return victim; }
+    inline size_t selectworker() { return victim; }
 public:
     myScheduler(int max_num_workers):ff_loadbalancer(max_num_workers),victim(0) {}
     void set_victim(int v) { victim=v; }
 private:
-    int    victim;
+    size_t   victim;
 };
 
 class Emitter: public ff_node {

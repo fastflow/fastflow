@@ -94,7 +94,7 @@ public:
         ++(*t);
         return task;
     }
-    void eosnotify(int id) {
+    void eosnotify(ssize_t id) {
         if (id == -1) {
             eosarrived= true;
             if (numtasks==0) lb->broadcast_task(EOS);

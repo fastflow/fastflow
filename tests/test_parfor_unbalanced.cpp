@@ -87,8 +87,8 @@ int main(int argc, char *argv[]) {
     srandom(seed);
     SRandom(random());
 #if !defined(USE_OPENMP) && !defined(USE_TBB) 
-    ParallelFor ffpf(nthreads);
-    ffpf.disableScheduler();
+    ParallelFor ffpf(nthreads,true); // enable spin-wait barrier
+    ffpf.disableScheduler(); // disable scheduler
 #endif
 #if defined(USE_TBB)
     tbb::task_scheduler_init init(nthreads);

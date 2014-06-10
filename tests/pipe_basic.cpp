@@ -168,7 +168,7 @@ int main() {
             }
             return GO_ON;
         }            
-        void eosnotify(int id) {
+        void eosnotify(ssize_t id) {
             if (id==-1) lb->broadcast_task(EOS);
         }
     };

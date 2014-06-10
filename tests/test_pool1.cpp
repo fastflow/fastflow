@@ -50,19 +50,18 @@ struct Element {
 
 
 // if we have at least an odd element, than we go on
-bool termination(const std::vector<Element> &P) {
+bool termination(const std::vector<Element> &P, char&) {
     for(size_t i=0;i<P.size(); ++i)
         if (P[i].nmutations < MAXMUTATIONS && P[i].number & 0x1) return false;
     return true;
 }
 
 // selects all odd elements that have a number of mutation less than MAXMUTATIONS
-void selection(std::vector<Element>::const_iterator P_start, 
-               std::vector<Element>::const_iterator P_stop, 
-               std::vector<Element> &output) {
-    size_t size = P_stop-P_start;
-    for(size_t i=0;i<(size/2);++i)
-        output.push_back(P_start[i]);     
+void selection(ParallelForReduce<Element> &, 
+               std::vector<Element> &P, 
+               std::vector<Element> &output,char&) {
+    for(size_t i=0;i<P.size()/2;++i)
+        output.push_back(P[i]);
 }
 
 const Element& evolution(Element & individual) {
@@ -72,16 +71,16 @@ const Element& evolution(Element & individual) {
 }
 
 // remove at most K elements randomly
-void filter(std::vector<Element>::const_iterator P_start, 
-            std::vector<Element>::const_iterator P_stop, 
-            std::vector<Element> & output) {
+void filter(ParallelForReduce<Element> &, 
+            std::vector<Element> &P, 
+            std::vector<Element> &output,char&) {
     
-    size_t size = P_stop-P_start;
-    if (size<K) { output.clear(); return; }
-    output.insert(output.begin(),P_start,P_stop);
+    if (P.size()<K) { output.clear(); return; }
+    output.clear();
+    output.insert(output.begin(),P.begin(), P.end());
 
     for(size_t i=0;i<K;++i) {
-        auto r = random() % size;
+        auto r = random() % P.size();
         output.erase(output.begin()+r);
     }
 }
@@ -91,7 +90,7 @@ template<typename T>
 void printPopulation(std::vector<T> &P) {
     printf("[ ");
     for (size_t i=0;i<P.size(); ++i)
-        printf(" (%u,%u) ", (size_t)P[i].number, (size_t)P[i].nmutations);
+        printf(" (%ld,%ld) ", (size_t)P[i].number, (size_t)P[i].nmutations);
     printf("  ]\n");
 }
 

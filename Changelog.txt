@@ -1,4 +1,9 @@
 * 24/01/14 - v.2.0.4
+   - separated parallel_for_internals.hpp and parallel_for.hpp 
+   - added the possibility to control the grain size in the static scheduling 
+     policy of the ParallelFor(Reduce) pattern(s)
+   - ff_node::eosnotify interface changed: 
+       virtual void eosnotify(int id=-1) --> virtual void eosnotify(ssize_t id=-1)
    - added the poolEvolutionCUDA pattern with some simple tests (beta version)
    - added the poolEvolution pattern with some simple tests (beta version)
    - stencilReduceCUDA added 

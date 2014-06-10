@@ -94,7 +94,7 @@ public:
         return GO_ON;
     }
 
-    void eosnotify(int id) {
+    void eosnotify(ssize_t id) {
         if (id != -1) return; 
         ++neos;
         if ((neos == FARM1WORKERS) && (numtasks==0))

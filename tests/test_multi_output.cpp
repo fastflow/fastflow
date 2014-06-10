@@ -77,7 +77,7 @@ public:
         return GO_ON;
     }
     
-    // void eosnotify(int) {
+    // void eosnotify(ssize_t) {
     //     ff_send_out_to((void*)EOS, 1);
     // }
 

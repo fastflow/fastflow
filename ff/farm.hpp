@@ -395,7 +395,7 @@ public:
             error("FARM, try to add zero workers!\n");
             return -1; 
         }        
-        for(int i=0;i<w.size();++i) {
+        for(size_t i=0;i<w.size();++i) {
             workers.push_back(w[i]);
 			(workers.back())->set_id(i);
         }
@@ -1392,7 +1392,7 @@ private:
          * \It notifies the EOS.
          *
          */
-        void eosnotify(int id) { 
+        void eosnotify(ssize_t id=-1) { 
             gt->set_dead(id);
             if (nextone == (size_t)id) {
                 nextone= (nextone+1) % nworkers;

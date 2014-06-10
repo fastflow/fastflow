@@ -69,7 +69,7 @@ struct Stage1: ff_monode {
         }
         return GO_ON;
     }
-    void eosnotify(int) {
+    void eosnotify(ssize_t) {
         ff_send_out((void*)EOS);
     }
 };
@@ -81,7 +81,7 @@ struct Stage2: ff_monode {
             ff_send_out_to(task, 1);
         return GO_ON;
     }
-    void eosnotify(int) {
+    void eosnotify(ssize_t) {
         ff_send_out((void*)EOS);
     }
 };
