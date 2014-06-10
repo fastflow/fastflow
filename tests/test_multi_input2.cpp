@@ -72,7 +72,7 @@ public:
         printf("got back a task from Worker2(%d)\n", wid);
         return GO_ON;
     }
-    void eosnotify(int id) {
+    void eosnotify(ssize_t id) {
         if (id != -1) return;
         if (++neos == nworkers) lb->broadcast_task(EOS);        
     }

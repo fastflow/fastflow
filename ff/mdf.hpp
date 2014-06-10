@@ -463,7 +463,7 @@ protected:
             return GO_ON;
         }
         
-        void eosnotify(int id) { lb->broadcast_task(EOS);}
+        void eosnotify(ssize_t id=-1) { lb->broadcast_task(EOS);}
 
         int wait_freezing() {
             return lb->wait_lb_freezing();

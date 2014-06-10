@@ -132,24 +132,25 @@ int main(int argc, char * argv[]) {
 
 #if 1
     {
-    parallel_for(0,arraySize,1,CHUNKSIZE, [&](const long j) { A[j]=j*3.14; B[j]=2.1*j;});
-    auto Fsum = [](double& v, const double elem) { v += elem; };
+        ParallelForReduce<double> pfr(nworkers,true); // spinwait is set to true
 
-    ParallelForReduce<double> pfr(nworkers,true); // spinwait is set to true
-    
-    ff::ffTime(ff::START_TIME);    
-    for(int z=0;z<NTIMES;++z) {
-        //printf("running z=%d, (nw=%d)\n", z, std::min(nworkers, (z+1)));
-        pfr.parallel_reduce(sum, 0.0, 
-                            0, arraySize,1,CHUNKSIZE,
-                            [&](const long i, double& sum) {sum += A[i]*B[i];}, 
-                            Fsum); // FIX: , std::min(nworkers, (z+1)));
+        //pfr.parallel_for_static(0,arraySize,1,CHUNKSIZE, [&](const long j) { A[j]=j*3.14; B[j]=2.1*j;});
+        pfr.parallel_for(0,arraySize,1,CHUNKSIZE, [&](const long j) { A[j]=j*3.14; B[j]=2.1*j;});
+        auto Fsum = [](double& v, const double elem) { v += elem; };
+        
+        ff::ffTime(ff::START_TIME);    
+        for(int z=0;z<NTIMES;++z) {
+            //pfr.parallel_reduce_static(sum, 0.0,
+            pfr.parallel_reduce(sum, 0.0, 
+                                0, arraySize,1,CHUNKSIZE,
+                                [&](const long i, double& sum) {sum += A[i]*B[i];}, 
+                                Fsum); // FIX: , std::min(nworkers, (z+1)));
+        }
+        ffTime(STOP_TIME);
+        printf("ff %d Time = %g ntimes=%d\n", nworkers, ffTime(GET_TIME), NTIMES);
     }
-    ffTime(STOP_TIME);
-    printf("ff %d Time = %g ntimes=%d\n", nworkers, ffTime(GET_TIME), NTIMES);
-    }
-
-#else  // using macroes
+#else  
+    // using macroes
     FF_PARFORREDUCE_INIT(dp, double, nworkers);
 
     // init data
