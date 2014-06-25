@@ -56,6 +56,9 @@
 
 namespace ff {
 
+//
+// TODO: to re-write the ParallelFor class as a specialization of the ParallelForReduce
+//
     
 //! ParallelFor class
 class ParallelFor {
@@ -74,6 +77,13 @@ public:
         pf->disableScheduler(onoff);
     }
 
+    // It puts all spinning threads to sleep. 
+    // If spinwait is false it dosen't do anything.
+    inline int threadPause() {
+        return pf->stopSpinning();
+    }
+
+    /* -------------------- parallel_for -------------------- */
     template <typename Function>
     inline void parallel_for(long first, long last, const Function& f, 
                              const long nw=-1) {
@@ -91,14 +101,14 @@ public:
     template <typename Function>
     inline void parallel_for(long first, long last, long step, long grain, 
                              const Function& f, const long nw=-1) {
-        FF_PARFOR_START(pf, parforidx,first,last,step,grain,nw) {
+        FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(parforidx);            
         } FF_PARFOR_STOP(pf);
     }    
     template <typename Function>
     inline void parallel_for_thid(long first, long last, long step, long grain, 
                                   const Function& f, const long nw=-1) {
-        FF_PARFOR_START(pf, parforidx,first,last,step,grain,nw) {
+        FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(parforidx,_ff_thread_id);            
         } FF_PARFOR_STOP(pf);
     }    
@@ -106,7 +116,7 @@ public:
     template <typename Function>
     inline void parallel_for_idx(long first, long last, long step, long grain, 
                                   const Function& f, const long nw=-1) {
-        FF_PARFOR_START_IDX(pf,parforidx,first,last,step,grain,nw) {
+        FF_PARFOR_START_IDX(pf,parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(ff_start_idx, ff_stop_idx,_ff_thread_id);            
         } FF_PARFOR_STOP(pf);
     }
@@ -115,11 +125,11 @@ public:
     inline void parallel_for_static(long first, long last, long step, long grain, 
                                     const Function& f, const long nw=-1) {
         if (grain==0 || labs(nw)==1) {
-            FF_PARFOR_START(pf, parforidx,first,last,step,grain,nw) {
+            FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
                 f(parforidx);            
             } FF_PARFOR_STOP(pf);
         } else {
-            FF_PARFOR_T_START_STATIC(pf, int, parforidx,first,last,step,grain,nw) {
+            FF_PARFOR_T_START_STATIC(pf, int, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
                 f(parforidx);
             } FF_PARFOR_STOP(pf);
         }
@@ -142,6 +152,12 @@ public:
     // parameter
     inline void disableScheduler(bool onoff=true) { 
         pfr->disableScheduler(onoff);
+    }
+
+    // It puts all spinning threads to sleep. 
+    // If spinwait is false it dosen't do anything.
+    inline int threadPause() {
+        return pfr->stopSpinning();
     }
 
     /* -------------------- parallel_for -------------------- */
@@ -188,7 +204,7 @@ public:
     inline void parallel_for_static(long first, long last, long step, long grain, 
                                     const Function& f, const long nw=-1) {
         if (grain==0 || labs(nw)==1) {
-            FF_PARFOR_T_START(pfr, T, parforidx,first,last,step,grain,nw) {
+            FF_PARFOR_T_START(pfr, T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
                 f(parforidx);            
             } FF_PARFOR_STOP(pfr);
         } else {
