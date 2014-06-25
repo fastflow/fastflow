@@ -574,7 +574,9 @@ public:
      */
     inline void thaw(bool _freeze=false) {
         pthread_mutex_lock(&mutex);
-        if (_freeze) freezing=2; // next time freeze again the thread
+        // if this function is called even if the thread is not 
+        // in frozen state, than freezing has to be set to 1 and not 2
+        if (_freeze) freezing=(frozen?2:1); // next time freeze again the thread
         else freezing=0;
         //assert(thawed==false);
         frozen=false; 

@@ -433,6 +433,7 @@ protected:
 protected:
     // initialize the data vector
     virtual inline size_t init_data(long start, long stop) {
+        static_scheduling = false;  // enable work stealing in the nextTaskConcurrent
         const long numtasks  = std::lrint(std::ceil((stop-start)/(double)_step));
         long totalnumtasks   = std::lrint(std::ceil(numtasks/(double)_chunk));
         long tt     = totalnumtasks;
@@ -473,6 +474,8 @@ protected:
     // initialize the data vector
     virtual inline size_t init_data_static(long start, long stop) {
         assert(_chunk <= 0);
+        static_scheduling = true;  // this forces static scheduling in the nextTaskConcurrent
+
         if (_chunk == 0) { 
             // default static scheduling, i.e. the iteration space is almost equally divided
             // in contiguous chunks among threads
@@ -519,7 +522,7 @@ protected:
 public:
     forall_Scheduler(ff_loadbalancer* lb, long start, long stop, long step, long chunk, size_t nw):
         lb(lb),_start(start),_stop(stop),_step(step),_chunk(chunk),totaltasks(0),_nw(nw),
-        jump(0),skip1(false),workersspinwait(false) {
+        jump(0),skip1(false),workersspinwait(false),static_scheduling(false) {
 		maxid.store(-1); // MA: consistency of store to be checked
         if (_chunk<=0) totaltasks = init_data_static(start,stop);
         else           totaltasks = init_data(start,stop);
@@ -595,6 +598,8 @@ public:
         }
 
         // no available task for the current thread
+        if (static_scheduling) return false;      // <------------------------------------
+
 #if !defined(PARFOR_MULTIPLE_TASKS_STEALING)
         // the following scheduling policy for the tasks focuses mostly to load-balancing
         long _maxid = 0, ntask = 0;
@@ -754,6 +759,7 @@ protected:
     long             jump;
     bool             skip1;
     bool             workersspinwait;
+    bool             static_scheduling;
     std::vector<forall_task_t> taskv;
 };
 
@@ -909,7 +915,9 @@ public:
             if (spinwait) {
                 // all worker threads have already crossed the barrier so it is safe to restart it
                 loopbar.barrierSetup(nwtostart+1);
-                ((forall_Scheduler*)getEmitter())->sendWakeUp();
+                // NOTE: here is not possible to use sendTask because otherwise there could be 
+                //       a rece between the main thread and the workers in accessing the task table.
+                ((forall_Scheduler*)getEmitter())->sendWakeUp(); 
             } else 
                 ((forall_Scheduler*)getEmitter())->sendTask(true);
 
@@ -935,6 +943,18 @@ public:
                 r = getlb()->waitWorkers();
         }
         return r;
+    }
+
+    inline int stopSpinning() {
+        if (!spinwait) return -1;
+        // getnworkers() returns the number of threads that are running
+        // it may be different from getnw() (i.e. the n. of threads currently 
+        // executing the parallel iterations)
+        size_t running = getlb()->getnworkers();
+        if (running == (size_t)-1) return 0;
+        for(size_t i=0;i<getlb()->getnworkers();++i)
+            getlb()->ff_send_out_to(GO_OUT,i);
+        return getlb()->wait_freezingWorkers();
     }
 
     inline int wait_freezing() {
