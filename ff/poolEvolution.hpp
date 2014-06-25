@@ -92,9 +92,9 @@ public :
                    evolution_t evol,                           // the evolution function
                    filtering_t fil,                            // the filter function
                    termination_t term,                         // the termination function
-                   const env_t &E= env_t())
+                   const env_t &E= env_t(), bool spinWait=true)
         :maxp(maxp), pE(maxp),env(E),input(&pop),selection(sel),evolution(evol),filter(fil),termination(term),
-         loopevol(maxp) { 
+         loopevol(maxp,true) { 
         loopevol.disableScheduler(true);
     }
     // constructor : to be used in streaming applications
@@ -103,9 +103,9 @@ public :
                    evolution_t evol,                           // the evolution function
                    filtering_t fil,                            // the filter function
                    termination_t term,                         // the termination function
-                   const env_t &E= env_t())
+                   const env_t &E= env_t(), bool spinWait=true)
         :maxp(maxp), pE(maxp),env(E),input(NULL),selection(sel),evolution(evol),filter(fil),termination(term),
-         loopevol(maxp) { 
+         loopevol(maxp, spinWait) { 
         loopevol.disableScheduler(true);
     }
     
@@ -155,6 +155,7 @@ protected:
 
             input->swap(buffer);
         }
+        loopevol.threadPause();
         return (task?input:NULL);
     }
 };

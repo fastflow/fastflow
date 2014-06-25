@@ -1,4 +1,7 @@
 * 24/01/14 - v.2.0.4
+   - introduced the threadPause() method in the ParallelFor/Reduce patterns. 
+     It may be used to  put threads to sleep when the spinwait flag is set 
+     and the parallel for is not   used for a while
    - separated parallel_for_internals.hpp and parallel_for.hpp 
    - added the possibility to control the grain size in the static scheduling 
      policy of the ParallelFor(Reduce) pattern(s)
