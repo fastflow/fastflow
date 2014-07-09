@@ -292,6 +292,17 @@ namespace ff {
 		 error("running ff_forall_farm (name)\n");                                       \
       name->wait_freezing();                                                             \
     } else F_##name(name->startIdx(),name->stopIdx(),0,0);
+
+#define FF_PARFOR_T_STOP(name, type)                                                     \
+    };                                                                                   \
+    if (name->getnw()>1) {                                                               \
+        name->setF(F_##name, type());                                                    \
+        if (name->run_then_freeze(name->getnw())<0)                                      \
+		  error("running ff_forall_farm (name)\n");                                      \
+        name->wait_freezing();                                                           \
+    } else {                                                                             \
+        F_##name(name->startIdx(),name->stopIdx(),0,type());                             \
+    }
     
 #define FF_PARFORREDUCE_START(name, var,identity, idx,begin,end,step, chunk, nw)         \
     name->setloop(begin,end,step,chunk,nw);                                              \
@@ -976,7 +987,7 @@ public:
         return ff_farm<foralllb_t>::wait();
     }
 
-    inline void setF(F_t  _F, const Tres idtt=(Tres)0) { 
+    inline void setF(F_t  _F, const Tres idtt=Tres()) { //(Tres)0) { 
         const size_t nw                = getnw();
         const svector<ff_node*> &nodes = getWorkers();
         // aggressive mode enabled if the number of threads is less than

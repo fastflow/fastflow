@@ -48,8 +48,9 @@
 #ifndef FF_SWSR_PTR_BUFFER_HPP
 #define FF_SWSR_PTR_BUFFER_HPP
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
+//#include <atomic>
 
 #include <ff/sysdep.h>
 #include <ff/config.hpp>
@@ -204,7 +205,7 @@ public:
      *  \return TODO
      */
     inline bool push(void * const data) {     /* modify only pwrite pointer */
-        if (!data) return false;
+        assert(data != NULL);
 
         if (available()) {
             /**
@@ -216,6 +217,7 @@ public:
              * (e.g. Powerpc). This is a no-op on Intel x86/x86-64 CPUs.
              */
             WMB(); 
+            //std::atomic_thread_fence(std::memory_order_release);
             buf[pwrite] = data;
             pwrite += (pwrite+1 >=  size) ? (1-size): 1; // circular buffer
             return true;
@@ -269,7 +271,7 @@ public:
      * \param data Element to be pushed in the buffer
      */
     inline bool mpush(void * const data) {
-        if (!data) return false;
+        assert(data);
         
         if (mcnt==MULTIPUSH_BUFFER_SIZE)
             return multipush(multipush_buf,MULTIPUSH_BUFFER_SIZE);
@@ -298,6 +300,7 @@ public:
         if (!data || empty()) return false;
 
         *data = buf[pread];
+        //std::atomic_thread_fence(std::memory_order_acquire);
         return inc();
     } 
     
@@ -406,7 +409,7 @@ public:
      * returned.
      */
     bool init() {
-        if (buf) return false;
+        assert(buf);
         buf=(void**)getAlignedMemory(longxCacheLine*sizeof(long),size*sizeof(void*));
         if (!buf) return false;
         reset();
@@ -435,7 +438,7 @@ public:
      * TODO
      */
     inline bool push(void * const data) {
-        if (!data) return false;
+        assert(data);
 
         const unsigned long next = pwrite + ((pwrite+1>=size)?(1-size):1);
         if (next != pread) {
@@ -455,7 +458,7 @@ public:
      * TODO
      */
     inline bool  pop(void ** data) {
-        if (!data) return false;       
+        assert(data);
 
         if (empty()) return false;
         *data = buf[pread];

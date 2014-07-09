@@ -46,9 +46,13 @@
  *
  */
 
+// TODO:
+// reuse the pool pattern multiple times in a non streaming fashion
+
 #ifndef FF_POOL_HPP
 #define FF_POOL_HPP
 
+#include <iostream>
 #include <vector>
 #include <ff/node.hpp>
 #include <ff/parallel_for.hpp>
@@ -60,9 +64,11 @@ class poolEvolution : public ff_node {
 public:
 
     typedef void     (*selection_t)  (ParallelForReduce<T> &, std::vector<T> &, std::vector<T> &, env_t &);
-    typedef const T& (*evolution_t)  (T&);
+    typedef const T& (*evolution_t)  (T&, const env_t&);
     typedef void     (*filtering_t)  (ParallelForReduce<T> &, std::vector<T> &, std::vector<T> &, env_t &);
     typedef bool     (*termination_t)(const std::vector<T> &pop, env_t &);
+
+    typedef env_t envT;
 
 protected:
     size_t maxp,pE;
@@ -94,7 +100,7 @@ public :
                    termination_t term,                         // the termination function
                    const env_t &E= env_t(), bool spinWait=true)
         :maxp(maxp), pE(maxp),env(E),input(&pop),selection(sel),evolution(evol),filter(fil),termination(term),
-         loopevol(maxp,true) { 
+         loopevol(maxp,spinWait) { 
         loopevol.disableScheduler(true);
     }
     // constructor : to be used in streaming applications
@@ -110,8 +116,8 @@ public :
     }
     
     // the function returning the result in non streaming applications
-    const std::vector<T>& get_result() { return *input; }
-    
+    const std::vector<T>& get_result() const { return *input; }
+
     // changing the parallelism degree
     void setParEvolution(size_t pardegree)   { 
         if (pardegree>maxp)
@@ -120,7 +126,7 @@ public :
     }
 
     const env_t& getEnv() const { return env;}
-        
+
     int run_and_wait_end() {
         // TODO:
         // if (isfrozen()) {
@@ -134,7 +140,7 @@ public :
         if (ff_node::wait()<0) return -1;
         return 0;
     }
-    
+        
 protected:
     void* svc(void * task) {
         if (task) input = ((std::vector<T>*)task);
@@ -143,13 +149,13 @@ protected:
             // selection phase
             buffer.clear();            
             selection(loopevol, *input, buffer, env);
-
+            
             // evolution phase
             auto E = [&](const long i) {
-                buffer[i]=evolution(buffer[i]); 
+                buffer[i]=evolution(buffer[i], env); 
             };
             loopevol.parallel_for(0,buffer.size(),E, pE); // TODO: static and dynamic scheduling
-
+            
             // filtering phase
             filter(loopevol, *input, buffer, env);
 
@@ -157,7 +163,8 @@ protected:
         }
         loopevol.threadPause();
         return (task?input:NULL);
-    }
+    }    
+
 };
     
 } // namespace ff
