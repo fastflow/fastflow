@@ -316,7 +316,7 @@ public:
         if (size<=MULTIPUSH_BUFFER_SIZE) return false;
 #endif
         buf_r = (INTERNAL_BUFFER_T*)::malloc(sizeof(INTERNAL_BUFFER_T));
-        if (!buf_r) return false;
+        assert(buf_r);
         new ((void *)buf_r) INTERNAL_BUFFER_T(size);
 #if defined(uSWSR_MULTIPUSH)        
         if (!buf_r->init(true)) return false;
@@ -365,7 +365,7 @@ public:
      */
     inline bool push(void * const data) {
         /* NULL values cannot be pushed in the queue */
-        if (!data || !buf_w) return false;
+        assert(data != NULL);
         
         // If fixedsize has been set to \p true, this method may
         // return false. This means EWOULDBLOCK 
@@ -412,7 +412,7 @@ public:
      * \return TODO
      */
     inline bool mpush(void * const data) {
-        if (!data) return false;
+        assert(data != NULL);
         
         if (mcnt==MULTIPUSH_BUFFER_SIZE) 
             return multipush();        
@@ -437,7 +437,8 @@ public:
      *
      */
     inline bool  pop(void ** data) {
-        if (!data || !buf_r) return false;
+        assert(data != NULL);
+
         if (buf_r->empty()) { // current buffer is empty
             if (buf_r == buf_w) return false; 
             if (buf_r->empty()) { // we have to check again

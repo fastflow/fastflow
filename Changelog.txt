@@ -1,4 +1,5 @@
 * 24/01/14 - v.2.0.4
+   - poolEvolution interface improved
    - introduced the threadPause() method in the ParallelFor/Reduce patterns. 
      It may be used to  put threads to sleep when the spinwait flag is set 
      and the parallel for is not   used for a while

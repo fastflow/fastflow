@@ -29,16 +29,46 @@
  *  - Author: 
  *     Massimo Torquati <torquati@di.unipi.it>
  *
+ *
  *  This file contains the ParallelFor and the ParallelForReduce classes 
  *  (and also some static functions).
  * 
  *  Iterations scheduling options:
  *
- *       - default static scheduling
- *       - static scheduling with grain size greater than 0
- *       - dynamic scheduling with grain size greater than 1
+ *      1 - default static scheduling
+ *      2 - static scheduling with grain size greater than 0
+ *      3 - dynamic scheduling with grain size greater than 0
  * 
- *  How to use the ParallelFor:
+ *  As a general rule, the scheduling strategy is selected according to the chunk value:
+ *      - chunk == 0 means default static scheduling, that is, ~(#iteration_space/num_workers) 
+ *                   iterations per thread)
+ *      - chunk >  0 means dynamic scheduling with grain equal to chunk, that is,
+ *                   no more than chunk iterations at a time is computed by one thread, the 
+ *                   chunk is assigned to workers thread dynamically
+ *      - chunk <  0 means static scheduling with grain equal to chunk, that is,
+ *                   the iteration space is divided into chunks each one of no more 
+ *                   than chunk iterations. Then chunks are assigned to the workers threads 
+ *                   statically and in a round-robin fashion.
+ *
+ *  If you want to use the static scheduling policy (either default or with a given grain),
+ *  please use the parallel_for_static construct.
+ *
+ *  To use or not to use a scheduler thread ?
+ *  As always, it depends on the application, scheduling strategy, platform at hand, 
+ *  parallelism degree, ...etc....
+ *
+ *  The general rule is: a scheduler thread is started if:
+ *   1. the dynamic scheduling policy is used (chunk>0);
+ *   2. there are enough cores for hosting both worker threads and the scheduler thread;
+ *   3. the number of tasks per thread is greater than 1.
+ *
+ *  In case of static scheduling (chunk <= 0), the scheduler thread is never started.
+ *  It is possible to explicitly disable/enable the presence of the scheduler thread
+ *  both at compile time and at run-time by using the disableScheduler method and the 
+ *  two defines NO_PARFOR_SCHEDULER_THREAD and PARFOR_SCHEDULER_THREAD. 
+ *
+ *
+ *  How to use the ParallelFor (in a nutshell) :
  *                                      ParallelForReduce<long> pfr;
  *    for(long i=0;i<N;i++)             pfr.parallel_for(0,N,[&](const long i) {
  *       A[i]=f(i);                         A[i]=f(i);
@@ -47,6 +77,7 @@
  *       sum+=g(A[i]);                  pfr.parallel_reduce(sum,0, 0,N,[&](const long i,long &sum) {
  *                                         sum+=g(A[i]);
  *                                      }, [](long &v, const long elem) {v+=elem;});
+ *
  */
 
 #ifndef FF_PARFOR_HPP
@@ -131,7 +162,7 @@ public:
         } else {
             FF_PARFOR_T_START_STATIC(pf, int, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
                 f(parforidx);
-            } FF_PARFOR_STOP(pf);
+            } FF_PARFOR_T_STOP(pf,int);
         }
     }
 };
@@ -166,14 +197,14 @@ public:
                              const long nw=-1) {
         FF_PARFOR_T_START(pfr, T, parforidx,first,last,1,PARFOR_STATIC(0),nw) {
             f(parforidx);            
-        } FF_PARFOR_STOP(pfr);
+        } FF_PARFOR_T_STOP(pfr,T);
     }
     template <typename Function>
     inline void parallel_for(long first, long last, long step, const Function& f, 
                              const long nw=-1) {
         FF_PARFOR_T_START(pfr, T, parforidx,first,last,step,PARFOR_STATIC(0),nw) {
             f(parforidx);            
-        } FF_PARFOR_STOP(pfr);
+        } FF_PARFOR_T_STOP(pfr,T);
     }
     template <typename Function>
     inline void parallel_for(long first, long last, long step, long grain, 
@@ -188,7 +219,7 @@ public:
                                   const Function& f, const long nw=-1) {
         FF_PARFOR_T_START(pfr,T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(parforidx,_ff_thread_id);            
-        } FF_PARFOR_STOP(pfr);
+        } FF_PARFOR_T_STOP(pfr,T);
     }    
 
     template <typename Function>
@@ -197,7 +228,7 @@ public:
 
         FF_PARFOR_T_START_IDX(pfr,T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(ff_start_idx, ff_stop_idx,_ff_thread_id);            
-        } FF_PARFOR_STOP(pfr);
+        } FF_PARFOR_T_STOP(pfr,T);
     }    
 
     template <typename Function>
@@ -206,11 +237,11 @@ public:
         if (grain==0 || labs(nw)==1) {
             FF_PARFOR_T_START(pfr, T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
                 f(parforidx);            
-            } FF_PARFOR_STOP(pfr);
+            } FF_PARFOR_T_STOP(pfr,T);
         } else {
             FF_PARFOR_T_START_STATIC(pfr, T, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
                 f(parforidx);
-            } FF_PARFOR_STOP(pfr);
+            } FF_PARFOR_T_STOP(pfr,T);
         }
     }
 
