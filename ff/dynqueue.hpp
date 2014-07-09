@@ -188,7 +188,7 @@ public:
      * TODO
      */
     inline bool push(void * const data) {
-        if (!data) return false;
+        assert(data != NULL);
         Node * n = allocnode();
         n->data = data; n->next = NULL;
         WMB();
@@ -202,7 +202,7 @@ public:
      * TODO
      */
     inline bool  pop(void ** data) {        
-        if (!data) return false;
+        assert(data != NULL);
 #if defined(STRONG_WAIT_FREE)
         if (head == tail) return false;
 #else
@@ -231,7 +231,7 @@ public:
      * MS 2-lock MPMC algorithm PUSH method 
      */
     inline bool mp_push(void * const data) {
-        if (!data) return false;
+        assert(data != NULL);
         Node* n = mp_allocnode();
         n->data = data; n->next = NULL;
         ff::spin_lock(P_lock);
@@ -245,7 +245,7 @@ public:
      * MS 2-lock MPMC algorithm POP method 
      */
     inline bool  mp_pop(void ** data) {        
-        if (!data) return false;
+        assert(data != NULL);
         spin_lock(C_lock);
         if (head->next) {
             Node * n = (Node *)head;
@@ -374,7 +374,7 @@ public:
      * TODO
      */
     inline bool push(void * const data) {
-        if (!data) return false;
+        assert(data != NULL);
 
         union { Node * n; void * n2; } p;
         if (!cachepop(&p.n2))
@@ -392,7 +392,7 @@ public:
      * TODO
      */
     inline bool  pop(void ** data) {
-        if (!data) return false;
+        assert(data != NULL);
         if (head->next) {
             Node * n = (Node *)head;
             *data    = (head->next)->data;
