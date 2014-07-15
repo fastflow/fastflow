@@ -302,9 +302,10 @@ int main(int argc, char * argv[]) {
 
 
   random_nums.resize(num_randoms);
-  std::default_random_engine generator;
+  std::random_device rd;
+  std::default_random_engine generator(rd());
   std::uniform_real_distribution<double> distribution(0.0,1.0);
-  const long range = abs(env.max_range-env.min_range);
+  const double range = fabs(env.max_range-env.min_range);
 
   for(long i=0;i<num_randoms;++i) {
       double value;
