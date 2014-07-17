@@ -64,7 +64,7 @@ void selection(ParallelForReduce<Element> &,
         output.push_back(P[i]);
 }
 
-const Element& evolution(Element & individual) {
+const Element& evolution(Element & individual,const char&) {
     individual.number += decltype(individual.number)(individual.number/2);
     individual.nmutations +=1;
     return individual;
