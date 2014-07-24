@@ -5,7 +5,7 @@
 #
 # It just runs executable files (using default params) 
 # contained in the current directory and then checks the exit status
-# ( if the program terminates ;) )
+# ( hoping that the program terminates ;) )
 #
 #
 
