@@ -48,6 +48,7 @@
 using namespace ff;
 
 int main(int argc, char * argv[]) {    
+    const double INITIAL_VALUE = 5.0;
     int arraySize= 10000000;
     int nworkers = 3;
     int NTIMES   = 5;
@@ -75,7 +76,7 @@ int main(int argc, char * argv[]) {
     double *A = new double[arraySize];
     double *B = new double[arraySize];
 
-    double sum = 5.0;
+    double sum = INITIAL_VALUE;
 #if defined(USE_OPENMP)
     // init data
 #pragma omp parallel for schedule(runtime)
@@ -128,9 +129,35 @@ int main(int argc, char * argv[]) {
     ffTime(STOP_TIME);
     printf("tbb %d Time = %g ntimes=%d\n", nworkers, ffTime(GET_TIME), NTIMES);
 
-#else // (default) FastFlow version
+#else 
 
 #if 1
+#if defined(TEST_PARFOR_PIPE_REDUCE)
+    // yet another version (to test ParallelForPipeReduce)
+    {        
+        parallel_for(0,arraySize,1,CHUNKSIZE, [&](const long j) { A[j]=j*3.14; B[j]=2.1*j;});
+        ParallelForPipeReduce<double*> pfr(nworkers,true); // spinwait is set to true
+        
+        auto Map = [&](const long start, const long stop, const int thid, ff_buffernode &node) {
+            if (start == stop) return;
+            double localsum = 0.0;
+            for(long i=start;i<stop;++i)
+                localsum += A[i]*B[i];
+            node.put(new double(localsum));
+        };
+        auto Reduce = [&](const double* v) {
+            sum +=*v;
+        };
+
+        ff::ffTime(ff::START_TIME);    
+        for(int z=0;z<NTIMES;++z) {
+            pfr.parallel_for_idx(0, arraySize,1,CHUNKSIZE, Map, Reduce);
+        }
+        ffTime(STOP_TIME);
+        printf("ff %d Time = %g ntimes=%d\n", nworkers, ffTime(GET_TIME), NTIMES);
+    }
+#else // TEST_PARFOR_PIPE_REDUCE
+    // (default) FastFlow version
     {
         ParallelForReduce<double> pfr(nworkers,true); // spinwait is set to true
 
@@ -149,7 +176,10 @@ int main(int argc, char * argv[]) {
         ffTime(STOP_TIME);
         printf("ff %d Time = %g ntimes=%d\n", nworkers, ffTime(GET_TIME), NTIMES);
     }
+#endif
+
 #else  
+
     // using macroes
     FF_PARFORREDUCE_INIT(dp, double, nworkers);
 

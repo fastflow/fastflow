@@ -56,7 +56,7 @@ struct Element {
 
 
 // if we have at least an odd element, than we go on
-bool termination(const std::vector<Element> &P, char&) {
+bool termination(const std::vector<Element> &P, poolEvolution<Element>::envT&) {
     for(size_t i=0;i<P.size(); ++i)
         if (P[i].nmutations < MAXMUTATIONS && P[i].number & 0x1) return false;
     return true;
@@ -67,12 +67,12 @@ bool termination(const std::vector<Element> &P, char&) {
 // selects all odd elements that have a number of mutation less than MAXMUTATIONS
 void selection(ParallelForReduce<Element> &, 
                std::vector<Element> &P, 
-               std::vector<Element> &output,char&) {
+               std::vector<Element> &output,poolEvolution<Element>::envT&) {
     for(size_t i=0;i<P.size()/2;++i)
         output.push_back(P[i]);
 }
 
-const Element& evolution(Element & individual,const char&) {
+const Element& evolution(Element & individual,const poolEvolution<Element>::envT&) {
     individual.number += decltype(individual.number)(individual.number/2);
     individual.nmutations +=1;
     return individual;
@@ -81,7 +81,7 @@ const Element& evolution(Element & individual,const char&) {
 // remove at most K elements randomly
 void filter(ParallelForReduce<Element> &, 
             std::vector<Element> &P, 
-            std::vector<Element> &output,char&) {
+            std::vector<Element> &output,poolEvolution<Element>::envT&) {
     
     if (P.size()<K) { output.clear(); return; }
     output.clear();
