@@ -89,8 +89,7 @@ void selection(ParallelForReduce<long> & pfr, std::vector<long> &P, std::vector<
 
 }
 
-const long &evolution(long &element,const Env_t&) {
-
+const long &evolution(long &element, const Env_t&) {
     for(volatile long j=0;j<element%5000;++j);   // lose time
     
     if (element & 0x1) element += 1;
@@ -142,6 +141,8 @@ int main(int argc, char* argv[]) {
 
     poolEvolution<long, Env_t> pool(std::max(nwF, std::max(nwS,nwE)), P, selection,evolution,filter,termination, env);
     pool.run_and_wait_end();
+
+    
     
     printf("final avg = %ld (iter i=%ld)\n", pool.getEnv().avg, pool.getEnv().iter);
 
