@@ -83,6 +83,7 @@
 #ifndef FF_PARFOR_HPP
 #define FF_PARFOR_HPP
 
+#include <ff/pipeline.hpp>
 #include <ff/parallel_for_internals.hpp>
 
 namespace ff {
@@ -94,10 +95,10 @@ namespace ff {
 //! ParallelFor class
 class ParallelFor {
 protected:
-    ff_forall_farm<int> * pf;
+    ff_forall_farm<forallreduce_W<int> > *pf; 
 public:
-    ParallelFor(const long maxnw=-1,bool spinwait=false, bool skipwarmup=false):
-        pf(new ff_forall_farm<int>(maxnw,spinwait,skipwarmup)) {}
+    ParallelFor(const long maxnw=-1,bool spinwait=false):
+        pf(new ff_forall_farm<forallreduce_W<int> >(maxnw,spinwait)) {}
 
     ~ParallelFor()                { FF_PARFOR_DONE(pf); }
 
@@ -108,8 +109,8 @@ public:
         pf->disableScheduler(onoff);
     }
 
-    // It puts all spinning threads to sleep. 
-    // If spinwait is false it dosen't do anything.
+    // It puts all spinning threads to sleep. It does not disable the spinWait flag
+    // so at the next call, threads start spinning again.
     inline int threadPause() {
         return pf->stopSpinning();
     }
@@ -171,10 +172,10 @@ public:
 template<typename T>
 class ParallelForReduce {
 protected:
-    ff_forall_farm<T> * pfr; 
+    ff_forall_farm<forallreduce_W<T> > * pfr; 
 public:
-    ParallelForReduce(const long maxnw=-1, bool spinwait=false, bool skipwarmup=false):
-        pfr(new ff_forall_farm<T>(maxnw,spinwait,skipwarmup)) {}
+    ParallelForReduce(const long maxnw=-1, bool spinwait=false):
+        pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,spinwait)) {}
 
     ~ParallelForReduce()                { FF_PARFORREDUCE_DONE(pfr); }
 
@@ -185,8 +186,8 @@ public:
         pfr->disableScheduler(onoff);
     }
 
-    // It puts all spinning threads to sleep. 
-    // If spinwait is false it dosen't do anything.
+    // It puts all spinning threads to sleep. It does not disable the spinWait flag
+    // so at the next call, threads start spinning again.
     inline int threadPause() {
         return pfr->stopSpinning();
     }
@@ -302,6 +303,87 @@ public:
     }
 };
 
+
+#if defined(HAS_CXX11_VARIADIC_TEMPLATES)
+
+//! ParallelForPipeReduce class
+template<typename task_t>
+class ParallelForPipeReduce {
+protected:
+    ff_forall_farm<forallpipereduce_W> *pfr; 
+    struct reduceStage: ff_minode {        
+        typedef std::function<void(const task_t &)> F_t;
+        void *svc(void *t) {
+            const task_t& task=reinterpret_cast<task_t>(t);
+            F(task);
+            return GO_ON;
+        }
+        int  wait() { return ff_minode::wait(); }
+
+        void setF(F_t f) { F = f; }        
+        F_t F;
+    } reduce;
+    ff_pipe<task_t>  pipe;
+
+public:
+    ParallelForPipeReduce(const long maxnw=-1, bool spinwait=false):
+        pfr(new ff_forall_farm<forallpipereduce_W>(maxnw,false,true)), // skip loop warmup and disable spinwait
+        pipe(pfr,&reduce) {
+        
+        // required to avoid error
+        pfr->remove_collector();
+
+        // avoiding initial barrier
+        if (pipe.dryrun()<0)  // preparing all connections
+            error("ParallelForPipeReduce: preparing pipe\n");
+        
+        // warmup phase
+        pfr->resetskipwarmup();
+        auto r=-1;
+        if (pfr->run_then_freeze() != -1)         
+            if (reduce.run_then_freeze() != -1)
+                r = pipe.wait_freezing();            
+        if (r<0) error("ParallelForPipeReduce: running pipe\n");
+
+
+        if (spinwait) { // NOTE: spinning is enabled only for the Map part and not for the Reduce part
+            if (pfr->enableSpinning() == -1)
+                error("ParallelForPipeReduce: enabling spinwait\n");
+        }
+    }
+    
+    ~ParallelForPipeReduce()                { FF_PARFOR_DONE(pfr); reduce.wait(); }
+
+    // By calling this method with 'true' the scheduler will be disabled,
+    // to restore the usage of the scheduler thread just pass 'false' as 
+    // parameter
+    inline void disableScheduler(bool onoff=true) { 
+        pfr->disableScheduler(onoff);
+    }
+
+    // It puts all spinning threads to sleep. It does not disable the spinWait flag
+    // so at the next call, threads start spinning again.
+    inline int threadPause() {
+        return pfr->stopSpinning();
+    }
+
+    template <typename Function, typename FReduction>
+    inline void parallel_for_idx(long first, long last, long step, long grain, 
+                                 const Function& Map, const FReduction& Reduce,
+                                 const long nw=-1) {
+        
+        pfr->setloop(first,last,step,grain,nw);
+        pfr->setF(Map);
+        reduce.setF(Reduce);
+        auto r=-1;
+        if (pfr->run_then_freeze(nw) != -1)
+            if (reduce.run_then_freeze(nw) != -1)
+                r = pipe.wait_freezing();            
+        if (r<0) error("ParallelForPipeReduce: parallel_for_idx, starting pipe\n");
+    }
+
+};
+#endif 
 
 //
 //---- static functions, useful for one-shot parallel for execution or when no extra settings are needed

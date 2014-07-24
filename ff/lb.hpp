@@ -424,7 +424,6 @@ public:
      */
     inline size_t getNWorkers() const { return workers.size();}
 
-    // AGGIUNTO
     const svector<ff_node*>& getWorkers() const { return workers; }
 
     /**
@@ -562,6 +561,7 @@ public:
 
         gettimeofday(&wtstart,NULL);
         if (!master_worker && (multi_input.size()==0) && (int_multi_input.size()==0)) {
+
             do {
                 if (inpresent) {
                     if (!skipfirstpop) pop(&task);
@@ -577,7 +577,7 @@ public:
                         break;
                     }
                 }
-                
+
                 if (filter) {
                     FFTRACE(register ticks t0 = getticks());
 
@@ -750,7 +750,6 @@ public:
         return 0;
     }
 
-    // AGGIUNTI
     int runWorkers(ssize_t nw=-1) {
         running = (nw<=0)?workers.size():nw;
         if (isfrozen()) {
@@ -773,7 +772,8 @@ public:
     int thawWorkers(bool _freeze=false, ssize_t nw=-1) {
         if (nw == -1 || (size_t)nw > workers.size()) running = workers.size();
         else running = nw;
-        for(ssize_t i=0;i<running;++i) workers[i]->thaw(_freeze);
+        for(ssize_t i=0;i<running;++i)
+            workers[i]->thaw(_freeze);
         return 0;
     }
     inline int wait_freezingWorkers() {

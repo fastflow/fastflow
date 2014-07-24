@@ -928,6 +928,8 @@ protected:
     }
 
 
+    virtual bool isoutbuffermine() const { return myoutbuffer;}
+
     
     /**
      * \brief Counts how many threads there are in this node.
@@ -1594,9 +1596,10 @@ private:
 
 /* just a node interface for the input and output buffers */
 struct ff_buffernode: ff_node {
-    ff_buffernode(int nentries, bool fixedsize=true) {
-        set_id(-1);
-        create_input_buffer(nentries,fixedsize);
+    ff_buffernode() {}
+    ff_buffernode(int nentries, bool fixedsize=true, int id=-1) {
+        set_id(id);
+        if (create_input_buffer(nentries,fixedsize)<0) abort();
         set_output_buffer(ff_node::get_in_buffer());
     }
     ff_buffernode(int id, FFBUFFER *in, FFBUFFER *out) {
@@ -1605,6 +1608,14 @@ struct ff_buffernode: ff_node {
         set_output_buffer(out);
     }
     void* svc(void*){return NULL;}
+    void set(int nentries, bool fixedsize=true, int id=-1) {
+        set_id(id);
+        if (create_input_buffer(nentries,fixedsize) < 0) abort();
+        set_output_buffer(ff_node::get_in_buffer());
+    }
+
+    template<typename T>
+    inline bool  put(T *ptr) {  return ff_node::put(ptr);  }
 };
 
 

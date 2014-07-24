@@ -484,7 +484,7 @@ public:
         assert(running==-1);
         if (nw == -1 || (size_t)nw > workers.size()) running = workers.size();
         else running = nw;
-        ff_thread::thaw(_freeze); // NOTE:start scheduler first
+        ff_thread::thaw(_freeze);
     }
 
     /**
