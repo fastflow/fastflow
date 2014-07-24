@@ -339,7 +339,7 @@ public:
             return -1; 
         }
         if (e->isMultiInput()) {
-            error("FARM, add_emitter: the node is a multi-input node, please do use ff_node instead together with ff_farm::setMultiInput() method\n");
+            error("FARM, add_emitter: the node is a multi-input node, please do use ff_node together with ff_farm::setMultiInput() method\n");
             return -1;
         }
         emitter = e;
@@ -597,7 +597,7 @@ public:
      *
      * \return If successful 0, otherwise a negative value
      */
-    virtual int run_then_freeze(int nw=-1) {
+    virtual int run_then_freeze(ssize_t nw=-1) {
         if (isfrozen()) {
             // true means that next time threads are frozen again
             thaw(true, nw); 
@@ -791,10 +791,13 @@ public:
 
     inline void get_out_nodes(svector<ff_node*>&w) {
         if (collector && !collector_removed) {
-            w.push_back(collector);
+            collector->get_out_nodes(w);
+            if (w.size()==0) w.push_back(collector);
             return;
         }
-        w = workers;
+        for(size_t i=0;i<workers.size();++i)
+            workers[i]->get_out_nodes(w);
+        if (w.size()==0) w = workers;
     }
         
 
@@ -1567,7 +1570,7 @@ public:
      *
      * It deletes the gatherer.
      */
-    ~ff_minode() {
+    virtual ~ff_minode() {
         if (gt) delete gt;
     }
     
@@ -1610,6 +1613,7 @@ public:
      */
     int run(bool skip_init=false) {
         if (!gt) return -1;
+        
         gt->set_filter(this);
 
         for(size_t i=0;i<inputNodes.size();++i)
@@ -1621,6 +1625,24 @@ public:
         }
         return 0;
     }
+    int freeze_and_run(bool=false) { 
+        gt->freeze();
+        return run();
+    }
+    int run_then_freeze(ssize_t nw=-1) {
+        if (gt->isfrozen()) {
+            // true means that next time threads are frozen again
+            gt->thaw(true, nw); 
+            return 0;
+        }
+        gt->freeze();
+        return run();
+    }
+
+
+
+    int wait_freezing() { return gt->wait_freezing(); }
+
 
     /**
      * \brief Gets the channel id from which the data has just been received
@@ -1665,7 +1687,6 @@ private:
 
 class ff_monode: public ff_node {
 protected:
-
     /**
      * \brief Cardinatlity
      *
@@ -1692,7 +1713,6 @@ protected:
         return 0;
     }
 
-
 public:
     /**
      * \brief Constructor
@@ -1710,7 +1730,7 @@ public:
      *
      * It deletes the load balancer.
      */
-    ~ff_monode() {
+    virtual ~ff_monode() {
         if (lb) delete lb;
     }
     
@@ -1776,6 +1796,11 @@ public:
         return 0;
     }
 
+    int freeze_and_run(bool=false) {
+        lb->freeze();
+        return run(true);
+    }
+
     /**
      * \brief Gets the internal gatherer
      *
@@ -1796,7 +1821,7 @@ public:
     }
 #endif
 
-private:
+protected:
     svector<ff_node*> outputNodes;
     ff_loadbalancer* lb;
 };
