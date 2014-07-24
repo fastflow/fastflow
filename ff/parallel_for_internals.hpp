@@ -123,7 +123,7 @@ namespace ff {
      *  nw   : n. of worker threads
      */
 #define FF_PARFOR_BEGIN(name, idx, begin, end, step, chunk, nw)                   \
-    ff_forall_farm<int> name(nw,false,true);                                      \
+    ff_forall_farm<forallreduce_W<int> > name(nw,false,true);                     \
     name.setloop(begin,end,step,chunk,nw);                                        \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,     \
                          const int _ff_thread_id, const int) {                    \
@@ -136,7 +136,7 @@ namespace ff {
      * the loop.
      */
 #define FF_PARFOR2_BEGIN(name, idx, begin, end, step, chunk, nw)                  \
-    ff_forall_farm<int> name(nw,false,true);                                      \
+    ff_forall_farm<forallreduce_W<int> > name(nw,false,true);                     \
     name.setloop(begin,end,step,chunk, nw);                                       \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,     \
                          const int _ff_thread_id, const int) {                    \
@@ -170,7 +170,7 @@ namespace ff {
      *  op      : reduce operation (+ * ....) 
      */
 #define FF_PARFORREDUCE_BEGIN(name, var,identity, idx,begin,end,step, chunk, nw)  \
-    ff_forall_farm<decltype(var)> name(nw,false,true);                            \
+    ff_forall_farm<forallreduce_W<decltype(var)> > name(nw,false,true);           \
     name.setloop(begin,end,step,chunk,nw);                                        \
     auto idtt_##name =identity;                                                   \
     auto F_##name =[&](const long start,const long stop,const int _ff_thread_id,  \
@@ -221,17 +221,20 @@ namespace ff {
      * The same is for FF_PARFORREDUCE_START/STOP.
      */
 #define FF_PARFOR_INIT(name, nw)                                                         \
-    ff_forall_farm<int> *name = new ff_forall_farm<int>(nw);
+    ff_forall_farm<forallreduce_W<int> > *name =                                         \
+        new ff_forall_farm<forallreduce_W<int> >(nw)
 
-#define FF_PARFOR_DECL(name)         ff_forall_farm<int> * name
-#define FF_PARFOR_ASSIGN(name,nw)    name=new ff_forall_farm<int>(nw)
+#define FF_PARFOR_DECL(name)         ff_forall_farm<forallreduce_W<int> > * name
+#define FF_PARFOR_ASSIGN(name,nw)    name=new ff_forall_farm<forallreduce_W<int> >(nw)
 #define FF_PARFOR_DONE(name)         name->stop(); name->wait(); delete name
 
 #define FF_PARFORREDUCE_INIT(name, type, nw)                                             \
-    ff_forall_farm<type> *name = new ff_forall_farm<type>(nw)
+    ff_forall_farm<forallreduce_W<type> > *name =                                        \
+        new ff_forall_farm<forallreduce_W<type> >(nw)
 
-#define FF_PARFORREDUCE_DECL(name,type)      ff_forall_farm<type> * name
-#define FF_PARFORREDUCE_ASSIGN(name,type,nw) name=new ff_forall_farm<type>(nw)
+#define FF_PARFORREDUCE_DECL(name,type)      ff_forall_farm<forallreduce_W<type> > * name
+#define FF_PARFORREDUCE_ASSIGN(name,type,nw) name=                                       \
+        new ff_forall_farm<forallreduce_W<type> >(nw)
 #define FF_PARFORREDUCE_DONE(name)           name->stop();name->wait();delete name
 
 #define FF_PARFOR_START(name, idx, begin, end, step, chunk, nw)                          \
@@ -723,7 +726,7 @@ public:
         if (t==NULL) {
             if (totaltasks==0) { lb->broadcast_task(GO_OUT); return GO_OUT;}
             sendTask();
-            return GO_ON;
+            return GO_ON; 
         }
         auto wid =  lb->get_channel_id();
         if (--totaltasks <=0) {
@@ -777,7 +780,8 @@ protected:
 // parallel for/reduce  worker node
 template<typename Tres>
 class forallreduce_W: public ff_node {
-protected:
+public:
+    typedef Tres Tres_t;
     typedef std::function<void(const long,const long, const int, Tres&)> F_t;
 protected:
     virtual inline void losetime_in(void) {
@@ -811,12 +815,12 @@ public:
 
     inline void enableSpinWait() {  spinwait=true; }
 
-    inline void setF(F_t _F, const Tres idtt, bool a=true) { 
+    inline void setF(F_t _F, const Tres& idtt, bool a=true) { 
         F=_F, res=idtt, aggressive=a;
     }
     inline const Tres& getres() const { return res; }
 
-private:
+protected:
     forall_Scheduler *const sched;
     FF_PARFOR_BARRIER *const loopbar;
     bool schedRunning;    
@@ -826,9 +830,51 @@ protected:
     Tres res;
 };
 
-template <typename Tres>
+
+class forallpipereduce_W: public forallreduce_W<ff_buffernode> {
+public:
+    typedef ff_buffernode Tres_t;
+    typedef std::function<void(const long,const long, const int, ff_buffernode&)> F_t;
+public:
+    forallpipereduce_W(forall_Scheduler *const sched,FF_PARFOR_BARRIER *const loopbar, F_t F):
+        forallreduce_W<ff_buffernode>(sched,loopbar,F) { res.set(8192,false,get_my_id()); }
+
+    inline void* svc(void* t) {
+        auto task = (forall_task_t*)t;
+        auto myid = get_my_id();
+
+        F(task->start,task->end,myid,res);
+        if (schedRunning) return t;
+
+        // the code below is executed only if the scheduler thread is not running
+        while(sched->nextTaskConcurrent(task,myid))
+            F(task->start,task->end,myid,res);
+
+        if (spinwait) {
+            res.put(EOS);
+            loopbar->doBarrier(myid);
+            return GO_ON;
+        }
+        return GO_OUT;
+    }
+    
+    void svc_end() { res.put(EOS); }
+
+    inline void setF(F_t _F, const Tres_t&, bool a=true) { 
+        F=_F, aggressive=a;
+    }
+
+
+    void get_out_nodes(svector<ff_node*> &w) { w.push_back(&res); }
+};
+
+
+
+template <typename Worker_t>
 class ff_forall_farm: public ff_farm<foralllb_t> {
-    typedef std::function<void(const long,const long, const int, Tres&)> F_t;
+public:
+    typedef typename Worker_t::Tres_t Tres_t;
+    typedef typename Worker_t::F_t    F_t;
 protected:
     // removes possible EOS still in the input queues of the workers
     inline void resetqueues(const int _nw) {
@@ -837,7 +883,7 @@ protected:
     }
 
 private:
-    Tres t; // not used
+    Tres_t t; // not used
     size_t numCores;
     FF_PARFOR_BARRIER loopbar;
 public:
@@ -849,11 +895,12 @@ public:
         numCores = ((foralllb_t*const)getlb())->getNCores();
         if (maxnw<=0) maxnw=numCores;
         std::vector<ff_node *> forall_w;
-        auto donothing=[](const long,const long,const int,const Tres) -> void { };
+        auto donothing=[](const long,const long,const int,const Tres_t&) -> void { };
         forall_Scheduler *sched = new forall_Scheduler(getlb(),maxnw);
         ff_farm<foralllb_t>::add_emitter(sched);
         for(size_t i=0;i<(size_t)maxnw;++i)
-            forall_w.push_back(new forallreduce_W<Tres>(sched, &loopbar, donothing));
+            forall_w.push_back(new Worker_t(sched, &loopbar, donothing));
+            //forall_w.push_back(new forallreduce_W<Tres>(sched, &loopbar, donothing));
         ff_farm<foralllb_t>::add_workers(forall_w);
         ff_farm<foralllb_t>::wrap_around();
 
@@ -861,6 +908,8 @@ public:
         if (ff_farm<foralllb_t>::prepare() < 0) 
             error("running base forall farm(2)\n");
         
+        // NOTE: the warmup phase has to be done, if not now latern on. 
+        // The run_then_freeze method will fail if skipwarmup is true.
         if (!skipwarmup) {
             auto r=-1;
             getlb()->freeze();
@@ -872,7 +921,8 @@ public:
         if (spinwait) {
             sched->workersSpinWait();
             for(size_t i=0;i<(size_t)maxnw;++i) {
-                auto w = (forallreduce_W<Tres>*)forall_w[i];
+                //auto w = (forallreduce_W<Tres>*)forall_w[i];
+                auto w = (Worker_t*)forall_w[i];
                 w->enableSpinWait();
             }
             //resetqueues(maxnw);
@@ -912,7 +962,7 @@ public:
     inline void disableScheduler(bool onoff=true) { removeSched=onoff; }
 
     inline int run_then_freeze(ssize_t nw_=-1) {
-        assert(skipwarmup == false); // TODO
+        assert(skipwarmup == false);
         const ssize_t nwtostart = (nw_ == -1)?getNWorkers():nw_;
         auto r = -1;
         if (schedRunning) {
@@ -936,7 +986,9 @@ public:
         }
         return r;
     }
-    int run_and_wait_end() {
+
+
+    inline int run_and_wait_end() {
         assert(spinwait == false); 
         const size_t nwtostart = getnw();
         auto r= -1;
@@ -955,7 +1007,8 @@ public:
         }
         return r;
     }
-
+    
+    // it puts all threads to sleep but does not disable the spinWait flag
     inline int stopSpinning() {
         if (!spinwait) return -1;
         // getnworkers() returns the number of threads that are running
@@ -963,9 +1016,21 @@ public:
         // executing the parallel iterations)
         size_t running = getlb()->getnworkers();
         if (running == (size_t)-1) return 0;
-        for(size_t i=0;i<getlb()->getnworkers();++i)
+        for(size_t i=0;i<running;++i)
             getlb()->ff_send_out_to(GO_OUT,i);
         return getlb()->wait_freezingWorkers();
+    }
+
+    inline int enableSpinning() {
+        if (spinwait) return -1;
+        const svector<ff_node*> &nodes = getWorkers();
+        for(size_t i=0;i<nodes.size();++i) {
+            auto w = (Worker_t*)nodes[i];
+            w->enableSpinWait();
+        }
+        ((forall_Scheduler*)getEmitter())->workersSpinWait();
+        spinwait = true;
+        return 0;
     }
 
     inline int wait_freezing() {
@@ -987,25 +1052,27 @@ public:
         return ff_farm<foralllb_t>::wait();
     }
 
-    inline void setF(F_t  _F, const Tres idtt=Tres()) { //(Tres)0) { 
+    inline void setF(F_t  _F, const Tres_t& idtt=Tres_t()) { //(Tres)0) { 
         const size_t nw                = getnw();
         const svector<ff_node*> &nodes = getWorkers();
         // aggressive mode enabled if the number of threads is less than
         // or equal to the number of cores
-        const bool mode = (nw <= numCores)?true:false;
+        const bool mode = (nw <= numCores);
     
         // NOTE: in case of static scheduling, the scheduler is never started !
         schedRunning = (!removeSched && startScheduler(nw, ((forall_Scheduler*)getEmitter())->getnumtasks()));
 
         if (schedRunning)  {
             for(size_t i=0;i<nw;++i) {
-                auto w = (forallreduce_W<Tres>*)nodes[i];
+                //auto w = (forallreduce_W<Tres>*)nodes[i];
+                auto w = (Worker_t*)nodes[i];
                 w->setF(_F, idtt, mode);
                 w->setSchedRunning(true);
             }
         } else {
             for(size_t i=0;i<nw;++i) {
-                auto w = (forallreduce_W<Tres>*)nodes[i];
+                //auto w = (forallreduce_W<Tres>*)nodes[i];
+                auto w = (Worker_t*)nodes[i];
                 w->setF(_F, idtt, mode);
                 w->setSchedRunning(false);
             }
@@ -1029,12 +1096,15 @@ public:
     // return the number of workers running or supposed to run
     inline size_t getnw() { return ((const forall_Scheduler*)getEmitter())->running(); }
     
-    inline const Tres& getres(int i) {
-        return  ((forallreduce_W<Tres>*)(getWorkers()[i]))->getres();
+    inline const Tres_t& getres(int i) {
+        //return  ((forallreduce_W<Tres>*)(getWorkers()[i]))->getres();
+        return  ((Worker_t*)(getWorkers()[i]))->getres();
     }
     inline long startIdx(){ return ((const forall_Scheduler*)getEmitter())->startIdx(); }
     inline long stopIdx() { return ((const forall_Scheduler*)getEmitter())->stopIdx(); }
     inline long stepIdx() { return ((const forall_Scheduler*)getEmitter())->stepIdx(); }
+
+    void resetskipwarmup() { assert(skipwarmup); skipwarmup=false;}
 protected:
     bool   removeSched = false;
     bool   schedRunning= true;

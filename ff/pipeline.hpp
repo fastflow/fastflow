@@ -371,6 +371,12 @@ public:
         return 0;
     }
 
+    int dryrun() {  
+        if (!prepared) 
+            if (prepare()<0) return -1; 
+        return 0;
+    }
+
     /**
      * It run and wait all threads to finish.
      */
@@ -388,7 +394,7 @@ public:
     /**
      * It run and then freeze.
      */
-    virtual int run_then_freeze() {
+    virtual int run_then_freeze(bool skip_init=false) {
         if (isfrozen()) {
             // true means that next time threads are frozen again
             thaw(true);
@@ -401,7 +407,7 @@ public:
          * there isn't no manager thread, which allows to freeze other 
          * threads before starting the computation
          */
-        return freeze_and_run();
+        return freeze_and_run(skip_init);
     }
     
     /**
@@ -446,6 +452,7 @@ public:
     inline void freeze() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->freeze();
     }
+
     /**
      * It Thaws all frozen stages.
      * if _freeze is true at next step all threads are frozen again
