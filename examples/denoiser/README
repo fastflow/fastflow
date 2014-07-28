@@ -1,3 +1,13 @@
+This is an implementation of the two-stage denoiser presented here:
+* M. Aldinucci, G. P. Pezzi, M. Drocco, C. Spampinato, and M. Torquati, "Parallel Video Denoising on Multi-GPGPUs using Stencil Pattern" in International Journal of High Performance Computing Applications, submitted.
+* M. Aldinucci, G. P. Pezzi, M. Drocco, F. Tordini, P. Kilpatrick, and M. Torquati, "Parallel video denoising on heterogeneous platforms" in Proc. of Intl. Workshop on High-level Programming for Heterogeneous and Hierarchical Parallel Systems (HLPGPU), 2014.
+* M. Aldinucci, M. Torquati, M. Drocco, G. P. Pezzi, and C. Spampinato, "FastFlow: Combining Pattern-Level Abstraction and Efficiency in GPGPUs" in GPU Technology Conference (GTC 2014), San Jose, CA, USA, 2014.
+* M. Aldinucci, G. P. Pezzi, M. Drocco, F. Tordini, P. Kilpatrick, and M. Torquati, "Parallel video restoration on heterogeneous platforms" in International Journal of Parallel Programming, submitted.
+
+This package includes two versions:
+* multicore (denoiser)
+* hybrid multicore+CUDA (denoiser_cuda_auto)
+
 =========
 Running
 =========

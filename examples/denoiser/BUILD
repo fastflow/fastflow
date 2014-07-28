@@ -26,17 +26,18 @@ $ export PKG_CONFIG_LIBDIR=$PKG_CONFIG_LIBDIR:/ffmpeg_install_path/lib/
 Compiling Denoiser 
 ====================
 
-
 $ export OpenCV_DIR="path containing OpenCVConfig.cmake"
 
-denoiser$ mkdir build ; cd build
-denoiser/build$ cmake ../src
-denoiser/build$ make
+cd to fastflow root directory
+
+fastflow$ mkdir build ; cd build
+fastflow/build$ cmake ../src
+fastflow/build$ make denoiser denoiser_cuda_auto
 
 =======
 Testing
 ======= 
-denoiser/build$ ./denoiser  ../test/test.mp4  -s -n 10 -v
+denoiser/build$ ./denoiser  video.avi  -s -n 10 -v
 
 
  
