@@ -79,8 +79,8 @@ private:
 
 
 int main(int argc, char * argv[]) {
-    int nworkers = 3;
-    int streamlen = 1000;
+    int nworkers = 1;
+    int streamlen = 10;
 
     if (argc>1) {
         if (argc!=3) {

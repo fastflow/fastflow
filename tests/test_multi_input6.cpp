@@ -63,7 +63,7 @@ struct W: ff_node {
 
 struct Stage: ff_minode {
     void *svc(void *task) { 
-        printf("received %ld from %d\n", (long)task, get_channel_id());
+        printf("received %ld from %zd\n", (long)task, get_channel_id());
         return GO_ON;
     }
 };
