@@ -38,6 +38,7 @@
 #define FF_OCL
 #endif
 
+#include <ff/farm.hpp>
 #include <ff/map.hpp>
 
 using namespace ff;
