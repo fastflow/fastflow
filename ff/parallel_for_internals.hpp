@@ -544,7 +544,7 @@ public:
     }
     forall_Scheduler(ff_loadbalancer* lb, size_t nw):
         lb(lb),_start(0),_stop(0),_step(1),_chunk(1),totaltasks(0),_nw(nw),
-        jump(0),skip1(false) {
+        jump(0),skip1(false),workersspinwait(false),static_scheduling(false) {
 		maxid.store(-1); // MA: consistency of store to be checked
         totaltasks = init_data(0,0);
         assert(totaltasks==0);
@@ -736,10 +736,10 @@ public:
             }
             return GO_OUT;
         }
-        if (nextTask((forall_task_t*)t, (const int) wid)) lb->ff_send_out_to(t, (int) wid);
+        if (nextTask((forall_task_t*)t, (const int) wid)) lb->ff_send_out_to(t, (int) wid);            
         else  {
             if (!eossent[wid]) {
-                lb->ff_send_out_to((workersspinwait?EOS_NOFREEZE:GO_OUT), wid); 
+                lb->ff_send_out_to((workersspinwait?EOS_NOFREEZE:GO_OUT), wid);
                 eossent[wid]=true;
             }
         }
