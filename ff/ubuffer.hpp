@@ -521,10 +521,19 @@ public:
 private:
     // Padding is required to avoid false-sharing between 
     // core's private cache
+    /* 
     INTERNAL_BUFFER_T * buf_r;
     long padding1[longxCacheLine-1];
     INTERNAL_BUFFER_T * buf_w;
     long padding2[longxCacheLine-1];
+    */ 
+    ALIGN_TO_PRE(CACHE_LINE_SIZE)
+        INTERNAL_BUFFER_T * buf_r;
+    ALIGN_TO_POST(CACHE_LINE_SIZE)
+
+    ALIGN_TO_PRE(CACHE_LINE_SIZE)
+        INTERNAL_BUFFER_T * buf_w;
+    ALIGN_TO_POST(CACHE_LINE_SIZE)
 
     /* ----- two-lock used only in the mp_push and mc_pop methods ------- */
 	ALIGN_TO_PRE(CACHE_LINE_SIZE)
