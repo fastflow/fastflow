@@ -50,7 +50,7 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
        message(WARNING "g++ Version < 4.1, some targets will be skipped")
        message(STATUS "Use CC/CXX env variable to define a newer compiler, e.g. export CC=/usr/bin/gcc-4.2; export CXX=/usr/bin/g++-4.2 ")
     else (NOT(GXX_VERSION VERSION_GREATER 4.1))
-           ADD_DEFINITIONS(-std=c++0x)  # Or -std=c++11
+           ADD_DEFINITIONS(-std=c++11) # or -std=c++0x 
     endif  (NOT(GXX_VERSION VERSION_GREATER 4.1))    
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
      MESSAGE( STATUS "C++ Compiler is Intel")
