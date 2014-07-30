@@ -1,70 +1,56 @@
+# Author: MarcoA
+
 include_directories(
     ${PROJECT_SOURCE_DIR}
     )
 
-add_executable( __sizeof sizeof.cpp )      
-add_executable( test1 test1.cpp )  
-add_executable( test2 test2.cpp )
-add_executable( test3 test3.cpp )
-add_executable( test3b test3b.cpp )
-add_executable( test4 test4.cpp )
-add_executable( test5 test5.cpp )
-add_executable( test6 test6.cpp )
-add_executable( test7 test7.cpp )
-add_executable( perf_test1 perf_test1.cpp )
-#add_executable( perf_test2 perf_test2.cpp )
-add_executable( test_accelerator test_accelerator.cpp )
-add_executable( test_accelerator2 test_accelerator2.cpp )
-add_executable( test_accelerator3 test_accelerator3.cpp )
-add_executable( test_accelerator_farm+pipe test_accelerator_farm+pipe.cpp )
-add_executable( test_accelerator_pipe test_accelerator_pipe.cpp )
-add_executable( test_accelerator_pipe+farm test_accelerator_pipe+farm.cpp )
-add_executable( test_freeze test_freeze.cpp )
-add_executable( test_masterworker test_masterworker.cpp )
-add_executable( test_multi_masterworker test_multi_masterworker.cpp )
-add_executable( test_pipe+masterworker test_pipe+masterworker.cpp )
-add_executable( test_scheduling test_scheduling.cpp )
-add_executable( test_dt test_dt.cpp )
-add_executable( perf_test_alloc1 perf_test_alloc1.cpp )
-add_executable( perf_test_alloc2 perf_test_alloc2.cpp )
-add_executable( perf_test_alloc3 perf_test_alloc3.cpp )
-add_executable( perf_test_noalloc perf_test_noalloc.cpp )
-add_executable( test_uBuffer test_uBuffer.cpp )
-add_executable( test_torus test_torus.cpp )
-add_executable( test_map test_map.cpp )
-add_executable( test_map2 test_map2.cpp )
-add_executable( test_mapreduce test_mapreduce.cpp) 
-add_executable( test_spinBarrier test_spinBarrier.cpp )
-add_executable( test_multi_input test_multi_input.cpp )
-add_executable( test_dotprod test_dotprod.cpp )
-add_executable( test_ofarm test_ofarm.cpp )
-add_executable( test_accelerator_ofarm test_accelerator_ofarm.cpp )
-add_executable( test_accelerator_ofarm_multiple_freezing test_accelerator_ofarm_multiple_freezing.cpp )
-add_executable( test_parfor test_parfor.cpp )
-add_executable( test_parfor2 test_parfor2.cpp )
-add_executable( test_dotprod_parfor test_dotprod_parfor.cpp )
-add_executable( test_devicequery test_devicequery.cpp )
 
-#if (NOT(GCC_TOO_OLD))
-#  add_executable( test_mpmc test_mpmc.cpp)
-#  if (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
-#    SET_TARGET_PROPERTIES(test_mpmc PROPERTIES COMPILE_FLAGS " -Wno-strict-aliasing -O3  -finline-functions ")
-#  endif (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
-#endif (NOT(GCC_TOO_OLD))
- 
 
-set( TESTS test1 test2 test3 test3b test4 test5 test6 test7
-perf_test1 test_accelerator test_accelerator2 test_accelerator3
-test_accelerator_pipe+farm test_accelerator_farm+pipe test_accelerator_pipe
-test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker
-test_scheduling test_dt perf_test_alloc1 perf_test_alloc2
-perf_test_alloc3 perf_test_noalloc test_uBuffer test_torus
-test_map test_map2 test_mapreduce test_dotprod 
-test_spinBarrier test_multi_input test_ofarm test_accelerator_ofarm
-test_accelerator_ofarm_multiple_freezing test_devicequery)
-#if (NOT(GCC_TOO_OLD))
-#  set(TESTS ${TESTS}  test_mpmc)
-#endif (NOT(GCC_TOO_OLD))
+set( TESTS farm_basic                                test_ffthread
+perf_parfor                               test_freeze
+perf_parfor2                              test_graphsearch
+perf_test1                                test_lb_affinity
+perf_test_alloc1                          test_map
+perf_test_alloc2                          test_masterworker
+perf_test_alloc3                          test_mpmc
+perf_test_noalloc                         test_multi_input
+pipe_basic                                test_multi_input2
+simplest                                  test_multi_input3
+sizeof                                    test_multi_input4
+test1                                     test_multi_input5
+test1b                                    test_multi_input6
+test2                                     test_multi_input7
+test3                                     test_multi_input8
+test3_farm                                test_multi_masterworker
+test3b                                    test_multi_output
+test4                                     test_multi_output2
+test5                                     test_noinput_pipe
+test6                                     test_ofarm
+test7                                     test_parfor
+test_MISD                                 test_parfor2
+test_accelerator+pinning                  test_parfor_multireduce
+test_accelerator                          test_parfor_unbalanced
+test_accelerator2                         test_parforpipereduce
+test_accelerator3                         test_pipe+masterworker
+test_accelerator_farm+pipe                test_pipe
+test_accelerator_ofarm                    test_pool1
+test_accelerator_ofarm_multiple_freezing  test_pool2
+test_accelerator_pipe+farm                test_pool3
+test_accelerator_pipe                     test_scheduling
+test_bmpmc                             test_scheduling2
+test_dataflow                             test_sendq
+test_dataflow2                            test_spinBarrier
+test_devicequery                          test_stopstartall
+test_dotprod_parfor                       test_stopstartthreads
+test_dt                                   test_stopstartthreads2
+test_farm+pipe                            test_torus
+test_farm                                 test_uBuffer)
+
+#  
+
+foreach( t ${TESTS} )
+    add_executable( ${t} ${t}.cpp)
+endforeach( t )
 
 foreach( t ${TESTS} )
     target_link_libraries( ${t} ${CMAKE_THREAD_LIBS_INIT} )
@@ -102,10 +88,10 @@ add_test( test_torus ${CMAKE_CURRENT_BINARY_DIR}/test_torus 4 1000 )
 #  add_test( test_mpmc ${CMAKE_CURRENT_BINARY_DIR}/test_mpmc 10000 3 5 )
 #endif (NOT(GCC_TOO_OLD))
 add_test( test_map ${CMAKE_CURRENT_BINARY_DIR}/test_map 65536 3 )
-add_test( test_map2 ${CMAKE_CURRENT_BINARY_DIR}/test_map2 65536 3 10 )
+#add_test( test_map2 ${CMAKE_CURRENT_BINARY_DIR}/test_map2 65536 3 10 )
 add_test( test_spinBarrier ${CMAKE_CURRENT_BINARY_DIR}/test_spinBarrier 3 100)
 add_test( test_multi_input ${CMAKE_CURRENT_BINARY_DIR}/test_multi_input 3 10000 )
-add_test( test_mapreduce ${CMAKE_CURRENT_BINARY_DIR}/test_mapreduce 1000000 3 )
+#add_test( test_mapreduce ${CMAKE_CURRENT_BINARY_DIR}/test_mapreduce 1000000 3 )
 add_test( test_dotprod ${CMAKE_CURRENT_BINARY_DIR}/test_dotprod 10485760 3 )
 add_test( test_ofarm ${CMAKE_CURRENT_BINARY_DIR}/test_ofarm 3 1000 )
 add_test( test_accelerator_ofarm ${CMAKE_CURRENT_BINARY_DIR}/test_accelerator_ofarm 3 1000 )

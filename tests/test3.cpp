@@ -35,6 +35,10 @@
 
 using namespace ff;
 
+struct ff_task_t {
+    ff_task_t() {}
+    int payload;
+};
 
 // generic stage
 class Stage: public ff_node {

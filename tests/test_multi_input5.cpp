@@ -52,7 +52,7 @@ struct Stage0: ff_minode {
                 ff_send_out((void*)i);
             return GO_ON;
         }
-        printf("STAGE0 got back %ld from %d\n", (long)task, get_channel_id());
+        printf("STAGE0 got back %ld from %zd\n", (long)task, get_channel_id());
         ++counter;
         if (counter == NUMTASKS) return NULL;
         return GO_ON;
