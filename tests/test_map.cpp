@@ -26,100 +26,69 @@
  */
 
 /*
- * The program is a simple map used:
- *   1. as a software accelerator (mapSA)
- *   2. to compute just one single task (mapOneShot).
+ * This test tests the ff_Map pattern (aka ParallelForReudce) in a pipeline computation.
+ * The structure is:
+ *
+ *    pipeline( farm(mapWorker,2) , mapStage );
  *
  */
-#include <vector>
-#include <iostream>
+
+#include <ff/parallel_for.hpp>
+#include <ff/pipeline.hpp>
+#include <ff/farm.hpp>
 #include <ff/map.hpp>
-#include <ff/utils.hpp>  
 
 using namespace ff;
 
-// this is the map function
-void* mapF(basePartitioner*const P, int tid) {
-    LinearPartitioner<int>* const partitioner=(LinearPartitioner<int>* const)P;
-    LinearPartitioner<int>::partition_t Partition;
-    partitioner->getPartition(tid, Partition);
-    
-    int* p   = (int*)Partition.getData(); // gets the pointer to the first element of the partion
-    size_t l = Partition.getLength(); // gets the length of the partion
 
-    for(size_t i=0;i<l;++i)  p[i] += tid;
+const long SIZE = 100;
 
-    return p;  // returns the partition pointer !!!
-}
-
-long f(long v) { return v+1;}
-
-
-int main(int argc, char * argv[]) {
-    int arraySize = 1000;
-    int nworkers  = 3;
-    if (argc>1) {
-        if (argc<3) {
-            std::cerr << "use: " 
-                      << argv[0] 
-                      << " arraysize nworkers\n";
-            return -1;
-        }
-        arraySize= atoi(argv[1]);
-        nworkers = atoi(argv[2]);
+class mapWorker: public ff_Map<> {
+public:
+    void *svc(void*) {
+	std::vector<long> *A = new std::vector<long>(SIZE);
+	
+	// this is the parallel_for provided by the ff_Map class
+	parallel_for(0,A->size(),[&A](const long i) { 
+		A->operator[](i)=i;
+	    });
+	ff_send_out(A);
+	return NULL;
     }
-    if (nworkers<=0) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
-    }
-    
-    // defining a linear partitioner of integer elements
-    LinearPartitioner<int> P(arraySize,nworkers);
-    // defining the map passing as parameter the function called 
-    // within each worker and the partitioner that has to be used
-    // to create the worker partitions
-    ff_map mapSA(mapF,&P, NULL, true); // the 4rd parameter enable the accelerator mode
-    mapSA.run();
+};
 
-    printf("\nmapSA:\n");
-    for(int i=0;i<10;++i) {
-        // create a task
-        int* A=new int[arraySize];
-        for(int j=0;j<arraySize;++j) A[j]=i;
+class mapStage: public ff_Map<> {
+public:
+    void *svc(void *task) {
+	std::vector<long> *A = reinterpret_cast<std::vector<long>*>(task);
 
-        // offload the task into the map 
-        mapSA.offload(A);
+	// this is the parallel_for provided by the ff_Map class
+	parallel_for(0,A->size(),[&A](const long i) { 
+		A->operator[](i) += i;
+	    });
 
-        // wait for the result (NOTE: also the non-blocking call may be used !)
-        void* R=NULL;
-        mapSA.load_result(&R);
-
-        // print the result
-        for(int j=0;j<arraySize;++j) printf("%d ", ((int*)R)[j]);
-        printf("\n");
-    }
-    // stopping the accelerator
-    mapSA.offload(EOS);
-    mapSA.wait();
-
-    long *oneTask=new long[arraySize];
-
-    for(long j=0;j<arraySize;++j) oneTask[j]=j;
-    FF_MAP(map, oneTask,arraySize, f, nworkers);
-
-#if 0
-    ff_map mapOneShot(mapF,&P, oneTask);
-    mapOneShot.run_and_wait_end();
-#endif
+	printf("mapStage received:\n");
+	for(size_t i=0;i<A->size();++i)
+	    printf("%ld ", A->operator[](i));
+	printf("\n");
+	
+	return GO_ON;
+    }    
+};
 
 
-    //ff_map mapOneShot(mapF,&P, oneTask);
-    //mapOneShot.run_and_wait_end();
-    // print the result
-    printf("\nmapOneShot:\n");
-    for(int j=0;j<arraySize;++j) printf("%ld ", oneTask[j]);
-    printf("\n");
+int main() {
+    ff_pipeline pipe;
+    std::vector<ff_node*> W;
+    W.push_back(new mapWorker);
+    W.push_back(new mapWorker);
+    ff_farm<> farm(W);
+    farm.cleanup_workers();
+    pipe.add_stage(&farm);
+    mapStage stage;
+    pipe.add_stage(&stage);
+    pipe.run_and_wait_end();
 
-    std::cerr << "DONE\n";
     return 0;
+	
 }

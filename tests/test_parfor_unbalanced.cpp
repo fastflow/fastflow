@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
                               }
                           },ap);
 #else
-        ffpf.parallel_for(1,_N+1,1,1,[V](long i){compute(10000*V[i]);}, nthreads);
+        ffpf.parallel_for(1,_N+1,1,1,[V](const long i){compute(10000*V[i]);}, nthreads);
 #endif
         ffTime(STOP_TIME);
         free(V);
