@@ -173,6 +173,10 @@ template<typename T>
 class ParallelForReduce {
 protected:
     ff_forall_farm<forallreduce_W<T> > * pfr; 
+
+    // this constructor is useful to skip loop warmup and to disable spinwait
+    ParallelForReduce(const long maxnw, bool spinWait, bool skipWarmup): 
+        pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,false, true)) {}
 public:
     ParallelForReduce(const long maxnw=-1, bool spinwait=false):
         pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,spinwait)) {}
@@ -368,9 +372,9 @@ public:
     }
 
     template <typename Function, typename FReduction>
-    inline void parallel_for_idx(long first, long last, long step, long grain, 
-                                 const Function& Map, const FReduction& Reduce,
-                                 const long nw=-1) {
+    inline void parallel_reduce_idx(long first, long last, long step, long grain, 
+                                    const Function& Map, const FReduction& Reduce,
+                                    const long nw=-1) {
         
         pfr->setloop(first,last,step,grain,nw);
         pfr->setF(Map);
@@ -379,8 +383,21 @@ public:
         if (pfr->run_then_freeze(nw) != -1)
             if (reduce.run_then_freeze(nw) != -1)
                 r = pipe.wait_freezing();            
+        if (r<0) error("ParallelForPipeReduce: parallel_reduce_idx, starting pipe\n");
+    }
+
+    template <typename Function>
+    inline void parallel_for_idx(long first, long last, long step, long grain, 
+                                 const Function& Map, const long nw=-1) {
+        
+        pfr->setloop(first,last,step,grain,nw);
+        pfr->setF(Map);
+        auto r=-1;
+        if (pfr->run_then_freeze(nw) != -1)
+            r = pfr->wait_freezing();            
         if (r<0) error("ParallelForPipeReduce: parallel_for_idx, starting pipe\n");
     }
+
 
 };
 #endif 
@@ -425,7 +442,6 @@ void parallel_reduce(Value_t& var, const Value_t& identity,
     } FF_PARFORREDUCE_F_END(pfr, _var, finalreduce);
     var=_var;
 }
-    
     
 } // namespace ff
 

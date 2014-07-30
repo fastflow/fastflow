@@ -30,30 +30,20 @@
 #ifndef FF_MAP_HPP
 #define FF_MAP_HPP
 
-#include <vector>
-#include <ff/svector.hpp>
-#include <ff/gt.hpp>
-#include <ff/lb.hpp>
-#include <ff/node.hpp>
-#include <ff/farm.hpp>
-#include <ff/partitioners.hpp>
-
 // NOTE: A better check would be needed !
 // both GNU g++ and Intel icpc define __GXX_EXPERIMENTAL_CXX0X__ if -std=c++0x or -std=c++11 is used 
 // (icpc -E -dM -std=c++11 -x c++ /dev/null | grep GXX_EX)
 #if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_AUTO) && defined(HAS_CXX11_LAMBDA))
 #include <ff/parallel_for.hpp>
 #else
-#pragma message("C++ >= 201103L required, build will fail")
+#error "C++ >= 201103L is required to use ff_Map"
 #endif
+
 
 #if defined(FF_OCL)
 #include <ff/oclnode.hpp>
 #endif
 
-#if defined(FF_CUDA)
-#include <cuda.h>
-#endif
 
 namespace ff {
 
@@ -62,306 +52,58 @@ namespace ff {
  *
  *  @{
  */
+template<typename T=int>
+class ff_Map: public ff_node, public ParallelForReduce<T> {
+    using ParallelForReduce<T>::pfr;
+protected:
+    int prepare() {
+	if (!prepared) {
+	    // warmup phase
+	    pfr->resetskipwarmup();
+	    auto r=-1;
+	    if (pfr->run_then_freeze() != -1)         
+                r = pfr->wait_freezing();            
+	    if (r<0) {
+		error("ff_Map: preparing ParallelForReduce\n");
+		return -1;
+	    }
 
-/* ---------------- basic high-level macros ----------------------- */
-
-#define MAPDEF(mapname,func, basictype)                             \
-    void* mapdef_##mapname(basePartitioner*const P,int tid) {		\
-        LinearPartitioner<basictype>* const partitioner=			\
-            (LinearPartitioner<basictype>* const)P;                 \
-        LinearPartitioner<basictype>::partition_t Partition;		\
-        partitioner->getPartition(tid, Partition);                  \
-        basictype* p = (basictype*)(Partition.getData());           \
-        size_t l = Partition.getLength();                           \
-        func(p,l);                                                  \
-        return p;                                                   \
+	    if (spinWait) { 
+		if (pfr->enableSpinning() == -1) {
+		    error("ParallelForReduce: enabling spinwait\n");
+		    return -1;
+		}
+	    }
+	    prepared = true;
+	}
+	return 0;
     }
-#define MAP(mapname, basictype, V,size,nworkers)		            \
-    LinearPartitioner<basictype> P(size,nworkers);		            \
-    ff_map _map_##mapname(mapdef_##mapname,&P,V)
-#define RUNMAP(mapname)                                             \
-    _map_##mapname.run_and_wait_end()
-#define MAPTIME(mapname)                                            \
-    _map_##mapname.ffTime()
-#define MAPWTIME(mapname)                                           \
-    _map_##mapname.ffwTime()
 
+    int run(bool=false) {
+        if (!prepared) if (prepare()<0) return -1;
+	return ff_node::run(true);
+    }
 
-
-#if (__cplusplus >= 201103L) || (defined(HAS_CXX11_AUTO) && defined(HAS_CXX11_LAMBDA))
-#define FF_MAP(mapname,V,size,func,nworkers)                        \
-    parallel_for(0,size,[&V](const long i) { V[i]=func(i);},nworkers);
-
-#else
-#pragma message("C++ >= 201103L required, build will fail")
-#endif
-
-
-/* ---------------------------------------------------------------- */
-
-/*!
- * \class map_lb
- *  \ingroup high_level_patterns_shared_memory
- *
- * \brief A loadbalancer for the \p map skeleton.
- *
- * The map loadbalancer extends the \p ff_loadbalancer and uses
- * ff_loadbalancer's method \p broadcast_task() to send task to all workers.
- *
- * This class is defined in \ref map.hpp
- *
- */
-class map_lb: public ff_loadbalancer {
-public:
-    /**
-     * Default constructor
-     *
-     * \param max_num_workers max number of workers
-     */
-    map_lb(int max_num_workers):ff_loadbalancer(max_num_workers) {}
-    
-    /// Broadcast the task to all workers
-    void broadcast(void * task) {
-        ff_loadbalancer::broadcast_task(task);
-    }   
-};
-
-/*!
- * \class map_gt
- *  \ingroup high_level_patterns_shared_memory
- *
- * \brief A gatherer for the \p map skeleton.
- *
- * The map gatherer extends the \p ff_gatherer and uses ff_gatherer's
- * method \p all_gather() to collect the result from all workers.
- *
- * This class is defined in \ref map.hpp
- */
-class map_gt: public ff_gatherer {
-public:
-    /**
-     * Default constructor
-     *
-     * \param max_num_workers max number of workers
-     */
-    map_gt(int max_num_workers):ff_gatherer(max_num_workers) {}
-    
-    /**
-     * It collects results from all tasks.
-     *
-     * \return TODO
-     */
-    int all_gather(void * task, void **V) {
-        return ff_gatherer::all_gather(task,V);
-    }   
-};
-
-/*!
- * \class ff_map
- *  \ingroup high_level_patterns_shared_memory
- *
- * \brief The map skeleton.
- *
- * The map skeleton, that extends the \p farm skeleton.
- *
- * This class is defined in \ref map.hpp
- * 
- */
-class ff_map: public ff_farm<map_lb,map_gt> {
-public:
-    // REW
-    /**
-     *  worker function type
-     *  Function called by each worker thread as soon as an input task is received.
-     *  The first parameter is the partitioner (that can be user-defined or one 
-     *  of those provided in the partitioners.hpp file) used the get a task 
-     *  partition for the worker.
-     *  tid is the worker/thread id (from 0 to mapWorkers-1).
-     */
-    typedef void* (*map_worker_F_t) (basePartitioner*const, int tid);
-
-    /**
-     *  reduce function type
-     *  It gets in input the array of tasks sent by each worker 
-     *  (one for each worker).
-     *  vsize is the size of the V array.
-     */
-    typedef void* (*reduce_F_t) (void** V, int vsize);
-    
-private:
-    // Emitter, Collector and Worker of the farm.
-    /**
-     * Emitter
-     *
-     * \return TODO
-     */
-    class mapE: public ff_node {
-    public:
-        mapE(map_lb * const lb, void* oneShotTask): lb(lb),ost(oneShotTask) {}	
-        void * svc(void * task) {
-            if (task==NULL) { 
-                if (ost) lb->broadcast(ost);
-                return NULL;
-            }
-            lb->broadcast(task);
-            return GO_ON;
-        }
-    private:
-        map_lb* lb;
-        void*   ost;
-    };
-    
-    /**
-     * Collector
-     *
-     * \return TODO
-     */
-    class mapC: public ff_node {
-    public:
-        mapC(map_gt * const gt, reduce_F_t reduceF): gt(gt),reduceF(reduceF) {}	
-        
-        void * svc(void *task) {
-            int nw= gt->getnworkers();
-            svector<void*> Task(nw);
-            gt->all_gather(task, &Task[0]);
-            if (reduceF) return reduceF(Task.begin(), nw);
-            return Task[0];  // "default" reduceF
-        }
-    private:
-        map_gt* const gt;
-        reduce_F_t reduceF;
-    };
-    
-    /**
-     * Worker
-     *
-     * \return TODO
-     */
-    class mapW: public ff_node {
-    public:
-        mapW(map_worker_F_t mapF, basePartitioner *const P):mapF(mapF),P(P) {}
-        void * svc(void * task) {
-            P->setTask(task);
-            return mapF(P,ff_node::get_my_id());
-        }
-    private:
-        map_worker_F_t  mapF;
-        basePartitioner * const P;
-    };
+    int freeze_and_run(bool=false) {
+        if (!prepared) if (prepare()<0) return -1;
+	return ff_node::freeze_and_run(true);
+    }
 
 public:
-
-    /**  
-     *  Public Constructor (1).
-     *
-     *  This constructor allows to activate the map for working on a stream of
-     *  tasks or as a software accelerator by setting \p input_ch \p = \p
-     *  true.
-     *
-     *  \param mapF Specifies the \p Worker object that will execute the
-     *  operations.
-     *  \param mapP It is the partitioner that is responsible to partition the
-     *  problem.
-     *  \param reduceF The \p Reduce object. This parameter is optional and is
-     *  to be specified when using a \a MapReduce skeleton. Defult is \p
-     *  NULL.
-     *  \param input_ch Specifies whether the map skeleton is used as an
-     *  accelerator. Default is \p false.
-     */
-    ff_map ( map_worker_F_t mapF, 
-             basePartitioner* mapP,
-             reduce_F_t reduceF=NULL, 
-             bool input_ch=false
-           ) : ff_farm<map_lb,map_gt>(input_ch), mapP(mapP) 
-    {
-        add_emitter(new mapE(getlb(),NULL));
-        add_collector(new mapC(getgt(), reduceF));
-        std::vector<ff_node *> w;
-        for(size_t i=0;i<mapP->getParts();++i) w.push_back(new mapW(mapF,mapP));
-        add_workers(w);
+    ff_Map(size_t maxp=-1, bool spinWait=false):
+	ParallelForReduce<T>(maxp,false,true),// skip loop warmup and disable spinwait
+	spinWait(spinWait),prepared(false)  {
+	ParallelForReduce<T>::disableScheduler(true);
     }
-
-    /**  
-     *  Public Constructor (2).
-     *
-     *  This constructor allows to activate the map for the computation of
-     *  just one task
-     *
-     *  \param mapF Specifies the \p Worker object that will execute the operations.
-     *  \param mapP It is the partitioner that is responsible to partition the 
-     *                 problem.
-     *  \param task The task to be executed.
-     *  \param reduceF The \p Reduce object. This parameter is optional and is 
-     * to be specified when using a \a MapReduce skeleton. Defult is \p NULL.
-     */
-    ff_map ( map_worker_F_t mapF, 
-             basePartitioner* mapP,
-             void* task, 
-             reduce_F_t reduceF=NULL
-           ) : ff_farm<map_lb,map_gt>(false), mapP(mapP) 
-    {
-        add_emitter(new mapE(getlb(), task));
-        if (reduceF)
-            add_collector(new mapC(getgt(),reduceF));
-        std::vector<ff_node *> w;
-        for(size_t i=0;i<mapP->getParts();++i) w.push_back(new mapW(mapF,mapP));
-        add_workers(w);
-    }
-    
-    /** 
-     * Destructor 
-     *
-     * \return TODO
-     */
-    ~ff_map() {
-        if (end_callback) end_callback(end_callback_param);
-        delete (mapE*)(getEmitter());
-        mapC* C = (mapC*)(getCollector());
-        if (C) delete C;
-        const svector<ff_node*>& w= getWorkers();
-        for(size_t i=0;i<w.size();++i) delete (mapW*)(w[i]);	
-    }
-
-    int   get_my_id() const { return -1; };
-    
-    /**
-     * This method sets the affinity for the emitter and collector threads,
-     * both are pinned on the same core.
-     *
-     * \param cpuID the ID of the cpu to which the threads will be pinned 
-     */
-    void  setAffinity(int cpuID) { 
-        if (cpuID<0 || !threadMapper::instance()->checkCPUId(cpuID) ) {
-            error("MAP, setAffinity, invalid cpuID\n");
-        }
-        ((mapE*)getEmitter())->setAffinity(cpuID);
-        if (getCollector()) 
-            ((mapC*)getCollector())->setAffinity(cpuID);
-
-        ff_node::setAffinity(cpuID);
-    }
-
-    /**
-     * Retrivies the id of the cpu
-     *
-     * \return the core id
-     */
-    int   getCPUId() const { return ff_node::getCPUId();}
-
-    /**
-     * TODO
-     */
-    int wrap_around() {
-        error("MAP, feedback channel between Emitter and Collector not supported\n");
-        return -1;
-    }
-
-private:
-    basePartitioner* mapP;
+protected:
+    bool spinWait;
+    bool prepared;
 };
 
 
-// map base task for OpenCL and CUDA implementation 
+#if defined(FF_OCL)
+
+// map base task for OpenCL
 class baseTask {
 public:
     baseTask():task(NULL) {}
@@ -382,8 +124,6 @@ protected:
     void* task;
 };
 
-
-#if defined(FF_OCL)
     
     /* The following OpenCL code macros have been derived from the SkePU OpenCL code
      * http://www.ida.liu.se/~chrke/skepu/
@@ -806,285 +546,7 @@ protected:
 
 #endif /* FF_OCL  */
 
-#if defined(FF_CUDA)
 
-#define FFMAPFUNC(name, basictype, param, code )        \
-struct name {                                           \
- __device__ basictype K(basictype param) {              \
-     code ;                                             \
- }                                                      \
-}
-
-#define FFREDUCEFUNC(name, basictype, param1, param2, code )     \
-struct name {                                                    \
- __device__ basictype K(basictype param1, basictype param2) {    \
-     code ;                                                      \
- }                                                               \
-}
-
-
-
-#define NEWMAP(name, task_t, f, input, sz)               \
-    ff_mapCUDA<task_t,f> *name =                         \
-        new ff_mapCUDA<task_t, f>(new f, input, sz)
-#define NEWMAPONSTREAM(task_t, f)                        \
-    new ff_mapCUDA<task_t, f>(new f)
-#define DELETEMAP(name)                                  \
-    { name->cleanup(); delete name; }
-
-
-/* The following code (mapCUDAKernerl, SharedMemory and reduceCUDAKernel) 
- * has been taken from the SkePU CUDA code
- * http://www.ida.liu.se/~chrke/skepu/
- *
- */
-
-template <typename T, typename kernelF>
-__global__ void mapCUDAKernel(kernelF K, T* input, T* output, size_t size) {
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    unsigned int gridSize = blockDim.x*gridDim.x;
-    
-    while(i < size) {
-        output[i] = K.K(input[i]);
-        i += gridSize;
-    }
-}
-
-#if 0
-
-// Utility class used to avoid linker errors with extern
-// unsized shared memory arrays with templated type
-template<class T>
-struct SharedMemory
-{
-    __device__ inline operator       T*()
-    {
-        extern __shared__ int __smem[];
-        return (T*)__smem;
-    }
-
-    __device__ inline operator const T*() const
-    {
-        extern __shared__ int __smem[];
-        return (T*)__smem;
-    }
-};
-
-// specialize for double to avoid unaligned memory 
-// access compile errors
-template<>
-struct SharedMemory<double>
-{
-    __device__ inline operator       double*()
-    {
-        extern __shared__ double __smem_d[];
-        return (double*)__smem_d;
-    }
-
-    __device__ inline operator const double*() const
-    {
-        extern __shared__ double __smem_d[];
-        return (double*)__smem_d;
-    }
-};
-
-
-template<typename T, typename kernelF, unsigned int blockSize, bool nIsPow2>
-__global__ void reduceCUDAKernel(kernelF K, T *input, T *output, size_t sizen) {
-
-    T *sdata = SharedMemory<T>();
-
-    // perform first level of reduction,
-    // reading from global memory, writing to shared memory
-    unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x*blockSize*2 + threadIdx.x;
-    unsigned int gridSize = blockSize*2*gridDim.x;
-    
-    T result = 0;
-    
-    if(i < size) {
-        result = input[i];
-        // ensure we don't read out of bounds -- this is optimized away for powerOf2 sized arrays
-
-        // There we pass it always false
-        if (nIsPow2 || i + blockSize < n) 
-            result = K.K(result, input[i+blockSize]);
-        i += gridSize;
-    }
-
-	// we reduce multiple elements per thread.  The number is determined by the 
-    // number of active thread blocks (via gridDim).  More blocks will result
-    // in a larger gridSize and therefore fewer elements per thread
-    while(i < size) {
-        result = reduceFunc.CU(result, input[i]);
-        // ensure we don't read out of bounds -- this is optimized away for powerOf2 sized arrays
-        if (nIsPow2 || i + blockSize < n) 
-            result = K.K(result, input[i+blockSize]);
-        i += gridSize;
-    }
-
-    // each thread puts its local sum into shared memory 
-    sdata[tid] = result;
-    
-    __syncthreads();
-
-    // do reduction in shared mem
-    if (blockSize >= 512) { if (tid < 256) { sdata[tid] = result = K.K(result, sdata[tid + 256]); } __syncthreads(); }
-    if (blockSize >= 256) { if (tid < 128) { sdata[tid] = result = K.K(result, sdata[tid + 128]); } __syncthreads(); }
-    if (blockSize >= 128) { if (tid <  64) { sdata[tid] = result = K.K(result, sdata[tid +  64]); } __syncthreads(); }
-    
-    if (tid < 32)  {
-        // now that we are using warp-synchronous programming (below)
-        // we need to declare our shared memory volatile so that the compiler
-        // doesn't reorder stores to it and induce incorrect behavior.
-        volatile T* smem = sdata;
-        if (blockSize >=  64) { smem[tid] = result = K.K(result, smem[tid + 32]); }
-        if (blockSize >=  32) { smem[tid] = result = K.K(result, smem[tid + 16]); }
-        if (blockSize >=  16) { smem[tid] = result = K.K(result, smem[tid +  8]); }
-        if (blockSize >=   8) { smem[tid] = result = K.K(result, smem[tid +  4]); }
-        if (blockSize >=   4) { smem[tid] = result = K.K(result, smem[tid +  2]); }
-        if (blockSize >=   2) { smem[tid] = result = K.K(result, smem[tid +  1]); }
-    }
-    
-    // write result for this block to global mem 
-    if (tid == 0) 
-        output[blockIdx.x] = sdata[0];
-}
-#endif
-
-
-/*!
- * \class ff_mapCUDA
- *  \ingroup high_level_patterns_shared_memory
- *
- * \brief The map skeleton.
- *
- * The map skeleton using OpenCL
- *
- * This class is defined in \ref map.hpp
- * 
- */
-template<typename T, typename kernelF>
-class ff_mapCUDA: public ff_node {
-public:
-
-    ff_mapCUDA(kernelF *mapF): oneshot(false), kernel(mapF) {
-        maxThreads=maxBlocks=0;
-        oldSize=0;
-        in_buffer = out_buffer = NULL;
-    }    
-
-    ff_mapCUDA(kernelF *mapF, void* task, size_t s):
-        oneshot(true),Task((typename T::base_type*)task,s), kernel(mapF) { 
-        assert(task);
-        ff_node::skipfirstpop(true);
-        maxThreads=maxBlocks=0;
-        oldSize=0;
-        in_buffer = out_buffer = NULL;
-    }    
-    
-    int  run(bool=false) { return  ff_node::run(); }    
-    int  wait() { return ff_node::wait(); }    
-
-    int run_and_wait_end() {
-        if (run()<0) return -1;           
-        if (wait()<0) return -1;
-        return 0;
-    }
-
-    double ffTime()  { return ff_node::ffTime();  }
-    double ffwTime() { return ff_node::wffTime(); }
-
-    const T* getTask() const { return &Task; }
-
-    void cleanup() { if (kernel) delete kernel; }
-    
-protected:
-    
-    int svc_init() {
-        int deviceID = 0;         // FIX:  we have to manage multiple devices
-        cudaDeviceProp deviceProp;
-
-        cudaSetDevice(deviceID);         
-        if (cudaGetDeviceProperties(&deviceProp, deviceID) != cudaSuccess)
-            error("mapCUDA, error getting device properties\n");
-        
-        if(deviceProp.major == 1 && deviceProp.minor < 2) 
-            maxThreads = 256;
-        else
-            maxThreads = deviceProp.maxThreadsPerBlock;
-        maxBlocks = deviceProp.maxGridSize[0];
-        
-        if(cudaStreamCreate(&stream) != cudaSuccess)
-            error("mapCUDA, error creating stream\n");
-
-        // allocate memory on device having the initial size
-        if(cudaMalloc(&in_buffer, Task.bytesize()) != cudaSuccess) 
-            error("mapCUDA error while allocating mmemory on device\n");
-        oldSize = Task.bytesize();
-
-        return 0;
-    }
-    
-    void * svc(void* task) {				                        
-        Task.setTask(task);
-        size_t size = Task.size();
-
-        void* inPtr  = Task.getInPtr();
-        void* outPtr = Task.newOutPtr();
-
-        if (oldSize < Task.bytesize()) {
-            cudaFree(in_buffer);
-            if(cudaMalloc(&in_buffer, Task.bytesize()) != cudaSuccess) 
-                error("mapCUDA error while allocating mmemory on device\n");
-        }
-        
-        // async transfer data to GPU
-        cudaMemcpyAsync(in_buffer, inPtr, Task.bytesize(), cudaMemcpyHostToDevice, stream); 
-
-        if (inPtr == outPtr) {
-            out_buffer = in_buffer;
-        } else {
-            if (oldSize < Task.bytesize()) {
-                if (out_buffer) cudaFree(out_buffer);
-                if(cudaMalloc(&out_buffer, Task.bytesize()) != cudaSuccess) 
-                    error("mapCUDA error while allocating mmemory on device (output buffer)\n");
-            }
-        }
-        oldSize = Task.bytesize();
-
-        size_t thxblock = std::min(maxThreads, size);
-        size_t blockcnt = std::min(size/thxblock + (size%thxblock == 0 ?0:1), maxBlocks);
-            
-        mapCUDAKernel<<<blockcnt,thxblock,0,stream>>>(*kernel, in_buffer, out_buffer, size); 
-        cudaMemcpyAsync(outPtr, out_buffer, Task.bytesize(), cudaMemcpyDeviceToHost, stream); 
-        cudaStreamSynchronize(stream); 
-        
-        //return (oneshot?NULL:task);
-        return (oneshot?NULL:outPtr);
-    }   
-
-    void svc_end() {
-        if (in_buffer != out_buffer) 
-            if (out_buffer) cudaFree(out_buffer);
-        if (in_buffer) cudaFree(in_buffer);
-        if(cudaStreamDestroy(stream) != cudaSuccess) 
-            error("mapCUDA, error destroying stream\n");
-    }
-private:
-    const bool   oneshot;
-    T            Task;
-    kernelF     *kernel;     // user function
-    cudaStream_t stream;     
-    size_t       maxThreads;
-    size_t       maxBlocks;
-    size_t       oldSize;
-    typename T::base_type* in_buffer;
-    typename T::base_type* out_buffer;
-};
-
-#endif /* FF_CUDA */
-    
 /*!
 *  @}
 *  \endlink
@@ -1093,3 +555,4 @@ private:
 } // namespace ff
 
 #endif /* FF_MAP_HPP */
+
