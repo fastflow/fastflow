@@ -42,8 +42,8 @@
 #ifndef FF_OCLNODE_HPP
 #define FF_OCLNODE_HPP
 
-#include <ff/ocl/clEnvironment.hpp>
 #include <ff/node.hpp>
+#include <ff/ocl/clEnvironment.hpp>
 
 namespace ff{
 

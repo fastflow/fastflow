@@ -30,6 +30,7 @@
 #ifndef FF_MAP_HPP
 #define FF_MAP_HPP
 
+#if !defined(FF_OCL)
 // NOTE: A better check would be needed !
 // both GNU g++ and Intel icpc define __GXX_EXPERIMENTAL_CXX0X__ if -std=c++0x or -std=c++11 is used 
 // (icpc -E -dM -std=c++11 -x c++ /dev/null | grep GXX_EX)
@@ -39,13 +40,14 @@
 #error "C++ >= 201103L is required to use ff_Map"
 #endif
 
-
-#if defined(FF_OCL)
+#else
 #include <ff/oclnode.hpp>
 #endif
 
 
 namespace ff {
+
+#if !defined(FF_OCL)
 
 /*!
  *  \ingroup high_level_patterns_shared_memory
@@ -91,17 +93,16 @@ protected:
 
 public:
     ff_Map(size_t maxp=-1, bool spinWait=false):
-	ParallelForReduce<T>(maxp,false,true),// skip loop warmup and disable spinwait
-	spinWait(spinWait),prepared(false)  {
-	ParallelForReduce<T>::disableScheduler(true);
+        ParallelForReduce<T>(maxp,false,true),// skip loop warmup and disable spinwait
+        spinWait(spinWait),prepared(false)  {
+        ParallelForReduce<T>::disableScheduler(true);
     }
 protected:
     bool spinWait;
     bool prepared;
 };
 
-
-#if defined(FF_OCL)
+#else  //FF_OCL defined
 
 // map base task for OpenCL
 class baseTask {
