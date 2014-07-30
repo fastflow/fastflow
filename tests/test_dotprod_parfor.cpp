@@ -131,7 +131,7 @@ int main(int argc, char * argv[]) {
 
 #else 
 
-#if 1
+#if 0
 #if defined(TEST_PARFOR_PIPE_REDUCE)
     // yet another version (to test ParallelForPipeReduce)
     {        
