@@ -87,7 +87,7 @@ public:
             printf("INPUT: sending %ld to worker\n", t);
             return task;
         }
-        printf("BACK: got  %ld from %d (numtasks=%ld)\n", t,lb->get_channel_id(),numtasks);
+        printf("BACK: got  %ld from %zd (numtasks=%ld)\n", t,lb->get_channel_id(),numtasks);
         if ((t != 1) && (t & 0x1)) return task;
         --numtasks;
         if (numtasks == 0 && neos==FARM1WORKERS) return NULL;

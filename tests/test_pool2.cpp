@@ -98,7 +98,7 @@ template<typename T>
 void printPopulation(std::vector<T> &P) {
     printf("[ ");
     for (size_t i=0;i<P.size(); ++i)
-        printf(" (%u,%u) ", (size_t)P[i].number, (size_t)P[i].nmutations);
+        printf(" (%zu,%zu) ", (size_t)P[i].number, (size_t)P[i].nmutations);
     printf("  ]\n");
 }
 

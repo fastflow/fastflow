@@ -94,7 +94,7 @@ class myScheduler: public ff_loadbalancer {
 protected:
     inline size_t selectworker() { 
         size_t sel = victim++ % getnworkers(); 
-        printf("selected %d\n", sel);
+        printf("selected %zd\n", sel);
         return sel;
     }
 public:

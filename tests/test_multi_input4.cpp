@@ -46,7 +46,7 @@ struct Stage1: ff_node {
 };
 struct Stage2: ff_minode {
     void *svc(void *task) {
-        printf("Stage2 got task from %d\n", get_channel_id());
+        printf("Stage2 got task from %zd\n", get_channel_id());
         
         if (get_channel_id()==0) return task; // FIX!!!
         return GO_ON;
