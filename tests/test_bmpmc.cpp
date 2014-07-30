@@ -42,23 +42,25 @@
 #include <ff/node.hpp>
 
 
-int NTHREADS;
-int SIZE;
+int    NTHREADS;
+size_t SIZE;
 atomic_long_t counter;           
 ff::MPMC_Ptr_Queue* q=NULL;
+ff::Barrier *bar = NULL;
+
 
 // consumer function
 void * consumer(void * arg) {
     int myid= *(int*)arg;
-    int * data;
+    size_t * data;
 
-    ff::Barrier::instance()->doBarrier(myid);
+    bar->doBarrier(myid);
     while(1) {
 	if (q->pop((void**)&data)) {
 	    printf("(%d %ld) ", myid, (long)data);
 	    atomic_long_inc(&counter);
 	}
-	if ((long)(atomic_long_read(&counter))>= SIZE) break;
+	if ((size_t)(atomic_long_read(&counter))>= SIZE) break;
     }
     pthread_exit(NULL);
     return NULL;
@@ -71,7 +73,7 @@ int main(int argc, char* argv[]) {
 	return -1;
     }
 
-    SIZE= atoi(argv[1]);
+    SIZE= atol(argv[1]);
     assert(SIZE>0);
     NTHREADS=atoi(argv[2]);
     assert(NTHREADS>0);
@@ -80,7 +82,7 @@ int main(int argc, char* argv[]) {
     assert(q);
     q->init(SIZE);
 
-    for(int i=1;i<=SIZE;++i) 
+    for(size_t i=1;i<=SIZE;++i) 
         q->push((void*)i);
 
     atomic_long_set(&counter,0);
@@ -90,7 +92,8 @@ int main(int argc, char* argv[]) {
     C_handle = (pthread_t *) malloc(sizeof(pthread_t)*NTHREADS);
 	
     // define the number of threads that are going to partecipate....
-    ff::Barrier::instance()->barrierSetup(NTHREADS);
+    bar = new ff::Barrier;
+    bar->barrierSetup(NTHREADS);
 
     int * idC;
     idC = (int *) malloc(sizeof(int)*NTHREADS);
