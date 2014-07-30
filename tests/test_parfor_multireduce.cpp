@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
 
     ReductionVars R(1000.0, -1000.0), Rzero;
 
-    FF_PARFORREDUCE_INIT(dp, ReductionVars, nworkers);
+    ParallelForReduce<ReductionVars> pfr(nworkers);
 
     // init data
     for(int j=0; j<arraySize; ++j) {
@@ -82,16 +82,13 @@ int main(int argc, char *argv[]) {
         R += r;
     };
   
-    FF_PARFORREDUCE_START(dp, R, Rzero, i, 0, arraySize, 1, -1, nworkers) { 
-        auto tmp = A[i]*B[i];
-        R.sum  += tmp;
-        R.diff -= tmp;
-    } FF_PARFORREDUCE_F_STOP(dp, R, reduceF);
-  //} FF_PARFORREDUCE_STOP(dp, R, +);    
-
-    FF_PARFORREDUCE_DONE(dp);
-
+    pfr.parallel_reduce(R, Rzero, 0, arraySize, 1, 0, [&](const long i, ReductionVars &R) {
+            auto tmp = A[i]*B[i];
+            R.sum  += tmp;
+            R.diff -= tmp;
+        }, reduceF, nworkers);
+    
     printf("R sum=%g diff=%g\n", R.sum, R.diff);
-
+    
     return 0;
 }

@@ -89,7 +89,7 @@ int main(int argc, char * argv[]) {
 
         ff::ffTime(ff::START_TIME);    
         for(int z=0;z<NTIMES;++z) {
-            pfr.parallel_for_idx(0, arraySize,1,CHUNKSIZE, Map, Reduce);
+            pfr.parallel_reduce_idx(0, arraySize,1,CHUNKSIZE, Map, Reduce);
         }
         ffTime(STOP_TIME);
         printf("ff %d Time = %g ntimes=%d\n", nworkers, ffTime(GET_TIME), NTIMES);
