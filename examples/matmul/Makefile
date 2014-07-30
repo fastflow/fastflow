@@ -40,7 +40,7 @@ LIBS                 = -lpthread
 INCLUDES             = -I. $(INCS)
 TBB_INCLUDES         = -I /opt/local/include/tbb/
 TBB_LIBS             = -L /opt/local/lib/ -ltbb
-TARGET               = ff_matmul ff_matmul_v2 ff_matmul_map ff_matmul_forall ff_matmul_map_omp tbb_matmul ff_streamMM matmul
+TARGET               = ff_matmul ff_matmul_v2 ff_matmul_forall tbb_matmul ff_streamMM matmul
 
 all: $(TARGET)
 
@@ -50,20 +50,14 @@ ff_matmul:ff_matmul.cpp
 ff_matmul_v2:ff_matmul_v2.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
-ff_matmul_map:ff_matmul_map.cpp
-	$(CXX) -std=c++11 $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-
 ff_matmul_forall:ff_matmul_forall.cpp
 	$(CXX) -std=c++11 $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-
-ff_matmul_map_omp:ff_matmul_map.cpp
-	$(CXX) -DUSE_OPENMP $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS) $(OMP_FLAGS)
 
 ff_streamMM:ff_streamMM.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 tbb_matmul:tbb_matmul.cpp
-	$(CXX) $(INCLUDES) $(TBB_INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(TBB_LIBS)
+	$(CXX) -std=c++11 $(INCLUDES) $(TBB_INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(TBB_LIBS)
 
 matmul:matmul.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OMP_FLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS)
