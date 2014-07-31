@@ -100,4 +100,5 @@ set_target_properties (bowtie2.0.6 PROPERTIES COMPILE_FLAGS "${CO-BT2} -DBOWTIE2
 
 target_link_libraries ( bowtie2.0.6 ${CMAKE_THREAD_LIBS_INIT})
 
-add_test( ${CMAKE_CURRENT_BINARY_DIR}/bowtie2.0.6-ff -t -p 2 -x ${CURRENT_SOURCE_DIR}/example/index/lambda_virus -U ${CURRENT_SOURCE_DIR}/example/reads/longreads.fq -S ${CURRENT_SOURCE_DIR}/out.sam )
+add_test( bowtie2.0.6-ff ${CMAKE_CURRENT_BINARY_DIR}/bowtie2.0.6-ff -t -p 2 -x ${CMAKE_CURRENT_SOURCE_DIR}/example/index/lambda_virus -U ${CMAKE_CURRENT_SOURCE_DIR}/example/reads/longreads.fq -S ${CMAKE_CURRENT_BINARY_DIR}/out.ff.sam )
+add_test( bowtie2.0.6 ${CMAKE_CURRENT_BINARY_DIR}/bowtie2.0.6 -t -p 2 -x ${CMAKE_CURRENT_SOURCE_DIR}/example/index/lambda_virus -U ${CMAKE_CURRENT_SOURCE_DIR}/example/reads/longreads.fq -S ${CMAKE_CURRENT_BINARY_DIR}/out.sam )
