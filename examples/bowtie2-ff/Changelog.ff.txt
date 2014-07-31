@@ -1,0 +1,26 @@
+This file contains the list of changes with respect original
+bowtie2.0. code
+
+- bt2_search.cpp: added fastflow code and define macros
+
+- ff_wrap.hpp: header containing the farm's emitter code
+
+- metrics_utils.hpp: containing PerfStat and OuterLoopMetrics struct, moved
+for visibility from ff_wrap.hpp
+
+- aligner_cache.cpp
+  aligner_cache.h
+  aligner_seed.h
+  aligner_sw_common.h
+  aligner_swsse.h
+  aln_sink.h
+  ds.cpp
+  group_walk.h
+  metrics_utils.pp
+  outq.cpp
+  pat.h
+  added define macros to enable/disable thread-safeness 
+
+- bt2io.cpp and ds.h: added define macros to enable/disable interleaved genome
+allocation policy
+

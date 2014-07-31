@@ -53,3 +53,6 @@ else (OpenCV_FOUND)
   message (WARNING " OpenCV not found: Skipping denoiser example")
 endif (OpenCV_FOUND)
 
+add_subdirectory( bowtie2-ff )
+ 
+
