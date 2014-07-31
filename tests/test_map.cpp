@@ -24,7 +24,10 @@
  *
  ****************************************************************************
  */
-
+/* Author: Massimo
+ * Date  : July 2014
+ *         
+ */
 /*
  * This test tests the ff_Map pattern (aka ParallelForReudce) in a pipeline computation.
  * The structure is:
