@@ -1,0 +1,72 @@
+---- Bowtie2-ff
+
+Claudia Misale <misale@di.unito.it> and Marco Aldinucci
+<aldinuc@di.unito.it> designed and wrote Bowtie2-ff, which is a
+porting on the FastFlow framework of the Bowtie 2 code. 
+
+FastFlow: http://mc-fastflow.sourceforge.net/
+
+FastFlow is licenced under LGPLv3. Bowtie2-ff is licenced under GNU
+GPL, see license file. 
+
+FastFlow has been originally designed by Marco Aldinucci
+<aldinuc@di.unito.it> and Massimo Torquati <torquati@di.unipi.it>. 
+Many other researchers and developers contributed to FastFlow
+evolution, among the others Marco Danelutto and Peter Kilpatrick (see
+FastFlow website for an extensive listing). Massimo Torquati is
+currently the main maintainer.  
+
+FastFlow developmented has been partially supported by a number of
+grants, including: 
+
+- REPARA (EC-STREP, 7th FP): Reengineering and Enabling Performance
+  And poweR of Applications. Grant no. 609666. 
+- IMPACT (founded by Compagnia di San Paolo): Innovative Methods for
+  Particle Colliders at the Terascale.
+- ParaPhrase (EC-STREP, 7th FP): Parallel Patterns for Adaptive
+  Heterogeneous Multicore Systems. Grant no. 288570.
+- HiPEAC (EC-NoE,7th FP) European Network of Excellence on High
+  Performance and Embedded Architecture and Compilation.
+
+Bowtie2-ff and its perfromance are described in:
+
+1) C. Misale, G. Ferrero, M. Torquati, and M. Aldinucci, “Sequence
+   alignment tools: one parallel pattern to rule them all?,” BioMed
+   Research International, 2014. doi:10.1155/2014/539410
+
+2) C. Misale, “Accelerating Bowtie2 with a lock-less concurrency approach
+   and memory affinity,” in Proc. of Intl. Euromicro PDP 2014:
+   Parallel Distributed and network-based Processing, Torino, Italy,
+   2014. doi:10.1109/PDP.2014.50  
+  
+
+July 2014
+
+
+---- Bowtie2
+
+Ben Langmead <langmea@cs.jhu.edu> wrote Bowtie 2, which is based partially on
+Bowtie.  Bowtie was written by Ben Langmead and Cole Trapnell.
+
+  Bowtie & Bowtie 2:  http://bowtie-bio.sf.net
+
+A DLL from the pthreads for Win32 library is distributed with the Win32 version
+of Bowtie 2.  The pthreads for Win32 library and the GnuWin32 package have many
+contributors (see their respective web sites).
+
+  pthreads for Win32: http://sourceware.org/pthreads-win32
+  GnuWin32:           http://gnuwin32.sf.net
+
+The ForkManager.pm perl module is used in Bowtie 2's random testing framework,
+and is included as scripts/sim/contrib/ForkManager.pm.  ForkManager.pm is
+written by dLux (Szabo, Balazs), with contributions by others.  See the perldoc
+in ForkManager.pm for the complete list.
+
+The file ls.h includes an implementation of the Larsson-Sadakane suffix sorting
+algorithm.  The implementation is by N. Jesper Larsson and was adapted somewhat
+for use in Bowtie 2.
+
+Various users have kindly supplied patches, bug reports and feature requests
+over the years.  Many, many thanks go to them.
+
+September 2011

@@ -1,0 +1,105 @@
+cmake_minimum_required(VERSION 2.8)
+
+include_directories(    ${PROJECT_SOURCE_DIR}/
+                        ${CMAKE_CURRENT_SOURCE_DIR}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/include
+                    )
+
+set ( SHARED_CPPS ccnt_lut.cpp ref_read.cpp alphabet.cpp shmem.cpp 
+              edit.cpp bt2_idx.cpp bt2_io.cpp bt2_util.cpp 
+              reference.cpp ds.cpp multikey_qsort.cpp limit.cpp 
+			  random_source.cpp) 
+			  
+set ( SEARCH_CPPS qual.cpp pat.cpp sam.cpp 
+              read_qseq.cpp aligner_seed_policy.cpp 
+              aligner_seed.cpp 
+			  aligner_seed2.cpp 
+			  aligner_sw.cpp 
+			  aligner_sw_driver.cpp aligner_cache.cpp 
+			  aligner_result.cpp ref_coord.cpp mask.cpp 
+			  pe.cpp aln_sink.cpp dp_framer.cpp 
+			  scoring.cpp presets.cpp unique.cpp 
+			  simple_func.cpp 
+			  random_util.cpp 
+			  aligner_bt.cpp sse_util.cpp 
+			  aligner_swsse.cpp outq.cpp 
+			  aligner_swsse_loc_i16.cpp 
+			  aligner_swsse_ee_i16.cpp 
+			  aligner_swsse_loc_u8.cpp 
+			  aligner_swsse_ee_u8.cpp 
+			  aligner_driver.cpp 
+			   )
+
+
+set ( BT2_FF_SRCS bt2_search.cpp 
+		${SHARED_CPPS}
+		${SEARCH_CPPS}	
+                bowtie_main.cpp 		
+ )
+
+set ( BT2_SRCS bt2_search.cpp 
+		${SHARED_CPPS}
+		${SEARCH_CPPS}
+		#metrics_utils.cpp	
+                bowtie_main.cpp 		
+ )			
+			
+include_directories( 
+    ${PROJECT_SOURCE_DIR}
+    ${PROJECT_SOURCE_DIR}/atomic
+    ${CURRENT_SOURCE_DIR}    
+    )
+
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 8) 
+    set(ARCH_64 TRUE) 
+else() 
+    set(ARCH_64 FALSE) 
+endif() 
+
+if ( ARCH_64 )
+	set (BITS_FLAG -m64)
+else()
+	set (BITS_FLAG -m32)
+endif()
+
+add_executable ( bowtie2.0.6-ff ${BT2_FF_SRCS} )
+add_executable ( bowtie2.0.6 ${BT2_SRCS} )
+
+
+site_name(HOST_NAME)
+string(TIMESTAMP TS "%d/%m/%Y")
+SET (CO-BT2-FF "-funroll-loops -finline-functions -fno-strict-aliasing -msse3 -Wall -DBOWTIE2 -DBOWTIE_PTHREADS -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -DFF")
+SET (CO-BT2 "-funroll-loops -finline-functions -fno-strict-aliasing -Wall -msse3 -DBOWTIE2 -DBOWTIE_PTHREADS -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE")
+SET(cat_prog cat)
+IF(WIN32)
+  IF(NOT UNIX)
+    SET(cat_prog type)
+  ENDIF(NOT UNIX)
+ENDIF(WIN32)
+
+# -DNDEBUG is added by cmake with Debug generation type
+
+# ---- numa
+find_package(LibNuma)
+if ( ${LIBNUMA_LIBRARIES} MATCHES LIBNUMA_LIBRARIES-NOTFOUND )
+message (WARNING  " LibNUMA not found, Bowtie-FF will not benefit from memory affinity") 
+target_link_libraries ( bowtie2.0.6-ff  ${CMAKE_THREAD_LIBS_INIT} )
+else ()
+SET (CO-BT2-FF "${CO-BT2-FF} -DFF_NUMA_ALLOC -DFF_INDEX_INTERLEAVED" )
+INCLUDE_DIRECTORIES( ${LIBNUMA_INCLUDE_DIRS} )
+target_link_libraries ( bowtie2.0.6-ff  ${LIBNUMA_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} )
+endif ()
+
+EXEC_PROGRAM(${cat_prog}  ARGS ${CMAKE_CURRENT_SOURCE_DIR}/VERSION OUTPUT_VARIABLE ver)
+
+# ----
+set_target_properties (bowtie2.0.6-ff PROPERTIES COMPILE_FLAGS "${CO-BT2-FF} -DBOWTIE2_VERSION=\"\\\"${ver}\\\"\" -DBUILD_HOST=\"\\\"${HOST_NAME}\\\"\" -DBUILD_TIME=\"\\\"${TS}\\\"\"  -DCOMPILER_VERSION=\"\\\"${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\\\"\"  -DCOMPILER_OPTIONS=\"\\\"${CO-BT2-FF}\\\"\" " )
+set_target_properties (bowtie2.0.6 PROPERTIES COMPILE_FLAGS "${CO-BT2} -DBOWTIE2_VERSION=\"\\\"${ver}\\\"\" -DBUILD_HOST=\"\\\"${HOST_NAME}\\\"\" -DBUILD_TIME=\"\\\"${TS}\\\"\"  -DCOMPILER_VERSION=\"\\\"${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\\\"\"  -DCOMPILER_OPTIONS=\"\\\"${CO-BT2}\\\"\"  " )
+# -DFF -DFF_NUMA_ALLOC -DFF_INDEX_INTERLEAVED
+
+target_link_libraries ( bowtie2.0.6 ${CMAKE_THREAD_LIBS_INIT})
+
+add_test( bowtie2.0.6-ff ${CMAKE_CURRENT_BINARY_DIR}/bowtie2.0.6-ff -t -p 2 -x ${CURRENT_SOURCE_DIR}/example/index/lambda_virus -U ${CURRENT_SOURCE_DIR}/example/reads/longreads.fq -S ${CURRENT_SOURCE_DIR}/out.sam )
+
+
