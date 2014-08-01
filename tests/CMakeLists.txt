@@ -4,7 +4,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}
     )
 
-
+ADD_DEFINITIONS(-DUSE_CMAKE_CONFIG)
 
 set( TESTS farm_basic                                test_ffthread
 perf_parfor                               test_freeze
