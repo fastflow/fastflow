@@ -303,7 +303,8 @@ int main(int argc, char * argv[]) {
 
   random_nums.resize(num_randoms);
   std::random_device rd;
-  std::default_random_engine generator(rd());
+  //std::default_random_engine generator(rd());
+  std::default_random_engine generator;
   std::uniform_real_distribution<double> distribution(0.0,1.0);
   const double range = fabs(env.max_range-env.min_range);
 
@@ -337,7 +338,7 @@ int main(int argc, char * argv[]) {
   ffTime(STOP_TIME);
 
   std::cout << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
-  std::cout << "Best min (x,y) = (" << std::setprecision(10) << P[0].value << ", " << std::setprecision(10) << P[0].f_value << ")\n";
+  std::cout << "Best min (x,y) = (" << std::setprecision(15) << P[0].value << ", " << std::setprecision(15) << P[0].f_value << ")\n";
   
   return 0;
 }
