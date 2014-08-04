@@ -31,6 +31,7 @@ set ( SEARCH_CPPS qual.cpp pat.cpp sam.cpp
 			   )
 
 
+
 set ( BT2_FF_SRCS bt2_search.cpp 
 		${SHARED_CPPS}
 		${SEARCH_CPPS}	
@@ -63,9 +64,18 @@ else()
 	set (BITS_FLAG -m32)
 endif()
 
+
+file( MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bt2 )
+file( MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bt2ff )
+
+set( CMAKE_RUNTIME_OUTPUT_DIRECTORY bt2ff )
 add_executable ( bowtie2.0.6-ff ${BT2_FF_SRCS} )
+set( CMAKE_RUNTIME_OUTPUT_DIRECTORY bt2 )
 add_executable ( bowtie2.0.6 ${BT2_SRCS} )
 
+
+file (COPY bowtie2 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/bt2)
+file (COPY bowtie2 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/bt2ff)
 
 site_name(HOST_NAME)
 string(TIMESTAMP TS "%d/%m/%Y")
@@ -79,7 +89,6 @@ IF(WIN32)
 ENDIF(WIN32)
 
 # -DNDEBUG is added by cmake with Debug generation type
-
 # ---- numa
 find_package(LibNuma)
 if ( ${LIBNUMA_LIBRARIES} MATCHES LIBNUMA_LIBRARIES-NOTFOUND )
@@ -94,11 +103,14 @@ endif ()
 EXEC_PROGRAM(${cat_prog}  ARGS ${CMAKE_CURRENT_SOURCE_DIR}/VERSION OUTPUT_VARIABLE ver)
 
 # ----
-set_target_properties (bowtie2.0.6-ff PROPERTIES COMPILE_FLAGS "${CO-BT2-FF} -DBOWTIE2_VERSION=\"\\\"${ver}\\\"\" -DBUILD_HOST=\"\\\"${HOST_NAME}\\\"\" -DBUILD_TIME=\"\\\"${TS}\\\"\"  -DCOMPILER_VERSION=\"\\\"${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\\\"\"  -DCOMPILER_OPTIONS=\"\\\"${CO-BT2-FF}\\\"\" " )
-set_target_properties (bowtie2.0.6 PROPERTIES COMPILE_FLAGS "${CO-BT2} -DBOWTIE2_VERSION=\"\\\"${ver}\\\"\" -DBUILD_HOST=\"\\\"${HOST_NAME}\\\"\" -DBUILD_TIME=\"\\\"${TS}\\\"\"  -DCOMPILER_VERSION=\"\\\"${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\\\"\"  -DCOMPILER_OPTIONS=\"\\\"${CO-BT2}\\\"\"  " )
+set_target_properties (bowtie2.0.6-ff PROPERTIES COMPILE_FLAGS "${CO-BT2-FF} -DBOWTIE2_VERSION=\"\\\"${ver}\\\"\" -DBUILD_HOST=\"\\\"${HOST_NAME}\\\"\" -DBUILD_TIME=\"\\\"${TS}\\\"\"  -DCOMPILER_VERSION=\"\\\"${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\\\"\"  -DCOMPILER_OPTIONS=\"\\\"${CO-BT2-FF}\\\"\" " OUTPUT_NAME bowtie2-align)
+
+
+set_target_properties (bowtie2.0.6 PROPERTIES COMPILE_FLAGS "${CO-BT2} -DBOWTIE2_VERSION=\"\\\"${ver}\\\"\" -DBUILD_HOST=\"\\\"${HOST_NAME}\\\"\" -DBUILD_TIME=\"\\\"${TS}\\\"\"  -DCOMPILER_VERSION=\"\\\"${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\\\"\"  -DCOMPILER_OPTIONS=\"\\\"${CO-BT2}\\\"\"  " OUTPUT_NAME bowtie2-align)
 # -DFF -DFF_NUMA_ALLOC -DFF_INDEX_INTERLEAVED
 
 target_link_libraries ( bowtie2.0.6 ${CMAKE_THREAD_LIBS_INIT})
+
 
 add_test( bowtie2.0.6-ff ${CMAKE_CURRENT_BINARY_DIR}/bowtie2.0.6-ff -t -p 2 -x ${CMAKE_CURRENT_SOURCE_DIR}/example/index/lambda_virus -U ${CMAKE_CURRENT_SOURCE_DIR}/example/reads/longreads.fq -S ${CMAKE_CURRENT_BINARY_DIR}/out.ff.sam )
 add_test( bowtie2.0.6 ${CMAKE_CURRENT_BINARY_DIR}/bowtie2.0.6 -t -p 2 -x ${CMAKE_CURRENT_SOURCE_DIR}/example/index/lambda_virus -U ${CMAKE_CURRENT_SOURCE_DIR}/example/reads/longreads.fq -S ${CMAKE_CURRENT_BINARY_DIR}/out.sam )
