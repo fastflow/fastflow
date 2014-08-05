@@ -618,7 +618,7 @@ public:
     int wait(/* timeval */ ) {
         int ret=0;
         if (lb->wait()<0) ret=-1;
-        if (collector) if (gt->wait()<0) ret=-1;
+        if (!collector_removed && collector) if (gt->wait()<0) ret=-1;
 #if 0
         if(is_profiling_root()) 
             DSRIManger::instance()->finalise();
