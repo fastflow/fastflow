@@ -176,8 +176,12 @@ static inline int ff_realNumCores() {
 #endif
     FILE       *f; 
     f = popen(inspect, "r");
-    fscanf(f, "%d", &n);
-    pclose(f);
+    if (f) {
+        if (fscanf(f, "%d", &n) == EOF) { 
+            perror("fscanf");
+        }
+        pclose(f);
+    } else perror("popen");
     return n;
 }
 
@@ -201,8 +205,12 @@ static inline int ff_numSockets() {
 #endif
     FILE       *f; 
     f = popen(inspect, "r");
-    fscanf(f, "%d", &n);
-    pclose(f);
+    if (f) {
+        if (fscanf(f, "%d", &n) == EOF) { 
+            perror("fscanf");
+        }
+        pclose(f);
+    } else perror("popen");
     return n;
 }
 

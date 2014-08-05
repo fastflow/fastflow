@@ -125,6 +125,7 @@ static inline int ulong_key_compare( void *key1, void *key2  ) {
     return ( *(unsigned long*)key1 == *(unsigned long*)key2 );
 }
 
+
 /* --------------------------------------- */
 
 typedef enum {INPUT=0,OUTPUT=1,VALUE=2} data_direction_t;
@@ -164,8 +165,7 @@ protected:
                 base_f_t *wtask;
                 status_t status;
                 bool     is_dummy;
-                //counter of dependencies that have to been yet satisfied
-                long     remaining_dep;
+                long     remaining_dep;  // dependencies counter
                 long     unblock_numb;
                 long     num_out;
                 //task list that have to be "unblocked"
@@ -498,7 +498,7 @@ public:
      */
     template<typename T1>
     ff_mdf(void (*F)(T1*const), T1*const args, size_t outstandingTasks=DEFAULT_OUTSTANDING_TASKS,
-           int maxnw=ff_numCores(), void (*schedRelaxF)(unsigned long)=NULL):
+           int maxnw=ff_realNumCores(), void (*schedRelaxF)(unsigned long)=NULL):
         farmworkers(maxnw),pipe(false,outstandingTasks) { //NOTE: pipe has fixed size queue by default 
         GD<T1> *_gd   = new GD<T1>(F,args);
         _gd->setMaxTasks(outstandingTasks+16); // NOTE: TASKS must be greater than pipe's queue!
