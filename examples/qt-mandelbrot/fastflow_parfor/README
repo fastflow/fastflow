@@ -1,0 +1,1 @@
+This the QT-mandelbrot example http://doc.trolltech.com/4.1/threads-mandelbrot.html modified to use Fastflow accelerator with standard Libc allocator or FF allocator (can be selected via -DUSE_FFA).
