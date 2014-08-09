@@ -636,7 +636,7 @@ public:
     inline int wait_freezing(/* timeval */ ) {
         int ret=0;
         if (lb->wait_freezing()<0) ret=-1;
-        if (collector) if (gt->wait_freezing()<0) ret=-1;
+        if (!collector_removed && collector) if (gt->wait_freezing()<0) ret=-1;
         return ret; 
     } 
 
@@ -791,17 +791,19 @@ public:
 
     inline void get_out_nodes(svector<ff_node*>&w) {
         if (collector && !collector_removed) {
-            collector->get_out_nodes(w);
-            if (w.size()==0) w.push_back(collector);
+            if ((ff_node*)gt == collector) {
+                ff_node *outnode = new ff_buffernode(-1, NULL,gt->get_out_buffer());
+                internalSupportNodes.push_back(outnode);
+            } else {
+                collector->get_out_nodes(w);
+                if (w.size()==0) w.push_back(collector);
+            }
             return;
         }
         for(size_t i=0;i<workers.size();++i)
             workers[i]->get_out_nodes(w);
         if (w.size()==0) w = workers;
     }
-        
-
-
 
     /** \brief Resets input/output queues.
      * 
