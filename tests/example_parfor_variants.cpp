@@ -11,7 +11,7 @@
 # include <omp.h>
 #endif
  
-#define N 24
+#define N 10
 
 template <typename T>
 std::string to_string (const T& t)
@@ -21,9 +21,7 @@ std::string to_string (const T& t)
     return ss.str();
 }
 
-static void print(long V[], long size, char *c) {
-  std::cout << "====================================================" << std::endl;
-  std::cout << c << std::endl;
+static void print(long V[], long size) {
   for (long i=0;i<size;++i) std::cout << std::setw(2) << V[i] << " ";
   std::cout << std::endl;
 }
@@ -66,7 +64,7 @@ int main() {
   */
 
 #ifdef FF
-  ff::ParallelFor pf(nworkers, true);
+  ff::ParallelFor pf(nworkers, false);
   pf.parallel_for(0L,N,[&A](const long i) {
       A[i]+=1;
     });
@@ -76,8 +74,10 @@ int main() {
       A[i]+=1;
     };
 #endif
-
-  print(A,N,"Basic");
+  
+  std::cout << "====================================================" << std::endl;
+  std::cout << "1) Basic" << std::endl;
+  print(A,N);
   compute_mask(A,N," X");
   reset(A,N);
 
@@ -86,14 +86,19 @@ int main() {
      parallel_for (long first, long last, long step, const Function &f, const long nw=FF_AUTO)
     
     Compute the body on [first,last) elements with step
-    Static scheduling, grain = (last-first)/(step*nw)    
+    Static scheduling, grain = (last-first)/(step*nw)
+
+    X  -  X  -  -  X  -  X  -  -
+    To be checked
   */
   long step = 2;
   pf.parallel_for(0L,N,step,[&A](const long i) {
       A[i]+=1;
-    });
+    }, nworkers);
 
-  print(A,N,"Step");
+  std::cout << "====================================================" << std::endl;
+  std::cout << "2) Step" << step << std::endl;
+  print(A,N);
   compute_mask(A,N," X");
   reset(A,N);
 
@@ -114,7 +119,9 @@ int main() {
       mapping_on_threads[i] = ff_getThreadID(); 
     });
 
-  print(A,N,"Chunk");
+  std::cout << "====================================================" << std::endl;
+  std::cout << "3) step << " << step << " grain=" << grain << std::endl;
+  print(A,N);
   compute_mask(A,N," X");
   for (long i=0;i<N;++i) {
     std::cout << "A["<< i << "] on Thread ";
@@ -133,51 +140,56 @@ int main() {
   */
   for (long i=0;i<N;++i) mapping_on_threads[i] =-1;
 
-  pf.parallel_for_thid(0L,N,step,grain,[&A,&mapping_on_threads](const long i, const long thid) {
+  pf.parallel_for_thid(0L,N,step,grain,[&A,&mapping_on_threads](const long i, const int thid) {
       A[i]+=1;
       mapping_on_threads[i] = thid;
     });
 
-  print(A,N,"ThreadID");
+  std::cout << "====================================================" << std::endl;
+  std::cout << "4) step= " << step << "grain = " << grain << 
+    "with ThreadIDs" << std::endl;
+  print(A,N);
   compute_mask_i(A,N,mapping_on_threads);
   reset(A,N);
 
-   /* Version 5 (step, grain, threadID)
+   /* Version 5 (step, grain, IDX)
      
      parallel_for_idx (long first, long last, long step, long grain, const Function &f, const long nw=FF_AUTO)
     
     Compute the body on [first,last) elements with step
     Static scheduling, chunk defined by user, body can access to worker number
 
-    TO BE FIXED - try with N = 16
-
   */
+
+  std::cout << "====================================================" << std::endl;
+  std::cout << "5) Partition range indexes (IDX)" << std::endl; 
   for (long i=0;i<N;++i) mapping_on_threads[i] =-1;
   pf.parallel_for_idx(0L,N,3,2,[&A,&mapping_on_threads](const long start, const long end, const long thid) {
       usleep(random()&1111111);
       std::cerr << start << " - " << end << "\n";
-      for (long j=start; j<end; ++j) {
+      for (long j=start; j<end; j+=3) {
 	A[j]+=1;
 	mapping_on_threads[j] = thid;
       }
-    });
+    },nworkers);
 
-  print(A,N,"IDX (blocked)");
+  print(A,N);
   compute_mask_i(A,N,mapping_on_threads);
   reset(A,N);
 
   /* ---------- */
+  std::cout << "====================================================" << std::endl;
   step = 1;
-  grain = 2;
   for (long i=0;i<N;++i) mapping_on_threads[i] =-1;
-  pf.parallel_for_static(0L,N,step,grain,[&A,&mapping_on_threads](const long i) {
-      if (i==0) sleep(2);
+  pf.parallel_for_static(0L,N,step,0,[&A,&mapping_on_threads](const long i) {
+
       A[i]+=1;
       // Internal, OS-dependent thread ID
       mapping_on_threads[i] = ff_getThreadID(); 
     });
 
-  print(A,N,"Static-to be changed ");
+  std::cout << "6) Static with maximal balanced partitions" << std::endl; 
+  print(A,N);
   compute_mask(A,N," X");
   for (long i=0;i<N;++i) {
     std::cout << "A["<< i << "] on Thread ";
@@ -188,14 +200,15 @@ int main() {
   reset(A,N);
 
   for (long i=0;i<N;++i) mapping_on_threads[i] =-1;
-  pf.parallel_for_static(0L,N,step,0,[&A,&mapping_on_threads](const long i) {
-      if (i==0) sleep(2);
+  pf.parallel_for_static(0L,N,step,grain,[&A,&mapping_on_threads](const long i) {
       A[i]+=1;
       // Internal, OS-dependent thread ID
       mapping_on_threads[i] = ff_getThreadID(); 
     });
-
-  print(A,N,"Static-to be changed ");
+  
+  std::cout << "====================================================" << std::endl;
+  std::cout << "7) Static with fixed partition size = " << grain << std::endl; 
+  print(A,N);
   compute_mask(A,N," X");
   for (long i=0;i<N;++i) {
     std::cout << "A["<< i << "] on Thread ";
