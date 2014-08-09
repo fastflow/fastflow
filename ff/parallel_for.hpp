@@ -3,9 +3,14 @@
 /*! 
  *  \link
  *  \file parallel_for.hpp
- *  \ingroup high_level_patterns_shared_memory
+ *  \ingroup high_level_patterns
  *
  *  \brief This file describes the parallel_for/parallel_reduce skeletons.
+ *  
+ *  Realize a parallel for loop. Different iterations should be 
+ *  independent (data-races management is not autimatically provided
+ *  but can be introduced by programmers via mutex).
+ *
  */
  
 /* ***************************************************************************
@@ -97,7 +102,7 @@ class ParallelFor {
 protected:
     ff_forall_farm<forallreduce_W<int> > *pf; 
 public:
-    ParallelFor(const long maxnw=-1,bool spinwait=false):
+    ParallelFor(const long maxnw=FF_AUTO,bool spinwait=false):
         pf(new ff_forall_farm<forallreduce_W<int> >(maxnw,spinwait)) {}
 
     ~ParallelFor()                { FF_PARFOR_DONE(pf); }
@@ -116,38 +121,113 @@ public:
     }
 
     /* -------------------- parallel_for -------------------- */
+    /**
+     * \brief Parallel for with static scheduling
+     *
+     * With static scheduling onto nw worker threads.
+     * 
+     * \param first first value of the iteration variable
+     * \param last last value of the iteration variable
+     * \param f body of the parallel loop
+     * \param nw number of worker threads (default n. of platform HW contexts)
+     */
     template <typename Function>
     inline void parallel_for(long first, long last, const Function& f, 
-                             const long nw=-1) {
+                             const long nw=FF_AUTO) {
         FF_PARFOR_START(pf, parforidx,first,last,1,PARFOR_STATIC(0),nw) {
             f(parforidx);            
         } FF_PARFOR_STOP(pf);
     }
+
+    /**
+     * \brief Parallel for with static scheduling (steps)
+     *
+     * With static scheduling onto nw worker threads (and iteration steps)
+     * 
+     * \param first first value of the iteration variable
+     * \param last last value of the iteration variable
+     * \param step step increment for the iteration variable
+     * \param f body of the parallel loop
+     * \param nw number of worker threads (default n. of platform HW contexts)
+     */
     template <typename Function>
     inline void parallel_for(long first, long last, long step, const Function& f, 
-                             const long nw=-1) {
+                             const long nw=FF_AUTO) {
         FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_STATIC(0),nw) {
             f(parforidx);            
         } FF_PARFOR_STOP(pf);
     }
+
+    /**
+     * @brief Parallel for with dynamic scheduling (steps,grain)
+     *
+     * @detail With dynamic scheduling onto nw worker threads (+ iteration steps
+     * and grain). Iteration space is walked with stride 
+     * <b>step</b>. 
+     * 
+     * @param first first value of the iteration variable
+     * @param last last value of the iteration variable
+     * @param step step increment for the iteration variable
+     * @param grain (> 0) minimum computation grain 
+     * (n. of iterations scheduled together to a single worker)
+     * @param f <b>f(const long idx)</b>  Lambda function, 
+     * body of the parallel loop. <b>idx</b>: iteration
+     * *param nw number of worker threads (default n. of platform HW contexts)
+     */
     template <typename Function>
     inline void parallel_for(long first, long last, long step, long grain, 
-                             const Function& f, const long nw=-1) {
+                             const Function& f, const long nw=FF_AUTO) {
         FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(parforidx);            
         } FF_PARFOR_STOP(pf);
     }    
+
+    /**
+     * @brief Parallel for with dynamic scheduling (+ iteration steps, grain, 
+     * and threadId )
+     *
+     * @detail With dynamic scheduling onto nw worker threads (+ iteration steps, 
+     * computation grain and worker ID). Iteration space is walked with stride 
+     * <b>step<b> 
+     * 
+     * @param first first value of the iteration variable
+     * @param last last value of the iteration variable
+     * @param step step increment for the iteration variable
+     * @param grain (> 0) minimum computation grain  (n. of iterations scheduled together to a single worker)
+     * @param f <b>f(const long idx, const int thid)</b>  Lambda function, body of the parallel loop. <b>idx</b>: iteration, <b>thid</b>: worker_id 
+     * @param nw number of worker threads (default n. of platform HW contexts)
+     */
     template <typename Function>
     inline void parallel_for_thid(long first, long last, long step, long grain, 
-                                  const Function& f, const long nw=-1) {
+                                  const Function& f, const long nw=FF_AUTO) {
         FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(parforidx,_ff_thread_id);            
         } FF_PARFOR_STOP(pf);
     }    
 
+    /**
+     * @brief Parallel for with dynamic scheduling (+ iteration steps, grain)
+     *
+     * @detail With dynamic scheduling onto nw worker threads (+ iteration steps, 
+     * computation grain). A chunk of iterations are assigned to each worker but
+     * they are not automatically walked. Each chunk can be traversed within the
+     * parallel_for body (e.g. with a for loop within <b>f</b>). 
+     * 
+     * @param first first value of the iteration variable
+     * @param last last value of the iteration variable
+     * @param step step increment for the iteration variable
+     * @param grain (> 0) minimum computation grain  (n. of iterations scheduled 
+     * together to a single worker)
+     * @param f <b>f(const long start_idx, const long stop_idx, const int thid)
+     * </b>  Lambda function, body of the parallel loop. 
+     * <b>start_idx</b> and <b>stop_idx</b>: iteration bounds assigned to 
+     * worker_id <b>thid</b>. 
+     * @param nw number of worker threads (default n. of platform HW contexts)
+     */
+    // Change name in parallel_for_block ?
     template <typename Function>
     inline void parallel_for_idx(long first, long last, long step, long grain, 
-                                  const Function& f, const long nw=-1) {
+                                  const Function& f, const long nw=FF_AUTO) {
         FF_PARFOR_START_IDX(pf,parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(ff_start_idx, ff_stop_idx,_ff_thread_id);            
         } FF_PARFOR_STOP(pf);
@@ -155,7 +235,7 @@ public:
 
     template <typename Function>
     inline void parallel_for_static(long first, long last, long step, long grain, 
-                                    const Function& f, const long nw=-1) {
+                                    const Function& f, const long nw=FF_AUTO) {
         if (grain==0 || labs(nw)==1) {
             FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
                 f(parforidx);            
@@ -178,7 +258,7 @@ protected:
     ParallelForReduce(const long maxnw, bool spinWait, bool skipWarmup): 
         pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,false, true)) {}
 public:
-    ParallelForReduce(const long maxnw=-1, bool spinwait=false):
+    ParallelForReduce(const long maxnw=FF_AUTO, bool spinwait=false):
         pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,spinwait)) {}
 
     ~ParallelForReduce()                { FF_PARFORREDUCE_DONE(pfr); }
@@ -199,21 +279,21 @@ public:
     /* -------------------- parallel_for -------------------- */
     template <typename Function>
     inline void parallel_for(long first, long last, const Function& f, 
-                             const long nw=-1) {
+                             const long nw=FF_AUTO) {
         FF_PARFOR_T_START(pfr, T, parforidx,first,last,1,PARFOR_STATIC(0),nw) {
             f(parforidx);            
         } FF_PARFOR_T_STOP(pfr,T);
     }
     template <typename Function>
     inline void parallel_for(long first, long last, long step, const Function& f, 
-                             const long nw=-1) {
+                             const long nw=FF_AUTO) {
         FF_PARFOR_T_START(pfr, T, parforidx,first,last,step,PARFOR_STATIC(0),nw) {
             f(parforidx);            
         } FF_PARFOR_T_STOP(pfr,T);
     }
     template <typename Function>
     inline void parallel_for(long first, long last, long step, long grain, 
-                             const Function& f, const long nw=-1) {
+                             const Function& f, const long nw=FF_AUTO) {
         FF_PARFOR_T_START(pfr, T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(parforidx);            
         } FF_PARFOR_STOP(pfr);
@@ -221,7 +301,7 @@ public:
 
     template <typename Function>
     inline void parallel_for_thid(long first, long last, long step, long grain, 
-                                  const Function& f, const long nw=-1) {
+                                  const Function& f, const long nw=FF_AUTO) {
         FF_PARFOR_T_START(pfr,T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(parforidx,_ff_thread_id);            
         } FF_PARFOR_T_STOP(pfr,T);
@@ -229,7 +309,7 @@ public:
 
     template <typename Function>
     inline void parallel_for_idx(long first, long last, long step, long grain, 
-                                  const Function& f, const long nw=-1) {
+                                  const Function& f, const long nw=FF_AUTO) {
 
         FF_PARFOR_T_START_IDX(pfr,T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(ff_start_idx, ff_stop_idx,_ff_thread_id);            
@@ -238,7 +318,7 @@ public:
 
     template <typename Function>
     inline void parallel_for_static(long first, long last, long step, long grain, 
-                                    const Function& f, const long nw=-1) {
+                                    const Function& f, const long nw=FF_AUTO) {
         if (grain==0 || labs(nw)==1) {
             FF_PARFOR_T_START(pfr, T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
                 f(parforidx);            
@@ -256,7 +336,7 @@ public:
     inline void parallel_reduce(T& var, const T& identity, 
                                 long first, long last, 
                                 const Function& body, const FReduction& finalreduce,
-                                const long nw=-1) {
+                                const long nw=FF_AUTO) {
         FF_PARFORREDUCE_START(pfr, var, identity, parforidx, first, last, 1, PARFOR_STATIC(0), nw) {
             body(parforidx, var);            
         } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
@@ -265,7 +345,7 @@ public:
     inline void parallel_reduce(T& var, const T& identity, 
                                 long first, long last, long step, 
                                 const Function& body, const FReduction& finalreduce,
-                                const long nw=-1) {
+                                const long nw=FF_AUTO) {
         FF_PARFORREDUCE_START(pfr, var, identity, parforidx,first,last,step,PARFOR_STATIC(0),nw) {
             body(parforidx, var);            
         } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
@@ -274,7 +354,7 @@ public:
     inline void parallel_reduce(T& var, const T& identity, 
                                 long first, long last, long step, long grain, 
                                 const Function& body, const FReduction& finalreduce,
-                                const long nw=-1) {
+                                const long nw=FF_AUTO) {
         FF_PARFORREDUCE_START(pfr, var, identity, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             body(parforidx, var);            
         } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
@@ -284,7 +364,7 @@ public:
     inline void parallel_reduce_static(T& var, const T& identity,
                                        long first, long last, long step, long grain, 
                                        const Function& body, const FReduction& finalreduce,
-                                       const long nw=-1) {
+                                       const long nw=FF_AUTO) {
         if (grain==0 || labs(nw)==1) {
             FF_PARFORREDUCE_START(pfr, var, identity, parforidx,first,last,step,grain,nw) {
                 body(parforidx, var);            
@@ -300,7 +380,7 @@ public:
     inline void parallel_reduce_thid(T& var, const T& identity, 
                                      long first, long last, long step, long grain, 
                                      const Function& body, const FReduction& finalreduce,
-                                     const long nw=-1) {
+                                     const long nw=FF_AUTO) {
         FF_PARFORREDUCE_START(pfr, var, identity, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             body(parforidx, var, _ff_thread_id);            
         } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
@@ -330,7 +410,7 @@ protected:
     ff_pipe<task_t>  pipe;
 
 public:
-    ParallelForPipeReduce(const long maxnw=-1, bool spinwait=false):
+    ParallelForPipeReduce(const long maxnw=FF_AUTO, bool spinwait=false):
         pfr(new ff_forall_farm<forallpipereduce_W>(maxnw,false,true)), // skip loop warmup and disable spinwait
         pipe(pfr,&reduce) {
         
@@ -374,7 +454,7 @@ public:
     template <typename Function, typename FReduction>
     inline void parallel_reduce_idx(long first, long last, long step, long grain, 
                                     const Function& Map, const FReduction& Reduce,
-                                    const long nw=-1) {
+                                    const long nw=FF_AUTO) {
         
         pfr->setloop(first,last,step,grain,nw);
         pfr->setF(Map);
@@ -388,7 +468,7 @@ public:
 
     template <typename Function>
     inline void parallel_for_idx(long first, long last, long step, long grain, 
-                                 const Function& Map, const long nw=-1) {
+                                 const Function& Map, const long nw=FF_AUTO) {
         
         pfr->setloop(first,last,step,grain,nw);
         pfr->setF(Map);
@@ -409,7 +489,7 @@ public:
 //! Parallel loop over a range of indexes (step=1)
 template <typename Function>
 static void parallel_for(long first, long last, const Function& body, 
-                         const long nw=-1) {
+                         const long nw=FF_AUTO) {
     FF_PARFOR_BEGIN(pfor, parforidx,first,last,1,PARFOR_STATIC(0),nw) {
         body(parforidx);            
     } FF_PARFOR_END(pfor);
@@ -417,7 +497,7 @@ static void parallel_for(long first, long last, const Function& body,
 //! Parallel loop over a range of indexes using a given step
 template <typename Function>
 static void parallel_for(long first, long last, long step, const Function& body, 
-                         const long nw=-1) {
+                         const long nw=FF_AUTO) {
     FF_PARFOR_BEGIN(pfor, parforidx,first,last,step,PARFOR_STATIC(0),nw) {
         body(parforidx);            
     } FF_PARFOR_END(pfor);
@@ -425,7 +505,7 @@ static void parallel_for(long first, long last, long step, const Function& body,
 //! Parallel loop over a range of indexes using a given step and granularity
 template <typename Function>
 static void parallel_for(long first, long last, long step, long grain, 
-                         const Function& body, const long nw=-1) {
+                         const Function& body, const long nw=FF_AUTO) {
     FF_PARFOR_BEGIN(pfor, parforidx,first,last,step,grain,nw) {
         body(parforidx);            
     } FF_PARFOR_END(pfor);
@@ -435,7 +515,7 @@ template <typename Function, typename Value_t, typename FReduction>
 void parallel_reduce(Value_t& var, const Value_t& identity, 
                      long first, long last, 
                      const Function& body, const FReduction& finalreduce,
-                     const long nw=-1) {
+                     const long nw=FF_AUTO) {
     Value_t _var = var;
     FF_PARFORREDUCE_BEGIN(pfr, _var, identity, parforidx, first, last, 1, PARFOR_STATIC(0), nw) {
         body(parforidx, _var);            
