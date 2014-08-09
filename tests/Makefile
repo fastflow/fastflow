@@ -168,6 +168,8 @@ test_stopstartall:test_stopstartall.o
 test_MISD:test_MISD.o
 test_lb_affinity:test_lb_affinity.o
 test_farm:test_farm.o
+example_parfor_variants: example_parfor_variants.cpp
+	$(CXX) -std=c++0x -DFF -DHAS_CXX11_VARIADIC_TEMPLATES -DHAS_CXX11_LAMBDA $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)	
 farm_basic:farm_basic.cpp
 	$(CXX) -std=c++0x -DHAS_CXX11_VARIADIC_TEMPLATES -DHAS_CXX11_LAMBDA $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 pipe_basic:pipe_basic.cpp
@@ -217,7 +219,6 @@ test_pool3:test_pool3.cpp
 
 test_mdf:test_mdf.cpp
 	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-
 
 test_devicequery: test_devicequery.o
 
