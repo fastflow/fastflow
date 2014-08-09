@@ -200,7 +200,7 @@ int main() {
   reset(A,N);
 
   for (long i=0;i<N;++i) mapping_on_threads[i] =-1;
-  pf.parallel_for_static(0L,N,step,grain,[&A,&mapping_on_threads](const long i) {
+  pf.parallel_for_static(0L,N,step,grain, [&A,&mapping_on_threads](const long i) {
       A[i]+=1;
       // Internal, OS-dependent thread ID
       mapping_on_threads[i] = ff_getThreadID(); 
