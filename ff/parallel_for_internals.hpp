@@ -65,6 +65,8 @@
 #include <ff/farm.hpp>
 #include <ff/spin-lock.hpp>
 
+enum {FF_AUTO=-1};
+
 #if defined(__ICC)
 #define PRAGMA_IVDEP _Pragma("ivdep")
 #else
