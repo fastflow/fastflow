@@ -12,17 +12,7 @@
 # include <omp.h>
 #endif
  
-#define N 10
-
-// Auxiliary functions
-
-template <typename T>
-std::string to_string (const T& t)
-{
-    std::stringstream ss;
-    ss << t;
-    return ss.str();
-}
+const long N=10;
 
 static void print(long V[], long size) {
   for (long i=0;i<size;++i) std::cout << std::setw(2) << V[i] << " ";
@@ -40,7 +30,7 @@ static void compute_mask(long V[], long size, std::string m) {
 static void compute_mask_i(long V[], long size, long mapping[]) {
   std::cout << "Compute mask (worker ID, - not computed)" << std::endl;
   for (long i=0;i<size;++i) 
-    if (V[i]!=i) std::cout <<  std::setw(2) << to_string<long>(mapping[i]) << " ";
+      if (V[i]!=i) std::cout <<  std::setw(2) << std::to_string(mapping[i]) << " ";
     else std::cout << " -" << " ";
   std::cout << std::endl;
 }
@@ -90,9 +80,8 @@ int main() {
     Compute the body on [first,last) elements with step
     Dynamic scheduling, grain = (last-first)/(step*nw)
 
-    X  -  X  -  -  X  -  X  -  -
-    To be checked
   */
+  
   long step = 2;
   pf.parallel_for(0L,N,step,[&A](const long i) {
       A[i]+=1;
@@ -209,7 +198,7 @@ int main() {
   reset(A,N);
 
   for (long i=0;i<N;++i) mapping_on_threads[i] =-1;
-  pf.parallel_for_static(0L,N,step,grain, [&A,&mapping_on_threads](const long i) {
+  pf.parallel_for_static(0L,N,step, grain, [&A,&mapping_on_threads](const long i) {
       A[i]+=1;
       // Internal, OS-dependent thread ID
       mapping_on_threads[i] = ff_getThreadID(); 
