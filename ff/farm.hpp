@@ -3,10 +3,31 @@
 /*! 
  *  \link
  *  \file farm.hpp
- *  \ingroup high_level_patterns_shared_memory
+ *  \ingroup core_patterns
  *  
  *
- *  \brief This file describes the farm skeleton.
+ *  @brief Farm skeleton.
+ *
+ *  @details It works on a stream of tasks. Workers are non-blocking threads
+ *  not tasks. It is composed by: Emitter (E), Workers (W), Collector (C).
+ *  They all are C++ objects.
+ *  Overall, it has one (optional) input stream and one (optional) output stream.
+ *  Emitter gets stream items (tasks, i.e. C++ objects) and disptach them to 
+ *  Workers (activating svc method). On svn return (or ff_send_out call), tasks
+ *  are sent to Collector that gather them and output them in the output stream.
+
+ *  Dispatching policy can be configured in the Emitter. Gathering policy in the
+ *  Collector.
+ * 
+ *  In case of no output stream the Collector is usually not needed. Emitter 
+ *  should always exist, even with no input stream.
+ * 
+ *  There exists several variants of the parm pattern, including 
+ * 
+ *  \li Master-worker: no collector, tasks from Workers return to Emitter
+ *  \li Ordering farm: default emitter and collector, tasks are gathered
+ *  in the same order they are dispatched
+ * 
  */
 
 /* ***************************************************************************
@@ -83,14 +104,14 @@ namespace ff {
 
 
 /*!
- * \ingroup high_level_patterns_shared_memory
+ * \ingroup core_patterns
  *
  *  @{
  */
 
 /*!
  *  \class ff_farm
- * \ingroup high_level_patterns_shared_memory
+ * \ingroup core_patterns
  *
  *  \brief The Farm skeleton, with Emitter (\p lb_t) and Collector (\p gt_t).
  *
@@ -1122,7 +1143,7 @@ protected:
 
 
 /*!
- * \ingroup high_level_patterns_shared_memory
+ * \ingroup core_patterns
  *  
  *  \brief Ordered farm
  *
@@ -1164,7 +1185,7 @@ private:
 };
 
 /*!
- * \ingroup high_level_patterns_shared_memory
+ * \ingroup core_patterns
  *
  * \brief Ordered farm with gatherer
  *
@@ -1234,7 +1255,7 @@ private:
 
 /*!
  *  \class ff_ofarm
- *  \ingroup high_level_patterns_shared_memory
+ *  \ingroup core_patterns
  *
  *  \brief The ordered Farm skeleton.
  *
