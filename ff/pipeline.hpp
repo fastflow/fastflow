@@ -1,11 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*! 
- * \link
  * \file pipeline.hpp
- * \ingroup high_level_patterns_shared_memory
+ * \ingroup core_patterns
  *
- * \brief This file describes the pipeline skeleton.
+ * \brief This file describes the pipeline skeleton, both in the high-level pattern 
+ * syntax (\ref ff::ff_pipe) and internal syntax (\ref ff::ff_pipeline)
  *
  */
 /* ***************************************************************************
@@ -96,35 +96,18 @@ namespace ff {
 /* ---------------------------------------------------------------- */
 
 
-/*!
- * \ingroup high_level_patterns_shared_memory
- *
- *  @{
- */
 
 
-/*!
+/**
  *  \class ff_pipeline
- * \ingroup high_level_patterns_shared_memory
+ * \ingroup core_patterns
  *
- *  \brief The Pipeline skeleton.
+ *  \brief The Pipeline skeleton (low-level syntax)
  *
- *  Pipelining is one of the simplest parallel patterns where data flows
- *  through a series of stages (or nodes) and each stage processes the input
- *  data in some ways, producing as output a modified version or new data. A
- *  pipeline's stage can operate sequentially or in parallel and may or may not
- *  have an internal state.
- *
- *  This class is defined in \ref pipeline.hpp
  */
  
 class ff_pipeline: public ff_node {
 protected:
-    /**
-     * It prepare the Pipeline skeleton for execution.
-     *
-     * \return TODO
-     */
     inline int prepare() {
         // create input FFBUFFER
         int nstages=static_cast<int>(nodes_list.size());
@@ -182,13 +165,7 @@ protected:
         return ret;
     }
 
-    /**
-     *  This function is required when no manager threads are present in the 
-     *  pipeline, which would allow to freeze other threads before starting the 
-     *  computation.
-     *
-     *  \return TODO
-     */
+
     int freeze_and_run(bool skip_init=false) {
         int nstages=static_cast<int>(nodes_list.size());
         if (!skip_init) {            
@@ -214,18 +191,16 @@ protected:
     } 
 
 public:
-    /**
-     * TODO
-     */
+ 
     enum { DEF_IN_BUFF_ENTRIES=512, DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+128)};
 
     /**
-     *  Constructor
+     *  \brief Constructor
      *
-     *  \param input_ch = true to set accelerator mode
-     *  \param in_buffer_entries = input queue length
-     *  \param out_buffer_entries = output queue length
-     *  \param fixedsize = true uses only fixed size queue
+     *  \param input_ch \p true set accelerator mode
+     *  \param in_buffer_entries input queue length
+     *  \param out_buffer_entries output queue length
+     *  \param fixedsize \p true uses bound channels (SPSC queue)
      */
     ff_pipeline(bool input_ch=false,
                 int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
@@ -238,7 +213,7 @@ public:
     }
     
     /**
-     * Destructor
+     * \brief Destructor
      */
     ~ff_pipeline() {
         if (end_callback) end_callback(end_callback_param);
@@ -256,18 +231,17 @@ public:
         }
     }
 
-    /** WARNING: if these methods are called after prepare (i.e. after having called
-     *  run_and_wait_end/run_then_freeze/run/....) they have no effect.
-     *
-     */
+    //  WARNING: if these methods are called after prepare (i.e. after having called
+    //  run_and_wait_end/run_then_freeze/run/....) they have no effect.
+     
     void setXNodeInputQueueLength(int sz) { in_buffer_entries = sz; }
     void setXNodeOutputQueueLength(int sz) { out_buffer_entries = sz;}
 
     /**
-     *  It adds a stage to the Pipeline
+     *  \brief It adds a stage to the pipeline
      *
-     *  \param s a ff_node that is the stage to be added to the skeleton. The
-     *  stage contains the task that has to be executed.
+     *  \param s a ff_node (or derived, e.g. farm) object that is the stage to be added 
+     *  to the pipeline
      */
     int add_stage(ff_node * s) {
         if (nodes_list.size()==0 && s->isMultiInput())
@@ -282,8 +256,10 @@ public:
 
 
     /**
-     * The last stage output queue will be connected 
-     * to the first stage input queue (feedback channel).
+     * \brief Feedback channel (pattern modifier)
+     * 
+     * The last stage output stream will be connected to the first stage 
+     * input stream in a cycle (feedback channel)
      */
     int wrap_around(bool multi_input=false) {
         if (nodes_list.size()<2) {
@@ -326,10 +302,7 @@ public:
         return 0;
     }
 
-    /**
-     * \brief Delete nodes when the destructor is called.
-     *
-     */
+   
     inline void cleanup_nodes() { node_cleanup = true; }
 
 
@@ -343,7 +316,10 @@ public:
 
 
     /**
-     * It run the Pipeline skeleton.
+     * \brief Run the pipeline skeleton asynchronously
+     * 
+     * Run the pipeline, the method call return immediately. To be coupled with 
+     * \ref ff_pipeline::wait()
      */
     int run(bool skip_init=false) {
         int nstages=static_cast<int>(nodes_list.size());
@@ -378,7 +354,10 @@ public:
     }
 
     /**
-     * It run and wait all threads to finish.
+     * \brief run the pipeline, waits that all stages received the End-Of-Stream (EOS), 
+     * and destroy the pipeline run-time 
+     * 
+     * Blocking behaviour w.r.t. main thread to be clarified
      */
     int run_and_wait_end() {
         if (isfrozen()) {  // TODO 
@@ -392,7 +371,11 @@ public:
     }
     
     /**
-     * It run and then freeze.
+     * * \brief run the pipeline, waits that all stages received the End-Of-Stream (EOS), 
+     * and suspend the pipeline run-time
+     * 
+     * Run-time threads are suspended by way of a distrubuted protocol. 
+     * The same pipeline can be re-started by calling again run_then_freeze 
      */
     virtual int run_then_freeze(bool skip_init=false) {
         if (isfrozen()) {
@@ -411,7 +394,7 @@ public:
     }
     
     /**
-     * It waits for a stage to complete its task
+     * \brief wait for pipeline termination (all stages received EOS)
      */
     int wait(/* timeval */ ) {
         int ret=0;
@@ -425,7 +408,9 @@ public:
     }
     
     /**
-     * It waits for freezing.
+     * \brief wait for pipeline to complete and suspend (all stages received EOS)
+     * 
+     * Should be coupled with ??? 
      */
     inline int wait_freezing(/* timeval */ ) {
         int ret=0;
@@ -439,31 +424,21 @@ public:
         return ret;
     } 
     
-    /**
-     * It stops all stages.
-     */
+   
     inline void stop() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->stop();
     }
 
-    /**
-     * It freeze all stages.
-     */
+  
     inline void freeze() {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->freeze();
     }
 
-    /**
-     * It Thaws all frozen stages.
-     * if _freeze is true at next step all threads are frozen again
-     */
+    
     inline void thaw(bool _freeze=false) {
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->thaw(_freeze);
     }
     
-    /** 
-     * It checks if the pipeline is frozen 
-     */
     inline bool isfrozen() const { 
         int nstages=static_cast<int>(nodes_list.size());
         for(int i=0;i<nstages;++i) 
@@ -472,7 +447,13 @@ public:
     }
 
     /** 
-     * offfload the given task to the pipeline 
+     * \brief offload a task to the pipeline from the offloading thread (accelerator mode)
+     * 
+     * Offload a task onto a pipeline accelerator, tipically the offloading 
+     * entity is the main thread (even if it can be used from any 
+     * \ref ff_node::svc method)  
+     *
+     * \note to be used in accelerator mode only
      */
     inline bool offload(void * task,
                         unsigned int retry=((unsigned int)-1),
@@ -490,9 +471,18 @@ public:
         return false;
     }    
     
-    /**
-     *  It loads results. If \p false, EOS arrived or too many retries. If \p
-     *  true, there is a new value
+    /** 
+     * \brief gets a result from a task to the pipeline from the main thread 
+     * (accelator mode)
+     * 
+     * Total call: return when a result is available. To be used in accelerator mode only
+     *
+     * \param[out] task
+     * \param retry number of attempts to get a result before failing 
+     * (related to nonblocking get from channel - expert use only)
+     * \param ticks number of clock cycles between successive attempts 
+     * (related to nonblocking get from channel - expert use only)
+     * \return \p true is a task is returned, \p false if End-Of-Stream (EOS)
      */
     inline bool load_result(void ** task, 
                             unsigned int retry=((unsigned int)-1),
@@ -516,12 +506,15 @@ public:
         return false;
     }
 
-    /**
-     * TODO
+/** 
+     * \brief try to get a result from a task to the pipeline from the main thread 
+     * (accelator mode)
+     * 
+     * Partial call: can return no result. To be used in accelerator mode only
      *
-     * \return values:
-     * false: no task present
-     * true : there is a new value, you should check if the task is an FF_EOS
+     * \param[out] task
+     * \return \p true is a task is returned (including EOS), 
+     * \p false if no task is returned
      */
     inline bool load_result_nb(void ** task) {
         FFBUFFER * outbuffer = get_out_buffer();
@@ -537,11 +530,7 @@ public:
         return false;        
     }
     
-    /**
-     * TODO
-     *
-     * \return TODO
-     */
+
     int cardinality(BARRIER_T * const barrier)  { 
         int card=0;
         for(unsigned int i=0;i<nodes_list.size();++i) 
@@ -551,21 +540,19 @@ public:
     }
     
     /* 
-     * The returned time comprise the time spent in svn_init and 
-     * in svc_end methods
+     * \brief Misure execution time (including init and finalise)
      *
-     * \return TODO
+     * \return pipeline execution time (including init and finalise)
      */
     double ffTime() {
         return diffmsec(nodes_list[nodes_list.size()-1]->getstoptime(),
                         nodes_list[0]->getstarttime());
     }
     
-    /*  
-     *  The returned time considers only the time spent in the svc
-     *  methods
+    /* 
+     * \brief Misure execution time (excluding init and finalise)
      *
-     *  \return TODO
+     * \return pipeline execution time (excluding runtime setup)
      */
     double ffwTime() {
         return diffmsec(nodes_list[nodes_list.size()-1]->getwstoptime(),
@@ -573,18 +560,12 @@ public:
     }
     
 #if defined(TRACE_FASTFLOW)
-    /**
-     * TODO
-     */
     void ffStats(std::ostream & out) { 
         out << "--- pipeline:\n";
         for(unsigned int i=0;i<nodes_list.size();++i)
             nodes_list[i]->ffStats(out);
     }
 #else
-    /**
-     * TODO
-     */
     void ffStats(std::ostream & out) { 
         out << "FastFlow trace not enabled\n";
     }
@@ -592,37 +573,18 @@ public:
     
 protected:
     
-    /**
-     * TODO
-     */
     void* svc(void * task) { return NULL; }
     
-    /**
-     * TODO
-     */
     int   svc_init() { return -1; };
     
-    /**
-     * TODO
-     */
     void  svc_end()  {}
     
-
-    /**
-     * TODO
-     */
     void  setAffinity(int) { 
         error("PIPE, setAffinity: cannot set affinity for the pipeline\n");
     }
     
-    /**
-     * TODO
-     */
     int   getCPUId() { return -1;}
 
-    /**
-     * TODO
-     */
     int create_input_buffer(int nentries, bool fixedsize) { 
         if (in) return -1;  
 
@@ -636,9 +598,6 @@ protected:
         return 0;
     }
     
-    /**
-     * TODO
-     */
     int create_output_buffer(int nentries, bool fixedsize=false) {
         int last = static_cast<int>(nodes_list.size())-1;
         if (last<0) return -1;
@@ -651,9 +610,6 @@ protected:
         return 0;
     }
 
-    /**
-     * TODO
-     */
     int set_output_buffer(FFBUFFER * const o) {
         int last = static_cast<int>(nodes_list.size())-1;
         if (!last) return -1;
@@ -686,7 +642,7 @@ private:
 };
 
 
-/* ------------------------ high-level (simpler) pipeline -------------------------------- */
+    // ------------------------ high-level (simpler) pipeline ------------------
 
 // generic ff_node stage. It is built around the function F ( F: T* -> T* )
 // template<typename T>
@@ -701,80 +657,118 @@ private:
 
 #if defined( HAS_CXX11_VARIADIC_TEMPLATES )
 
-// NOTE: std::function can introduce a bit of extra overhead. Think about on how to avoid functionals.
-template<typename T>
-class Fstage2: public ff_node {
-public:
-    Fstage2(const std::function<T*(T*,ff_node*const)> &F):F(F) {}
-    inline void* svc(void *t) {	 return F((T*)t, this); }
-protected:
-    std::function<T*(T*,ff_node*const)> F;
-};
-
-template<typename TaskType>
-class ff_pipe: public ff_pipeline {
-private:
-    typedef TaskType*(*F_t)(TaskType*);
-    
-    template<std::size_t I = 1, typename FuncT, typename... Tp>
-    inline typename std::enable_if<I == (sizeof...(Tp)-1), void>::type
-    for_each(std::tuple<Tp...> & t, FuncT f) { f(std::get<I>(t)); } // last one
-    
-    template<std::size_t I = 1, typename FuncT, typename... Tp>
-    inline typename std::enable_if<I < (sizeof...(Tp)-1), void>::type
-    for_each(std::tuple<Tp...>& t, FuncT f) {
-        f(std::get<I>(t));
-        for_each<I + 1, FuncT, Tp...>(t, f);  // all but the first
-    }
-      
-  
-    inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }
-    //    inline void add2pipe(F_t F) { ff_pipeline::add_stage(new Fstage<TaskType>(F));  }
-    inline void add2pipe(std::function<TaskType*(TaskType*,ff_node*const)> F) { ff_pipeline::add_stage(new Fstage2<TaskType>(F));  }
-
-    struct add_to_pipe {
-        ff_pipe *const P;
-        add_to_pipe(ff_pipe *const P):P(P) {}
-        template<typename T>
-        void operator()(T t) const { P->add2pipe(t); }
+    // NOTE: std::function can introduce a bit of extra overhead. 
+    // Think about on how to avoid functionals.
+    template<typename T>
+    class Fstage2: public ff_node {
+    public:
+        Fstage2(const std::function<T*(T*,ff_node*const)> &F):F(F) {}
+        inline void* svc(void *t) {	 return F((T*)t, this); }
+    protected:
+        std::function<T*(T*,ff_node*const)> F;
     };
+
+    /** 
+     * \class ff_pipe
+     * \ingroup core_patterns
+     * 
+     * \brief Pipeline pattern (high-level pattern syntax)
+     *
+     * Set up a parallel for pipeline pattern run-time support object. 
+     *
+     * \note Don't use to model a workflow of tasks, stages are nonblocking threads 
+     * and
+     * require one core per stage. If you need to model a workflow use \ref ff::ff_mdf
+     *
+     * \example ../tests/pipe_basic.cpp 
+     */ 
+    template<typename TaskType>
+    class ff_pipe: public ff_pipeline {
+    private:
+        typedef TaskType*(*F_t)(TaskType*);
         
-public:
-    template<typename... Arguments>
-    ff_pipe(Arguments...args) {
-        std::tuple<Arguments...> t = std::make_tuple(args...);
-        auto firstF = std::get<0>(t);
-        add2pipe(firstF);
-        for_each(t,add_to_pipe(this));
-    }
-    
-    template<typename... Arguments>
-    ff_pipe(bool input_ch, Arguments...args):ff_pipeline(input_ch) {
-        std::tuple<Arguments...> t = std::make_tuple(args...);
-        auto firstF = std::get<0>(t);
-        add2pipe(firstF);
-        for_each(t,add_to_pipe(this));
-    }
-    
-    int add_feedback() {
-        return ff_pipeline::wrap_around();
-    }
-    
-    operator ff_node* () { return this;}
-};
+        template<std::size_t I = 1, typename FuncT, typename... Tp>
+        inline typename std::enable_if<I == (sizeof...(Tp)-1), void>::type
+        for_each(std::tuple<Tp...> & t, FuncT f) { f(std::get<I>(t)); } // last one
+        
+        template<std::size_t I = 1, typename FuncT, typename... Tp>
+        inline typename std::enable_if<I < (sizeof...(Tp)-1), void>::type
+        for_each(std::tuple<Tp...>& t, FuncT f) {
+            f(std::get<I>(t));
+            for_each<I + 1, FuncT, Tp...>(t, f);  // all but the first
+        }
+            
+  
+            inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }
+        //    inline void add2pipe(F_t F) 
+        //{   ff_pipeline::add_stage(new Fstage<TaskType>(F));  }
+        inline void add2pipe(std::function<TaskType*(TaskType*,ff_node*const)> F) { ff_pipeline::add_stage(new Fstage2<TaskType>(F));  }
+        
+        struct add_to_pipe {
+            ff_pipe *const P;
+            add_to_pipe(ff_pipe *const P):P(P) {}
+            template<typename T>
+            void operator()(T t) const { P->add2pipe(t); }
+        };
+        
+    public:
+        /**
+         * \brief Create a stand-alone pipeline
+         *
+         * Identifies an stream parallel construct in which stages are executed 
+         * in parallel. 
+         * It does require a stream of tasks, either external of created by the 
+         * first stage.
+         * \param args pipeline stages, i.e. a list f1,f2,... of functions 
+         * with the following type
+         * \p std::function<myTask*(myTask*,ff_node*const)>
+         * 
+         * Example: \ref pipe_basic.cpp
+         */
+        template<typename... Arguments>
+        ff_pipe(Arguments...args) {
+            std::tuple<Arguments...> t = std::make_tuple(args...);
+            auto firstF = std::get<0>(t);
+            add2pipe(firstF);
+            for_each(t,add_to_pipe(this));
+        }
+        /**
+         * \brief Create a stand-alone pipeline (no input/output streams)
+         *
+         * Identifies an stream parallel construct in which stages are executed 
+         * in parallel. 
+         * It does require a stream of tasks, either external of created by the 
+         * first stage.
+         * \param input_ch \p true to enable first stage input stream
+         * \param args pipeline stages, i.e. a list f1,f2,... of functions 
+         * with the following type
+         * \p std::function<myTask*(myTask*,ff_node*const)>
+         *
+         * Example: \ref pipe_basic.cpp
+         */
+        template<typename... Arguments>
+        ff_pipe(bool input_ch, Arguments...args):ff_pipeline(input_ch) {
+            std::tuple<Arguments...> t = std::make_tuple(args...);
+            auto firstF = std::get<0>(t);
+            add2pipe(firstF);
+            for_each(t,add_to_pipe(this));
+        }
+        
+        int add_feedback() {
+            return ff_pipeline::wrap_around();
+        }
+        
+        operator ff_node* () { return this;}
+    };
 #endif /* HAS_CXX11_VARIADIC_TEMPLATES */
-template<typename T>
-ff_node* toffnode(T* p) { return p;}
-template<typename T>
-ff_node* toffnode(T& p) { return (ff_node*)p;}
+    template<typename T>
+    ff_node* toffnode(T* p) { return p;}
+    template<typename T>
+    ff_node* toffnode(T& p) { return (ff_node*)p;}
+    
+    // ---------------------------------------------------------------
 
-/* --------------------------------------------------------------------------------------- */
 
-
-
-/*!
- *  @}
- */
 
 #define CONCAT(x, y)  x##y
 #define FFPIPE_1(apply, x, ...)  apply(new _FF_pipe_stage(x))

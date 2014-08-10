@@ -115,7 +115,8 @@ public:
     /**
      * \brief Constructor
 
-     * \detail Set up a parallel for pattern run-time support (i.e. spawn workers threads)
+     * Set up a parallel for ParallelFor pattern run-time support 
+     * (i.e. spawn workers threads)
      * A single object can be used as many times as needed to run different parallel for
      * pattern instances (different loop bodies). They cannot be nested nor recursive.
      * Nonblocking policy is to be preferred in case of repeated call of the 
@@ -125,7 +126,7 @@ public:
 
      * \param maxnw Maximum number of worker threads (not including active scheduler, if
      * any). Deafault <b>FF_AUTO</b> = N. of HW contexts. 
-     * \param spinwait barrier kind. <b>true</b> nonblocking, <b>false</b> blocking.
+     * \param spinwait barrier kind. \p true nonblocking, \p false blocking.
      * Nonbloking barrier will leave worker threads active until class destruction is called 
      * (the threads will be active and in the nonblocking barrier only after the 
      * first call to one of the parallel_for methods). To put threads to sleep between different

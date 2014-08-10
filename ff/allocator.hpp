@@ -1,7 +1,6 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*!
- *  \link
  *  \file allocator.hpp
  *  \ingroup shared_memory_fastflow
  *  
@@ -1313,7 +1312,7 @@ public:
             )
 
 private:
-    svector<SlabCache *>   slabcache;       /* List of caches */
+    svector<SlabCache *>   slabcache;       // List of caches
     SegmentAllocator     * alloc;
     const size_t           max_size;
     const int              delayedReclaim;

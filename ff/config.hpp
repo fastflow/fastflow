@@ -1,12 +1,5 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-/*! 
- *  \link
- *  \file config.hpp
- *  \ingroup shared_memory_fastflow
- *
- *  \brief This file contains general settings for the FastFlow framework.
- */
 
 /* ***************************************************************************
  *
@@ -46,12 +39,6 @@
 #endif
 
 namespace ff {
-/*!
- *  \ingroup shared_memory_fastflow
- *
- *  \brief These are reserved pointer addresses 
- *  @{
- */
 static const size_t FF_EOS           = (ULONG_MAX);  /// automatically propagated
 static const size_t FF_EOS_NOFREEZE  = (FF_EOS-0x1); /// non automatically propagated
 static const size_t FF_GO_ON         = (FF_EOS-0x2); /// non automatically propagated
@@ -120,10 +107,5 @@ static const size_t FF_GO_OUT        = (FF_EOS-0x3); /// non automatically propa
 #if defined(USE_CMAKE_CONFIG)
 #include <cmake.modules/ffconfig.h>
 #endif
-
-/*!
- *  @}
- *  \endlink
- */
 
 #endif /* FF_CONFIG_HPP */
