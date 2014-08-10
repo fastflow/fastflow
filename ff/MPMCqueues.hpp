@@ -3,9 +3,16 @@
 /*!
  *  \link
  *  \file MPMCqueues.hpp
- *  \ingroup streaming_network_arbitrary_shared_memory
+ *  \ingroup aux_classes
  *
- *  \brief This file contains several MPMC queue implementations.
+ *  \brief This file contains several MPMC queue implementations. They are not  
+ *  currently used in FastFlow implementation unless for perfromance assessment.
+ * 
+ * \detail This file contains the following 
+ * Multi-Producer/Multi-Consumer queue implementations:
+ * \li  MPMC_Ptr_Queue   bounded MPMC queue by Dmitry Vyukov 
+ * \li  uMPMC_Ptr_Queue  unbounded MPMC queue by Massimo Torquati
+ * \li  uMPMC_Ptr_Queue  unbounded MPMC queue by Massimo Torquati
  */
  
 #ifndef FF_MPMCQUEUE_HPP
@@ -22,7 +29,7 @@
  *     Massimo Torquati <torquati@di.unipi.it> <massimotor@gmail.com>
  *  
  *  - History
- *    10 Jul 2012: M. Aldinucci: Minor fixes (some casts)
+ *    10 Jul 2012: M. Aldinucci: Minor fixes 
  */
 
 
@@ -55,7 +62,7 @@
 namespace ff {
 
 /*!
- *  \ingroup streaming_network_arbitrary_shared_memory
+ *  \ingroup aux_classes
  *
  *  @{
  */
