@@ -47,14 +47,14 @@
 
 namespace ff {
 
-/*!
- *  \class Barrier
- *  \ingroup aux_classes
- *
- *  \brief Barrier - Used only to start all nodes synchronously. 
- *  
- *  An auxiliary class in \ref building_blocks
- */
+    /**
+     *  \class Barrier
+     *  \ingroup building_blocks
+     *
+     *  \brief Barrier - Used only to start all nodes synchronously. 
+     *  
+     *  An auxiliary class in \ref building_blocks
+     */
 
 #if (defined(__APPLE__) || defined(_MSC_VER))
 class Barrier {
@@ -294,23 +294,10 @@ static void * proxy_thread_routine(void * arg);
  *
  */
 class ff_thread {
-    /**
-     * \brief Proxy thread routine
-     *
-     */
 
     friend void * proxy_thread_routine(void *arg);
 
 protected:
-    /*! 
-     *  \brief Constructor
-     *
-     *  It checks initializations of mutex and conditional variable and then
-     *  create the FastFlow thread.
-     *
-     *  \param barrier is a Barrier object (i.e a custom Mutex) as input
-     *  paramenter.
-     */
     ff_thread(BARRIER_T * barrier=NULL):
         tid((unsigned)-1),barrier(barrier),
         stp(true), // only one shot by default
@@ -336,18 +323,8 @@ protected:
         }
     }
 
-    /**
-     * \brief Destructor
-     *
-     */
     virtual ~ff_thread() {}
     
-    /**
-     * \brief The life cycle of FastFlow thread
-     *
-     * It defines the life cycle of the FastFlow thread. 
-     *
-     */
     void thread_routine() {
         if (barrier) barrier->doBarrier(tid);
         void * ret;
@@ -400,15 +377,6 @@ protected:
         }
     }
 
-    /**
-     *
-     * \brief Disable the cancelation of thread
-     *
-     * It makes thread to be not cancelable. If a cancellation request is received, it is
-     * blocked until cancelability is enabled.
-     *
-     * \return 0 if successful, otherwise a negative value.
-     */
     int disable_cancelability()
     {
         if (pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancelstate)) {
@@ -418,13 +386,6 @@ protected:
         return 0;
     }
 
-    /**
-     * \brief Makes thread cancelable
-     *
-     * It makes thread cancelable.
-     *
-     * \return 0 if successful, otherwise a negative value.
-     */
     int enable_cancelability()
     {
         if (pthread_setcancelstate(old_cancelstate, 0)) {
@@ -435,66 +396,25 @@ protected:
     }
     
 public:
-    /** 
-     *
-     * \brief the \p svc method
-     *
-     * It defines the \p svc method as pure virtual function.
-     */
+ 
     virtual void* svc(void * task) = 0;
-
-    /**
-     * \brief The \p svc_init method
-     *
-     * It defines the virtual (overridable) function.
-     *
-     * \return 0 is returned always.
-     */
     virtual int   svc_init() { return 0; };
-    
-    /**
-     *
-     * \brief The svc_end method
-     *
-     * It defines the virtual (overridable) function.
-     */
     virtual void  svc_end()  {}
 
     /**
-     * \brief The \p svc_createOCL method
+     * \brief The OpenCL initialisation
      *
-     * It defines the virtual function.
      */
     virtual void  svc_createOCL()  {}
 
     /**
-     * \brief The \p svc_releaseOCL
+     * \brief OpenCL finsalisation
      *
-     * It defines teh virtual function.
      */
     virtual void  svc_releaseOCL() {}
 
-    /**
-     * \brief Sets the barrier object
-     *
-     * It sets the Barrier object for the ff_thread.
-     *
-     * \param b is a barrier object.
-     *
-     */
     void set_barrier(BARRIER_T * const b) { barrier=b;}
 
-    /**
-     * \brief Creates a new thread
-     *
-     * It create a new FastFlow thread
-     *
-     * \param cpuID is the identifier of the core.
-     *
-     * \return the -2 in case of error, 
-     *             -1 in case the thread is not assigned to any CPU
-     *             CPU-id if successful
-     */
     int spawn(int cpuId=-1) {
         if (spawned) return -1;
 
@@ -536,13 +456,6 @@ public:
         return r;
     }
 
-    /**
-     * \brief Waits for thread freezing
-     *
-     * It waits for the thread to freeze (uses Mutex).
-     *
-     * \return 0 if successful, otherwise a negative value.
-     */
     inline int wait_freezing() {
         pthread_mutex_lock(&mutex);
         while(!frozen) pthread_cond_wait(&cond_frozen,&mutex);
@@ -550,29 +463,13 @@ public:
         return (init_error?-1:0);
     }
 
-    /**
-     * \brief Forces the thread to stop
-     *
-     * It forces the thread to stop at next EOS or next thawing.
-     *
-     */
     inline void stop() { stp = true; };
 
-    /**
-     * \brief Forces the thread to freeze
-     *
-     * It forces the thread to freeze himself.
-     */
     inline void freeze() {  
         stp=false;
         freezing = 1;
     }
     
-    /**
-     * \brief Thaw the thread, if it is frozen
-     *
-     * If the thread is frozen, then thaw it. 
-     */
     inline void thaw(bool _freeze=false) {
         pthread_mutex_lock(&mutex);
         // if this function is called even if the thread is not 
@@ -590,33 +487,12 @@ public:
         //pthread_mutex_unlock(&mutex);
     }
 
-    /**
-     *
-     * \brief Checks if the thread is frozen
-     *
-     * It checks whether the thread is frozen.
-     *
-     * \return A booleon value shoing the status of freezing.
-     */
     inline bool isfrozen() const { return freezing>0;} 
-
 
     inline bool iswaiting() const { return frozen;}
 
-    /**
-     *
-     * \brief Gets the pthread handler
-     *
-     * It retrives the pthread handler.
-     *
-     * \return The handle for pthread.
-     */
     pthread_t get_handle() const { return th_handle;}
 
-    /**
-     *  \brief Gets the internal unique thread identifier.
-     *
-     */
     inline int getTid() const { return tid; }
 
 protected:
@@ -644,15 +520,10 @@ static void * proxy_thread_routine(void * arg) {
     return NULL;
 }
 
-/*!
- *  \ingroup building_blocks
- *
- *  @{
- */
 
 /*!
  *  \class ff_node
- *  \ingroup streaming_network_arbitrary_shared_memory
+ *  \ingroup building_blocks
  *
  *  \brief The FastFlow abstract contanier for a parallel activity (actor).
  *
@@ -707,25 +578,25 @@ protected:
     }
 
     /**
-     * \brief Sets the skip-the-first-element mode true or false
+     * \brief Set the ff_node to start with no input task
      *
      * Setting it to true let the \p ff_node execute the \p svc method spontaneusly 
      * before receiving a task on the input channel. \p skipfirstpop makes it possible
      * to define a "producer" node that starts the network.
      *
-     * \param sk Boolean value showing if the first element should be skipped
+     * \param sk \p true start spontaneously (*task will be NULL)
      *
      */
     virtual inline void skipfirstpop(bool sk)   { skip1pop=sk;}
 
     /** 
-     * \brief Gets the status of skip-the-first-element mode
+     * \brief Gets the status of spontaneous start
      * 
-     * If true the \p ff_node execute the \p svc method spontaneusly 
+     * If \p true the \p ff_node execute the \p svc method spontaneusly
      * before receiving a task on the input channel. \p skipfirstpop makes it possible
-     * to define a "producer" node that starts the network.
+     * to define a "producer" node that produce the stream.
      * 
-     * \return true if skip-the-first-element mode is set, false otherwise
+     * \return \p true if skip-the-first-element mode is set, \p false otherwise
      * 
      * \example l1_ff_nodes_graph.cpp
      */
@@ -733,8 +604,6 @@ protected:
     
     /** 
      * \brief Creates the input channel 
-     *
-     *  It create an input channel for the \p ff_node. 
      *
      *  \param nentries: the number of elements of the buffer
      *  \param fixedsize flag to decide whether the buffer is bound or unbound.
@@ -752,8 +621,6 @@ protected:
     
     /** 
      *  \brief Creates the output channel
-     *
-     *  It creates an output buffer for the \p ff_node. 
      *
      *  \param nentries: the number of elements of the buffer
      *  \param fixedsize flag to decide whether the buffer is bound or unbound.
@@ -793,7 +660,7 @@ protected:
      *
      *  \param i a buffer object of type \p FFBUFFER
      *
-     *  \return 0 if successful otherwise a negative value is returned.
+     *  \return 0 if successful, -1 otherwise
      */
     virtual int set_input_buffer(FFBUFFER * const i) {
         if (myinbuffer) return -1;
@@ -801,21 +668,10 @@ protected:
         return 0;
     }
 
-    /**
-     *  used for multi input node (ff_minode) 
-     * 
-     *
-     */
     virtual inline int set_input(svector<ff_node *> & w) { return -1;}
     virtual inline int set_input(ff_node *) { return -1;}
     virtual inline bool isMultiInput() const { return multiInput;}
     virtual inline void setMultiInput()      { multiInput = true; }
-
-    /**
-     *  used for multi output node (ff_monode) 
-     * 
-     *
-     */
     virtual inline int set_output(svector<ff_node *> & w) { return -1;}
     virtual inline int set_output(ff_node *) { return -1;}
     virtual inline bool isMultiOutput() const { return multiOutput;}
@@ -824,12 +680,9 @@ protected:
     virtual inline void get_out_nodes(svector<ff_node*>&w) {}
 
     /**
-     * \brief Executes the FastFlow thread
+     * \brief Run the ff_node
      *
-     * It executes the FastFlow thread.
-     *
-     * \return The state of the run method if successful, otherwise a negative
-     * value is returned.
+     * \return 0 success, -1 otherwise
      */
     virtual int run(bool=false) { 
         thread = new thWorker(this);
@@ -838,12 +691,11 @@ protected:
     }
     
     /**
-     * \brief Freezes the thread and then run
+     * \brief Suspend (freeze) the ff_node and run it
      *
-     * It freezes the thread and then run.
+     * Only initialisation will be performed
      *
-     * \return It returns the state of the run method if successful, otherwise
-     * a negative value is returned.
+     * \return 0 success, -1 otherwise
      */
     virtual int freeze_and_run(bool=false) {
         thread = new thWorker(this);
@@ -853,12 +705,9 @@ protected:
     }
 
     /**
-     * \brief Waits for thread termination
+     * \brief Wait ff_node termination
      *
-     * It lets the thread to wait until termination.
-     *
-     * \return If successful the state of the wait method otherwise a negative
-     * value.
+     * \return 0 success, -1 otherwise
      */
     virtual int  wait() { 
         if (!thread) return 0;
@@ -866,36 +715,24 @@ protected:
     }
     
     /**
-     * \brief Waits for thread to thaw
+     * \brief Wait the freezing state
      *
-     * It wait for thread to thaw.
+     * It will happen on EOS arrival on the input channel
      *
-     * \return If successful the state of the \p wait_freezing method, otherwise a
-     * negative value.
+     * \return 0 success, -1 otherwise
      */
     virtual int  wait_freezing() { 
         if (!thread) return 0;
         return thread->wait_freezing(); 
     }
     
-    /**
-     * \brief Stops the thread
-     *
-     * It stops thread.
-     *
-     * \return If the thread does not exist, then the method is returned.
-     */
     virtual void stop() {
         if (!thread) return; 
         thread->stop(); 
     }
     
     /**
-     * \brief Freezes the thread
-     *
-     * It freezes the thread.
-     *
-     * \return If thread does not exist, then the method returns.
+     * \brief Freeze (suspend) a ff_node
      */
     virtual void freeze() { 
         if (!thread) return; 
@@ -903,12 +740,7 @@ protected:
     }
     
     /**
-     * \brief Checks to thaw a thread
-     *
-     * It checks if the thread is created then thaw it.
-     *
-     * \return If the thread does not exist then the method is returned,
-     * otherwise the thread is thawed.
+     * \brief Thaw (resume) a ff_node
      */
     virtual void thaw(bool _freeze=false) { 
         if (!thread) return; 
@@ -916,12 +748,8 @@ protected:
     }
     
     /**
-     * \brief Checks if the thread is frozen
-     *
-     * It checks whether the thread is frozen.
-     *
-     * \return If the thread does not exists then false is returned, otherwise
-     * the status of \p isfrozen() is returned.
+     * \brief Checks if a ff_node is frozen
+     * \return \p true is it frozen
      */
     virtual bool isfrozen() const { 
         if (!thread) return false;
@@ -931,49 +759,28 @@ protected:
 
     virtual bool isoutbuffermine() const { return myoutbuffer;}
 
-    
-    /**
-     * \brief Counts how many threads there are in this node.
-     *
-     * Counts the n. of threads that should block in the barrier.
-     *
-     * \param b is the barrier.
-     *
-     * \return always 1
-     */
     virtual int  cardinality(BARRIER_T * const b) { 
         barrier = b;
         return 1;
     }
-    
-    /**
-     * \brief Sets the barrier
-     *
-     * It sets the barrier.
-     *
-     * \param b is the barrier.
-     */
+
     virtual void set_barrier(BARRIER_T * const b) {
         barrier = b;
     }
 
     /**
-     * \brief Gets the time
+     * \brief Misure \ref ff::ff_node execution time
      *
-     * It retrives the tim spent in FastFlow pattern.
-     *
-     * \return The difference in the time spent.
+     * \return time (ms)
      */
     virtual double ffTime() {
         return diffmsec(tstop,tstart);
     }
 
     /**
-     * \brief Gets the time
+     * \brief Misure \ref ff_node::svc execution time
      *
-     * It retrieves the time spend in FastFlow skeleton.
-     *
-     * \return The difference in the time spent.
+     * \return time (ms)
      */
     virtual double wffTime() {
         return diffmsec(wtstop,wtstart);
@@ -993,61 +800,45 @@ public:
 
     
     /**
-     * Defines the number of ticks to wait.
+     * \brief Default retry delay in nonblocking get/put on channels
      */
     enum {TICKS2WAIT=1000};
 
     /**
-     * \brief The \p svc method
+     * \brief The service callback (should be filled by user with parallel activity business code)
      *
-     * It is a pure virtual function. If \p svc returns a NULL value then
-     * End-Of-Stream (EOS) is produced on the output channel.
-     *
-     * \param task is the input data stream.
+     * \param task is a the input data stream item pointer (task)
+     * \return output data stream item pointer
      */
     virtual void* svc(void * task) = 0;
     
     /**
-     * \brief The \p svc_init()
+     * \brief Service initialisation
      *
-     * It is a virtual function. This is called only once for each
-     * thread, right before the \p svc method.
+     * Called after run-time initialisation (e.g. thread spawning) but before 
+     * to start to get items from input stream (can be useful for initialisation
+     * of parallel activities, e.g. manual thread pinning that cannot be done in
+     * the costructor because threads stil do not exist).
      *
-     * \return 0 is always returned.
+     * \return 0
      */
     virtual int svc_init() { return 0; }
     
-    /**
-     * \brief The \p svc_end()
+     /**
      *
-     * It is a virtual function. This is called only once for each
-     * thread, right after the \p svc method.
+     * \brief Service finalisation
+     *
+     * Called after EOS arrived (logical termination) but before shutdding down
+     * runtime support (can be useful for housekeeping)
      */
     virtual void  svc_end() {}
 
-    /**
-     * \brief Notifies EOS
-     *
-     * It is a virtual function. It is called once just after the EOS
-     * has arrived.
-     *
-     * \param id is the ID of the input channel, it makes sense only for N-to-1
-     * input channels.
-     */
     virtual void eosnotify(ssize_t id=-1) {}
     
-    /**
-     * \brief Gets the ID of the ff_node 
-     *
-     * \return The ID of the ff_node
-     */
     virtual int get_my_id() const { return myid; };
     
     /**
-     * \brief Sets threads affinity 
-     *
-     * It is a virtual function. It maps the working thread to the
-     * chosen CPU.
+     * \brief Force ff_node-to-core pinning
      *
      * \param cpuID is the ID of the CPU to which the thread will be pinned.
      */
@@ -1061,23 +852,13 @@ public:
     /** 
      * \brief Gets the CPU id (if set) of this node is pinned
      *
-     * It gets the ID of the CPU where the thread is running.
+     * It gets the ID of the CPU where the ff_node is running.
      *
      * \return The identifier of the CPU.
      */
     virtual int getCPUId() const { return CPUId; }
 
 #if defined(TEST_QUEUE_SPIN_LOCK)
-    /**
-     * \brief Pushes the task
-     *
-     * It tries to acquire the lock, pushes the task to the input queue and
-     * then releaes the lock
-     *
-     * \param ptr is pointing to the task
-     *
-     * \return The status of \p push operation as Boolean value
-     */
     virtual bool put(void * ptr) { 
         spin_lock(lock);
         bool r= in->push(ptr);
@@ -1085,16 +866,6 @@ public:
         return r;
     }
 
-    /**
-     * \brief Pops the task
-     *
-     * It tries to acquire the lock, pop the data from the output queue and
-     * then releases the lock. 
-     *
-     * \param ptr is pointing to the task
-     *
-     * \return The status of \p pop operation as Boolean value
-     */
     virtual bool  get(void **ptr) { 
         spin_lock(lock);
         register bool r = out->pop(ptr);
@@ -1103,26 +874,24 @@ public:
     }
 #else
     /**
-     * \brief Pushes the task
+     * \brief Nonblocking put onto output channel
      *
-     * It pushes task without using locks.
+     * Wait-free and fence-free (under TSO)
      *
      * \param ptr is a pointer to the task
      *
-     * \return The status of \p push as Boolean value
      */
     virtual inline bool  put(void * ptr) { 
         return in->push(ptr);
     }
     
     /**
-     * \brief Pops the task
+     * \brief Noblocking pop from input channel
      *
-     * It pops the task without acquiring the lock.
+     * Wait-free and fence-free (under TSO)
      *
      * \param ptr is a pointer to the task
      *
-     * \return The status of \p pop operation as Boolean value
      */
     virtual inline bool  get(void **ptr) { return out->pop(ptr);}
 #endif
@@ -1140,7 +909,7 @@ public:
     }
 
     /**
-     * \brief Gets input buffer
+     * \brief Gets input channel
      *
      * It returns a pointer to the input buffer.
      *
@@ -1149,7 +918,7 @@ public:
     virtual FFBUFFER * get_in_buffer() const { return in;}
 
     /**
-     * \brief Gets pointer to the output buffer
+     * \brief Gets pointer to the output channel
      *
      * It returns a pointer to the output buffer.
      *
@@ -1157,53 +926,19 @@ public:
      */
     virtual FFBUFFER * get_out_buffer() const { return out;}
 
-    /**
-     * \brief Gets start time
-     *
-     * It resturns the starting time.
-     *
-     * \return Starting time.
-     */
     virtual const struct timeval getstarttime() const { return tstart;}
 
-    /**
-     * \brief Gets stop time
-     *
-     * It returns the stopping time.
-     *
-     * \return Stopping time.
-     */
     virtual const struct timeval getstoptime()  const { return tstop;}
 
-    /**
-     * \brief Gets start time
-     *
-     * It returns the starting time.
-     *
-     * \return Starting time.
-     */
     virtual const struct timeval getwstartime() const { return wtstart;}
 
-    /**
-     * \brief Gets the stop time
-     *
-     * It returns the stopping time.
-     *
-     * \return Stopping time.
-     */
     virtual const struct timeval getwstoptime() const { return wtstop;}    
 
-    
     virtual inline void svc_createOCL()  {} 
 
     virtual inline void svc_releaseOCL() {}
 
 #if defined(TRACE_FASTFLOW)
-    /**
-     * \brief Prints the trace
-     *
-     * It prints the trace for debugging.
-     */
     virtual void ffStats(std::ostream & out) {
         out << "ID: " << get_my_id()
             << "  work-time (ms): " << wttime    << "\n"
@@ -1217,16 +952,13 @@ public:
     /**
      * \brief Sends out the task
      *
-     * It allows to queue tasks without returning from the \p svc method 
+     * It allows to emit tasks on output stream without returning from the \p svc method.
+     * Make the ff_node to emit zero or more tasks per input task
      *
      * \param task a pointer to the task
-     * \param retry number of tries to push the task to the buffer
-     * \param ticks number of ticks to wait
+     * \param retry number of tries to put (nonbloking partial) the task to output channel
+     * \param ticks delay between successive retries
      * 
-     * \return If call back is defined, then returns the status of \p callback
-     * function. Otherwise, if tries to push an element with the number of
-     * XXX and if succesfful \p true is returned, and if after the number of
-     * XXX the push is not successful \p false is returned.
      */
     virtual bool ff_send_out(void * task, 
                              unsigned int retry=((unsigned int)-1),
@@ -1241,10 +973,7 @@ public:
         return false;
     }
 
-    /** \brief Resets input/output queues.
-     * 
-     *  Warning resetting queues while the node is running may produce unexpected results.
-     */
+    // Warning resetting queues while the node is running may produce unexpected results.
     virtual void reset() {
         if (in)  in->reset();
         if (out) out->reset();
@@ -1257,11 +986,7 @@ public:
     }
 
 protected:
-    /**
-     * \brief Protected constructor
-     *
-     * It is the protected constructor. It initializes the FastFlow node.
-     */
+
     ff_node():in(0),out(0),myid(-1),CPUId(-1),
               myoutbuffer(false),myinbuffer(false),
               skip1pop(false), in_active(true), 
@@ -1279,9 +1004,6 @@ protected:
     
     /** 
      *  \brief Destructor
-     *
-     *  It is a desctructor and it deletes input buffers and output buffers and
-     *  the working thread.
      */
     virtual  ~ff_node() {
         if (end_callback) end_callback(end_callback_param);
@@ -1297,58 +1019,24 @@ protected:
 
 private:
     
-    /**
-     * \brief Registers the call back
-     *
-     * It registers the call back method and arguments.
-     *
-     * \param cb is the callback function
-     * \param arg is a pointer to arguments
-     */
+
     void registerCallback(bool (*cb)(void *,unsigned int,unsigned int,void *), void * arg) {
         callback=cb;
         callback_arg=arg;
     }
 
-    /**
-     * Sets the CPU id for this node (used only in the run-time)  
-     *
-     */
     void  setCPUId(int id) { CPUId = id;}
 
-    /**
-     *  Returns the internal thread identifier.
-     *
-     */
     inline int   getTid() const { return thread->getTid();} 
     
-    /**
-     * \brief An inner class for FastFlow's thread
-     *
-     * It is an inner class that wraps ff_thread functions and adds \p push and \p pop methods. 
-     */
+
     class thWorker: public ff_thread {
     public:
-        /**
-         * \brief Constructor
-         *
-         * It is contructor to create FastFlow thread.
-         *
-         * \param filter is a pointer to FastFlow's node
-         *
-         */
+
         thWorker(ff_node * const filter):
             ff_thread(filter->barrier),filter(filter) {}
         
-        /**
-         * \brief Pushes the task
-         *
-         * It pushes the task to the \p filter
-         *
-         * \param task is a pointer to the task.
-         *
-         * \return \p true is always returned.
-         */
+
         inline bool push(void * task) {
             /* NOTE: filter->push and not buffer->push because of the filter can be a dnode
              */
@@ -1356,15 +1044,6 @@ private:
             return true;
         }
         
-        /**
-         * \brief Pops the task
-         *
-         * It pops the task from the buffer of the filter.
-         *
-         * \task is a pointer to the task
-         *
-         * \return \p true is always returned.
-         */
         inline bool pop(void ** task) {
             /* 
              * NOTE: filter->pop and not buffer->pop because of the filter can be a dnode
@@ -1375,45 +1054,15 @@ private:
             } 
             return true;
         }
-        
-        /**
-         * \brief Puts the task in buffer
-         *
-         * It pushes the task in the filter.
-         *
-         * \paramptr is a pointer to the task.
-         */
+
         inline bool put(void * ptr) { return filter->put(ptr);}
 
-        /**
-         * \brief Gets the task from the buffer.
-         *
-         * It gets the task from the buffer.
-         *
-         * \return The status of \p get function as Boolean value.
-         */
         inline bool get(void **ptr) { return filter->get(ptr);}
 
-        /**
-         * \brief Creates OCL
-         *
-         * It creates OCL.
-         */
         inline void svc_createOCL()  { filter-> svc_createOCL();}
         
-        /**
-         * \brief Releases OCL.
-         *
-         * It releases OCL.
-         */
         inline void svc_releaseOCL() { filter-> svc_releaseOCL();}
 
-        
-        /**
-         * \brief The \p svc method
-         *
-         * It defines the \p svc method of the FastFlow.
-         */
         void* svc(void * ) {
             void * task = NULL;
             void * ret = (void*)FF_EOS;
@@ -1466,13 +1115,6 @@ private:
             return ret;
         }
         
-        /**
-         * \brief The \p svc_init method
-         *
-         * It defines the \p svc_init method of FastFlow.
-         *
-         * \return The status of \p svc_init() method.
-         */
         int svc_init() {
 #if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
             int cpuId = filter->getCPUId();  
@@ -1484,70 +1126,25 @@ private:
             return filter->svc_init(); 
         }
         
-        /**
-         * \brief The \p svc_end method
-         *
-         * It defines the \p svc_end method of the FastFlow.
-         */
         virtual void svc_end() {
             filter->svc_end();
             gettimeofday(&filter->tstop,NULL);
         }
         
-        /**
-         * \brief Executes FastFlow thread
-         *
-         * It executs the FastFlow thread.
-         *
-         * \return The status of \p spawn method.
-         */
         int run() { 
             int CPUId = ff_thread::spawn(filter->getCPUId());             
             filter->setCPUId(CPUId);
             return (CPUId==-2)?-1:0;
         }
 
-        /**
-         * \brief Waits the thread
-         *
-         * It waits for the thread.
-         *
-         * \return The staus of \p wait() method.
-         */
         virtual inline int wait() { return ff_thread::wait();}
 
-        /**
-         * \brief Waits for freezing
-         *
-         * It waits the thread to freeze.
-         *
-         * \return The status of \p wait_freezing() method.
-         */
         virtual inline int wait_freezing() { return ff_thread::wait_freezing();}
 
-        /**
-         * \brief Freezes the thread
-         *
-         * It freezes the thread.
-         */
         virtual inline void freeze() { ff_thread::freeze();}
 
-        /**
-         * \brief Checks if the thread is frozen
-         * 
-         * It checks if the thread is frozen.
-         *
-         * \return the status of the \p isfrozen() method.
-         */
         bool isfrozen() const { return ff_thread::isfrozen();}
 
-        /**
-         * \brief Gets the ID of the thread
-         *
-         * It returns the ID of the thread.
-         *
-         * \return An integer value showing the identifier of the thread.
-         */
         int get_my_id() const { return filter->get_my_id(); };
         
     protected:    
@@ -1619,12 +1216,6 @@ struct ff_buffernode: ff_node {
     inline bool  put(T *ptr) {  return ff_node::put(ptr);  }
 };
 
-
-
-/*!
- *  @}
- *  \endlink
- */
 
 } // namespace ff
 
