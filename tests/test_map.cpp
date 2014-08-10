@@ -49,33 +49,33 @@ const long SIZE = 100;
 class mapWorker: public ff_Map<> {
 public:
     void *svc(void*) {
-	std::vector<long> *A = new std::vector<long>(SIZE);
-	
-	// this is the parallel_for provided by the ff_Map class
-	parallel_for(0,A->size(),[&A](const long i) { 
-		A->operator[](i)=i;
-	    });
-	ff_send_out(A);
-	return NULL;
+        std::vector<long> *A = new std::vector<long>(SIZE);
+        
+        // this is the parallel_for provided by the ff_Map class
+        parallel_for(0,A->size(),[&A](const long i) { 
+                A->operator[](i)=i;
+            });
+        ff_send_out(A);
+        return NULL;
     }
 };
 
 class mapStage: public ff_Map<> {
 public:
     void *svc(void *task) {
-	std::vector<long> *A = reinterpret_cast<std::vector<long>*>(task);
-
-	// this is the parallel_for provided by the ff_Map class
-	parallel_for(0,A->size(),[&A](const long i) { 
-		A->operator[](i) += i;
-	    });
-
-	printf("mapStage received:\n");
-	for(size_t i=0;i<A->size();++i)
-	    printf("%ld ", A->operator[](i));
-	printf("\n");
-	
-	return GO_ON;
+        std::vector<long> *A = reinterpret_cast<std::vector<long>*>(task);
+        
+        // this is the parallel_for provided by the ff_Map class
+        parallel_for(0,A->size(),[&A](const long i) { 
+                A->operator[](i) += i;
+            });
+        
+        printf("mapStage received:\n");
+        for(size_t i=0;i<A->size();++i)
+            printf("%ld ", A->operator[](i));
+        printf("\n");
+        
+        return GO_ON;
     }    
 };
 
@@ -91,7 +91,6 @@ int main() {
     mapStage stage;
     pipe.add_stage(&stage);
     pipe.run_and_wait_end();
-
-    return 0;
-	
+    
+    return 0;	
 }

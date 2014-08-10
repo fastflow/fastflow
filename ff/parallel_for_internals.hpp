@@ -495,7 +495,7 @@ protected:
         if (_chunk == 0) { 
             // default static scheduling, i.e. the iteration space is almost equally divided
             // in contiguous chunks among threads
-            const long numtasks  = (stop-start)/_step;
+            const long numtasks  = std::lrint(std::ceil((stop-start)/(double)_step));
             long totalnumtasks   = (long)_nw;
             size_t r             = numtasks % _nw;
             _chunk               = numtasks / _nw;
@@ -505,7 +505,7 @@ protected:
             
             long end, e;
             for(size_t i=0; totalnumtasks>0; ++i,--totalnumtasks) {
-                e       = start + (_chunk - 1)*_step + 1 + ((i<r) ? 1 : 0 );
+                e       = start + (_chunk - 1)*_step + 1 + ((i<r) ? _step : 0 );
                 end     = (e<stop) ? e : stop;
                 data[i].ntask=1;
                 data[i].task.set(start,end);
