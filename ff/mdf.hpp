@@ -2,7 +2,7 @@
 /*! 
  *  \link
  *  \file mdf.hpp
- *  \ingroup high_level_patterns_shared_memory
+ *  \ingroup high_level_patterns
  *
  *  \brief This file implements the macro dataflow pattern.
  */
@@ -134,7 +134,12 @@ struct param_info {
     data_direction_t dir;
 };
 
-
+    /** 
+     * \class ff_mdf
+     * \ingroup high_level_patterns
+     * 
+     * \brief Macro Data Flow executor
+     */
 class ff_mdf:public ff_node {
 public:
     enum {DEFAULT_OUTSTANDING_TASKS = 2048};

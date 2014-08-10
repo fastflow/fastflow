@@ -25,8 +25,13 @@
  ****************************************************************************
  */
 
-/* Some basic usage examples of the pipeline (and farm) pattern  */
-
+/**
+ * \file pipe_basic.cpp
+ * \ingroup applications
+ * \brief Some basic usage examples of the pipeline (and farm) pattern 
+ *
+ * @include pipe_basic.cpp
+ */
 #include <ff/pipeline.hpp>
 #include <ff/farm.hpp>
 
