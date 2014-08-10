@@ -1,7 +1,6 @@
 // MarcoA
 // Part of FastFlow tests
 // Aug 3, 1024
-// All parfors inc element-wise the array A.
 
 #include <iostream>
 #include <iomanip>
@@ -13,8 +12,6 @@
 #endif
  
 #define N 10
-
-// Auxiliary functions
 
 template <typename T>
 std::string to_string (const T& t)
@@ -50,6 +47,7 @@ static void reset(long V[], long size) {
 }
 
 
+// All parfors inc element-wise the array A.
 
 int main() {
   long nworkers = 2;
@@ -57,12 +55,12 @@ int main() {
   for (long i=0;i<N;++i) A[i]=i;
 
 
-  /* 1) Parallel for region (basic) 
+  /* Version 1 (basic)
 
      void parallel_for (long first, long last, const Function &f, const long nw=FF_AUTO)
 
     Compute the body on [first,last) elements
-    Dynamic scheduling. grain = N/nw
+    Static scheduling. grain = N/nw
   */
 
 #ifdef FF
@@ -83,15 +81,16 @@ int main() {
   compute_mask(A,N," X");
   reset(A,N);
 
-  /* 2) Parallel for region (step)
+  /* Version 2 (step)
      
      parallel_for (long first, long last, long step, const Function &f, const long nw=FF_AUTO)
     
     Compute the body on [first,last) elements with step
-    Dynamic scheduling, grain = (last-first)/(step*nw)
+    Static scheduling, grain = (last-first)/(step*nw)
 
     X  -  X  -  -  X  -  X  -  -
-    To be checked
+    Error to be fixed
+
   */
   long step = 2;
   pf.parallel_for(0L,N,step,[&A](const long i) {
@@ -104,13 +103,15 @@ int main() {
   compute_mask(A,N," X");
   reset(A,N);
 
-  /* 3) Parallel for region (step, grain) 
+  /* Version 3 (step, grain)
      
      parallel_for (long first, long last, long step, long grain, const Function &f, const long nw=FF_AUTO)
     
     Compute the body on [first,last) elements with step
     Dynamic scheduling, grain defined by user
+
   */
+
   long grain = 3;
   long mapping_on_threads[N];
   for (long i=0;i<N;++i) mapping_on_threads[i] =-1;
@@ -133,12 +134,12 @@ int main() {
   }
   reset(A,N);
 
-  /* 4) Parallel for region with threadID (step, grain, thid)
+  /* Version 4 (step, grain, threadID)
      
      parallel_for_thid (long first, long last, long step, long grain, const Function &f, const long nw=FF_AUTO)
     
     Compute the body on [first,last) elements with step
-    Dynamic scheduling, chunk defined by user, body can access to Worker ID
+    Static scheduling, chunk defined by user, body can access to worker number
   */
   for (long i=0;i<N;++i) mapping_on_threads[i] =-1;
 
@@ -149,17 +150,17 @@ int main() {
 
   std::cout << "====================================================" << std::endl;
   std::cout << "4) step= " << step << "grain = " << grain << 
-    "with ThreadIDs" << std::endl;
+    " with ThreadIDs" << std::endl;
   print(A,N);
   compute_mask_i(A,N,mapping_on_threads);
   reset(A,N);
 
-   /* Parallel for region with indexes ranges (step, grain, thid, idx)
+   /* Version 5 (step, grain, IDX)
      
      parallel_for_idx (long first, long last, long step, long grain, const Function &f, const long nw=FF_AUTO)
     
     Compute the body on [first,last) elements with step
-    Dynamic scheduling, chunk defined by user, body can access to worker number
+    Static scheduling, chunk defined by user, body can access to worker number
 
   */
 
@@ -179,14 +180,7 @@ int main() {
   compute_mask_i(A,N,mapping_on_threads);
   reset(A,N);
 
-  /* Parallel for region static (step, grain)
-     
-     parallel_for_static (long first, long last, long step, long grain, const Function &f, const long nw=FF_AUTO)
-    
-    Compute the body on [first,last) elements with step
-    Static scheduling, grain defined by user or with maximal partitions
-
-  */
+  /* ---------- */
   std::cout << "====================================================" << std::endl;
   step = 1;
   for (long i=0;i<N;++i) mapping_on_threads[i] =-1;
@@ -197,7 +191,7 @@ int main() {
       mapping_on_threads[i] = ff_getThreadID(); 
     });
 
-  std::cout << "6) Static with maximal partitions" << std::endl; 
+  std::cout << "6) Static with maximal balanced partitions" << std::endl; 
   print(A,N);
   compute_mask(A,N," X");
   for (long i=0;i<N;++i) {
@@ -209,11 +203,11 @@ int main() {
   reset(A,N);
 
   for (long i=0;i<N;++i) mapping_on_threads[i] =-1;
-  pf.parallel_for_static(0L,N,step,grain, [&A,&mapping_on_threads](const long i) {
+  pf.parallel_for_static(0L,N,step,grain,[&A,&mapping_on_threads](const long i) {
       A[i]+=1;
       // Internal, OS-dependent thread ID
       mapping_on_threads[i] = ff_getThreadID(); 
-    },nworkers);
+    });
   
   std::cout << "====================================================" << std::endl;
   std::cout << "7) Static with fixed partition size = " << grain << std::endl; 
