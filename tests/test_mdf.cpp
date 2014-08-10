@@ -89,7 +89,6 @@ struct Parameters {
 };
 
 
-// block Cholesky algorithm
 void taskGen(Parameters<ff_mdf > *const P){
     long *A = P->A;
     long *B = P->B;
@@ -192,36 +191,36 @@ int main() {
     assert(A && B && C && D);
 
     for(long i=0;i<SIZE;++i) {
-	A[i] = 0; B[i] = i;
-	C[i] = 1; D[i] = i+1;
+        A[i] = 0; B[i] = i;
+        C[i] = 1; D[i] = i+1;
     }
-
+    
     Parameters<ff_mdf > P;
     ff_mdf dag(taskGen, &P, 16, 3);
     P.A=A,P.B=B,P.C=C,P.D=D,P.mdf=&dag;P.res=0;
-
+    
     dag.run_and_wait_end();
 
     // printing result
     printf("result = %ld\n", P.res);
-
+    
     if (check) {
-	// re-init data
-	for(long i=0;i<SIZE;++i) {
-	    A[i] = 0; B[i] = i;
-	    C[i] = 1; D[i] = i+1;
-	}
-	long res=0;
-
-	sum2(A,B,SIZE);
-	sum2(C,B,SIZE);
-	sum2(D,B,SIZE);
-	sum3(D,A,C,SIZE);
-	sum2(A,D,SIZE);
-	sum2(B,D,SIZE);
-	sum2(C,D,SIZE);
-	reduce(&res,A,B,C,D,SIZE);
-	printf("result = %ld\n",res);
+        // re-init data
+        for(long i=0;i<SIZE;++i) {
+            A[i] = 0; B[i] = i;
+            C[i] = 1; D[i] = i+1;
+        }
+        long res=0;
+        
+        sum2(A,B,SIZE);
+        sum2(C,B,SIZE);
+        sum2(D,B,SIZE);
+        sum3(D,A,C,SIZE);
+        sum2(A,D,SIZE);
+        sum2(B,D,SIZE);
+        sum2(C,D,SIZE);
+        reduce(&res,A,B,C,D,SIZE);
+        printf("result = %ld\n",res);
     }
     return 0;
 

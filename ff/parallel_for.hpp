@@ -55,7 +55,7 @@
  *                   statically and in a round-robin fashion.
  *
  *  If you want to use the static scheduling policy (either default or with a given grain),
- *  please use the parallel_for_static construct.
+ *  please use the **parallel_for_static** method.
  *
  *  To use or not to use a scheduler thread ?
  *  As always, it depends on the application, scheduling strategy, platform at hand, 
@@ -121,13 +121,15 @@ public:
      * Nonblocking policy is to be preferred in case of repeated call of the 
      * some of the parallel_for methods (e.g. within a strict outer loop). On the same
      * ParallelFor object different parallel_for methods (e.g. parallel_for and 
-     * parallel_for_thid) can be called in sequence.
+     * parallel_for_thid, parallel_for_idx) can be called in sequence.
 
      * \param maxnw Maximum number of worker threads (not including active scheduler, if
      * any). Deafault <b>FF_AUTO</b> = N. of HW contexts. 
      * \param spinwait barrier kind. <b>true</b> nonblocking, <b>false</b> blocking.
-     * Nonbloking barrier will leave worker threads active until destruction, even if
-     * not executing any method. 
+     * Nonbloking barrier will leave worker threads active until class destruction is called 
+     * (the threads will be active and in the nonblocking barrier only after the 
+     * first call to one of the parallel_for methods). To put threads to sleep between different
+     * calls, the <b>threadPause</b> method may be called.
      */
     ParallelFor(const long maxnw=FF_AUTO,bool spinwait=false):
         pf(new ff_forall_farm<forallreduce_W<int> >(maxnw,spinwait)) {}

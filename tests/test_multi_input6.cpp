@@ -46,6 +46,7 @@
  *
  */
 
+//#define HAS_CXX11_VARIADIC_TEMPLATES 1  // needed to use the ff_pipe pattern
 #include <ff/pipeline.hpp>
 #include <ff/farm.hpp> 
 
@@ -70,8 +71,19 @@ struct Stage: ff_minode {
 
 
 int main() {
+#if 0
     Stage S;
+    std::vector<ff_node*> w;
+    w.push_back(new W);
+    w.push_back(new W);
+    w.push_back(new W);
+    ff_farm<> farm(w);
+    farm.remove_collector();
+    ff_pipe<long> pipe(&farm,&S);
+    pipe.run_and_wait_end();
 
+#else
+    Stage S;
     ff_farm<> farm;
     std::vector<ff_node*> w;
     w.push_back(new W);
@@ -85,6 +97,7 @@ int main() {
     pipe.add_stage(&S);
 
     pipe.run_and_wait_end();
+#endif
 
     printf("DONE\n");
     return 0;

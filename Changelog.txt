@@ -1,4 +1,8 @@
 * 24/01/14 - v.2.0.4
+   - fixed a bug in the init_data_static function (ParallelFor related)
+   - fixed some problems appearing when remove_collector is called
+   - an ff_minode can be used in place of the ff_node (i.e. when there is no need to 
+     use an ff_minode, indeed) 
    - first version of the ParallelForPipeReduce pattern
    - fixed problem with run_then_freeze for the ff_minode and ff_monode
    - poolEvolution interface improved
