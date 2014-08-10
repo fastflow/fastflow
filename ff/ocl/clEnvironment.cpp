@@ -37,17 +37,10 @@
 
 #include <ff/ocl/clEnvironment.hpp>
 
-/*!
- * \ingroup streaming_network_simple_shared_memory
- *
- * @{
- */
 
 Environment* Environment::m_Environment = NULL;
 
-/**
- * TODO
- */
+
 Environment::Environment(){
     if (pthread_mutex_init(&mutex_set_policy, NULL)!=0) {
         ff::error("FATAL ERROR: Environment: pthread_mutex_init fails!\n");
@@ -120,17 +113,13 @@ int Environment::staticSelectionPolicy(cl_device_type d, Ocl_Utilities* ocl_util
     return i;
 }
 
-/**
- * TODO
- */
+
 cl_device_id Environment::reallocation(int t_id) {
     return Environment::instance()->clDevices.at(Environment::instance()->clNodesDevice.at(t_id))->deviceId;// this should change to dynamic policy
     
 }
 
-/**
- * TODO
- */
+
 Environment * Environment::instance(){ 
     if (!m_Environment){
         pthread_mutex_lock(&instanceMutex);
@@ -141,16 +130,11 @@ Environment * Environment::instance(){
     return m_Environment; 
 }
 
-/**
- * TODO
- */
+
 cl_device_id Environment::getDeviceId(int t_id){
     return Environment::instance()->clDevices.at(Environment::instance()->clNodesDevice.at(t_id))->deviceId;
 }
 
-/**
- * TODO
- */
 void Environment::createEntry(int& t_id , Ocl_Utilities* ocl_utilities){
     
     pthread_mutex_lock(&(Environment::instance()->mutex_set_policy));
@@ -172,8 +156,3 @@ void Environment::createEntry(int& t_id , Ocl_Utilities* ocl_utilities){
     pthread_mutex_unlock(&(Environment::instance()->mutex_set_policy)); 
 }
 
-/*!
- *
- * @}
- * \endlink
- */

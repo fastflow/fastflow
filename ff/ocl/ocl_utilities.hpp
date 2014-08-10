@@ -1,13 +1,5 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-/*!
- * \link
- * \file ocl_utilities.hpp
- * \ingroup opencl_fastflow
- *
- * \brief TODO
- *
- */
 
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify it
@@ -48,12 +40,6 @@
 #endif
 
 #include <iostream>
-
-/*!
- * \ingroup opencl_fastflow
- *
- * @{
- */
 
 
 
@@ -214,14 +200,7 @@ static inline void printOCLErrorString(cl_int error, std::ostream & out) {
     }
 }
     
-/*!
- * \class Ocl_Utilities
- * \ingroup opencl_fastflow
- *
- * \brief TODO
- *
- * This class is defined in \ref ocl_utilities.hpp
- */
+
 class Ocl_Utilities{
     //protected:
     //    int threshold;
@@ -231,14 +210,9 @@ public:
     // }
     //int threshold;
 
-    /**
-     * TODO
-     */
+
     Ocl_Utilities(){}//threshold=1;}
 
-    /**
-     * TODO
-     */
     virtual bool  device_rules(cl_device_id id)=0;
 
     //void  setThreshold(int t){
@@ -247,10 +221,7 @@ public:
     // if (threshold!=1){
     //      #define THRESHOLD threshold
     //}
-    
-    /**
-     * TODO
-     */
+
     void printStatus(std::string label, cl_int status){
   
       std::cout << label << " status: ";
@@ -259,18 +230,11 @@ public:
       if (status != CL_SUCCESS) exit(1);
     }
 
-    /**
-     * TODO
-     */
     void printErrorString(cl_int error){
         printOCLErrorString(error, std::cout);
     }
 };
 
-/*!
- * @}
- * \endlink
- * }
- */
+
 
 #endif  /* FF_OCL_UTILITIES_HPP */

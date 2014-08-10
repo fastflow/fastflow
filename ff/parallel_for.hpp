@@ -1,13 +1,12 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*! 
- *  \link
  *  \file parallel_for.hpp
  *  \ingroup high_level_patterns
  *
  *  \brief This file describes the parallel_for/parallel_reduce skeletons.
  *  
- *  Realize a parallel for loop. Different iterations should be 
+ *  \detail Realize a parallel for loop. Different iterations should be 
  *  independent (data-races management is not autimatically provided
  *  but can be introduced by programmers via mutex).
  *
@@ -97,19 +96,64 @@ namespace ff {
 // TODO: to re-write the ParallelFor class as a specialization of the ParallelForReduce
 //
     
-//! ParallelFor class
+/*! 
+  * \class ParallelFor
+  *  \ingroup high_level_patterns
+  * 
+  * \brief Parallel for loop
+  *
+  * \detail Identifies an iterative work-sharing construct that specifies a region
+  * (i.e. a Lambda function) in which the iterations of the associated loop 
+  * should be executed in parallel. 
+  * 
+  * \example ../tests/parfor_basic.cpp
+  */ 
 class ParallelFor {
 protected:
     ff_forall_farm<forallreduce_W<int> > *pf; 
 public:
+    /**
+     * \brief Constructor
+
+     * \detail Set up a parallel for pattern run-time support (i.e. spawn workers threads)
+     * A single object can be used as many times as needed to run different parallel for
+     * pattern instances (different loop bodies). They cannot be nested nor recursive.
+     * Nonblocking policy is to be preferred in case of repeated call of the 
+     * some of the parallel_for methods (e.g. within a strict outer loop). On the same
+     * ParallelFor object different parallel_for methods (e.g. parallel_for and 
+     * parallel_for_thid) can be called in sequence.
+
+     * \param maxnw Maximum number of worker threads (not including active scheduler, if
+     * any). Deafault <b>FF_AUTO</b> = N. of HW contexts. 
+     * \param spinwait barrier kind. <b>true</b> nonblocking, <b>false</b> blocking.
+     * Nonbloking barrier will leave worker threads active until destruction, even if
+     * not executing any method. 
+     */
     ParallelFor(const long maxnw=FF_AUTO,bool spinwait=false):
         pf(new ff_forall_farm<forallreduce_W<int> >(maxnw,spinwait)) {}
-
+    /**
+     * \brief Destructor
+     * 
+     * \detail Terminate ParallelFor run-time support and makes resources housekeeping.
+     * Both nonlocking and blocking worker threads are terminated.
+     */
     ~ParallelFor()                { FF_PARFOR_DONE(pf); }
 
-    // By calling this method with 'true' the scheduler will be disabled,
-    // to restore the usage of the scheduler thread just pass 'false' as 
-    // parameter
+    /**
+     * \brief Disable active scheduler (i.e. Emitter thread)
+     *
+     * \detail Disable active scheduler (i.e. Emitter thread of the master-worker
+     * implementation). Active scheduling uses one dedicated nonblocking thread.
+     * In passive scheduling, workers cooperatively schedule tasks via synchronisations
+     * in memory. None of the above is always faster than the other: it depends on
+     * parallelism degree, task grain and platform. 
+     * As rule of thumb on large multicore and fine-grain tasks active scheduling is
+     * faster. On few cores passive scheduler enhances overall performance.
+     * Active scheduler is the default option.
+     * \param onoff <b>true</b> disable active schduling, 
+     * <b>false</b> enable active scheduling
+     */ 
+
     inline void disableScheduler(bool onoff=true) { 
         pf->disableScheduler(onoff);
     }
@@ -120,16 +164,20 @@ public:
         return pf->stopSpinning();
     }
 
-    /* -------------------- parallel_for -------------------- */
+    // -------------------- parallel_for --------------------
+
     /**
-     * \brief Parallel for with static scheduling
+     * \brief Parallel for region (basic) - static
      *
-     * With static scheduling onto nw worker threads.
+     * \detail Static scheduling onto nw worker threads.
+     * Data is statically cut in maximal partitions, i.e.
+     * partition size = last-first/nw
      * 
      * \param first first value of the iteration variable
      * \param last last value of the iteration variable
-     * \param f body of the parallel loop
-     * \param nw number of worker threads (default n. of platform HW contexts)
+     * \param f <b>f(const long idx)</b>  Lambda function, 
+     * body of the parallel loop. <b>idx</b>: iterator
+     * \param nw number of worker threads (default FF_AUTO)
      */
     template <typename Function>
     inline void parallel_for(long first, long last, const Function& f, 
@@ -140,15 +188,18 @@ public:
     }
 
     /**
-     * \brief Parallel for with static scheduling (steps)
+     * \brief Parallel for region (step) - static
      *
-     * With static scheduling onto nw worker threads (and iteration steps)
+     * \detail Static scheduling onto nw worker threads. 
+     * Iteration space is walked with stride <b>step</b>. 
+     * Data is statically cut in maximal partitions, i.e.
+     * partition size = last-first/(nw*step)
      * 
      * \param first first value of the iteration variable
      * \param last last value of the iteration variable
      * \param step step increment for the iteration variable
-     * \param f body of the parallel loop
-     * \param nw number of worker threads (default n. of platform HW contexts)
+     * \param f <b>f(const long idx)</b> body of the parallel loop
+     * \param nw number of worker threads
      */
     template <typename Function>
     inline void parallel_for(long first, long last, long step, const Function& f, 
@@ -158,12 +209,13 @@ public:
         } FF_PARFOR_STOP(pf);
     }
 
+
     /**
-     * @brief Parallel for with dynamic scheduling (steps,grain)
+     * @brief Parallel for region (step, grain) - dynamic  
      *
-     * @detail With dynamic scheduling onto nw worker threads (+ iteration steps
-     * and grain). Iteration space is walked with stride 
-     * <b>step</b>. 
+     * @detail Dynamic scheduling onto nw worker threads. Iterations are scheduled in 
+     * blocks of minimal size <b>grain</b> 
+     * Iteration space is walked with stride <b>step</b>. 
      * 
      * @param first first value of the iteration variable
      * @param last last value of the iteration variable
@@ -172,7 +224,7 @@ public:
      * (n. of iterations scheduled together to a single worker)
      * @param f <b>f(const long idx)</b>  Lambda function, 
      * body of the parallel loop. <b>idx</b>: iteration
-     * *param nw number of worker threads (default n. of platform HW contexts)
+     * param nw number of worker threads
      */
     template <typename Function>
     inline void parallel_for(long first, long last, long step, long grain, 
@@ -183,17 +235,17 @@ public:
     }    
 
     /**
-     * @brief Parallel for with dynamic scheduling (+ iteration steps, grain, 
-     * and threadId )
+     * @brief Parallel for region with threadID (step, grain, thid) - dynamic
      *
-     * @detail With dynamic scheduling onto nw worker threads (+ iteration steps, 
-     * computation grain and worker ID). Iteration space is walked with stride 
-     * <b>step<b> 
+     * @detail Dynamic scheduling onto nw worker threads. Iterations are scheduled in 
+     * blocks of minimal size <b>grain</b> 
+     * Iteration space is walked with stride <b>step</b>. <b>thid</b> Worker thread ID
+     * is made available via a Lambda parameter.
      * 
      * @param first first value of the iteration variable
      * @param last last value of the iteration variable
      * @param step step increment for the iteration variable
-     * @param grain (> 0) minimum computation grain  (n. of iterations scheduled together to a single worker)
+     * @param grain  minimum computation grain  (n. of iterations scheduled together to a single worker)
      * @param f <b>f(const long idx, const int thid)</b>  Lambda function, body of the parallel loop. <b>idx</b>: iteration, <b>thid</b>: worker_id 
      * @param nw number of worker threads (default n. of platform HW contexts)
      */
@@ -206,13 +258,17 @@ public:
     }    
 
     /**
-     * @brief Parallel for with dynamic scheduling (+ iteration steps, grain)
+     * @brief Parallel for region with indexes ranges (step, grain, thid, idx) - 
+     * dynamic - advanced usage
      *
-     * @detail With dynamic scheduling onto nw worker threads (+ iteration steps, 
-     * computation grain). A chunk of iterations are assigned to each worker but
+     * @detail Dynamic scheduling onto nw worker threads. Iterations are scheduled in 
+     * blocks of minimal size <b>grain</b>. Iteration space is walked with stride 
+     * <b>step</b>. A chunk of <b>grain</b> iterations are assigned to each worker but
      * they are not automatically walked. Each chunk can be traversed within the
-     * parallel_for body (e.g. with a for loop within <b>f</b>). 
-     * 
+     * parallel_for body (e.g. with a for loop within <b>f</b> with the same step). 
+     *
+     * \note Useful in few cases only - requires some expertise
+     *
      * @param first first value of the iteration variable
      * @param last last value of the iteration variable
      * @param step step increment for the iteration variable
@@ -224,7 +280,6 @@ public:
      * worker_id <b>thid</b>. 
      * @param nw number of worker threads (default n. of platform HW contexts)
      */
-    // Change name in parallel_for_block ?
     template <typename Function>
     inline void parallel_for_idx(long first, long last, long step, long grain, 
                                   const Function& f, const long nw=FF_AUTO) {
@@ -233,11 +288,33 @@ public:
         } FF_PARFOR_STOP(pf);
     }
 
+    /**
+     * @brief Parallel for region (step, grain) - static
+     * 
+     *
+     * @detail Static scheduling onto nw worker threads. Iterations are scheduled in 
+     * blocks of minimal size <b>grain > 1</b> or in maximal partitions 
+     * <b>grain == 0</b>. Iteration space is walked with stride 
+     * <b>step</b>. 
+     *
+     *
+     * @param first first value of the iteration variable
+     * @param last last value of the iteration variable
+     * @param step step increment for the iteration variable
+     * @param grain (> 0) minimum computation grain  (n. of iterations scheduled 
+     * together to a single worker)
+     * @param f <b>f(const long idx)</b>
+     * Lambda function, body of the parallel loop. 
+     * <b>start_idx</b> and <b>stop_idx</b>: iteration bounds assigned to 
+     * worker_id <b>thid</b>. 
+     * @param nw number of worker threads (default n. of platform HW contexts)
+     */
     template <typename Function>
     inline void parallel_for_static(long first, long last, long step, long grain, 
                                     const Function& f, const long nw=FF_AUTO) {
         if (grain==0 || labs(nw)==1) {
-            FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+            // Divide in evenly partioned parts
+            FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
                 f(parforidx);            
             } FF_PARFOR_STOP(pf);
         } else {

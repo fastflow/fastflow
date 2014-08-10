@@ -1,12 +1,5 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-/*!
- * \link
- * \file clDeviceInfo.hpp
- * \ingroup opencl_fastflow
- *
- * \brief
- */
 
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify
@@ -45,20 +38,7 @@
 #include <CL/opencl.h>
 #endif
 
-/*!
- * \ingroup opencl_fastflow
- *
- * @{
- */
 
-/*!
- * \class CLDevice
- * \ingroup opencl_fastflow
- *
- * \brief TODO
- * 
- * This struct is defined in \ref clDeviceInfo.hpp
- */
 
 struct CLDevice{
   CLDevice(){}
@@ -68,9 +48,5 @@ struct CLDevice{
   unsigned long int maxNum;
 };
 
-/*!
- * @}
- * \endlink
- */
 
 #endif /* FF_CLDEVICEINFO_HPP */

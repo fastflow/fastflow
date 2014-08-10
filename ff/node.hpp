@@ -1,13 +1,13 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*!
- *  \link
- *  \file node.hpp 
- *  \ingroup streaming_network_arbitrary_shared_memory
+ * \link
+ * \file node.hpp
+ * \ingroup building_blocks
  *
- *  \brief This file contains the definition of the \p ff_node class, which
- *  acts as the basic structure of each skeleton on shared-memory architecture.
- *  Other supplementary classes are also defined here.
+ * \brief FastFlow ff_node 
+ *
+ * @detail FastFlow basic contanier for a shared-memory parallel activity 
  *
  */
 
@@ -43,8 +43,9 @@
 #include <ff/config.hpp>
 #include <ff/svector.hpp>
 
-namespace ff {
 
+
+namespace ff {
 
 /*!
  *  \class Barrier

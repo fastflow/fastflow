@@ -142,7 +142,7 @@ protected:
             cnt=0;
             do {
                 nextr = selectworker();
-                assert(offline[nextr]==false);
+                //assert(offline[nextr]==false);
                 if (workers[nextr]->get(task)) return nextr;
                 else if (++cnt == ntentative()) break;
             } while(1);
