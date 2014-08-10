@@ -3,13 +3,13 @@
 /*!
  * \link
  * \file oclnode.hpp
- * \ingroup streaming_network_arbitrary_shared_memory
+ * \ingroup building_blocks
  *
- * \brief Defines the OpenCL implementation of FastFlow node
+ * \brief FastFlow OpenCL interface node
  *
- * This files defines the FastFlow implementation of OpenCL. This
- * implementation enables us to support FastFlow on the GPGPUs. 
+ * @detail This class bridges multicore with GPGPUs using OpenCL
  *
+ * \note This class is deprecated in the current form. It will be updated soon  
  */
 
 /* ***************************************************************************
@@ -55,42 +55,32 @@ namespace ff{
 
 /*!
  * \class ff_oclNode
- * \ingroup streaming_network_arbitrary_shared_memory
+ * \ingroup building_blocks
  *
  * \brief OpenCL implementation of FastFlow node
  *
- * This class defines the OpenCL implementation of FastFlow node.
- *
- * This class is defined in \ref ff_oclnode.hpp
  *
  */
 class ff_oclNode : public ff_node, public Ocl_Utilities { 
 public:
 
     /**
-     * \brief Setup OCL object
+     * \brief Setup a OCL device
      *
-     * It is a pure virtual function. It sets up the OpenCL object of the FastFlow node.
-     *
-     * \parm id is the identifier of the opencl device
+     * \param id is the identifier of the opencl device
      */
     virtual void svc_SetUpOclObjects(cl_device_id id)=0;
     
     /**
-     * \brief Releases OCL object
-     *
-     * It is a pure virtual function, and releases the OpenCL object of the
-     * FastFlow node.
-     *
+     * \brief Releases a OCL device
+     *    
      */
     virtual void svc_releaseOclObjects()=0;
      
 protected:
    
     /**
-     * \brief Intializes OpenCL instance
-     *
-     * It initializes the OpenCL instance. 
+     * \brief Initializes OpenCL instance
      *
      * \return If successful \p true is returned, otherwise \p false is
      * returned.
@@ -115,9 +105,9 @@ protected:
     /**
      * \brief Device rules
      *
-     * It defines the ruls for the device.
+     * It defines the rules for the device.
      *
-     * \parm id is the identifier of the device
+     * \param id is the identifier of the device
      *
      * \return \p true is always returned
      */
@@ -126,7 +116,6 @@ protected:
     /**
      * \brief Creates OpenCL
      *
-     * It initializes OpenCL instance,
      */
     inline void svc_createOCL(){
         if (baseclass_ocl_node_deviceId==NULL) {
@@ -146,7 +135,6 @@ protected:
     /**
      * \brief Releases OpenCL
      *
-     * It releases OpenCL instance.
      */
     inline void svc_releaseOCL(){ 
         svc_releaseOclObjects();
@@ -155,7 +143,6 @@ protected:
     /**
      * \brief Evaluation
      *
-     * it evalautes the OpenCL node on the device.
      *
      * \return If successful \p true, otherwise \p false
      */

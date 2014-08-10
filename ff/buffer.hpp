@@ -3,25 +3,30 @@
 /*!
  *  \link
  *  \file buffer.hpp
- *  \ingroup streaming_network_simple_shared_memory
+ *  \ingroup building_blocks
  *
- *  \brief This file contains the definition of the bounded \p SWSR circular
+ *  \brief This file contains the definition of the bounded \p SPSC channel
  *  buffer used in FastFlow
  *
  *  Single-Writer Single-Reader circular buffer.
  *  No lock is needed around pop and push methods.
+ *  Wait-free and fence-free (in the TSO model). 
  * 
  *  A single NULL value is used to indicate buffer full and 
  *  buffer empty conditions.
  * 
  *  More details about the SWSR_Ptr_Buffer implementation 
- *  can be found in the following report:
+ *  can be found in:
  *
  *  Massimo Torquati, "Single-Producer/Single-Consumer Queue on Shared Cache 
  *  Multi-Core Systems", TR-10-20, Computer Science Department, University
  *  of Pisa Italy,2010
  *  ( http://compass2.di.unipi.it/TR/Files/TR-10-20.pdf.gz )
- *
+ * 
+ *  M. Aldinucci, M. Danelutto, P. Kilpatrick, M. Meneghin, and M. Torquati, 
+ *  "An Efficient Unbounded Lock-Free Queue for Multi-core Systems," 
+ *  in Proc. of 18th Intl. Euro-Par 2012 Parallel Processing, Rhodes Island, 
+ *  Greece, 2012, pp. 662-673. doi:10.1007/978-3-642-32820-6_65
  */
 
 /* ***************************************************************************
@@ -64,17 +69,12 @@ namespace ff {
 // 64 bytes is the common size of a cache line
 static const int longxCacheLine = (CACHE_LINE_SIZE/sizeof(long));
     
-/*!
- *  \ingroup streaming_network_simple_shared_memory
- *
- *  @{
- */
  
  /*! 
   * \class SWSR_Ptr_Buffer
-  *  \ingroup streaming_network_simple_shared_memory
+  *  \ingroup building_blocks
   * 
-  * \brief Single-Writer/Single-Reader circular buffer.
+  * \brief SPSC bound channel (Single-Writer/Single-Reader)
   *
   * This class describes the SWSR circular buffer, used in FastFlow to
   * implement a lock-free (wait-free) bounded FIFO queue. No lock is needed
