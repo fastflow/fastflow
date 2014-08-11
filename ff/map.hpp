@@ -1,11 +1,12 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*! 
- *  \link
+
  *  \file map.hpp
- *  \ingroup high_level_patterns_shared_memory
+ *  \ingroup high_level_patterns
  *
- *  \brief This file describes the map skeleton.
+ *  \brief map pattern
+ * \todo OCL version to be checked
  */
 
 /* ***************************************************************************
@@ -50,9 +51,14 @@ namespace ff {
 #if !defined(FF_OCL)
 
 /*!
- *  \ingroup high_level_patterns_shared_memory
+ * \class Map pattern
+ *  \ingroup high_level_patterns
  *
- *  @{
+ * \brief Map pattern
+ *
+ * Apply to all
+ *
+ * \todo Map to be documented and exemplified
  */
 template<typename T=int>
 class ff_Map: public ff_node, public ParallelForReduce<T> {
@@ -192,9 +198,9 @@ protected:
 #define DELETEREDUCE(name)                               \
     delete name
 
-/*!
+/*
  * \class ff_mapOCL
- *  \ingroup high_level_patterns_shared_memory
+ *  \ingroup high_level_patterns
  *
  * \brief The map skeleton.
  *
@@ -311,7 +317,7 @@ protected:
 
 
 
-/*!
+/*
  * \class ff_mapOCL
  *  \ingroup high_level_patterns_shared_memory
  *
@@ -419,7 +425,7 @@ protected:
 
 
 
-/*!
+/*
  * \class ff_reduceOCL
  *  \ingroup high_level_patterns_shared_memory
  *
@@ -548,10 +554,6 @@ protected:
 #endif /* FF_OCL  */
 
 
-/*!
-*  @}
-*  \endlink
-*/
     
 } // namespace ff
 
