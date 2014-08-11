@@ -25,10 +25,17 @@
  ****************************************************************************
  */
 
-/*
+/**
+ * \file perf_test_alloc1.cpp
+ * \ingroup applications low-level-tests
+ *
+ * \brief \ref ff::ff_allocator usage example
+ *
  * This test gives the possibility to test different memory allocator
  * (libc, TBB, FastFlow, Hoard (compiling with USE_STANDARD and preloading the 
  *  Hoard library) )
+ *
+ * @include perf_test_alloc1.cpp
  */
 
 #include <sys/types.h>

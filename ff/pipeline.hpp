@@ -713,7 +713,7 @@ private:
         
     public:
         /**
-         * \brief Create a stand-alone pipeline
+         * \brief Create a stand-alone pipeline (no input/output streams)
          *
          * Identifies an stream parallel construct in which stages are executed 
          * in parallel. 
@@ -721,7 +721,7 @@ private:
          * first stage.
          * \param args pipeline stages, i.e. a list f1,f2,... of functions 
          * with the following type
-         * \p std::function<myTask*(myTask*,ff_node*const)>
+         * <tt> const std::function<T*(T*,ff_node*const)></tt>
          * 
          * Example: \ref pipe_basic.cpp
          */
@@ -733,7 +733,7 @@ private:
             for_each(t,add_to_pipe(this));
         }
         /**
-         * \brief Create a stand-alone pipeline (no input/output streams)
+         * \brief Create a pipeline (with input stream)
          *
          * Identifies an stream parallel construct in which stages are executed 
          * in parallel. 
@@ -742,7 +742,7 @@ private:
          * \param input_ch \p true to enable first stage input stream
          * \param args pipeline stages, i.e. a list f1,f2,... of functions 
          * with the following type
-         * \p std::function<myTask*(myTask*,ff_node*const)>
+         * <tt> const std::function<T*(T*,ff_node*const)></tt>
          *
          * Example: \ref pipe_basic.cpp
          */
