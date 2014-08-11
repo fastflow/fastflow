@@ -362,13 +362,12 @@ public:
 };
 
 /*!
- * \class Lamport_Buffer
- *  \ingroup streaming_network_simple_shared_memory
+ * \class Lamport_Buffer.
+ * \ingroup aux_classes
  *
  * \brief Implementation of the well-known Lamport's wait-free circular
- * buffer.
+ * buffer. Not currently used.
  *
- * \This class is defined in \ref buffer.hpp
  *
  */
 class Lamport_Buffer {

@@ -157,7 +157,7 @@ LEVEL 1
   *
   * \brief Core patterns (basic streaming patterns)
   *
-  * \details Basic streaming patterns: pipeline, farm and loopback qualifier
+  * Basic streaming patterns: pipeline, farm and loopback qualifier
   *
   */
 
@@ -175,7 +175,7 @@ LEVEL 1
   *
   * \brief Auxiliary classes
   *
-  * \detail Auxiliary classes: general utility classes and algorithms
+  * Auxiliary classes: general utility classes and algorithms
   *
   */
 
@@ -196,7 +196,7 @@ LEVEL 1
   *
   *  \brief Supported HW platforms 
   *
-  *  \detail FastFlow targets multicore, many-core (GPGPUs) and distributed systems.
+  *  FastFlow targets multicore, many-core (GPGPUs) and distributed systems.
   *  
   *  \li Multicore: x86_64, Arm, PPC - Linux, Mac OS, Win 7/8
   *  \li Manycore: NVidia and AMD GPGPUs via CUDA and OpenCL. Experimental support for 

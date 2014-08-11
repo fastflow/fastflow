@@ -8,9 +8,9 @@
 /* Compiler type */
 /* #undef CMAKE_COMPILER_IS_GNUCC */
 /* #undef HAS_GCC */
-#define CMAKE_COMPILER_IS_GNUCXX 
+/* #undef CMAKE_COMPILER_IS_GNUCXX */
 /* #undef HAS_GXX */
-/* #undef HAS_CLANGXX */
+#define HAS_CLANGXX
 /* #undef HAS_MSVC */
 /* #undef HAS_MSVC10 */
 

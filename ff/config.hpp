@@ -107,5 +107,4 @@ static const size_t FF_GO_OUT        = (FF_EOS-0x3); /// non automatically propa
 #if defined(USE_CMAKE_CONFIG)
 #include <cmake.modules/ffconfig.h>
 #endif
-
 #endif /* FF_CONFIG_HPP */

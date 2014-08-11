@@ -3,9 +3,13 @@
 /*!
  *  \link
  *  \file spin-lock.hpp
- *  \ingroup streaming_network_arbitrary
+ *  \ingroup building_blocks
  *
- *  \brief This file contains the spin lock(s) used in FastFlow
+ *  \brief This file contains several alternative spin lock(s)
+ *  implementations that can be used as FastFlow spin-lock
+ *
+ * CLH spin-lock, ticket lock, XCHG-based spin-lock,
+ * AtomicFlagWrapper-based spin-lock, and counting ...
  */
 
 /* ***************************************************************************
@@ -287,10 +291,6 @@ _INLINE void spin_unlock(lock_t l) {
 } // namespace ff
 #endif
 
-/*!
- *
- * @}
- * \endlink
- */
+
 
 #endif /* FF_SPINLOCK_HPP */

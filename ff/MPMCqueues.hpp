@@ -5,8 +5,8 @@
  *  \file MPMCqueues.hpp
  *  \ingroup aux_classes
  *
- *  \brief This file contains several MPMC queue implementations. They are not  
- *  currently used in FastFlow implementation unless for perfromance assessment.
+ *  \brief This file contains several MPMC queue implementations. Not
+ *  currently used.
  * 
  * \detail This file contains the following 
  * Multi-Producer/Multi-Consumer queue implementations:
@@ -263,7 +263,6 @@ private:
  *
  * This version uses internal atomic operations.
  *
- * This class is defined in \ref MPMCqueues.hpp
  *
  */
 class MPMC_Ptr_Queue {
@@ -278,9 +277,8 @@ protected:
 
 public:
     /** 
-     *  Default constructor 
-     *
-     *  @param[in] size The size of the queue.
+     *  \brief Constructor
+     *  \param[in] size The size of the queue.
      */
     MPMC_Ptr_Queue() {}
 
@@ -547,21 +545,17 @@ protected:
 
 };
 
-/*!
- *  @}
- *  \endlink
- */
 
 #endif // USE_STD_C0X
 
-//-------------------------------------****-------------------------------
-// No doxygen documentation from below.
 
 /*! 
  * \class MSqueue
+ * \ingroup aux_classes
  *
- * \brief An implementation of the lock-free FIFO MPMC queue by
- * Michael and Scott, described in the paper: "Simple, Fast, and Practical 
+ * \brief Michael and Scott MPMC. Not currently used.
+ *
+ * See:  M. Michael and M. Scott, "Simple, Fast, and Practical
  * Non-Blocking and Blocking Concurrent Queue Algorithms", PODC 1996.
  *
  * The MSqueue implementation is inspired to the one in the \p liblfds 

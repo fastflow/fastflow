@@ -3,10 +3,22 @@
 /*!
  * \link
  * \file dynqueue.hpp
- * \ingroup streaming_network_simple_shared_memory
+ * \ingroup aux_classes
  *
- * \brief This file defines the dynamic queue.
+ * \brief Implementation of a dynamic queue. Not currently used.
  *
+ * Dynamic (list-based) Single-Writer Single-Reader
+ * (or Single-Producer Single-Consumer) unbounded queue.
+ *
+ * No lock is needed around pop and push methods.
+ * See also ubuffer.hpp for a more efficient SPSC unbounded queue.
+ *
+ * M. Aldinucci, M. Danelutto, P. Kilpatrick, M. Meneghin, and M. Torquati,
+ * "An Efficient Unbounded Lock-Free Queue for Multi-core Systems,"
+ * in Proc. of 18th Intl. Euro-Par 2012 Parallel Processing, Rhodes Island,
+ * Greece, 2012, pp. 662-673. doi:10.1007/978-3-642-32820-6_65
+ *
+ * \note Not currently used in the FastFlow implementation.
  */
 
 #ifndef FF_DYNQUEUE_HPP
@@ -30,14 +42,6 @@
  ****************************************************************************
  */
 
-/* Dynamic (list-based) Single-Writer Single-Reader 
- * (or Single-Producer Single-Consumer) unbounded queue.
- *
- * No lock is needed around pop and push methods.
- * See also ubuffer.hpp for a more efficient SPSC unbounded queue.
- * 
- *
- */
 
 #include <stdlib.h>
 #include <ff/buffer.hpp>
@@ -46,22 +50,8 @@
 
 namespace ff {
 
-/*!
- * \ingroup streaming_network_simple_shared_memory
- *
- * @{
- */
-
 #if !defined(_FF_DYNQUEUE_OPTIMIZATION)
 
-/*!
- * \class dynqueue
- * \ingroup streaming_network_simple_shared_memory
- *
- * \brief TODO
- *
- * This class is defined in \ref dynqueue.hpp
- */
 class dynqueue {
 private:
     struct Node {
@@ -110,9 +100,6 @@ private:
 #endif
 
 private:
-    /**
-     * TODO
-     */
     inline Node * allocnode() {
         union { Node * n; void * n2; } p;
 #if !defined(NO_CACHE)
@@ -122,9 +109,6 @@ private:
         return p.n;
     }
 
-    /**
-     * TODO
-     */
     inline Node * mp_allocnode() {
         union { Node * n; void * n2; } p;
 #if !defined(NO_CACHE)
@@ -140,14 +124,8 @@ private:
     }
 
 public:
-    /**
-     * TODO
-     */
     enum {DEFAULT_CACHE_SIZE=1024};
 
-    /**
-     * TODO
-     */
     dynqueue(int cachesize=DEFAULT_CACHE_SIZE, bool fillcache=false):cache(cachesize) {
         Node * n = (Node *)::malloc(sizeof(Node));
         n->data = NULL; n->next = NULL;
@@ -165,14 +143,8 @@ public:
         //(void) padding1; (void) padding2 ; (void) padding3; (void) padding4;
     }
 
-    /**
-     * TODO
-     */
     bool init() { return true;}
 
-    /**
-     * TODO
-     */
     ~dynqueue() {
         union { Node * n; void * n2; } p;
         if (cache.buffersize()>0) while(cache.pop(&p.n2)) free(p.n);
@@ -184,9 +156,6 @@ public:
         if (head) free((void*)head);
     }
     
-    /**
-     * TODO
-     */
     inline bool push(void * const data) {
         assert(data != NULL);
         Node * n = allocnode();
@@ -198,9 +167,6 @@ public:
         return true;
     }
 
-    /**
-     * TODO
-     */
     inline bool  pop(void ** data) {        
         assert(data != NULL);
 #if defined(STRONG_WAIT_FREE)
@@ -222,12 +188,10 @@ public:
         return false;
     }    
 
-    /**
-     * TODO
-     */
+
     inline unsigned long length() const { return 0;}
 
-    /**
+    /*
      * MS 2-lock MPMC algorithm PUSH method 
      */
     inline bool mp_push(void * const data) {
@@ -241,7 +205,7 @@ public:
         return true;
     }
 
-    /**
+    /*
      * MS 2-lock MPMC algorithm POP method 
      */
     inline bool  mp_pop(void ** data) {        
@@ -266,15 +230,6 @@ public:
  * Experimental code
  */
 
-/*!
- * \class dynqueue
- * \ingroup streaming_network_simple_shared_memory
- *
- * \brief TODO
- *
- * This class is defined in \ref dynqueue.hpp
- */
-
 class dynqueue {
 private:
     struct Node {
@@ -294,9 +249,6 @@ private:
 
 private:
 
-    /**
-     * TODO
-     */
     inline bool cachepush(void * const data) {
         
         if (!cache[pwrite]) {
@@ -315,9 +267,6 @@ private:
         return false;
     }
 
-    /**
-     * TODO
-     */
     inline bool  cachepop(void ** data) {
         if (!cache[pread]) return false;
         
@@ -328,14 +277,8 @@ private:
     }    
     
 public:
-    /**
-     * TODO
-     */
     enum {DEFAULT_CACHE_SIZE=1024};
 
-    /**
-     * TODO
-     */
     dynqueue(int cachesize=DEFAULT_CACHE_SIZE, bool fillcache=false):cachesize(cachesize) {
         Node * n = (Node *)::malloc(sizeof(Node));
         n->data = NULL; n->next = NULL;
@@ -355,9 +298,6 @@ public:
         }
     }
 
-    /**
-     * TODO
-     */
     ~dynqueue() {
         union { Node * n; void * n2; } p;
         while(cachepop(&p.n2)) free(p.n);
@@ -370,9 +310,6 @@ public:
         if (cache) freeAlignedMemory(cache);
     }
 
-    /**
-     * TODO
-     */
     inline bool push(void * const data) {
         assert(data != NULL);
 
@@ -388,9 +325,6 @@ public:
         return true;
     }
 
-    /**
-     * TODO
-     */
     inline bool  pop(void ** data) {
         assert(data != NULL);
         if (head->next) {
@@ -407,10 +341,6 @@ public:
 
 #endif // _FF_DYNQUEUE_OPTIMIZATION
 
-/*!
- * @}
- * \endlink
- */
 
 } // namespace
 
