@@ -1,14 +1,13 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*!
- *  \link
  *  \file MPMCqueues.hpp
  *  \ingroup aux_classes
  *
  *  \brief This file contains several MPMC queue implementations. Not
  *  currently used.
  * 
- * \detail This file contains the following 
+ * This file contains the following
  * Multi-Producer/Multi-Consumer queue implementations:
  * \li  MPMC_Ptr_Queue   bounded MPMC queue by Dmitry Vyukov 
  * \li  uMPMC_Ptr_Queue  unbounded MPMC queue by Massimo Torquati
@@ -61,12 +60,6 @@
 
 namespace ff {
 
-/*!
- *  \ingroup aux_classes
- *
- *  @{
- */
-
 #define CAS abstraction_cas
 
 /* 
@@ -82,41 +75,36 @@ namespace ff {
  *     uSWSR_Ptr_Buffer.
  *  
  */
- 
-#if defined(USE_STD_C0X)
 
-/*! 
+/*!
  * \class MPMC_Ptr_Queue
- *  \ingroup streaming_network_arbitrary_shared_memory
+ *  \ingroup aux_classes
  *
- * \brief An implementation of the \a bounded Multi-Producer/Multi-Consumer queue
+ * \brief An implementation of the \a bounded Multi-Producer/Multi-Consumer queue. Not currently used.
  *
- * This class describes an implementation of the MPMC queue inspired by the solution 
+ * This class describes an implementation of the MPMC queue inspired by the solution
  * proposed by <a href="https://sites.google.com/site/1024cores/home/lock-free-algorithms/queues/bounded-mpmc-queue" target="_blank">Dmitry Vyukov</a>. \n
  *
- * This version uses the new C++0X standard.
+ * \note There are two versions 1) with atomic operations 2) using new C++0X standard (compile with -DUSE_STD_C0X).
  *
- * This class is defined in \ref MPMCqueues.hpp
  *
  */
+#if defined(USE_STD_C0X)
 class MPMC_Ptr_Queue {
 private:
-    /**
-     * TODO
-     */
     struct element_t {
         std::atomic<unsigned long> seq;
         void *                     data;
     };
     
 public:
-    /** 
-     * Default constructor
+    /*
+     * \brief Constructor
      */
     MPMC_Ptr_Queue() {}
     
-    /**
-     * Destructor
+    /*
+     * \brief Destructor
      */
     ~MPMC_Ptr_Queue() {
         if (buf) {
@@ -135,11 +123,7 @@ public:
      */
      
     /**
-     * This method initialises the underlying bounded buffer using
-     * the operator 'new'.
-     *
-     * \prm size TODO
-     * \return TODO
+     * \brief init
      */
     inline bool init(size_t size) {
         if (size<2) size=2;
@@ -169,11 +153,9 @@ public:
     }
     
     /** 
-     * Push method: enqueue data in the queue.
+     * \brief push: enqueue data
      *
      * This method is non-blocking and costs one CAS per operation. 
-     *
-     * \return TODO
      */
     inline bool push(void *const data) {
         unsigned long pw, seq;
@@ -205,11 +187,10 @@ public:
     }
 
     /**
-     * Pop method: dequeue data from the queue.
+     * pop method: dequeue data from the queue.
      *
      * This is a non-blocking method.
      *
-     * \return TODO
      */
     inline bool pop(void** data) {
         unsigned long pr, seq;
@@ -251,40 +232,23 @@ private:
 
 
 #else  // using internal atomic operations
-
-/*! 
- * \class MPMC_Ptr_Queue
- *  \ingroup streaming_network_arbitrary_shared_memory
- *
- * \brief An implementation of the \a bounded Multi-Producer/Multi-Consumer queue
- *
- * This class describes an implementation of the MPMC queue inspired by the solution 
- * proposed by <a href="http://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue" target="_blank">Dmitry Vyukov</a>. \n
- *
- * This version uses internal atomic operations.
- *
- *
- */
 class MPMC_Ptr_Queue {
 protected:
-    /**
-     * TODO
-     */
+
     struct element_t {
         atomic_long_t seq;
         void *        data;
     };
 
 public:
-    /** 
+    /**
      *  \brief Constructor
-     *  \param[in] size The size of the queue.
      */
     MPMC_Ptr_Queue() {}
 
     /**
      *
-     * Destructor
+     * \brief Destructor
      */
     ~MPMC_Ptr_Queue() { 
         if (buf) {
@@ -303,9 +267,7 @@ public:
      */
     
     /**
-     * This method initialises the underlying bounded buffer.
-     *
-     * \return TODO
+     * \brief init
      */
     inline bool init(size_t size) {
         if (size<2) size=2;
@@ -328,9 +290,8 @@ public:
     /**
      * Push method: enqueue data in the queue.
      *
-     * This method is non-blocking and costs one CAS per operation. 
+     * This method is non-blocking and costs one CAS per operation.
      *
-     * \return TODO
      */
     inline bool push(void *const data) {
         unsigned long pw, seq;
@@ -365,7 +326,6 @@ public:
      *
      * This is a non-blocking method.
      *
-     * \return TODO
      */
     inline bool pop(void** data) {
         unsigned long pr , seq;
@@ -410,7 +370,7 @@ protected:
  
 /*! 
  * \class uMPMC_Ptr_Queue
- *  \ingroup streaming_network_arbitrary_shared_memory
+ *  \ingroup building_blocks
  *
  * \brief An implementation of the \a unbounded Multi-Producer/Multi-Consumer queue
  *

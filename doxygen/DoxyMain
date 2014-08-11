@@ -1,3 +1,12 @@
+//**********************************
+// Author Marco Aldinucci
+// Changelog:
+// August 2014: Partial but consistent class documentation of multicore part
+//**********************************
+
+
+
+
 //********************************
 Main Page contents
 //********************************
@@ -6,7 +15,7 @@ Main Page contents
  *
  *  \section geninfo_sec Parallel programming in FastFlow
  *
- *  FastFlow (斋戒流) is a C++ parallel programming framework
+ *  FastFlow is a C++ parallel programming framework
  * advocating high-level, pattern-based parallel programming. It chiefly
  * supports streaming and data parallelism, targeting heterogenous
  * platforms composed of clusters of shared-memory platforms, possibly
@@ -164,9 +173,9 @@ LEVEL 1
 /*!
   * \defgroup building_blocks Building blocks
   *
-  * \brief brief description
+  * \brief Run-time support building blocks
   *
-  * Full description
+  * Set up of Parallel activities, synchronisations, communications, ...
   *
   */
 
@@ -186,8 +195,7 @@ LEVEL 1
   /*!
   *  \defgroup extra_functional_features Extra Functional Features
   * 
-  *  \brief These are the extra functional features 
-  *
+  *  \brief Not yet documented
   *
   */
 
