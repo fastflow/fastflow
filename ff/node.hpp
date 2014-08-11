@@ -51,9 +51,8 @@ namespace ff {
      *  \class Barrier
      *  \ingroup building_blocks
      *
-     *  \brief Barrier - Used only to start all nodes synchronously. 
+     *  \brief Blocking barrier - Used only to start all nodes synchronously
      *  
-     *  An auxiliary class in \ref building_blocks
      */
 
 #if (defined(__APPLE__) || defined(_MSC_VER))
@@ -159,6 +158,13 @@ private:
 
 #endif 
 
+/**
+ *  \class spinBarrier
+ *  \ingroup building_blocks
+ *
+ *  \brief Nonblocking barrier - Used only to start all nodes synchronously
+ *
+ */
 class spinBarrier {
 public:
    
@@ -213,7 +219,7 @@ private:
 // TODO: Should be rewritten in terms of mapping_utils.hpp 
 #if defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
 
-    /**
+    /*
      *
      * \brief Initialize thread affinity 
      * It initializes thread affinity i.e. which cpu the thread should be
@@ -244,7 +250,7 @@ static inline int init_thread_affinity(pthread_attr_t*attr, int cpuId) {
 }
 #elif !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
 
-/**
+/*
  * \brief Initializes thread affinity
  *
  * It initializes thread affinity i.e. it defines to which core ths thread
@@ -258,7 +264,7 @@ static inline int init_thread_affinity(pthread_attr_t*,int) {
     return -1;
 }
 #else
-/**
+/*
  * \brief Initializes thread affinity
  *
  * It initializes thread affinity i.e. it defines to which core ths thread
@@ -274,7 +280,7 @@ static inline int init_thread_affinity(pthread_attr_t*,int) {
 
 
 // forward decl
-/**
+/*
  * \brief Proxy thread routine
  *
  */
@@ -282,16 +288,14 @@ static void * proxy_thread_routine(void * arg);
 
 /*!
  *  \class ff_thread
- *  \ingroup streaming_network_arbitrary_shared_memory
+ *  \ingroup buiding_blocks
  *
- *  \brief Defines FastFlow's threads
+ *  \brief thread container for (leaves) ff_node
  *
- *  It defines FastFlow's threads. This class manages all the low-level
- *  communications and synchronisations needed among threads. It is responsible
- *  for threads creation and destruction, suspension, freezing and thawing.
+ * It defines FastFlow's threading abstraction to run ff_node in parallel
+ * in the shared-memory runtime
  *
- *  This class is defined in \ref node.hpp
- *
+ * \note Should not be used directly, it is called by ff_node
  */
 class ff_thread {
 
@@ -401,13 +405,13 @@ public:
     virtual int   svc_init() { return 0; };
     virtual void  svc_end()  {}
 
-    /**
+    /*
      * \brief The OpenCL initialisation
      *
      */
     virtual void  svc_createOCL()  {}
 
-    /**
+    /*
      * \brief OpenCL finsalisation
      *
      */
