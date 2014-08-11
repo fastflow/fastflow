@@ -1,12 +1,15 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*! 
- *  \link
  *  \file lb.hpp
- *  \ingroup streaming_network_arbitrary_shared_memory
+ *  \ingroup building_blocks
  *
- *  \brief Contains the \p ff_loadbalancer class and methods used to model the \a Emitter node,
- *  which is used to distribute tasks among workers.
+ *  \brief Farm Emitter (not a ff_node)
+ *
+ * Contains the \p ff_loadbalancer class and methods used to model the \a Emitter node,
+ *  which is used to schedule tasks among workers.
+ *
+ *  * \todo Documentation to be rewritten. To be substituted with ff_monode?
  */
 
 /* ***************************************************************************
@@ -39,15 +42,11 @@
 
 namespace ff {
 
-/*!
- *  \ingroup streaming_network_arbitrary_shared_memory
- *
- *  @{
- */
+
 
 /*!
  *  \class ff_loadbalancer
- *  \ingroup streaming_network_arbitrary_shared_memory
+ *  \ingroup building_blocks
  *
  *  \brief A class representing the \a Emitter node in a typical \a Farm
  *  skeleton.
@@ -1037,10 +1036,6 @@ private:
 #endif
 };
 
-/*!
- *  @}
- *  \endlink
- */
 
 } // namespace ff
 

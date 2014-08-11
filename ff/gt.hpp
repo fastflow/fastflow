@@ -2,11 +2,15 @@
 
 /*! 
  *  \file gt.hpp
- *  \ingroup streaming_network_arbitrary_shared_memory
+ *  \ingroup building_blocks
  *
- *  \brief It Contains the \p ff_gatherer class and methods which are used to model the \a
+ *  \brief Farm Collector (it is not a ff_node)
+ *
+ * It Contains the \p ff_gatherer class and methods which are used to model the \a
  *  Collector node, which is optionally used to gather tasks coming from
  *  workers.
+ *
+ * \todo Documentation to be rewritten. To be substituted with ff_minode?
  */
 
 /* ***************************************************************************
@@ -39,15 +43,10 @@
 
 namespace ff {
 
-/*!
- *  \ingroup streaming_network_arbitrary_shared_memory
- *
- *  @{
- */
 
 /*!
  *  \class ff_gatherer
- *  \ingroup streaming_network_arbitrary_shared_memory
+ *  \ingroup building_blocks
  *
  *  \brief A class representing the \a Collector node in a \a Farm skeleton.
  *
@@ -572,11 +571,6 @@ private:
 #endif
 };
 
-/*!
- *  @}
- *  \endlink
- *
- */
 
 } // namespace ff
 
