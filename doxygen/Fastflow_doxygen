@@ -1,3 +1,5 @@
+
+
 # Doxyfile 1.8.7
 
 # This file describes the settings to be used by the documentation system
@@ -152,7 +154,7 @@ FULL_PATH_NAMES        = NO
 # will be relative from the directory where doxygen is started.
 # This tag requires that the tag FULL_PATH_NAMES is set to YES.
 
-STRIP_FROM_PATH        = "/branches/fastflow-2.0.0/"
+#STRIP_FROM_PATH        = "/branches/fastflow-2.0.0/"
 
 # The STRIP_FROM_INC_PATH tag can be used to strip a user-defined part of the
 # path mentioned in the documentation of a class, which tells the reader which
@@ -1944,7 +1946,7 @@ INCLUDE_FILE_PATTERNS  =
 # recursively expanded use the := operator instead of the = operator.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
 
-PREDEFINED             = HAS_CXX11_VARIADIC_TEMPLATES:=1
+PREDEFINED             = HAS_CXX11_VARIADIC_TEMPLATES:=1 USE_STD_C0X:=1
 
 # If the MACRO_EXPANSION and EXPAND_ONLY_PREDEF tags are set to YES then this
 # tag can be used to specify a list of macro names that should be expanded. The

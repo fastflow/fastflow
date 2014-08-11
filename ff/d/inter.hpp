@@ -38,7 +38,7 @@ namespace ff {
 // Communication Pattern interface
 //**************************************
 
-/**
+/*
  * \class commPattern
  *  \ingroup streaming_network_simple_distributed_memory
  *
