@@ -602,7 +602,7 @@ protected:
      * 
      * \return \p true if skip-the-first-element mode is set, \p false otherwise
      * 
-     * \example l1_ff_nodes_graph.cpp
+     * Example: \ref l1_ff_nodes_graph.cpp
      */
     bool skipfirstpop() const { return skip1pop; }
     
@@ -695,6 +695,7 @@ protected:
     }
     
     /**
+     * \internal
      * \brief Suspend (freeze) the ff_node and run it
      *
      * Only initialisation will be performed
@@ -736,6 +737,7 @@ protected:
     }
     
     /**
+     * \internal
      * \brief Freeze (suspend) a ff_node
      */
     virtual void freeze() { 
@@ -744,6 +746,7 @@ protected:
     }
     
     /**
+     * \internal
      * \brief Thaw (resume) a ff_node
      */
     virtual void thaw(bool _freeze=false) { 
@@ -752,6 +755,7 @@ protected:
     }
     
     /**
+     * \internal
      * \brief Checks if a ff_node is frozen
      * \return \p true is it frozen
      */
@@ -803,7 +807,7 @@ public:
 
 
     
-    /**
+    /*
      * \brief Default retry delay in nonblocking get/put on channels
      */
     enum {TICKS2WAIT=1000};
@@ -842,6 +846,7 @@ public:
     virtual int get_my_id() const { return myid; };
     
     /**
+     * \internal
      * \brief Force ff_node-to-core pinning
      *
      * \param cpuID is the ID of the CPU to which the thread will be pinned.
@@ -854,6 +859,7 @@ public:
     }
     
     /** 
+     * \internal
      * \brief Gets the CPU id (if set) of this node is pinned
      *
      * It gets the ID of the CPU where the ff_node is running.

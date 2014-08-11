@@ -354,7 +354,8 @@ public:
     }
 
     /**
-     * \brief run the pipeline, waits that all stages received the End-Of-Stream (EOS), 
+     * \relates ff_pipe
+     * \brief run the pipeline, waits that all stages received the End-Of-Stream (EOS),
      * and destroy the pipeline run-time 
      * 
      * Blocking behaviour w.r.t. main thread to be clarified
@@ -371,7 +372,8 @@ public:
     }
     
     /**
-     * * \brief run the pipeline, waits that all stages received the End-Of-Stream (EOS), 
+     * \related ff_pipe
+     * \brief run the pipeline, waits that all stages received the End-Of-Stream (EOS),
      * and suspend the pipeline run-time
      * 
      * Run-time threads are suspended by way of a distrubuted protocol. 
@@ -675,6 +677,7 @@ private:
      * \brief Pipeline pattern (high-level pattern syntax)
      *
      * Set up a parallel for pipeline pattern run-time support object. 
+     * Run with \p run_and_wait_end or \p run_the_freeze. See related functions.
      *
      * \note Don't use to model a workflow of tasks, stages are nonblocking threads 
      * and
@@ -713,7 +716,7 @@ private:
         
     public:
         /**
-         * \brief Create a stand-alone pipeline (no input/output streams)
+         * \brief Create a stand-alone pipeline (no input/output streams). Run with \p run_and_wait_end or \p run_the_freeze.
          *
          * Identifies an stream parallel construct in which stages are executed 
          * in parallel. 
@@ -733,7 +736,7 @@ private:
             for_each(t,add_to_pipe(this));
         }
         /**
-         * \brief Create a pipeline (with input stream)
+         * \brief Create a pipeline (with input stream). Run with \p run_and_wait_end or \p run_the_freeze.
          *
          * Identifies an stream parallel construct in which stages are executed 
          * in parallel. 

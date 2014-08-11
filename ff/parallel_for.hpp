@@ -100,13 +100,13 @@ namespace ff {
   * \class ParallelFor
   *  \ingroup high_level_patterns
   * 
-  * \brief Parallel for loop
+  * \brief Parallel for loop. Run automatically.
   *
   *  Identifies an iterative work-sharing construct that specifies a region
   * (i.e. a Lambda function) in which the iterations of the associated loop 
   * should be executed in parallel. 
   * 
-  * \example ../tests/parfor_basic.cpp
+  * \example parfor_basic.cpp
   */ 
 class ParallelFor {
 protected:
@@ -328,7 +328,19 @@ public:
     }
 };
 
-//! ParallelForReduce class
+ /*!
+  * \class ParallelForReduce
+  *  \ingroup high_level_patterns
+  *
+  * \brief Parallel for + reduce. Run automatically.
+  *
+  *  Identifies an iterative work-sharing construct that specifies a region
+  * (i.e. a Lambda function) in which the iterations of the associated loop
+  * should be executed in parallel. Reduce results.
+  *
+  * \todo ParallelForReduce to be documented and exemplified
+  */
+
 template<typename T>
 class ParallelForReduce {
 protected:

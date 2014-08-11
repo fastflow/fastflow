@@ -393,12 +393,12 @@ protected:
 
 public:
     /**
-     * Constructor
+     * \brief Constructor
      */
     uMPMC_Ptr_Queue() {}
     
     /**
-     * Destructor
+     * \brief Destructor
      */
     ~uMPMC_Ptr_Queue() {
         if (buf) {
@@ -413,7 +413,7 @@ public:
     }
 
     /**
-     * TODO
+     * \brief init
      */
     inline bool init(unsigned long nqueues=DEFAULT_NUM_QUEUES, size_t size=DEFAULT_uSPSC_SIZE) {
         if (nqueues<2) nqueues=2;
@@ -436,7 +436,7 @@ public:
     }
 
     /**
-     * TODO
+     * \brief nonblocking push
      *
      * \return It always returns true
      */
@@ -463,9 +463,8 @@ public:
     }
     
     /**
-     * non-blocking pop
+     * \brieg nonblocking pop
      *
-     * \return TODO
      */
     inline bool pop(void ** data) {
         unsigned long pr,seq,idx;

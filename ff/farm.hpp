@@ -1,14 +1,11 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*! 
- *  \link
  *  \file farm.hpp
- *  \ingroup core_patterns
- *  
+ *  \ingroup high_level_patterns core_patterns building_blocks
+ *  \brief Farm pattern
  *
- *  @brief Farm skeleton.
- *
- *  @details It works on a stream of tasks. Workers are non-blocking threads
+ *  It works on a stream of tasks. Workers are non-blocking threads
  *  not tasks. It is composed by: Emitter (E), Workers (W), Collector (C).
  *  They all are C++ objects.
  *  Overall, it has one (optional) input stream and one (optional) output stream.
@@ -28,6 +25,8 @@
  *  \li Ordering farm: default emitter and collector, tasks are gathered
  *  in the same order they are dispatched
  * 
+ * \todo Includes classes at different levels. To be split sooner or later.
+ * High level farm function to be wrapped in a separate class.
  */
 
 /* ***************************************************************************
@@ -104,14 +103,8 @@ namespace ff {
 
 
 /*!
- * \ingroup core_patterns
- *
- *  @{
- */
-
-/*!
  *  \class ff_farm
- * \ingroup core_patterns
+ * \ingroup  high_level_patterns core_patterns
  *
  *  \brief The Farm skeleton, with Emitter (\p lb_t) and Collector (\p gt_t).
  *
@@ -196,7 +189,8 @@ public:
     typedef gt_t Gatherer_t;
 
     /**                                                                                                                                 
-     *  \brief Constructor  
+     * \ingroup high_level_patterns
+     * \brief High-level pattern constructor
      */
 #if defined( HAS_CXX11_VARIADIC_TEMPLATES )
     template<typename T>
@@ -221,7 +215,16 @@ public:
         }
     }
 #endif
-
+    /**
+     * \ingroup core_patterns
+     * @brief Core patterns constructor 2
+     *
+     * This is a constructor at core patterns level
+     * @param W vector of workers
+     * @param Emitter pointer to Emitter object (mandatory)
+     * @param Collector pointer to Collector object (optional)
+     * @param input_ch \p true for enabling the input stream
+     */
     ff_farm(std::vector<ff_node*>& W, ff_node *const Emitter=NULL, ff_node *const Collector=NULL, bool input_ch=false):
         has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
         in_buffer_entries(DEF_IN_BUFF_ENTRIES),
@@ -249,9 +252,10 @@ public:
     }
 
     /**
-     *  \brief Constructor
+     * \ingroup core_patterns
+     * \brief Core patterns constructor 1
      *
-     *  This is the default constructor.
+     *  This is a constructor at core patterns level. To be coupled with \p add_worker, \p add_emitter, and \p add_collector
      *
      *  \param input_ch = true to set accelerator mode
      *  \param in_buffer_entries = input queue length
@@ -286,9 +290,8 @@ public:
     /** 
      * \brief Destructor
      *
-     * This is the default destructor, which delete the load balancer, the
-     * gatherer, all the workers, and the barriers.
-     *
+     * Destruct the load balancer, the
+     * gatherer, all the workers
      */
     ~ff_farm() { 
         if (end_callback) { 
@@ -481,6 +484,7 @@ public:
     }
 
     /**
+     * \internal
      * \brief Sets multiple input nodes
      *
      * It sets multiple inputs to the node.
@@ -504,6 +508,7 @@ public:
 
 
     /**
+     * \internal
      * \brief Delete workers when the destructor is called.
      *
      */
@@ -628,6 +633,7 @@ public:
     } 
 
     /** 
+     * \internal
      * \brief Forces a thread to Stop
      *
      * It forces the thread to stop at the next EOS signal. 
@@ -638,6 +644,7 @@ public:
     }
 
     /** 
+     * \internal
      * \brief Forces the thread to freeze at next FF_EOS.
      *
      * It forces a thread to Freeze itself.
@@ -648,6 +655,7 @@ public:
     }
 
     /**
+     * \internal
      * \brief Thaws the thread
      *
      * If the thread is frozen, then thaw it. 
@@ -658,6 +666,7 @@ public:
     }
 
     /**
+     * \internal
      * \brief Checks if the Farm is frozen
      *
      * It checks if the farm is frozen.
@@ -739,9 +748,10 @@ public:
     }
     
     /**
-     * \brief Gets Emitter node
+     * \internal
+     * \brief Gets lb (Emitter) node
      *
-     * It gets the emitter node.
+     * It gets the lb node (Emitter)
      *
      * \return A pointer to the load balancer is returned.
      *
@@ -749,15 +759,17 @@ public:
     inline lb_t * getlb() const { return lb;}
 
     /**
-     * \breif Gets Collector node
+     * \internal
+     * \brief Gets gt (Collector) node
      *
-     * It gets the collector node.
+     * It gets the gt node (collector)
      *
      * \return A pointer to the gatherer is returned.
      */
     inline gt_t * getgt() const { return gt;}
 
     /**
+     * \internal
      * \brief Gets workers list
      *
      * It gets the list of the workers
@@ -768,6 +780,7 @@ public:
 
 
     /**
+     * \internal
      * \brief Gets the number of workers
      *
      * The number of workers is returned.
@@ -792,7 +805,9 @@ public:
         if (w.size()==0) w = workers;
     }
 
-    /** \brief Resets input/output queues.
+    /**
+     * \internal
+     * \brief Resets input/output queues.
      * 
      *  Warning resetting queues while the node is running may produce unexpected results.
      */
@@ -803,6 +818,7 @@ public:
     }
 
     /**
+     * \internal
      * \brief Gets the starting time
      *
      * It returns the starting time.
@@ -813,6 +829,7 @@ public:
     const struct timeval getstarttime() const { return lb->getstarttime();}
 
     /**
+     * \internal
      * \brief Gets the stoping time
      *
      * It returns the structure showing the finishing time. It
@@ -836,17 +853,17 @@ public:
     }
 
     /**
+     * \internal
      * \brief Gets the starting time
      *
      * It returnes the starting time.
-     *
-     * TODO: Do not know what is the difference between wstartime and startime.
      *
      * \return A struct of type timeval showing the starting time.
      */
     const struct timeval  getwstartime() const { return lb->getwstartime(); }    
 
     /**
+     * \internal
      * \brief Gets the finishing time
      *
      * It returns the finishing time if there exists a collector in the farm.
@@ -869,6 +886,7 @@ public:
     }
     
     /**
+     * \internal
      * \brief Gets the time spent in \p svc_init
      *
      * The returned time comprises the time spent in \p svc_init and in \p
@@ -883,6 +901,7 @@ public:
     }
 
     /**
+     * \internal
      * \brief Gets the time spent in \p svc
      *
      * The returned time considers only the time spent in the svc methods.
@@ -967,8 +986,9 @@ protected:
         return 0;
     }
     
-    /** 
-     *  \brief Creates the output buffer for the collector
+    /**
+     * \internal
+     * \brief Creates the output buffer for the collector
      *
      *  This function redefines the ff_node's virtual method of the same name.
      *  It create an output buffer for the Collector
@@ -994,7 +1014,7 @@ protected:
         return 0;
     }
 
-    /** 
+    /**
      *
      *  \brief Sets the output buffer of the collector 
      *
@@ -1017,7 +1037,7 @@ protected:
     }
 
     /**
-     * \brief Gets emitter
+     * \brief Gets Emitter
      *
      * It returns a pointer to the emitter.
      *
@@ -1026,7 +1046,7 @@ protected:
     ff_node* getEmitter()   { return emitter;}
 
     /**
-     * \brief Gets collector
+     * \brief Gets Collector
      * 
      * It returns a pointer to the collector.
      *
@@ -1058,12 +1078,11 @@ protected:
 };
 
 
-/*!
- * \ingroup core_patterns
- *  
- *  \brief Ordered farm
+/**
  *
- *  This class defines the ordered form.
+ * \ingroup building_blocks
+ *  
+ *  \brief Ordered farm emitter
  *
  *  This class is defined in \ref farm.hpp
  */
@@ -1086,6 +1105,7 @@ public:
     ofarm_lb(int max_num_workers):ff_loadbalancer(max_num_workers) {}
 
     /**
+     * \internal
      * \brief Sets the target worker
      *
      * Overload to define you own scheduling policy
@@ -1098,17 +1118,18 @@ private:
 };
 
 /*!
- * \ingroup core_patterns
+ * \ingroup building_blocks
  *
- * \brief Ordered farm with gatherer
+ * \brief Ordered farm  Collector
  *
- * It defines an ordered farm with gatherer.
+ * It defines an ordered farm
  *
  * This class is defined in \ref farm.hpp
  */
 class ofarm_gt: public ff_gatherer {
 protected:
     /**
+     * \internal
      * \brief Selects worker
      *
      * It selects a worker
@@ -1120,8 +1141,6 @@ public:
     /**
      * \brief Constructor
      *
-     * It build the ordered farm.
-     *
      * \param max_num_workers defines the maximum number of workers.
      *
      */
@@ -1132,6 +1151,7 @@ public:
     }
 
     /**
+     * \internal
      * \brief Sets the victim
      *
      * It sets the victim with the given worker
@@ -1145,6 +1165,7 @@ public:
     }
 
     /**
+     * \internal
      * \brief Sets the dead
      *
      * It sets an element in the dead vector to true, to make it dead.
@@ -1154,7 +1175,8 @@ public:
     inline void set_dead(int v)   { dead[v]=true;}
 
     /**
-     * 
+     * \internal
+     *
      * It makes the element in the dead vector as false i.e. makes it alive.
      *
      */
@@ -1178,11 +1200,12 @@ private:
 class ff_ofarm: public ff_farm<ofarm_lb, ofarm_gt> {
 private:
     /**
-     * \brief inline class emitter of ordered farm
+     * \brief Ordered farm
      */
     class ofarmE: public ff_node {
     public:
         /**
+         * \internal
          * \brief Emitter of ordered form
          *
          * It creates an ordered form
@@ -1194,6 +1217,7 @@ private:
             nworkers(0),nextone(0), lb(lb),E_f(NULL) {}
 
         /**
+         * \internal
          * \brief Sets number of workers
          *
          * It sets the number of workers.
@@ -1203,11 +1227,7 @@ private:
         void setnworkers(size_t nw) { nworkers=nw;}
 
         /**
-         * \brief Sets filter
-         *
-         * It sets the filter
-         *
-         * \param f is the FastFlow node
+         * \brief Set filtering policy for scheduling
          *
          */
         void setfilter(ff_node* f) { E_f = f;}
@@ -1263,20 +1283,21 @@ private:
     };
 
     /**
-     * inline class collector for oredred farm
+     * \ingroup building_blocks
+     *
+     * \brief Ordered farm default Emitter
      */
     class ofarmC: public ff_node {
     public:
         /**
          * \brief Constructor
          *
-         * it defines the collectors for the oredered farm.
-         *
          */
         ofarmC(ofarm_gt * const gt):
             nworkers(0),nextone(0), gt(gt),C_f(NULL) {}
 
         /**
+         * \internal
          * \brief Sets worker
          *
          * It sets the number of workers
@@ -1286,7 +1307,9 @@ private:
         void setnworkers(size_t nw) { nworkers=nw;}
 
         /**
-         * \brief Sets filter
+         * \internal
+         *
+         * \brief Sets filtering policy
          *
          * It sets the filter.
          *
@@ -1326,6 +1349,7 @@ private:
         }
 
         /**
+         * \internal
          * \brief Notifies EOS
          *
          * \It notifies the EOS.
@@ -1356,8 +1380,6 @@ private:
 public:
     /**
      * \brief Constructor
-     *
-     * It creates an orderred farm.
      *
      * \param input_ch states the presence of input channel
      * \param in_buffer_entries defines the number of input entries
@@ -1391,7 +1413,8 @@ public:
     }
 
     /**
-     * \brief Sets emitter
+     * \internal
+     *  \brief Sets emitter
      *
      * It sets the emitter.
      *
@@ -1400,7 +1423,8 @@ public:
     void setEmitterF  (ff_node* f) { E_f = f; }
 
     /**
-     * \brief Sets collector
+     * \internal
+     *  \brief Sets collector
      *
      * It sets the collecto
      *
@@ -1409,14 +1433,8 @@ public:
     void setCollectorF(ff_node* f) { C_f = f; }
     
     /**
-     * \brief Runs the farm
+     * \brief run
      *
-     * It executes the farm.
-     *
-     * \param skip_init shows the status of weather the init phase to be
-     * cancelled or not
-     *
-     * \return The status of run method
      */
     int run(bool skip_init=false) {
         E->setnworkers(this->getNWorkers());
@@ -1434,11 +1452,11 @@ protected:
 
 
 /*!
- * \ingroup streaming_network_arbitrary_shared_memory
+ * \ingroup building_blocks
  *
- * \brief FastFlow node with multiple inputs
+ * \brief Multiple input ff_node (the MPSC mediator)
  *
- * This class defines the FastFlow node with multiple entries.
+ * The ff_node with many input channels.
  *
  * This class is defined in \ref farm.hpp
  */
@@ -1447,14 +1465,7 @@ class ff_minode: public ff_node {
 protected:
 
     /**
-     * \brief Defines the cardinality of the FastFlow node
-     *
-     * It defines the cardinatlity of the FastFlow node by setting the barrier
-     * to the give number of barriers.
-     *
-     * \param barrier shows the number of barriers
-     *
-     * \return 1 is alway returned.
+     * \brief Gets the number of input channels
      */
     inline int cardinality(BARRIER_T * const barrier)  { 
         gt->set_barrier(barrier);
@@ -1462,9 +1473,7 @@ protected:
     }
 
     /**
-     * \brief Creates the input buffer
-     *
-     * It creates the input buffer to the node.
+     * \brief Creates the input channels
      *
      * \return >=0 if successful, otherwise -1 is returned.
      */
@@ -1477,13 +1486,6 @@ protected:
         return 0;
     }
 
-    /**
-     * \brief Waits 
-     *
-     * It wait for TODO?
-     *
-     * \return 0 if successful, otherwise -1 is returned.
-     */
     int  wait(/* timeout */) { 
         if (gt->wait()<0) return -1;
         return 0;
@@ -1492,34 +1494,32 @@ protected:
 public:
     /**
      * \brief Constructor
-     *
-     * It defines the multiple input FastFlow node.
-     *
-     * \param max_num_workers defines the maximum number of workers
-     *
      */
     ff_minode(int max_num_workers=ff_farm<>::DEF_MAX_NUM_WORKERS):
         ff_node(), gt(new ff_gatherer(max_num_workers)) { ff_node::setMultiInput(); }
 
     /**
      * \brief Destructor 
-     *
-     * It deletes the gatherer.
      */
     virtual ~ff_minode() {
         if (gt) delete gt;
     }
     
     /**
-     * \brief Sets input buffer
+     * \brief Assembly input channels
      *
-     * It is a virtual function to set the input buffer.
+     * Assembly input channelnames to ff_node channels
      */
     virtual inline int set_input(svector<ff_node *> & w) { 
         inputNodes += w;
         return 0; 
     }
 
+    /**
+     * \brief Assembly a input channel
+     *
+     * Assembly a input channelname to a ff_node channel
+     */
     virtual inline int set_input(ff_node *node) { 
         inputNodes.push_back(node); 
         return 0;
@@ -1535,14 +1535,12 @@ public:
     /**
      * \brief Skip first pop
      *
-     * It calls the \p skipfirstpop method to skip the first pop
+     * Set up spontaneous start
      */
     inline void skipfirstpop(bool sk)   { ff_node::skipfirstpop(sk);}
 
     /**
-     * \brief Runs the multiple input farm
-     *
-     * It executes the multiple input farm.
+     * \brief run
      *
      * \return 0 if successful, otherwise -1 is returned.
      *
@@ -1587,7 +1585,8 @@ public:
     ssize_t get_channel_id() const { return gt->get_channel_id();}
 
     /**
-     * \brief Gets the gatherer
+     * \internal
+     * \brief Gets the gt
      *
      * It gets the internal gatherer.
      *
@@ -1612,11 +1611,11 @@ private:
 };
 
 /*!
- *  \ingroup streaming_network_arbitrary_shared_memory
+ *  \ingroup building_blocks
  *
- * \brief Multiple output FastFlow node
+ * \brief Multiple output ff_node (the SPMC mediator)
  *
- * This class defines the FastFlow node with multiple output buffers.
+ * The ff_node with many output channels.
  *
  * This class is defined in \ref farm.hpp
  */
@@ -1637,13 +1636,6 @@ protected:
         return 1;
     }
 
-    /**
-     * \brief Wait
-     *
-     * It waits for TODO. Wait for what?
-     *
-     * \return 0 if successful, otherwise -1 is returned.
-     */
     int  wait(/* timeout */) { 
         if (lb->waitlb()<0) return -1;
         return 0;
@@ -1653,8 +1645,6 @@ public:
     /**
      * \brief Constructor
      *
-     * It creates a FastFlow node with multiple output buffers.
-     *
      * \param max_num_workers defines the maximum number of workers
      *
      */
@@ -1663,17 +1653,15 @@ public:
 
     /**
      * \brief Destructor 
-     *
-     * It deletes the load balancer.
      */
     virtual ~ff_monode() {
         if (lb) delete lb;
     }
     
     /**
-     * \brief Sets the output buffer
+     * \brief Assembly the output channels
      *
-     * It is a virtual function which sets the output buffer.
+     * Attach output channelnames to ff_node channels
      */
     virtual inline int set_output(svector<ff_node *> & w) {
         for(size_t i=0;i<w.size();++i)
@@ -1681,6 +1669,11 @@ public:
         return 0; 
     }
 
+    /**
+     * \brief Assembly an output channels
+     *
+     * Attach a output channelname to ff_node channel
+     */
     virtual inline int set_output(ff_node *node) { 
         outputNodes.push_back(node); 
         return 0;
@@ -1695,7 +1688,7 @@ public:
     /**
      * \brief Skips the first pop
      *
-     * It skips the first pop.
+     * Set up spontaneous start
      */
     inline void skipfirstpop(bool sk)   {
         if (sk) lb->skipfirstpop();
@@ -1710,9 +1703,7 @@ public:
     }
     
     /**
-     * \brief Executes the farm
-     *
-     * It executes the farm.
+     * \brief run
      *
      * \param skip_init defines if the initilization should be skipped
      *
@@ -1738,16 +1729,17 @@ public:
     }
 
     /**
-     * \brief Gets the internal gatherer
+     * \internal
+     * \brief Gets the internal lb (Emitter)
      *
-     * It gets the internal gatherer.
+     * It gets the internal lb (Emitter)
      *
-     * \return A pointer to the FastFlow load balancer
+     * \return A pointer to the lb
      */
     inline ff_loadbalancer * getlb() const { return lb;}
 
 #if defined(TRACE_FASTFLOW) 
-    /**
+    /*
      * \brief Prints the FastFlow trace
      *
      * It prints the trace of FastFlow.
@@ -1762,11 +1754,6 @@ protected:
     ff_loadbalancer* lb;
 };
 
-
-/*!
- *  @}
- *  \endlink
- */
 
 } // namespace ff
 
