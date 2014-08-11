@@ -1,11 +1,10 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*!
- * \link
  * \file utils.hpp
- * \ingroup shared_memory_fastflow
+ * \ingroup aux_classes
+ * \brief Utility functions
  *
- * \brief TODO
  */
 
 /* ***************************************************************************
@@ -50,11 +49,6 @@
 
 namespace ff {
 
-/*!
- * \ingroup shared_memory_fastflow
- *
- * @{
- */
 
 enum { START_TIME=0, STOP_TIME=1, GET_TIME=2 };
 
@@ -113,9 +107,6 @@ static inline void ff_relax(unsigned long us) {
     PAUSE();
 }
 
-/**
- * TODO
- */
 static inline void error(const char * str, ...) {
     const char err[]="ERROR: ";
     va_list argp;
@@ -132,18 +123,13 @@ static inline void error(const char * str, ...) {
     free(p);
 }
 
-/**
- * It returns the current time in usec 
- */
+
 static inline unsigned long getusec() {
     struct timeval tv;
     gettimeofday(&tv,NULL);
     return (unsigned long)(tv.tv_sec*1e6+tv.tv_usec);
 }
 
-/**
- * Compute a-b and return the difference in msec
- */
 static inline double diffmsec(const struct timeval & a, 
                               const struct timeval & b) {
     long sec  = (a.tv_sec  - b.tv_sec);
@@ -156,41 +142,29 @@ static inline double diffmsec(const struct timeval & a,
     return ((double)(sec*1000)+ ((double)usec)/1000.0);
 }
 
-/**
- * TODO
- */
+
 static inline bool time_compare(struct timeval & a, struct timeval & b) {
     double t1= a.tv_sec*1000 + (double)(a.tv_usec)/1000.0;
     double t2= b.tv_sec*1000 + (double)(b.tv_usec)/1000.0;        
     return (t1<t2);
 }
 
-/**
- * TODO
- */
 static inline bool time_iszero(const struct timeval & a) {
     if ((a.tv_sec==0) && (a.tv_usec==0)) return true;
     return false;
 }
 
-/**
- * TODO
- */
+
 static inline void time_setzero(struct timeval & a) {
     a.tv_sec=0;  
     a.tv_usec=0;
 }
 
-/**
- * TODO
- */
 static inline bool isPowerOf2(unsigned int x) {
     return (x==1 || (x & (x-1)) == 0);
 }
 
-/**
- * TODO
- */
+
 static inline unsigned int nextPowerOf2(unsigned int x) {
     assert(isPowerOf2(x)==false); // x is not a power of two!
     unsigned int p=1;
@@ -204,11 +178,6 @@ static inline unsigned int nextMultipleOfIf(unsigned int x, unsigned int m) {
 }
 
 
-/**
- * TODO
- *
- * \return TODO
- */
 static inline double ffTime(int tag, bool lock=false) {
     static struct timeval tv_start = {0,0};
     static struct timeval tv_stop  = {0,0};
@@ -241,11 +210,6 @@ static inline double ffTime(int tag, bool lock=false) {
     }    
     return res;
 }
-
-/*!
- * @}
- * \endlink
- */
 
 } // namespace ff
 

@@ -3,7 +3,7 @@
 /**
  *  \link
  *  \file zmqImpl.hpp
- *  \ingroup streaming_network_simple_distributed_memory
+ *  \ingroup building_blocks
  *
  *  \brief This file describes the communication patterns of distributed
  *  FastFlow using ØMQ.
@@ -43,11 +43,6 @@
 
 namespace ff {
 
-/**
- *  \ingroup streaming_network_simple_distributed_memory
- *
- *  @{
- */
 
 #define CONNECTION_PROTOCOL 1
 //#undef CONNECTION_PROTOCOL
@@ -78,24 +73,22 @@ namespace ff {
 #define MANYTOONE                        commPattern<zmqN_1>
 #define MANYTOONE_DESC(name,n,trasp,P)   MANYTOONE::descriptor(name,n,trasp,P)
 
-//**************************************
+//*************************************
 // One to Many communication
-//**************************************
+//*************************************
 
 /**
  *  \struct descriptor1_N
- *  \ingroup streaming_network_simple_distributed_memory
+ *  \ingroup building_blocks
  *
  *  \brief This struct is used in several communication patterns; Unicast,
  *  Broadcast, Scatter, On-Demand, OneToMany, FromAny etc.
- *
- *  This struct is defined in zmqImpl.hpp
  *
  */
 struct descriptor1_N {
     typedef zmqTransportMsg_t  msg_t;
     
-    /**
+    /*
      * Constructor. 
      *
      * It Creates a One-to-Many descriptor, that is, instantiate a
@@ -128,12 +121,12 @@ struct descriptor1_N {
         }
     }
     
-    /** 
+    /*
      * Destructor 
      */
     ~descriptor1_N() { close(); socket=NULL; }
     
-    /** 
+    /*
      * It closes active connection and delete the existing socket.
      *
      * \return It delets the end point from socket and return NULL. If it is
@@ -144,7 +137,7 @@ struct descriptor1_N {
         return -1;
     }
     
-    /** 
+    /*
      *  It initialises a socket and estabilishes a connection to the given address.
      *
      *  \param addr is the IP address in the form 'ip/host:port' 
@@ -194,7 +187,7 @@ struct descriptor1_N {
         return 0;
     }
 
-    /** 
+    /*
      *  It broadcast a message to all connected peers. 
      *
      *  \param msg is a eference to the message to be sent
@@ -222,7 +215,7 @@ struct descriptor1_N {
         return true;    
     }
     
-    /** 
+    /*
      *  It broadcasts other parts of a multi-parts message to all connected peers.
      *  This method exits if the flag is not set to ZMQ_SNDMORE.  
      *
@@ -240,7 +233,7 @@ struct descriptor1_N {
         return v;
     }
     
-    /** 
+    /*
      *  It unicasts a message to a specified destination 
      *
      *  \param msg is a reference to the message to be sent
@@ -266,7 +259,7 @@ struct descriptor1_N {
         return true;    
     }
     
-    /** 
+    /*
      *  It unicasts other parts of a multi-parts message to a specified
      *  destination. This method exits if the flag is not set to ZMQ_SNDMORE.
      *
@@ -285,7 +278,7 @@ struct descriptor1_N {
         return v;
     }
        
-    /** 
+    /*
      * It receives a message header 
      *
      * \return Contents of the message.
@@ -294,7 +287,7 @@ struct descriptor1_N {
         return recv(msg);
     }
     
-    /** 
+    /*
      * It receives a message after having received the header.
      *
      * \exceptionn TODO
@@ -312,7 +305,7 @@ struct descriptor1_N {
         return true;
         }
     
-    /** 
+    /*
      * It returns the total number of peers (NOTE: if !P,  peers is 1).
      *
      * \return The number of peers.
@@ -329,7 +322,7 @@ struct descriptor1_N {
     std::vector<std::string> transportIDs;
     
 #if defined(CONNECTION_PROTOCOL)
-    /**
+    /*
      * It defines the sending of a message.
      */
     inline void sendHelloRecvHi() {
@@ -344,7 +337,7 @@ struct descriptor1_N {
         zmqTDBG(printf("%s received %s\n", name.c_str(), static_cast<char*>(msg.getData())));    
     }
     
-    /**
+    /*
      * It defines the sending of requests.
      *
      * \exception TODO
@@ -359,7 +352,7 @@ struct descriptor1_N {
         return true;
     }
     
-    /**
+    /*
      * It defines the receiving of reply.
      *
      * \exception TODO
@@ -377,7 +370,7 @@ struct descriptor1_N {
         return true;    
     }
     
-    /**
+    /*
      * It receives a message from a ZMQ_ROUTER
      *
      * \exception TODO
@@ -405,7 +398,7 @@ struct descriptor1_N {
         return true;
     }
 
-    /**
+    /*
      * It is used in the on-demand pattern by the producer (i.e. the on-demand consumer).
      *
      * \return The contents of the message.
@@ -413,7 +406,7 @@ struct descriptor1_N {
     inline bool sendReq(const msg_t& msg) {
         return sendreq(msg);
     }
-    /**
+    /*
      * It is used in the on-demand pattern by the consumer (i.e. the on-demand producer).
      *
      * \param flags can be ZMQ_NOBLOCK
@@ -443,7 +436,7 @@ struct descriptor1_N {
         return true;
     }
     
-    /**
+    /*
      * It is used for sending back the message to the sender.
      *
      * \exception TODO
@@ -485,9 +478,9 @@ struct descriptor1_N {
 // used in ALLgather, collect fromANY, ManyToOne
 //**************************************
 
-/**
+/*
  *  \struct descriptorN_1
- *  \ingroup streaming_network_simple_distributed_memory
+ *  \ingroup building_blocks
  *
  *  \brief Descriptor used in several communication patterns: AllGather,
  *  Collect FromAny, ManyToOne.
@@ -498,7 +491,7 @@ struct descriptor1_N {
 struct descriptorN_1 {
     typedef zmqTransportMsg_t  msg_t;
     
-    /** 
+    /*
      * Constructor. 
      *
      * It creates a Many-to-One descriptor, that is, instantiate a transport
@@ -526,12 +519,12 @@ struct descriptorN_1 {
         }
     }
     
-    /** 
+    /*
      * Destructor 
      */
     ~descriptorN_1() { close(); socket=NULL; }
     
-    /** 
+    /*
      * It closes active connection and delete the existing socket.
      *
      * \return Deletes the end point and a null pointer is returned, otherwise
@@ -542,7 +535,7 @@ struct descriptorN_1 {
         return -1;
     }
     
-    /** 
+    /*
      *  It initialises a socket and estabilish a connection to the given
      *  address.
      *
@@ -593,7 +586,7 @@ struct descriptorN_1 {
         return 0;
     }
     
-    /** 
+    /*
      * It sends a message.
      *
      *  \param msg is a reference to the message to be sent.
@@ -613,7 +606,7 @@ struct descriptorN_1 {
         return true;
     }
     
-    /** 
+    /*
      * It receives a message header.
      *
      * \exception TODO
@@ -644,7 +637,7 @@ struct descriptorN_1 {
         return true;
     }
     
-    /**
+    /*
      * \p It receives a message after having received the header.
      *
      * \parm msg is a reference to the message to be sent.
@@ -681,7 +674,7 @@ struct descriptorN_1 {
         return true;
     }
     
-    /**
+    /*
      * It receives the request.
      *
      * \exception TODO
@@ -700,7 +693,7 @@ struct descriptorN_1 {
         return true;
     }
     
-    /**
+    /*
      * It resets recvHdr.
      *
      * \exception TODO
@@ -724,7 +717,7 @@ struct descriptorN_1 {
         return true;    
     }
     
-    /**
+    /*
      * It returns the number of partners of the single communication (NOTE: if P, peers is 1).
      *
      * \return The number of peers are returned.
@@ -741,7 +734,7 @@ struct descriptorN_1 {
     
 #if defined(CONNECTION_PROTOCOL)
 
-    /**
+    /*
      * It sends hello to receiving node.
      */
     inline void sendHelloRecvHi() {
@@ -756,7 +749,7 @@ struct descriptorN_1 {
         zmqTDBG(printf("%s received %s\n", name.c_str(), static_cast<char*>(msg.getData())));    
     }
     
-    /**
+    /*
      * It receives a reply.
      *
      * \exception TODO
@@ -774,7 +767,7 @@ struct descriptorN_1 {
         return true;
     }
     
-    /** 
+    /*
      * It sends a reply.
      *
      * \exception TODO
@@ -795,7 +788,7 @@ struct descriptorN_1 {
         return true;    
     }
     
-    /**
+    /*
      * It receive hello to sening hi.
      */
     inline void recvHelloSendHi() {
@@ -839,12 +832,12 @@ public:
 
     enum {MULTIPUT = 0};
 
-    /** 
+    /*
      * Constructor 
      */
     zmq1_1():desc(NULL),active(false) {}
 
-    /**
+    /*
      * Constructor (2)
      *
      * \param D is a pointer to a 1_N descriptor object.
@@ -861,14 +854,14 @@ public:
         desc = D; 
     }
 
-    /**
+    /*
      * It gets the descriptor.
      *
      * \return It returns the descriptor.
      */
     inline  descriptor* getDescriptor() { return desc; }
 
-    /**
+    /*
      * It initializes the communication pattern.
      *
      * \return TODO
@@ -880,7 +873,7 @@ public:
         return active;
     }
 
-    /**
+    /*
      * It sends one message.
      *
      * \param msg is a reference to the message to be sent.
@@ -889,7 +882,7 @@ public:
      */
     inline bool put(const tosend_t& msg) { return desc->send(msg, 0, 0); }
     
-    /**
+    /*
      * It sends other parts of a multi-part message.
      *
      * \param msg is a reference to the message to be sent.
@@ -898,7 +891,7 @@ public:
      */
     inline bool putmore(const tosend_t& msg) { return desc->sendmore(msg,0,ZMQ_SNDMORE);}
 
-    /**
+    /*
      * TODO
      * 
      * \param msg TODO
@@ -908,7 +901,7 @@ public:
      */
     inline bool put(const msg_t& msg, const int) { return desc->send(msg, 0, 0); }
 
-    /**
+    /*
      * TODO
      *
      * \parm msg TODO
@@ -918,7 +911,7 @@ public:
      */
     inline bool putmore(const msg_t& msg, const int) { return desc->send(msg, 0, ZMQ_SNDMORE); }
 
-    /**
+    /*
      * It receives the message header (should be called before get).
      *
      * \parm msg TODO
@@ -998,19 +991,19 @@ public:
 
     enum {MULTIPUT = 0};
 
-    /** 
+    /*
      * Constructor
      */
     zmqBcast():desc(NULL),active(false) {}
     
-    /** 
+    /*
      *  Constructor (2) 
      *
      *  \param D pointer to a 1_N descriptor object.
      */
     zmqBcast(descriptor* D):desc(D),active(false) {}
 
-    /**
+    /*
      * It sets the descriptor.
      *
      * \parm D is the descriptor.
@@ -1020,14 +1013,14 @@ public:
         desc = D; 
     }
 
-    /**
+    /*
      * It returns the descriptor.
      *
      * \return It returns the descriptor.
      */
     inline  descriptor* getDescriptor() { return desc; }
 
-    /**
+    /*
      * It initializes the communication pattern.
      *
      * \param addr is the IP address in the form 'ip/host:port'
@@ -1041,7 +1034,7 @@ public:
         return active;
     }
 
-    /**
+    /*
      * It sends one message.
      *
      * \param msg is a reference to the message to be sent.
@@ -1050,7 +1043,7 @@ public:
      */ 
     inline bool put(const tosend_t& msg) { return desc->send(msg, 0); }
     
-    /**
+    /*
      * It sends other parts of a multi-part message.
      *
      * \param msg is a reference to the message to be sent.
@@ -1059,7 +1052,7 @@ public:
      */
     inline bool putmore(const tosend_t& msg) { return desc->sendmore(msg,ZMQ_SNDMORE);}
 
-    /**
+    /*
      * It sens the message.
      *
      * \parm msg is the reference to the message.
@@ -1071,7 +1064,7 @@ public:
         return desc->send(msg, to, 0); 
     }
 
-    /**
+    /*
      * It sen the message to more nodes.
      *
      * \parm msg is the reference to the message.
@@ -1083,7 +1076,7 @@ public:
         return desc->sendmore(msg,to,ZMQ_SNDMORE);
     }
 
-    /**
+    /*
      * It receives the message header (should be called before get).
      *
      * \parm msg is the reference to the message.
@@ -1093,7 +1086,7 @@ public:
      */
     inline bool gethdr(torecv_t& msg, int& peer) { peer=0; return desc->recvhdr(msg); }
 
-    /**
+    /*
      * It receives one message.
      *
      * \parm msg is the reference to the message.
@@ -1102,21 +1095,21 @@ public:
      */
     inline bool get(torecv_t& msg, int=0) { return desc->recv(msg); }
 
-    /**
+    /*
      * It puts the node in the waiting state.
      *
      * \return TODO
      */
     inline int getToWait() const { return 1;}
 
-    /**
+    /*
      * It puts the node to peforming state.
      *
      * \return TODO
      */
     inline int putToPerform() const { return 1;}
 
-    /**
+    /*
      * It closes the communication pattern.
      *
      * \return TODO
@@ -1128,7 +1121,7 @@ public:
         return true;
     }
 
-    /**
+    /*
      * It finishes the communication.
      */
     inline void done() {}
@@ -1164,19 +1157,19 @@ public:
 
     enum {MULTIPUT = 0};
 
-    /**
+    /*
      * Constructor (1)
      */
     zmqAllGather():desc(NULL),active(false) {}
 
-    /**
+    /*
      * Constructor (2)
      *
      * \parm D is the descriptor.
      */
     zmqAllGather(descriptor* D):desc(D),active(false) {}
     
-    /**
+    /*
      * It sets the descriptor.
      */
     inline void setDescriptor(descriptor* D) {
@@ -1184,14 +1177,14 @@ public:
         desc = D; 
     }
     
-    /**
+    /*
      * It returns the descriptor.
      *
      * \return It returns the descriptor.
      */
     inline  descriptor* getDescriptor() { return desc; }
     
-    /**
+    /*
      * It initializes communication pattern.
      *
      * \return TODO
@@ -1203,7 +1196,7 @@ public:
         return active;
     }
     
-    /**
+    /*
      * It sends one message.
      *
      * \parm msg is the reference of the message.
@@ -1215,7 +1208,7 @@ public:
         return desc->send(msg, 0); 
     }
     
-    /**
+    /*
      * It puts more messages in the sening queue.
      *
      * \parm msg is the reference to the message.
@@ -1224,7 +1217,7 @@ public:
      */
     inline bool putmore(const tosend_t& msg) { return desc->send(msg,ZMQ_SNDMORE);}
 
-    /**
+    /*
      * It puts single message.
      *
      * \parm msg is the reference to the message.
@@ -1235,7 +1228,7 @@ public:
         return put(msg);
     }
 
-    /**
+    /*
      * It put more messages.
      *
      * \parm msg is the reference to the message.
@@ -1246,7 +1239,7 @@ public:
         return putmore(msg);
     }
     
-    /**
+    /*
      * It receives the message header ONLY from one peer (should be called before get).
      *
      * \parm msg is the reference to the message.
@@ -1258,7 +1251,7 @@ public:
         return desc->recvhdr(msg, peer);
     }
 
-    /**
+    /*
      * It receives one message ONLY from one peer (gethdr should be called before).
      *
      * \param msg is the reference to the message.
@@ -1270,7 +1263,7 @@ public:
         return desc->recv(msg,peer);
     }
 
-    /**
+    /*
      * It receives one message.
      *
      * \return TODO
@@ -1285,26 +1278,26 @@ public:
         return true;
     }
 
-    /**
+    /*
      * It returns the number of distinct messages for one single communication.
      *
      * \return TODO
      */
     inline int getToWait() const { return desc->getPeers();}
 
-    /**
+    /*
      * It puts the node in performing state.
      *
      * \return TODO
      */
     inline int putToPerform() const { return 1;}
 
-    /**
+    /*
      * It finishes the communication process.
      */
     inline void done() { desc->done(true); }
     
-    /**
+    /*
      * It closes communication pattern.
      *
      * \return TODO
@@ -1349,7 +1342,7 @@ public:
     zmqFromAny():desc(NULL),active(false) {}
     zmqFromAny(descriptor* D):desc(D),active(false) {}
     
-    /**
+    /*
      * It sets the descriptor.
      *
      * \parm D is the descriptor.
@@ -1359,14 +1352,14 @@ public:
         desc = D; 
     }
     
-    /**
+    /*
      * It returns the descriptor.
      *
      * \return TODO
      */
     inline  descriptor* getDescriptor() { return desc; }
     
-    /**
+    /*
      * It initializes communication pattern.
      *
      * \parm address
@@ -1380,7 +1373,7 @@ public:
         return active;
     }
     
-    /**
+    /*
      * It sends one message.
      *
      * \parm msg is the reference to the message.
@@ -1391,7 +1384,7 @@ public:
         return desc->send(msg, 0); 
     }
     
-    /**
+    /*
      * It put more messages.
      *
      * \parm msg is the reference to the message.
@@ -1402,7 +1395,7 @@ public:
         return desc->send(msg,ZMQ_SNDMORE);
     }
     
-    /**
+    /*
      * It places a message in the node.
      *
      * \parm msg is the reference to the message.
@@ -1413,7 +1406,7 @@ public:
         return desc->send(msg, 0); 
     }
 
-    /**
+    /*
      * It places more messages in the node.
      *
      * \parm msg is the reference to the message.
@@ -1424,7 +1417,7 @@ public:
         return desc->send(msg,ZMQ_SNDMORE);
     }
 
-    /**
+    /*
      * It receives the message header (should be called before get).
      *
      * \parm msg is the reference to the message.
@@ -1436,7 +1429,7 @@ public:
         return desc->recvhdr(msg,peer);
     }
     
-    /**
+    /*
      * It receives one message.
      *
      * \parm msg is the reference to the message.
@@ -1448,7 +1441,7 @@ public:
         return desc->recv(msg,peer);
     }
 
-    /**
+    /*
      * It receives one message.
      *
      * \param msg is the reference to the message.
@@ -1460,26 +1453,26 @@ public:
         return desc->recv(msg,useless);
     }
 
-    /**
+    /*
      * It places the node in the waiting state.
      *
      * \return TODO
      */
     inline int getToWait() const { return 1;}
 
-    /**
+    /*
      * It places the node in the waiting state.
      *
      * \return TODO
      */
     inline int putToPerform() const { return 1;}
 
-    /**
+    /*
      * It performs the completion operation.
      */
     inline void done() { desc->done(); }
     
-    /**
+    /*
      * It closes communication pattern.
      *
      * \return TODO
@@ -1496,9 +1489,9 @@ protected:
     bool        active;
 };
 
-//**************************************
+//*************************************
 // Scatter communication pattern
-//**************************************
+//*************************************
 
 /*!
  *  \class zmqScatter
@@ -1518,14 +1511,14 @@ public:
     typedef descriptor1_N      descriptor;
     enum {MULTIPUT = 1};
 
-    /**
+    /*
      * Constructor (1)
      *
      * It creates an empty scatter.
      */
     zmqScatter():desc(NULL),active(false) {}
 
-    /**
+    /*
      * Constructor (2)
      *
      * It creates a scatter with a scriptor.
@@ -1534,7 +1527,7 @@ public:
      */
     zmqScatter(descriptor* D):desc(D),active(false) {}
 
-    /**
+    /*
      * It sets the descriptor.
      *
      * \parm D is the descriptor.
@@ -1544,14 +1537,14 @@ public:
         desc = D;
     }
 
-    /**
+    /*
      * It returns the descriptor.
      *
      * \return It returns the descriptor.
      */
     inline  descriptor* getDescriptor() { return desc; }
 
-    /**
+    /*
      * It initializes communication pattern.
      *
      * \parm address TOOD
@@ -1565,7 +1558,7 @@ public:
         return active;
     }
 
-    /**
+    /*
      * It sends one message.
      *
      * \parm msg is the reference to the message.
@@ -1580,7 +1573,7 @@ public:
         return true;
     }
     
-    /**
+    /*
      * It places more messages.
      *
      * \parm msg is the reference to the message.
@@ -1591,7 +1584,7 @@ public:
         return -1;
     }
 
-    /**
+    /*
      * It places message.
      *
      * \parm msg is the reference to the message.
@@ -1603,7 +1596,7 @@ public:
         return desc->send(msg, to, 0); 
     }
 
-    /**
+    /*
      * It sends a message.
      *
      * \parm msg is the reference to message
@@ -1614,7 +1607,7 @@ public:
         return -1;
     }
 
-    /**
+    /*
      * It places many messages.
      *
      * \parm msg is the reference to the message.
@@ -1626,7 +1619,7 @@ public:
         return desc->sendmore(msg,to,ZMQ_SNDMORE);
     }
 
-    /**
+    /*
      * It places more messages to the node.
      *
      * \parm msg is the reference to the message.
@@ -1637,7 +1630,7 @@ public:
         return -1;
     }
 
-    /**
+    /*
      * It receives the message header (should be called before get).
      *
      * \parm msg is the reference to the message.
@@ -1647,26 +1640,26 @@ public:
      */
     inline bool gethdr(torecv_t& msg, int& peer) { peer=0; return desc->recvhdr(msg); }
 
-    /**
+    /*
      * It receives one message.
      *
      * \return TODO
      */
     inline bool get(torecv_t& msg, int=0) { return desc->recv(msg); }
 
-    /**
+    /*
      * It returns the number of distinct messages for one single communication.
      *
      * \return 1 is always returned
      */
     inline int getToWait() const { return 1;}
 
-    /**
+    /*
      * \return TODO
      */
     inline int putToPerform() const { return desc->getPeers();}
 
-    /**
+    /*
      * It closes communication pattern
      *
      * \return TODO
@@ -1678,7 +1671,7 @@ public:
         return true;
     }
 
-    /**
+    /*
      * The communication finished.
      */
     inline void done() {}
@@ -1688,9 +1681,9 @@ protected:
     bool        active;
 };
 
-//**************************************
+//*************************************
 // OnDemand communication transport
-//**************************************
+//*************************************
 
 /*!
  *  \class zmqOnDemand 
@@ -1704,7 +1697,7 @@ protected:
 class zmqOnDemand {
 protected:
 
-    /**
+    /*
      * It defines the sending request.
      *
      * \return TODO
@@ -1725,13 +1718,13 @@ public:
     typedef descriptor1_N      descriptor;
     enum {MULTIPUT = 0};
 
-    /**
+    /*
      * Constructur (1)
      *
      */
     zmqOnDemand():desc(NULL),active(false),to(-1),requestsToWait(0),requestSent(false) {}
 
-    /**
+    /*
      * Constructor (2)
      *
      */
@@ -1747,14 +1740,14 @@ public:
         desc = D; 
     }
 
-    /**
+    /*
      * It returns the descriptor.
      *
      * \return TODO
      */
     inline  descriptor* getDescriptor() { return desc; }
 
-    /**
+    /*
      * It initializes communication pattern.
      *
      * \parm address if the address of the node.
@@ -1775,7 +1768,7 @@ public:
         return active;
     }
 
-    /**
+    /*
      * It sends one message.
      *
      * \parm msg is the reference of the message.
@@ -1792,7 +1785,7 @@ public:
         return r;
     }
 
-    /**
+    /*
      * It sends one message, more messages have to come.
      *
      * \parm msg is the reference of the message.
@@ -1805,7 +1798,7 @@ public:
         return desc->sendmore(msg, to, ZMQ_SNDMORE);
     }
 
-    /**
+    /*
      * It places a message.
      *
      * \parm msg is the reference of the message.
@@ -1844,7 +1837,7 @@ public:
         return false;
     }
 
-    /**
+    /*
      * It places many messages.
      *
      * \parm msg is the reference of the message.
@@ -1856,7 +1849,7 @@ public:
         return put(msg,dest,ZMQ_SNDMORE);
     }
 
-    /**
+    /*
      * It receives the message header (should be called before get).
      *
      * \parm msg is the reference of the message.
@@ -1871,7 +1864,7 @@ public:
         return r;
     }
 
-    /**
+    /*
      * It receives one message part.
      *
      * \parm msg is the reference of the message.
@@ -1883,7 +1876,7 @@ public:
         if (!requestSent && r) sendReq();
         return r;
     }
-    /**
+    /*
      * It receives one message part.
      *
      * \parm msg is the reference of the message.
@@ -1897,7 +1890,7 @@ public:
         return get(msg);
     }
 
-    /**
+    /*
      * It closes communication pattern.
      *
      * \return TODO
@@ -1918,14 +1911,14 @@ public:
         return true;
     }
 
-    /**
+    /*
      * It returns the number of distinct messages for one single communication.
      *
      * \return 1 is always returned.
      */
     inline int getToWait() const { return 1;}
 
-    /**
+    /*
      * It completes the communication.
      */
     inline void done() { requestSent=false; }
@@ -1939,9 +1932,9 @@ protected:
     svector<bool> To;
 };
 
-//**************************************
+//*************************************
 // One to many communication
-//**************************************
+//*************************************
 
 /* 
  *  \class zmq1_N
@@ -1966,7 +1959,7 @@ public:
     zmq1_N():desc(NULL),active(false) {}    
     zmq1_N(descriptor* D):desc(D),active(false) {}
     
-    /**
+    /*
      * It sets the descriptor.
      *
      * \parm D is the descriptor.
@@ -1976,14 +1969,14 @@ public:
         desc = D; 
     }
     
-    /**
+    /*
      * It returns the descriptor.
      *
      * \return Descriptor of the file is returned.
      */
     inline  descriptor* getDescriptor() { return desc; }
     
-    /**
+    /*
      * It initializes communication pattern.
      *
      * \parm address if the IP address
@@ -1997,7 +1990,7 @@ public:
         return active;
     }
 
-    /**
+    /*
      * It sends one message.
      *
      * \parm msg is the reference to the message.
@@ -2012,7 +2005,7 @@ public:
         return true;
     }
     
-    /**
+    /*
      * It sends one message.
      *
      * \parm msgs is the reference to the message.
@@ -2025,7 +2018,7 @@ public:
         return desc->send(msg, to, to); 
     }
 
-    /**
+    /*
      * It sends message to many nodes.
      *
      * \parm msg is the reference to the message.
@@ -2037,7 +2030,7 @@ public:
         return desc->sendmore(msg,to,ZMQ_SNDMORE);
     }
 
-    /**
+    /*
      * It receives the message header (should be called before get).
      *
      * \parm msg is the reference to the message.
@@ -2047,7 +2040,7 @@ public:
      */
     inline bool gethdr(torecv_t& msg, int& peer) { peer=0; return desc->recvhdr(msg); }
 
-    /**
+    /*
      * It receives one message.
      *
      * \parm msg is the reference to the message
@@ -2056,7 +2049,7 @@ public:
      */
     inline bool get(torecv_t& msg, int=0) { return desc->recv(msg); }
 
-    /**
+    /*
      * It closes communication pattern.
      *
      * \return TODO
@@ -2068,7 +2061,7 @@ public:
         return true;
     }
 
-    /**
+    /*
      * It finishes the communicaiton.
      */
     inline void done() {}
