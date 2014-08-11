@@ -6,7 +6,7 @@
  *
  *  \brief This file describes the parallel_for/parallel_reduce skeletons.
  *  
- *  \detail Realize a parallel for loop. Different iterations should be 
+ *  Realize a parallel for loop. Different iterations should be
  *  independent (data-races management is not autimatically provided
  *  but can be introduced by programmers via mutex).
  *
@@ -102,7 +102,7 @@ namespace ff {
   * 
   * \brief Parallel for loop
   *
-  * \detail Identifies an iterative work-sharing construct that specifies a region
+  *  Identifies an iterative work-sharing construct that specifies a region
   * (i.e. a Lambda function) in which the iterations of the associated loop 
   * should be executed in parallel. 
   * 
@@ -137,7 +137,7 @@ public:
     /**
      * \brief Destructor
      * 
-     * \detail Terminate ParallelFor run-time support and makes resources housekeeping.
+     *  Terminate ParallelFor run-time support and makes resources housekeeping.
      * Both nonlocking and blocking worker threads are terminated.
      */
     ~ParallelFor()                { FF_PARFOR_DONE(pf); }
@@ -145,7 +145,7 @@ public:
     /**
      * \brief Disable active scheduler (i.e. Emitter thread)
      *
-     * \detail Disable active scheduler (i.e. Emitter thread of the master-worker
+     *  Disable active scheduler (i.e. Emitter thread of the master-worker
      * implementation). Active scheduling uses one dedicated nonblocking thread.
      * In passive scheduling, workers cooperatively schedule tasks via synchronisations
      * in memory. None of the above is always faster than the other: it depends on
@@ -172,7 +172,7 @@ public:
     /**
      * \brief Parallel for region (basic) - static
      *
-     * \detail Static scheduling onto nw worker threads.
+     *  Static scheduling onto nw worker threads.
      * Data is statically cut in maximal partitions, i.e.
      * partition size = last-first/nw
      * 
@@ -193,7 +193,7 @@ public:
     /**
      * \brief Parallel for region (step) - static
      *
-     * \detail Static scheduling onto nw worker threads. 
+     * Static scheduling onto nw worker threads.
      * Iteration space is walked with stride <b>step</b>. 
      * Data is statically cut in maximal partitions, i.e.
      * partition size = last-first/(nw*step)

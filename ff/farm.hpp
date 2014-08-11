@@ -22,7 +22,7 @@
  *  In case of no output stream the Collector is usually not needed. Emitter 
  *  should always exist, even with no input stream.
  * 
- *  There exists several variants of the parm pattern, including 
+ *  There exists several variants of the farm pattern, including
  * 
  *  \li Master-worker: no collector, tasks from Workers return to Emitter
  *  \li Ordering farm: default emitter and collector, tasks are gathered
@@ -126,15 +126,6 @@ namespace ff {
 template<typename lb_t=ff_loadbalancer, typename gt_t=ff_gatherer>
 class ff_farm: public ff_node {
 protected:
-    /**
-     * \brief Cardinality of the Farm
-     *
-     * It defines the cardinality of the farm.
-     * 
-     * \parm barrier is a parameter of type \p BARRIER_T
-     *
-     * \return An integer value showing the cardinality.
-     */
     inline int cardinality(BARRIER_T * const barrier)  { 
         int card=0;
         for(size_t i=0;i<workers.size();++i) 
@@ -146,13 +137,6 @@ protected:
         return (card + 1 + ((collector && !collector_removed)?1:0));
     }
 
-    /**
-     * \brief Prepares the Farm skeleton
-     *
-     * It prepares the Farm skeleton for execution.
-     *
-     * \return 0 if successful, otherwise a negative value is returned.
-     */
     inline int prepare() {
         size_t nworkers = workers.size();
         for(size_t i=0;i<nworkers;++i) {
@@ -170,13 +154,6 @@ protected:
         return 0;
     }
 
-    /**
-     * \brief Frezes the thread and then execute
-     *
-     * It first freezes the thread for one cycle, and then start executing it.
-     *
-     * \return The status of the run function
-     */
     int freeze_and_run(bool=false) {
         if (!prepared) if (prepare()<0) return -1;
         freeze();
@@ -214,21 +191,12 @@ public:
     enum { DEF_MAX_NUM_WORKERS=(MAX_NUM_THREADS-2), DEF_IN_BUFF_ENTRIES=2048, DEF_IN_OUT_DIFF=128, 
            DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+DEF_IN_OUT_DIFF)};
 
-    /**
-     * A typedef of loadBalancer_t
-     */
     typedef lb_t LoadBalancer_t;
 
-    /**
-     * A typedef of Gatherer_t
-     */
     typedef gt_t Gatherer_t;
 
     /**                                                                                                                                 
      *  \brief Constructor  
-     * 
-     *  This is the basic (the simplest) farm that can be built.
-     *  It has a default emitter and a default collector.
      */
 #if defined( HAS_CXX11_VARIADIC_TEMPLATES )
     template<typename T>
@@ -385,7 +353,7 @@ public:
      * possible to define a complete application-level scheduling by redefining
      * the ff_loadbalancer class.
      *
-     * \parm inbufferentries sets the number of queue slot for one worker
+     * \param inbufferentries sets the number of queue slot for one worker
      * threads.
      *
      */
@@ -431,8 +399,8 @@ public:
      *  \link ff_gatherer \endlink). Note that it is not possible to add more
      *  than one collector. 
      *
-     *  \param c the \p ff_node acting as Collector node.
-     *  \parm outpresent TODO
+     *  \param c Collector object
+     *  \param outpresent outstream?
      *
      *  \return The status of \p set_filter(x) if successful, otherwise -1 is
      *  returned.
@@ -459,9 +427,7 @@ public:
      *
      * This method allows to estabilish a feedback channel from the Collector
      * to the Emitter. If the collector is present, than the collector output
-     * queue will be connected to the emitter input queue (feedback channel),
-     * otherwise the emitter acts as collector filter (pure master-worker
-     * skeleton).
+     * queue will be connected to the emitter input queue (feedback channel)
      *
      * \return 0 if successful, otherwise -1 is returned.
      *
@@ -550,7 +516,7 @@ public:
      *
      * It executes the form.
      *
-     * \parm skip_init A booleon value showing if the initialization should be
+     * \param skip_init A booleon value showing if the initialization should be
      * skipped
      *
      * \return If successful 0, otherwise a negative is returned.
@@ -705,9 +671,9 @@ public:
      *
      * It offloads the given task to the farm.
      *
-     * \parm task is a void pointer
-     * \parm retry showing the number of tries to offload
-     * \parm ticks is the number of ticks to wait
+     * \param task is a void pointer
+     * \param retry showing the number of tries to offload
+     * \param ticks is the number of ticks to wait
      *
      * \return \p true if successful, otherwise \p false
      */
@@ -736,9 +702,9 @@ public:
      *
      * It loads the results from the gatherer (if any).
      *
-     * \parm task is a void pointer
-     * \parm retry is the number of tries to load the results
-     * \parm ticks is the number of ticks to wait
+     * \param task is a void pointer
+     * \param retry is the number of tries to load the results
+     * \param ticks is the number of ticks to wait
      *
      * \return \p false if EOS arrived or too many retries, \p true if  there is a new value
      */
@@ -761,7 +727,7 @@ public:
      *
      * It loads the result with non-blocking situation.
      *
-     * \parm task is a void pointer
+     * \param task is a void pointer
      *
      * \return \false if no task is present, otherwise \true if there is a new
      * value. It should be checked if the task has a \p FF_EOS
@@ -932,13 +898,6 @@ public:
 
 
 #if defined(TRACE_FASTFLOW)
-    /**
-     * \brief Prints FastFlow trace
-     *
-     * It prints the trace of FastFlow
-     *
-     * \parm out determines the output terminal.
-     */
     void ffStats(std::ostream & out) { 
         out << "--- farm:\n";
         lb->ffStats(out);
@@ -946,15 +905,6 @@ public:
         if (collector) gt->ffStats(out);
     }
 #else
-
-    /**
-     * \brief Prints FastFlow message
-     *
-     * It prints the FastFlow trace message indicateing that the define to
-     * print trace should be defined.
-     *
-     * \parm out determines the output terminal.
-     */
     void ffStats(std::ostream & out) { 
         out << "FastFlow trace not enabled\n";
     }
@@ -964,60 +914,26 @@ protected:
 
     /**
      * \brief svc method
-     *
-     * It gives the definition of the \p svc method
-     *
-     * \parm task is a void pointer
-     *
-     * \return always return \p NULL
      */
     void* svc(void * task) { return NULL; }
 
     /**
      * \brief The svc_init method
-     *
-     * It gives the definition of the \p svc_init
-     *
-     * \return -1 is always returned.
      */
     int svc_init()       { return -1; };
 
     /**
      * \brief The svc_end method
-     *
-     * It defines the \p svc_end method.
-     *
      */
     void svc_end()        {}
 
-    /**
-     * \brief Gets the thread id
-     *
-     * It returns the thread is 
-     *
-     * \return An integer value showing the id of the thread.
-     *
-     */
     int get_my_id() const { return -1; };
 
-    /**
-     * \brief Sets the affinity
-     *
-     * It sets the affinity of the farm
-     *
-     */
+
     void setAffinity(int) { 
         error("FARM, setAffinity: cannot set affinity for the farm\n");
     }
 
-    /**
-     * \brief Gets the id of the core
-     *
-     * It gets the identifier of the core.
-     *
-     * \return The identifier of the core
-     *
-     */
     int getCPUId() const { return -1;}
 
     /** 
@@ -1154,30 +1070,27 @@ protected:
 class ofarm_lb: public ff_loadbalancer {
 protected:
     /**
-     * \brief Selects workers
+     * \brief Get selected worker
      *
-     * It selects the worker.
+     * Inspect which worker has been selected
      *
      * \return An integer value showing the worker.
      */
     inline size_t selectworker() { return victim; }
 public:
     /**
-     * \brief Constructos
+     * \brief Constructor
      *
-     * It defines the constructos which formst the load balancer with the give
-     * number of workers.
-     *
-     * \parm max_num_workers defines the maximum number of workers.
+     * \param max_num_workers defines the maximum number of workers.
      */
     ofarm_lb(int max_num_workers):ff_loadbalancer(max_num_workers) {}
 
     /**
-     * \brief Sets the workers
+     * \brief Sets the target worker
      *
-     * It sets the worker.
+     * Overload to define you own scheduling policy
      *
-     * \parm v is the number of the worker.
+     * \param v is the number of the worker.
      */
     void set_victim(size_t v) { victim=v;}
 private:
@@ -1209,7 +1122,7 @@ public:
      *
      * It build the ordered farm.
      *
-     * \parm max_num_workers defines the maximum number of workers.
+     * \param max_num_workers defines the maximum number of workers.
      *
      */
     ofarm_gt(int max_num_workers):
@@ -1236,7 +1149,7 @@ public:
      *
      * It sets an element in the dead vector to true, to make it dead.
      *
-     * \parm v is number in the dead vector.
+     * \param v is number in the dead vector.
      */
     inline void set_dead(int v)   { dead[v]=true;}
 
@@ -1274,7 +1187,7 @@ private:
          *
          * It creates an ordered form
          *
-         * \parm lb is ordered farm load balancer
+         * \param lb is ordered farm load balancer
          *
          */
         ofarmE(ofarm_lb * const lb):
@@ -1285,7 +1198,7 @@ private:
          *
          * It sets the number of workers.
          *
-         * \parm nw is the number of workers
+         * \param nw is the number of workers
          */
         void setnworkers(size_t nw) { nworkers=nw;}
 
@@ -1294,7 +1207,7 @@ private:
          *
          * It sets the filter
          *
-         * \parm f is the FastFlow node
+         * \param f is the FastFlow node
          *
          */
         void setfilter(ff_node* f) { E_f = f;}
@@ -1320,7 +1233,7 @@ private:
          *
          * It defines the \p svc method.
          *
-         * \parm task is a void pointer
+         * \param task is a void pointer
          *
          * \return If it is \p FF_EOS then the status of svc method is returned
          * otherwise \p GO_ON
@@ -1368,7 +1281,7 @@ private:
          *
          * It sets the number of workers
          *
-         * \parm nw is the number of workers
+         * \param nw is the number of workers
          */
         void setnworkers(size_t nw) { nworkers=nw;}
 
@@ -1446,12 +1359,12 @@ public:
      *
      * It creates an orderred farm.
      *
-     * \parm input_ch states the presence of input channel
-     * \parm in_buffer_entries defines the number of input entries
-     * \parm worker_cleanup states the cleaning of workers
-     * \parm max_num_workers defines the maximum number of workers in the
+     * \param input_ch states the presence of input channel
+     * \param in_buffer_entries defines the number of input entries
+     * \param worker_cleanup states the cleaning of workers
+     * \param max_num_workers defines the maximum number of workers in the
      * ordered farm
-     * \parm fixedsize states the status of fixed size buffer
+     * \param fixedsize states the status of fixed size buffer
      *
      */
     ff_ofarm(bool input_ch=false,
@@ -1482,7 +1395,7 @@ public:
      *
      * It sets the emitter.
      *
-     * \parm f is the FastFlow node.
+     * \param f is the FastFlow node.
      */
     void setEmitterF  (ff_node* f) { E_f = f; }
 
@@ -1491,7 +1404,7 @@ public:
      *
      * It sets the collecto
      *
-     * \parm f is the FastFlow node.
+     * \param f is the FastFlow node.
      */
     void setCollectorF(ff_node* f) { C_f = f; }
     
@@ -1500,7 +1413,7 @@ public:
      *
      * It executes the farm.
      *
-     * \parm skip_init shows the status of weather the init phase to be
+     * \param skip_init shows the status of weather the init phase to be
      * cancelled or not
      *
      * \return The status of run method
@@ -1539,7 +1452,7 @@ protected:
      * It defines the cardinatlity of the FastFlow node by setting the barrier
      * to the give number of barriers.
      *
-     * \parm barrier shows the number of barriers
+     * \param barrier shows the number of barriers
      *
      * \return 1 is alway returned.
      */
@@ -1582,7 +1495,7 @@ public:
      *
      * It defines the multiple input FastFlow node.
      *
-     * \parm max_num_workers defines the maximum number of workers
+     * \param max_num_workers defines the maximum number of workers
      *
      */
     ff_minode(int max_num_workers=ff_farm<>::DEF_MAX_NUM_WORKERS):
@@ -1715,7 +1628,7 @@ protected:
      *
      * Defines the cardinatlity of the FastFlow node.
      *
-     * \parm barrier defines the barrier
+     * \param barrier defines the barrier
      *
      * \return 1 is always returned.
      */
@@ -1742,7 +1655,7 @@ public:
      *
      * It creates a FastFlow node with multiple output buffers.
      *
-     * \parm max_num_workers defines the maximum number of workers
+     * \param max_num_workers defines the maximum number of workers
      *
      */
     ff_monode(int max_num_workers=ff_farm<>::DEF_MAX_NUM_WORKERS):
@@ -1801,7 +1714,7 @@ public:
      *
      * It executes the farm.
      *
-     * \parm skip_init defines if the initilization should be skipped
+     * \param skip_init defines if the initilization should be skipped
      *
      * \return 0 if successful, otherwsie -1 is returned.
      */

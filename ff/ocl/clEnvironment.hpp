@@ -1,12 +1,5 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-/*!
- * \link 
- * \file clEnvironment.hpp
- * \ingroup opencl_fastflow
- *
- * \brief TODO
- */
 
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify
@@ -46,21 +39,9 @@
 
 #define THRESHOLD (512*1024*1024)
 
-/*!
- * \ingroup opencl_fastflow
- *
- * @{
- */
+
 pthread_mutex_t instanceMutex = PTHREAD_MUTEX_INITIALIZER;
 
-/*!
- * \class Environment
- * \ingroup opencl_fastflow
- *
- * \brief TODO
- *
- * This class is defined in \ref clEnvironment.hpp
- */
 
 class Environment{
 
@@ -86,8 +67,4 @@ public:
 
 #include <ff/ocl/clEnvironment.cpp>  
 
-/*!
- * @}
- * \endlink
- */
 #endif /* FF_OCLENVIRONMENT_HPP */

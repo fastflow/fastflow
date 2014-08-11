@@ -3,10 +3,41 @@
 /*!
  *  \link
  *  \file ubuffer.hpp
- *  \ingroup streaming_network_simple_shared_memory
+ *  \ingroup building_blocks
  *
  *  \brief This file contains the definition of the unbounded \p SWSR circular buffer used in 
  *  FastFlow
+ *
+ * Single-Writer/Single-Reader (SWSR) lock-free (wait-free) unbounded FIFO
+ * queue.  No lock is needed around pop and push methods!!
+ *
+ * The key idea underneath the implementation is quite simple: the unbounded
+ * queue is based on a pool of wait-free SWSR circular buffers (see
+ * buffer.hpp).  The pool of buffers automatically grows and shrinks on demand.
+ * The implementation of the pool of buffers carefully try to minimize the
+ * impact of dynamic memory allocation/deallocation by using caching
+ * strategies.
+ *
+ * More information about the uSWSR_Ptr_Buffer implementation and correctness
+ * proof can be found in:
+ *
+ * M. Aldinucci, M. Danelutto, P. Kilpatrick, M. Meneghin, and M. Torquati,
+ * "An Efficient Unbounded Lock-Free Queue for Multi-core Systems,"
+ * in Proc. of 18th Intl. Euro-Par 2012 Parallel Processing, Rhodes Island,
+ * Greece, 2012, pp. 662-673. doi:10.1007/978-3-642-32820-6_65
+ *
+ *
+ * IMPORTANT:
+ *
+ * This implementation has been optimized for 1 producer and 1 consumer.
+ * If you need to use more producers and/or more consumers you have
+ * several possibilities (top-down order):
+ *  1. to use an high level construct like the farm skeleton and compositions
+ *     of multiple farms (in other words, use FastFlow ;-) ).
+ *  2. to use one of the implementations in the MPMCqueues.hpp file
+ *  3. to use the SWSR_Ptr_Buffer but with the mp_push and the mc_pop methods
+ *     both protected by (spin-)locks in order to protect the internal data
+ *     structures.
  *
  */
 
@@ -30,38 +61,7 @@
 /* Author: Massimo Torquati
  *
  */
-/**
- * Single-Writer/Single-Reader (SWSR) lock-free (wait-free) unbounded FIFO
- * queue.  No lock is needed around pop and push methods!!
- * 
- * The key idea underneath the implementation is quite simple: the unbounded
- * queue is based on a pool of wait-free SWSR circular buffers (see
- * buffer.hpp).  The pool of buffers automatically grows and shrinks on demand.
- * The implementation of the pool of buffers carefully try to minimize the
- * impact of dynamic memory allocation/deallocation by using caching
- * strategies. 
- *
- * More information about the uSWSR_Ptr_Buffer implementation and correctness
- * proof can be found in the following report:
- *
- * Massimo Torquati, "Single-Producer/Single-Consumer Queue on Shared Cache 
- * Multi-Core Systems", TR-10-20, Computer Science Department, University
- * of Pisa Italy,2010
- * ( http://compass2.di.unipi.it/TR/Files/TR-10-20.pdf.gz )
- *
- * IMPORTANT:
- *
- * This implementation has been optimized for 1 producer and 1 consumer. 
- * If you need to use more producers and/or more consumers you have 
- * several possibilities (top-down order):
- *  1. to use an high level construct like the farm skeleton and compositions 
- *     of multiple farms (in other words, use FastFlow ;-) ).
- *  2. to use one of the implementations in the MPMCqueues.hpp file
- *  3. to use the SWSR_Ptr_Buffer but with the mp_push and the mc_pop methods 
- *     both protected by (spin-)locks in order to protect the internal data 
- *     structures.
- *
- */
+
 
  
 #ifndef FF_uSWSR_PTR_BUFFER_HPP
@@ -80,26 +80,9 @@
 #endif
 namespace ff {
 
-/*!
- *
- *  \ingroup streaming_network_simple_shared_memory
- *
- * @{
- */
-
 /* Do not change the following define unless you know what you're doing */
 #define INTERNAL_BUFFER_T SWSR_Ptr_Buffer  /* bounded SPSC buffer */
 
-/*!
- *
- * \class BufferPool
- *  \ingroup streaming_network_simple_shared_memory
- *
- * \breif It defines a pool of buffers used to create and unbounded SWSR buffer.
- *
- * This class is defined in \ref ubuffer.hpp
- *
- */
 class BufferPool {
 public:
     BufferPool(int cachesize, const bool fillcache=false, unsigned long size=-1)
@@ -127,10 +110,6 @@ public:
 #endif
     }
     
-    /**
-     *
-     * TODO
-     */
     ~BufferPool() {
         union { INTERNAL_BUFFER_T * b1; void * b2;} p;
 
@@ -144,9 +123,6 @@ public:
         }
     }
     
-    /**
-     * It returns a pointer to the next internal buffer to write 
-     */
     inline INTERNAL_BUFFER_T * next_w(unsigned long size)  { 
         union { INTERNAL_BUFFER_T * buf; void * buf2;} p;
         if (!bufcache.pop(&p.buf2)) {
@@ -168,17 +144,13 @@ public:
         return p.buf;
     }
     
-    /**
-     * It returns a pointer to the next internal buffer to read 
-     */
+
     inline INTERNAL_BUFFER_T * next_r()  { 
         union { INTERNAL_BUFFER_T * buf; void * buf2;} p;
         return (inuse.pop(&p.buf2)? p.buf : NULL);
     }
     
-    /**
-     * TODO
-     */
+
     inline void release(INTERNAL_BUFFER_T * const buf) {
         buf->reset();
         if (!bufcache.push(buf)) {
@@ -188,18 +160,14 @@ public:
     }
 
 #if defined(UBUFFER_STATS)
-    /**
-     * TODO
-     */
+
     inline unsigned long readPoolMiss() {
         unsigned long m = miss;
         miss = 0;
         return m;
     }
 
-    /**
-     * TODO
-     */
+
     inline unsigned long readPoolHit() {
         unsigned long h = hit;
         hit = 0;
@@ -227,17 +195,12 @@ private:
     
 // --------------------------------------------------------------------------------------
     
-/*!
- *  \ingroup streaming_network_simple_shared_memory
- *
- *  @{
- */
  
  /*! 
   * \class uSWSR_Ptr_Buffer
- *  \ingroup streaming_network_simple_shared_memory
+ *  \ingroup building_blocks
   *
-  * \brief Unbounded Single-Writer/Single-Reader circular buffer.
+  * \brief Unbounded Single-Writer/Single-Reader buffer (FastFlow unbound channel)
   *
   * The unbounded SWSR circular buffer is based on a pool of wait-free SWSR
   * circular buffers (see buffer.hpp). The pool of buffers automatically grows
@@ -246,7 +209,6 @@ private:
   * using caching strategies. The unbounded buffer is based on the
   * INTERNAL_BUFFER_T.
   *
-  * This class is defined in \ref ubuffer.hpp
   */ 
 class uSWSR_Ptr_Buffer {
 private:
@@ -279,12 +241,8 @@ private:
 
 public:
     /**
-     *  Constructor
+     *  \brief Constructor
      *
-     *  \param n the size of the buffer
-     *  \param fixedsize a boolean flag that asserts whether the buffer can be 
-     *  resized. Default is \p false.
-     *  \param fillcache a flag.
      */
     uSWSR_Ptr_Buffer(unsigned long n, const bool fixedsize=false, const bool fillcache=false):
         buf_r(0),buf_w(0),in_use_buffers(1),size(n),fixedsize(fixedsize),
@@ -298,7 +256,7 @@ public:
         
     }
     
-    /** Destructor */
+    /** \brief Destructor */
     ~uSWSR_Ptr_Buffer() {
         if (buf_r) {
             buf_r->~INTERNAL_BUFFER_T();
@@ -308,7 +266,7 @@ public:
     }
     
     /**
-     *  Initialise the unbounded buffer.
+     *  \brief Initialise the unbounded buffer.
      */
     bool init() {
         if (buf_w || buf_r) return false;
@@ -328,10 +286,9 @@ public:
     }
     
     /** 
-     * It returns true if the buffer is empty.
+     * \brief Returns true if the buffer is empty.
      *
-     * \return If successful \p true is returned, otherwise \p false is
-     * returned.
+     * \return \p true if empty, \p false otherwise
      */
     inline bool empty() {
         //return buf_r->empty();
@@ -341,23 +298,19 @@ public:
         return false;
     }
     
-    /** 
-     * It returns true if there is at least one room in the buffer.
-     *
-     * \return If available \p true is returned, otherwise \p false is
-     * returned.
-     */
     inline bool available()   { 
         return buf_w->available();
     }
  
     /**
-     *  Push Method: push the input value into the queue.\n
+     *  \brief Push
+     *
+     *  push the input value into the queue.\n
      *  If fixedsize has been set to \p true, this method may
      *  return false. This means EWOULDBLOCK 
      *  and the call should be retried.
      *
-     *  \param data Data to be pushed in the buffer 
+     *  \param data pointer to data to be pushed in the buffer
      *  \return \p false if \p fixedsize is set to \p true OR if \p data is NULL 
      *  OR if there is not a buffer to write to. 
      *  
@@ -387,12 +340,7 @@ public:
         return true;
     }
 
-    /**
-     *  Multi-producers push method (lock protected)
-     *
-     *  \return TODO
-     *
-     */
+
     inline bool mp_push(void *const data) {
         spin_lock(P_lock);
         bool r=push(data);  // should it be mpush(data)?
@@ -430,10 +378,9 @@ public:
 #endif /* uSWSR_MULTIPUSH */
     
     /**
-     *  Pop method: get the next data from the buffer
+     *  \brief Pop
      *  
-     *  \param data Double pointer to the location where to store the data
-     *  popped from the buffer
+     *  \param[out] data pointer-pointer to data
      *
      */
     inline bool  pop(void ** data) {
@@ -461,33 +408,22 @@ public:
 
 #if defined(UBUFFER_STATS)
 
-    /**
-     * TODO
-     */
+
     inline unsigned long queue_status() {
         return (unsigned long)atomic_long_read(&numBuffers);
     }
     
-    /**
-     * TODO
-     */
+
     inline unsigned long readMiss() {
         return pool.readPoolMiss();
     }
 
-    /**
-     * TODO
-     */
+
     inline unsigned long readHit() {
         return pool.readPoolHit();
     }
 #endif
 
-    /**
-     * It defines multi-consumers pop method. lock protected.
-     *
-     * \return TODO
-     */
     inline bool mc_pop(void ** data) {
         spin_lock(C_lock);
         bool r=pop(data);
@@ -496,10 +432,10 @@ public:
     }
     
     /**
-     * It returns the length of the queue. 
-     * Note that this is just a rough estimation of the actual queue length.
+     * \brief number of elements in the queue
+     * \note This is just a rough estimation of the actual queue length. Not really possible
+     * to be precise in a lock-free buffer.
      *
-     * \return TODO
      */
     inline unsigned long length() const {
         unsigned long len = buf_r->length();
@@ -508,9 +444,7 @@ public:
         return len+(in_use_buffers-2)*size+buf_w->length();
     }
 
-    /** 
-     *  Resets the buffer
-     */
+
     inline void reset() {
         if (buf_r) buf_r->reset();
         if (buf_w) buf_w->reset();
@@ -562,10 +496,7 @@ private:
     BufferPool			pool;
 };
 
-/*!
- * @}
- * \endlink
- */
+
 
 } // namespace ff
 

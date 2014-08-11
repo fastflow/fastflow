@@ -2,10 +2,10 @@
 
 /*! 
  * \file pipeline.hpp
- * \ingroup core_patterns
+ * \ingroup core_patterns high_level_patterns
  *
- * \brief This file describes the pipeline skeleton, both in the high-level pattern 
- * syntax (\ref ff::ff_pipe) and internal syntax (\ref ff::ff_pipeline)
+ * \brief This file implements the pipeline skeleton, both in the high-level pattern
+ * syntax (\ref ff::ff_pipe) and low-level syntax (\ref ff::ff_pipeline)
  *
  */
 /* ***************************************************************************
@@ -99,7 +99,7 @@ namespace ff {
 
 
 /**
- *  \class ff_pipeline
+ * \class ff_pipeline
  * \ingroup core_patterns
  *
  *  \brief The Pipeline skeleton (low-level syntax)
@@ -657,7 +657,7 @@ private:
 
 #if defined( HAS_CXX11_VARIADIC_TEMPLATES )
 
-    // NOTE: std::function can introduce a bit of extra overhead. 
+    // NOTE: std::function can introduce a bit of extra overhead.
     // Think about on how to avoid functionals.
     template<typename T>
     class Fstage2: public ff_node {
@@ -670,7 +670,7 @@ private:
 
     /** 
      * \class ff_pipe
-     * \ingroup core_patterns
+     * \ingroup high_level_patterns
      * 
      * \brief Pipeline pattern (high-level pattern syntax)
      *
@@ -680,7 +680,7 @@ private:
      * and
      * require one core per stage. If you need to model a workflow use \ref ff::ff_mdf
      *
-     * \example ../tests/pipe_basic.cpp 
+     * \example pipe_basic.cpp
      */ 
     template<typename TaskType>
     class ff_pipe: public ff_pipeline {
