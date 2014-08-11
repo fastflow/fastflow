@@ -38,7 +38,7 @@ namespace ff {
  *  \class ff_dinout
  * \ingroup building_blocks
  *
- *  \brief Input-and-Output (\ref ff::ff_dnode)
+ *  \brief A \ref ff::ff_dnode serving both Input and Output to the network
  *
  */
 

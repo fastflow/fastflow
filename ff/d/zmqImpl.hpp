@@ -77,7 +77,7 @@ namespace ff {
 // One to Many communication
 //*************************************
 
-/**
+/*
  *  \struct descriptor1_N
  *  \ingroup building_blocks
  *
@@ -457,7 +457,7 @@ struct descriptor1_N {
         return true;    
     }
     
-    /**
+    /*
      * It defines the receiving of hi.
      */
     inline void recvHelloSendHi() {
@@ -811,7 +811,7 @@ struct descriptorN_1 {
 // One to one communication
 //**************************************
 
-/*! 
+/*
  *  \class zmq1_1
  *  \ingroup streaming_network_simple_distributed_memory
  *
@@ -971,7 +971,7 @@ protected:
 // Broadcast communication
 //**************************************
 
-/*! 
+/*
  *  \class zmqBcast
  *  \ingroup streaming_network_simple_distributed_memory
  *
@@ -1138,7 +1138,7 @@ protected:
 //  ZeroMQ implementation of the ALL_GATHER communication patter
 //**************************************
 
-/*! 
+/*
  *  \class zmqAllGather
  *  \ingroup streaming_network_simple_distributed_memory
  *
@@ -1319,7 +1319,7 @@ protected:
 // FromAny communication pattern
 //**************************************
     
-/*! 
+/*
  *  \class zmqFromAny
  *  \ingroup streaming_network_simple_distributed_memory
  *
@@ -1493,7 +1493,7 @@ protected:
 // Scatter communication pattern
 //*************************************
 
-/*!
+/*
  *  \class zmqScatter
  *  \ingroup streaming_network_simple_distributed_memory
  *
@@ -1685,7 +1685,7 @@ protected:
 // OnDemand communication transport
 //*************************************
 
-/*!
+/*
  *  \class zmqOnDemand 
  *  \ingroup streaming_network_simple_distributed_memory
  *
@@ -2071,7 +2071,7 @@ protected:
     bool        active;
 };
 
-/*!
+/*
  *
  * @}
  * \endlink

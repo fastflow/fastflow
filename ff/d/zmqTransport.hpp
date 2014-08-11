@@ -20,7 +20,7 @@
  
  /*! 
   * \file zmqTransport.hpp 
-  *  \ingroup sbuilding_blocks
+  *  \ingroup building_blocks
   *
   * \brief This file provides the definition of the external transport layer
   * based on ØMQ.
@@ -139,7 +139,7 @@ public:
     }
 };
 
-/*! 
+/*
  * \class zmqTransport
  *  \ingroup streaming_network_simple_distributed_memory
  *

@@ -25,10 +25,17 @@
  ****************************************************************************
  */
 
-/*
- * Tests per-thread allocator. 
- * Multiple malloc threads, one free thread.
+ /**
+ * \file perf_test_alloc2.cpp
+ * \ingroup applications low-level-tests
  *
+ * \brief \ref ff::ff_allocator and \ref ff::FFAllocator usage example
+ *
+ * This test gives the possibility to test different memory allocator
+ * (libc, TBB, FastFlow, Hoard (compiling with USE_STANDARD and preloading the
+ *  Hoard library) )
+ *
+ * @include perf_test_alloc2.cpp
  */
 
 #include <sys/types.h>
