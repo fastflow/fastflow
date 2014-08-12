@@ -30,10 +30,11 @@
 // Aug 3, 1024
 // All parfors inc element-wise the array A.
 
+#define FF
 /**
  * \file parfor_basic.cpp
  * \ingroup applications
- * \brief Some basic usage examples of the pipeline (and farm) pattern 
+ * \brief Some basic usage examples of the parfor pattern
  *
  * @include parfor_basic.cpp
  */
