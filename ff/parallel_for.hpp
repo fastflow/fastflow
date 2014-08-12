@@ -332,13 +332,19 @@ public:
   * \class ParallelForReduce
   *  \ingroup high_level_patterns
   *
-  * \brief Parallel for + reduce. Run automatically.
+  * \brief Parallel for and reduce. Run automatically.
   *
-  *  Identifies an iterative work-sharing construct that specifies a region
+  *  Set up the run-time for parallel for and parallel reduce.
+  *
+  *  Parallel for: Identifies an iterative work-sharing construct that
+  * specifies a region
   * (i.e. a Lambda function) in which the iterations of the associated loop
-  * should be executed in parallel. Reduce results.
+  * should be executed in parallel.  in parallel.
   *
-  * \todo ParallelForReduce to be documented and exemplified
+  * Parallel reduce: reduce an array of T to a single value by way of
+  * an associative operation.
+  *
+  * \tparam T reduction op type: op(T,T) -> T
   */
 
 template<typename T>
@@ -347,9 +353,26 @@ protected:
     ff_forall_farm<forallreduce_W<T> > * pfr; 
 
     // this constructor is useful to skip loop warmup and to disable spinwait
+    /**
+     * @brief Constructor
+     * @param maxnw Maximum number of worker threads
+     * @param spinWait \p true Noblocking support (run-time thread
+     * will never suspend, even between successive calls to \p parallel_for
+     * and \p parallel_reduce, useful when they are called in sequence on
+     * small kernels), \p false blocking support
+     * @param skipWarmup Skip warmup phase (autotuning)
+     */
     ParallelForReduce(const long maxnw, bool spinWait, bool skipWarmup): 
         pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,false, true)) {}
 public:
+    /**
+     * @brief Constructor
+     * @param maxnw Maximum number of worker threads
+     * @param spinwait \p true for noblocking support (run-time thread
+     * will never suspend, even between successive calls to \p parallel_for
+     * and \p parallel_reduce, useful when they are called in sequence on
+     * small kernels), \p false blocking support
+     */
     ParallelForReduce(const long maxnw=FF_AUTO, bool spinwait=false):
         pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,spinwait)) {}
 
@@ -369,6 +392,19 @@ public:
     }
 
     /* -------------------- parallel_for -------------------- */
+    /**
+     * \brief Parallel for region (basic) - static
+     *
+     *  Static scheduling onto nw worker threads.
+     * Data is statically cut in maximal partitions, i.e.
+     * partition size = last-first/nw
+     *
+     * \param first first value of the iteration variable
+     * \param last last value of the iteration variable
+     * \param f <b>f(const long idx)</b>  Lambda function,
+     * body of the parallel loop. <b>idx</b>: iterator
+     * \param nw number of worker threads (default FF_AUTO)
+     */
     template <typename Function>
     inline void parallel_for(long first, long last, const Function& f, 
                              const long nw=FF_AUTO) {
@@ -376,6 +412,19 @@ public:
             f(parforidx);            
         } FF_PARFOR_T_STOP(pfr,T);
     }
+    /**
+     * \brief Parallel for region (step) - static
+     *
+     * Static scheduling onto nw worker threads.
+     * Data is statically cut in maximal partitions, i.e.
+     * partition size = last-first/(nw*step)
+     *
+     * \param first first value of the iteration variable
+     * \param last last value of the iteration variable
+     * \param step step increment for the iteration variable
+     * \param f <b>f(const long idx)</b> body of the parallel loop
+     * \param nw number of worker threads
+     */
     template <typename Function>
     inline void parallel_for(long first, long last, long step, const Function& f, 
                              const long nw=FF_AUTO) {
@@ -383,6 +432,22 @@ public:
             f(parforidx);            
         } FF_PARFOR_T_STOP(pfr,T);
     }
+    /**
+     * @brief Parallel for region (step, grain) - dynamic
+     *
+     * Dynamic scheduling onto nw worker threads. Iterations are scheduled in
+     * blocks of minimal size \p grain
+     * Iteration space is walked with stride \p step
+     *
+     * @param first first value of the iteration variable
+     * @param last last value of the iteration variable
+     * @param step step increment for the iteration variable
+     * @param grain (> 0) minimum computation grain
+     * (n. of iterations scheduled together to a single worker)
+     * @param f <b>f(const long idx)</b>  Lambda function,
+     * body of the parallel loop. <b>idx</b>: iteration
+     * param nw number of worker threads
+     */
     template <typename Function>
     inline void parallel_for(long first, long last, long step, long grain, 
                              const Function& f, const long nw=FF_AUTO) {
@@ -390,7 +455,21 @@ public:
             f(parforidx);            
         } FF_PARFOR_STOP(pfr);
     }    
-
+    /**
+     * @brief Parallel for region with threadID (step, grain, thid) - dynamic
+     *
+     * Dynamic scheduling onto nw worker threads. Iterations are scheduled in
+     * blocks of minimal size \p grain
+     * Iteration space is walked with stride \p step. \p thid Worker thread ID
+     * is made available via a Lambda parameter.
+     *
+     * @param first first value of the iteration variable
+     * @param last last value of the iteration variable
+     * @param step step increment for the iteration variable
+     * @param grain  minimum computation grain  (n. of iterations scheduled together to a single worker)
+     * @param f <b>f(const long idx, const int thid)</b>  Lambda function, body of the parallel loop. <b>idx</b>: iteration, <b>thid</b>: worker_id
+     * @param nw number of worker threads (default n. of platform HW contexts)
+     */
     template <typename Function>
     inline void parallel_for_thid(long first, long last, long step, long grain, 
                                   const Function& f, const long nw=FF_AUTO) {
@@ -398,7 +477,29 @@ public:
             f(parforidx,_ff_thread_id);            
         } FF_PARFOR_T_STOP(pfr,T);
     }    
-
+    /**
+     * @brief Parallel for region with indexes ranges (step, grain, thid, idx) -
+     * dynamic - advanced usage
+     *
+     * Dynamic scheduling onto nw worker threads. Iterations are scheduled in
+     * blocks of minimal size <b>grain</b>. Iteration space is walked with stride
+     * <b>step</b>. A chunk of <b>grain</b> iterations are assigned to each worker but
+     * they are not automatically walked. Each chunk can be traversed within the
+     * parallel_for body (e.g. with a for loop within <b>f</b> with the same step).
+     *
+     * \note Useful in few cases only - requires some expertise
+     *
+     * @param first first value of the iteration variable
+     * @param last last value of the iteration variable
+     * @param step step increment for the iteration variable
+     * @param grain (> 0) minimum computation grain  (n. of iterations scheduled
+     * together to a single worker)
+     * @param f <b>f(const long start_idx, const long stop_idx, const int thid)
+     * </b>  Lambda function, body of the parallel loop.
+     * <b>start_idx</b> and <b>stop_idx</b>: iteration bounds assigned to
+     * worker_id <b>thid</b>.
+     * @param nw number of worker threads (default n. of platform HW contexts)
+     */
     template <typename Function>
     inline void parallel_for_idx(long first, long last, long step, long grain, 
                                   const Function& f, const long nw=FF_AUTO) {
@@ -407,12 +508,25 @@ public:
             f(ff_start_idx, ff_stop_idx,_ff_thread_id);            
         } FF_PARFOR_T_STOP(pfr,T);
     }    
-
+    /**
+     * \brief Parallel for region (step) - static
+     *
+     * Static scheduling onto nw worker threads.
+     * Iteration space is walked with stride <b>step</b>.
+     * Data is statically cut in maximal partitions, i.e.
+     * partition size = last-first/(nw*step)
+     *
+     * \param first first value of the iteration variable
+     * \param last last value of the iteration variable
+     * \param step step increment for the iteration variable
+     * \param f <b>f(const long idx)</b> body of the parallel loop
+     * \param nw number of worker threads
+     */
     template <typename Function>
     inline void parallel_for_static(long first, long last, long step, long grain, 
                                     const Function& f, const long nw=FF_AUTO) {
         if (grain==0 || labs(nw)==1) {
-            FF_PARFOR_T_START(pfr, T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+            FF_PARFOR_T_START(pfr, T, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
                 f(parforidx);            
             } FF_PARFOR_T_STOP(pfr,T);
         } else {
@@ -423,16 +537,52 @@ public:
     }
 
     /* ------------------ parallel_reduce ------------------- */
-
+    /**
+     * \brief Parallel reduce (basic)
+     *
+     * Reduce is executed in two phases: the first phase execute in
+     * parallel a partial reduce (by way of \p partialreduce_body function),
+     * the second reduces partial results (by way of \p finalresult_body).
+     * Typically the two function are really the same.
+     *
+     * \param var inital value of reduction variable (accumulator)
+     * \param indentity indetity value for the reduction function
+     * \param first first value of the iteration variable
+     * \param last last value of the iteration variable
+     * \param partialreduce_body reduce operation (1st phase, executed in parallel)
+     * \param finalreduce_body reduce operation (2nd phase, executed sequentially)
+     * \param nw number of worker threads
+     */
     template <typename Function, typename FReduction>
     inline void parallel_reduce(T& var, const T& identity, 
                                 long first, long last, 
-                                const Function& body, const FReduction& finalreduce,
+                                const Function& partialreduce_body, const FReduction& finalreduce_body,
                                 const long nw=FF_AUTO) {
         FF_PARFORREDUCE_START(pfr, var, identity, parforidx, first, last, 1, PARFOR_STATIC(0), nw) {
-            body(parforidx, var);            
-        } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
+            partialreduce_body(parforidx, var);
+        } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce_body);
     }
+    /**
+     * \brief Parallel reduce (step)
+     *
+     * Iteration space is walked with stride <b>step</b>.
+     * Data is statically cut in maximal partitions, i.e.
+     * partition size = last-first/(nw*step)
+     *
+     * Reduce is executed in two phases: the first phase execute in
+     * parallel a partial reduce (by way of \p partialreduce_body function),
+     * the second reduces partial results (by way of \p finalresult_body).
+     * Typically the two function are really the same.
+     *
+     * \param var inital value of reduction variable (accumulator)
+     * \param indentity indetity value for the reduction function
+     * \param first first value of the iteration variable
+     * \param last last value of the iteration variable
+     * \param step step increment for the iteration variable
+     * \param partialreduce_body reduce operation (1st phase, executed in parallel)
+     * \param finalreduce_body reduce operation (2nd phase, executed sequentially)
+     * \param nw number of worker threads
+     */
     template <typename Function, typename FReduction>
     inline void parallel_reduce(T& var, const T& identity, 
                                 long first, long last, long step, 
@@ -442,6 +592,29 @@ public:
             body(parforidx, var);            
         } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
     }
+    /**
+     * \brief Parallel reduce (step, grain)
+     *
+     * Dynamic scheduling onto nw worker threads. Iterations are scheduled in
+     * blocks of minimal size \p grain
+     * Iteration space is walked with stride /p step
+     * Data is statically cut in maximal partitions, i.e.
+     * partition size = last-first/(nw*step)
+     *
+     * Reduce is executed in two phases: the first phase execute in
+     * parallel a partial reduce (by way of \p partialreduce_body function),
+     * the second reduces partial results (by way of \p finalresult_body).
+     * Typically the two function are really the same.
+     *
+     * \param var inital value of reduction variable (accumulator)
+     * \param indentity indetity value for the reduction function
+     * \param first first value of the iteration variable
+     * \param last last value of the iteration variable
+     * \param step step increment for the iteration variable
+     * \param partialreduce_body reduce operation (1st phase, executed in parallel)
+     * \param finalreduce_body reduce operation (2nd phase, executed sequentially)
+     * \param nw number of worker threads
+     */
     template <typename Function, typename FReduction>
     inline void parallel_reduce(T& var, const T& identity, 
                                 long first, long last, long step, long grain, 
@@ -451,7 +624,33 @@ public:
             body(parforidx, var);            
         } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
     }
-    
+
+    template <typename Function, typename FReduction>
+    inline void parallel_reduce_thid(T& var, const T& identity,
+                                     long first, long last, long step, long grain,
+                                     const Function& body, const FReduction& finalreduce,
+                                     const long nw=FF_AUTO) {
+        FF_PARFORREDUCE_START(pfr, var, identity, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+            body(parforidx, var, _ff_thread_id);
+        } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
+    }
+
+    /**
+     * \brief Parallel reduce region (step) - static
+     *
+     * Static scheduling onto nw worker threads.
+     * Iteration space is walked with stride \p step.
+     * Data is statically cut in maximal partitions, i.e.
+     * partition size = last-first/(nw*step)
+     *
+     * \param var inital value of reduction variable (accumulator)
+     * \param indentity indetity value for the reduction function
+     * \param first first value of the iteration variable
+     * \param last last value of the iteration variable
+     * \param step step increment for the iteration variable
+     * \param f <b>f(const long idx)</b> body of the parallel loop
+     * \param nw number of worker threads
+     */
     template <typename Function, typename FReduction>
     inline void parallel_reduce_static(T& var, const T& identity,
                                        long first, long last, long step, long grain, 
@@ -468,15 +667,6 @@ public:
         }
     }
     
-    template <typename Function, typename FReduction>
-    inline void parallel_reduce_thid(T& var, const T& identity, 
-                                     long first, long last, long step, long grain, 
-                                     const Function& body, const FReduction& finalreduce,
-                                     const long nw=FF_AUTO) {
-        FF_PARFORREDUCE_START(pfr, var, identity, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
-            body(parforidx, var, _ff_thread_id);            
-        } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
-    }
 };
 
 
