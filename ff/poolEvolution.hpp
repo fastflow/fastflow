@@ -1,11 +1,12 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*! 
- *  \link
  *  \file poolEvolution.hpp
- *  \ingroup high_level_patterns_shared_memory
+ *  \ingroup high_level_patterns
  *
- *  \brief This file describes the pool evolution pattern.
+ *
+ *  \brief  The PoolEvolution pattern models the evolution of a given population. 
+ *
  */
  
 /* ***************************************************************************
@@ -59,6 +60,25 @@
 
 namespace ff {
 
+/*! 
+  * \class poolEvolution
+  * \ingroup high_level_patterns
+  * 
+  * \brief The pool evolution parallel pattern.
+  *
+  * The pool pattern computes the set P as result of the following algorithm:
+  *
+  *  while not( t(P) ) do
+  *    N  = e ( s(P) )
+  *    P += f (N, P)
+  *  end while
+  * 
+  * where 's' is a “candidate selection” function, which selects a subset of objects belonging 
+  * to an unstructured object pool (P), 'e' is the "evolution" function, 'f' a "filter" function
+  * and 't' a "termination" function.
+  *
+  * \example funcmin.cpp
+  */ 
 template<typename T, typename env_t=char>
 class poolEvolution : public ff_node {
 public:
