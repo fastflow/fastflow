@@ -55,7 +55,7 @@ Main Page contents
  * the original version developed with pthreads and spinlocks) 
  * \li Two-phase video/image restoration for impulsive/Gaussian noise 
  * (multicore, GPGPUs, heterogeneous; original algorithm)
- * \li Cholesky decomposition (multicore, porting of the PLASMA version)
+ * \li Block-based dense LU and Cholesky decomposition (multicore, original algorithm)
  * \li Yadt C4.5 classifier (multicore; original algorithm)
  * \li CWC Gillespie simulator for systems biology (multicore, 
  * distributed, GPGPUs; original algorithm)

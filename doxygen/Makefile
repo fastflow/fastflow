@@ -1,3 +1,8 @@
+PHONY: all
 all:
-	doxygen FastFlow_doxygen
-	echo "\n**************************\nLook for the generated documents in doc/"
+	doxygen Fastflow_doxygen
+	@echo
+	@echo "*****************************************************"
+	@echo "Look for the generated documents in the doc directory"
+	@echo "*****************************************************"
+	@echo
