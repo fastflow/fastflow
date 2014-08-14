@@ -90,7 +90,7 @@ Main Page contents
  * ARM, Tilera, NVidia with gcc, icc, Visual Studio on Linux, Mac OS,
  * and Windows XP/7. The FastFlow core has been ported to ARM/iOS.
 
- *  \image html ff_architecture_new_bw.pdf
+ *  \image html ff_architecture_new_bw.png
  *
  * The FastFlow run-time support uses several techniques to efficiently 
  * support fine grain parallelism (and very high frequency streaming). 
