@@ -172,9 +172,9 @@ public:
     /**
      * \brief Parallel for region (basic) - static
      *
-     *  Static scheduling onto nw worker threads.
-     * Data is statically cut in maximal partitions, i.e.
-     * partition size = last-first/nw
+     * Static scheduling onto nw worker threads.
+     * Data is statically partitioned in blocks, i.e.
+     * partition size = last-first/(nw*step).
      * 
      * \param first first value of the iteration variable
      * \param last last value of the iteration variable
@@ -195,8 +195,8 @@ public:
      *
      * Static scheduling onto nw worker threads.
      * Iteration space is walked with stride <b>step</b>. 
-     * Data is statically cut in maximal partitions, i.e.
-     * partition size = last-first/(nw*step)
+     * Data is statically partitioned in blocks, i.e.
+     * partition size = last-first/(nw*step).
      * 
      * \param first first value of the iteration variable
      * \param last last value of the iteration variable
@@ -217,7 +217,7 @@ public:
      * @brief Parallel for region (step, grain) - dynamic  
      *
      * @detail Dynamic scheduling onto nw worker threads. Iterations are scheduled in 
-     * blocks of minimal size <b>grain</b> 
+     * blocks of minimal size <b>grain</b>.
      * Iteration space is walked with stride <b>step</b>. 
      * 
      * @param first first value of the iteration variable
@@ -240,8 +240,8 @@ public:
     /**
      * @brief Parallel for region with threadID (step, grain, thid) - dynamic
      *
-     * @detail Dynamic scheduling onto nw worker threads. Iterations are scheduled in 
-     * blocks of minimal size <b>grain</b> 
+     * Dynamic scheduling onto nw worker threads. Iterations are scheduled in
+     * blocks of minimal size <b>grain</b>.
      * Iteration space is walked with stride <b>step</b>. <b>thid</b> Worker thread ID
      * is made available via a Lambda parameter.
      * 
@@ -270,7 +270,7 @@ public:
      * they are not automatically walked. Each chunk can be traversed within the
      * parallel_for body (e.g. with a for loop within <b>f</b> with the same step). 
      *
-     * \note Useful in few cases only - requires some expertise
+     * \note Useful in few cases only - requires some expertise.
      *
      * @param first first value of the iteration variable
      * @param last last value of the iteration variable
@@ -294,9 +294,8 @@ public:
     /**
      * @brief Parallel for region (step, grain) - static
      * 
-     *
-     * @detail Static scheduling onto nw worker threads. Iterations are scheduled in 
-     * blocks of minimal size <b>grain > 1</b> or in maximal partitions 
+     * Static scheduling onto nw worker threads. Iterations are scheduled in
+     * blocks of minimal size <b>grain > 1</b> or in maximal partitions
      * <b>grain == 0</b>. Iteration space is walked with stride 
      * <b>step</b>. 
      *
@@ -336,7 +335,7 @@ public:
   *
   *  Set up the run-time for parallel for and parallel reduce.
   *
-  *  Parallel for: Identifies an iterative work-sharing construct that
+  * Parallel for: Identifies an iterative work-sharing construct that
   * specifies a region
   * (i.e. a Lambda function) in which the iterations of the associated loop
   * should be executed in parallel.  in parallel.
@@ -396,8 +395,8 @@ public:
      * \brief Parallel for region (basic) - static
      *
      *  Static scheduling onto nw worker threads.
-     * Data is statically cut in maximal partitions, i.e.
-     * partition size = last-first/nw
+     * Data is statically partitioned in blocks, i.e.
+     * partition size = last-first/(nw*step).
      *
      * \param first first value of the iteration variable
      * \param last last value of the iteration variable
@@ -416,8 +415,8 @@ public:
      * \brief Parallel for region (step) - static
      *
      * Static scheduling onto nw worker threads.
-     * Data is statically cut in maximal partitions, i.e.
-     * partition size = last-first/(nw*step)
+     * Data is statically partitioned in blocks, i.e.
+     * partition size = last-first/(nw*step).
      *
      * \param first first value of the iteration variable
      * \param last last value of the iteration variable
@@ -436,8 +435,8 @@ public:
      * @brief Parallel for region (step, grain) - dynamic
      *
      * Dynamic scheduling onto nw worker threads. Iterations are scheduled in
-     * blocks of minimal size \p grain
-     * Iteration space is walked with stride \p step
+     * blocks of minimal size \p grain.
+     * Iteration space is walked with stride \p step.
      *
      * @param first first value of the iteration variable
      * @param last last value of the iteration variable
@@ -459,7 +458,7 @@ public:
      * @brief Parallel for region with threadID (step, grain, thid) - dynamic
      *
      * Dynamic scheduling onto nw worker threads. Iterations are scheduled in
-     * blocks of minimal size \p grain
+     * blocks of minimal size \p grain.
      * Iteration space is walked with stride \p step. \p thid Worker thread ID
      * is made available via a Lambda parameter.
      *
@@ -483,8 +482,8 @@ public:
      *
      * Dynamic scheduling onto nw worker threads. Iterations are scheduled in
      * blocks of minimal size <b>grain</b>. Iteration space is walked with stride
-     * <b>step</b>. A chunk of <b>grain</b> iterations are assigned to each worker but
-     * they are not automatically walked. Each chunk can be traversed within the
+     * <b>step</b>. A block of <b>grain</b> iterations are assigned to each worker but
+     * they are not automatically walked. Each block can be traversed within the
      * parallel_for body (e.g. with a for loop within <b>f</b> with the same step).
      *
      * \note Useful in few cases only - requires some expertise
@@ -513,7 +512,7 @@ public:
      *
      * Static scheduling onto nw worker threads.
      * Iteration space is walked with stride <b>step</b>.
-     * Data is statically cut in maximal partitions, i.e.
+     * Data is statically partitioned in blocks, i.e.
      * partition size = last-first/(nw*step)
      *
      * \param first first value of the iteration variable
@@ -539,6 +538,9 @@ public:
     /* ------------------ parallel_reduce ------------------- */
     /**
      * \brief Parallel reduce (basic)
+     *
+     * Data is statically partitioned in blocks, i.e.
+     * partition size = last-first/(nw*step)
      *
      * Reduce is executed in two phases: the first phase execute in
      * parallel a partial reduce (by way of \p partialreduce_body function),
@@ -566,7 +568,7 @@ public:
      * \brief Parallel reduce (step)
      *
      * Iteration space is walked with stride <b>step</b>.
-     * Data is statically cut in maximal partitions, i.e.
+     * Data is statically partitioned in blocks, i.e.
      * partition size = last-first/(nw*step)
      *
      * Reduce is executed in two phases: the first phase execute in
@@ -596,10 +598,8 @@ public:
      * \brief Parallel reduce (step, grain)
      *
      * Dynamic scheduling onto nw worker threads. Iterations are scheduled in
-     * blocks of minimal size \p grain
-     * Iteration space is walked with stride /p step
-     * Data is statically cut in maximal partitions, i.e.
-     * partition size = last-first/(nw*step)
+     * blocks of minimal size \p grain.
+     * Iteration space is walked with stride /p step.
      *
      * Reduce is executed in two phases: the first phase execute in
      * parallel a partial reduce (by way of \p partialreduce_body function),
@@ -640,8 +640,9 @@ public:
      *
      * Static scheduling onto nw worker threads.
      * Iteration space is walked with stride \p step.
-     * Data is statically cut in maximal partitions, i.e.
+     * Data is statically partitioned in blocks, i.e.
      * partition size = last-first/(nw*step)
+     *
      *
      * \param var inital value of reduction variable (accumulator)
      * \param indentity indetity value for the reduction function

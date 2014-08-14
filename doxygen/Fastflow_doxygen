@@ -40,7 +40,7 @@ PROJECT_NAME           = "FastFlow"
 # could be handy for archiving the generated documentation or if some version
 # control system is used.
 
-PROJECT_NUMBER         = 2.0.4
+PROJECT_NUMBER         = SVN-r182-Aug-14-2014 
 
 # Using the PROJECT_BRIEF tag one can provide an optional one line description
 # for a project that appears at the top of each page and should give viewer a
