@@ -36,39 +36,40 @@
  *
  */
 
+#if !defined(HAS_CXX11_VARIADIC_TEMPLATES)
+#define HAS_CXX11_VARIADIC_TEMPLATES 1
+#endif
 #include <ff/parallel_for.hpp>
 #include <ff/pipeline.hpp>
 #include <ff/farm.hpp>
 #include <ff/map.hpp>
 
 using namespace ff;
-
-
 const long SIZE = 100;
 
-class mapWorker: public ff_Map<> {
-public:
+typedef std::vector<long> task_t;
+
+struct mapWorker: ff_Map<> {
     void *svc(void*) {
-        std::vector<long> *A = new std::vector<long>(SIZE);
-        
+        task_t *A = new task_t(SIZE);
+       
         // this is the parallel_for provided by the ff_Map class
         parallel_for(0,A->size(),[&A](const long i) { 
                 A->operator[](i)=i;
-            });
+            },3);
         ff_send_out(A);
-        return NULL;
+        return EOS;
     }
 };
 
-class mapStage: public ff_Map<> {
-public:
+struct mapStage: ff_Map<> {
     void *svc(void *task) {
-        std::vector<long> *A = reinterpret_cast<std::vector<long>*>(task);
+        task_t *A = reinterpret_cast<task_t*>(task);
         
         // this is the parallel_for provided by the ff_Map class
         parallel_for(0,A->size(),[&A](const long i) { 
                 A->operator[](i) += i;
-            });
+            },2);
         
         printf("mapStage received:\n");
         for(size_t i=0;i<A->size();++i)
@@ -81,16 +82,14 @@ public:
 
 
 int main() {
-    ff_pipeline pipe;
     std::vector<ff_node*> W;
     W.push_back(new mapWorker);
     W.push_back(new mapWorker);
     ff_farm<> farm(W);
     farm.cleanup_workers();
-    pipe.add_stage(&farm);
     mapStage stage;
-    pipe.add_stage(&stage);
-    pipe.run_and_wait_end();
-    
+    ff_pipe<task_t> pipe(&farm,&stage);
+    if (pipe.run_and_wait_end()<0)
+        error("running pipe");   
     return 0;	
 }

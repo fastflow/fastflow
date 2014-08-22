@@ -73,11 +73,6 @@ enum {FF_AUTO=-1};
 #define PRAGMA_IVDEP
 #endif
 
-#if !defined(FF_PARFOR_BARRIER)
-#define FF_PARFOR_BARRIER Barrier   
-// if spinwait=true, try also to compile with -DFF_PARFOR_BARRIER=spinBarrier
-#endif
-
 namespace ff {
 
     /* -------------------- Parallel For/Reduce Macros -------------------- */
@@ -275,7 +270,7 @@ namespace ff {
     name->setloop(begin,end,step,chunk,nw);                                              \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,            \
                          const int _ff_thread_id, const type&) {                         \
-        const long _ff_jump0=labs(nw)*(-chunk*step);                                     \
+        const long _ff_jump0=(name->getnw())*(-chunk*step);                              \
         const long _ff_jump1=(-chunk*step);                                              \
         PRAGMA_IVDEP;                                                                    \
         for(long _ff_##idx=ff_start_##idx;_ff_##idx<ff_stop_##idx;_ff_##idx+=_ff_jump0)  \
@@ -323,7 +318,7 @@ namespace ff {
     auto idtt_##name =identity;                                                          \
     auto F_##name =[&](const long ff_start_##idx, const long ff_stop_##idx,              \
                        const int _ff_thread_id, decltype(var) &var) {                    \
-        const long _ff_jump0=labs(nw)*(-chunk*step);                                     \
+        const long _ff_jump0=(name->getnw())*(-chunk*step);                              \
         const long _ff_jump1=(-chunk*step);                                              \
         PRAGMA_IVDEP;                                                                    \
         for(long _ff_##idx=ff_start_##idx;_ff_##idx<ff_stop_##idx;_ff_##idx+=_ff_jump0)  \
@@ -791,7 +786,7 @@ protected:
         workerlosetime_in(aggressive);
     }
 public:
-    forallreduce_W(forall_Scheduler *const sched,FF_PARFOR_BARRIER *const loopbar, F_t F):
+    forallreduce_W(forall_Scheduler *const sched, ffBarrier *const loopbar, F_t F):
         sched(sched),loopbar(loopbar), schedRunning(true), 
         spinwait(false), aggressive(true),F(F) {}
     
@@ -824,7 +819,7 @@ public:
 
 protected:
     forall_Scheduler *const sched;
-    FF_PARFOR_BARRIER *const loopbar;
+    ffBarrier *const loopbar;
     bool schedRunning;    
 protected:
     bool spinwait,aggressive;
@@ -838,7 +833,7 @@ public:
     typedef ff_buffernode Tres_t;
     typedef std::function<void(const long,const long, const int, ff_buffernode&)> F_t;
 public:
-    forallpipereduce_W(forall_Scheduler *const sched,FF_PARFOR_BARRIER *const loopbar, F_t F):
+    forallpipereduce_W(forall_Scheduler *const sched,ffBarrier *const loopbar, F_t F):
         forallreduce_W<ff_buffernode>(sched,loopbar,F) { res.set(8192,false,get_my_id()); }
 
     inline void* svc(void* t) {
@@ -887,12 +882,15 @@ protected:
 private:
     Tres_t t; // not used
     size_t numCores;
-    FF_PARFOR_BARRIER loopbar;
+    ffBarrier *loopbar;
 public:
 
     ff_forall_farm(ssize_t maxnw, const bool spinwait=false, const bool skipwarmup=false):
         ff_farm<foralllb_t>(false,8*ff_farm<>::DEF_MAX_NUM_WORKERS,8*ff_farm<>::DEF_MAX_NUM_WORKERS,
-                            true, ff_farm<>::DEF_MAX_NUM_WORKERS,true),loopbar((maxnw<=0?ff_farm<>::DEF_MAX_NUM_WORKERS+1:(size_t)(maxnw+1))),
+                            true, ff_farm<>::DEF_MAX_NUM_WORKERS,true), // cleanup at exit !
+        loopbar( spinwait ? 
+                 (ffBarrier*)(new spinBarrier(maxnw<=0?ff_farm<>::DEF_MAX_NUM_WORKERS+1:(size_t)(maxnw+1))) :
+                 (ffBarrier*)(new Barrier(maxnw<=0?ff_farm<>::DEF_MAX_NUM_WORKERS+1:(size_t)(maxnw+1))) ),
         skipwarmup(skipwarmup),spinwait(spinwait) {
         numCores = ((foralllb_t*const)getlb())->getNCores();
         if (maxnw<=0) maxnw=numCores;
@@ -901,8 +899,7 @@ public:
         forall_Scheduler *sched = new forall_Scheduler(getlb(),maxnw);
         ff_farm<foralllb_t>::add_emitter(sched);
         for(size_t i=0;i<(size_t)maxnw;++i)
-            forall_w.push_back(new Worker_t(sched, &loopbar, donothing));
-            //forall_w.push_back(new forallreduce_W<Tres>(sched, &loopbar, donothing));
+            forall_w.push_back(new Worker_t(sched, loopbar, donothing));
         ff_farm<foralllb_t>::add_workers(forall_w);
         ff_farm<foralllb_t>::wrap_around();
 
@@ -930,6 +927,10 @@ public:
             //resetqueues(maxnw);
         }
     }
+    virtual ~ff_forall_farm() {
+        if (loopbar) delete loopbar;
+    }
+
 
     // It returns true if the scheduler has to be started, false otherwise.
     //
@@ -977,9 +978,9 @@ public:
         } else {
             if (spinwait) {
                 // all worker threads have already crossed the barrier so it is safe to restart it
-                loopbar.barrierSetup(nwtostart+1);
+                loopbar->barrierSetup(nwtostart+1);
                 // NOTE: here is not possible to use sendTask because otherwise there could be 
-                //       a rece between the main thread and the workers in accessing the task table.
+                //       a race between the main thread and the workers in accessing the task table.
                 ((forall_Scheduler*)getEmitter())->sendWakeUp(); 
             } else 
                 ((forall_Scheduler*)getEmitter())->sendTask(true);
@@ -988,7 +989,6 @@ public:
         }
         return r;
     }
-
 
     inline int run_and_wait_end() {
         assert(spinwait == false); 
@@ -1039,7 +1039,7 @@ public:
         //if (startScheduler(getnw())) return getlb()->wait_lb_freezing();
         if (schedRunning) return getlb()->wait_lb_freezing();
         if (spinwait) { 
-            loopbar.doBarrier(getnw()); 
+            loopbar->doBarrier(getnw()); 
             return 0;
         }
         return getlb()->wait_freezingWorkers();

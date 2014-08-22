@@ -314,7 +314,7 @@ public:
     template <typename Function>
     inline void parallel_for_static(long first, long last, long step, long grain, 
                                     const Function& f, const long nw=FF_AUTO) {
-        if (grain==0 || labs(nw)==1) {
+        if (grain==0 || nw==1) {
             // Divide in evenly partioned parts
             FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
                 f(parforidx);            
@@ -524,7 +524,7 @@ public:
     template <typename Function>
     inline void parallel_for_static(long first, long last, long step, long grain, 
                                     const Function& f, const long nw=FF_AUTO) {
-        if (grain==0 || labs(nw)==1) {
+        if (grain==0 || nw==1) {
             FF_PARFOR_T_START(pfr, T, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
                 f(parforidx);            
             } FF_PARFOR_T_STOP(pfr,T);
@@ -657,7 +657,7 @@ public:
                                        long first, long last, long step, long grain, 
                                        const Function& body, const FReduction& finalreduce,
                                        const long nw=FF_AUTO) {
-        if (grain==0 || labs(nw)==1) {
+        if (grain==0 || nw==1) {
             FF_PARFORREDUCE_START(pfr, var, identity, parforidx,first,last,step,grain,nw) {
                 body(parforidx, var);            
             } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
@@ -680,14 +680,14 @@ protected:
     ff_forall_farm<forallpipereduce_W> *pfr; 
     struct reduceStage: ff_minode {        
         typedef std::function<void(const task_t &)> F_t;
-        void *svc(void *t) {
+        inline void *svc(void *t) {
             const task_t& task=reinterpret_cast<task_t>(t);
             F(task);
             return GO_ON;
         }
-        int  wait() { return ff_minode::wait(); }
+        inline int  wait() { return ff_minode::wait(); }        
+        inline void setF(F_t f) { F = f; }
 
-        void setF(F_t f) { F = f; }        
         F_t F;
     } reduce;
     ff_pipe<task_t>  pipe;
@@ -734,6 +734,22 @@ public:
         return pfr->stopSpinning();
     }
 
+
+    template <typename Function>
+    inline void parallel_for_idx(long first, long last, long step, long grain, 
+                                 const Function& Map, const long nw=FF_AUTO) {
+        
+        pfr->setloop(first,last,step,grain,nw);
+        pfr->setF(Map);
+        auto donothing=[](task_t) { };
+        reduce.setF(donothing);
+        auto r=-1;
+        if (pfr->run_then_freeze(nw) != -1)
+            if (reduce.run_then_freeze(nw) != -1)
+                r = pipe.wait_freezing();                               
+        if (r<0) error("ParallelForPipeReduce: parallel_for_idx, starting pipe\n");      
+    }
+
     template <typename Function, typename FReduction>
     inline void parallel_reduce_idx(long first, long last, long step, long grain, 
                                     const Function& Map, const FReduction& Reduce,
@@ -748,20 +764,6 @@ public:
                 r = pipe.wait_freezing();            
         if (r<0) error("ParallelForPipeReduce: parallel_reduce_idx, starting pipe\n");
     }
-
-    template <typename Function>
-    inline void parallel_for_idx(long first, long last, long step, long grain, 
-                                 const Function& Map, const long nw=FF_AUTO) {
-        
-        pfr->setloop(first,last,step,grain,nw);
-        pfr->setF(Map);
-        auto r=-1;
-        if (pfr->run_then_freeze(nw) != -1)
-            r = pfr->wait_freezing();            
-        if (r<0) error("ParallelForPipeReduce: parallel_for_idx, starting pipe\n");
-    }
-
-
 };
 #endif 
 
