@@ -121,7 +121,7 @@ int main() {
     /* ------------------------------------------- */
     // farm introduction. The pipeline has also a feedback channel.
     ff_pipe<myTask> pipe4(f1,new ff_farm<>((func_t)f2,3),new ff_farm<>((func_t)f3,2));
-    pipe4.add_feedback();
+    pipe4.wrap_around();
     pipe4.run_and_wait_end();
     printf("done 4th\n\n");
     /* ------------------------------------------- */

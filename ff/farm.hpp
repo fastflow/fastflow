@@ -267,7 +267,7 @@ public:
     ff_farm(bool input_ch=false,
             int in_buffer_entries=DEF_IN_BUFF_ENTRIES, 
             int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
-            bool worker_cleanup=false,
+            bool worker_cleanup=false, // NOTE: by default no cleanup at exit is done !
             int max_num_workers=DEF_MAX_NUM_WORKERS,
             bool fixedsize=false):  // NOTE: by default all the internal farm queues are unbounded !
         has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
@@ -293,7 +293,7 @@ public:
      * Destruct the load balancer, the
      * gatherer, all the workers
      */
-    ~ff_farm() { 
+    virtual ~ff_farm() { 
         if (end_callback) { 
             end_callback(end_callback_param);
             end_callback = NULL;
@@ -1526,7 +1526,6 @@ public:
     }
 
     virtual bool isMultiInput() const { return true;}
-
 
     virtual inline void get_out_nodes(svector<ff_node*>&w) {
         w.push_back(this);

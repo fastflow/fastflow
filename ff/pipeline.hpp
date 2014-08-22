@@ -623,10 +623,21 @@ protected:
         return 0;
     }
 
+    inline bool isMultiInput() const { 
+        if (nodes_list.size()==0) return false;
+        return nodes_list[0]->isMultiInput();
+    }
+    inline bool isMultiOutput() const {
+        if (nodes_list.size()==0) return false;
+        int last = static_cast<int>(nodes_list.size())-1;
+        return nodes_list[last]->isMultiOutput();
+    }
     inline int set_input(ff_node *node) { 
         return nodes_list[0]->set_input(node);
     }
-
+    inline int set_input(svector<ff_node *> & w) { 
+             return nodes_list[0]->set_input(w);
+    }   
     inline int set_output(ff_node *node) {
         int last = static_cast<int>(nodes_list.size())-1;
         return nodes_list[last]->set_output(node);
@@ -701,8 +712,8 @@ private:
             for_each<I + 1, FuncT, Tp...>(t, f);  // all but the first
         }
             
-  
-            inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }
+            
+        inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }
         //    inline void add2pipe(F_t F) 
         //{   ff_pipeline::add_stage(new Fstage<TaskType>(F));  }
         inline void add2pipe(std::function<TaskType*(TaskType*,ff_node*const)> F) { ff_pipeline::add_stage(new Fstage2<TaskType>(F));  }
@@ -757,13 +768,10 @@ private:
             for_each(t,add_to_pipe(this));
         }
         
-        int add_feedback() {
-            return ff_pipeline::wrap_around();
-        }
-        
         operator ff_node* () { return this;}
     };
 #endif /* HAS_CXX11_VARIADIC_TEMPLATES */
+
     template<typename T>
     ff_node* toffnode(T* p) { return p;}
     template<typename T>

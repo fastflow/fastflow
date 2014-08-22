@@ -94,7 +94,7 @@ protected:
 
     int freeze_and_run(bool=false) {
         if (!prepared) if (prepare()<0) return -1;
-	return ff_node::freeze_and_run(true);
+        return ff_node::freeze_and_run(true);
     }
 
 public:
