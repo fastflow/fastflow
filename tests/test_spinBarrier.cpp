@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <vector>
 #include <ff/node.hpp>
+#include <ff/barrier.hpp>
 
 using namespace ff;
 
@@ -44,11 +45,11 @@ using namespace ff;
 #endif
 
 #if defined(USE_PTHREAD_BARRIER)
-#include <pthread.h>
-static Barrier bar;
+#define SPIN 0
 #else
-static spinBarrier bar;
+#define SPIN 1
 #endif
+static barrierSelector<SPIN> bar;
 
 // global array
 int* data=NULL;

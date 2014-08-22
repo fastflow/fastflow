@@ -131,7 +131,7 @@ int main(int argc, char * argv[]) {
 
 #else 
 
-#if 0
+#if 1
 #if defined(TEST_PARFOR_PIPE_REDUCE)
     // yet another version (to test ParallelForPipeReduce)
     {        
@@ -163,7 +163,7 @@ int main(int argc, char * argv[]) {
 
         //pfr.parallel_for_static(0,arraySize,1,CHUNKSIZE, [&](const long j) { A[j]=j*3.14; B[j]=2.1*j;});
         pfr.parallel_for(0,arraySize,1,CHUNKSIZE, [&](const long j) { A[j]=j*3.14; B[j]=2.1*j;});
-        auto Fsum = [](double& v, const double elem) { v += elem; };
+        auto Fsum = [](double& v, const double& elem) { v += elem; };
         
         ff::ffTime(ff::START_TIME);    
         for(int z=0;z<NTIMES;++z) {

@@ -30,7 +30,6 @@
 // Aug 3, 1024
 // All parfors inc element-wise the array A.
 
-#define FF
 /**
  * \file parfor_basic.cpp
  * \ingroup applications
@@ -42,11 +41,7 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
-#ifdef FF
 #include <ff/parallel_for.hpp>
-#else
-# include <omp.h>
-#endif
  
 const long N=10;
 
@@ -91,17 +86,16 @@ int main() {
     Dynamic scheduling. grain = N/nw
   */
 
-#ifdef FF
   ff::ParallelFor pf(nworkers, false);
   pf.parallel_for(0L,N,[&A](const long i) {
       A[i]+=1;
     });
-#else // OMP
-#pragma omp parallel for num_threads(nworkers)
-  for(long i=0;i<N;++i) {
-      A[i]+=1;
-    };
-#endif
+  /* OpenMP version 
+   * #pragma omp parallel for num_threads(nworkers)
+   * for(long i=0;i<N;++i) {
+   * A[i]+=1;
+   * };
+   */
   
   std::cout << "====================================================" << std::endl;
   std::cout << "1) Basic" << std::endl;

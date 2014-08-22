@@ -1,10 +1,13 @@
-* 24/01/14 - v.2.0.4
+* 22/08/14 - v.2.0.5
+   - if spinWait is set to true in the parallel for, than spinBarrier is used as loop barrier
+   - removed barrier implementation from node.hpp and created a new file barrier.hpp
    - fixed a bug in the init_data_static function (ParallelFor related)
    - fixed some problems appearing when remove_collector is called
    - an ff_minode can be used in place of the ff_node (i.e. when there is no need to 
      use an ff_minode, indeed) 
    - first version of the ParallelForPipeReduce pattern
    - fixed problem with run_then_freeze for the ff_minode and ff_monode
+* 24/01/14 - v.2.0.4
    - poolEvolution interface improved
    - introduced the threadPause() method in the ParallelFor/Reduce patterns. 
      It may be used to  put threads to sleep when the spinwait flag is set 
