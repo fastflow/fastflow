@@ -157,7 +157,6 @@ protected:
      *
      * It pushes the tasks in a queue. 
      */
-
     void push(void * task) {
         //register int cnt = 0;
         if (!filter) {
@@ -198,9 +197,9 @@ protected:
     }
 
     /**
-     * \brief Pop a tak from un unbounded queue.
+     * \brief Pop a task
      *
-     * It pops the task from an unbounded queue.
+     * It pops the task.
      *
      * \return The task popped from the buffer.
      */
