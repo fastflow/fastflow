@@ -309,8 +309,9 @@ public:
     inline void get_out_nodes(svector<ff_node*>&w) {
         assert(nodes_list.size()>0);
         int last = static_cast<int>(nodes_list.size())-1;
+        const size_t sizebefore = w.size();
         nodes_list[last]->get_out_nodes(w);
-        if (w.size()==0) 
+        if (w.size()==sizebefore) 
             w.push_back(nodes_list[last]);
     }
 
