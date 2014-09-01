@@ -722,8 +722,9 @@ public:
 #if defined(TEST_QUEUE_LOCK)
     virtual bool put(void * ptr) { 
         pthread_mutex_lock(&mutex_in);
-        while(!in->push(ptr))
+        while(!in->push(ptr)){
             pthread_cond_wait(&queue_in_task_out,&mutex_in);
+        }
         pthread_cond_signal(&queue_in_task_in);
         pthread_mutex_unlock(&mutex_in);
         return true;
@@ -731,8 +732,9 @@ public:
 
     virtual bool  get(void **ptr) { 
         pthread_mutex_lock(&mutex_out);
-        while(!out->pop(ptr))
+        while(!out->pop(ptr)) {
             pthread_cond_wait(&queue_out_task_in,&mutex_out);
+        }
         pthread_cond_signal(&queue_out_task_out);
         pthread_mutex_unlock(&mutex_out);
         return true;
@@ -862,13 +864,14 @@ protected:
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
-#if defined(TEST_QUEUE_SPIN_LOCK)
+#if defined(TEST_QUEUE_LOCK)
         
         pthread_mutex_init(&mutex_in,NULL);
         pthread_mutex_init(&mutex_out,NULL);
-        pthread_cond_init(&queue_out_task, NULL);
-        pthread_cond_init(&queue_in_task,  NULL);
-
+        pthread_cond_init(&queue_out_task_in, NULL);
+        pthread_cond_init(&queue_out_task_out, NULL);
+        pthread_cond_init(&queue_in_task_in,  NULL);
+        pthread_cond_init(&queue_in_task_out,  NULL);
 #endif
     };
     
