@@ -36,6 +36,7 @@
  *
  */
 
+#include <ff/farm.hpp>
 #if !defined(HAS_CXX11_VARIADIC_TEMPLATES)
 #define HAS_CXX11_VARIADIC_TEMPLATES 1
 #endif
@@ -47,11 +48,11 @@
 using namespace ff;
 const long SIZE = 100;
 
-typedef std::vector<long> task_t;
+typedef std::vector<long> ff_task_t;
 
 struct mapWorker: ff_Map<> {
     void *svc(void*) {
-        task_t *A = new task_t(SIZE);
+        ff_task_t *A = new ff_task_t(SIZE);
        
         // this is the parallel_for provided by the ff_Map class
         parallel_for(0,A->size(),[&A](const long i) { 
@@ -64,7 +65,7 @@ struct mapWorker: ff_Map<> {
 
 struct mapStage: ff_Map<> {
     void *svc(void *task) {
-        task_t *A = reinterpret_cast<task_t*>(task);
+        ff_task_t *A = reinterpret_cast<ff_task_t*>(task);
         
         // this is the parallel_for provided by the ff_Map class
         parallel_for(0,A->size(),[&A](const long i) { 
@@ -88,7 +89,7 @@ int main() {
     ff_farm<> farm(W);
     farm.cleanup_workers();
     mapStage stage;
-    ff_pipe<task_t> pipe(&farm,&stage);
+    ff_pipe<ff_task_t> pipe(&farm,&stage);
     if (pipe.run_and_wait_end()<0)
         error("running pipe");   
     return 0;	
