@@ -22,6 +22,7 @@
 #ifndef FF_CONFIG_HPP
 #define FF_CONFIG_HPP
 
+#include <stddef.h> 
 #include <limits.h>
 
 #if !defined(CACHE_LINE_SIZE)
