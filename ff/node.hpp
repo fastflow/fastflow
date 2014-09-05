@@ -400,6 +400,7 @@ private:
     friend class ff_map;
     friend class ff_loadbalancer;
     friend class ff_gatherer;
+    friend class ff_ofarm;
 
 protected:
     
