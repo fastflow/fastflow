@@ -78,7 +78,7 @@ endif (CMAKE_SYSTEM_NAME MATCHES "Windows")
 #  MESSAGE(STATUS (${CMAKE_SYSTEM} " system: using Windows native threads]")
 #endif (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
 
-#ADD_DEFINITIONS(-DUSE_CMAKE_CONFIG)
+ADD_DEFINITIONS(-DUSE_CMAKE_CONFIG)
 
 find_package(Threads)
 if (NOT(CMAKE_HAVE_PTHREAD_H))
