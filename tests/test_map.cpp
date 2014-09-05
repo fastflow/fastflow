@@ -36,7 +36,7 @@
  *
  */
 
-#include <ff/farm.hpp>
+#include <ff/config.hpp>
 #if !defined(HAS_CXX11_VARIADIC_TEMPLATES)
 #define HAS_CXX11_VARIADIC_TEMPLATES 1
 #endif
@@ -57,7 +57,7 @@ struct mapWorker: ff_Map<> {
         // this is the parallel_for provided by the ff_Map class
         parallel_for(0,A->size(),[&A](const long i) { 
                 A->operator[](i)=i;
-            },3);
+            },std::min(3,ff_realNumCores()));
         ff_send_out(A);
         return EOS;
     }
