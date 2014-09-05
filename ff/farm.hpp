@@ -1203,7 +1203,11 @@ private:
      * \brief Ordered farm
      */
     class ofarmE: public ff_node {
+        static bool ff_send_out_ofarmE(void * task,unsigned int retry,unsigned int ticks, void *obj) {
+            return ((ofarmE *)obj)->ff_send_out(task, retry, ticks);
+        }
     public:
+        
         /**
          * \internal
          * \brief Emitter of ordered form
@@ -1230,7 +1234,10 @@ private:
          * \brief Set filtering policy for scheduling
          *
          */
-        void setfilter(ff_node* f) { E_f = f;}
+        void setfilter(ff_node* f) { 
+            E_f = f;
+            if (f) f->registerCallback(ff_send_out_ofarmE, this);
+        }
 
         /**
          * \brief \p svc_init method
@@ -1288,6 +1295,9 @@ private:
      * \brief Ordered farm default Emitter
      */
     class ofarmC: public ff_node {
+        static bool ff_send_out_ofarmC(void * task,unsigned int retry,unsigned int ticks, void *obj) {
+            return ((ofarmC *)obj)->ff_send_out(task, retry, ticks);
+        }
     public:
         /**
          * \brief Constructor
@@ -1314,7 +1324,10 @@ private:
          * It sets the filter.
          *
          */
-        void setfilter(ff_node* f) { C_f = f;}
+        void setfilter(ff_node* f) { 
+            C_f = f;
+            if (f) f->registerCallback(ff_send_out_ofarmC, this);
+        }
 
         /**
          * \brief \p svc_init method

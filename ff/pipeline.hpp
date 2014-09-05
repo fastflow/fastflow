@@ -39,63 +39,6 @@
 
 namespace ff {
 
-/* ---------------- basic high-level macros ----------------------- */
-
-    /* FF_PIPEA creates an n-stage accelerator pipeline (max 16 stages) 
-     * where channels have type 'type'. The functions called in each stage
-     * must have the following signature:
-     *   bool (*F)(type &)
-     * If the function F returns false an EOS is produced in the 
-     * output channel.
-     *
-     * Usage example:
-     *
-     *  struct task_t { .....};
-     *
-     *  bool F(task_t &task) { .....; return true;}
-     *  bool G(task_t &task) { .....; return true;}
-     *  bool H(task_t &task) { .....; return true;}
-     * 
-     *  FF_PIPEA(pipe1, task_t, F, G);     // 2-stage
-     *  FF_PIPEA(pipe2, task_t, F, G, H);  // 3-stage
-     *
-     *  FF_PIPEARUN(pipe1); FF_PIPEARUN(pipe2);
-     *  for(...) {
-     *     if (even_task) FF_PIPEAOFFLOAD(pipe1, new task_t(...));
-     *     else FF_PIPEAOFFLOAD(pipe2, new task_t(...));
-     *  }
-     *  FF_PIEAEND(pipe1);  FF_PIPEAEND(pipe2);
-     *  FF_PIEAWAIT(pipe1); FF_PIPEAWAIT(pipe2);
-     *
-     */
-#define FF_PIPEA(pipename, type, ...)                                   \
-    ff_pipeline _FF_node_##pipename(true);                              \
-    _FF_node_##pipename.cleanup_nodes();                                \
-    {                                                                   \
-      class _FF_pipe_stage: public ff_node {                            \
-          typedef bool (*type_f)(type &);                               \
-          type_f F;                                                     \
-      public:                                                           \
-       _FF_pipe_stage(type_f F):F(F) {}                                 \
-       void* svc(void *task) {                                          \
-          type* _ff_in = (type*)task;                                   \
-          if (!F(*_ff_in)) return NULL;                                 \
-          return task;                                                  \
-       }                                                                \
-      };                                                                \
-      ff_pipeline *p = &_FF_node_##pipename;                            \
-      FOREACHPIPE(p->add_stage, __VA_ARGS__);                           \
-    }
-
-#define FF_PIPEARUN(pipename)  _FF_node_##pipename.run()
-#define FF_PIPEAWAIT(pipename) _FF_node_##pipename.wait()
-#define FF_PIPEAOFFLOAD(pipename, task)  _FF_node_##pipename.offload(task);
-#define FF_PIPEAEND(pipename)  _FF_node_##pipename.offload(EOS)
-#define FF_PIPEAGETRESULTNB(pipename, result) _FF_node_##pipename.load_result_nb((void**)result)
-#define FF_PIPEAGETRESULT(pipename, result) _FF_node_##pipename.load_result((void**)result)
-/* ---------------------------------------------------------------- */
-
-
 
 
 /**
@@ -780,6 +723,64 @@ private:
     
     // ---------------------------------------------------------------
 
+#if 0  // old code
+
+
+/* ---------------- basic high-level macros ----------------------- */
+
+    /* FF_PIPEA creates an n-stage accelerator pipeline (max 16 stages) 
+     * where channels have type 'type'. The functions called in each stage
+     * must have the following signature:
+     *   bool (*F)(type &)
+     * If the function F returns false an EOS is produced in the 
+     * output channel.
+     *
+     * Usage example:
+     *
+     *  struct task_t { .....};
+     *
+     *  bool F(task_t &task) { .....; return true;}
+     *  bool G(task_t &task) { .....; return true;}
+     *  bool H(task_t &task) { .....; return true;}
+     * 
+     *  FF_PIPEA(pipe1, task_t, F, G);     // 2-stage
+     *  FF_PIPEA(pipe2, task_t, F, G, H);  // 3-stage
+     *
+     *  FF_PIPEARUN(pipe1); FF_PIPEARUN(pipe2);
+     *  for(...) {
+     *     if (even_task) FF_PIPEAOFFLOAD(pipe1, new task_t(...));
+     *     else FF_PIPEAOFFLOAD(pipe2, new task_t(...));
+     *  }
+     *  FF_PIEAEND(pipe1);  FF_PIPEAEND(pipe2);
+     *  FF_PIEAWAIT(pipe1); FF_PIPEAWAIT(pipe2);
+     *
+     */
+#define FF_PIPEA(pipename, type, ...)                                   \
+    ff_pipeline _FF_node_##pipename(true);                              \
+    _FF_node_##pipename.cleanup_nodes();                                \
+    {                                                                   \
+      class _FF_pipe_stage: public ff_node {                            \
+          typedef bool (*type_f)(type &);                               \
+          type_f F;                                                     \
+      public:                                                           \
+       _FF_pipe_stage(type_f F):F(F) {}                                 \
+       void* svc(void *task) {                                          \
+          type* _ff_in = (type*)task;                                   \
+          if (!F(*_ff_in)) return NULL;                                 \
+          return task;                                                  \
+       }                                                                \
+      };                                                                \
+      ff_pipeline *p = &_FF_node_##pipename;                            \
+      FOREACHPIPE(p->add_stage, __VA_ARGS__);                           \
+    }
+
+#define FF_PIPEARUN(pipename)  _FF_node_##pipename.run()
+#define FF_PIPEAWAIT(pipename) _FF_node_##pipename.wait()
+#define FF_PIPEAOFFLOAD(pipename, task)  _FF_node_##pipename.offload(task);
+#define FF_PIPEAEND(pipename)  _FF_node_##pipename.offload(EOS)
+#define FF_PIPEAGETRESULTNB(pipename, result) _FF_node_##pipename.load_result_nb((void**)result)
+#define FF_PIPEAGETRESULT(pipename, result) _FF_node_##pipename.load_result((void**)result)
+/* ---------------------------------------------------------------- */
 
 
 #define CONCAT(x, y)  x##y
@@ -809,6 +810,8 @@ private:
 #define FFCOUNT(...) COUNT_(X,##__VA_ARGS__, 16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
 
 #define FOREACHPIPE(apply, x, ...) FFPIPE_(FFPIPE_NARG(x, __VA_ARGS__), apply, x, __VA_ARGS__)
+
+#endif // if 0
 
 } // namespace ff
 
