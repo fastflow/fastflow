@@ -1,4 +1,7 @@
 * 22/08/14 - v.2.0.5
+   - the ff_send_out now works also inside the Emitter and Collector of the 
+     ordered farm (ofarm)
+   - removed FF_PIPE macros
    - if spinWait is set to true in the parallel for, than spinBarrier is used as loop barrier
    - removed barrier implementation from node.hpp and created a new file barrier.hpp
    - fixed a bug in the init_data_static function (ParallelFor related)
