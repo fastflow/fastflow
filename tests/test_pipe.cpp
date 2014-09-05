@@ -23,8 +23,14 @@
  *  the GNU General Public License.
  *
  ****************************************************************************
+ *
+ * Simple 2-stage pipeline feeded by the main program (accelerator mode).
+ *
  */
 
+#if !defined( HAS_CXX11_VARIADIC_TEMPLATES )
+#defined HAS_CXX11_VARIADIC_TEMPLATES 1
+#endif
 #include <ff/pipeline.hpp>
   
 using namespace ff;
@@ -37,13 +43,15 @@ struct fftask_t {
     fftask_t(long r):r(r) {}
     long r;
 };
-static inline bool wrapF(fftask_t &t) { 
-    t.r = F(t.r);
-    return true;
+static inline fftask_t* wrapF(fftask_t* in, ff_node*const) { 
+    long r = F(in->r);
+    in->r=r;
+    return in;
 }
-static inline bool wrapG(fftask_t &t) { 
-    t.r = G(t.r);
-    return true;
+static inline fftask_t* wrapG(fftask_t *in, ff_node*const) { 
+    long r = G(in->r);
+    in->r=r;
+    return in;
 }
 #endif
 
@@ -61,16 +69,21 @@ int main(int argc, char * argv[]) {
     for(long i=0;i<streamlen;++i)
         printf("%ld ", G(F(i)));
 #else
-    FF_PIPEA(pipe, fftask_t, wrapF, wrapG);
-    FF_PIPEARUN(pipe);
-    fftask_t *r = NULL;
+    ff_pipe<fftask_t> pipe(true, wrapF,wrapG); // accelerator mode turned on
+    pipe.run_then_freeze();
     for(long i=0;i<streamlen;++i) {
-        FF_PIPEAOFFLOAD(pipe, new fftask_t(i));
-        if (FF_PIPEAGETRESULTNB(pipe, &r)) printf("%ld ", r->r);
+        fftask_t *task = new fftask_t(i);
+        pipe.offload(task);
     }
-    FF_PIPEAEND(pipe);
-    while(FF_PIPEAGETRESULT(pipe,&r)) printf("%ld ", r->r);
-    FF_PIPEAWAIT(pipe);
+    pipe.offload(EOS);
+    for(long i=0;i<streamlen;++i) {
+        fftask_t *task = nullptr;
+        pipe.load_result(reinterpret_cast<void**>(&task));
+        assert(task != (void*)EOS);
+        printf("result %ld\n", task->r);
+        delete task;
+    }
+    pipe.wait();
 #endif
     printf("\n");
     return 0;
