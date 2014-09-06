@@ -54,8 +54,13 @@
 #include <cstring>
 #include <cassert>
 #include <stdexcept>
+#if defined(_WIN32) && defined(FF)
+#include <ff/platforms/platform.h>
+#include <ff/platforms/getopt.hpp>
+#else
 #include <getopt.h>
 #include <pthread.h>
+#endif
 #include <math.h>
 #include <utility>
 #include <limits>
@@ -3402,7 +3407,7 @@ public:
 			// Try to align this read
 			while (retry) {
 				retry = false;
-				assert_eq(alignTask->bufa.color, false);
+				//assert_eq(alignTask->bufa.color, false);
 				ca->nextRead(); // clear the cache
 				alignTask->olm->reads++;
 				assert(!ca->aligning());
@@ -3799,7 +3804,7 @@ public:
 						assert(msinkwrap.repOk());
 						//rnd.init(ROTL(rds[mate]->seed, 10));
 						assert(shs[mate].empty());
-						assert(shs[mate].repOk(ca->current()));
+						//assert(shs[mate].repOk(ca->current()));
 						bool yfw = minedfw[mate] <= 1 && !nofw[mate];
 						bool yrc = minedrc[mate] <= 1 && !norc[mate];
 						if (yfw || yrc) {

@@ -42,8 +42,12 @@
 #include <string>
 #include <cassert>
 #include <stdexcept>
+#if defined(_WIN32) && defined(FF)
+#include <ff/platforms/platform.h>
+#else
 #include <getopt.h>
 #include <pthread.h>
+#endif
 #include <math.h>
 #include <utility>
 #include <limits>

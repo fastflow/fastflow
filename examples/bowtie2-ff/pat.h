@@ -41,7 +41,9 @@
 #include "ds.h"
 #include "read.h"
 #include "util.h"
+#ifndef _WIN32
 #include <sys/time.h>
+#endif
 
 /**
  * Classes and routines for reading reads from various input sources.

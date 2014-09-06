@@ -25,7 +25,9 @@
 #include "assert_helpers.h"
 #include "alphabet.h"
 #include "random_source.h"
+#ifndef _WIN32
 #include <sys/time.h>
+#endif
 
 /**
  * Four kinds of strings defined here:

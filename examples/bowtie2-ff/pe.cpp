@@ -19,6 +19,9 @@
 
 #include "assert_helpers.h"
 #include "pe.h"
+#if defined(_WIN32) && defined(FF)
+#include <ff/platforms/platform.h>
+#endif
 
 using namespace std;
 
@@ -81,8 +84,8 @@ int PairedEndPolicy::peClassifyPair(
 		oneLeft = !fw1;
 	}
 	// Calc implied fragment size
-	int64_t fraglo = min<int64_t>(off1, off2);
-	int64_t fraghi = max<int64_t>(off1+len1, off2+len2);
+	int64_t fraglo = std::min<int64_t>(off1, off2);
+	int64_t fraghi = std::max<int64_t>(off1+len1, off2+len2);
 	assert_gt(fraghi, fraglo);
 	size_t frag = (size_t)(fraghi - fraglo);
 	if(frag > maxfrag || frag < minfrag) {

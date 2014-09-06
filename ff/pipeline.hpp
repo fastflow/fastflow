@@ -646,14 +646,14 @@ private:
         typedef TaskType*(*F_t)(TaskType*);
         
         template<std::size_t I = 1, typename FuncT, typename... Tp>
-        inline typename std::enable_if<I == (sizeof...(Tp)-1), void>::type
-        for_each(std::tuple<Tp...> & t, FuncT f) { f(std::get<I>(t)); } // last one
+        inline typename std::enable_if< (I+1) == (sizeof...(Tp)), void>::type
+        for_each_pipe(std::tuple<Tp...> & t, FuncT f) { f(std::get<I>(t)); } // last one
         
         template<std::size_t I = 1, typename FuncT, typename... Tp>
-        inline typename std::enable_if<I < (sizeof...(Tp)-1), void>::type
-        for_each(std::tuple<Tp...>& t, FuncT f) {
+        inline typename std::enable_if<(I+1) < (sizeof...(Tp)), void>::type
+        for_each_pipe(std::tuple<Tp...>& t, FuncT f) {
             f(std::get<I>(t));
-            for_each<I + 1, FuncT, Tp...>(t, f);  // all but the first
+            for_each_pipe<I + 1, FuncT, Tp...>(t, f);  // all but the first
         }
             
             
@@ -688,7 +688,7 @@ private:
             std::tuple<Arguments...> t = std::make_tuple(args...);
             auto firstF = std::get<0>(t);
             add2pipe(firstF);
-            for_each(t,add_to_pipe(this));
+            for_each_pipe(t,add_to_pipe(this));
         }
         /**
          * \brief Create a pipeline (with input stream). Run with \p run_and_wait_end or \p run_the_freeze.
@@ -709,7 +709,7 @@ private:
             std::tuple<Arguments...> t = std::make_tuple(args...);
             auto firstF = std::get<0>(t);
             add2pipe(firstF);
-            for_each(t,add_to_pipe(this));
+            for_each_pipe(t,add_to_pipe(this));
         }
         
         operator ff_node* () { return this;}

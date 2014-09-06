@@ -21,7 +21,9 @@
 #define WORD_IO_H_
 
 #include <stdint.h>
+#if !(defined(_WIN32) && defined(FF))
 #include <unistd.h>
+#endif
 #include <iostream>
 #include <fstream>
 #include "assert_helpers.h"
