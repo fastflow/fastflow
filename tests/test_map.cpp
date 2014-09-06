@@ -46,13 +46,13 @@
 #include <ff/map.hpp>
 
 using namespace ff;
-const long SIZE = 100;
+const long MYSIZE = 100;
 
 typedef std::vector<long> ff_task_t;
 
 struct mapWorker: ff_Map<> {
     void *svc(void*) {
-        ff_task_t *A = new ff_task_t(SIZE);
+        ff_task_t *A = new ff_task_t(MYSIZE);
        
         // this is the parallel_for provided by the ff_Map class
         parallel_for(0,A->size(),[&A](const long i) { 

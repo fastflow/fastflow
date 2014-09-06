@@ -27,7 +27,11 @@
 #include "mask.h"
 #include "sse_util.h"
 #include <emmintrin.h>
-#include <strings.h>
+#if defined(_WIN32) && defined(FF)
+#include <string>
+#else
+#include <string.h>
+#endif
 
 struct SSEMetrics {
 	

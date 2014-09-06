@@ -35,7 +35,8 @@
 #include <cstdio>
 #include <vector>
 #include <algorithm>
-#include <pthread.h>
+//#include <pthread.h>
+#include <ff/platforms/platform.h>
 #include <ff/atomic/atomic.h>
 #include <ff/atomic/abstraction_dcas.h>
 #include <ff/MPMCqueues.hpp>
@@ -43,7 +44,7 @@
 
 
 int    NTHREADS;
-size_t SIZE;
+size_t MYSIZE;
 atomic_long_t counter;           
 ff::MPMC_Ptr_Queue* q=NULL;
 ff::Barrier *bar = NULL;
@@ -60,7 +61,7 @@ void * consumer(void * arg) {
 	    printf("(%d %ld) ", myid, (long)data);
 	    atomic_long_inc(&counter);
 	}
-	if ((size_t)(atomic_long_read(&counter))>= SIZE) break;
+	if ((size_t)(atomic_long_read(&counter))>= MYSIZE) break;
     }
     pthread_exit(NULL);
     return NULL;
@@ -73,16 +74,16 @@ int main(int argc, char* argv[]) {
 	return -1;
     }
 
-    SIZE= atol(argv[1]);
-    assert(SIZE>0);
+    MYSIZE= atol(argv[1]);
+    assert(MYSIZE>0);
     NTHREADS=atoi(argv[2]);
     assert(NTHREADS>0);
 
     q = new ff::MPMC_Ptr_Queue;
     assert(q);
-    q->init(SIZE);
+    q->init(MYSIZE);
 
-    for(size_t i=1;i<=SIZE;++i) 
+    for(size_t i=1;i<=MYSIZE;++i) 
         q->push((void*)i);
 
     atomic_long_set(&counter,0);

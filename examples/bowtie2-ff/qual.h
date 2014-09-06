@@ -23,6 +23,9 @@
 #include <stdexcept>
 #include "search_globals.h"
 #include "sstring.h"
+#ifdef _WIN32
+#include <ff/platforms/platform.h>
+#endif
 
 extern unsigned char qualRounds[];
 extern unsigned char solToPhred[];
@@ -57,7 +60,7 @@ public:
 		return qual;
 	}
 	static uint8_t insPenalty(uint8_t qual_left, uint8_t qual_right) {
-		return std::max(qual_left, qual_right);
+		return (std::max(qual_left, qual_right));
 	}
 };
 
@@ -70,7 +73,7 @@ public:
 		return qualRounds[qual];
 	}
 	static uint8_t insPenalty(uint8_t qual_left, uint8_t qual_right) {
-		return qualRounds[std::max(qual_left, qual_right)];
+		return qualRounds[(std::max)(qual_left, qual_right)];
 	}
 };
 

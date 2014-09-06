@@ -18,7 +18,9 @@
  */
 
 #include <string>
+#ifndef _WIN32
 #include <sys/time.h>
+#endif
 #include "sam.h"
 #include "filebuf.h"
 
