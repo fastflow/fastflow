@@ -63,6 +63,8 @@
 #include <AvailabilityMacros.h>
 #endif
 
+#include <ff/platforms/platform.h>
+
 namespace ff {
 
 // 64 bytes is the common size of a cache line

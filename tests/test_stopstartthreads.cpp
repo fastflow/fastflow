@@ -31,7 +31,8 @@
  *
  */
 
-#include <pthread.h>
+//#include <pthread.h>
+#include <ff/platforms/platform.h>
 #include <vector>
 #include <iostream>
 #include <ff/farm.hpp>
@@ -50,10 +51,11 @@ struct fftask_t {
 };
 
 /* these mutex and cond variables are globals but they shoud be x thread 
+ * Dynamic initialisation for WIN compatibility
  * 
  */
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutex; // = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond; // = PTHREAD_COND_INITIALIZER;
 static bool waiting=false;
 
 
@@ -138,11 +140,11 @@ public:
         ++getback;
         if (getback<ntasks) return GO_ON;
 
-        sleep(2);
+        sleep(2000);
         printf("checking now who is sleeping\n");
         lb->broadcast(new fftask_t(WAIT, 0));
 
-        sleep(2);
+        sleep(2000);
         printf("waking up all threads now!\n");
         BCAST_SIGNAL();
 
@@ -159,8 +161,12 @@ private:
 
 
 int main(int argc, char* argv[]) {    
+	// Init global mutexes and cond vars
+	pthread_mutex_init(&mutex, NULL);
+	pthread_cond_init(&cond, NULL);
     int nworkers = 3;
-    int ntask = 1000;
+	int ntask = 1000;
+
     if (argc>1) {
         if (argc<3) {
             printf("use: %s nworkers ntask\n", argv[0]);

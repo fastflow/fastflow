@@ -49,7 +49,11 @@
 #include "dp_framer.h"
 // -- BTL remove --
 #include <stdlib.h>
+#if defined(FF) && defined(_WIN32)
+#include <ff/platforms/platform.h>
+#else
 #include <sys/time.h>
+#endif
 // -- --
 
 using namespace std;

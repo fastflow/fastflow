@@ -65,28 +65,28 @@ else()
 endif()
 
 
+IF (UNIX)
 file( MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bt2 )
-file( MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bt2ff )
-
-set( CMAKE_RUNTIME_OUTPUT_DIRECTORY bt2ff )
-add_executable ( bowtie2.0.6-ff ${BT2_FF_SRCS} )
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY bt2 )
 add_executable ( bowtie2.0.6 ${BT2_SRCS} )
-
-
 file (COPY bowtie2 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/bt2)
+ENDIF (UNIX)
+
+file( MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bt2ff )
+set( CMAKE_RUNTIME_OUTPUT_DIRECTORY bt2ff )
+add_executable ( bowtie2.0.6-ff ${BT2_FF_SRCS} )
 file (COPY bowtie2 DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/bt2ff)
 
 site_name(HOST_NAME)
 string(TIMESTAMP TS "%d/%m/%Y")
-SET (CO-BT2-FF "-funroll-loops -finline-functions -fno-strict-aliasing -msse3 -Wall -DBOWTIE2 -DBOWTIE_PTHREADS -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -DFF")
-SET (CO-BT2 "-funroll-loops -finline-functions -fno-strict-aliasing -Wall -msse3 -DBOWTIE2 -DBOWTIE_PTHREADS -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE")
-SET(cat_prog cat)
-IF(WIN32)
-  IF(NOT UNIX)
-    SET(cat_prog type)
-  ENDIF(NOT UNIX)
-ENDIF(WIN32)
+SET (CO-BT2-FF " -DBOWTIE2  -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -DFF")
+SET (CO-BT2 " -DBOWTIE2 -DBOWTIE_PTHREADS -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE")
+#SET(cat_prog cat)
+
+IF(UNIX)
+    SET (CO-BT2-FF "${CO-BT2-FF} -funroll-loops -finline-functions -fno-strict-aliasing -msse3 -Wall " )
+	SET (CO-BT2 "${CO-BT2} -funroll-loops -finline-functions -fno-strict-aliasing -msse3 -Wall " )
+ENDIF(UNIX)
 
 # -DNDEBUG is added by cmake with Debug generation type
 # ---- numa
@@ -100,17 +100,19 @@ INCLUDE_DIRECTORIES( ${LIBNUMA_INCLUDE_DIRS} )
 target_link_libraries ( bowtie2.0.6-ff  ${LIBNUMA_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} )
 endif ()
 
-EXEC_PROGRAM(${cat_prog}  ARGS ${CMAKE_CURRENT_SOURCE_DIR}/VERSION OUTPUT_VARIABLE ver)
+#EXEC_PROGRAM(${cat_prog}  ARGS ${CMAKE_CURRENT_SOURCE_DIR}/VERSION OUTPUT_VARIABLE ver)
+FILE(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" ver)
 
 # ----
 set_target_properties (bowtie2.0.6-ff PROPERTIES COMPILE_FLAGS "${CO-BT2-FF} -DBOWTIE2_VERSION=\"\\\"${ver}\\\"\" -DBUILD_HOST=\"\\\"${HOST_NAME}\\\"\" -DBUILD_TIME=\"\\\"${TS}\\\"\"  -DCOMPILER_VERSION=\"\\\"${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\\\"\"  -DCOMPILER_OPTIONS=\"\\\"${CO-BT2-FF}\\\"\" " OUTPUT_NAME bowtie2-align)
 
-
+IF (UNIX)
 set_target_properties (bowtie2.0.6 PROPERTIES COMPILE_FLAGS "${CO-BT2} -DBOWTIE2_VERSION=\"\\\"${ver}\\\"\" -DBUILD_HOST=\"\\\"${HOST_NAME}\\\"\" -DBUILD_TIME=\"\\\"${TS}\\\"\"  -DCOMPILER_VERSION=\"\\\"${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\\\"\"  -DCOMPILER_OPTIONS=\"\\\"${CO-BT2}\\\"\"  " OUTPUT_NAME bowtie2-align)
 # -DFF -DFF_NUMA_ALLOC -DFF_INDEX_INTERLEAVED
-
 target_link_libraries ( bowtie2.0.6 ${CMAKE_THREAD_LIBS_INIT})
+add_test( bowtie2.0.6 ${CMAKE_CURRENT_BINARY_DIR}/bt2/bowtie2 -t -p 2 -x ${CMAKE_CURRENT_SOURCE_DIR}/example/index/lambda_virus -U ${CMAKE_CURRENT_SOURCE_DIR}/example/reads/longreads.fq -S ${CMAKE_CURRENT_BINARY_DIR}/out.sam )
+ENDIF (UNIX)
 
 
 add_test( bowtie2.0.6-ff ${CMAKE_CURRENT_BINARY_DIR}/bt2ff/bowtie2 -t -p 2 -x ${CMAKE_CURRENT_SOURCE_DIR}/example/index/lambda_virus -U ${CMAKE_CURRENT_SOURCE_DIR}/example/reads/longreads.fq -S ${CMAKE_CURRENT_BINARY_DIR}/out.ff.sam )
-add_test( bowtie2.0.6 ${CMAKE_CURRENT_BINARY_DIR}/bt2/bowtie2 -t -p 2 -x ${CMAKE_CURRENT_SOURCE_DIR}/example/index/lambda_virus -U ${CMAKE_CURRENT_SOURCE_DIR}/example/reads/longreads.fq -S ${CMAKE_CURRENT_BINARY_DIR}/out.sam )
+

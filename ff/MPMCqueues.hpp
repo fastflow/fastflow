@@ -38,6 +38,7 @@
 #include <ff/sysdep.h>
 #include <ff/allocator.hpp>
 #include <ff/atomic/abstraction_dcas.h>
+#include <ff/platforms/platform.h>
 
 /*
  * NOTE: You should define USE_STD_C0X if you want to use 
