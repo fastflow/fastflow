@@ -25,7 +25,7 @@ project( mc-fastflow )
 cmake_minimum_required( VERSION 2.8 )
 
 SET( CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake.modules )
-FILE (COPY ${PROJECT_SOURCE_DIR}/cmake.modules/ffconfig.h.empty ${PROJECT_SOURCE_DIR}/cmake.modules/ffconfig.h)
+FILE (COPY ${PROJECT_SOURCE_DIR}/cmake.modules/templates/ffconfig.h DESTINATION ${PROJECT_SOURCE_DIR}/cmake.modules/)
 
 INCLUDE (${CMAKE_ROOT}/Modules/CheckIncludeFile.cmake)
 INCLUDE (${CMAKE_ROOT}/Modules/CheckTypeSize.cmake)
