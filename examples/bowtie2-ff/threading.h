@@ -25,7 +25,9 @@
 
 // Note that USE_SPINLOCK trumps BOWTIE_PTHREADS
 
-#ifdef BOWTIE_PTHREADS
+#if defined(FF)
+#include<ff/platforms/platform.h>
+#elif defined(BOWTIE_PTHREADS)
 #include <pthread.h>
 #endif
 
@@ -80,7 +82,7 @@ private:
 	MUTEX_T *lock_;
 };
 
-#ifdef BOWTIE_PTHREADS
+#if defined(BOWTIE_PTHREADS) && !defined(FF) 
 static inline void joinThread(pthread_t th) {
 	int ret, *tmp;
 	if((ret = pthread_join(th, (void**)(int**)&tmp)) != 0) {
