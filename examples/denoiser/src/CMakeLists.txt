@@ -46,6 +46,7 @@ TARGET_LINK_LIBRARIES (denoiser ${OpenCV_LIBS} )
 
 #CUDA version
 
+
 FIND_PACKAGE(CUDA)
 
 if((CUDA_FOUND) AND NOT (APPLE))
