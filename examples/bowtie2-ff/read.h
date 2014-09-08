@@ -23,7 +23,7 @@
 #include <stdint.h>
 #ifdef _WIN32
 #include <ff/platforms/platform.h>
-#else _WIN32
+#else 
 #include <sys/time.h>
 #endif
 #include "ds.h"
