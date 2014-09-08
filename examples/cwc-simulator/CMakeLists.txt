@@ -1,9 +1,11 @@
 # Author: Marco Aldinucci
 # Date: Oct 9, 2009
 
-#cmake_minimum_required(VERSION 2.6)
+#cmake_minimum_required(VERSION 2.8)
 
 add_definitions(${Boost_LIB_DIAGNOSTIC_DEFINITIONS})
+
+message(STATUS "Boost Libraries: " ${Boost_LIBRARY_DIRS})
 
 set (PARSER_SRCS_DIR parser)
 set ( CWC_FF_SRCS driver.cpp Compartment.cpp
