@@ -5,7 +5,8 @@
 
 add_definitions(${Boost_LIB_DIAGNOSTIC_DEFINITIONS})
 
-message(STATUS "Boost Libraries: " ${Boost_LIBRARY_DIRS})
+message(STATUS "Boost Libraries dir: " ${Boost_LIBRARY_DIRS})
+message(STATUS "Boost Libraries: " ${Boost_LIBRARIES})
 
 set (PARSER_SRCS_DIR parser)
 set ( CWC_FF_SRCS driver.cpp Compartment.cpp
