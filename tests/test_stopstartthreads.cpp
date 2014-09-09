@@ -140,11 +140,11 @@ public:
         ++getback;
         if (getback<ntasks) return GO_ON;
 
-        sleep(2000);
+        sleep(2);
         printf("checking now who is sleeping\n");
         lb->broadcast(new fftask_t(WAIT, 0));
 
-        sleep(2000);
+        sleep(2);
         printf("waking up all threads now!\n");
         BCAST_SIGNAL();
 
