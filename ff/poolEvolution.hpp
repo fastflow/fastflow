@@ -84,7 +84,7 @@ class poolEvolution : public ff_node {
 public:
 
     typedef void     (*selection_t)  (ParallelForReduce<T> &, std::vector<T> &, std::vector<T> &, env_t &);
-    typedef const T& (*evolution_t)  (T&, const env_t&);
+    typedef const T& (*evolution_t)  (T&, const env_t&, const int); 
     typedef void     (*filtering_t)  (ParallelForReduce<T> &, std::vector<T> &, std::vector<T> &, env_t &);
     typedef bool     (*termination_t)(const std::vector<T> &pop, env_t &);
 
@@ -171,10 +171,12 @@ protected:
             selection(loopevol, *input, buffer, env);
             
             // evolution phase
-            auto E = [&](const long i) {
-                buffer[i]=evolution(buffer[i], env); 
+            auto E = [&](const long i, const int thid) {
+                buffer[i]=evolution(buffer[i], env, thid); 
             };
-            loopevol.parallel_for(0,buffer.size(),E, pE); // TODO: static and dynamic scheduling
+            // TODO: to add dynamic scheduling option
+            loopevol.parallel_for_thid(0,buffer.size(),1,
+                                       PARFOR_STATIC(0),E, pE); 
             
             // filtering phase
             filter(loopevol, *input, buffer, env);
