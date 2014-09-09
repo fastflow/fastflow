@@ -145,7 +145,7 @@ void selection(ParallelForReduce<Couple>& pfr, std::vector<Couple>& P, std::vect
 }
 
 /*----------------------------------------------------*/
-const Couple& evolution(Couple& individual, const Env_t& env) {
+const Couple& evolution(Couple& individual, const Env_t& env,const int) {
   double dx=individual.f_value;
   double sx=individual.f_value;
   for (long i=0;i< env.local_iter;i++){
