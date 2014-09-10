@@ -2,6 +2,7 @@ add_subdirectory( cholesky )
 add_subdirectory( matmul )
 add_subdirectory( fibonacci )
 add_subdirectory( quicksort )
+add_subdirectory( function_min )
 find_package( Qt4 )
 if( QT4_FOUND )
 add_subdirectory( qt-mandelbrot )
@@ -58,4 +59,5 @@ endif (OpenCV_FOUND)
 
 add_subdirectory( bowtie2-ff )
  
+
 
