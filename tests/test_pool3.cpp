@@ -89,7 +89,7 @@ void selection(ParallelForReduce<long> & pfr, std::vector<long> &P, std::vector<
 
 }
 
-const long &evolution(long &element, const Env_t&) {
+const long &evolution(long &element, const Env_t&,const int) {
     for(volatile long j=0;j<element%5000;++j);   // lose time
     
     if (element & 0x1) element += 1;
