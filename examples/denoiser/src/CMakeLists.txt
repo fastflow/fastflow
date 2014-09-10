@@ -8,13 +8,18 @@ include_directories (
   ${CMAKE_CURRENT_SOURCE_DIR}/cuda/gaussian
   )
 
-set(CUDA_NVCC_FLAGS -Xcompiler -use_fast_math)
+# This is a patch to cope with strange behaviour of cmake in 
+# generating nvcc compilation string
+# Here really -std=c++11 is needed. With make & cuda6.5 it works,
+# but a for an unknown reason with cmake it doesn't work
+set(CUDA_NVCC_FLAGS -use_fast_math; -Xcompiler -DNOT_USE_CMAKE_CONFIG)
+
 
 if(APPLE)
 	#SET(CMAKE_CXX_FLAGS " -stdlib=libstdc++")
         set(CUDA_NVCC_FLAGS -ccbin /usr/bin/clang++ -Xcompiler -stdlib=libstdc++ -gencode arch=compute_30,code=sm_30)
 elseif(APPLE)
-   # 	ADD_DEFINITIONS(-std=c++0x)
+   #ADD_DEFINITIONS(-UUSE_CMAKE_CONFIG)
 endif(APPLE)
 
 # END ----------------------------------------------------------------------------
