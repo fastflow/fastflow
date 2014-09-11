@@ -68,15 +68,24 @@ void * consumer(void * arg) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 3) {
-	std::cerr << "use: " << argv[0] 
-		  << " queue-size #consumers\n";
-	return -1;
+    long qs = 20;
+    int nc = 6;
+
+    if (argc>1) {
+        if (argc!=3) {
+            std::cerr << "use: "
+                      << argv[0]
+                      << " queue-size #consumers\n";
+            return -1;
+        }
+        qs=atol(argv[1]);
+        nc=atoi(argv[2]);
     }
 
-    MYSIZE= atol(argv[1]);
+
+    MYSIZE= qs;
     assert(MYSIZE>0);
-    NTHREADS=atoi(argv[2]);
+    NTHREADS=nc;
     assert(NTHREADS>0);
 
     q = new ff::MPMC_Ptr_Queue;
