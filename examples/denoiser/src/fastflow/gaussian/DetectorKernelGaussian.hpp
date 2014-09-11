@@ -61,7 +61,7 @@ public:
       varianza(0), R(0), meanForVarianza(0), sommaForVarianza(0), outputValue(0), noisyVariance(0) {
     kernelSize = 3;
     K = 0;
-    L = (int) (pow((float) (kernelSize), 2) - 1) / 2;
+    L = (int) ((kernelSize * kernelSize) - 1) / 2;
     TT = 4;
     windowSize = kernelSize * kernelSize;
     padding = kernelSize - 1;
