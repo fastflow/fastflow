@@ -111,13 +111,19 @@ private:
 
 
 int main(int argc, char * argv[]) {    
-    if (argc<3) {
-        std::cerr << "use: " << argv[0] << " nworkers ntask\n";
-        return -1;
+    int nworkers = 4;
+    int ntask = 1000;
+    if (argc>1) {
+        if (argc<3) {
+            std::cerr << "use: " 
+                      << argv[0] 
+                      << " nworkers ntask\n";
+            return -1;
+        }
+        
+        nworkers=atoi(argv[1]);
+        ntask=atoi(argv[2]);
     }
-    
-    int nworkers=atoi(argv[1]);
-    int ntask=atoi(argv[2]);
     if (nworkers<=0 || ntask<=0) {
         std::cerr << "Wrong parameters values\n";
         return -1;
