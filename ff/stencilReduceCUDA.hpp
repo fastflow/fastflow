@@ -37,6 +37,7 @@
 #include <cuda.h>
 #include <ff/mapper.hpp>
 #include <ff/node.hpp>
+#include <cmath>
 
 namespace ff {
 
@@ -452,7 +453,7 @@ protected:
         size_t thxblock = std::min(maxThreads, size);
         size_t blockcnt = std::min(size / thxblock + (size % thxblock == 0 ? 0 : 1), maxBlocks);
         
-        size_t padded_size = (size_t)pow(2, ceil(log2((float)size)));
+        size_t padded_size = (size_t)pow(2, ceil(std::log2((float)size)));
         size_t thxblock_r = std::min(maxThreads, padded_size);
         size_t blockcnt_r = std::min(padded_size / thxblock_r + (padded_size % thxblock_r == 0 ? 0 : 1), maxBlocks);
         
