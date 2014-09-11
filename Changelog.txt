@@ -1,4 +1,5 @@
 * 22/08/14 - v.2.0.5
+   - introduced ff_node_t a wrapper template class around the ff_node class
    - the ff_send_out now works also inside the Emitter and Collector of the 
      ordered farm (ofarm)
    - removed FF_PIPE macros
