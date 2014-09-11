@@ -49,10 +49,10 @@ static const size_t FF_GO_OUT        = (FF_EOS-0x3); /// non automatically propa
 // to exit the computation loop and keep spinning on the input queue for a new task without being freezed.
 
 }
-#define GO_ON         (void*)ff::FF_GO_ON
-#define GO_OUT        (void*)ff::FF_GO_OUT
-#define EOS_NOFREEZE  (void*)ff::FF_EOS_NOFREEZE
-#define EOS           (void*)ff::FF_EOS
+static void *GO_ON        = (void*)ff::FF_GO_ON;
+static void *GO_OUT       = (void*)ff::FF_GO_OUT;
+static void *EOS_NOFREEZE = (void*)ff::FF_EOS_NOFREEZE;
+static void *EOS          = (void*)ff::FF_EOS;
 
 
 #if defined(TRACE_FASTFLOW)
