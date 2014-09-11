@@ -1093,6 +1093,27 @@ struct ff_buffernode: ff_node {
 };
 
 
+/*!
+ *  \class ff_node_t
+ *  \ingroup building_blocks
+ *
+ *  \brief The FastFlow typed abstract contanier for a parallel activity (actor).
+ *
+ *  Key method is: \p svc (pure virtual).
+ *
+ *  This class is defined in \ref node.hpp
+ */
+
+template<typename T>
+struct ff_node_t:ff_node {
+    T* GO_ON        = (T*)FF_GO_ON;
+    T* EOS          = (T*)FF_EOS;
+    T* GO_OUT       = (T*)FF_GO_OUT;    
+    T* EOS_NOFREEZE = (T*)FF_EOS_NOFREEZE;
+    void *svc(void *task) { return svc(reinterpret_cast<T*>(task));};
+    virtual T* svc(T*)=0;
+};
+
 } // namespace ff
 
 #endif /* FF_NODE_HPP */
