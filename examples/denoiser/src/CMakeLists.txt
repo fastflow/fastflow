@@ -18,7 +18,7 @@ endif(APPLE)
 # END ----------------------------------------------------------------------------
 
 
-set(CMAKE_BUILD_TYPE Release)
+#set(CMAKE_BUILD_TYPE Release)
 #set(CMAKE_BUILD_TYPE Debug)
 
 
@@ -41,7 +41,7 @@ ADD_DEFINITIONS(
 add_executable (denoiser ${SRCS_FF})
 target_link_libraries (denoiser ${CMAKE_THREAD_LIBS_INIT})
 TARGET_LINK_LIBRARIES (denoiser ${OpenCV_LIBS} )
-
+add_test( denoiser ${CMAKE_CURRENT_BINARY_DIR}/denoiser ${CMAKE_CURRENT_SOURCE_DIR}/test/lena512.bmp )
 #CUDA version
 
 
@@ -57,7 +57,7 @@ if((CUDA_FOUND) AND NOT (APPLE))
   CUDA_ADD_EXECUTABLE ( denoiser_cuda_auto ${DENOISER_CUDAAUTO_SRCS} )
   target_link_libraries ( denoiser_cuda_auto ${CMAKE_THREAD_LIBS_INIT} )
   target_link_libraries ( denoiser_cuda_auto ${OpenCV_LIBS} )
-  
+  add_test( denoiser_cuda_auto ${CMAKE_CURRENT_BINARY_DIR}/denoiser_cuda_auto ${CMAKE_CURRENT_SOURCE_DIR}/test/test.mp4 ) 
 else((CUDA_FOUND) AND NOT (APPLE))
 if(NOT (APPLE))
   message (WARNING "Cuda not found: can't configure CUDA-enabled denoiser")
