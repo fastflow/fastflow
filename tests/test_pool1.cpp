@@ -80,8 +80,10 @@ void filter(ParallelForReduce<Element> &,
     output.insert(output.begin(),P.begin(), P.end());
 
     for(size_t i=0;i<K;++i) {
-        auto r = random() % P.size();
+        auto r = random() % (output.size()); // MA Changed from P.size() to output.size()
+        //std::cout << "Erease " << r << " Size " << output.size() << "\n";
         output.erase(output.begin()+r);
+        // std::cout << "Done " << r << " Size " << output.size() << "\n";
     }
 }
 
