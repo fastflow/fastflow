@@ -44,7 +44,7 @@ endif
 #
 ###############################à#########################################
 CC                   = gcc
-CXX 		     = clang++
+CXX 		     = g++  # clang++
 #CC		     = icc  -mmic
 #CXX 		     = icpc -mmic 
 #CXX		     = clang++

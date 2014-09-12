@@ -7,7 +7,7 @@ include_directories(
 ADD_DEFINITIONS(-DUSE_CMAKE_CONFIG)
 
 set( TESTS                               
-parforreduce_basic                        test_graphsearch
+                        test_graphsearch
 perf_parfor                               test_lb_affinity
 perf_parfor2                              test_map
 perf_test1                                test_masterworker
