@@ -8,13 +8,6 @@ include_directories (
   ${CMAKE_CURRENT_SOURCE_DIR}/cuda/gaussian
   )
 
-# This is a patch to cope with strange behaviour of cmake in 
-# generating nvcc compilation string
-# Here really -std=c++11 is needed. With make & cuda6.5 it works,
-# but a for an unknown reason with cmake it doesn't work
-set(CUDA_NVCC_FLAGS -use_fast_math; -Xcompiler -DNOT_USE_CMAKE_CONFIG)
-ADD_DEFINITIONS(-DNOT_USE_CMAKE_CONFIG)
-
 if(APPLE)
 	#SET(CMAKE_CXX_FLAGS " -stdlib=libstdc++")
         set(CUDA_NVCC_FLAGS -ccbin /usr/bin/clang++ -Xcompiler -stdlib=libstdc++ -gencode arch=compute_30,code=sm_30)
@@ -57,6 +50,8 @@ FIND_PACKAGE(CUDA)
 if((CUDA_FOUND) AND NOT (APPLE))
   
   INCLUDE(FindCUDA)
+  set(CUDA_NVCC_FLAGS -use_fast_math -std=c++11)
+
   
   set (DENOISER_CUDAAUTO_SRCS mainCUDAAUTO.cu parameters.cpp)
   CUDA_ADD_EXECUTABLE ( denoiser_cuda_auto ${DENOISER_CUDAAUTO_SRCS} )
