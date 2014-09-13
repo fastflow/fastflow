@@ -60,4 +60,4 @@ if(ZeroMQ_FOUND)
   set_target_properties (scwc_distr PROPERTIES COMPILE_FLAGS "-DUSE_FF_ACCEL -DUSE_FF_DISTR -DFF_ALLOCATOR -DUSE_STAT_ACCEL -DBARRIER_T=Barrier")
 endif()
 
-add_test( scwc ${CMAKE_CURRENT_BINARY_DIR}/scwc -i ${CMAKE_CURRENT_SOURCE_DIR}/examples/ecoli/low.cwc -o ecoli -t 600000 -s 2400 -n 10 -w 6 )
+add_test( scwc ${CMAKE_CURRENT_BINARY_DIR}/scwc -i ${CMAKE_CURRENT_SOURCE_DIR}/examples/ecoli/low.cwc -o ecoli -t 400000 -s 2400 -n 10 -w 2 )
