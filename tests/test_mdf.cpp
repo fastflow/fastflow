@@ -59,7 +59,7 @@
 using namespace ff;
 
 const bool check = false;    // true to check the result
-const long SIZE = (1 << 20);
+const long MYSIZE = (1 << 20);
 
 // X = X + Y
 void sum2(long *X, long *Y, const long size) {
@@ -100,97 +100,97 @@ void taskGen(Parameters<ff_mdf > *const P){
 
     // A = A + B;
     {
-	const param_info _1={(uintptr_t)A,INPUT};
-	const param_info _2={(uintptr_t)B,INPUT};
-	const param_info _3={(uintptr_t)A,OUTPUT};
+	const param_info _1={(uintptr_t)A,ff::INPUT};
+	const param_info _2={(uintptr_t)B,ff::INPUT};
+	const param_info _3={(uintptr_t)A,ff::OUTPUT};
 	Param.push_back(_1); Param.push_back(_2); Param.push_back(_3);
-	mdf->AddTask(Param, sum2, A,B,SIZE);
+	mdf->AddTask(Param, sum2, A,B,MYSIZE);
     }
 
     // C = C + B;
     {
 	Param.clear();
-	const param_info _1={(uintptr_t)C,INPUT};
-	const param_info _2={(uintptr_t)B,INPUT};
-	const param_info _3={(uintptr_t)C,OUTPUT};
+	const param_info _1={(uintptr_t)C,ff::INPUT};
+	const param_info _2={(uintptr_t)B,ff::INPUT};
+	const param_info _3={(uintptr_t)C,ff::OUTPUT};
 	Param.push_back(_1); Param.push_back(_2); Param.push_back(_3);
-	mdf->AddTask(Param, sum2, C,B,SIZE);
+	mdf->AddTask(Param, sum2, C,B,MYSIZE);
     }
 
     // D = D + B;
     {
 	Param.clear();
-	const param_info _1={(uintptr_t)D,INPUT};
-	const param_info _2={(uintptr_t)B,INPUT};
+	const param_info _1={(uintptr_t)D,ff::INPUT};
+	const param_info _2 = { (uintptr_t)B, ff::INPUT };
 	const param_info _3={(uintptr_t)D,OUTPUT};
 	Param.push_back(_1); Param.push_back(_2); Param.push_back(_3);
-	mdf->AddTask(Param, sum2, D,B,SIZE);
+	mdf->AddTask(Param, sum2, D,B,MYSIZE);
     }
 
     // D = A + C + D;
     { 
 	Param.clear();
-	const param_info _1={(uintptr_t)A,INPUT};
-	const param_info _2={(uintptr_t)C,INPUT};
-	const param_info _3={(uintptr_t)D,INPUT};
-	const param_info _4={(uintptr_t)D,OUTPUT};
+	const param_info _1={(uintptr_t)A,ff::INPUT};
+	const param_info _2 = { (uintptr_t)C, ff::INPUT };
+	const param_info _3 = { (uintptr_t)D, ff::INPUT };
+	const param_info _4={(uintptr_t)D,ff::OUTPUT};
 	Param.push_back(_1); Param.push_back(_2); Param.push_back(_3); Param.push_back(_4);
-	mdf->AddTask(Param, sum3, D,A,C,SIZE);
+	mdf->AddTask(Param, sum3, D,A,C,MYSIZE);
     }
 
     // A = A + D;
     {
 	Param.clear();
-	const param_info _1={(uintptr_t)A,INPUT};
-	const param_info _2={(uintptr_t)D,INPUT};
-	const param_info _3={(uintptr_t)A,OUTPUT};
+	const param_info _1 = { (uintptr_t)A, ff::INPUT };
+	const param_info _2 = { (uintptr_t)D, ff::INPUT };
+	const param_info _3={(uintptr_t)A,ff::INPUT};
 	Param.push_back(_1); Param.push_back(_2); Param.push_back(_3);
-	mdf->AddTask(Param, sum2, A, D,SIZE);
+	mdf->AddTask(Param, sum2, A, D,MYSIZE);
     }
 
     // B = B + D;
     {
 	Param.clear();
-	const param_info _1={(uintptr_t)B,INPUT};
-	const param_info _2={(uintptr_t)D,INPUT};
-	const param_info _3={(uintptr_t)B,OUTPUT};
+	const param_info _1 = { (uintptr_t)B, ff::INPUT };
+	const param_info _2 = { (uintptr_t)D, ff::INPUT };
+	const param_info _3={(uintptr_t)B,ff::OUTPUT};
 	Param.push_back(_1); Param.push_back(_2); Param.push_back(_3);
-	mdf->AddTask(Param, sum2, B, D,SIZE);
+	mdf->AddTask(Param, sum2, B, D,MYSIZE);
     }
 
     // C = C + D;
     {
 	Param.clear();
-	const param_info _1={(uintptr_t)C,INPUT};
-	const param_info _2={(uintptr_t)D,INPUT};
-	const param_info _3={(uintptr_t)C,OUTPUT};
+	const param_info _1 = { (uintptr_t)C, ff::INPUT };
+	const param_info _2 = { (uintptr_t)D, ff::INPUT };
+	const param_info _3={(uintptr_t)C, ff::OUTPUT };
 	Param.push_back(_1); Param.push_back(_2); Param.push_back(_3);
-	mdf->AddTask(Param, sum2, C, D,SIZE);
+	mdf->AddTask(Param, sum2, C, D,MYSIZE);
     }
 
     // res = reduce(+)(A,B,C,D)
     {
 	Param.clear();
-	const param_info _1={(uintptr_t)A,INPUT};
-	const param_info _2={(uintptr_t)B,INPUT};
-	const param_info _3={(uintptr_t)C,INPUT};
-	const param_info _4={(uintptr_t)D,INPUT};
-	const param_info _5={(uintptr_t)&P->res,OUTPUT};
+	const param_info _1 = { (uintptr_t)A, ff::INPUT };
+	const param_info _2 = { (uintptr_t)B, ff::INPUT };
+	const param_info _3 = { (uintptr_t)C, ff::INPUT };
+	const param_info _4 = { (uintptr_t)D, ff::INPUT };
+	const param_info _5={(uintptr_t)&P->res,ff::OUTPUT};
 	Param.push_back(_1); Param.push_back(_2); Param.push_back(_3); Param.push_back(_4); Param.push_back(_5);
-	mdf->AddTask(Param, reduce, &P->res, A,B,C,D,SIZE);
+	mdf->AddTask(Param, reduce, &P->res, A,B,C,D,MYSIZE);
     }
 }
 
 
 int main() {
-    long *A = new long[SIZE];
-    long *B = new long[SIZE];
-    long *C = new long[SIZE];
-    long *D = new long[SIZE];
+    long *A = new long[MYSIZE];
+    long *B = new long[MYSIZE];
+    long *C = new long[MYSIZE];
+    long *D = new long[MYSIZE];
 
     assert(A && B && C && D);
 
-    for(long i=0;i<SIZE;++i) {
+    for(long i=0;i<MYSIZE;++i) {
         A[i] = 0; B[i] = i;
         C[i] = 1; D[i] = i+1;
     }
@@ -206,20 +206,20 @@ int main() {
     
     if (check) {
         // re-init data
-        for(long i=0;i<SIZE;++i) {
+        for(long i=0;i<MYSIZE;++i) {
             A[i] = 0; B[i] = i;
             C[i] = 1; D[i] = i+1;
         }
         long res=0;
         
-        sum2(A,B,SIZE);
-        sum2(C,B,SIZE);
-        sum2(D,B,SIZE);
-        sum3(D,A,C,SIZE);
-        sum2(A,D,SIZE);
-        sum2(B,D,SIZE);
-        sum2(C,D,SIZE);
-        reduce(&res,A,B,C,D,SIZE);
+		sum2(A, B, MYSIZE);
+		sum2(C, B, MYSIZE);
+		sum2(D, B, MYSIZE);
+		sum3(D, A, C, MYSIZE);
+		sum2(A, D, MYSIZE);
+		sum2(B, D, MYSIZE);
+		sum2(C, D, MYSIZE);
+		reduce(&res, A, B, C, D, MYSIZE);
         printf("result = %ld\n",res);
     }
     return 0;

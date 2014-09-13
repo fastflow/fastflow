@@ -477,7 +477,7 @@ protected:
     private:
         ff_loadbalancer  *lb;
         ff_allocator     *ffalloc;
-        int               runningworkers;
+        size_t               runningworkers; // unsigned?
         int               LOWER_TH, UPPER_TH;
         icl_hash_t       *address_set, *task_set;
         unsigned long     task_id, task_numb, task_completed, bk_count;
