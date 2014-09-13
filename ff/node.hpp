@@ -1106,10 +1106,13 @@ struct ff_buffernode: ff_node {
 
 template<typename T>
 struct ff_node_t:ff_node {
-    T* GO_ON        = (T*)FF_GO_ON;
-    T* EOS          = (T*)FF_EOS;
-    T* GO_OUT       = (T*)FF_GO_OUT;    
-    T* EOS_NOFREEZE = (T*)FF_EOS_NOFREEZE;
+    ff_node_t():
+        GO_ON((T*)FF_GO_ON),
+        EOS((T*)FF_EOS),
+        GO_OUT((T*)FF_GO_OUT),
+        EOS_NOFREEZE((T*)FF_EOS_NOFREEZE) {}
+    T *GO_ON, *EOS, *GO_OUT, *EOS_NOFREEZE;
+    virtual ~ff_node_t()  {}
     void *svc(void *task) { return svc(reinterpret_cast<T*>(task));};
     virtual T* svc(T*)=0;
 };
