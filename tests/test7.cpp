@@ -132,7 +132,7 @@ private:
 
 
 int main(int argc, char * argv[]) {
-    int streamlen = 1000;
+    int streamlen = 100;
     if (argc>1) {
         if (argc!=2) {
             std::cerr << "use: "  << argv[0] << " streamlen\n";

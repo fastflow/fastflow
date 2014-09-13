@@ -469,7 +469,8 @@ protected:
      */
     virtual int create_input_buffer(int nentries, bool fixedsize=true) {
         if (in) return -1;
-        in = new FFBUFFER(nentries,fixedsize);        
+        // MA: here probably better to use p = posix_memalign to 64 bits; new (p) FFBUFFER
+		in = new FFBUFFER(nentries,fixedsize);        
         if (!in) return -1;
         myinbuffer=true;
         return (in->init()?0:-1);

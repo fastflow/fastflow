@@ -493,7 +493,7 @@ protected:
             const long numtasks  = std::lrint(std::ceil((stop-start)/(double)_step));
             long totalnumtasks   = (long)_nw;
             size_t r             = numtasks % _nw;
-            _chunk               = numtasks / _nw;
+            _chunk               = numtasks / long(_nw);
             
             data.resize(_nw); taskv.resize(_nw);eossent.resize(_nw);
             skip1=false,jump=0,maxid=-1;
@@ -518,7 +518,7 @@ protected:
 
         for(size_t i=0;i<ntxw;++i) {
             data[i].ntask = 1;
-            data[i].task.set(start+i*chunk,stop);                        
+            data[i].task.set(start+long(i)*chunk,stop);                        
         }
         // printf("init_data_static\n");
         // for(size_t i=0;i<_nw;++i) {
@@ -567,7 +567,7 @@ public:
         // of very high load imbalance between iterations. 
         // Update: removed skip2 and skip3 so that it is less aggressive !
         
-        jump+=_nw;
+        jump+=long(_nw);
         assert((jump / _nw) <= 8);
         // heuristic: try to assign more task at the very beginning
         if (!skipmore && !skip1 && totaltasks>=4*_nw)   { skip1=true; goto more;}        
@@ -579,7 +579,7 @@ public:
     inline void sendWakeUp() {
         for(size_t id=0;id<_nw;++id) {
             taskv[id].set(0,0);
-            lb->ff_send_out_to(&taskv[id], id);
+            lb->ff_send_out_to(&taskv[id], int(id));
         }
     }
 
@@ -615,7 +615,7 @@ public:
         // the following scheduling policy for the tasks focuses mostly to load-balancing
         long _maxid = 0, ntask = 0;
         if (maxid.load(std::memory_order_acquire)<0)
-            _maxid = (std::max_element(data.begin(),data.end(),data_cmp) - data.begin());
+            _maxid = (long) (std::max_element(data.begin(),data.end(),data_cmp) - data.begin());
         else _maxid = maxid;
         ntask  = data[_maxid].ntask.load(std::memory_order_relaxed);
         if (ntask>0) { 
@@ -681,7 +681,7 @@ public:
         // the following scheduling policy for the tasks focuses mostly to load-balancing
         if (maxid<0)  { //check if maxid has been set
         L2:
-            maxid = (std::max_element(data.begin(),data.end(),data_cmp) - data.begin());
+            maxid = (long) (std::max_element(data.begin(),data.end(),data_cmp) - data.begin());
             if (data[maxid].ntask > 0) {
                 id=maxid;
                 goto L1;
@@ -728,15 +728,15 @@ public:
         auto wid =  lb->get_channel_id();
         if (--totaltasks <=0) {
             if (!eossent[wid]) {
-                lb->ff_send_out_to(workersspinwait?EOS_NOFREEZE:GO_OUT, wid);
+                lb->ff_send_out_to(workersspinwait?EOS_NOFREEZE:GO_OUT, int(wid));
                 eossent[wid]=true;
             }
             return GO_OUT;
         }
-        if (nextTask((forall_task_t*)t, (const int) wid)) lb->ff_send_out_to(t, (int) wid);            
+        if (nextTask((forall_task_t*)t, (const int) wid)) lb->ff_send_out_to(t, int(wid));            
         else  {
             if (!eossent[wid]) {
-                lb->ff_send_out_to((workersspinwait?EOS_NOFREEZE:GO_OUT), wid);
+                lb->ff_send_out_to((workersspinwait?EOS_NOFREEZE:GO_OUT), int(wid));
                 eossent[wid]=true;
             }
         }
@@ -1019,7 +1019,7 @@ public:
         size_t running = getlb()->getnworkers();
         if (running == (size_t)-1) return 0;
         for(size_t i=0;i<running;++i)
-            getlb()->ff_send_out_to(GO_OUT,i);
+            getlb()->ff_send_out_to(GO_OUT,int(i));
         return getlb()->wait_freezingWorkers();
     }
 

@@ -57,7 +57,9 @@ else (OpenCV_FOUND)
   message (WARNING " OpenCV not found: Skipping denoiser example")
 endif (OpenCV_FOUND)
 
+# In principle Bowtie2-ff should works also under Win. Cmake ready, a bit of debugging on code is required. Currently crash. Skipped
+IF (UNIX)
 add_subdirectory( bowtie2-ff )
- 
+ENDIF (UNIX)
 
 

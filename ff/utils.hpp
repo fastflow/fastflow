@@ -165,12 +165,13 @@ static inline bool isPowerOf2(unsigned int x) {
 }
 
 
-static inline unsigned int nextPowerOf2(unsigned int x) {
+static inline unsigned long nextPowerOf2(unsigned long x) {
     assert(isPowerOf2(x)==false); // x is not a power of two!
-    unsigned int p=1;
+    unsigned long p=1;
     while (x>p) p <<= 1;
     return p;
 }
+
 
 static inline unsigned int nextMultipleOfIf(unsigned int x, unsigned int m) {
     unsigned r = x % m;
