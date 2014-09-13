@@ -389,7 +389,7 @@ public:
         }        
         for(size_t i=0;i<w.size();++i) {
             workers.push_back(w[i]);
-			(workers.back())->set_id(i);
+			(workers.back())->set_id(int(i));
         }
         return 0;
     }
@@ -660,7 +660,7 @@ public:
      *
      * If the thread is frozen, then thaw it. 
      */
-    inline void thaw(bool _freeze=false, int nw=-1) {
+    inline void thaw(bool _freeze=false, ssize_t nw=-1) {
         lb->thaw(_freeze, nw);
         if (collector) gt->thaw(_freeze, nw);
     }
@@ -1172,7 +1172,7 @@ public:
      *
      * \param v is number in the dead vector.
      */
-    inline void set_dead(int v)   { dead[v]=true;}
+    inline void set_dead(ssize_t v)   { dead[v]=true;}
 
     /**
      * \internal

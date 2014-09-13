@@ -26,7 +26,8 @@
  */
 /* Author: Massimo Torquati
  * Date:   January 2014
- *
+ * Modified: M. Aldinucci
+ * Date: September 2014
  */
 /*
  * Unbalanced parallel for computation
@@ -105,7 +106,7 @@ int main(int argc, char *argv[]) {
         posix_memalign((void**)&V, 64, (_N+1)*sizeof(long));
         
         for (long i=1; i<=_N;++i) {
-            double c = ceil((_N/MAX_PARALLELISM)*powf(i,-1.1));	
+            float c = ceil((float(_N/MAX_PARALLELISM))*powf(float(i),-1.1));	
             V[i] = (long)(c);
             iter += (long)(c);
             //printf("%ld\n", V[i]);
@@ -129,7 +130,7 @@ int main(int argc, char *argv[]) {
         ffpf.parallel_for(1,_N+1,1,1,[V](const long i){compute(10000*V[i]);}, nthreads);
 #endif
         ffTime(STOP_TIME);
-        free(V);
+        posix_memalign_free(V); // Win compability
         dt += ffTime(GET_TIME); 
     }
     printf("%d Time=%g (ms)\n", nthreads, dt);

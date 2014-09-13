@@ -274,13 +274,13 @@ public:
         if (size<2) size=2;
         // we need a size that is a power 2 in order to set the mask 
         if (!isPowerOf2(size)) size = nextPowerOf2(size);
-        mask = size-1;
+        mask = (unsigned long) (size-1);
 
         buf=(element_t*)getAlignedMemory(longxCacheLine*sizeof(long),size*sizeof(element_t));
         if (!buf) return false;
         for(size_t i=0;i<size;++i) {
             buf[i].data = NULL;
-            atomic_long_set(&buf[i].seq,i);
+            atomic_long_set(&buf[i].seq,long(i));
         }
         atomic_long_set(&pwrite,0);
         atomic_long_set(&pread,0);
@@ -428,8 +428,8 @@ public:
         for(size_t i=0;i<nqueues;++i) {
             buf[i]= new uSWSR_Ptr_Buffer(size);
             ((uSWSR_Ptr_Buffer*)(buf[i]))->init();
-            atomic_long_set(&(seqP[i]),i);
-            atomic_long_set(&(seqC[i]),i);
+            atomic_long_set(&(seqP[i]),long(i));
+            atomic_long_set(&(seqC[i]),long(i));
         }
         atomic_long_set(&preadP,0);
         atomic_long_set(&preadC,0);
@@ -468,7 +468,8 @@ public:
      *
      */
     inline bool pop(void ** data) {
-        unsigned long pr,seq,idx;
+        unsigned long pr,idx;
+		long seq;
         unsigned long bk = BACKOFF_MIN;
 
         do {
