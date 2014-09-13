@@ -26,12 +26,12 @@
  */
 
 /*
- * This test shows how to implement a complete user level scheduling policy.
+ * This test shows how to implement a complete user level scheduling policy,
+ * using memory to 
  *
  */
 #include <vector>
 #include <iostream>
-#include <algorithm> // for min_element
 #include <ff/farm.hpp>
 #include <ff/node.hpp>
 #include <ff/allocator.hpp>
@@ -48,7 +48,6 @@ public:
     Worker():ntasks(0) {}
 
     void * svc(void * task) {
-        long t=(long)task;
         ++ntasks;
         ticks_wait(random()%MAX_TIME_MS);
         return GO_ON;
@@ -62,11 +61,15 @@ private:
 
 class my_loadbalancer: public ff_loadbalancer {
 protected:
-    inline void callback(int n) { 
-        assert(n<ff_loadbalancer::getnworkers());
+    // called after that the worker has been selected
+    // can be used to allocate/reuse memory for the task
+    // once it is known who is the 'victim'
+    inline void* callback(int n, void *task) { 
+        assert((size_t)n<ff_loadbalancer::getnworkers());
         if (pool[n]==NULL) pool[n] = (void*)malloc(128*sizeof(char));
         else printf("ALREADY allocated\n");
-        victim=n;        
+        victim=n;
+        return task;
     }
 public:
     my_loadbalancer(int max_num_workers):ff_loadbalancer(max_num_workers),poolsize(max_num_workers) {
@@ -132,7 +135,7 @@ int main(int argc, char * argv[]) {
     ff_farm<my_loadbalancer> farm;
     Emitter emitter(ntask,nworkers,farm.getlb());
     farm.add_emitter(&emitter);
-    farm.set_scheduling_ondemand(2);
+    farm.set_scheduling_ondemand();
 
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker);
