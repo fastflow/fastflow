@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
     srandom(seed);
     SRandom(random());
 #if !defined(USE_OPENMP) && !defined(USE_TBB) 
-    ParallelFor ffpf(nthreads,true); // enable spin-wait barrier
+    ParallelFor ffpf(nthreads, (nthreads < ff_numCores())); 
     ffpf.disableScheduler(); // disable scheduler
 #endif
 #if defined(USE_TBB)
@@ -103,7 +103,8 @@ int main(int argc, char *argv[]) {
         //printf("n=%ld\n", _N);
         
         long *V;
-        posix_memalign((void**)&V, 64, (_N+1)*sizeof(long));
+        if (posix_memalign((void**)&V, 64, (_N+1)*sizeof(long)) != 0) 
+            error("posix_memalign");
         
         for (long i=1; i<=_N;++i) {
             float c = ceil((float(_N/MAX_PARALLELISM))*powf(float(i),-1.1));	

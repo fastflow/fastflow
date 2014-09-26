@@ -35,6 +35,11 @@
  *
  */
 
+#if defined(TEST_PARFOR_PIPE_REDUCE)
+ #if !defined(HAS_CXX11_VARIADIC_TEMPLATES)
+  #define HAS_CXX11_VARIADIC_TEMPLATES 1
+ #endif
+#endif
 #include <ff/parallel_for.hpp>
 
 #if defined(USE_TBB) 
@@ -79,7 +84,7 @@ int main(int argc, char * argv[]) {
     double sum = INITIAL_VALUE;
 #if defined(USE_OPENMP)
     // init data
-#pragma omp parallel for schedule(runtime)
+#pragma omp parallel for schedule(runtime) num_threads(nworkers)
     for(long j=0;j<arraySize;++j) {
         A[j]=j*3.14; B[j]=2.1*j;
     }
@@ -136,7 +141,7 @@ int main(int argc, char * argv[]) {
     // yet another version (to test ParallelForPipeReduce)
     {        
         parallel_for(0,arraySize,1,CHUNKSIZE, [&](const long j) { A[j]=j*3.14; B[j]=2.1*j;});
-        ParallelForPipeReduce<double*> pfr(nworkers,true); // spinwait is set to true
+        ParallelForPipeReduce<double*> pfr(nworkers, (nworkers < ff_numCores())); // spinwait is set to true if ...
         
         auto Map = [&](const long start, const long stop, const int thid, ff_buffernode &node) {
             if (start == stop) return;
@@ -151,7 +156,7 @@ int main(int argc, char * argv[]) {
 
         ff::ffTime(ff::START_TIME);    
         for(int z=0;z<NTIMES;++z) {
-            pfr.parallel_for_idx(0, arraySize,1,CHUNKSIZE, Map, Reduce);
+            pfr.parallel_reduce_idx(0, arraySize,1,CHUNKSIZE, Map, Reduce);
         }
         ffTime(STOP_TIME);
         printf("ff %d Time = %g ntimes=%d\n", nworkers, ffTime(GET_TIME), NTIMES);
@@ -159,8 +164,8 @@ int main(int argc, char * argv[]) {
 #else // TEST_PARFOR_PIPE_REDUCE
     // (default) FastFlow version
     {
-        ParallelForReduce<double> pfr(nworkers,true); // spinwait is set to true
-
+        ParallelForReduce<double> pfr(nworkers, (nworkers < ff_numCores())); // spinwait is set to true if ...
+        
         //pfr.parallel_for_static(0,arraySize,1,CHUNKSIZE, [&](const long j) { A[j]=j*3.14; B[j]=2.1*j;});
         pfr.parallel_for(0,arraySize,1,CHUNKSIZE, [&](const long j) { A[j]=j*3.14; B[j]=2.1*j;});
         auto Fsum = [](double& v, const double& elem) { v += elem; };

@@ -73,7 +73,7 @@ public:
             ++numtasks;
             return task;
         }        
-        if (--numtasks == 0 && eosreceived) return NULL;
+        if (--numtasks == 0 && eosreceived) return EOS;
         return GO_ON;	
     }
     void eosnotify(ssize_t id) {
@@ -137,8 +137,7 @@ int main(int argc,  char * argv[]) {
             // Here offloading computation onto the farm
             farm.offload(ii); 
         }
-        void * eos = (void *)FF_EOS;
-        farm.offload(eos);    
+        farm.offload(EOS);    
         // Here join
         farm.wait_freezing();          
         std::cout << "[Main] Farm accelerator frozen, time= " << farm.ffTime() << " (ms)\n";

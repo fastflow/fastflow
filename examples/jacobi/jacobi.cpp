@@ -501,7 +501,7 @@ int main(int argc, char **argv){
     threadMapper::instance()->setMappingList(worker_mapping);
 #endif
 
-    ParallelForReduce<double> pfr(NUMTHREADS, true);
+    ParallelForReduce<double> pfr(NUMTHREADS, (NUMTHREADS < ff_numCores()));
 
     printf("\n\nFastFlow runs using %d threads\n", NUMTHREADS);
     ffTime(START_TIME);

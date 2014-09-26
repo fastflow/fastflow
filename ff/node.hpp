@@ -44,6 +44,12 @@
 #include <ff/svector.hpp>
 #include <ff/barrier.hpp>
 
+static void *GO_ON        = (void*)ff::FF_GO_ON;
+static void *GO_OUT       = (void*)ff::FF_GO_OUT;
+static void *EOS_NOFREEZE = (void*)ff::FF_EOS_NOFREEZE;
+static void *EOS          = (void*)ff::FF_EOS;
+
+
 namespace ff {
 
 

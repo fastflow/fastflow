@@ -60,54 +60,54 @@ namespace ff {
  *
  * \todo Map to be documented and exemplified
  */
-template<typename T=int>
-class ff_Map: public ff_node, public ParallelForReduce<T> {
-    using ParallelForReduce<T>::pfr;
+template<typename S, typename reduceT=int>
+class ff_Map: public ff_node_t<S>, public ParallelForReduce<reduceT> {
+    using ParallelForReduce<reduceT>::pfr;
 protected:
     int prepare() {
-	if (!prepared) {
-	    // warmup phase
-	    pfr->resetskipwarmup();
-	    auto r=-1;
-	    if (pfr->run_then_freeze() != -1)         
+        if (!prepared) {
+            // warmup phase
+            pfr->resetskipwarmup();
+            auto r=-1;
+            if (pfr->run_then_freeze() != -1)         
                 r = pfr->wait_freezing();            
-	    if (r<0) {
-		error("ff_Map: preparing ParallelForReduce\n");
-		return -1;
-	    }
-
-	    if (spinWait) { 
-		if (pfr->enableSpinning() == -1) {
-		    error("ParallelForReduce: enabling spinwait\n");
-		    return -1;
-		}
-	    }
-	    prepared = true;
-	}
-	return 0;
+            if (r<0) {
+                error("ff_Map: preparing ParallelForReduce\n");
+                return -1;
+            }
+            
+            if (spinWait) { 
+                if (pfr->enableSpinning() == -1) {
+                    error("ParallelForReduce: enabling spinwait\n");
+                    return -1;
+                }
+            }
+            prepared = true;
+        }
+        return 0;
     }
-
+    
     int run(bool=false) {
         if (!prepared) if (prepare()<0) return -1;
-	return ff_node::run(true);
+        return ff_node::run(true);
     }
-
+    
     int freeze_and_run(bool=false) {
         if (!prepared) if (prepare()<0) return -1;
         return ff_node::freeze_and_run(true);
     }
-
+    
 public:
     ff_Map(size_t maxp=-1, bool spinWait=false):
-        ParallelForReduce<T>(maxp,false,true),// skip loop warmup and disable spinwait
+        ParallelForReduce<reduceT>(maxp,false,true),// skip loop warmup and disable spinwait
         spinWait(spinWait),prepared(false)  {
-        ParallelForReduce<T>::disableScheduler(true);
+        ParallelForReduce<reduceT>::disableScheduler(true);
     }
 protected:
     bool spinWait;
     bool prepared;
 };
-
+    
 #else  //FF_OCL defined
 
 // map base task for OpenCL

@@ -50,8 +50,8 @@ const long MYSIZE = 100;
 
 typedef std::vector<long> ff_task_t;
 
-struct mapWorker: ff_Map<> {
-    void *svc(void*) {
+struct mapWorker: ff_Map<ff_task_t> {
+    ff_task_t *svc(ff_task_t*) {
         ff_task_t *A = new ff_task_t(MYSIZE);
        
         // this is the parallel_for provided by the ff_Map class
@@ -63,10 +63,8 @@ struct mapWorker: ff_Map<> {
     }
 };
 
-struct mapStage: ff_Map<> {
-    void *svc(void *task) {
-        ff_task_t *A = reinterpret_cast<ff_task_t*>(task);
-        
+struct mapStage: ff_Map<ff_task_t> {
+    ff_task_t *svc(ff_task_t *A) {
         // this is the parallel_for provided by the ff_Map class
         parallel_for(0,A->size(),[&A](const long i) { 
                 A->operator[](i) += i;
