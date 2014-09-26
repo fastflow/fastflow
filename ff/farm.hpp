@@ -528,10 +528,6 @@ public:
      *
      */
     int run(bool skip_init=false) {
-#if 0
-        if(is_profiling_root() )
-            DSRIManger::instance()->config_and_run(this);
-#endif        
         if (!skip_init) {
             // set the initial value for the barrier 
 
@@ -611,10 +607,6 @@ public:
         int ret=0;
         if (lb->wait()<0) ret=-1;
         if (!collector_removed && collector) if (gt->wait()<0) ret=-1;
-#if 0
-        if(is_profiling_root()) 
-            DSRIManger::instance()->finalise();
-#endif
         return ret;
     }
 
@@ -1464,10 +1456,12 @@ protected:
 };
 
 
+    /* ************************* Multi-Input node ************************* */
+
 /*!
  * \ingroup building_blocks
  *
- * \brief Multiple input ff_node (the MPSC mediator)
+ * \brief Multiple input ff_node (the SPMC mediator)
  *
  * The ff_node with many input channels.
  *
@@ -1623,9 +1617,36 @@ private:
 };
 
 /*!
+ *  \class ff_minode_t
  *  \ingroup building_blocks
  *
- * \brief Multiple output ff_node (the SPMC mediator)
+ *  \brief Typed multiple input ff_node (the SPMC mediator).
+ *
+ *  Key method is: \p svc (pure virtual).
+ *
+ *  This class is defined in \ref node.hpp
+ */
+
+template <typename T>
+struct ff_minode_t: ff_minode {
+    ff_minode_t():
+        GO_ON((T*)FF_GO_ON),
+        EOS((T*)FF_EOS),
+        GO_OUT((T*)FF_GO_OUT),
+        EOS_NOFREEZE((T*)FF_EOS_NOFREEZE) {}
+    T *GO_ON, *EOS, *GO_OUT, *EOS_NOFREEZE;
+    virtual ~ff_minode_t()  {}
+    void *svc(void *task) { return svc(reinterpret_cast<T*>(task));};
+    virtual T* svc(T*)=0;
+};
+
+
+    /* ************************* Multi-Ouput node ************************* */
+
+/*!
+ *  \ingroup building_blocks
+ *
+ * \brief Multiple output ff_node (the MPSC mediator)
  *
  * The ff_node with many output channels.
  *
@@ -1765,6 +1786,31 @@ protected:
     svector<ff_node*> outputNodes;
     ff_loadbalancer* lb;
 };
+
+/*!
+ *  \class ff_minode_t
+ *  \ingroup building_blocks
+ *
+ *  \brief Typed multiple output ff_node (the MPSC mediator).
+ *
+ *  Key method is: \p svc (pure virtual).
+ *
+ *  This class is defined in \ref node.hpp
+ */
+
+template <typename T>
+struct ff_monode_t: ff_monode {
+    ff_monode_t():
+        GO_ON((T*)FF_GO_ON),
+        EOS((T*)FF_EOS),
+        GO_OUT((T*)FF_GO_OUT),
+        EOS_NOFREEZE((T*)FF_EOS_NOFREEZE) {}
+    T *GO_ON, *EOS, *GO_OUT, *EOS_NOFREEZE;
+    virtual ~ff_monode_t()  {}
+    void *svc(void *task) { return svc(reinterpret_cast<T*>(task));};
+    virtual T* svc(T*)=0;
+};
+
 
 
 } // namespace ff

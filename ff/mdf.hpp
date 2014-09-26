@@ -343,7 +343,7 @@ protected:
 
         // try to send at least one task to workers
         inline void schedule_task(const unsigned long th) {
-            for(int i=0;(readytasks>0)&&(i<runningworkers);i++){
+            for(size_t i=0;(readytasks>0)&&(i<runningworkers);i++){
                 if(nscheduled[i]<=th){
                     if(ready_queues[i].size()>0){
                         ++nscheduled[i];
@@ -352,7 +352,7 @@ protected:
                         --readytasks;
                     } else{
                         bool found = false;
-                        for(int j=0; !found && (j<runningworkers);j++){
+                        for(size_t j=0; !found && (j<runningworkers);j++){
                             if(ready_queues[mmax].size()>0){
                                 ++nscheduled[i];
                                 lb->ff_send_out_to(ready_queues[mmax].top(),i);
@@ -378,7 +378,7 @@ protected:
                 }
             }
             
-            schedule_task(0);
+            schedule_task(0);  
             
             t->status=DONE;
             if(t->num_out==0) {
