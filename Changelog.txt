@@ -1,4 +1,8 @@
 * 22/08/14 - v.2.0.5
+   - introduced the ff_taskf pattern (first non-recursive version)
+   - moved some code from mdf.hpp to tasks_internals.hpp
+   - if set_scheduling_ondemand is called with 0 as parameter then the 
+     scheduling policy is NOT set to ondemand (i.e. the value should be >=1).
    - introduced ff_minode_t and ff_monode_t, changed the interface (now typed)
      of the ff_Map<S,T>
    - introduced ff_node_t a wrapper template class around the ff_node class

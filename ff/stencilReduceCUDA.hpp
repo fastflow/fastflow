@@ -203,20 +203,20 @@ protected:
     }
     
     
-#define FFSTENCILREDUCECUDA(taskT, mapT, reduceT)			 \
+#define FFSTENCILREDUCECUDA(taskT, mapT, reduceT)                       \
     ff_stencilReduceCUDA<taskT, mapT, device##reduceT, host##reduceT>
 
-#define FFMAPCUDA(taskT, mapT)			                         \
+#define FFMAPCUDA(taskT, mapT)                                          \
     ff_mapCUDA<taskT, mapT>
 
-#define FFREDUCECUDA(taskT, reduceT)				         \
+#define FFREDUCECUDA(taskT, reduceT)				                    \
     ff_reduceCUDA<taskT, device##reduceT, host##reduceT>
 
 //following 2 macros are for backward compatibility
-#define NEWMAP(name, task_t, f, input, iter)               \
-    ff_mapCUDA<task_t,f> *name =                      \
+#define NEWMAP(name, task_t, f, input, iter)                            \
+    ff_mapCUDA<task_t,f> *name =                                        \
         new ff_mapCUDA<task_t, f>(input, iter)
-#define NEWMAPONSTREAM(task_t, f)                        \
+#define NEWMAPONSTREAM(task_t, f)                                       \
     new ff_mapCUDA<task_t, f>()
 
 //kernel for buffer initialization

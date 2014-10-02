@@ -2,10 +2,10 @@
 
 /*! 
  *  \link
- *  \file parallel_for.hpp
- *  \ingroup high_level_patterns_shared_memory
+ *  \file parallel_for_internals.hpp
+ *  \ingroup aux_classes
  *
- *  \brief This file describes the parallel_for/parallel_reduce skeletons.
+ *  \brief Internal classes and functions for parallel_for/parallel_reduce skeletons.
  */
  
 /* ***************************************************************************
