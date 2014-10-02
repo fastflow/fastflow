@@ -357,11 +357,12 @@ public:
      * the ff_loadbalancer class.
      *
      * \param inbufferentries sets the number of queue slot for one worker
-     * threads.
+     * threads. If the input parameter should be greater than 0. If it is 0
+     * then the ondemand scheduling is NOT set.
      *
      */
     void set_scheduling_ondemand(const int inbufferentries=1) { 
-        if (inbufferentries<=0) ondemand=1;
+        if (inbufferentries<0) ondemand=1;
         else ondemand=inbufferentries;
     }
 
