@@ -51,46 +51,15 @@
 #include <ff/pipeline.hpp>
 #include <ff/farm.hpp>
 #include <ff/allocator.hpp>
+#include <ff/task_internals.hpp>
 #include "./icl_hash.h"
 
 
 namespace ff {
 
-/* -------------- expanding tuple to func. arguments ------------------------- */
-template<size_t N>
-struct Apply {
-    template<typename F, typename T, typename... A>
-    static inline auto apply(F && f, T && t, A &&... a)
-        -> decltype(Apply<N-1>::apply(
-            ::std::forward<F>(f), ::std::forward<T>(t),
-            ::std::get<N-1>(::std::forward<T>(t)), ::std::forward<A>(a)...))
-    {
-        return Apply<N-1>::apply(::std::forward<F>(f), ::std::forward<T>(t),
-            ::std::get<N-1>(::std::forward<T>(t)), ::std::forward<A>(a)...
-        );
-    }
-};
 
-template<>
-struct Apply<0> {
-    template<typename F, typename T, typename... A>
-    static inline auto apply(F && f, T &&, A &&... a)
-        -> decltype(::std::forward<F>(f)(::std::forward<A>(a)...))
-    {
-        return ::std::forward<F>(f)(::std::forward<A>(a)...);
-    }
-};
-
-template<typename F, typename T>
-inline auto apply(F && f, T && t)
-    -> decltype(Apply< ::std::tuple_size<typename ::std::decay<T>::type
-					 >::value>::apply(::std::forward<F>(f), ::std::forward<T>(t)))
-{
-    return Apply< ::std::tuple_size<typename ::std::decay<T>::type>::value>::apply(::std::forward<F>(f), ::std::forward<T>(t));
-}
-/* --------------------------------------- */
 /* ---------------------------------------------------------------------- 
- *Hashing funtions
+ * Hashing funtions
  * Well known hash function: Fowler/Noll/Vo - 32 bit version
  */
 static inline unsigned int fnv_hash_function( void *key, int len ) {
@@ -128,11 +97,6 @@ static inline int ulong_key_compare( void *key1, void *key2  ) {
 
 /* --------------------------------------- */
 
-typedef enum {INPUT=0,OUTPUT=1,VALUE=2} data_direction_t;
-struct param_info {
-    uintptr_t        tag;  // unique tag for the parameter
-    data_direction_t dir;
-};
 
     /** 
      * \class ff_mdf
@@ -143,26 +107,9 @@ struct param_info {
 class ff_mdf:public ff_node {
 public:
     enum {DEFAULT_OUTSTANDING_TASKS = 2048};
-protected:
     typedef enum {NOT_READY, READY, DONE} status_t;
-    struct base_f_t {
-        virtual inline void call() {};
-    };    
-    template<typename... Param>
-    struct worker_task_t: public base_f_t {
-        worker_task_t(void(*F)(Param...), Param&... a):F(F) {
-            args = std::make_tuple(a...);
-        }	
-        inline void call() { apply(F, args);  }
-        void (*F)(Param...);
-        std::tuple<Param...> args;	
-    };
     
-    struct task_t { 
-        std::vector<param_info> P;  // svector could be used here
-        base_f_t *wtask;
-    };
-    
+protected:    
     struct hash_task_t {
         union{
             struct {
@@ -204,32 +151,31 @@ protected:
         int wait_freezing() { return ff_node::wait_freezing(); };
 
         inline void alloc_and_send(std::vector<param_info> &P, base_f_t *wtask) {
-            task_t *task = &(TASKS[ntasks++ % maxMsgs]);
+            task_f_t *task = &(TASKS[ntasks++ % maxMsgs]);
             task->P     = P;
             task->wtask = wtask;
             while(!ff_send_out(task, 1)) ff_relax(1);
         }
+
         void *svc(void *) {
-            if (!active) return NULL;
+            if (!active) return EOS;
             F(args);
             std::vector<param_info> useless;
             alloc_and_send(useless, NULL); // END task
-            return NULL;
+            return EOS;
         }
     protected:
         bool active;
         void(*F)(T*const); // user's function
         T*const args;      // F's arguments
         unsigned long ntasks, maxMsgs;
-        std::vector<task_t> TASKS;
+        std::vector<task_f_t> TASKS;    // FIX: svector should be used here
     };
     
-    /* --------------  generic workers ----------------------- */
-    class Worker:public ff_node {
-    public:
-        inline void *svc(void *task) {
-            hash_task_t *t = static_cast<hash_task_t*>(task);
-            t->wtask->call();
+    /* --------------  worker ------------------------------- */
+    struct Worker: ff_node_t<hash_task_t> {
+        inline hash_task_t *svc(hash_task_t *task) {
+            task->wtask->call();
             return task;
         }
     };
@@ -268,7 +214,7 @@ protected:
             t->unblock_act_numb=UNBLOCK_SIZE;  t->num_out=0;
             return t;        
         }
-        inline void insertTask(task_t *const msg) {
+        inline void insertTask(task_f_t *const msg) {
             unsigned long act_id=task_id++;
             hash_task_t *act_task=createTask(act_id,NOT_READY,msg->wtask);	    
             icl_hash_insert(task_set, &act_task->id, act_task); 
@@ -405,7 +351,7 @@ protected:
             }
 #endif            
             
-            LOWER_TH = std::max(1024, TASK_PER_WORKER*maxnw); //FIX: potrebbe comunque stallare ..
+            LOWER_TH = std::max(1024, TASK_PER_WORKER*maxnw); //FIX: check for deadlock problems !!!
             UPPER_TH = LOWER_TH+TASK_PER_WORKER;
         }
         ~Scheduler() {
@@ -443,7 +389,7 @@ protected:
             }
             bk_count = 0;
             if (fromInput()) {
-                task_t *const msg = static_cast<task_t*>(task);
+                task_f_t *const msg = static_cast<task_f_t*>(task);
                 if (msg->wtask == NULL) {
                     gd_ended = true;
                     ff_node::input_active(false); // we don't want to read FF_EOS
@@ -475,17 +421,17 @@ protected:
         }
 
     private:
-        ff_loadbalancer  *lb;
-        ff_allocator     *ffalloc;
-        size_t               runningworkers; // unsigned?
-        int               LOWER_TH, UPPER_TH;
-        icl_hash_t       *address_set, *task_set;
-        unsigned long     task_id, task_numb, task_completed, bk_count;
-        void            (*schedRelaxF)(unsigned long);
-        int mmax, readytasks,m;
-        std::vector<priority_queue_t> ready_queues;
-        std::vector<unsigned long> nscheduled;
-        bool              gd_ended;
+        ff_loadbalancer               *lb;
+        ff_allocator                  *ffalloc;
+        size_t                         runningworkers;
+        int                            LOWER_TH, UPPER_TH;
+        icl_hash_t                    *address_set, *task_set;
+        unsigned long                  task_id, task_numb, task_completed, bk_count;
+        void                         (*schedRelaxF)(unsigned long);
+        int                            mmax, readytasks,m;
+        std::vector<priority_queue_t>  ready_queues;
+        std::vector<unsigned long>     nscheduled;
+        bool                           gd_ended;
     };
 
     inline void reset() {
@@ -527,32 +473,33 @@ public:
             reset();
         }
     }
-    ~ff_mdf() {
+    virtual ~ff_mdf() {
         if (gd)    delete gd;
         if (sched) delete sched;
         if (farm)  delete farm;
     }
 
-    template<typename... Param>
-    inline void AddTask(std::vector<param_info> &P, void(*F)(Param...), Param... args) {	
-        worker_task_t<Param...> *wtask = new worker_task_t<Param...>(F, args...);
+    template<typename F_t, typename... Param>
+    inline void AddTask(std::vector<param_info> &P, const F_t F, Param... args) {	
+        ff_task_f_t<F_t, Param...> *wtask = new ff_task_f_t<F_t, Param...>(F, args...);
         gd->alloc_and_send(P,wtask);
     }
-
+  
     void setNumWorkers(int nw) { 
         if (nw > ff_numCores())
             error("ff_mdf: setNumWorkers: too much workers, setting num worker to %d\n", ff_numCores());         
         farmworkers=std::min(ff_numCores(),nw); 
     }	
-    void setThreshold(size_t th=0) {} // <----------
+    void setThreshold(size_t th=0) {} // FIX: 
 	
 
     // FIX: TODO
     void *svc(void*) { 
-        // FIX: hashing tables on stream ?
+        // FIX: (IDEA) hashing tables received as input.
         return NULL;
     }
     
+    // FIX: check, why not to call wait instead of wait_freezing ?
     virtual inline int run_and_wait_end() {
         gd->thaw(true);
         farm->thaw(true,farmworkers);
