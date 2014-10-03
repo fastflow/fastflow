@@ -32,6 +32,7 @@
 #include <functional>
 #include <ff/node.hpp>
 #include <ff/svector.hpp>
+#include <ff/fftree.hpp>
 
 #if defined( HAS_CXX11_VARIADIC_TEMPLATES )
 #include <tuple>
@@ -152,7 +153,9 @@ public:
         has_input_channel(input_ch),prepared(false),
         node_cleanup(false),fixedsize(fixedsize),
         in_buffer_entries(in_buffer_entries),
-        out_buffer_entries(out_buffer_entries) {               
+        out_buffer_entries(out_buffer_entries) {
+    	//fftree stuff
+    	fftree_ptr = new fftree(this, PIPE);
     }
     
     /**
@@ -172,6 +175,9 @@ public:
             delete internalSupportNodes.back();
             internalSupportNodes.pop_back();
         }
+
+        //fftree stuff
+        delete fftree_ptr;
     }
 
     //  WARNING: if these methods are called after prepare (i.e. after having called
@@ -190,6 +196,10 @@ public:
         if (nodes_list.size()==0 && s->isMultiInput())
             ff_node::setMultiInput();
         nodes_list.push_back(s);        
+        //fftree stuff
+        if (s->fftree_ptr == NULL)
+        	s->fftree_ptr = new fftree(s, WORKER);
+        fftree_ptr->add_child(s->fftree_ptr);
         return 0;
     }
 

@@ -52,6 +52,8 @@ static void *EOS          = (void*)ff::FF_EOS;
 
 namespace ff {
 
+struct fftree;
+
 
 // TODO: Should be rewritten in terms of mapping_utils.hpp 
 #if defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
@@ -140,6 +142,7 @@ class ff_thread {
 
 protected:
     ff_thread(BARRIER_T * barrier=NULL):
+    	fftree_ptr(NULL),
         tid((unsigned)-1),barrier(barrier),
         stp(true), // only one shot by default
         spawned(false),
@@ -335,6 +338,9 @@ public:
     pthread_t get_handle() const { return th_handle;}
 
     inline int getTid() const { return tid; }
+
+    //fftree stuff
+    fftree *fftree_ptr;
 
 protected:
     unsigned        tid;
@@ -860,9 +866,12 @@ public:
         end_callback_param = param;
     }
 
+    //fftree stuff
+    fftree *fftree_ptr;
+
 protected:
 
-    ff_node():in(0),out(0),myid(-1),CPUId(-1),
+    ff_node():fftree_ptr(NULL),in(0),out(0),myid(-1),CPUId(-1),
               myoutbuffer(false),myinbuffer(false),
               skip1pop(false), in_active(true), 
               multiInput(false), multiOutput(false), 
