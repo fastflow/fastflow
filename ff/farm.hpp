@@ -57,6 +57,7 @@
 #include <ff/lb.hpp>
 #include <ff/gt.hpp>
 #include <ff/node.hpp>
+#include <ff/fftree.hpp>
 
 #if defined( HAS_CXX11_VARIADIC_TEMPLATES )
 #include <functional>
@@ -204,6 +205,11 @@ public:
         lb(new lb_t(nw)),gt(new gt_t(nw)),
         workers(nw),fixedsize(false) {
 
+    	//fftree stuff
+    	fftree_ptr = new fftree(this, FARM);
+    	fftree_ptr->add_child(lb->fftree_ptr = new fftree(lb, EMITTER));
+    	fftree_ptr->add_child(gt->fftree_ptr = NULL);
+
         std::vector<ff_node*> w(nw);        
         for(int i=0;i<nw;++i) w[i]=new ff_node_F<T>(F);
         add_workers(w);
@@ -234,6 +240,11 @@ public:
         emitter(NULL),collector(NULL),
         lb(new lb_t(W.size())),gt(new gt_t(W.size())),
         workers(W.size()),fixedsize(false) {
+
+    	//fftree stuff
+    	fftree_ptr = new fftree(this, FARM);
+    	fftree_ptr->add_child(lb->fftree_ptr = new fftree(lb, EMITTER));
+    	fftree_ptr->add_child(gt->fftree_ptr = NULL);
 
         assert(W.size()>0);
         add_workers(W);
@@ -278,6 +289,12 @@ public:
         emitter(NULL),collector(NULL),
         lb(new lb_t(max_num_workers)),gt(new gt_t(max_num_workers)),
         workers(max_num_workers),fixedsize(fixedsize) {
+
+    	//fftree stuff
+    	fftree_ptr = new fftree(this, FARM);
+    	fftree_ptr->add_child(lb->fftree_ptr = new fftree(lb, EMITTER));
+    	fftree_ptr->add_child(gt->fftree_ptr = NULL);
+
         for(int i=0;i<max_num_workers;++i) workers[i]=NULL;
 
         if (has_input_channel) { 
@@ -310,6 +327,9 @@ public:
         }
 
         if (barrier) {delete barrier; barrier=NULL;}
+
+        //fftree stuff
+        delete fftree_ptr;
     }
 
     /** 
@@ -341,6 +361,8 @@ public:
             emitter->set_input_buffer(in);
         }
         if (lb->set_filter(emitter)) return -1;
+        //fftree stuff
+        lb->fftree_ptr->do_comp = true;
         return 0;
     }
 
@@ -391,6 +413,12 @@ public:
         for(size_t i=0;i<w.size();++i) {
             workers.push_back(w[i]);
 			(workers.back())->set_id(int(i));
+        }
+        //fftree stuff
+        for (size_t i = 0; i < w.size(); ++i) {
+        	if (w[i]->fftree_ptr == NULL)
+        		w[i]->fftree_ptr = new fftree(w[i], WORKER);
+        	fftree_ptr->add_child(w[i]->fftree_ptr);
         }
         return 0;
     }
