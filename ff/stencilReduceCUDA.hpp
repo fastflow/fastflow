@@ -168,7 +168,14 @@ protected:
             code                                                        \
                 }                                                       \
     }
-    
+
+#define FFMAPFUNC3(name, outT, inT, param, env1T, param1, env2T, param2, env3T, param3, code) \
+    struct name {                                                       \
+        __device__ outT K(inT param, env1T *param1, env2T *param2, env3T *param3, void *dummy0, void *dummy1, void *dummy2) { \
+            code                                                        \
+                }                                                       \
+    }
+
 #define FFMAPFUNC4(name, outT, inT, param, env1T, param1, env2T, param2, env3T, param3, env4T, param4, code) \
     struct name {                                                       \
         __device__ outT K(inT param, env1T *param1, env2T *param2, env3T *param3, env4T *param4, void *dummy0, void *dummy1) { \
@@ -203,20 +210,20 @@ protected:
     }
     
     
-#define FFSTENCILREDUCECUDA(taskT, mapT, reduceT)                       \
+#define FFSTENCILREDUCECUDA(taskT, mapT, reduceT)			 \
     ff_stencilReduceCUDA<taskT, mapT, device##reduceT, host##reduceT>
 
-#define FFMAPCUDA(taskT, mapT)                                          \
+#define FFMAPCUDA(taskT, mapT)			                         \
     ff_mapCUDA<taskT, mapT>
 
-#define FFREDUCECUDA(taskT, reduceT)				                    \
+#define FFREDUCECUDA(taskT, reduceT)				         \
     ff_reduceCUDA<taskT, device##reduceT, host##reduceT>
 
 //following 2 macros are for backward compatibility
-#define NEWMAP(name, task_t, f, input, iter)                            \
-    ff_mapCUDA<task_t,f> *name =                                        \
+#define NEWMAP(name, task_t, f, input, iter)               \
+    ff_mapCUDA<task_t,f> *name =                      \
         new ff_mapCUDA<task_t, f>(input, iter)
-#define NEWMAPONSTREAM(task_t, f)                                       \
+#define NEWMAPONSTREAM(task_t, f)                        \
     new ff_mapCUDA<task_t, f>()
 
 //kernel for buffer initialization
@@ -277,7 +284,7 @@ template<> struct SharedMemory<double> {
 
 template<typename kernelF, typename T, typename Tenv1, typename Tenv2, typename Tenv3, typename Tenv4, typename Tenv5, typename Tenv6>
 __global__ void reduceCUDAKernel(kernelF K, T *output, T *input, Tenv1 *env1, Tenv2 *env2, Tenv3 *env3, Tenv4 *env4, Tenv5 *env5, Tenv6 *env6, 
-				 size_t size, unsigned int blockSize, bool nIsPow2) {
+				 size_t size, unsigned int blockSize, bool nIsPow2, T identityVal) {
 
     T *sdata = SharedMemory<T>();
 
@@ -287,7 +294,7 @@ __global__ void reduceCUDAKernel(kernelF K, T *output, T *input, Tenv1 *env1, Te
     unsigned int i = blockIdx.x*blockSize*2 + threadIdx.x;
     unsigned int gridSize = blockSize*2*gridDim.x;
     
-    T result;
+    T result = identityVal;
     
     if(i < size) {
         result = input[i];
@@ -411,7 +418,10 @@ protected:
     
     inline int svc_init() {
         // set the CUDA device where the node will be executed
-        deviceID = get_my_id() % threadMapper::instance()->getNumCUDADevices();
+        if(get_my_id() < 0)
+        	deviceID = 0;
+         else
+             deviceID = get_my_id() % threadMapper::instance()->getNumCUDADevices();
         cudaDeviceProp deviceProp;
         
         cudaSetDevice(deviceID);
@@ -585,7 +595,7 @@ protected:
                 Task.beforeMR();
                 //Reduce
                 //CUDA: blockwise reduce
-                reduceCUDAKernel<TkernelReduce, Tout, Tenv1, Tenv2, Tenv3, Tenv4, Tenv5, Tenv6><<<blockcnt_r, thxblock_r, thxblock_r * sizeof(Tout), stream>>>(*kernelReduce, reduce_buffer, (Tout *)Task.getInDevicePtr(), Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr(), padded_size, thxblock_r, false);
+                reduceCUDAKernel<TkernelReduce, Tout, Tenv1, Tenv2, Tenv3, Tenv4, Tenv5, Tenv6><<<blockcnt_r, thxblock_r, thxblock_r * sizeof(Tout), stream>>>(*kernelReduce, reduce_buffer, (Tout *)Task.getInDevicePtr(), Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr(), padded_size, thxblock_r, false, (Tout)identityValue);
                 //copy reduce-blocks back to host
                 cudaMemcpyAsync(reduceBlocksPtr, reduce_buffer, blockcnt_r * sizeof(Tout), cudaMemcpyDeviceToHost, stream);
                 cudaStreamSynchronize(stream);
@@ -606,12 +616,20 @@ protected:
                     //CUDA Map
                     mapCUDAKernel<TkernelMap, Tin, Tout, Tenv1, Tenv2, Tenv3, Tenv4, Tenv5, Tenv6><<<blockcnt, thxblock, 0, stream>>>(*kernelMap, Task.getInDevicePtr(), Task.getOutDevicePtr(), Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr(), size);
                     
+                    cudaError err = cudaGetLastError();
+                    if(err!=cudaSuccess)
+                    	std::cerr << "Problem launching mapCUDAKernel, code = " << err <<" \n";
+
                     //Reduce
                     //CUDA: blockwise reduce
-                    reduceCUDAKernel<TkernelReduce, Tout, Tenv1, Tenv2, Tenv3, Tenv4, Tenv5, Tenv6><<<blockcnt_r, thxblock_r, thxblock_r * sizeof(Tout), stream>>>(*kernelReduce, reduce_buffer, Task.getOutDevicePtr(), Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr(), padded_size, thxblock_r, false);
+                    reduceCUDAKernel<TkernelReduce, Tout, Tenv1, Tenv2, Tenv3, Tenv4, Tenv5, Tenv6><<<blockcnt_r, thxblock_r, thxblock_r * sizeof(Tout), stream>>>(*kernelReduce, reduce_buffer, Task.getOutDevicePtr(), Task.getEnv1DevicePtr(), Task.getEnv2DevicePtr(), Task.getEnv3DevicePtr(), Task.getEnv4DevicePtr(), Task.getEnv5DevicePtr(), Task.getEnv6DevicePtr(), padded_size, thxblock_r, false, (Tout)identityValue);
                     //copy reduce-blocks back to host
                     cudaMemcpyAsync(reduceBlocksPtr, reduce_buffer, blockcnt_r * sizeof(Tout), cudaMemcpyDeviceToHost, stream);
                     cudaStreamSynchronize(stream);
+                    err = cudaGetLastError();
+                    if(err!=cudaSuccess)
+                    	std::cerr << "Problem launching reduceCUDAKernel, code = " << err <<" \n";
+
                     //host: reduce blocks into reduceVar
                     reduceVar = identityValue;
                     for(size_t i=0; i<blockcnt_r; ++i)
@@ -621,7 +639,10 @@ protected:
                 } while (Task.iterCondition(reduceVar, ++iter) && iter < maxIter);
                 
                 cudaMemcpyAsync(Task.getOutPtr(), Task.getOutDevicePtr(), Task.getBytesizeOut(), cudaMemcpyDeviceToHost, stream);
-                cudaStreamSynchronize(stream);            
+                cudaStreamSynchronize(stream);
+                cudaError err = cudaGetLastError();
+                if(err!=cudaSuccess)
+                	std::cerr << "Problem launching cudaMemcpyAsync (after kernel calls), code = " << err <<" \n";
             }
             free(reduceBlocksPtr);
             cudaFree(reduce_buffer);
