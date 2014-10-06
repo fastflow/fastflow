@@ -223,7 +223,7 @@ namespace ff {
 
 #define FF_PARFOR_DECL(name)         ff_forall_farm<forallreduce_W<int> > * name
 #define FF_PARFOR_ASSIGN(name,nw)    name=new ff_forall_farm<forallreduce_W<int> >(nw)
-#define FF_PARFOR_DONE(name)         name->stop(); name->wait(); delete name
+#define FF_PARFOR_DONE(name)         name->stop(); name->wait(); delete name;
 
 #define FF_PARFORREDUCE_INIT(name, type, nw)                                             \
     ff_forall_farm<forallreduce_W<type> > *name =                                        \
@@ -1018,8 +1018,8 @@ public:
         // executing the parallel iterations)
         size_t running = getlb()->getnworkers();
         if (running == (size_t)-1) return 0;
-        for(size_t i=0;i<running;++i)
-            getlb()->ff_send_out_to(GO_OUT,int(i));
+        getlb()->freezeWorkers();
+        getlb()->broadcast_task(GO_OUT);
         return getlb()->wait_freezingWorkers();
     }
 

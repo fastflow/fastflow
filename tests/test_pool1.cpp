@@ -116,9 +116,9 @@ int main(int argc, char* argv[]) {
         }
         nw    =atoi(argv[1]);
         size  =atol(argv[2]); 
-	if (argc==4) debug=atoi(argv[3]);
+        if (argc==4) debug=atoi(argv[3]);
     }
-
+    
     srandom(10);
     
     std::vector<Element> P;

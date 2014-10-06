@@ -25,55 +25,72 @@
  ****************************************************************************
  */
 
-/*
- *
- */
-
-#include <cstdlib>
+#include <ff/taskf.hpp>
 #include <ff/parallel_for.hpp>
-
 using namespace ff;
 
+void F(long *E) {
+    printf("Executing %ld\n", *E);
+    delete E;
+}
+
 int main(int argc, char *argv[]) {
-    long size     = 100000;
-    long chunk    = 111;
-    int  nworkers = 3;
-    int  ntimes   = 3;
+    int W = ff_numCores();
+    if (argc>1) W = atoi(argv[1]);
+    ff_taskf taskf(W);
 
-    if (argc>1) {
-        if (argc<5) {
-            printf("use: %s size nworkers ntimes chunk\n", argv[0]);
-            return -1;
-        }
-        size     = atol(argv[1]);
-        nworkers = atoi(argv[2]);
-        ntimes   = atoi(argv[3]);
-        chunk    = atol(argv[4]);
+    // start immediatly the scheduler and all worker threads
+    taskf.run(); 
+
+    taskf.AddTask(F, new long(1));
+    taskf.AddTask(F, new long(2));
+    taskf.AddTask(F, new long(3));
+
+    taskf.wait(); // barrier
+
+    // add another task, here the scheduler is stopped
+    taskf.AddTask(F, new long(4)); 
+    taskf.AddTask(F, new long(5));  
+
+    // run the scheduler using 1 thread and then barrier
+    taskf.run_then_freeze(1); 
+
+    // here the scheduler is stopped
+    taskf.AddTask(F, new long(6));
+    taskf.AddTask(F, new long(7));
+    taskf.AddTask(F, new long(8));
+
+    // run the scheduler and then barrier
+    taskf.run_then_freeze(2); 
+
+    // here the scheduler is stopped
+    taskf.AddTask(F, new long(9));  
+    taskf.AddTask(F, new long(10));
+
+    taskf.run_then_freeze();
+
+    // now stressing the parallel for
+
+    ParallelFor pf(W+4,true);
+    pf.disableScheduler();
+    std::atomic_long K;
+    K.store(0);
+
+    for(long i=1;i<=100;++i) {
+	pf.parallel_for(0,10,1,1,[i, &K,&taskf](const long j) { K+=j; }, 1+i%4);
+	printf("."); fflush(stdout);
+	pf.threadPause();
     }
-    long *A = new long[size];
+    printf("\n");
+    if (K != 4500) abort();
+    printf("K=%ld\n", K.load());
+    pf.threadPause();
 
-    ParallelForReduce<long> pfr(nworkers, true);
-    long sum;
-    for(int k0=0;k0<3;++k0) {  // this loop just tests the threadPause()
-    
-        sum = 0;
-        for(int k=0;k<ntimes; ++k) {
-            auto loop1 = [&A,k](const long j) { A[j]=j+k; };
-            auto loop2 = [&A](const long i, long& sum) { sum += A[i];};
-            auto Fsum = [](long& v, const long elem) { v += elem; };
-            
-            pfr.parallel_for(0L,size,1L,chunk,loop1,std::min(k+1, nworkers));
-            printf("loop1 using %d workers\n", std::min(k+1, nworkers));
-            pfr.parallel_reduce(sum,0L,0L,size,1L,chunk,loop2,Fsum,nworkers);
-            printf("loop2 using %d workers\n", nworkers);
-        }
-        pfr.threadPause();
-
-        printf("sum = %ld\n", sum);
-    } // k0
-
-    printf("loop done\n");
-    printf("sum = %ld\n", sum);
+    // re-start the taskf scheduler
+    taskf.run();
+    for(long i=1;i<=100;++i) 
+	taskf.AddTask(F, new long(i));
+    taskf.wait();
 
     return 0;
 }

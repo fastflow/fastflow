@@ -640,6 +640,8 @@ public:
                     victim=collect_task(&task, availworkers, start);
                 } else skipfirstpop=false;
                 
+                if (task == GO_OUT) { ret = task; break; }
+
                 if ((task == EOS) || 
                     (task == EOS_NOFREEZE)) {
                     if (filter) filter->eosnotify(channelid);
@@ -930,6 +932,15 @@ public:
     inline void freeze() {
         for(ssize_t i=0;i<running;++i) workers[i]->freeze();
         ff_thread::freeze();
+    }
+
+    /**
+     * \brief Freezes all workers registered with the lb.
+     *
+     * It freezes all worker threads.
+     */
+    inline void freezeWorkers() {
+        for(ssize_t i=0;i<running;++i) workers[i]->freeze();
     }
 
     /**
