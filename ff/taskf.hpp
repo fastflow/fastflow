@@ -37,7 +37,7 @@
 
 namespace ff {
 
-class ff_taskf {
+class ff_taskf: public ff_farm<> {
     enum {DEFAULT_OUTSTANDING_TASKS = 2048};
 protected:
     inline task_f_t *alloc_task(std::vector<param_info> &P, base_f_t *wtask) {
@@ -63,24 +63,30 @@ protected:
         Scheduler(ff_loadbalancer*const lb, const int):
             eosreceived(false),numtasks(0), lb(lb) {}
         
+        int svc_init() { numtasks = 0; eosreceived = false;  return 0;}
+
         inline task_f_t *svc(task_f_t *task) { 
             if (fromInput()) { 
                 ++numtasks; 
                 return task;
             }
-            if (--numtasks <= 0 && eosreceived) return EOS;
+            if (--numtasks <= 0 && eosreceived) {
+                lb->broadcast_task(GO_OUT);
+                return GO_OUT;
+            }
             return GO_ON; 
         }
-        
-        void thaw(bool freeze=false) { ff_node::thaw(freeze); };
+
+        void thaw(bool freeze, ssize_t nw) { lb->thaw(freeze,nw);}
         int wait_freezing() {  return lb->wait_lb_freezing(); }
         int wait()          {  return lb->wait(); }
         void eosnotify(ssize_t id) { 
-            if (id == -1) { 
+            if (id == -1) {
                 eosreceived=true; 
                 if (numtasks<=0) lb->broadcast_task(EOS);
             }
         }
+
     protected:	
         bool   eosreceived;
         size_t numtasks;
@@ -91,31 +97,40 @@ public:
     // NOTE: by default the scheduling is round-robing (pseudo round-robin indeed).
     //       In order to select the ondemand scheduling policy, set the ondemand_buffer to a 
     //       value grather than 1.
-    ff_taskf(int maxnw=ff_realNumCores(), const size_t maxTasks=DEFAULT_OUTSTANDING_TASKS, const int ondemand_buffer=0):
-        farmworkers(maxnw),ntasks(0),outstandingTasks(std::max(maxTasks, (size_t)(MAX_NUM_THREADS*8))) {
+    ff_taskf(int maxnw=ff_realNumCores(), 
+             const size_t maxTasks=DEFAULT_OUTSTANDING_TASKS, 
+             const int ondemand_buffer=0):
+        ff_farm<>(true, 
+                  std::max(maxTasks, (size_t)(MAX_NUM_THREADS*8)),
+                  std::max(maxTasks, (size_t)(MAX_NUM_THREADS*8)),
+                  true, maxnw, true),
+        farmworkers(maxnw),ntasks(0),
+        outstandingTasks(std::max(maxTasks, (size_t)(MAX_NUM_THREADS*8))),taskscounter(0) {
         
-        farm = new ff_farm<>(true,outstandingTasks,outstandingTasks,true,maxnw,true);
         TASKS.resize(outstandingTasks); 
         std::vector<ff_node *> w;
         // NOTE: Worker objects are going to be destroyed by the farm destructor
         for(int i=0;i<maxnw;++i) w.push_back(new Worker);
-        farm->add_workers(w);
-        farm->add_emitter(sched = new Scheduler(farm->getlb(), maxnw));
-        farm->wrap_around(true);
-        farm->set_scheduling_ondemand(ondemand_buffer);
-        // FIX: scheduling on-demand 
+        ff_farm<>::add_workers(w);
+        ff_farm<>::add_emitter(sched = new Scheduler(ff_farm<>::getlb(), maxnw));
+        ff_farm<>::wrap_around(true);
+        ff_farm<>::set_scheduling_ondemand(ondemand_buffer);
         
-        if (farm->run_then_freeze()<0) {
-            error("ff_taskf: running farm\n");
-        } else {
-            farm->offload(EOS);
-            farm->wait_freezing();
-            farm->reset();
+        // needed to avoid the initial barrier
+        if (ff_farm<>::prepare() < 0) 
+            error("ff_taskf: running farm (1)\n");
+        
+        auto r=-1;
+        getlb()->freeze();
+        ff_farm<>::offload(GO_OUT);
+        if (getlb()->run() != -1) {
+            getlb()->broadcast_task(GO_OUT);
+            r = getlb()->wait_freezing();   
         }
+        if (r<0) error("ff_taskf: running farm (2)\n");
     }
     virtual ~ff_taskf() {
-        if (sched) delete sched;
-        if (farm)  delete farm;
+        if (sched) { delete sched; sched=nullptr;}
     }
     
     template<typename F_t, typename... Param>
@@ -123,40 +138,41 @@ public:
         ff_task_f_t<F_t, Param...> *wtask = new ff_task_f_t<F_t, Param...>(F, args...);
         std::vector<param_info> useless;
         task_f_t *task = alloc_task(useless,wtask);	
-        while(!farm->offload(task, 1)) ff_relax(1);	
+        while(!ff_farm<>::offload(task, 1)) ff_relax(1);	
+        ++taskscounter;
         return task;
     } 
     
     virtual inline int run_and_wait_end() {
-        while(!farm->offload(EOS, 1)) ff_relax(1);
-        farm->thaw(true,farmworkers);
+        while(!ff_farm<>::offload(EOS, 1)) ff_relax(1);
+        sched->thaw(true,farmworkers);
         sched->wait_freezing();
-        return sched->wait();
+            return sched->wait();
     }
     virtual int run_then_freeze(ssize_t nw=-1) {
-        while(!farm->offload(EOS, 1)) ff_relax(1);
-        farm->thaw(true,farmworkers);
+        while(!ff_farm<>::offload(EOS, 1)) ff_relax(1);
+        sched->thaw(true,(nw>0) ? nw:taskscounter);
         int r=sched->wait_freezing();
-        farm->reset();
+        taskscounter=0;
         return r;
     }
     
+    // it starts all workers
     virtual inline int run()  { 
-        farm->thaw(true,farmworkers); 
+        sched->thaw(true,farmworkers);
         return 0;
     }
     virtual inline int wait() { 
-        while(!farm->offload(EOS, 1)) ff_relax(1);
+        while(!ff_farm<>::offload(EOS, 1)) ff_relax(1);
         int r=sched->wait_freezing();
-        farm->reset();
+        taskscounter=0;
         return r;
     }
     
 protected:
     int farmworkers;
-    ff_farm<> *farm;
     Scheduler *sched;
-    size_t ntasks, outstandingTasks;
+    size_t ntasks, outstandingTasks, taskscounter;
     std::vector<task_f_t> TASKS;    // FIX: svector should be used here
 };
 

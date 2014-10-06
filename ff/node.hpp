@@ -146,7 +146,7 @@ protected:
         tid((unsigned)-1),barrier(barrier),
         stp(true), // only one shot by default
         spawned(false),
-        freezing(0), frozen(false),thawed(false),
+        freezing(0), frozen(false), //thawed(false),
         init_error(false) {
         
         /* Attr is NULL, default mutex attributes are used. Upon successful
@@ -317,8 +317,13 @@ public:
     inline void thaw(bool _freeze=false) {
         pthread_mutex_lock(&mutex);
         // if this function is called even if the thread is not 
-        // in frozen state, than freezing has to be set to 1 and not 2
-        if (_freeze) freezing=(frozen?2:1); // next time freeze again the thread
+        // in frozen state, then freezing has to be set to 1 and not 2
+        //if (_freeze) freezing= (frozen?2:1); // next time freeze again the thread
+        // October 2014, changed the above policy.
+        // If thaw is called and the thread is not in the frozen stage, 
+        // then the thread won't fall to sleep at the next freezing point
+
+        if (_freeze) freezing = 2; // next time freeze again the thread
         else freezing=0;
         //assert(thawed==false);
         frozen=false; 
@@ -350,7 +355,7 @@ private:
     bool            spawned;
     int             freezing;   // changed from bool to int
     bool            frozen;
-    bool            thawed;
+    //bool            thawed;
     bool            init_error;
     pthread_t       th_handle;
     pthread_attr_t  attr;
