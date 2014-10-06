@@ -1,4 +1,9 @@
 * 22/08/14 - v.2.0.5
+   - spinBarrier::barrierSetup revised
+   - *** changed 'thaw' semantic ***. 
+     If the function is called and the current thread is not in the frozen 
+     state, then the thread will not be put to sleep when it reaches 
+     the next freezing point.
    - introduced the ff_taskf pattern (first non-recursive version)
    - moved some code from mdf.hpp to tasks_internals.hpp
    - if set_scheduling_ondemand is called with 0 as parameter then the 

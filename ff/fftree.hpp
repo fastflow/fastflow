@@ -1,3 +1,24 @@
+/* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+
+/* ***************************************************************************
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU Lesser General Public License version 3 as
+ *  published by the Free Software Foundation.
+ *
+ *  This program is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
+ *  License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public License
+ *  along with this program; if not, write to the Free Software Foundation,
+ *  Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ ****************************************************************************
+ */
+
 /*
  * fftree.hpp
  *
@@ -119,7 +140,7 @@ struct fftree {
 	}
 };
 
-static void print_fftrees(std::ostream &os) {
+static inline void print_fftrees(std::ostream &os) {
 	size_t t = 0, total = 0;
 	for (std::set<fftree *>::const_iterator it = roots.begin();
 			it != roots.end(); ++it) {
@@ -132,7 +153,6 @@ static void print_fftrees(std::ostream &os) {
 	os << "total thread count = " << total << "\n";
 }
 
-}
-;
-//end namespace ff
+}; //end namespace ff
+
 #endif /* FFTREE_HPP_ */

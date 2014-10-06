@@ -140,7 +140,7 @@ public:
      *  Terminate ParallelFor run-time support and makes resources housekeeping.
      * Both nonlocking and blocking worker threads are terminated.
      */
-    ~ParallelFor()                { FF_PARFOR_DONE(pf); }
+    ~ParallelFor()                { if (pf) { FF_PARFOR_DONE(pf); pf=nullptr;}  }
 
     /**
      * \brief Disable active scheduler (i.e. Emitter thread)
@@ -375,7 +375,7 @@ public:
     ParallelForReduce(const long maxnw=FF_AUTO, bool spinwait=false):
         pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,spinwait)) {}
 
-    ~ParallelForReduce()                { FF_PARFORREDUCE_DONE(pfr); }
+    ~ParallelForReduce()                { if (pfr) { FF_PARFORREDUCE_DONE(pfr); pfr=nullptr; }}
 
     // By calling this method with 'true' the scheduler will be disabled,
     // to restore the usage of the scheduler thread just pass 'false' as 
@@ -719,7 +719,12 @@ public:
         }
     }
     
-    ~ParallelForPipeReduce()                { FF_PARFOR_DONE(pfr); reduce.wait(); }
+    ~ParallelForPipeReduce()                { 
+        if (pfr) { 
+            FF_PARFOR_DONE(pfr); pfr=nullptr;
+            reduce.wait(); 
+        }
+    }
 
     // By calling this method with 'true' the scheduler will be disabled,
     // to restore the usage of the scheduler thread just pass 'false' as 

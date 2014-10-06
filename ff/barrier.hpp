@@ -73,14 +73,13 @@ public:
             abort();
         }
     }
-    
    
     inline int barrierSetup(size_t init) {
-        if (!_barrier && init>0) _barrier = init;
+        assert(init>0);
+        _barrier = init; 
         return 0;
     }
 
-   
     inline void doBarrier(size_t) {
         pthread_mutex_lock(&bLock);
         if (!--_barrier) pthread_cond_broadcast(&bCond);
@@ -177,7 +176,9 @@ public:
     }
     
     inline int barrierSetup(size_t init) {
-        if (!_barrier && init>0) _barrier = init; 
+        assert(init>0);
+        for(size_t i=0; i<init; ++i) barArray[i]=false;
+        _barrier = init; 
         return 0;
     }
 

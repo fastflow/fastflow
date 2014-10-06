@@ -186,7 +186,6 @@ protected:
         loopevol.threadPause();
         return (task?input:NULL);
     }    
-
 };
     
 } // namespace ff
