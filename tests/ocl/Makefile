@@ -11,15 +11,17 @@ endif
 FF_ROOT  = ../../
 #AMD OpenCL location
 OCL_ROOT = /opt/AMDAPP
+#OCL_ROOT = /usr/local/cuda
+
 # 
 OCLFLAGS =
-OPTFLAGS = -O3
+OPTFLAGS = -O3  #-g -DCHECK
 LDFLAGS  = -L$(OCL_ROOT)/lib/x86_64
 LIBS     =  $(OPENCL) -lpthread 
 INCLUDES = -I$(FF_ROOT) -I$(OCL_ROOT)/include
 
 
-TARGETS = oclMap farm_oclMap oclReduce farm_oclReduce pipeFarmMap dotProduct
+TARGETS = oclMap farm_oclMap oclReduce oclMapReduce farm_oclReduce pipeFarmMap dotProduct
 
 all: $(TARGETS)
 
@@ -27,6 +29,9 @@ oclMap: oclMap.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 oclReduce: oclReduce.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+oclMapReduce: oclMapReduce.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 farm_oclMap: farm_oclMap.cpp
