@@ -41,9 +41,10 @@ ADD_DEFINITIONS(
 add_executable (denoiser ${SRCS_FF})
 target_link_libraries (denoiser ${CMAKE_THREAD_LIBS_INIT})
 TARGET_LINK_LIBRARIES (denoiser ${OpenCV_LIBS} )
-add_test( denoiser ${CMAKE_CURRENT_BINARY_DIR}/denoiser ${CMAKE_CURRENT_SOURCE_DIR}/test/lena512.bmp )
-#CUDA version
+add_test( denoiser ${CMAKE_CURRENT_BINARY_DIR}/denoiser -n50 ${CMAKE_CURRENT_SOURCE_DIR}/../test/lena512.bmp )
+add_test( denoiser_validation ${CMAKE_COMMAND} -E compare_files ${CMAKE_CURRENT_BINARY_DIR}/RESTORED_lena512.bmp ${CMAKE_CURRENT_SOURCE_DIR}/../test/RESTORED_lena512-50REF.bmp ) 
 
+#CUDA version
 
 FIND_PACKAGE(CUDA)
 
@@ -57,7 +58,8 @@ if((CUDA_FOUND) AND NOT (APPLE))
   CUDA_ADD_EXECUTABLE ( denoiser_cuda_auto ${DENOISER_CUDAAUTO_SRCS} )
   target_link_libraries ( denoiser_cuda_auto ${CMAKE_THREAD_LIBS_INIT} )
   target_link_libraries ( denoiser_cuda_auto ${OpenCV_LIBS} )
-  add_test( denoiser_cuda_auto ${CMAKE_CURRENT_BINARY_DIR}/denoiser_cuda_auto ${CMAKE_CURRENT_SOURCE_DIR}/test/test.mp4 ) 
+  add_test( denoiser_cuda_auto ${CMAKE_CURRENT_BINARY_DIR}/denoiser_cuda_auto -n50 -F10  ${CMAKE_CURRENT_SOURCE_DIR}/../test/test.mp4 ) 
+  add_test( denoiser_cuda_validation ${CMAKE_COMMAND} -E compare_files ${CMAKE_CURRENT_BINARY_DIR}/RESTORED_test.avi ${CMAKE_CURRENT_SOURCE_DIR}/../test/RESTORED_test-50REF.avi )
 else((CUDA_FOUND) AND NOT (APPLE))
 if(NOT (APPLE))
   message (WARNING "Cuda not found: can't configure CUDA-enabled denoiser")
