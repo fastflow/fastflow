@@ -193,18 +193,21 @@ protected:
 #define NEWREDUCE(name, task_t, f, input, sz)            \
     ff_reduceOCL<task_t> *name =                         \
         new ff_reduceOCL<task_t>(f, input,sz)
+#define NEWMAPREDUCE(name, task_t, mapf, redf, input, sz)\
+    ff_mapreduceOCL<task_t> *name =                      \
+        new ff_mapreduceOCL<task_t>(mapf, redf, input,sz)
 #define NEWREDUCEONSTREAM(task_t, f)                     \
     new ff_reduceOCL<task_t>(f)
 #define DELETEREDUCE(name)                               \
     delete name
 
 /*
- * \class ff_mapOCL
+ * \class ff_ocl
  *  \ingroup high_level_patterns
  *
- * \brief The map skeleton.
+ * \brief The FF ocl kernel interface (?)
  *
- * The map skeleton using OpenCL
+ * The kernel skeleton using OpenCL
  *
  * This class is defined in \ref map.hpp
  * 
@@ -227,7 +230,7 @@ private:
         } else
             kernel_code  = tmpstr.substr(n+1);        
     }
-
+    
 public:
     ff_ocl(const std::string &codestr):oneshot(false) {
         setcode(codestr);
@@ -241,6 +244,26 @@ public:
         oldOutPtr = false;
     }
 
+    void ResetOclObjects(const std::string &codestr){
+        setcode(codestr);
+
+    	size_t sourceSize = kernel_code.length();
+
+    	const char* code = kernel_code.c_str();
+
+    	program = clCreateProgramWithSource(context,1, &code, &sourceSize,&status);
+    	checkResult(status, "creating program with source");
+
+    	status = clBuildProgram(program,1,&baseclass_ocl_node_deviceId,NULL,NULL,NULL);
+    	checkResult(status, "building program");
+
+    	kernel = clCreateKernel(program, kernel_name.c_str(), &status);
+    	checkResult(status, "CreateKernel");
+
+    	status = clGetKernelWorkGroupInfo(kernel, baseclass_ocl_node_deviceId,
+    			CL_KERNEL_WORK_GROUP_SIZE,sizeof(size_t), &workgroup_size,0);
+    	checkResult(status, "GetKernelWorkGroupInfo");
+    }
     const T* getTask() const { return &Task; }
 protected:
     inline void checkResult(cl_int s, const char* msg) {
@@ -297,6 +320,7 @@ protected:
 
     cl_mem* getInputBuffer()  const { return (cl_mem*)&inputBuffer;}
     cl_mem* getOutputBuffer() const { return (cl_mem*)&outputBuffer;}
+    void swapInOut(){inputBuffer=outputBuffer;}
     
 protected:
     const bool oneshot;
@@ -548,6 +572,174 @@ protected:
         //return (ff_ocl<T>::oneshot?NULL:task);
         return (ff_ocl<T>::oneshot?NULL:outPtr);
     }									
+};
+
+/*
+ * \class ff_mapreduceOCL
+ *  \ingroup high_level_patterns_shared_memory
+ *
+ * \brief The map reduce skeleton using OpenCL
+ *
+ *
+ */
+template<typename T>
+class ff_mapreduceOCL: public ff_ocl<T> {
+public:
+
+	ff_mapreduceOCL(std::string mapf, std::string reducef_):ff_ocl<T>(mapf),reducef(reducef_) {}
+
+
+	ff_mapreduceOCL(std::string mapf, std::string reducef_, void* task, size_t s):
+        ff_ocl<T>(mapf, (typename T::base_type*)task,s),reducef(reducef_) {
+
+        ff_node::skipfirstpop(true);
+    }
+
+    int  run(bool=false) { return  ff_node::run(); }
+    int  wait() { return ff_node::wait(); }
+
+    int run_and_wait_end() {
+        if (run()<0) return -1;
+        if (wait()<0) return -1;
+        return 0;
+    }
+
+    double ffTime()  { return ff_node::ffTime();  }
+    double ffwTime() { return ff_node::wffTime(); }
+
+    const T* getTask() const { return ff_ocl<T>::getTask(); }
+
+protected:
+    std::string reducef;
+    inline void checkResult(cl_int s, const char* msg) {
+        if(s != CL_SUCCESS) {
+            std::cerr << msg << ":";
+            printOCLErrorString(s,std::cerr);
+        }
+    }
+
+    /*!
+     * Computes the number of threads and blocks to use for the reduction kernel.
+     */
+    inline void getBlocksAndThreads(const size_t size,
+                                    const size_t maxBlocks, const size_t maxThreads,
+                                    size_t & blocks, size_t &threads) {
+
+        threads = (size < maxThreads*2) ? nextPowerOf2((size + 1)/ 2) : maxThreads;
+        blocks  = (size + (threads * 2 - 1)) / (threads * 2);
+        blocks  = std::min(maxBlocks, blocks);
+    }
+
+    void * svc(void* task) {
+        cl_int   status = CL_SUCCESS;
+        cl_event events[2];
+        size_t globalThreads[1];
+        size_t localThreads[1];
+
+        ff_ocl<T>::Task.setTask(task);
+        size_t size = ff_ocl<T>::Task.size();
+        void* outPtr = ff_ocl<T>::Task.newOutPtr();
+
+        // MAP
+        if (size  < ff_ocl<T>::workgroup_size) {
+        	localThreads[0]  = size;
+        	globalThreads[0] = size;
+        } else {
+        	localThreads[0]  = ff_ocl<T>::workgroup_size;
+        	globalThreads[0] = nextMultipleOfIf(size,ff_ocl<T>::workgroup_size);
+        }
+
+        if ( ff_ocl<T>::oldSize < ff_ocl<T>::Task.bytesize() ) {
+        	if (ff_ocl<T>::oldSize != 0) clReleaseMemObject(ff_ocl<T>::inputBuffer);
+        	ff_ocl<T>::inputBuffer = clCreateBuffer(ff_ocl<T>::context, CL_MEM_READ_WRITE,
+        			ff_ocl<T>::Task.bytesize(), NULL, &status);
+        	ff_ocl<T>::checkResult(status, "CreateBuffer input (2)");
+        	ff_ocl<T>::oldSize = ff_ocl<T>::Task.bytesize();
+        }
+
+        if (ff_ocl<T>::Task.getInPtr() == ff_ocl<T>::Task.newOutPtr()) {
+        	ff_ocl<T>::outputBuffer = ff_ocl<T>::inputBuffer;
+        } else {
+        	if (ff_ocl<T>::oldOutPtr) clReleaseMemObject(ff_ocl<T>::outputBuffer);
+        	ff_ocl<T>::outputBuffer = clCreateBuffer(ff_ocl<T>::context, CL_MEM_READ_WRITE,
+        			ff_ocl<T>::Task.bytesize(), NULL, &status);
+        	ff_ocl<T>::checkResult(status, "CreateBuffer output");
+        	ff_ocl<T>::oldOutPtr = true;
+        }
+
+        status = clSetKernelArg(ff_ocl<T>::kernel, 0, sizeof(cl_mem), ff_ocl<T>::getInputBuffer());
+        ff_ocl<T>::checkResult(status, "setKernelArg input");
+        status = clSetKernelArg(ff_ocl<T>::kernel, 1, sizeof(cl_mem), ff_ocl<T>::getOutputBuffer());
+        ff_ocl<T>::checkResult(status, "setKernelArg output");
+        status = clSetKernelArg(ff_ocl<T>::kernel, 2, sizeof(cl_uint), (void *)&size);
+        ff_ocl<T>::checkResult(status, "setKernelArg size");
+
+        status = clEnqueueWriteBuffer(ff_ocl<T>::cmd_queue,ff_ocl<T>::inputBuffer,CL_FALSE,0,
+        		ff_ocl<T>::Task.bytesize(), ff_ocl<T>::Task.getInPtr(),
+        		0,NULL,NULL);
+        ff_ocl<T>::checkResult(status, "copying Task to device input-buffer");
+
+        status = clEnqueueNDRangeKernel(ff_ocl<T>::cmd_queue,ff_ocl<T>::kernel,1,NULL,
+        		globalThreads, localThreads,0,NULL,&events[0]);
+
+        status |= clWaitForEvents(1, &events[0]);
+
+        // REDUCE
+        ff_ocl<T>::ResetOclObjects(reducef);
+        size_t elemSize = ff_ocl<T>::Task.bytesize()/size;
+        size_t numBlocks = 0;
+        size_t numThreads = 0;
+
+        // 64 and 256 are the max number of blocks and threads we want to use
+        getBlocksAndThreads(size, 64, 256, numBlocks, numThreads);
+
+        size_t outMemSize =
+            (numThreads <= 32) ? (2 * numThreads * elemSize) : (numThreads * elemSize);
+
+        localThreads[0]  = numThreads;
+        globalThreads[0] = numBlocks * numThreads;
+
+        ff_ocl<T>::swapInOut();// input buffer is the output buffer from map stage
+        ff_ocl<T>::outputBuffer = clCreateBuffer(ff_ocl<T>::context, CL_MEM_READ_WRITE,numBlocks*elemSize, NULL, &status);
+        ff_ocl<T>::checkResult(status, "CreateBuffer output");
+
+        status |= clSetKernelArg(ff_ocl<T>::kernel, 0, sizeof(cl_mem), ff_ocl<T>::getInputBuffer());
+        status |= clSetKernelArg(ff_ocl<T>::kernel, 1, sizeof(cl_mem), ff_ocl<T>::getOutputBuffer());
+        status |= clSetKernelArg(ff_ocl<T>::kernel, 2, sizeof(cl_uint), (void *)&size);
+        status != clSetKernelArg(ff_ocl<T>::kernel, 3, outMemSize, NULL);
+        checkResult(status, "setKernelArg ");
+
+        status = clEnqueueNDRangeKernel(ff_ocl<T>::cmd_queue,ff_ocl<T>::kernel,1,NULL,
+                                        globalThreads,localThreads,0,NULL,&events[0]);
+        status = clWaitForEvents(1, &events[0]);
+
+        // Sets the kernel arguments for second reduction
+        size = numBlocks;
+        status |= clSetKernelArg(ff_ocl<T>::kernel, 0, sizeof(cl_mem),ff_ocl<T>::getOutputBuffer());
+        status |= clSetKernelArg(ff_ocl<T>::kernel, 1, sizeof(cl_mem),ff_ocl<T>::getOutputBuffer());
+        status |= clSetKernelArg(ff_ocl<T>::kernel, 2, sizeof(cl_uint),(void*)&size);
+        status |= clSetKernelArg(ff_ocl<T>::kernel, 3, outMemSize, NULL);
+        ff_ocl<T>::checkResult(status, "setKernelArg ");
+
+        localThreads[0]  = numThreads;
+        globalThreads[0] = numThreads;
+
+        status = clEnqueueNDRangeKernel(ff_ocl<T>::cmd_queue,ff_ocl<T>::kernel,1,NULL,
+                                        globalThreads,localThreads,0,NULL,&events[0]);
+        outPtr = ff_ocl<T>::Task.newOutPtr();
+        status |= clWaitForEvents(1, &events[0]);
+        status |= clEnqueueReadBuffer(ff_ocl<T>::cmd_queue,ff_ocl<T>::outputBuffer,CL_TRUE, 0,
+                                      elemSize, outPtr ,0,NULL,&events[1]);
+        status |= clWaitForEvents(1, &events[1]);
+        ff_ocl<T>::checkResult(status, "ERROR during OpenCL computation");
+
+        clReleaseEvent(events[0]);
+        clReleaseEvent(events[1]);
+
+
+        //return (ff_ocl<T>::oneshot?NULL:task);
+        return (ff_ocl<T>::oneshot?NULL:outPtr);
+    }
 };
 
 

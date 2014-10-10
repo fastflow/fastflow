@@ -78,7 +78,8 @@ public:
     virtual void svc_releaseOclObjects()=0;
      
 protected:
-   
+    cl_device_id baseclass_ocl_node_deviceId; // is the id which is provided for user
+
     /**
      * \brief Initializes OpenCL instance
      *
@@ -157,7 +158,6 @@ protected:
     
 private:
     int tId; // the node id
-    cl_device_id baseclass_ocl_node_deviceId; // is the id which is provided for user
 };
 
 /*!
