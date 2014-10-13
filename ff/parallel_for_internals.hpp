@@ -885,10 +885,10 @@ private:
     ffBarrier *loopbar;
 public:
 
-    ff_forall_farm(ssize_t maxnw, const bool spinwait=false, const bool skipwarmup=false):
+    ff_forall_farm(ssize_t maxnw, const bool spinwait=false, const bool skipwarmup=false, const bool spinbarrier=false):
         ff_farm<foralllb_t>(false,8*ff_farm<>::DEF_MAX_NUM_WORKERS,8*ff_farm<>::DEF_MAX_NUM_WORKERS,
                             true, ff_farm<>::DEF_MAX_NUM_WORKERS,true), // cleanup at exit !
-        loopbar( spinwait ? 
+        loopbar( (spinwait && spinbarrier) ? 
                  (ffBarrier*)(new spinBarrier(maxnw<=0?ff_farm<>::DEF_MAX_NUM_WORKERS+1:(size_t)(maxnw+1))) :
                  (ffBarrier*)(new Barrier(maxnw<=0?ff_farm<>::DEF_MAX_NUM_WORKERS+1:(size_t)(maxnw+1))) ),
         skipwarmup(skipwarmup),spinwait(spinwait) {

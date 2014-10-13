@@ -28,52 +28,46 @@
  *         torquati@di.unipi.it  massimotor@gmail.com
  */
 
-
-#if !defined(FF_OCL)
-#define FF_OCL
-#endif
-
-#include <ff/map.hpp>
-
+#include <ff/mapOCL.hpp>
 using namespace ff;
 
-FFMAPFUNC(mapf, float, elem, return (elem+1.0) );
+FFMAPFUNC(mapf, float, elem, 
+          return (elem+1.0);
+          );
 
-template<typename T>
-class oclTask: public baseTask {
-public:
-    typedef T base_type;
-
-    oclTask():s(0) {}
-    oclTask(base_type* t, size_t s):baseTask(t),s(s) {}
-    size_t size() const     { return s;} 
-    size_t bytesize() const { return s*sizeof(base_type); }    
-protected:
-    size_t s; 
-};
-
-
-int main(int argc, char * argv[]) {
-    if (argc<2) {
-        printf("use %s arraysize\n", argv[0]);
-        return -1;
+struct oclTask: public baseOCLTask<float> {
+    oclTask():M(NULL),size(0) {}
+    oclTask(float *M, size_t size):M(M),size(size) {}
+    void setTask(void *task) { 
+        assert(task);
+        oclTask *t = reinterpret_cast<oclTask*>(task);
+        setInPtr(t->M);
+        setOutPtr(t->M);
+        setSizeIn(t->size);
     }
 
-    size_t size     =atoi(argv[1]);
+    float *M;
+    const size_t  size;
+};
 
-    /* init data */
+int main(int argc, char * argv[]) {
+    size_t size=1024;
+    if(argc>1) size     =atol(argv[1]);
+    printf("arraysize = %ld\n", size);
+
     float *M        = new float[size];
     for(size_t j=0;j<size;++j) M[j]=j;
 
-    NEWMAP(oclmap, oclTask<float>, mapf, M, size);
-    oclmap->run_and_wait_end();
-    
+    oclTask oclt(M, size);
+    ff_mapOCL<oclTask> oclMap(oclt, mapf);
+    oclMap.run_and_wait_end();
+
 #if defined(CHECK)
-    for(long i=0;i<size;++i)  printf("%.2f ", M[i]);
+    for(size_t i=0;i<size;++i)
+        printf("%g ", M[i]);
     printf("\n");
 #endif
 
-    printf("DONE\n");
-    DELETEMAP(oclmap);
+    delete [] M;
     return 0;
 }

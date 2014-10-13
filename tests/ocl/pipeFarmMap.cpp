@@ -28,12 +28,7 @@
  *         torquati@di.unipi.it  massimotor@gmail.com
  */
 
-
-#if !defined(FF_OCL)
-#define FF_OCL
-#endif
-
-#include <ff/map.hpp>
+#include <ff/mapOCL.hpp>
 #include <ff/farm.hpp>
 #include <ff/pipeline.hpp>
 
@@ -41,28 +36,24 @@ using namespace ff;
 
 FFMAPFUNC(mapf, float, elem, return (elem+1.0) );
 
-template<typename T>
-class oclTask: public baseTask {
-public:
-    typedef T base_type;
-
-    oclTask():s(0) {}
-    oclTask(base_type* t, size_t s):baseTask(t),s(s) {}
-
-    void   setTask(void* t) { 
-        if (t) {  
-            task=((oclTask<T>*)t)->getInPtr(); 
-            s   =((oclTask<T>*)t)->size();
-        } 
-    }
-    size_t size() const     { return s;} 
-    size_t bytesize() const { return s*sizeof(base_type); }    
-protected:
-    size_t s; 
+// stream task
+struct myTask {
+    myTask(float *M, const size_t size):M(M),size(size) {}
+    float *M;
+    const size_t size;
 };
 
-
-
+// OpenCL task
+struct oclTask: public baseOCLTask<float> {
+    oclTask() {}
+    void setTask(void *task) { 
+        assert(task);
+        myTask *t = reinterpret_cast<myTask*>(task);
+        setInPtr(t->M);
+        setOutPtr(t->M);
+        setSizeIn(t->size);
+    }
+};
 
 class ArrayGenerator: public ff_node {
 public:
@@ -73,27 +64,24 @@ public:
         for(int i=0;i<streamlen;++i) {
             float *t = new float[size];
             for(size_t j=0;j<size;++j) t[j]=j+i;
-            oclTask<float>* task = new oclTask<float>(t,size);
-            ff_send_out((void*)task);
+            myTask *task = new myTask(t, size);
+            ff_send_out(task);
         }
-        return NULL;
+        return EOS;
     }
 private:
     int streamlen;
     size_t size;
 };
 
-class ArrayGatherer: public ff_node {
+class ArrayGatherer: public ff_node_t<myTask> {
 public:
-    void* svc(void* t) {
-        oclTask<float>* task = (oclTask<float>*)t;
-        size_t size = task->size();
-        float* res = (float*)task->getInPtr();
+    myTask* svc(myTask *task) {
 #if defined(CHECK)
-        for(long i=0;i<size;++i)  printf("%.2f ", res[i]);
+        for(long i=0;i<task->size;++i)  printf("%.2f ", task->M[i]);
         printf("\n");
 #endif
-        delete res; delete task;
+        delete [] task->M; delete task;
         return GO_ON;
     }
 };
@@ -104,20 +92,22 @@ int main(int argc, char * argv[]) {
         return -1;
     }
 
-    int    size     =atoi(argv[1]);
-    int    streamlen=atoi(argv[2]);
-    int    nworkers =atoi(argv[3]);
+    size_t  size     =atol(argv[1]);
+    long    streamlen=atol(argv[2]);
+    int     nworkers =atoi(argv[3]);
 
     ff_pipeline pipe;
     pipe.add_stage(new ArrayGenerator(streamlen, size));
-    ff_farm<> farm;
-    farm.add_collector(NULL);
+    ff_farm<> *farm = new ff_farm<>;
+    farm->add_collector(NULL);
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i)
-        w.push_back(NEWMAPONSTREAM(oclTask<float>, mapf));
-    farm.add_workers(w);
-    pipe.add_stage(&farm);
+        w.push_back(new ff_mapOCL<oclTask>(mapf));
+    farm->add_workers(w);
+    farm->cleanup_workers();
+    pipe.add_stage(farm);
     pipe.add_stage(new ArrayGatherer);
+    pipe.cleanup_nodes();
     pipe.run_and_wait_end();
     
     printf("DONE\n");
