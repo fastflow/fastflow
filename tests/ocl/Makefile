@@ -11,7 +11,6 @@ endif
 FF_ROOT  = ../../
 #AMD OpenCL location
 OCL_ROOT = /opt/AMDAPP
-#OCL_ROOT = /usr/local/cuda
 
 # 
 OCLFLAGS =
@@ -21,7 +20,7 @@ LIBS     =  $(OPENCL) -lpthread
 INCLUDES = -I$(FF_ROOT) -I$(OCL_ROOT)/include
 
 
-TARGETS = oclMap farm_oclMap oclReduce oclMapReduce farm_oclReduce pipeFarmMap dotProduct
+TARGETS = oclMap oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct
 
 all: $(TARGETS)
 

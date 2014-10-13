@@ -126,14 +126,15 @@ public:
 
      * \param maxnw Maximum number of worker threads (not including active scheduler, if
      * any). Deafault <b>FF_AUTO</b> = N. of HW contexts. 
-     * \param spinwait barrier kind. \p true nonblocking, \p false blocking.
-     * Nonbloking barrier will leave worker threads active until class destruction is called 
+     * \param spinwait. \p true nonblocking, \p false blocking.
+     * \param spinbarrier. \p true it uses spinning barrier, \p false it uses blocking barrier.
+     * The nonbloking behaviour will leave worker threads active until class destruction is called 
      * (the threads will be active and in the nonblocking barrier only after the 
      * first call to one of the parallel_for methods). To put threads to sleep between different
      * calls, the <b>threadPause</b> method may be called.
      */
-    ParallelFor(const long maxnw=FF_AUTO,bool spinwait=false):
-        pf(new ff_forall_farm<forallreduce_W<int> >(maxnw,spinwait)) {}
+    ParallelFor(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
+        pf(new ff_forall_farm<forallreduce_W<int> >(maxnw,spinwait,false,spinbarrier)) {}
     /**
      * \brief Destructor
      * 
@@ -361,8 +362,8 @@ protected:
      * small kernels), \p false blocking support
      * @param skipWarmup Skip warmup phase (autotuning)
      */
-    ParallelForReduce(const long maxnw, bool spinWait, bool skipWarmup): 
-        pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,false, true)) {}
+    ParallelForReduce(const long maxnw, bool spinWait, bool skipWarmup, bool spinbarrier): 
+        pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,false, true, false)) {}
 public:
     /**
      * @brief Constructor
@@ -372,8 +373,8 @@ public:
      * and \p parallel_reduce, useful when they are called in sequence on
      * small kernels), \p false blocking support
      */
-    ParallelForReduce(const long maxnw=FF_AUTO, bool spinwait=false):
-        pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,spinwait)) {}
+    ParallelForReduce(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
+        pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,spinwait,false,spinbarrier)) {}
 
     ~ParallelForReduce()                { if (pfr) { FF_PARFORREDUCE_DONE(pfr); pfr=nullptr; }}
 
@@ -693,8 +694,8 @@ protected:
     ff_pipe<task_t>  pipe;
 
 public:
-    ParallelForPipeReduce(const long maxnw=FF_AUTO, bool spinwait=false):
-        pfr(new ff_forall_farm<forallpipereduce_W>(maxnw,false,true)), // skip loop warmup and disable spinwait
+    ParallelForPipeReduce(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
+        pfr(new ff_forall_farm<forallpipereduce_W>(maxnw,false,true,false)), // skip loop warmup and disable spinwait/spinbarrier
         pipe(pfr,&reduce) {
         
         // required to avoid error

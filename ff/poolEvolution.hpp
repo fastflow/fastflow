@@ -118,7 +118,7 @@ public :
                    evolution_t evol,                           // the evolution function
                    filtering_t fil,                            // the filter function
                    termination_t term,                         // the termination function
-                   const env_t &E= env_t(), bool spinWait=true)
+                   const env_t &E= env_t(), bool spinWait=true) // NOTE: spinWait does not enable spinBarrier !
         :maxp(maxp), pE(maxp),env(E),input(&pop),selection(sel),evolution(evol),filter(fil),termination(term),
          loopevol(maxp,spinWait) { 
         loopevol.disableScheduler(true);

@@ -1,4 +1,7 @@
 * 22/08/14 - v.2.0.5
+   - added the possibility to select the spinBarrier barrier in the parallel-for pattern (by default is enabled blocking barrier)
+   - revised version of OpenCL patterns (still experimental)
+   - OpenCL map/reduce/mapreduce patters are now in the mapOCL.hpp file
    - spinBarrier::barrierSetup revised
    - *** changed 'thaw' semantic ***. 
      If the function is called and the current thread is not in the frozen 
