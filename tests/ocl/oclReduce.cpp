@@ -28,55 +28,42 @@
  *         torquati@di.unipi.it  massimotor@gmail.com
  */
 
-
-#if !defined(FF_OCL)
-#define FF_OCL
-#endif
-#include <ff/map.hpp>
-
+#include <ff/mapOCL.hpp>
 using namespace ff;
 
+FFREDUCEFUNC(reducef, float, x, y, 
+             return (x+y);
+             );
 
-FFREDUCEFUNC(reducef, float, x, y, return (x+y) );
-
-template<typename T>
-class oclTask: public baseTask {
-public:
-    typedef T base_type;
-
-
-    oclTask():s(0) {}
-    oclTask(base_type* t, size_t s):baseTask(t),s(s) {}
-
-    size_t size() const     { return s;} 
-    size_t bytesize() const { return s*sizeof(base_type); }        
-    void*  newOutPtr()      { return &result; }
-
-    const T& getResult() const { return result; }
-
-protected:
-    size_t s; 
-    T      result;
-};
-
-
-int main(int argc, char * argv[]) {
-    if (argc<2) {
-        printf("use %s arraysize\n", argv[0]);
-        return -1;
+struct oclTask: public baseOCLTask<float> {
+    oclTask():M(NULL),size(0),result(0.0) {}
+    oclTask(float *M, size_t size):M(M),size(size),result(0.0) {}
+    void setTask(void *task) { 
+        assert(task);
+        oclTask *t = reinterpret_cast<oclTask*>(task);
+        setInPtr(t->M);
+        setSizeIn(t->size);
+        setReduceVar(&(t->result));
     }
 
-    size_t size     =atoi(argv[1]);
+    const size_t  size;
+    float *M;
+    float  result;
+};
 
-    /* init data */
+int main(int argc, char * argv[]) {
+    size_t size=1024;
+    if(argc>1) size     =atol(argv[1]);
+    printf("arraysize = %ld\n", size);
+
     float *M        = new float[size];
-    for(size_t j=0;j<size;++j) M[j]=j;
+    for(size_t j=0;j<size;++j) M[j]=j + 1.0;
 
-    NEWREDUCE(oclreduce, oclTask<float>, reducef, M, size);
-    oclreduce->run_and_wait_end();
+    oclTask oclt(M, size);
+    ff_reduceOCL<oclTask> oclReduce(oclt, reducef);
+    oclReduce.run_and_wait_end();
 
-    printf("res=%.2f\n", (oclreduce->getTask())->getResult());
-    printf("DONE\n");
-    DELETEREDUCE(oclreduce);
+    delete [] M;
+    printf("res=%.2f\n", oclt.result);
     return 0;
 }

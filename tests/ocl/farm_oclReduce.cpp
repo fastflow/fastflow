@@ -32,68 +32,53 @@
  * NOTE: the farm is not an ordered farm (in case use ff_ofarm).
  */
 
-
-#if !defined(FF_OCL)
-#define FF_OCL
-#endif
-
 #include <ff/farm.hpp>
-#include <ff/map.hpp>
+#include <ff/mapOCL.hpp>
 
 using namespace ff;
 
-FFREDUCEFUNC(mapf, float, x,y, return (x+y) );
+FFREDUCEFUNC(reducef, float, x,y, return (x+y) );
 
-// this is gobal just to keep things simple
-size_t inputsize=0;
-
-template<typename T>
-class oclTask: public baseTask {
-public:
-    typedef T base_type;
-
-    oclTask():s(0) {}
-    oclTask(base_type* t, size_t s):baseTask(t),s(s) {}
-
-    void   setTask(void* t) { if (t) { task=t; s=inputsize; } }
-    size_t size() const     { return s;} 
-    size_t bytesize() const { return s*sizeof(base_type); }    
-    void*  newOutPtr()      { return &((T*)task)[s]; }
-
-protected:
-    size_t s; 
+// stream task
+struct myTask {
+    myTask(float *M, const size_t size):M(M),sum(0.0),size(size) {}
+    float *M;
+    float  sum;
+    const size_t size;
 };
 
-class Emitter: public ff_node {
-public:
-    Emitter(int streamlen, size_t size):streamlen(streamlen),size(size) {}
+// OpenCL task
+struct oclTask: public baseOCLTask<float> {
+    oclTask() {}
+    void setTask(void *task) { 
+        assert(task);
+        myTask *t = reinterpret_cast<myTask*>(task);
+        setInPtr(t->M);
+        setSizeIn(t->size);
+        setReduceVar(&t->sum);
+    }
+};
 
+struct Emitter: public ff_node {
+    Emitter(long streamlen, size_t size):streamlen(streamlen),size(size) {}
     void* svc(void*) {
         for(int i=0;i<streamlen;++i) {
-            float* task = new float[size+1]; // one extra slot for the result
+            float* task = new float[size];            
             for(size_t j=0;j<size;++j) task[j]=j+i;
-            task[size]=0.0;
-            ff_send_out(task);
+            myTask *T = new myTask(task, size);
+            ff_send_out(T);
         }
-        return NULL;
+        return EOS;
     }
-private:
-    int streamlen;
+    long   streamlen;
     size_t size;
 };
 
-
-class Collector: public ff_node {
-public:
-    Collector(size_t size):size(size) {}
-
-    void* svc(void* t) {
-        float* task = (float*)t;
-        printf("%.2f\n", task[size]);
+struct Collector: public ff_node_t<myTask> {
+    myTask *svc(myTask *t) {
+        printf("%.2f\n", t->sum);
         return GO_ON;
     }
-private:
-    size_t size;
 };
 
 
@@ -103,20 +88,22 @@ int main(int argc, char * argv[]) {
         return -1;
     }
 
-    inputsize       =atoi(argv[1]);
-    int    streamlen=atoi(argv[2]);
-    int    nworkers =atoi(argv[3]);
+    size_t inputsize   =atol(argv[1]);
+    long   streamlen   =atoi(argv[2]);
+    int    nworkers    =atoi(argv[3]);
 
     ff_farm<> farm;
     Emitter   E(streamlen,inputsize);
-    Collector C(inputsize);
+    Collector C;
     farm.add_emitter(&E);
     farm.add_collector(&C);
 
+    oclTask oclt;
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) 
-        w.push_back(NEWREDUCEONSTREAM(oclTask<float>,mapf));
+        w.push_back(new ff_reduceOCL<oclTask>(reducef));
     farm.add_workers(w);
+    farm.cleanup_workers();
     farm.run_and_wait_end();
 
     printf("DONE\n");
