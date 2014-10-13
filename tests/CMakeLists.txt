@@ -4,7 +4,8 @@ include_directories(
     ${PROJECT_SOURCE_DIR}
     )
 
-ADD_DEFINITIONS(-DUSE_CMAKE_CONFIG)
+ADD_DEFINITIONS(-DUSE_CMAKE_CONFIG) 
+
 
 set( TESTS                               
                         test_graphsearch
@@ -29,8 +30,8 @@ test6                                     test_ofarm
 test7                                     test_ofarm2
 test_MISD                                 test_parfor
 test_accelerator+pinning                  test_parfor2
-test_accelerator                          
-test_accelerator2                         test_parfor_multireduce
+test_accelerator                          test_parfor_multireduce 
+test_accelerator2                         test_parfor_multireduce2
 test_accelerator3                         test_parfor_unbalanced
 test_accelerator_farm+pipe                test_parforpipereduce
 test_accelerator_ofarm                    test_pipe+masterworker
@@ -39,14 +40,15 @@ test_accelerator_pipe+farm                test_pool1
 test_accelerator_pipe                     test_pool2
 test_bmpmc                                test_pool3
 test_dataflow                             test_scheduling
-test_dataflow2                            test_scheduling2
+test_dataflow2                            #test_scheduling2
 test_devicequery                          test_sendq
 test_dotprod_parfor                       test_spinBarrier
 test_dt                                   test_stopstartall
 test_farm+pipe                            test_stopstartthreads
 test_farm                                 test_stopstartthreads2
-test_ffthread                             test_torus
-test_freeze                               test_uBuffer
+test_ffthread                             test_taskf
+test_torus                                test_freeze
+test_uBuffer
 )
 #set( TESTS_W_OMP test_parfor_basic)
 #  
@@ -66,6 +68,13 @@ endforeach( t )
 foreach( t ${TESTS} )
     add_test( ${t} ${CMAKE_CURRENT_BINARY_DIR}/${t} )
 endforeach( t )
+
+#test with special compilation parameters
+add_executable( test_scheduling2 test_scheduling2.cpp)
+set_target_properties(test_scheduling2 PROPERTIES COMPILE_DEFINITIONS LB_CALLBACK)
+target_link_libraries( test_scheduling2 ${CMAKE_THREAD_LIBS_INIT} )
+add_test( test_scheduling2 ${CMAKE_CURRENT_BINARY_DIR}/test_scheduling2 )
+
 
 #layer2 tests
 
