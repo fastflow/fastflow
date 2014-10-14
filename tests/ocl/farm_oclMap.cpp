@@ -33,8 +33,9 @@
  *
  */
 
-#include <ff/farm.hpp>
 #include <ff/mapOCL.hpp>
+#include <ff/farm.hpp>
+
 
 using namespace ff;
 
@@ -48,20 +49,19 @@ struct myTask {
 };
 
 // OpenCL task
-struct oclTask: public baseOCLTask<float> {
+struct oclTask: public baseOCLTask<myTask, float> {
     oclTask() {}
-    void setTask(void *task) { 
+    void setTask(myTask *task) { 
         assert(task);
-        myTask *t = reinterpret_cast<myTask*>(task);
-        setInPtr(t->M);
-        setOutPtr(t->M);
-        setSizeIn(t->size);
+        setInPtr(task->M);
+        setOutPtr(task->M);
+        setSizeIn(task->size);
     }
 };
 
 struct Emitter: public ff_node {
     Emitter(long streamlen, size_t size):streamlen(streamlen),size(size) {}
-    void* svc(void*) {
+    void *svc(void*) {
         for(int i=0;i<streamlen;++i) {
             float* task = new float[size];            
             for(size_t j=0;j<size;++j) task[j]=j+i;
@@ -105,7 +105,7 @@ int main(int argc, char * argv[]) {
     oclTask oclt;
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) 
-        w.push_back(new ff_mapOCL<oclTask>(mapf));
+        w.push_back(new ff_mapOCL<myTask, oclTask>(mapf));
     farm.add_workers(w);
     farm.cleanup_workers();
     farm.run_and_wait_end();

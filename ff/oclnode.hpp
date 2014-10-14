@@ -101,7 +101,7 @@ protected:
      * It construct the OpenCL node for the device.
      *
      */
-    ff_oclNode():tId(-1), baseclass_ocl_node_deviceId(NULL) { }
+    ff_oclNode():baseclass_ocl_node_deviceId(NULL),tId(-1) { }
     
     /**
      * \brief Device rules
@@ -156,8 +156,22 @@ protected:
         return false;
     }
     
+
 private:
     int tId; // the node id
+};
+
+template<typename T>
+struct ff_oclNode_t: ff_oclNode {
+    ff_oclNode_t():
+        GO_ON((T*)FF_GO_ON),
+        EOS((T*)FF_EOS),
+        GO_OUT((T*)FF_GO_OUT),
+        EOS_NOFREEZE((T*)FF_EOS_NOFREEZE) {}
+    T *GO_ON, *EOS, *GO_OUT, *EOS_NOFREEZE;
+    virtual ~ff_oclNode_t()  {}
+    virtual T* svc(T*)=0;
+    inline  void *svc(void *task) { return svc(reinterpret_cast<T*>(task));};
 };
 
 /*!

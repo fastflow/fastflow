@@ -44,16 +44,15 @@ FFREDUCEFUNC(reducef, float, x, y,
              return (x+y); 
              );
 
-struct oclTask: public baseOCLTask<mypair, float> {
+struct oclTask: public baseOCLTask<oclTask, mypair, float> {
     oclTask():M(NULL),Mout(NULL),result(0.0), size(0) {}
     oclTask(mypair *M, size_t size):M(M),Mout(NULL),result(0.0),size(size) {
         Mout = new float[size];
         assert(Mout);
     }
     ~oclTask() { if (Mout) delete [] Mout; }
-    void setTask(void *task) { 
-       assert(task);
-       oclTask *t = reinterpret_cast<oclTask*>(task);
+    void setTask(oclTask *t) { 
+       assert(t);
        setInPtr(t->M);
        setSizeIn(t->size);
        setReduceVar(&(t->result));

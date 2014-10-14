@@ -35,12 +35,12 @@ FFMAPFUNC(mapf, float, elem,
           return (elem+1.0);
           );
 
-struct oclTask: public baseOCLTask<float> {
+struct oclTask: public baseOCLTask<oclTask, float> {
     oclTask():M(NULL),size(0) {}
     oclTask(float *M, size_t size):M(M),size(size) {}
-    void setTask(void *task) { 
-        assert(task);
-        oclTask *t = reinterpret_cast<oclTask*>(task);
+    void setTask(oclTask *t) { 
+        assert(t);
+        //oclTask *t = reinterpret_cast<oclTask*>(task);
         setInPtr(t->M);
         setOutPtr(t->M);
         setSizeIn(t->size);

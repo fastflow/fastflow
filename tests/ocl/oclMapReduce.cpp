@@ -38,20 +38,19 @@ FFREDUCEFUNC(reducef, float, x, y,
              return (x+y); 
              );
 
-struct oclTask: public baseOCLTask<float> {
-    oclTask():M(NULL),size(0) {}
-    oclTask(float *M, size_t size):M(M),size(size) {}
-    void setTask(void *task) { 
-       assert(task);
-        oclTask *t = reinterpret_cast<oclTask*>(task);
+struct oclTask: public baseOCLTask<oclTask, float> {
+    oclTask():M(NULL),result(0.0), size(0) {}
+    oclTask(float *M, size_t size):M(M),result(0.0),size(size) {}
+    void setTask(oclTask *t) { 
+        assert(t);
         setInPtr(t->M);
         setSizeIn(t->size);
         setReduceVar(&(t->result));
      }
 
+    float        *M;
+    float         result;
     const size_t  size;
-    float *M;
-    float  result;
 };
 
 int main(int argc, char * argv[]) {
