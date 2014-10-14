@@ -44,14 +44,13 @@ struct myTask {
 };
 
 // OpenCL task
-struct oclTask: public baseOCLTask<float> {
+struct oclTask: public baseOCLTask<myTask, float> {
     oclTask() {}
-    void setTask(void *task) { 
+    void setTask(myTask *task) { 
         assert(task);
-        myTask *t = reinterpret_cast<myTask*>(task);
-        setInPtr(t->M);
-        setOutPtr(t->M);
-        setSizeIn(t->size);
+        setInPtr(task->M);
+        setOutPtr(task->M);
+        setSizeIn(task->size);
     }
 };
 
@@ -78,7 +77,7 @@ class ArrayGatherer: public ff_node_t<myTask> {
 public:
     myTask* svc(myTask *task) {
 #if defined(CHECK)
-        for(long i=0;i<task->size;++i)  printf("%.2f ", task->M[i]);
+        for(size_t i=0;i<task->size;++i)  printf("%.2f ", task->M[i]);
         printf("\n");
 #endif
         delete [] task->M; delete task;
@@ -102,7 +101,7 @@ int main(int argc, char * argv[]) {
     farm->add_collector(NULL);
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i)
-        w.push_back(new ff_mapOCL<oclTask>(mapf));
+        w.push_back(new ff_mapOCL<myTask, oclTask>(mapf));
     farm->add_workers(w);
     farm->cleanup_workers();
     pipe.add_stage(farm);

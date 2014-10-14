@@ -1124,7 +1124,6 @@ struct ff_buffernode: ff_node {
  *
  *  This class is defined in \ref node.hpp
  */
-
 template<typename T>
 struct ff_node_t:ff_node {
     ff_node_t():
@@ -1134,8 +1133,8 @@ struct ff_node_t:ff_node {
         EOS_NOFREEZE((T*)FF_EOS_NOFREEZE) {}
     T *GO_ON, *EOS, *GO_OUT, *EOS_NOFREEZE;
     virtual ~ff_node_t()  {}
-    void *svc(void *task) { return svc(reinterpret_cast<T*>(task));};
-    virtual T* svc(T*)=0;
+    virtual inline T* svc(T*)=0;
+    inline  void *svc(void *task) { return svc(reinterpret_cast<T*>(task));};
 };
 
 } // namespace ff
