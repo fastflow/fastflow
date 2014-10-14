@@ -48,14 +48,13 @@ struct myTask {
 };
 
 // OpenCL task
-struct oclTask: public baseOCLTask<float> {
+struct oclTask: public baseOCLTask<myTask, float> {
     oclTask() {}
-    void setTask(void *task) { 
+    void setTask(myTask *task) { 
         assert(task);
-        myTask *t = reinterpret_cast<myTask*>(task);
-        setInPtr(t->M);
-        setSizeIn(t->size);
-        setReduceVar(&t->sum);
+        setInPtr(task->M);
+        setSizeIn(task->size);
+        setReduceVar(&task->sum);
     }
 };
 
@@ -101,7 +100,7 @@ int main(int argc, char * argv[]) {
     oclTask oclt;
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) 
-        w.push_back(new ff_reduceOCL<oclTask>(reducef));
+        w.push_back(new ff_reduceOCL<myTask, oclTask>(reducef));
     farm.add_workers(w);
     farm.cleanup_workers();
     farm.run_and_wait_end();

@@ -103,4 +103,8 @@ static const size_t FF_GO_OUT        = (FF_EOS-0x3); /// non automatically propa
 #if defined(USE_CMAKE_CONFIG) && !defined(NOT_USE_CMAKE_CONFIG)
 #include <cmake.modules/ffconfig.h>
 #endif
+
+// OpenCL additional code needed to compile kernels
+#define FF_OPENCL_DATATYPES_FILE "ff_opencl_datatypes.cl"
+
 #endif /* FF_CONFIG_HPP */

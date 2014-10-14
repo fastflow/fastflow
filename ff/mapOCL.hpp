@@ -35,60 +35,73 @@
 #include <string>
 #include <fstream>
 #include <ff/oclnode.hpp>
+#include <ff/node.hpp>
 
 
 namespace ff {
 
 // map base task for OpenCL implementation
-template<typename Tin_, typename Tout_ = Tin_>
+// char type is a void type - clang++ don't like using void, g++ accept it
+template<typename TaskT_, 
+         typename Tin_, typename Tout_ = Tin_, typename Tenv_=char>
 class baseOCLTask {
 public:
-    typedef Tin_ Tin;
-    typedef Tout_ Tout;
+    typedef TaskT_ TaskT;
+    typedef Tin_   Tin;
+    typedef Tout_  Tout;
+    typedef Tenv_  Tenv;
 
-    baseOCLTask(): inPtr(NULL),outPtr(NULL),size_in(0),size_out(0),reduceVar(NULL) { }   
+    baseOCLTask(): inPtr(NULL),outPtr(NULL),envPtr(NULL),
+                   size_in(0),size_out(0),reduceVar(NULL) { }   
     virtual ~baseOCLTask() { }
     
     // user must override this method
-    virtual void setTask(void* t) = 0;
+    virtual void setTask(TaskT *t) = 0;
 
     size_t getBytesizeIn()   const { return getSizeIn() * sizeof(Tin); }
     size_t getBytesizeOut()  const { return getSizeOut() * sizeof(Tout); }
+    size_t getBytesizeEnv()  const { return getSizeEnv() * sizeof(Tenv); }
 
-    void setSizeIn(size_t   sizeIn)   {	size_in   = sizeIn;   }
-    void setSizeOut(size_t  sizeOut)  {	size_out  = sizeOut;   }
+    void setSizeIn(size_t  sizeIn)  { size_in   = sizeIn; }
+    void setSizeOut(size_t sizeOut) { size_out  = sizeOut; }
+    void setSizeEnv(size_t sizeEnv) { size_env  = sizeEnv; }
 
-    size_t getSizeIn()   const { return size_in;   }
-    size_t getSizeOut()  const { return (size_out==0)?size_in:size_out;  }
+    size_t getSizeIn()  const { return size_in;   }
+    size_t getSizeOut() const { return (size_out==0)?size_in:size_out;  }
+    size_t getSizeEnv() const { return size_env; }
 
-    void setInPtr(Tin*     _inPtr)     { inPtr   = _inPtr;  }
-    void setOutPtr(Tout*   _outPtr)    { outPtr  = _outPtr;  }
+    void setInPtr(Tin*    _inPtr)   { inPtr  = _inPtr;  }
+    void setOutPtr(Tout*  _outPtr)  { outPtr = _outPtr;  }
+    void setEnvPtr(Tenv*  _envPtr)  { envPtr = _envPtr; }
 
-    Tin*   getInPtr()   const { return inPtr;   }
-    Tout*  getOutPtr()  const { return outPtr;  }
-    
+    Tin*   getInPtr()   const { return inPtr;  }
+    Tout*  getOutPtr()  const { return outPtr; }
+    Tenv*  getEnvPtr()  const { return envPtr; }
+
     void setReduceVar(Tout *r) { reduceVar = r;  }
     Tout *getReduceVar() const { return reduceVar;  }
 
 protected:
     Tin    *inPtr;
     Tout   *outPtr;
-    size_t  size_in, size_out;
+    Tenv   *envPtr;
+
+    size_t  size_in, size_out, size_env;
     Tout   *reduceVar;
 };
 
-
-
     
-    /* The following OpenCL code macros have been derived from the SkePU OpenCL code
-     * http://www.ida.liu.se/~chrke/skepu/
-     *
-     */
+/* The following OpenCL code macros have been "inspired" from the 
+ * SkePU OpenCL code 
+ * http://www.ida.liu.se/~chrke/skepu/
+ */
+
+//  x=f(param)   'x' and 'param' have the same type
 #define FFMAPFUNC(name, basictype, param, code)                         \
     static char name[] =                                                \
         "kern_" #name "|"                                               \
         #basictype "|"                                                  \
-#basictype " f" #name "(" #basictype " " #param ") {" #code ";}\n"      \
+#basictype " f" #name "(" #basictype " " #param ") {\n" #code ";\n}\n"  \
 "__kernel void kern_" #name "(__global " #basictype "* input,\n"        \
 "                             __global " #basictype "* output,\n"       \
 "                             const uint maxItems) {\n"                 \
@@ -100,11 +113,13 @@ protected:
 "           }\n"                                                        \
 "}"
 
+
+//  x=f(param)   'x' and 'param' have different types
 #define FFMAPFUNC2(name, outT, inT, param, code)                        \
     static char name[] =                                                \
         "kern_" #name "|"                                               \
         #outT "|"                                                       \
-#outT " f" #name "(" #inT " " #param ") {" #code ";}\n"                 \
+#outT " f" #name "(" #inT " " #param ") {\n" #code ";\n}\n"             \
 "__kernel void kern_" #name "(__global " #inT  "* input,\n"             \
 "                             __global " #outT "* output,\n"            \
 "                             const uint maxItems) {\n"                 \
@@ -116,13 +131,80 @@ protected:
 "           }\n"                                                        \
 "}"
 
+//  x=f(param,idx) 'param' is the input array, 
+//                 'param[idx]' and 'x' have the same type
+#define FFMAP_ARRAY(name, basictype, param, idx, code)                  \
+    static char name[] =                                                \
+        "kern_" #name "|"                                               \
+        #basictype "|"                                                  \
+#basictype " f" #name "(" #basictype "* " #param ",\n"                  \
+                        " const int " #idx ") {\n" #code ";\n}\n"       \
+"__kernel void kern_" #name "(__global " #basictype "* input,\n"        \
+"                             __global " #basictype "* output,\n"       \
+"                             const uint maxItems) {\n"                 \
+"           int i = get_global_id(0);\n"                                \
+"           uint gridSize = get_local_size(0)*get_num_groups(0);\n"     \
+"           while(i < maxItems)  {\n"                                   \
+"              output[i] = f" #name "(input,i);\n"                      \
+"              i += gridSize;\n"                                        \
+"           }\n"                                                        \
+"}"
 
+//  x=f(param,idx,env) 'param' is the input array, 
+//                     'param[idx]' and 'x' have the same type
+//                     'env' is constant
+#define FFMAP_ARRAY_CENV(name, basictype, param, idx, envT, env, code)  \
+    static char name[] =                                                \
+        "kern_" #name "|"                                               \
+        #basictype "|"                                                  \
+#basictype " f" #name "(__global " #basictype "* " #param ",\n"         \
+                      " const int " #idx ",\n"                          \
+                      "__global const " #envT "* " #env ") {\n"         \
+        #code                                                           \
+        ";\n}\n"                                                        \
+"__kernel void kern_" #name "(__global " #basictype "* input,\n"        \
+"                             __global " #basictype "* output,\n"       \
+"                             __global const" #envT "* env,\n"          \
+"                             const uint maxItems) {\n"                 \
+"           int i = get_global_id(0);\n"                                \
+"           uint gridSize = get_local_size(0)*get_num_groups(0);\n"     \
+"           while(i < maxItems)  {\n"                                   \
+"              output[i] = f" #name "(input,i,env);\n"                  \
+"              i += gridSize;\n"                                        \
+"           }\n"                                                        \
+"}"
 
+//  x=f(param,idx)  'param' is the input array, 
+//                  'param[idx]' and 'x' have different types
+//                  'env' is constant
+#define FFMAP_ARRAY2_CENV(name, outT, inT, param, idx, envT, env, code) \
+    static char name[] =                                                \
+        "kern_" #name "|"                                               \
+        #outT "|"                                                       \
+#outT " f" #name "(__global " #inT "* " #param ",\n"                    \
+                 " const int " #idx ",\n"                               \
+                 "__global const " #envT "* " #env ") {\n"              \
+        #code                                                           \
+        ";\n}\n"                                                        \
+"__kernel void kern_" #name "(__global " #inT  "* input,\n"             \
+"                             __global " #outT "* output,\n"            \
+"                             __global const " #envT "* env,\n"         \
+"                             const uint maxItems) {\n"                 \
+"           int i = get_global_id(0);\n"                                \
+"           uint gridSize = get_local_size(0)*get_num_groups(0);\n"     \
+"           while(i < maxItems)  {\n"                                   \
+"              output[i] = f" #name "(input,i,env);\n"                  \
+"              i += gridSize;\n"                                        \
+"           }\n"                                                        \
+"}"
+
+//  x=f(param1,param2)   'x', 'param1', 'param2' have the same type
 #define FFREDUCEFUNC(name, basictype, param1, param2, code)             \
     static char name[] =                                                \
         "kern_" #name "|"                                               \
         #basictype "|"                                                  \
-#basictype " f" #name "(" #basictype " " #param1 ", " #basictype " " #param2 ") {" #code ";}\n"    \
+#basictype " f" #name "(" #basictype " " #param1 ",\n"                  \
+                          #basictype " " #param2 ") {\n" #code ";\n}\n" \
 "__kernel void kern_" #name "(__global " #basictype "* input, __global " #basictype "* output, const uint n, __local " #basictype "* sdata) {\n" \
 "        uint blockSize = get_local_size(0);\n"                         \
 "        uint tid = get_local_id(0);\n"                                 \
@@ -149,27 +231,6 @@ protected:
 "}\n"
     
 
-
-    // FIX: da rifare tutte !!
-
-#define NEWMAP(name, task_t, f, input, sz)               \
-    ff_mapOCL<task_t > *name =                           \
-        new ff_mapOCL<task_t>(f, input,sz)
-#define NEWMAPONSTREAM(task_t, f)                        \
-    new ff_mapOCL<task_t>(f)
-#define DELETEMAP(name)                                  \
-    delete name
-#define NEWREDUCE(name, task_t, f, input, sz)            \
-    ff_reduceOCL<task_t> *name =                         \
-        new ff_reduceOCL<task_t>(f, input,sz)
-#define NEWMAPREDUCE(name, task_t, mapf, redf, input, sz)\
-    ff_mapreduceOCL<task_t> *name =                      \
-        new ff_mapreduceOCL<task_t>(mapf, redf, input,sz)
-#define NEWREDUCEONSTREAM(task_t, f)                     \
-    new ff_reduceOCL<task_t>(f)
-#define DELETEREDUCE(name)                               \
-    delete name
-
 /*
  * \class ff_ocl
  *  \ingroup high_level_patterns
@@ -181,13 +242,13 @@ protected:
  * This class is defined in \ref map.hpp
  * 
  */
-template<typename T>
-class ff_ocl: public ff_oclNode {
+template<typename T, typename TOCL=T>
+class ff_ocl: public ff_oclNode_t<T> {
 private:
     void setcode(const std::string &codestr1, const std::string &codestr2) {
         int n = codestr1.find("|");
         assert(n>0);
-        ff_ocl<T>::kernel_name1 = codestr1.substr(0,n);
+        ff_ocl<T,TOCL>::kernel_name1 = codestr1.substr(0,n);
         const std::string &tmpstr = codestr1.substr(n+1);
         n = tmpstr.find("|");
         assert(n>0);
@@ -207,7 +268,7 @@ private:
         if (codestr2 != "") {
             n = codestr2.find("|");
             assert(n>0);
-            ff_ocl<T>::kernel_name2 += codestr2.substr(0,n);
+            ff_ocl<T,TOCL>::kernel_name2 += codestr2.substr(0,n);
             const std::string &tmpstr = codestr2.substr(n+1);
             n = tmpstr.find("|");
             assert(n>0);
@@ -227,25 +288,24 @@ public:
         oneshot(false) {
         setcode(codestr1, codestr2);
         oldSize = 0;
-        oldOutPtr = false;
+        oldOutPtr = oldEnvPtr = false;
     }
     ff_ocl(const T &task, 
            const std::string &codestr1, 
            const std::string &codestr2=std::string("")):
         oneshot(true) {
         setcode(codestr1,codestr2);
-        Task.setTask((void*)&task);
+        Task.setTask(const_cast<T*>(&task));
         oldSize = 0;
-        oldOutPtr = false;
+        oldOutPtr = oldEnvPtr = false;
     }
-
 
     void setKernel2() {
         clReleaseKernel(kernel);
         kernel = clCreateKernel(program, kernel_name2.c_str(), &status);
         checkResult(status, "CreateKernel (2)");
         
-        status = clGetKernelWorkGroupInfo(kernel, baseclass_ocl_node_deviceId,
+        status = clGetKernelWorkGroupInfo(kernel, ff_oclNode::baseclass_ocl_node_deviceId,
                                   CL_KERNEL_WORK_GROUP_SIZE,sizeof(size_t), &workgroup_size,0);
         checkResult(status, "GetKernelWorkGroupInfo");
     }
@@ -278,7 +338,8 @@ protected:
         checkResult(status, "building program");				
 
 #if 0
-        { // DEBUGGING CODE for checking OCL compilation errors
+        // DEBUGGING CODE for checking OCL compilation errors
+        if (status != CL_SUCCESS) {
             printf("\nFail to build the program\n");
             size_t len;
             clGetProgramBuildInfo(program, dId, CL_PROGRAM_BUILD_LOG, 0, NULL, &len);
@@ -310,6 +371,8 @@ protected:
         clReleaseProgram(program);						
         clReleaseCommandQueue(cmd_queue);					
         clReleaseMemObject(inputBuffer);
+        if (oldEnvPtr)
+            clReleaseMemObject(envBuffer);
         if (oldOutPtr)
             clReleaseMemObject(outputBuffer);					
         clReleaseContext(context);						
@@ -317,22 +380,25 @@ protected:
 
     cl_mem* getInputBuffer()  const { return (cl_mem*)&inputBuffer;}
     cl_mem* getOutputBuffer() const { return (cl_mem*)&outputBuffer;}
+    cl_mem* getEnvBuffer()    const { return (cl_mem*)&envBuffer;}
     void swapInOut(){inputBuffer=outputBuffer;}
     
 protected:
     const bool oneshot;
-    T Task;
+    TOCL Task;
     std::string kernel_code;
     std::string kernel_name1;
     std::string kernel_name2;
     size_t workgroup_size;
     size_t oldSize;
     bool   oldOutPtr;
+    bool   oldEnvPtr;
     cl_context context;							
     cl_program program;							
     cl_command_queue cmd_queue;						
     cl_mem inputBuffer;							
     cl_mem outputBuffer;							
+    cl_mem envBuffer;							
     cl_kernel kernel;
     cl_int status;							
 };
@@ -350,14 +416,14 @@ protected:
  * This class is defined in \ref map.hpp
  * 
  */
-template<typename T>
-class ff_mapOCL: public ff_ocl<T> {
+template<typename T, typename TOCL=T>
+class ff_mapOCL: public ff_ocl<T, TOCL> {
 public:
     
-    ff_mapOCL(std::string codestr):ff_ocl<T>(codestr) { 
+    ff_mapOCL(std::string codestr):ff_ocl<T,TOCL>(codestr) { 
     }    
     ff_mapOCL(const T &task, std::string codestr):
-        ff_ocl<T>(task, codestr) { 
+        ff_ocl<T,TOCL>(task, codestr) { 
         ff_node::skipfirstpop(true);
     }    
     
@@ -373,77 +439,99 @@ public:
     double ffTime()  { return ff_node::ffTime();  }
     double ffwTime() { return ff_node::wffTime(); }
 
-    const T* getTask() const { return ff_ocl<T>::getTask(); }
+    const T* getTask() const { return ff_ocl<T,TOCL>::getTask(); }
     
 protected:
     
-    void * svc(void* task) {				                        
+     T *svc(T *task) {				                        
         cl_int   status;
         cl_event events[2];
         size_t globalThreads[1];
         size_t localThreads[1];
         
-        if (task) ff_ocl<T>::Task.setTask(task);
-        const size_t size = ff_ocl<T>::Task.getSizeIn();
-        void* inPtr  = ff_ocl<T>::Task.getInPtr();
-        void* outPtr = ff_ocl<T>::Task.getOutPtr();
+        if (task) ff_ocl<T,TOCL>::Task.setTask(task);
+        const size_t size = ff_ocl<T,TOCL>::Task.getSizeIn();
+        void* inPtr  = ff_ocl<T,TOCL>::Task.getInPtr();
+        void* outPtr = ff_ocl<T,TOCL>::Task.getOutPtr();
+        void* envPtr = ff_ocl<T,TOCL>::Task.getEnvPtr();
+
         assert(outPtr != NULL);
 
-        if (size  < ff_ocl<T>::workgroup_size) {					
+        if (size  < ff_ocl<T,TOCL>::workgroup_size) {					
             localThreads[0]  = size;					
             globalThreads[0] = size;					
         } else {								
-            localThreads[0]  = ff_ocl<T>::workgroup_size;					
-            globalThreads[0] = nextMultipleOfIf(size,ff_ocl<T>::workgroup_size);	
+            localThreads[0]  = ff_ocl<T,TOCL>::workgroup_size;					
+            globalThreads[0] = nextMultipleOfIf(size,ff_ocl<T,TOCL>::workgroup_size);	
         }									
 
-        if ( ff_ocl<T>::oldSize < ff_ocl<T>::Task.getBytesizeIn() ) {
-            if (ff_ocl<T>::oldSize != 0) clReleaseMemObject(ff_ocl<T>::inputBuffer);
-            ff_ocl<T>::inputBuffer = clCreateBuffer(ff_ocl<T>::context, CL_MEM_READ_WRITE,		
-                                                    ff_ocl<T>::Task.getBytesizeIn(), NULL, &status); 
-            ff_ocl<T>::checkResult(status, "CreateBuffer input (2)");	
-            ff_ocl<T>::oldSize = ff_ocl<T>::Task.getBytesizeIn();
+        if ( ff_ocl<T,TOCL>::oldSize < ff_ocl<T,TOCL>::Task.getBytesizeIn() ) {
+            if (ff_ocl<T,TOCL>::oldSize != 0) clReleaseMemObject(ff_ocl<T,TOCL>::inputBuffer);
+            ff_ocl<T,TOCL>::inputBuffer = clCreateBuffer(ff_ocl<T,TOCL>::context, CL_MEM_READ_WRITE,		
+                                                    ff_ocl<T,TOCL>::Task.getBytesizeIn(), NULL, &status); 
+            ff_ocl<T,TOCL>::checkResult(status, "CreateBuffer input (2)");	
+            ff_ocl<T,TOCL>::oldSize = ff_ocl<T,TOCL>::Task.getBytesizeIn();
         }
         
         if (inPtr == outPtr) {                       
-            ff_ocl<T>::outputBuffer = ff_ocl<T>::inputBuffer;
+            ff_ocl<T,TOCL>::outputBuffer = ff_ocl<T,TOCL>::inputBuffer;
         } else { 
 
-            // FIX:  controllare se e' possibile evitare di allocare memoria sul device
-            //       se non serve
+            // FIX:  if the size is the same try to recycle the buffer
 
-            if (ff_ocl<T>::oldOutPtr) clReleaseMemObject(ff_ocl<T>::outputBuffer);
-            ff_ocl<T>::outputBuffer = clCreateBuffer(ff_ocl<T>::context, CL_MEM_READ_WRITE,		
-                                                     ff_ocl<T>::Task.getBytesizeOut(), NULL, &status);              
-            ff_ocl<T>::checkResult(status, "CreateBuffer output");	
-            ff_ocl<T>::oldOutPtr = true;
+            if (ff_ocl<T,TOCL>::oldOutPtr) clReleaseMemObject(ff_ocl<T,TOCL>::outputBuffer);
+            ff_ocl<T,TOCL>::outputBuffer = clCreateBuffer(ff_ocl<T,TOCL>::context, CL_MEM_READ_WRITE,		
+                                                     ff_ocl<T,TOCL>::Task.getBytesizeOut(), NULL, &status);              
+            ff_ocl<T,TOCL>::checkResult(status, "CreateBuffer output");	
+            ff_ocl<T,TOCL>::oldOutPtr = true;
         }
         
-        status = clSetKernelArg(ff_ocl<T>::kernel, 0, sizeof(cl_mem), ff_ocl<T>::getInputBuffer());
-        ff_ocl<T>::checkResult(status, "setKernelArg input");				
-        status = clSetKernelArg(ff_ocl<T>::kernel, 1, sizeof(cl_mem), ff_ocl<T>::getOutputBuffer());
-        ff_ocl<T>::checkResult(status, "setKernelArg output");				
-        status = clSetKernelArg(ff_ocl<T>::kernel, 2, sizeof(cl_uint), (void *)&size);				
-        ff_ocl<T>::checkResult(status, "setKernelArg size");				
-        
-        status = clEnqueueWriteBuffer(ff_ocl<T>::cmd_queue,ff_ocl<T>::inputBuffer,CL_FALSE,0,	
-                                      ff_ocl<T>::Task.getBytesizeIn(), ff_ocl<T>::Task.getInPtr(),
-                                      0,NULL,NULL);			
-        ff_ocl<T>::checkResult(status, "copying Task to device input-buffer");		
+        if (envPtr) {
+            if (ff_ocl<T,TOCL>::oldEnvPtr) clReleaseMemObject(ff_ocl<T,TOCL>::envBuffer);
+            ff_ocl<T,TOCL>::envBuffer = clCreateBuffer(ff_ocl<T,TOCL>::context, CL_MEM_READ_ONLY,		
+                                                  ff_ocl<T,TOCL>::Task.getBytesizeEnv(), NULL, &status);              
+            ff_ocl<T,TOCL>::checkResult(status, "CreateBuffer env");	
+            ff_ocl<T,TOCL>::oldEnvPtr = true;
+        }
 
-        status = clEnqueueNDRangeKernel(ff_ocl<T>::cmd_queue,ff_ocl<T>::kernel,1,NULL,		
+        status = clSetKernelArg(ff_ocl<T,TOCL>::kernel, 0, sizeof(cl_mem), ff_ocl<T,TOCL>::getInputBuffer());
+        ff_ocl<T,TOCL>::checkResult(status, "setKernelArg input");				
+        status = clSetKernelArg(ff_ocl<T,TOCL>::kernel, 1, sizeof(cl_mem), ff_ocl<T,TOCL>::getOutputBuffer());
+        ff_ocl<T,TOCL>::checkResult(status, "setKernelArg output");				
+        if (envPtr) {
+            status = clSetKernelArg(ff_ocl<T,TOCL>::kernel, 2, sizeof(cl_mem), ff_ocl<T,TOCL>::getEnvBuffer());
+            ff_ocl<T,TOCL>::checkResult(status, "setKernelArg env");				
+            status = clSetKernelArg(ff_ocl<T,TOCL>::kernel, 3, sizeof(cl_uint), (void *)&size);				
+            ff_ocl<T,TOCL>::checkResult(status, "setKernelArg size");				
+        } else {
+            status = clSetKernelArg(ff_ocl<T,TOCL>::kernel, 2, sizeof(cl_uint), (void *)&size);				
+            ff_ocl<T,TOCL>::checkResult(status, "setKernelArg size");				
+        }
+        
+        status = clEnqueueWriteBuffer(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::inputBuffer,CL_FALSE,0,	
+                                      ff_ocl<T,TOCL>::Task.getBytesizeIn(), ff_ocl<T,TOCL>::Task.getInPtr(),
+                                      0,NULL,NULL);			
+        ff_ocl<T,TOCL>::checkResult(status, "copying Task to device input buffer"); 
+        if (envPtr) {
+            status = clEnqueueWriteBuffer(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::envBuffer,CL_FALSE,0,	
+                                          ff_ocl<T,TOCL>::Task.getBytesizeEnv(), ff_ocl<T,TOCL>::Task.getEnvPtr(),
+                                          0,NULL,NULL);			
+            ff_ocl<T,TOCL>::checkResult(status, "copying Task to device env buffer");		
+        }
+
+
+        status = clEnqueueNDRangeKernel(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::kernel,1,NULL,		
                                         globalThreads, localThreads,0,NULL,&events[0]);             
 
         status |= clWaitForEvents(1, &events[0]);
-        status |= clEnqueueReadBuffer(ff_ocl<T>::cmd_queue,ff_ocl<T>::outputBuffer,CL_TRUE, 0,	
-                                      ff_ocl<T>::Task.getBytesizeOut(), outPtr,0,NULL,&events[1]);     
+        status |= clEnqueueReadBuffer(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::outputBuffer,CL_TRUE, 0,	
+                                      ff_ocl<T,TOCL>::Task.getBytesizeOut(), outPtr,0,NULL,&events[1]);     
         status |= clWaitForEvents(1, &events[1]);				
 
         clReleaseEvent(events[0]);					
         clReleaseEvent(events[1]);					
          
-        //return (ff_ocl<T>::oneshot?NULL:task);
-        return (ff_ocl<T>::oneshot?NULL:task);
+        return (ff_ocl<T,TOCL>::oneshot?NULL:task);
     }   
 };
 
@@ -457,16 +545,16 @@ protected:
  *
  * 
  */
-template<typename T>
-class ff_reduceOCL: public ff_ocl<T> {
+template<typename T, typename TOCL=T>
+class ff_reduceOCL: public ff_ocl<T,TOCL> {
 public:
-    typedef typename T::Tout Tout;
+    typedef typename TOCL::Tout Tout;
 
     ff_reduceOCL(std::string codestr):
-        ff_ocl<T>(codestr) {}    
+        ff_ocl<T,TOCL>(codestr) {}    
 
     ff_reduceOCL(const T &task, std::string codestr):
-        ff_ocl<T>(task, codestr) {
+        ff_ocl<T,TOCL>(task, codestr) {
         ff_node::skipfirstpop(true);
     }    
     
@@ -482,7 +570,7 @@ public:
     double ffTime()  { return ff_node::ffTime();  }
     double ffwTime() { return ff_node::wffTime(); }
 
-    const T* getTask() const { return ff_ocl<T>::getTask(); }
+    const T* getTask() const { return ff_ocl<T,TOCL>::getTask(); }
 
 protected:
     inline void checkResult(cl_int s, const char* msg) {
@@ -504,14 +592,14 @@ protected:
         blocks  = std::min(maxBlocks, blocks);
     }
 
-    void * svc(void* task) {				                        
+    T *svc(T *task) {				                        
         cl_int   status = CL_SUCCESS;
         cl_event events[2];
         size_t globalThreads[1];
         size_t localThreads[1];
         
-        if (task) ff_ocl<T>::Task.setTask(task);
-        size_t size       = ff_ocl<T>::Task.getSizeIn();
+        if (task) ff_ocl<T,TOCL>::Task.setTask(task);
+        size_t size       = ff_ocl<T,TOCL>::Task.getSizeIn();
         size_t elemSize   = sizeof(Tout);
         size_t numBlocks  = 0;
         size_t numThreads = 0;
@@ -525,53 +613,53 @@ protected:
         localThreads[0]  = numThreads;
         globalThreads[0] = numBlocks * numThreads;
 
-        ff_ocl<T>::inputBuffer = clCreateBuffer(ff_ocl<T>::context, CL_MEM_READ_ONLY,ff_ocl<T>::Task.getBytesizeIn(), NULL, &status);     
-        ff_ocl<T>::checkResult(status, "CreateBuffer input (3)");
+        ff_ocl<T,TOCL>::inputBuffer = clCreateBuffer(ff_ocl<T,TOCL>::context, CL_MEM_READ_ONLY,ff_ocl<T,TOCL>::Task.getBytesizeIn(), NULL, &status);     
+        ff_ocl<T,TOCL>::checkResult(status, "CreateBuffer input (3)");
 
-        ff_ocl<T>::outputBuffer = clCreateBuffer(ff_ocl<T>::context, CL_MEM_READ_WRITE,numBlocks*elemSize, NULL, &status);
-        ff_ocl<T>::checkResult(status, "CreateBuffer output");					
+        ff_ocl<T,TOCL>::outputBuffer = clCreateBuffer(ff_ocl<T,TOCL>::context, CL_MEM_READ_WRITE,numBlocks*elemSize, NULL, &status);
+        ff_ocl<T,TOCL>::checkResult(status, "CreateBuffer output");					
         
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 0, sizeof(cl_mem), ff_ocl<T>::getInputBuffer());			
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 1, sizeof(cl_mem), ff_ocl<T>::getOutputBuffer());
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 2, sizeof(cl_uint), (void *)&size);				
-        status != clSetKernelArg(ff_ocl<T>::kernel, 3, outMemSize, NULL);
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 0, sizeof(cl_mem), ff_ocl<T,TOCL>::getInputBuffer());			
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 1, sizeof(cl_mem), ff_ocl<T,TOCL>::getOutputBuffer());
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 2, sizeof(cl_uint), (void *)&size);				
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 3, outMemSize, NULL);
         checkResult(status, "setKernelArg ");				
         
-        status = clEnqueueWriteBuffer(ff_ocl<T>::cmd_queue,ff_ocl<T>::inputBuffer,CL_FALSE,0,	
-                                      ff_ocl<T>::Task.getBytesizeIn(), ff_ocl<T>::Task.getInPtr(),
+        status = clEnqueueWriteBuffer(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::inputBuffer,CL_FALSE,0,	
+                                      ff_ocl<T,TOCL>::Task.getBytesizeIn(), ff_ocl<T,TOCL>::Task.getInPtr(),
                                       0,NULL,NULL);			
-        ff_ocl<T>::checkResult(status, "copying Task to device input-buffer");		
+        ff_ocl<T,TOCL>::checkResult(status, "copying Task to device input-buffer");		
         
-        status = clEnqueueNDRangeKernel(ff_ocl<T>::cmd_queue,ff_ocl<T>::kernel,1,NULL,		
+        status = clEnqueueNDRangeKernel(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::kernel,1,NULL,		
                                         globalThreads,localThreads,0,NULL,&events[0]);             
         status = clWaitForEvents(1, &events[0]);				
 
         // Sets the kernel arguments for second reduction
         size = numBlocks;
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 0, sizeof(cl_mem),ff_ocl<T>::getOutputBuffer());
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 1, sizeof(cl_mem),ff_ocl<T>::getOutputBuffer());
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 2, sizeof(cl_uint),(void*)&size);
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 3, outMemSize, NULL);
-        ff_ocl<T>::checkResult(status, "setKernelArg ");			
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 0, sizeof(cl_mem),ff_ocl<T,TOCL>::getOutputBuffer());
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 1, sizeof(cl_mem),ff_ocl<T,TOCL>::getOutputBuffer());
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 2, sizeof(cl_uint),(void*)&size);
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 3, outMemSize, NULL);
+        ff_ocl<T,TOCL>::checkResult(status, "setKernelArg ");			
 
         localThreads[0]  = numThreads;
         globalThreads[0] = numThreads;
 
-        status = clEnqueueNDRangeKernel(ff_ocl<T>::cmd_queue,ff_ocl<T>::kernel,1,NULL,		
+        status = clEnqueueNDRangeKernel(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::kernel,1,NULL,		
                                         globalThreads,localThreads,0,NULL,&events[0]); 
-        Tout *reduceVar = ff_ocl<T>::Task.getReduceVar();
+        Tout *reduceVar = ff_ocl<T,TOCL>::Task.getReduceVar();
         assert(reduceVar != NULL);
         status |= clWaitForEvents(1, &events[0]);
-        status |= clEnqueueReadBuffer(ff_ocl<T>::cmd_queue,ff_ocl<T>::outputBuffer,CL_TRUE, 0,	
+        status |= clEnqueueReadBuffer(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::outputBuffer,CL_TRUE, 0,	
                                       elemSize, reduceVar ,0,NULL,&events[1]);          
         status |= clWaitForEvents(1, &events[1]);
-        ff_ocl<T>::checkResult(status, "ERROR during OpenCL computation");		
+        ff_ocl<T,TOCL>::checkResult(status, "ERROR during OpenCL computation");		
 
         clReleaseEvent(events[0]);					
         clReleaseEvent(events[1]);					
         
-        //return (ff_ocl<T>::oneshot?NULL:task);
-        return (ff_ocl<T>::oneshot?NULL:task);
+        //return (ff_ocl<T,TOCL>::oneshot?NULL:task);
+        return (ff_ocl<T,TOCL>::oneshot?NULL:task);
     }									
 };
 
@@ -583,14 +671,14 @@ protected:
  *
  *
  */
-template<typename T>
-class ff_mapreduceOCL: public ff_ocl<T> {
+template<typename T, typename TOCL=T>
+class ff_mapreduceOCL: public ff_ocl<T,TOCL> {
 public:
-    typedef typename T::Tout Tout;
+    typedef typename TOCL::Tout Tout;
 
-	ff_mapreduceOCL(std::string mapf, std::string reducef):ff_ocl<T>(mapf,reducef) {}
+	ff_mapreduceOCL(std::string mapf, std::string reducef):ff_ocl<T,TOCL>(mapf,reducef) {}
 	ff_mapreduceOCL(const T &task, std::string mapf, std::string reducef):
-        ff_ocl<T>(task, mapf, reducef) {
+        ff_ocl<T,TOCL>(task, mapf, reducef) {
         ff_node::skipfirstpop(true);
     }
 
@@ -606,7 +694,7 @@ public:
     double ffTime()  { return ff_node::ffTime();  }
     double ffwTime() { return ff_node::wffTime(); }
 
-    const T* getTask() const { return ff_ocl<T>::getTask(); }
+    const T* getTask() const { return ff_ocl<T,TOCL>::getTask(); }
 
 protected:
     inline void checkResult(cl_int s, const char* msg) {
@@ -628,63 +716,90 @@ protected:
         blocks  = std::min(maxBlocks, blocks);
     }
 
-    void * svc(void* task) {
+    T *svc(T *task) {
         cl_int   status = CL_SUCCESS;
         cl_event events[2];
         size_t globalThreads[1];
         size_t localThreads[1];
 
-        if (task) ff_ocl<T>::Task.setTask(task);
-        size_t size       = ff_ocl<T>::Task.getSizeIn();
-        void* inPtr  = ff_ocl<T>::Task.getInPtr();
-        void* outPtr = ff_ocl<T>::Task.getOutPtr();
+        if (task) ff_ocl<T,TOCL>::Task.setTask(task);
+        size_t size       = ff_ocl<T,TOCL>::Task.getSizeIn();
+        void* inPtr  = ff_ocl<T,TOCL>::Task.getInPtr();
+        void* outPtr = ff_ocl<T,TOCL>::Task.getOutPtr();
+        void *envPtr = ff_ocl<T,TOCL>::Task.getEnvPtr();
 
         // MAP
-        if (size  < ff_ocl<T>::workgroup_size) {
+        if (size  < ff_ocl<T,TOCL>::workgroup_size) {
         	localThreads[0]  = size;
         	globalThreads[0] = size;
         } else {
-        	localThreads[0]  = ff_ocl<T>::workgroup_size;
-        	globalThreads[0] = nextMultipleOfIf(size,ff_ocl<T>::workgroup_size);
+        	localThreads[0]  = ff_ocl<T,TOCL>::workgroup_size;
+        	globalThreads[0] = nextMultipleOfIf(size,ff_ocl<T,TOCL>::workgroup_size);
         }
 
-        if ( ff_ocl<T>::oldSize < ff_ocl<T>::Task.getBytesizeIn() ) {
-        	if (ff_ocl<T>::oldSize != 0) clReleaseMemObject(ff_ocl<T>::inputBuffer);
-        	ff_ocl<T>::inputBuffer = clCreateBuffer(ff_ocl<T>::context, CL_MEM_READ_WRITE,
-                                      ff_ocl<T>::Task.getBytesizeIn(), NULL, &status);
-        	ff_ocl<T>::checkResult(status, "CreateBuffer input (2)");
-        	ff_ocl<T>::oldSize = ff_ocl<T>::Task.getBytesizeIn();
+        if ( ff_ocl<T,TOCL>::oldSize < ff_ocl<T,TOCL>::Task.getBytesizeIn() ) {
+        	if (ff_ocl<T,TOCL>::oldSize != 0) clReleaseMemObject(ff_ocl<T,TOCL>::inputBuffer);
+        	ff_ocl<T,TOCL>::inputBuffer = clCreateBuffer(ff_ocl<T,TOCL>::context, CL_MEM_READ_WRITE,
+                                      ff_ocl<T,TOCL>::Task.getBytesizeIn(), NULL, &status);
+        	ff_ocl<T,TOCL>::checkResult(status, "CreateBuffer input (2)");
+        	ff_ocl<T,TOCL>::oldSize = ff_ocl<T,TOCL>::Task.getBytesizeIn();
         }
 
         if ( inPtr == outPtr ) {
-        	ff_ocl<T>::outputBuffer = ff_ocl<T>::inputBuffer;
+        	ff_ocl<T,TOCL>::outputBuffer = ff_ocl<T,TOCL>::inputBuffer;
         } else {
-        	if (ff_ocl<T>::oldOutPtr) clReleaseMemObject(ff_ocl<T>::outputBuffer);
-        	ff_ocl<T>::outputBuffer = clCreateBuffer(ff_ocl<T>::context, CL_MEM_READ_WRITE,
-                                          ff_ocl<T>::Task.getBytesizeOut(), NULL, &status);
-        	ff_ocl<T>::checkResult(status, "CreateBuffer output");
-        	ff_ocl<T>::oldOutPtr = true;
+
+            // FIX:  if the size is the same try to recycle the buffer
+
+        	if (ff_ocl<T,TOCL>::oldOutPtr) clReleaseMemObject(ff_ocl<T,TOCL>::outputBuffer);
+        	ff_ocl<T,TOCL>::outputBuffer = clCreateBuffer(ff_ocl<T,TOCL>::context, CL_MEM_READ_WRITE,
+                                          ff_ocl<T,TOCL>::Task.getBytesizeOut(), NULL, &status);
+        	ff_ocl<T,TOCL>::checkResult(status, "CreateBuffer output");
+        	ff_ocl<T,TOCL>::oldOutPtr = true;
         }
 
-        status = clSetKernelArg(ff_ocl<T>::kernel, 0, sizeof(cl_mem), ff_ocl<T>::getInputBuffer());
-        ff_ocl<T>::checkResult(status, "setKernelArg input");
-        status = clSetKernelArg(ff_ocl<T>::kernel, 1, sizeof(cl_mem), ff_ocl<T>::getOutputBuffer());
-        ff_ocl<T>::checkResult(status, "setKernelArg output");
-        status = clSetKernelArg(ff_ocl<T>::kernel, 2, sizeof(cl_uint), (void *)&size);
-        ff_ocl<T>::checkResult(status, "setKernelArg size");
+         if (envPtr) {
+            if (ff_ocl<T,TOCL>::oldEnvPtr) clReleaseMemObject(ff_ocl<T,TOCL>::envBuffer);
+            ff_ocl<T,TOCL>::envBuffer = clCreateBuffer(ff_ocl<T,TOCL>::context, CL_MEM_READ_ONLY,		
+                                                  ff_ocl<T,TOCL>::Task.getBytesizeEnv(), NULL, &status);              
+            ff_ocl<T,TOCL>::checkResult(status, "CreateBuffer env");	
+            ff_ocl<T,TOCL>::oldEnvPtr = true;
+        }
 
-        status = clEnqueueWriteBuffer(ff_ocl<T>::cmd_queue,ff_ocl<T>::inputBuffer,CL_FALSE,0,
-                                      ff_ocl<T>::Task.getBytesizeIn(), ff_ocl<T>::Task.getInPtr(),
+
+        status = clSetKernelArg(ff_ocl<T,TOCL>::kernel, 0, sizeof(cl_mem), ff_ocl<T,TOCL>::getInputBuffer());
+        ff_ocl<T,TOCL>::checkResult(status, "setKernelArg input");
+        status = clSetKernelArg(ff_ocl<T,TOCL>::kernel, 1, sizeof(cl_mem), ff_ocl<T,TOCL>::getOutputBuffer());
+        ff_ocl<T,TOCL>::checkResult(status, "setKernelArg output");
+
+        if (envPtr) {
+            status = clSetKernelArg(ff_ocl<T,TOCL>::kernel, 2, sizeof(cl_mem), ff_ocl<T,TOCL>::getEnvBuffer());
+            ff_ocl<T,TOCL>::checkResult(status, "setKernelArg env");				
+            status = clSetKernelArg(ff_ocl<T,TOCL>::kernel, 3, sizeof(cl_uint), (void *)&size);				
+            ff_ocl<T,TOCL>::checkResult(status, "setKernelArg size");				
+        } else {
+            status = clSetKernelArg(ff_ocl<T,TOCL>::kernel, 2, sizeof(cl_uint), (void *)&size);				
+            ff_ocl<T,TOCL>::checkResult(status, "setKernelArg size");				
+        }
+
+        status = clEnqueueWriteBuffer(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::inputBuffer,CL_FALSE,0,
+                                      ff_ocl<T,TOCL>::Task.getBytesizeIn(), ff_ocl<T,TOCL>::Task.getInPtr(),
         		0,NULL,NULL);
-        ff_ocl<T>::checkResult(status, "copying Task to device input-buffer");
-
-        status = clEnqueueNDRangeKernel(ff_ocl<T>::cmd_queue,ff_ocl<T>::kernel,1,NULL,
+        ff_ocl<T,TOCL>::checkResult(status, "copying Task to device input-buffer");
+        if (envPtr) {
+            status = clEnqueueWriteBuffer(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::envBuffer,CL_FALSE,0,	
+                                          ff_ocl<T,TOCL>::Task.getBytesizeEnv(), ff_ocl<T,TOCL>::Task.getEnvPtr(),
+                                          0,NULL,NULL);			
+            ff_ocl<T,TOCL>::checkResult(status, "copying Task to device env buffer");		
+        }
+        
+        status = clEnqueueNDRangeKernel(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::kernel,1,NULL,
         		globalThreads, localThreads,0,NULL,&events[0]);
 
         status |= clWaitForEvents(1, &events[0]);
 
         // REDUCE
-        ff_ocl<T>::setKernel2();
+        ff_ocl<T,TOCL>::setKernel2();
 
         size_t elemSize   = sizeof(typename T::Tout);
         size_t numBlocks  = 0;
@@ -700,47 +815,47 @@ protected:
         globalThreads[0] = numBlocks * numThreads;
 
         // input buffer is the output buffer from map stage
-        ff_ocl<T>::swapInOut(); 
+        ff_ocl<T,TOCL>::swapInOut(); 
 
-        ff_ocl<T>::outputBuffer = clCreateBuffer(ff_ocl<T>::context, CL_MEM_READ_WRITE,numBlocks*elemSize, NULL, &status);
-        ff_ocl<T>::checkResult(status, "CreateBuffer output");
+        ff_ocl<T,TOCL>::outputBuffer = clCreateBuffer(ff_ocl<T,TOCL>::context, CL_MEM_READ_WRITE,numBlocks*elemSize, NULL, &status);
+        ff_ocl<T,TOCL>::checkResult(status, "CreateBuffer output");
 
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 0, sizeof(cl_mem), ff_ocl<T>::getInputBuffer());
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 1, sizeof(cl_mem), ff_ocl<T>::getOutputBuffer());
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 2, sizeof(cl_uint), (void *)&size);
-        status != clSetKernelArg(ff_ocl<T>::kernel, 3, outMemSize, NULL);
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 0, sizeof(cl_mem), ff_ocl<T,TOCL>::getInputBuffer());
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 1, sizeof(cl_mem), ff_ocl<T,TOCL>::getOutputBuffer());
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 2, sizeof(cl_uint), (void *)&size);
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 3, outMemSize, NULL);
         checkResult(status, "setKernelArg ");
 
-        status = clEnqueueNDRangeKernel(ff_ocl<T>::cmd_queue,ff_ocl<T>::kernel,1,NULL,
+        status = clEnqueueNDRangeKernel(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::kernel,1,NULL,
                                         globalThreads,localThreads,0,NULL,&events[0]);
         status = clWaitForEvents(1, &events[0]);
 
         // Sets the kernel arguments for second reduction
         size = numBlocks;
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 0, sizeof(cl_mem),ff_ocl<T>::getOutputBuffer());
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 1, sizeof(cl_mem),ff_ocl<T>::getOutputBuffer());
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 2, sizeof(cl_uint),(void*)&size);
-        status |= clSetKernelArg(ff_ocl<T>::kernel, 3, outMemSize, NULL);
-        ff_ocl<T>::checkResult(status, "setKernelArg ");
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 0, sizeof(cl_mem),ff_ocl<T,TOCL>::getOutputBuffer());
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 1, sizeof(cl_mem),ff_ocl<T,TOCL>::getOutputBuffer());
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 2, sizeof(cl_uint),(void*)&size);
+        status |= clSetKernelArg(ff_ocl<T,TOCL>::kernel, 3, outMemSize, NULL);
+        ff_ocl<T,TOCL>::checkResult(status, "setKernelArg ");
 
         localThreads[0]  = numThreads;
         globalThreads[0] = numThreads;
 
-        status = clEnqueueNDRangeKernel(ff_ocl<T>::cmd_queue,ff_ocl<T>::kernel,1,NULL,
+        status = clEnqueueNDRangeKernel(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::kernel,1,NULL,
                                         globalThreads,localThreads,0,NULL,&events[0]);
-        Tout *reduceVar = ff_ocl<T>::Task.getReduceVar();
+        Tout *reduceVar = ff_ocl<T,TOCL>::Task.getReduceVar();
         assert(reduceVar != NULL);
         status |= clWaitForEvents(1, &events[0]);
-        status |= clEnqueueReadBuffer(ff_ocl<T>::cmd_queue,ff_ocl<T>::outputBuffer,CL_TRUE, 0,
+        status |= clEnqueueReadBuffer(ff_ocl<T,TOCL>::cmd_queue,ff_ocl<T,TOCL>::outputBuffer,CL_TRUE, 0,
                                       elemSize, reduceVar ,0,NULL,&events[1]);
         status |= clWaitForEvents(1, &events[1]);
-        ff_ocl<T>::checkResult(status, "ERROR during OpenCL computation");
+        ff_ocl<T,TOCL>::checkResult(status, "ERROR during OpenCL computation");
 
         clReleaseEvent(events[0]);
         clReleaseEvent(events[1]);
 
-        //return (ff_ocl<T>::oneshot?NULL:task);
-        return (ff_ocl<T>::oneshot?NULL:task);
+        //return (ff_ocl<T,TOCL>::oneshot?NULL:task);
+        return (ff_ocl<T,TOCL>::oneshot?NULL:task);
     }
 };
 
