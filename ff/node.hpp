@@ -1133,7 +1133,7 @@ struct ff_node_t:ff_node {
         EOS_NOFREEZE((T*)FF_EOS_NOFREEZE) {}
     T *GO_ON, *EOS, *GO_OUT, *EOS_NOFREEZE;
     virtual ~ff_node_t()  {}
-    virtual inline T* svc(T*)=0;
+    virtual T* svc(T*)=0;
     inline  void *svc(void *task) { return svc(reinterpret_cast<T*>(task));};
 };
 
