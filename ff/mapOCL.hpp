@@ -157,21 +157,22 @@ protected:
     static char name[] =                                                \
         "kern_" #name "|"                                               \
         #basictype "|"                                                  \
-#basictype " f" #name "(__global " #basictype "* " #param ",\n"         \
-                      " const int " #idx ",\n"                          \
-                      "__global const " #envT "* " #env ") {\n"         \
-        #code                                                           \
-        ";\n}\n"                                                        \
-"__kernel void kern_" #name "(__global " #basictype "* input,\n"        \
-"                             __global " #basictype "* output,\n"       \
-"                             __global const" #envT "* env,\n"          \
-"                             const uint maxItems) {\n"                 \
-"           int i = get_global_id(0);\n"                                \
-"           uint gridSize = get_local_size(0)*get_num_groups(0);\n"     \
-"           while(i < maxItems)  {\n"                                   \
-"              output[i] = f" #name "(input,i,env);\n"                  \
-"              i += gridSize;\n"                                        \
-"           }\n"                                                        \
+"\n\n" #basictype " f" #name "(\n"                                      \
+"\t__global " #basictype "* " #param ",const int " #idx ",\n"           \
+"\t__global const " #envT "* " #env ") {\n"                             \
+"\t   " #code ";\n"                                                     \
+"}\n\n"                                                                 \
+"__kernel void kern_" #name "(\n"                                       \
+"\t__global " #basictype "* input,\n"                                   \
+"\t__global " #basictype "* output,\n"                                  \
+"\t__global const " #envT "* env,\n"                                    \
+"\tconst uint maxItems) {\n"                                            \
+"\t    int i = get_global_id(0);\n"                                     \
+"\t    uint gridSize = get_local_size(0)*get_num_groups(0);\n"          \
+"\t    while(i < maxItems)  {\n"                                        \
+"\t        output[i] = f" #name "(input,i,env);\n"                      \
+"\t        i += gridSize;\n"                                            \
+"\t    }\n"                                                             \
 "}"
 
 //  x=f(param,idx)  'param' is the input array, 
@@ -181,21 +182,22 @@ protected:
     static char name[] =                                                \
         "kern_" #name "|"                                               \
         #outT "|"                                                       \
-#outT " f" #name "(__global " #inT "* " #param ",\n"                    \
-                 " const int " #idx ",\n"                               \
-                 "__global const " #envT "* " #env ") {\n"              \
-        #code                                                           \
-        ";\n}\n"                                                        \
-"__kernel void kern_" #name "(__global " #inT  "* input,\n"             \
-"                             __global " #outT "* output,\n"            \
-"                             __global const " #envT "* env,\n"         \
-"                             const uint maxItems) {\n"                 \
-"           int i = get_global_id(0);\n"                                \
-"           uint gridSize = get_local_size(0)*get_num_groups(0);\n"     \
-"           while(i < maxItems)  {\n"                                   \
-"              output[i] = f" #name "(input,i,env);\n"                  \
-"              i += gridSize;\n"                                        \
-"           }\n"                                                        \
+"\n\n" #outT " f" #name "(\n"                                           \
+"\t__global " #inT "* " #param ",const int " #idx ",\n"                 \
+"\t__global const " #envT "* " #env ") {\n"                             \
+"\t   " #code ";\n"                                                     \
+"}\n\n"                                                                 \
+"__kernel void kern_" #name "(\n"                                       \
+"\t__global " #inT  "* input,\n"                                        \
+"\t__global " #outT "* output,\n"                                       \
+"\t__global const " #envT "* env,\n"                                    \
+"\tconst uint maxItems) {\n"                                            \
+"\t    int i = get_global_id(0);\n"                                     \
+"\t    uint gridSize = get_local_size(0)*get_num_groups(0);\n"          \
+"\t    while(i < maxItems)  {\n"                                        \
+"\t        output[i] = f" #name "(input,i,env);\n"                      \
+"\t        i += gridSize;\n"                                            \
+"\t    }\n"                                                             \
 "}"
 
 //  x=f(param1,param2)   'x', 'param1', 'param2' have the same type
@@ -255,10 +257,10 @@ private:
         
         // checking for double type
         if (tmpstr.substr(0,n) == "double") {
-            kernel_code = "#pragma OPENCL EXTENSION cl_khr_fp64: enable\n" +
+            kernel_code = "\n#pragma OPENCL EXTENSION cl_khr_fp64: enable\n\n" +
                 tmpstr.substr(n+1);
         } else 
-            kernel_code  = tmpstr.substr(n+1);        
+            kernel_code  = "\n" + tmpstr.substr(n+1);        
         
         // checking for extra code needed to compile the kernels                
         std::ifstream ifs(FF_OPENCL_DATATYPES_FILE);
