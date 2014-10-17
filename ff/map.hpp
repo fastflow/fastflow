@@ -91,18 +91,19 @@ public:
         spinWait(spinWait),prepared(false)  {
         ParallelForReduce<reduceT>::disableScheduler(true);
     }
+    virtual ~ff_Map() {}
 
-    int run(bool=false) {
+    virtual int run(bool=false) {
         if (!prepared) if (prepare()<0) return -1;
         return ff_node::run(true);
     }
 
-    int run_then_freeze() {
+    virtual int run_then_freeze() {
         return freeze_and_run();
     }
 
-    int wait() { return ff_node::wait();}
-    int wait_freezing() { return ff_node::wait_freezing(); }
+    virtual int wait() { return ff_node::wait();}
+    virtual int wait_freezing() { return ff_node::wait_freezing(); }
 protected:
     bool spinWait;
     bool prepared;

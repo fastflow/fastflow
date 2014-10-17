@@ -51,7 +51,7 @@ struct myTask {
 // OpenCL task
 struct oclTask: public baseOCLTask<myTask, float> {
     oclTask() {}
-    void setTask(myTask *task) { 
+    void setTask(const myTask *task) { 
         assert(task);
         setInPtr(task->M);
         setOutPtr(task->M);
@@ -77,7 +77,7 @@ struct Emitter: public ff_node {
 struct Collector: public ff_node_t<myTask> {
     myTask* svc(myTask *t) {
 #if defined(CHECK)    
-        for(long i=0;i<t->size;++i)  printf("%.2f ", t->M[i]);
+        for(size_t i=0;i<t->size;++i)  printf("%.2f ", t->M[i]);
         printf("\n");
 #endif
         delete [] t->M; delete t;

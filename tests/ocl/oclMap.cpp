@@ -38,7 +38,7 @@ FFMAPFUNC(mapf, float, elem,
 struct oclTask: public baseOCLTask<oclTask, float> {
     oclTask():M(NULL),size(0) {}
     oclTask(float *M, size_t size):M(M),size(size) {}
-    void setTask(oclTask *t) { 
+    void setTask(const oclTask *t) { 
         assert(t);
         //oclTask *t = reinterpret_cast<oclTask*>(task);
         setInPtr(t->M);
