@@ -38,7 +38,7 @@ FFREDUCEFUNC(reducef, float, x, y,
 struct oclTask: public baseOCLTask<oclTask, float> {
     oclTask():M(NULL),result(0.0),size(0) {}
     oclTask(float *M, size_t size):M(M),result(0.0),size(size) {}
-    void setTask(oclTask *t) { 
+    void setTask(const oclTask *t) { 
         assert(t);
         setInPtr(t->M);
         setSizeIn(t->size);

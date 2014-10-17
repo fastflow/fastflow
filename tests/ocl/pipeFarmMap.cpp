@@ -46,7 +46,7 @@ struct myTask {
 // OpenCL task
 struct oclTask: public baseOCLTask<myTask, float> {
     oclTask() {}
-    void setTask(myTask *task) { 
+    void setTask(const myTask *task) { 
         assert(task);
         setInPtr(task->M);
         setOutPtr(task->M);
