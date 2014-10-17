@@ -57,11 +57,11 @@ struct cudaTask: public baseCUDATask<mypair,double> {
     double result;
     
     void setTask(void *t) {
-	const cudaTask &task = *(cudaTask*)t;
-	
-	setInPtr(task.AB);
-	setOutPtr(task.C);
-	setSizeIn(task.size);
+        const cudaTask &task = *(cudaTask*)t;
+        
+        setInPtr(task.AB);
+        setOutPtr(task.C);
+        setSizeIn(task.size);
     }
     
     void afterMR(void *t) {

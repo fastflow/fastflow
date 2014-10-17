@@ -56,7 +56,7 @@ using namespace cv;
 using namespace ff;
 
 /* --------------- OpenCL code ------------------- */
-FFMAP_ARRAY2_CENV(mapf, uchar, uchar, usrc, k, env_t, env,
+FF_ARRAY2_CENV(mapf, uchar, uchar, usrc, useless, k, env_t, env,
                   long cols = env->cols;
                   long rows = env->rows;                  
                   long y    = k / cols; if (y==0 || y==(cols-1)) return 0;
@@ -129,14 +129,14 @@ struct Task {
  */
 struct oclTask: public baseOCLTask<Task, uchar, uchar, env_t> {
     oclTask() {}
-    void setTask(Task *t) { 
+    void setTask(const Task *t) { 
         assert(t);
         setInPtr(t->src);
         setOutPtr(t->dst);
         size_t N = t->env.rows * t->env.cols;
         setSizeIn(N);
-        setEnvPtr(&t->env);
-        setSizeEnv(1);
+        setEnvPtr1(&t->env);
+        setSizeEnv1(1);
     }
 };
 

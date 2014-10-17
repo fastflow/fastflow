@@ -1,5 +1,5 @@
 CXX      = g++ 
-CXXFLAGS =
+CXXFLAGS = -Wall
 
 OS = $(shell uname)
 ifeq ($(strip $(OS)),Darwin)
@@ -14,7 +14,7 @@ OCL_ROOT = /opt/AMDAPP
 
 # 
 OCLFLAGS =
-OPTFLAGS = -O3  #-g -DCHECK
+OPTFLAGS = -O3 -DCHECK #-g
 LDFLAGS  = -L$(OCL_ROOT)/lib/x86_64
 LIBS     =  $(OPENCL) -lpthread 
 INCLUDES = -I$(FF_ROOT) -I$(OCL_ROOT)/include

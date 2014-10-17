@@ -94,7 +94,7 @@ protected:
         ff_loadbalancer *const lb;
     };
 public:
-    // NOTE: by default the scheduling is round-robing (pseudo round-robin indeed).
+    // NOTE: by default the scheduling is round-robin (pseudo round-robin indeed).
     //       In order to select the ondemand scheduling policy, set the ondemand_buffer to a 
     //       value grather than 1.
     ff_taskf(int maxnw=ff_realNumCores(), 
