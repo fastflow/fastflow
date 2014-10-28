@@ -34,7 +34,7 @@
 #ifndef FF_LB_HPP
 #define FF_LB_HPP
 
-#include <iostream>
+#include <iosfwd>
 #include <deque>
 
 #include <ff/utils.hpp>

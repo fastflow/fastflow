@@ -35,7 +35,7 @@
 #ifndef FF_GT_HPP
 #define FF_GT_HPP
 
-#include <iostream>
+#include <iosfwd>
 #include <deque>
 #include <ff/svector.hpp>
 #include <ff/utils.hpp>

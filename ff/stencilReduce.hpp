@@ -171,7 +171,7 @@ public:
         initInF1(NULL), initOutF1(NULL),initInF2(NULL),initOutF2(NULL), 
         beforeFor(NULL), computeF(NULL), computeFReduce1(NULL), computeFReduce2(NULL), afterFor(NULL),
         reduceOp(reduceOpDefault), iterCondition(NULL), identityValue((T)0), reduceVar((T)0),
-        maxIter(1) { 
+        iter(0), maxIter(1) { 
 
         Task.setInTask(Min, Xsize, Ysize);
         // TODO
@@ -190,7 +190,7 @@ public:
         beforeFor(NULL), computeF(NULL), computeFReduce1(NULL), computeFReduce2(NULL),
         afterFor(NULL),
         reduceOp(reduceOpDefault), iterCondition(NULL), identityValue((T)0), reduceVar((T)0),
-        maxIter(1),ploop(nw,true) { }
+        iter(0), maxIter(1),ploop(nw,true) { }
     
     ~stencil2D() {}
     

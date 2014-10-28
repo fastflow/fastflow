@@ -30,6 +30,7 @@
  *
  */
 
+#include <iostream>
 #include <cstdio>
 #include <ff/pipeline.hpp>
 

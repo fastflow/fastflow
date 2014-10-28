@@ -40,7 +40,7 @@ CUDA_LDFLAGS         = -L ${CUDA_ROOT}/lib64
 INCS                 = -I../../
 LIBS                 = -lpthread
 CUDA_LIBS	     = -lcudart -lpthread #-lcuda
-CUDA_INCS	     =
+CUDA_INCS	    = 
 INTEL_LIBS           = -L /opt/intel/tbb/lib/intel64/gcc4.4 -ltbb -lrt -ldl
 INTEL_LIBS_MIC       = -L /opt/intel/tbb/lib/mic -ltbb  
 
@@ -48,7 +48,7 @@ INCLUDES             = -I. $(INCS) $(CUDA_INCS)
 INTEL_INCLUDES       = -I /opt/intel/tbb/include
 TBB_INCLUDES         = -I /opt/local/include/tbb/
 
-TARGET               = jacobi_omp jacobi_omp_mic jacobi_ff jacobi_ff_mic  jacobi_tbb jacobi_tbb_mic jacobi_stencil jacobi_CUDA
+TARGET               = jacobi_omp jacobi_ff jacobi_tbb jacobi_stencil jacobi_CUDA
 
 all: $(TARGET)
 

@@ -50,7 +50,7 @@
 #ifndef FF_FARM_HPP
 #define FF_FARM_HPP
 
-#include <iostream>
+#include <iosfwd>
 #include <vector>
 #include <algorithm>
 #include <ff/platforms/platform.h>
@@ -58,10 +58,6 @@
 #include <ff/gt.hpp>
 #include <ff/node.hpp>
 #include <ff/fftree.hpp>
-
-#if defined( HAS_CXX11_VARIADIC_TEMPLATES )
-#include <functional>
-#endif
 
 namespace ff {
 
@@ -154,24 +150,6 @@ protected:
         return run(true);
     } 
 
-    // template<typename T>
-    // struct ff_node_F: public ff_node {
-    //     typedef T*(*F_t)(T*,ff_node*const);
-    //     ff_node_F(F_t F):F(F) {};
-    //     inline void *svc(void *t) { return F((T*)t,this); }
-    //     F_t F;
-    // };
-
-#if defined( HAS_CXX11_VARIADIC_TEMPLATES )
-    // NOTE: std::function can introduce a bit of extra overhead. 
-    template<typename T>
-    struct ff_node_F: public ff_node {
-        ff_node_F(std::function<T*(T*,ff_node*const)> F):F(F) {};
-        inline void *svc(void *t) { return F((T*)t,this); }
-        std::function<T*(T*,ff_node*const)> F;
-    };
-#endif
-
     inline void skipfirstpop(bool sk)   { 
         if (sk) lb->skipfirstpop();
         skip1pop=sk;
@@ -189,11 +167,11 @@ public:
 
     typedef gt_t Gatherer_t;
 
-    /**                                                                                                                                 
+    /**
      * \ingroup high_level_patterns
      * \brief High-level pattern constructor
      */
-#if defined( HAS_CXX11_VARIADIC_TEMPLATES )
+#if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
     template<typename T>
     ff_farm(const std::function<T*(T*,ff_node*const)> &F, int nw, bool input_ch=false):
         has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
@@ -303,6 +281,7 @@ public:
             }
         }
     }
+    
 
     /** 
      * \brief Destructor
@@ -325,11 +304,11 @@ public:
             delete internalSupportNodes.back();
             internalSupportNodes.pop_back();
         }
-
+        
         if (barrier) {delete barrier; barrier=NULL;}
-
+        
         //fftree stuff
-        delete fftree_ptr;
+        if(fftree_ptr) delete fftree_ptr;
     }
 
     /** 
