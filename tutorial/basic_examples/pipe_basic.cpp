@@ -53,8 +53,8 @@ struct myTask {
 // memory management is up to the user
 
 myTask* f1(myTask* in, ff_node*const) {
-    if (++k == 10) { printf("f1 END\n"); return NULL;}
-    if (in==NULL) {
+    if (++k == 10) { printf("f1 END\n"); return (myTask*)EOS;}
+    if (in==nullptr) {
         //int *V = new int[k+5]{}; brace-init does not work with Intel compiler 
         int *V = new int[k+5];
         for(int i=0;i<(k+5);++i) V[i]=0;
@@ -132,7 +132,7 @@ int main() {
     // The emitter of the first farm produces the stream.
     auto lambda = []() -> void* {
         static int k = 0;
-        if (k++ == 10) { printf("Emitter END\n"); return NULL;}
+        if (k++ == 10) { printf("Emitter END\n"); return EOS;}
         int *V = new int[k+5];
         for(int i=0;i<(k+5);++i) V[i]=0;
         return new myTask(k+5, V);
@@ -183,6 +183,17 @@ int main() {
     pipe6.run_and_wait_end();
     printf("done 6th\n\n");
     /* ------------------------------------------- */
+
+    k=-1; // reset k
+    auto _1  = make_ff_node_F<myTask>(f1);
+    auto _2  = make_ff_node_F<myTask>(f2);
+    auto _3  = make_ff_node_F<myTask>(f3);
+    auto nop = make_ff_node_F<myTask>([](myTask*in, ff_node*const) ->myTask* { 
+            return (myTask*)GO_ON;
+        });
+    ff_pipe<myTask> pipe7(&_1, &_2, &_3, &nop);
+    pipe7.run_and_wait_end();
+    printf("done 7th\n\n");
 
     return 0;
 }

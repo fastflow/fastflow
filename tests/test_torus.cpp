@@ -26,7 +26,7 @@
  */
 
 /* simple torus pipeline */
-
+#include <iostream> // cerr
 #include <ff/pipeline.hpp>
 
 using namespace ff;

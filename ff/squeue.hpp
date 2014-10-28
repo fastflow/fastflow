@@ -189,7 +189,7 @@ private:
 
 #if 0
 
-#include <iostream>
+#include <iosfwd>
 #include <deque>
 #include <squeue.hpp>
 

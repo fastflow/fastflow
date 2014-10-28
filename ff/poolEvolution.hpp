@@ -53,7 +53,7 @@
 #ifndef FF_POOL_HPP
 #define FF_POOL_HPP
 
-#include <iostream>
+#include <iosfwd>
 #include <vector>
 #include <ff/node.hpp>
 #include <ff/parallel_for.hpp>

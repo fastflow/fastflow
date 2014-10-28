@@ -29,10 +29,10 @@
 #ifndef FFTREE_HPP_
 #define FFTREE_HPP_
 
-#include <ff/node.hpp>
-
+#include <ostream>
 #include <vector>
 #include <set>
+#include <ff/node.hpp>
 
 namespace ff {
 

@@ -30,11 +30,11 @@
 #define FF_UTILS_HPP
 
 #include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstdarg>
 //#include <unistd.h> // Not availbe on windows - to be managed
-#include <iostream>
+#include <iosfwd>
 //#if (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
 #include <ff/platforms/platform.h>
 //#else

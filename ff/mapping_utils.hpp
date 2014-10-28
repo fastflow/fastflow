@@ -41,10 +41,11 @@
 #define FF_MAPPING_UTILS_HPP
 
 
-#include <iostream>
+#include <iosfwd>
 #include <errno.h>
 #include <ff/config.hpp>
 #if defined(__linux__)
+#include <sched.h>
 #include <sys/types.h>
 #include <sys/resource.h>
 #include <asm/unistd.h>
