@@ -22,8 +22,8 @@
  ****************************************************************************
  */
  
-#ifndef FF_DNODE_HPP
-#define FF_DNODE_HPP
+#ifndef FF_DINOUT_HPP
+#define FF_DINOUT_HPP
 
 #include <cstdlib>
 #include <ff/dnode.hpp>
@@ -66,10 +66,10 @@ protected:
     }
     
     /// Default constructor
-    ff_dnode():ff_node(),skipdnode(true) {}
+    ff_dinout():ff_node(),skipdnode(true) {}
     
     /// Destructor: closes all connections.
-    virtual ~ff_dnode() {         
+    virtual ~ff_dinout() {         
         com.close();
         delete com.getDescriptor();
     }
@@ -260,4 +260,4 @@ dnode_cbk_t ff_dnode<CommImpl>::cb=0;
 
 } // namespace ff
 
-#endif /* FF_NODE_HPP */
+#endif /* FF_DINOUT_HPP */

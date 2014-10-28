@@ -610,31 +610,7 @@ private:
 
 
     // ------------------------ high-level (simpler) pipeline ------------------
-
-// generic ff_node stage. It is built around the function F ( F: T* -> T* )
-// template<typename T>
-// class Fstage: public ff_node {
-// public:
-//     typedef T*(*F_t)(T*);
-//     Fstage(F_t F):F(F) {}
-//     inline void* svc(void *t) {	 return F((T*)t); }    
-// protected:
-//     F_t F;
-// };
-
-#if defined( HAS_CXX11_VARIADIC_TEMPLATES )
-
-    // NOTE: std::function can introduce a bit of extra overhead.
-    // Think about on how to avoid functionals.
-    template<typename T>
-    class Fstage2: public ff_node {
-    public:
-        Fstage2(const std::function<T*(T*,ff_node*const)> &F):F(F) {}
-        inline void* svc(void *t) {	 return F((T*)t, this); }
-    protected:
-        std::function<T*(T*,ff_node*const)> F;
-    };
-
+#if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
     /** 
      * \class ff_pipe
      * \ingroup high_level_patterns
@@ -667,10 +643,11 @@ private:
         }
             
             
-        inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }
-        //    inline void add2pipe(F_t F) 
-        //{   ff_pipeline::add_stage(new Fstage<TaskType>(F));  }
-        inline void add2pipe(std::function<TaskType*(TaskType*,ff_node*const)> F) { ff_pipeline::add_stage(new Fstage2<TaskType>(F));  }
+        inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }        
+        // TODO: try to avoid std::function here !
+        inline void add2pipe(std::function<TaskType*(TaskType*,ff_node*const)> F) { 
+            ff_pipeline::add_stage(new ff_node_F<TaskType>(F));  
+        }
         
         struct add_to_pipe {
             ff_pipe *const P;
@@ -688,8 +665,7 @@ private:
          * It does require a stream of tasks, either external of created by the 
          * first stage.
          * \param args pipeline stages, i.e. a list f1,f2,... of functions 
-         * with the following type
-         * <tt> const std::function<T*(T*,ff_node*const)></tt>
+         * with the following type <tt> T* ()(T*,ff_node*const) </tt>
          * 
          * Example: \ref pipe_basic.cpp
          */
@@ -710,7 +686,7 @@ private:
          * \param input_ch \p true to enable first stage input stream
          * \param args pipeline stages, i.e. a list f1,f2,... of functions 
          * with the following type
-         * <tt> const std::function<T*(T*,ff_node*const)></tt>
+         * <tt> T*(*)(T*,ff_node*const) /tt>
          *
          * Example: \ref pipe_basic.cpp
          */
@@ -732,6 +708,7 @@ private:
     ff_node* toffnode(T& p) { return (ff_node*)p;}
     
     // ---------------------------------------------------------------
+
 
 #if 0  // old code
 

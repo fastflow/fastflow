@@ -33,6 +33,7 @@
  *
  */
 
+#include <functional>
 #include <algorithm>
 #include <vector>
 #include <ff/node.hpp>

@@ -1658,7 +1658,6 @@ namespace ff {
                 ffaxtd = newAllocator(false,0,0);
 
                 if (!ffaxtd) {
-                    std::cerr << "New allocator\n";
                     error("FFAllocator:posix_memalign: newAllocator fails!\n");
                     return -1;
                 }

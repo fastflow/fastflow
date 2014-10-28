@@ -30,7 +30,7 @@
  Very basic testing of inspection and mapping utils
  
 */
-
+#include <iostream>
 #include <ff/farm.hpp>
 
 using namespace ff;

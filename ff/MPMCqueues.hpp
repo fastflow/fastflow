@@ -476,8 +476,8 @@ public:
             pr     = atomic_long_read(&preadC);
             idx    = pr & mask;
             seq    = atomic_long_read(&seqC[idx]);
-            if (pr == seq) { 
-                if (atomic_long_read(&seqP[idx]) <= seq) return false; // queue 
+            if (pr == (ulong)seq) { 
+                if (atomic_long_read(&seqP[idx]) <= (ulong)seq) return false; // queue 
                 if (abstraction_cas((volatile atom_t*)&preadC, (atom_t)(pr+1), (atom_t)pr)==(atom_t)pr) 
                     break;
 

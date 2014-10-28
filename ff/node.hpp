@@ -33,7 +33,8 @@
  */
 
 #include <stdlib.h>
-#include <iostream>
+#include <iosfwd>
+#include <functional>
 #include <ff/platforms/platform.h>
 #include <ff/cycle.h>
 #include <ff/utils.hpp>
@@ -1124,18 +1125,47 @@ struct ff_buffernode: ff_node {
  *
  *  This class is defined in \ref node.hpp
  */
-template<typename T>
+template<typename IN, typename OUT = IN>
 struct ff_node_t:ff_node {
     ff_node_t():
-        GO_ON((T*)FF_GO_ON),
-        EOS((T*)FF_EOS),
-        GO_OUT((T*)FF_GO_OUT),
-        EOS_NOFREEZE((T*)FF_EOS_NOFREEZE) {}
-    T *GO_ON, *EOS, *GO_OUT, *EOS_NOFREEZE;
+        GO_ON((OUT*)FF_GO_ON),
+        EOS((OUT*)FF_EOS),
+        GO_OUT((OUT*)FF_GO_OUT),
+        EOS_NOFREEZE((OUT*) FF_EOS_NOFREEZE) {
+	}
+    OUT * const GO_ON,  *const EOS, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_node_t()  {}
-    virtual T* svc(T*)=0;
-    inline  void *svc(void *task) { return svc(reinterpret_cast<T*>(task));};
+    virtual OUT* svc(IN*)=0;
+    inline  void *svc(void *task) { return svc(reinterpret_cast<IN*>(task));};
 };
+
+#if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
+
+/*!
+ *  \class ff_node_F
+ *  \ingroup building_blocks
+ *
+ *  \brief The FastFlow typed abstract contanier for a parallel activity (actor).
+ *
+ *  Creates an ff_node_t from a lambdas, function pointer, etc
+ *
+ *  This class is defined in \ref node.hpp
+ */
+template<typename T, typename FUNC=std::function<T*(T*,ff_node*const)> >
+struct ff_node_F: public ff_node_t<T> {
+   ff_node_F(FUNC f):F(f) {}
+   T* svc(T* task) { return F(task, this); }
+   FUNC F;
+};
+// factory function used to deduce function type
+template <typename T, typename FUNC>
+static ff_node_F<T,FUNC> make_ff_node_F(FUNC f) {
+    return ff_node_F<T,FUNC>(f); 
+}
+
+#endif
+
+
 
 } // namespace ff
 

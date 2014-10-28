@@ -42,7 +42,6 @@
 #define FF_SPINLOCK_HPP
  
 // REW -- documentation
-//#include <iostream>
 #include <ff/sysdep.h>
 #include <ff/platforms/platform.h>
 #include <ff/config.hpp>

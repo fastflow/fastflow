@@ -48,11 +48,17 @@ struct seq: ff_node {
     }
 };
 
+template<typename T, typename FUNC_t>
+std::function<T*(T*,ff_node*const)> make_ff_function(FUNC_t f) {
+    return f;
+}
+
 int main() {    
     /* ------------------------------------------- */
     // First version using functional replication
     // NOTE: no data stream in input to the farm
-    ff_farm<> farm((std::function<ff_task*(ff_task*,ff_node*const)>)F, 5);
+    //ff_farm<> farm((std::function<ff_task*(ff_task*,ff_node*const)>)F, 5);
+    ff_farm<> farm(make_ff_function<ff_task>(F), 5);
     farm.run_and_wait_end();    
     printf("done 1st\n\n");
     /* ------------------------------------------- */
@@ -61,7 +67,7 @@ int main() {
     // As in the previous case but the farm is set up
     // as a software accelerator. The stream of tasks
     // is generated from the main.
-    ff_farm<> farmA((std::function<ff_task*(ff_task*,ff_node*const)>)F, 5,true);
+    ff_farm<> farmA(make_ff_function<ff_task>(F), 5,true);
     farmA.run();
     for(int i=0;i<10;++i) farmA.offload(new long(i));
     farmA.offload(EOS);
@@ -119,7 +125,7 @@ int main() {
         Emitter(std::function<void*()> F):F(F) {}
         void *svc(void*) { return F(); }
     };
-    ff_farm<> farm2((std::function<ff_task*(ff_task*,ff_node*const)>)myF,4);
+    ff_farm<> farm2(make_ff_function<ff_task>(myF),4);
 
     farm2.remove_collector();
     farm2.add_emitter(new Emitter(lambda));
@@ -150,8 +156,9 @@ int main() {
     ff_farm<> farm3(W, new Emitter(lambda2));
     farm3.run_and_wait_end();
     printf("done 5th\n\n");
-#endif 
 
+
+#endif
     return 0;
 }
 
