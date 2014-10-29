@@ -473,6 +473,10 @@ int main(int argc, char **argv){
 
 #if defined(USE_OPENMP)
    /* OpenMP */
+   
+   // warm-up
+   jacobi_omp(n, m, dx, dy, alpha, relax, u,f, tol, 1);
+
 
    printf("OpenMP runs using %d threads\n", NUMTHREADS);
    ffTime(START_TIME);
@@ -484,6 +488,9 @@ int main(int argc, char **argv){
    printf("omp elapsed time : %12.6f  (ms)\n", dt);
 #elif defined(USE_TBB)
    tbb::task_scheduler_init init(NUMTHREADS);
+
+   // warm-up
+   jacobi_tbb(n, m, dx, dy, alpha, relax, u,f, tol, 1);
 
    printf("TBB runs using %d threads\n", NUMTHREADS);
    ffTime(START_TIME);
@@ -502,6 +509,9 @@ int main(int argc, char **argv){
 #endif
 
     ParallelForReduce<double> pfr(NUMTHREADS, (NUMTHREADS < ff_numCores()));
+
+    // warm-up
+    jacobi_ff(pfr, n, m, dx, dy, alpha, relax, u,f, tol, 1);
 
     printf("\n\nFastFlow runs using %d threads\n", NUMTHREADS);
     ffTime(START_TIME);
