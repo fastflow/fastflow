@@ -1,5 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
 #include <ff/utils.hpp>
 
 static long    N=0;      // matrix size
@@ -43,7 +43,7 @@ void init_sparse(long k) {
 
 int main(int argc, char* argv[]) {
     if (argc<2) {
-        std::cerr << "use: " << argv[0] << " size [sparse-factor 0<k<size]\n";
+        printf("use: %s size [sparse-factor 0<k<size]\n", argv[0]);
         return -1;
     }
     N               =atol(argv[1]);
