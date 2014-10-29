@@ -31,7 +31,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-
+#include <iostream>
 #include <cstdio>
 #include <ff/mdf.hpp>
 
@@ -166,26 +166,26 @@ void cholSeq(float_complex_t *A, int nb, int bs) {
     for(int k=0;k<=(nb-1);k++) {
         for(int i=0;i<=(k-1); i++) {
             F_CHERK(&A[k*bs*bs*nb+k*bs],&A[k*bs*bs*nb+i*bs],&A[k*bs*bs*nb+k*bs]);
-            if ((numtasks % 32) == 0) std::cerr << "X ";
+            //if ((numtasks % 32) == 0) std::cerr << "X ";
             ++numtasks;
         } // for i
         F_CPOTF2(&A[k*bs*bs*nb+k*bs],&A[k*bs*bs*nb+k*bs]);
-        if ((numtasks % 32) == 0) std::cerr << "X ";
+        //if ((numtasks % 32) == 0) std::cerr << "X ";
         ++numtasks;
 
         for(int j=(k+1); j<=(nb-1); j++) { 
             for(int i=0; i<=(k-1); i++) {
                 F_CGEMM(&A[k*bs*bs*nb+i*bs],&A[j*bs*bs*nb+i*bs],
                         &A[j*bs*bs*nb+k*bs],&A[j*bs*bs*nb+k*bs]);
-                if ((numtasks % 32) == 0) std::cerr << "X ";
+                //if ((numtasks % 32) == 0) std::cerr << "X ";
                 ++numtasks;
             }
             F_CTRSM(&A[k*bs*bs*nb+k*bs], &A[j*bs*bs*nb+k*bs], &A[j*bs*bs*nb+k*bs]);
-            if ((numtasks % 32) == 0) std::cerr << "X ";
+            //if ((numtasks % 32) == 0) std::cerr << "X ";
             ++numtasks;
         } // for j
     } // for k
-    std::cerr << "\n";
+    //std::cerr << "\n";
 }
 #else
 // block Cholesky algorithm

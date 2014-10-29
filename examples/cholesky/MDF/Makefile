@@ -25,6 +25,16 @@ all: $(TARGET)
 ff_chol_mdf:ff_chol_mdf.cpp 
 	$(CXX) -std=c++0x $(CXXFLAGS)  $(FASTFLOW_INCLUDES) $(MKL_INCLUDES) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(MKL_LIBS) -lm -lpthread 
 
+testPLASMA_static:testPLASMA_stable.c
+	$(CXX) -std=c++0x $(CXXFLAGS)  $(FASTFLOW_INCLUDES) $(PLASMA_INCLUDES) $(MKL_INCLUDES) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(MKL_LIBS) $(PLASMA_LIBS) -lm -lpthread 
+
+testPLASMA_dynamic:testPLASMA_stable.c
+	$(CXX) -std=c++0x $(CXXFLAGS)  $(FASTFLOW_INCLUDES) $(PLASMA_INCLUDES) $(MKL_INCLUDES) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(MKL_LIBS) $(PLASMA_LIBS) -lm -lpthread 
+
+example_dpotrf:example_dpotrf.c
+	$(CXX) -std=c++0x $(CXXFLAGS)  $(FASTFLOW_INCLUDES) $(PLASMA_INCLUDES) $(MKL_INCLUDES) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(MKL_LIBS) $(PLASMA_LIBS) -lm -lpthread 
+
+
 clean: 
 	-rm -fr *.o *~
 cleanall: clean

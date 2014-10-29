@@ -40,10 +40,10 @@ using namespace ff;
 
 int main(int argc, char * argv[]) {
     if (argc<3) {
-        std::cerr << "use: " << argv[0] << " nworkers size [chunk=-1 K=5 check=0]\n";
+        std::cerr << "use: " << argv[0] << " nworkers size [chunk=0 K=5 check=0]\n";
         return -1;
     }
-    int    chunk    = -1;
+    int    chunk    = 0; // default static scheduling
     bool   check    = false;  
     int    K        = 5;
     int    nworkers =atoi(argv[1]);
