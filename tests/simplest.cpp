@@ -50,7 +50,7 @@ public:
         return GO_ON;
     }
     void  svc_end() {
-        printf("Goodbay....\n");
+        printf("Goodbye....\n");
     }
 private:
     long counter;

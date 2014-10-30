@@ -55,6 +55,7 @@
 #include <ff/node.hpp>
 #include <ff/farm.hpp>
 #include <vector>
+#include <iostream>
 
 using namespace ff;
 

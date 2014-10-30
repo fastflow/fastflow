@@ -1,6 +1,6 @@
 #include <string>
 #include <ff/node.hpp>
-
+#include <iostream>
 
 class manager:public ff::ff_thread {
 public:
