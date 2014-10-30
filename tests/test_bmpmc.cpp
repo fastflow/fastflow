@@ -32,6 +32,7 @@
  *
  */
 
+#include <iostream>
 #include <cstdio>
 #include <vector>
 #include <algorithm>
