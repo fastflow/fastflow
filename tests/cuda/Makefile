@@ -8,8 +8,8 @@ OPTFLAGS = -DCHECK -g -G -std=c++11#-O3
 LIBS     = -lcudart -lpthread #-lcuda
 INCLUDES = -I$(FF_ROOT)
 
-TARGETS  = cudaMap cudaMapAccelerator farm_cudaMap farm_cudaStencil farm_cudaReduce dotProduct test_pool1CUDA test_pool2CUDA
-#cudaMapManaged 
+TARGETS  = cudaMap cudaMapAccelerator farm_cudaMap farm_cudaStencil farm_cudaReduce dotProduct test_pool1CUDA test_pool2CUDA cudaMapManaged
+ 
 
 .PHONY: all clean cleanall 
 .SUFFIXES: .cu 
@@ -22,8 +22,8 @@ cudaMap: cudaMap.cu
 cudaMapAccelerator: cudaMapAccelerator.cu
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
-#cudaMapManaged: cudaMapManaged.cu
-#	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+cudaMapManaged: cudaMapManaged.cu
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 farm_cudaMap: farm_cudaMap.cu
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CUDAFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
