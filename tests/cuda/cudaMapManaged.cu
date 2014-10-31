@@ -35,8 +35,6 @@
 
 #include <ff/mapCUDAManaged.hpp>
 
-#include <cuda_runtime.h>
-
 using namespace ff;
 
 template<typename Tenv, typename Tinout>
@@ -54,16 +52,16 @@ protected:
     size_t s;
 };
 
-class DenoiseEnv : public ff_cuda_managed{
+class ExampleEnv : public ff_cuda_managed{
 public:
-	DenoiseEnv(float alfa, float beta, int n_noisy) : alfa(alfa), beta(beta), n_noisy(n_noisy){};
+	ExampleEnv(float alfa, float beta, int n_noisy) : alfa(alfa), beta(beta), n_elems(n_noisy){};
 
 	float alfa;
 	float beta;
-	int n_noisy;
+	int n_elems;
 };
 
-FFMAPFUNCMANAGED(mapf, unsigned char, DenoiseEnv*, env, unsigned char, in, return (unsigned char) (env->beta * in));
+FFMAPFUNCMANAGED(mapf, unsigned char, ExampleEnv*, env, unsigned char, in, return (unsigned char) (env->beta * in));
 
 int main(int argc, char * argv[]) {
 	if (argc<2) {
@@ -78,7 +76,7 @@ int main(int argc, char * argv[]) {
 #endif
 
 	size_t size     =atoi(argv[1]);
-	DenoiseEnv * env = new DenoiseEnv(2.1 , 3.4 , size);
+	ExampleEnv * env = new ExampleEnv(2.1 , 3.4 , size);
 	unsigned char * in;
 	unsigned char * out;
 
@@ -88,21 +86,18 @@ int main(int argc, char * argv[]) {
 	/* init data */
 	for(size_t j=0;j<size;++j) in[j]=j;
 
-//	NEWMAPMANAGED(cudamap, (cudaTask<DenoiseEnv, unsigned char>), mapf, env, in , out, size);
+	ff_mapCUDAManaged<cudaTask<ExampleEnv, unsigned char>, mapf> *cudamap =
+			new ff_mapCUDAManaged<cudaTask<ExampleEnv, unsigned char>, mapf>(new mapf, env, in, out, size) ;
 
-	ff_mapCUDAManaged<cudaTask<DenoiseEnv, unsigned char>, mapf> *cudamap =
-			new ff_mapCUDAManaged<cudaTask<DenoiseEnv, unsigned char>, mapf>(new mapf, env, in, out, size) ;
-
+	printf("INPUT\n");
 	for(long i=0;i<size;++i)  printf("%d ", in[i]);
-	printf(" = INPUT\n");
-	printf("Env ( alfa = %f / beta = %f / n_noisy = %d )  \n", env->alfa, env->beta, env->n_noisy);
+
+	printf("\nEnv ( alfa = %f / beta = %f / size = %d )  \n", env->alfa, env->beta, env->n_elems);
 
 	cudamap->run_and_wait_end();
 
 	for(long i=0;i<size;++i)  printf("%d ", out[i]);
 	printf(" = OUTPUT\n");
-
-	DELETEMAP(cudamap);
 
 	if(env) cudaFree(env);
 	if (out) cudaFree(out);
