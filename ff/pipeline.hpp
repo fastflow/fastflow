@@ -34,10 +34,6 @@
 #include <ff/svector.hpp>
 #include <ff/fftree.hpp>
 
-#if defined( HAS_CXX11_VARIADIC_TEMPLATES )
-#include <tuple>
-#endif
-
 namespace ff {
 
 
@@ -630,6 +626,8 @@ private:
     class ff_pipe: public ff_pipeline {
     private:
         typedef TaskType*(*F_t)(TaskType*);
+
+#if 0   // old code  that uses tuple
         
         template<std::size_t I = 1, typename FuncT, typename... Tp>
         inline typename std::enable_if< (I+1) == (sizeof...(Tp)), void>::type
@@ -641,20 +639,32 @@ private:
             f(std::get<I>(t));
             for_each_pipe<I + 1, FuncT, Tp...>(t, f);  // all but the first
         }
-            
-            
+
         inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }        
         // TODO: try to avoid std::function here !
         inline void add2pipe(std::function<TaskType*(TaskType*,ff_node*const)> F) { 
             ff_pipeline::add_stage(new ff_node_F<TaskType>(F));  
-        }
-        
+        }        
         struct add_to_pipe {
             ff_pipe *const P;
             add_to_pipe(ff_pipe *const P):P(P) {}
             template<typename T>
             void operator()(T t) const { P->add2pipe(t); }
         };
+#endif
+        // Thanks to Peter Sommerlad for suggesting the following simpler code
+        void add2pipeall(){} // base case
+        // need to see this before add2pipeall variadic template function
+        inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }
+        // TODO: try to avoid std::function here !  
+        inline void add2pipe(std::function<TaskType*(TaskType*,ff_node*const)> F) {
+            ff_pipeline::add_stage(new ff_node_F<TaskType>(F));
+        }
+        template<typename FIRST,typename ...ARGS>
+        void add2pipeall(FIRST stage,ARGS...args){
+        	add2pipe(stage);
+        	add2pipeall(args...); // recurse
+        }
         
     public:
         /**
@@ -671,10 +681,13 @@ private:
          */
         template<typename... Arguments>
         ff_pipe(Arguments...args) {
+            this->add2pipeall(args...); 
+#if 0  // old code
             std::tuple<Arguments...> t = std::make_tuple(args...);
             auto firstF = std::get<0>(t);
             add2pipe(firstF);
             for_each_pipe(t,add_to_pipe(this));
+#endif
         }
         /**
          * \brief Create a pipeline (with input stream). Run with \p run_and_wait_end or \p run_the_freeze.
@@ -692,10 +705,13 @@ private:
          */
         template<typename... Arguments>
         ff_pipe(bool input_ch, Arguments...args):ff_pipeline(input_ch) {
+            this->add2pipeall(args...); 
+#if 0 // old code
             std::tuple<Arguments...> t = std::make_tuple(args...);
             auto firstF = std::get<0>(t);
             add2pipe(firstF);
             for_each_pipe(t,add_to_pipe(this));
+#endif
         }
         
         operator ff_node* () { return this;}
