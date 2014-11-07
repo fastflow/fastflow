@@ -86,11 +86,15 @@ struct thirdStage: ff_node_t<Task> {
 };
 
 int main(int argc, char *argv[]) {    
-    if (argc<2) {
-        std::cerr << "use: " << argv[0]  << " stream-length\n";
-        return -1;
+    long streamlen = 500;
+    if (argc>1) {
+        if (argc!=2) {
+            std::cerr << "use: "  << argv[0] << " streamlen\n";
+            return -1;
+        }
+        streamlen=atol(argv[1]);
     }
-    ff_pipe<Task> pipe(new firstStage(atol(argv[1])),
+    ff_pipe<Task> pipe(new firstStage(streamlen),
                        new secondStage, new thirdStage);
     pipe.cleanup_nodes();   // perform some cleanup at the end    
     pipe.run_and_wait_end();
