@@ -475,7 +475,7 @@ public:
         return 0;
     }
 
-    inline bool ff_send_out_to(void *task, int id) {
+    inline bool ff_send_out_to(void *task, int id) const {
         return workers[id]->put(task);
     }
 

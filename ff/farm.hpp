@@ -1796,7 +1796,7 @@ protected:
 };
 
 /*!
- *  \class ff_minode_t
+ *  \class ff_monode_t
  *  \ingroup building_blocks
  *
  *  \brief Typed multiple output ff_node (the MPSC mediator).

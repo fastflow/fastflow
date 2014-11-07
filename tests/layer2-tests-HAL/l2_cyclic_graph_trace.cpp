@@ -52,10 +52,10 @@
 
 #define TRACE_FASTFLOW 1 // This enables run-time monitor
 
-#include <ff/node.hpp>
-#include <ff/farm.hpp>
 #include <vector>
 #include <iostream>
+#include <ff/node.hpp>
+#include <ff/farm.hpp>
 
 using namespace ff;
 

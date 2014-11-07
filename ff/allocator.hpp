@@ -559,7 +559,7 @@ namespace ff {
         inline void * getfrom_fb() {
             void * buf = 0;
             for(unsigned i=0;i<fb_size;++i) {
-                register unsigned k=(lastqueue+i)%fb_size;
+                unsigned k=(lastqueue+i)%fb_size;
                 if (fb[k]->leak->pop((void **)&buf)) {
                     ALLSTATS(atomic_long_inc(&all_stats::instance()->leakremoved));
                     lastqueue=k;
@@ -596,7 +596,7 @@ namespace ff {
                    SegmentAllocator * const alloc, size_t sz, int ns )
             : size(sz), nslabs(ns), fb(0), fb_capacity(0), fb_size(0),
               buffptr(0), availbuffers(0), alloc(alloc),
-              mainalloc(mainalloc), delayedReclaim(delayedReclaim) { }
+              mainalloc(mainalloc), delayedReclaim(delayedReclaim),lastqueue(0) { }
     
         /**
          * Destructor
@@ -645,8 +645,8 @@ namespace ff {
             /* Allocate space for leak queue */
             fb = (xThreadData**)::malloc(MIN_FB_CAPACITY*sizeof(xThreadData*));
             if (!fb) return -1;
-            fb_capacity = MIN_FB_CAPACITY;
 
+            fb_capacity = MIN_FB_CAPACITY;            
             if ( prealloc && (newslab()<0) ) return -1;
             return 0;
         }
