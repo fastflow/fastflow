@@ -79,6 +79,7 @@ int main(int argc, char * argv[]) {
     pipe.add_stage(new Stage(streamlen));
 
     pipe.wrap_around();
+    pipe.cleanup_nodes();
 
     ffTime(START_TIME);
     if (pipe.run_and_wait_end()<0) {

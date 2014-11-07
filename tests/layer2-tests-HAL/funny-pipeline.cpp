@@ -105,13 +105,13 @@ public:
             printf("C sending task %ld to D\n", (long)task);
             return task;
         }
-        printf("C got task=%ld from D (channelid=%d)\n", (long)task, get_channel_id());
+        printf("C got task=%ld from D (channelid=%ld)\n", (long)task, get_channel_id());
         return GO_ON;
     }
     // this method is called when the EOS is received from the input channels
-    void eosnotify(int channel_id) {
+    void eosnotify(ssize_t channel_id) {
         if (channel_id < 0) {
-            printf("C received EOS from %d, sending EOS to D\n", channel_id);
+            printf("C received EOS from %ld, sending EOS to D\n", channel_id);
             ff_send_out((void*)FF_EOS);
         }
     }
