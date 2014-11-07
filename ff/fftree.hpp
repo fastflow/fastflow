@@ -57,7 +57,7 @@ struct threadcount_t {
 struct fftree {
 	bool isroot, do_comp;
 	fftype nodetype;
-	std::vector<fftree *> children;
+	std::vector<std::pair<fftree *, bool> > children;
 	ffnode_ptr ffnode;
 
 	fftree(ff_node *ffnode_, fftype nodetype_) :
@@ -80,14 +80,14 @@ struct fftree {
 
 	~fftree() {
 		for (size_t i = 0; i < children.size(); ++i)
-			if (children[i] && !children[i]->ispattern())
-				delete children[i];
+			if (children[i].first && !children[i].second)
+				delete children[i].first;
 		if (isroot)
 			roots.erase(this);
 	}
 
 	void add_child(fftree *t) {
-		children.push_back(t);
+		children.push_back(std::make_pair(t,t?t->ispattern():false));
 		if (t && t->isroot)
 			roots.erase(t);
 	}
@@ -117,9 +117,9 @@ struct fftree {
 		if (do_comp)
 			os << " docomp";
 		for (unsigned long i = 0; i < children.size(); ++i) {
-			if (children[i]) {
+			if (children[i].first) {
 				os << " ";
-				children[i]->print(os);
+				children[i].first->print(os);
 			}
 		}
 		os << (ispattern() ? "]" : ")");
@@ -134,8 +134,8 @@ struct fftree {
 			tc->n_docomp += do_comp;
 		}
 		for (size_t i = 0; i < children.size(); ++i)
-			if (children[i])
-				cnt += children[i]->threadcount(tc);
+			if (children[i].first)
+				cnt += children[i].first->threadcount(tc);
 		return cnt;
 	}
 };
