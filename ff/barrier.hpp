@@ -36,6 +36,12 @@
 #include <ff/utils.hpp>
 #include <ff/config.hpp>
 
+// 
+// Inside FastFlow barriers are used only for:
+//   - to start all nodes synchronously (just for convinience could be avoided)
+//   - inside the ParallelFor* to implement the barrier at the end of each 
+//     loop iteration.
+//
 
 namespace ff {
 
@@ -61,6 +67,10 @@ struct ffBarrier {
      */
 
 #if (defined(__APPLE__) || defined(_MSC_VER))
+    /**
+     *   No pthread_barrier available on these platforms.
+     *   The implementation uses only mutex and cond variable.
+     */ 
 class Barrier: public ffBarrier {
 public:   
     Barrier(const size_t=MAX_NUM_THREADS):threadCounter(0),_barrier(0) {
@@ -73,20 +83,28 @@ public:
             abort();
         }
     }
-   
+
+    /**
+     *
+     *  Note that the results are undefined if barrierSetup() is called
+     *  while any threads is blocked on the barrier.
+     *
+     */      
     inline int barrierSetup(size_t init) {
         assert(init>0);
+        if (_barrier == init) return 0;
         _barrier = init; 
+        counter = 0;
         return 0;
     }
 
-    inline void doBarrier(size_t) {
+    inline void doBarrier(size_t id) {
         pthread_mutex_lock(&bLock);
-        if (!--_barrier) pthread_cond_broadcast(&bCond);
-        else {
-            pthread_cond_wait(&bCond, &bLock);
-            assert(_barrier==0);
+        if (++counter == _barrier) {
+            pthread_cond_broadcast(&bCond);
+            counter = 0;
         }
+        else pthread_cond_wait(&bCond, &bLock);
         pthread_mutex_unlock(&bLock);
     }
 
@@ -98,14 +116,18 @@ public:
 private:
     // This is just a counter, and is used to set the ff_node::tid value.
     size_t            threadCounter;
+
     // it is the number of threads in the barrier. 
-    size_t _barrier;
+    size_t _barrier, counter;
     pthread_mutex_t bLock;  // Mutex variable
     pthread_cond_t  bCond;  // Condition variable
 };
 
 #else
-
+    /**
+     *   pthread_barrier based implementation
+     *
+     */ 
 class Barrier: public ffBarrier {
 public:
     Barrier(const size_t=MAX_NUM_THREADS):threadCounter(0),_barrier(0) { }
@@ -146,6 +168,7 @@ public:
 private:
     // This is just a counter, and is used to set the ff_node::tid value.
     size_t            threadCounter;
+
     // it is the number of threads in the barrier. 
     size_t _barrier;
     pthread_barrier_t bar;
@@ -157,7 +180,7 @@ private:
  *  \class spinBarrier
  *  \ingroup building_blocks
  *
- *  \brief Non-blocking barrier - Used only to start all nodes synchronously
+ *  \brief Non-blocking barrier 
  *
  */
 class spinBarrier: public ffBarrier {
