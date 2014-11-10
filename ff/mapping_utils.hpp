@@ -44,6 +44,7 @@
 #include <iosfwd>
 #include <errno.h>
 #include <ff/config.hpp>
+#include <ff/utils.hpp>
 #if defined(__linux__)
 #include <sched.h>
 #include <sys/types.h>
@@ -320,7 +321,6 @@ static inline int ff_getMyCore() {
 #if __GNUC__
 #warning "ff_getMyCpu not supported"
 #else 
-std::cerr << "---> ff_getMyCpu not supported\n";
 #pragma message( "ff_getMyCpu not supported")
 #endif
 #endif
@@ -374,8 +374,8 @@ static inline int ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
       // Define sets taking in account pinning is performed on L2
       mypolicy.affinity_tag = cpu_id/cacheconfig[CACHE_L2];
       if ( thread_policy_set(mach_thread_self(), THREAD_AFFINITY_POLICY, (integer_t*) &mypolicy, THREAD_AFFINITY_POLICY_COUNT) != KERN_SUCCESS ) {
-      std::cerr << "Setting affinity of thread ? (" << mach_thread_self() << ") failed!" << std::endl;
-      return EINVAL;
+          perror("thread_policy_set: unable to set affinity of thread");
+          return EINVAL;
       } // else {
       //   std::cerr << "Sucessfully set affinity of thread (" << 
       //   mach_thread_self() << ") to core " << cpu_id/cacheconfig[CACHE_L2] << "\n";
