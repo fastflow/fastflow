@@ -29,7 +29,7 @@
 
 
 
-/* The following OpenCL code macros have been "inspired" from the 
+/* The following OpenCL code macros have been "inspired" by the 
  * SkePU OpenCL code 
  * http://www.ida.liu.se/~chrke/skepu/
  */
@@ -218,3 +218,8 @@
 "}\n"
 
 
+#define FFGENERICFUNC(name, basictype, code)                            \
+    static char name[] =                                                \
+        "kern_" #name "|"                                               \
+        #basictype "|"                                                  \
+        #code ";\n\n"
