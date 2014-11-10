@@ -70,6 +70,7 @@ protected:
                 ++numtasks; 
                 return task;
             }
+            delete task->wtask;
             if (--numtasks <= 0 && eosreceived) {
                 lb->broadcast_task(GO_OUT);
                 return GO_OUT;
@@ -135,6 +136,7 @@ public:
     
     template<typename F_t, typename... Param>
     inline task_f_t* AddTask(const F_t F, Param... args) {	
+        // FIX: use ff_allocator here !
         ff_task_f_t<F_t, Param...> *wtask = new ff_task_f_t<F_t, Param...>(F, args...);
         std::vector<param_info> useless;
         task_f_t *task = alloc_task(useless,wtask);	

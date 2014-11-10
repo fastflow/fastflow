@@ -535,7 +535,7 @@ protected:
         error("PIPE, setAffinity: cannot set affinity for the pipeline\n");
     }
     
-    int   getCPUId() { return -1;}
+    int   getCPUId() const { return -1;}
 
     int create_input_buffer(int nentries, bool fixedsize) { 
         if (in) return -1;  

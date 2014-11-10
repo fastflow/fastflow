@@ -41,7 +41,10 @@
 namespace ff {
 
 // map base task for OpenCL implementation
-// char type is a void type - clang++ don't like using void, g++ accept it
+// char type is a void type - clang++ don't like using void, g++ accepts it
+//
+// TODO: try to implement as a variadic template !!
+//
 template<typename TaskT_, 
          typename Tin_, typename Tout_ = Tin_, typename Tenv1_=char, typename Tenv2_=char>
 class baseOCLTask {
