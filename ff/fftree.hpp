@@ -153,6 +153,6 @@ static inline void print_fftrees(std::ostream &os) {
 	os << "total thread count = " << total << "\n";
 }
 
-}; //end namespace ff
+} // namespace
 
 #endif /* FFTREE_HPP_ */
