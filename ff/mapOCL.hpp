@@ -126,11 +126,11 @@ template<typename T, typename TOCL=T>
 class ff_ocl: public ff_oclNode_t<T> {
 private:
     void setcode(const std::string &codestr1, const std::string &codestr2) {
-        int n = codestr1.find("|");
+        int n = codestr1.find_first_of("|");
         assert(n>0);
         ff_ocl<T,TOCL>::kernel_name1 = codestr1.substr(0,n);
         const std::string &tmpstr = codestr1.substr(n+1);
-        n = tmpstr.find("|");
+        n = tmpstr.find_first_of("|");
         assert(n>0);
         
         // checking for double type
@@ -179,7 +179,7 @@ public:
     }
 
     void setKernel2() {
-        clReleaseKernel(kernel);
+        if (kernel) clReleaseKernel(kernel);
         kernel = clCreateKernel(program, kernel_name2.c_str(), &status);
         checkResult(status, "CreateKernel (2)");
         
@@ -197,16 +197,11 @@ protected:
         }
     }    
 
-    void svc_SetUpOclObjects(cl_device_id dId) {	                        
-        cl_int status;							
-        context = clCreateContext(NULL,1,&dId,NULL,NULL,&status);		
-        checkResult(status, "creating context");				
-        
-        cmd_queue = clCreateCommandQueue (context, dId, 0, &status);	
-        checkResult(status, "creating command-queue");			
-        
-        size_t sourceSize = kernel_code.length();        
-        const char* code = kernel_code.c_str();
+    void buildKernelCode(const std::string &kc, cl_device_id dId) {
+        cl_int status;
+
+        size_t sourceSize = kc.length();        
+        const char* code  = kc.c_str();
         
         //printf("code=\n%s\n", code);
         program = clCreateProgramWithSource(context,1, &code, &sourceSize,&status);    
@@ -227,7 +222,19 @@ protected:
             printf("LOG: %s\n\n", buffer);
         }
 #endif
+    }
 
+
+    void svc_SetUpOclObjects(cl_device_id dId) {	                        
+        cl_int status;							
+        context = clCreateContext(NULL,1,&dId,NULL,NULL,&status);		
+        checkResult(status, "creating context");				
+        
+        cmd_queue = clCreateCommandQueue (context, dId, 0, &status);	
+        checkResult(status, "creating command-queue");			
+
+        buildKernelCode(kernel_code, dId);
+                
         kernel = clCreateKernel(program, kernel_name1.c_str(), &status);			
         checkResult(status, "CreateKernel");				
         
@@ -298,6 +305,11 @@ template<typename T, typename TOCL=T>
 class ff_mapOCL: public ff_ocl<T, TOCL> {
 public:
     
+    /* TODO: implement the possibility to pass more than one kernel code (maybe a variadic template constructor)
+     *       The idea is to decouple mapOCL from having one single kernel code.
+     *
+     */
+
     ff_mapOCL(std::string codestr):ff_ocl<T,TOCL>(codestr) { 
     }    
     ff_mapOCL(const T &task, std::string codestr):
@@ -510,8 +522,9 @@ protected:
     inline void getBlocksAndThreads(const size_t size, 
                                     const size_t maxBlocks, const size_t maxThreads, 
                                     size_t & blocks, size_t &threads) {
-
-        threads = (size < maxThreads*2) ? nextPowerOf2((size + 1)/ 2) : maxThreads;
+        const size_t half = (size+1)/2;
+        threads = (size < maxThreads*2) ? 
+            ( isPowerOf2(half) ? nextPowerOf2(half+1) : nextPowerOf2(half) ) : maxThreads;
         blocks  = (size + (threads * 2 - 1)) / (threads * 2);
         blocks  = std::min(maxBlocks, blocks);
     }
@@ -643,9 +656,10 @@ protected:
     inline void getBlocksAndThreads(const size_t size,
                                     const size_t maxBlocks, const size_t maxThreads,
                                     size_t & blocks, size_t &threads) {
-
-        threads = (size < maxThreads*2) ? nextPowerOf2((size + 1)/ 2) : maxThreads;
-        blocks  = (size + (threads * 2 - 1)) / (threads * 2);
+        const size_t half = (size+1)/2;
+        threads = (size < maxThreads*2) ? 
+            ( isPowerOf2(half) ? nextPowerOf2(half+1) : nextPowerOf2(half) ) : maxThreads;
+         blocks  = (size + (threads * 2 - 1)) / (threads * 2);
         blocks  = std::min(maxBlocks, blocks);
     }
 

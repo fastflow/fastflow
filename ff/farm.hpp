@@ -253,12 +253,12 @@ public:
      *  \param worker_cleanup = true deallocate worker object at exit
      *  \param fixedsize = true uses only fixed size queue
      */
-    ff_farm(bool input_ch=false,
-            int in_buffer_entries=DEF_IN_BUFF_ENTRIES, 
-            int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
-            bool worker_cleanup=false, // NOTE: by default no cleanup at exit is done !
-            int max_num_workers=DEF_MAX_NUM_WORKERS,
-            bool fixedsize=false):  // NOTE: by default all the internal farm queues are unbounded !
+    explicit ff_farm(bool input_ch=false,
+                     int in_buffer_entries=DEF_IN_BUFF_ENTRIES, 
+                     int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
+                     bool worker_cleanup=false, // NOTE: by default no cleanup at exit is done !
+                     int max_num_workers=DEF_MAX_NUM_WORKERS,
+                     bool fixedsize=false):  // NOTE: by default all the internal farm queues are unbounded !
         has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
         in_buffer_entries(in_buffer_entries),
         out_buffer_entries(out_buffer_entries),

@@ -142,10 +142,10 @@ public:
      *  \param out_buffer_entries output queue length
      *  \param fixedsize \p true uses bound channels (SPSC queue)
      */
-    ff_pipeline(bool input_ch=false,
-                int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
-                int out_buffer_entries=DEF_OUT_BUFF_ENTRIES, 
-                bool fixedsize=true):
+    explicit ff_pipeline(bool input_ch=false,
+                         int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
+                         int out_buffer_entries=DEF_OUT_BUFF_ENTRIES, 
+                         bool fixedsize=true):
         has_input_channel(input_ch),prepared(false),
         node_cleanup(false),fixedsize(fixedsize),
         in_buffer_entries(in_buffer_entries),
@@ -652,7 +652,9 @@ private:
             void operator()(T t) const { P->add2pipe(t); }
         };
 #endif
+        // 
         // Thanks to Peter Sommerlad for suggesting the following simpler code
+        //
         void add2pipeall(){} // base case
         // need to see this before add2pipeall variadic template function
         inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }
