@@ -1,5 +1,9 @@
+* 15/11/14 - v.2.0.6
+   - fixed a problem in the ff_mapOCL
+   - introduced "explicit" for some constructors in order to prevent the compiler
+     to use implicit conversions
+   - fixed problems in the fftree usage   
 * 22/08/14 - v.2.0.5
-   - fixed a problem in the fftree usage
    - added the possibility to select the spinBarrier barrier in the parallel-for pattern (by default is enabled blocking barrier)
    - revised version of OpenCL patterns (still experimental)
    - OpenCL map/reduce/mapreduce patters are now in the mapOCL.hpp file

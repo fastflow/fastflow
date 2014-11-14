@@ -27,6 +27,35 @@
  ****************************************************************************
  */
 
+#ifndef FF_OCLMACROES_HPP
+#define FF_OCLMACROES_HPP
+
+
+#include <string>
+#include <sstream>
+
+namespace ff {
+
+// NOTE: A better check would be needed !
+// both GNU g++ and Intel icpc define __GXX_EXPERIMENTAL_CXX0X__ if -std=c++0x or -std=c++11 is used 
+// (icpc -E -dM -std=c++11 -x c++ /dev/null | grep GXX_EX)
+#if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || defined(HAS_CXX11_VARIADIC_TEMPLATES)
+
+template< typename ... Args >
+std::string stringer(Args const& ... args ) {
+    std::ostringstream stream;
+    using List= int[];
+    
+    // expanding a parameter pack is only valid in contexts 
+    // where the parser expects a comma-separated list of entries
+    (void)List{0, ( (void)(stream << args), 0 ) ... };
+    
+    return stream.str();
+}
+    
+#define STRINGER(...) stringer(__VA_ARGS__)
+    
+#endif // c++11 check
 
 
 /* The following OpenCL code macros have been "inspired" by the 
@@ -51,7 +80,7 @@
 "\t        output[i] = f" #name "(input[i]);\n"                         \
 "\t        i += gridSize;\n"                                            \
 "\t    }\n"                                                             \
-"}"
+"}\n"
 
 
 //  x=f(param)   'x' and 'param' have different types
@@ -70,7 +99,7 @@
 "              output[i] = f" #name "(input[i]);\n"                     \
 "              i += gridSize;\n"                                        \
 "           }\n"                                                        \
-"}"
+"}\n"
 
 //  x=f(param,size, idx) 'param' is the input array, 
 //                       'size' is the size of the input array,
@@ -96,7 +125,7 @@
 "\t        output[i] = f" #name "(input,inSize,i);\n"                   \
 "\t        i += gridSize;\n"                                            \
 "\t    }\n"                                                             \
-"}"
+"}\n"
 
 
 //  x=f(param,size,idx,env) 'param' is the input array, 
@@ -124,7 +153,7 @@
 "\t        output[i] = f" #name "(input,inSize,i,env);\n"               \
 "\t        i += gridSize;\n"                                            \
 "\t    }\n"                                                             \
-"}"
+"}\n"
 
 //  x=f(param,size,idx,env) 'param' is the input array, 
 //                          'size' is the size of the input array,
@@ -151,7 +180,7 @@
 "\t        output[i] = f" #name "(input,inSize,i,env);\n"               \
 "\t        i += gridSize;\n"                                            \
 "\t    }\n"                                                             \
-"}"
+"}\n"
 
 
 //  x=f(param,size,idx,env1,env2)  'param' is the input array, 
@@ -182,7 +211,7 @@
 "\t        output[i] = f" #name "(input,inSize,i,env1,env2);\n"                  \
 "\t        i += gridSize;\n"                                                     \
 "\t    }\n"                                                                      \
-"}"
+"}\n"
 
 
 //  x=f(param1,param2)   'x', 'param1', 'param2' have the same type
@@ -223,3 +252,7 @@
         "kern_" #name "|"                                               \
         #basictype "|"                                                  \
         #code ";\n\n"
+
+} // namespace
+
+#endif /* FF_OCLMACROES_HPP */
