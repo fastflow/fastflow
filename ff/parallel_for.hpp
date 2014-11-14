@@ -133,7 +133,7 @@ public:
      * first call to one of the parallel_for methods). To put threads to sleep between different
      * calls, the <b>threadPause</b> method may be called.
      */
-    ParallelFor(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
+    explicit ParallelFor(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
         pf(new ff_forall_farm<forallreduce_W<int> >(maxnw,spinwait,false,spinbarrier)) {}
     /**
      * \brief Destructor
@@ -373,7 +373,7 @@ public:
      * and \p parallel_reduce, useful when they are called in sequence on
      * small kernels), \p false blocking support
      */
-    ParallelForReduce(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
+    explicit ParallelForReduce(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
         pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,spinwait,false,spinbarrier)) {}
 
     ~ParallelForReduce()                { if (pfr) { FF_PARFORREDUCE_DONE(pfr); pfr=nullptr; }}
@@ -694,7 +694,7 @@ protected:
     ff_pipe<task_t>  pipe;
 
 public:
-    ParallelForPipeReduce(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
+    explicit ParallelForPipeReduce(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
         pfr(new ff_forall_farm<forallpipereduce_W>(maxnw,false,true,false)), // skip loop warmup and disable spinwait/spinbarrier
         pipe(pfr,&reduce) {
         
