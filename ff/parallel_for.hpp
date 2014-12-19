@@ -672,6 +672,7 @@ public:
 };
 
 
+#ifndef WIN32 //VS12
 #if defined(HAS_CXX11_VARIADIC_TEMPLATES)
 
 //! ParallelForPipeReduce class
@@ -772,6 +773,7 @@ public:
     }
 };
 #endif 
+#endif //VS12
 
 //
 //---- static functions, useful for one-shot parallel for execution or when no extra settings are needed
