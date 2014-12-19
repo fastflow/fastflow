@@ -10,9 +10,9 @@ ADD_DEFINITIONS(-DUSE_CMAKE_CONFIG)
 set( TESTS                               
                         test_graphsearch
 perf_parfor                               test_lb_affinity
-perf_parfor2                              test_map
+perf_parfor2                              
 perf_test1                                test_masterworker
-perf_test_alloc1                          test_mdf
+perf_test_alloc1                          
 perf_test_alloc2                          test_mpmc
 perf_test_alloc3                          test_multi_input
 perf_test_noalloc                         test_multi_input2
@@ -24,7 +24,7 @@ test2                                     test_multi_input7
 test3                                     test_multi_input8
 test3_farm                                test_multi_masterworker
 test3b                                    test_multi_output
-test4                                     test_multi_output2
+test4                                     
 test5                                     test_noinput_pipe
 test6                                     test_ofarm
 test7                                     test_ofarm2
@@ -33,9 +33,9 @@ test_accelerator+pinning                  test_parfor2
 test_accelerator                          test_parfor_multireduce 
 test_accelerator2                         test_parfor_multireduce2
 test_accelerator3                         test_parfor_unbalanced
-test_accelerator_farm+pipe                test_parforpipereduce
+test_accelerator_farm+pipe                
 test_accelerator_ofarm                    test_pipe+masterworker
-test_accelerator_ofarm_multiple_freezing  test_pipe
+test_accelerator_ofarm_multiple_freezing  
 test_accelerator_pipe+farm                test_pool1
 test_accelerator_pipe                     test_pool2
 test_bmpmc                                test_pool3
@@ -46,10 +46,15 @@ test_dotprod_parfor                       test_spinBarrier
 test_dt                                   test_stopstartall
 test_farm+pipe                            test_stopstartthreads
 test_farm                                 test_stopstartthreads2
-test_ffthread                             test_taskf
+test_ffthread                             
 test_torus                                test_freeze
 test_uBuffer
 )
+
+if (NOT ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC"))
+set(TESTS ${TESTS} test_taskf test_multi_output2 test_parforpipereduce test_pipe test_map test_mdf)
+endif ()
+
 #set( TESTS_W_OMP test_parfor_basic)
 #  
 

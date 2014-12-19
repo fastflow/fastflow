@@ -1115,6 +1115,7 @@ struct ff_buffernode: ff_node {
 };
 
 
+#ifndef WIN32 //VS12
 /*!
  *  \class ff_node_t
  *  \ingroup building_blocks
@@ -1163,6 +1164,7 @@ static ff_node_F<T,FUNC> make_ff_node_F(FUNC f) {
     return ff_node_F<T,FUNC>(f); 
 }
 
+#endif
 #endif
 
 

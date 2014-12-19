@@ -41,6 +41,9 @@
  *
  */
 
+//VS12
+#ifndef WIN32
+
 #include <functional>
 #include <tuple>
 #include <vector>
@@ -521,4 +524,5 @@ protected:
 
 } // namespace
 
+#endif //VS12
 #endif /* FF_MDF_HPP */
