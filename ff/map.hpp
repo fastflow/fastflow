@@ -31,6 +31,9 @@
 #ifndef FF_MAP_HPP
 #define FF_MAP_HPP
 
+//VS12
+#ifndef WIN32
+
 // NOTE: A better check would be needed !
 // both GNU g++ and Intel icpc define __GXX_EXPERIMENTAL_CXX0X__ if -std=c++0x or -std=c++11 is used 
 // (icpc -E -dM -std=c++11 -x c++ /dev/null | grep GXX_EX)
@@ -111,5 +114,6 @@ protected:
     
 } // namespace ff
 
+#endif //VS12
 #endif /* FF_MAP_HPP */
 

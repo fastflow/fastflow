@@ -605,6 +605,7 @@ private:
 };
 
 
+#ifndef WIN32 //VS12
     // ------------------------ high-level (simpler) pipeline ------------------
 #if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
     /** 
@@ -719,6 +720,7 @@ private:
         operator ff_node* () { return this;}
     };
 #endif /* HAS_CXX11_VARIADIC_TEMPLATES */
+#endif //VS12
 
     template<typename T>
     ff_node* toffnode(T* p) { return p;}
