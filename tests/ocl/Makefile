@@ -14,15 +14,18 @@ OCL_ROOT = /opt/AMDAPP
 
 # 
 OCLFLAGS =
-OPTFLAGS = -O3 -DCHECK #-g
+OPTFLAGS = -O0 -DCHECK -g
 LDFLAGS  = -L$(OCL_ROOT)/lib/x86_64
 LIBS     =  $(OPENCL) -lpthread 
 INCLUDES = -I$(FF_ROOT) -I$(OCL_ROOT)/include
 
 
-TARGETS = oclMap oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct
+TARGETS = oclStencilReduce #oclMap oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct
 
 all: $(TARGETS)
+
+oclStencilReduce: oclStencilReduce.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 oclMap: oclMap.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
