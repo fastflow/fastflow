@@ -172,6 +172,10 @@ public:
 		return iter;
 	}
 
+	void resetIter() {
+		iter = 0;
+	}
+
 protected:
 	Tin *inPtr;
 	Tout *outPtr;
@@ -1277,6 +1281,7 @@ protected:
 		clWaitForEvents(nevents, events);
 		nevents = 0;
 
+		ff_ocl<T, TOCL>::Task.resetIter();
 		swapDeviceBuffers(); //invalidate first swap
 		do {
 			swapDeviceBuffers();
