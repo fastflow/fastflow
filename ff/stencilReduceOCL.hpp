@@ -1364,7 +1364,6 @@ protected:
 //		for(int i=0; i<3; ++i)
 //			if(events[i]) clReleaseEvent(events[i]);
 
-		//return (ff_ocl<T,TOCL>::oneshot?NULL:task);
 		return (ff_ocl<T, TOCL>::oneshot ? NULL : task);
 	}
 };
