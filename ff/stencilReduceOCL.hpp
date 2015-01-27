@@ -43,8 +43,8 @@ namespace ff {
 //
 // TODO: try to implement as a variadic template !!
 //
-template<typename TaskT_, typename Tin_, typename Tout_ = Tin_,
-		typename Tenv1_ = char, typename Tenv2_ = char>
+template<typename TaskT_, typename Tin_, typename Tout_ = Tin_, typename Tenv1_ = char,
+		typename Tenv2_ = char>
 class baseOCLTask {
 public:
 	typedef TaskT_ TaskT;
@@ -56,7 +56,7 @@ public:
 	baseOCLTask() :
 			inPtr(NULL), outPtr(NULL), envPtr1(NULL), envPtr2(NULL), size_in(0), size_out(
 					0), size_env1(0), size_env2(0), reduceVar((Tout) 0), copyEnv1(
-					true), copyEnv2(true), iter(0) {
+			true), copyEnv2(true), iter(0) {
 	}
 
 	virtual ~baseOCLTask() {
@@ -223,8 +223,7 @@ private:
 		// checking for extra code needed to compile the kernels
 		std::ifstream ifs(FF_OPENCL_DATATYPES_FILE);
 		if (ifs.is_open())
-			kernel_code.insert(kernel_code.begin(),
-					std::istreambuf_iterator<char>(ifs),
+			kernel_code.insert(kernel_code.begin(), std::istreambuf_iterator<char>(ifs),
 					std::istreambuf_iterator<char>());
 
 		if (codestr2 != "") {
@@ -247,14 +246,13 @@ private:
 	}
 public:
 
-	ff_ocl(const std::string &codestr1, const std::string &codestr2 =
-			std::string("")) :
+	ff_ocl(const std::string &codestr1, const std::string &codestr2 = std::string("")) :
 			oneshot(false) {
 		setcode(codestr1, codestr2);
 		oldSizeIn = oldSizeOut = oldSizeReduce = oldSizeEnv1 = oldSizeEnv2 = 0;
 	}
-	ff_ocl(const T &task, const std::string &codestr1,
-			const std::string &codestr2 = std::string("")) :
+	ff_ocl(const T &task, const std::string &codestr1, const std::string &codestr2 =
+			std::string("")) :
 			oneshot(true) {
 		setcode(codestr1, codestr2);
 		Task.setTask(const_cast<T*>(&task));
@@ -289,8 +287,7 @@ protected:
 		const char* code = kc.c_str();
 
 		//printf("code=\n%s\n", code);
-		program = clCreateProgramWithSource(context, 1, &code, &sourceSize,
-				&status);
+		program = clCreateProgramWithSource(context, 1, &code, &sourceSize, &status);
 		checkResult(status, "creating program with source");
 
 		status = clBuildProgram(program, 1, &dId, "-cl-fast-relaxed-math", NULL, NULL);
@@ -301,13 +298,12 @@ protected:
 		if (status != CL_SUCCESS) {
 			printf("\nFail to build the program\n");
 			size_t len;
-			clGetProgramBuildInfo(program, dId, CL_PROGRAM_BUILD_LOG, 0, NULL,
-					&len);
+			clGetProgramBuildInfo(program, dId, CL_PROGRAM_BUILD_LOG, 0, NULL, &len);
 			printf("LOG len %ld\n", len);
 			char *buffer = (char*) calloc(len, sizeof(char));
 			assert(buffer);
-			clGetProgramBuildInfo(program, dId, CL_PROGRAM_BUILD_LOG,
-					len * sizeof(char), buffer, NULL);
+			clGetProgramBuildInfo(program, dId, CL_PROGRAM_BUILD_LOG, len * sizeof(char),
+					buffer, NULL);
 			printf("LOG: %s\n\n", buffer);
 		}
 //#endif
@@ -328,21 +324,19 @@ protected:
 		kernel_map = clCreateKernel(program, kernel_name1.c_str(), &status);
 		checkResult(status, "CreateKernel (map)");
 		status = clGetKernelWorkGroupInfo(kernel_map, dId,
-				CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_map,
-				0);
+		CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_map, 0);
 		checkResult(status, "GetKernelWorkGroupInfo (map)");
 
 		kernel_reduce = clCreateKernel(program, kernel_name2.c_str(), &status);
 		checkResult(status, "CreateKernel (reduce)");
 		status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
-				CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t),
-				&workgroup_size_reduce, 0);
+		CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_reduce, 0);
 		checkResult(status, "GetKernelWorkGroupInfo (reduce)");
 
 // allocate memory on device having the initial size
 		if (Task.getBytesizeIn() > 0) {
-			inputBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE,
-					Task.getBytesizeIn(), NULL, &status);
+			inputBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE, Task.getBytesizeIn(),
+					NULL, &status);
 			checkResult(status, "CreateBuffer input (1)");
 			oldSizeIn = Task.getBytesizeIn();
 		}
@@ -429,15 +423,17 @@ class ff_stencilReduceOCL: public ff_ocl<T, TOCL> {
 public:
 	typedef typename TOCL::Tout Tout;
 
-	ff_stencilReduceOCL(std::string mapf, std::string reducef,
-			Tout initReduceVar = (Tout) 0) :
-			ff_ocl<T, TOCL>(mapf, reducef) {
+	ff_stencilReduceOCL(std::string mapf, std::string reducef, Tout initReduceVar =
+			(Tout) 0) :
+			ff_ocl<T, TOCL>(mapf, reducef), maxIters(
+					std::numeric_limits<unsigned int>::max()) {
 		ff_ocl<T, TOCL>::Task.setInitReduceVal(initReduceVar);
 		isPureMap = isPureReduce = false;
 	}
 	ff_stencilReduceOCL(const T &task, std::string mapf, std::string reducef,
 			Tout initReduceVar = (Tout) 0) :
-			ff_ocl<T, TOCL>(task, mapf, reducef) {
+			ff_ocl<T, TOCL>(task, mapf, reducef), maxIters(
+					std::numeric_limits<unsigned int>::max()) {
 		ff_node::skipfirstpop(true);
 		ff_ocl<T, TOCL>::Task.setInitReduceVal(initReduceVar);
 		isPureMap = isPureReduce = false;
@@ -489,10 +485,14 @@ public:
 	void setPureReduce() {
 		isPureReduce = true;
 	}
+	void setMaxIters(unsigned int maxIters_) {
+		maxIters = maxIters_;
+	}
 
 protected:
 
 	bool isPureMap, isPureReduce;
+	unsigned int maxIters;
 
 	inline void swapDeviceBuffers() {
 		cl_mem tmp = ff_ocl<T, TOCL>::inputBuffer;
@@ -540,13 +540,12 @@ protected:
 		void *envPtr2 = ff_ocl<T, TOCL>::Task.getEnvPtr2();
 
 		//(eventually) allocate device memory
-		if (ff_ocl<T, TOCL>::oldSizeIn
-				< ff_ocl<T, TOCL>::Task.getBytesizeIn()) {
+		if (ff_ocl<T, TOCL>::oldSizeIn < ff_ocl<T, TOCL>::Task.getBytesizeIn()) {
 			if (ff_ocl<T, TOCL>::oldSizeIn != 0)
 				clReleaseMemObject(ff_ocl<T, TOCL>::inputBuffer);
-			ff_ocl<T, TOCL>::inputBuffer = clCreateBuffer(
-					ff_ocl<T, TOCL>::context, CL_MEM_READ_WRITE,
-					ff_ocl<T, TOCL>::Task.getBytesizeIn(), NULL, &status);
+			ff_ocl<T, TOCL>::inputBuffer = clCreateBuffer(ff_ocl<T, TOCL>::context,
+					CL_MEM_READ_WRITE, ff_ocl<T, TOCL>::Task.getBytesizeIn(), NULL,
+					&status);
 			ff_ocl<T, TOCL>::checkResult(status, "CreateBuffer input (2)");
 			ff_ocl<T, TOCL>::oldSizeIn = ff_ocl<T, TOCL>::Task.getBytesizeIn();
 		}
@@ -554,72 +553,66 @@ protected:
 		if (inPtr == outPtr) {
 			ff_ocl<T, TOCL>::outputBuffer = ff_ocl<T, TOCL>::inputBuffer;
 		} else {
-			if (ff_ocl<T, TOCL>::oldSizeOut
-					< ff_ocl<T, TOCL>::Task.getBytesizeOut()) {
+			if (ff_ocl<T, TOCL>::oldSizeOut < ff_ocl<T, TOCL>::Task.getBytesizeOut()) {
 				if (ff_ocl<T, TOCL>::oldSizeOut != 0)
 					clReleaseMemObject(ff_ocl<T, TOCL>::outputBuffer);
 
-				ff_ocl<T, TOCL>::outputBuffer = clCreateBuffer(
-						ff_ocl<T, TOCL>::context, CL_MEM_READ_WRITE,
-						ff_ocl<T, TOCL>::Task.getBytesizeOut(), NULL, &status);
+				ff_ocl<T, TOCL>::outputBuffer = clCreateBuffer(ff_ocl<T, TOCL>::context,
+						CL_MEM_READ_WRITE, ff_ocl<T, TOCL>::Task.getBytesizeOut(), NULL,
+						&status);
 				ff_ocl<T, TOCL>::checkResult(status, "CreateBuffer output");
-				ff_ocl<T, TOCL>::oldSizeOut =
-						ff_ocl<T, TOCL>::Task.getBytesizeOut();
+				ff_ocl<T, TOCL>::oldSizeOut = ff_ocl<T, TOCL>::Task.getBytesizeOut();
 			}
 		}
 		if (envPtr1) {
-			if (ff_ocl<T, TOCL>::oldSizeEnv1
-					< ff_ocl<T, TOCL>::Task.getBytesizeEnv1()) {
+			if (ff_ocl<T, TOCL>::oldSizeEnv1 < ff_ocl<T, TOCL>::Task.getBytesizeEnv1()) {
 				if (ff_ocl<T, TOCL>::oldSizeEnv1 != 0)
 					clReleaseMemObject(ff_ocl<T, TOCL>::envBuffer1);
-				ff_ocl<T, TOCL>::envBuffer1 = clCreateBuffer(
-						ff_ocl<T, TOCL>::context, CL_MEM_READ_ONLY,
-						ff_ocl<T, TOCL>::Task.getBytesizeEnv1(), NULL, &status);
+				ff_ocl<T, TOCL>::envBuffer1 = clCreateBuffer(ff_ocl<T, TOCL>::context,
+						CL_MEM_READ_ONLY, ff_ocl<T, TOCL>::Task.getBytesizeEnv1(), NULL,
+						&status);
 				ff_ocl<T, TOCL>::checkResult(status, "CreateBuffer env");
-				ff_ocl<T, TOCL>::oldSizeEnv1 =
-						ff_ocl<T, TOCL>::Task.getBytesizeEnv1();
+				ff_ocl<T, TOCL>::oldSizeEnv1 = ff_ocl<T, TOCL>::Task.getBytesizeEnv1();
 			}
 		}
 		if (envPtr2) {
-			if (ff_ocl<T, TOCL>::oldSizeEnv2
-					< ff_ocl<T, TOCL>::Task.getBytesizeEnv2()) {
+			if (ff_ocl<T, TOCL>::oldSizeEnv2 < ff_ocl<T, TOCL>::Task.getBytesizeEnv2()) {
 				if (ff_ocl<T, TOCL>::oldSizeEnv2 != 0)
 					clReleaseMemObject(ff_ocl<T, TOCL>::envBuffer2);
-				ff_ocl<T, TOCL>::envBuffer2 = clCreateBuffer(
-						ff_ocl<T, TOCL>::context, CL_MEM_READ_ONLY,
-						ff_ocl<T, TOCL>::Task.getBytesizeEnv2(), NULL, &status);
+				ff_ocl<T, TOCL>::envBuffer2 = clCreateBuffer(ff_ocl<T, TOCL>::context,
+						CL_MEM_READ_ONLY, ff_ocl<T, TOCL>::Task.getBytesizeEnv2(), NULL,
+						&status);
 				ff_ocl<T, TOCL>::checkResult(status, "CreateBuffer env2");
-				ff_ocl<T, TOCL>::oldSizeEnv2 =
-						ff_ocl<T, TOCL>::Task.getBytesizeEnv2();
+				ff_ocl<T, TOCL>::oldSizeEnv2 = ff_ocl<T, TOCL>::Task.getBytesizeEnv2();
 			}
 		}
 
-		if(!isPureMap) {
+		if (!isPureMap) {
 #if 0 //REDUCE
-		//(eventually) allocate device memory for REDUCE - TODO check size
-		size_t elemSize = sizeof(Tout);
-		size_t numBlocks_reduce = 0;
-		size_t numThreads_reduce = 0;
-		getBlocksAndThreads(size, 64, 256, numBlocks_reduce, numThreads_reduce);// 64 and 256 are the max number of blocks and threads we want to use
-		size_t reduceMemSize =
+			//(eventually) allocate device memory for REDUCE - TODO check size
+			size_t elemSize = sizeof(Tout);
+			size_t numBlocks_reduce = 0;
+			size_t numThreads_reduce = 0;
+			getBlocksAndThreads(size, 64, 256, numBlocks_reduce, numThreads_reduce);// 64 and 256 are the max number of blocks and threads we want to use
+			size_t reduceMemSize =
 //				(numThreads_reduce <= 32) ?
 //						(2 * numThreads_reduce * elemSize) :
 //						(numThreads_reduce * elemSize);
-		numBlocks_reduce * elemSize;
-		if (ff_ocl<T, TOCL>::oldSizeReduce < reduceMemSize) {
-			if (ff_ocl<T, TOCL>::oldSizeReduce != 0) {
-				clReleaseMemObject(ff_ocl<T, TOCL>::reduceBuffer);
-				free(ff_ocl<T, TOCL>::reduceMemInit);
+			numBlocks_reduce * elemSize;
+			if (ff_ocl<T, TOCL>::oldSizeReduce < reduceMemSize) {
+				if (ff_ocl<T, TOCL>::oldSizeReduce != 0) {
+					clReleaseMemObject(ff_ocl<T, TOCL>::reduceBuffer);
+					free(ff_ocl<T, TOCL>::reduceMemInit);
+				}
+				ff_ocl<T, TOCL>::reduceBuffer = clCreateBuffer(ff_ocl<T, TOCL>::context,
+						CL_MEM_READ_WRITE, numBlocks_reduce * elemSize, NULL, &status);
+				ff_ocl<T, TOCL>::checkResult(status, "CreateBuffer reduce");
+				ff_ocl<T, TOCL>::reduceMemInit = (Tout *) malloc(numBlocks_reduce * elemSize);
+				for (size_t i = 0; i < numBlocks_reduce; ++i)
+				ff_ocl<T, TOCL>::reduceMemInit[i] =
+				ff_ocl<T, TOCL>::Task.getInitReduceVal();
+				ff_ocl<T, TOCL>::oldSizeReduce = reduceMemSize;
 			}
-			ff_ocl<T, TOCL>::reduceBuffer = clCreateBuffer(ff_ocl<T, TOCL>::context,
-					CL_MEM_READ_WRITE, numBlocks_reduce * elemSize, NULL, &status);
-			ff_ocl<T, TOCL>::checkResult(status, "CreateBuffer reduce");
-			ff_ocl<T, TOCL>::reduceMemInit = (Tout *) malloc(numBlocks_reduce * elemSize);
-			for (size_t i = 0; i < numBlocks_reduce; ++i)
-			ff_ocl<T, TOCL>::reduceMemInit[i] =
-			ff_ocl<T, TOCL>::Task.getInitReduceVal();
-			ff_ocl<T, TOCL>::oldSizeReduce = reduceMemSize;
-		}
 #endif
 		}
 
@@ -639,26 +632,26 @@ protected:
 		ff_ocl<T, TOCL>::checkResult(status, "setKernelArg inSize");
 		if (envPtr1) {
 			if (envPtr2) {
-				status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_map, 3,
-						sizeof(cl_mem), ff_ocl<T, TOCL>::getEnv1Buffer());
+				status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_map, 3, sizeof(cl_mem),
+						ff_ocl<T, TOCL>::getEnv1Buffer());
 				ff_ocl<T, TOCL>::checkResult(status, "setKernelArg env1");
-				status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_map, 4,
-						sizeof(cl_mem), ff_ocl<T, TOCL>::getEnv2Buffer());
+				status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_map, 4, sizeof(cl_mem),
+						ff_ocl<T, TOCL>::getEnv2Buffer());
 				ff_ocl<T, TOCL>::checkResult(status, "setKernelArg env2");
-				status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_map, 5,
-						sizeof(cl_uint), (void *) &size);
+				status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_map, 5, sizeof(cl_uint),
+						(void *) &size);
 				ff_ocl<T, TOCL>::checkResult(status, "setKernelArg size");
 			} else {
-				status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_map, 3,
-						sizeof(cl_mem), ff_ocl<T, TOCL>::getEnv1Buffer());
+				status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_map, 3, sizeof(cl_mem),
+						ff_ocl<T, TOCL>::getEnv1Buffer());
 				ff_ocl<T, TOCL>::checkResult(status, "setKernelArg env1");
-				status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_map, 4,
-						sizeof(cl_uint), (void *) &size);
+				status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_map, 4, sizeof(cl_uint),
+						(void *) &size);
 				ff_ocl<T, TOCL>::checkResult(status, "setKernelArg size");
 			}
 		} else {
-			status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_map, 3,
-					sizeof(cl_uint), (void *) &size);
+			status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_map, 3, sizeof(cl_uint),
+					(void *) &size);
 			ff_ocl<T, TOCL>::checkResult(status, "setKernelArg size");
 		}
 
@@ -670,34 +663,32 @@ protected:
 				ff_ocl<T, TOCL>::getOutputBuffer());
 		ff_ocl<T, TOCL>::checkResult(status, "setKernelArg output");
 
-		if(!isPureMap) {
+		if (!isPureMap) {
 #if 0 //REDUCE
-		//set iteration-invariant REDUCE kernel args
-		status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 1, sizeof(cl_mem),
-				&(ff_ocl<T, TOCL>::reduceBuffer));
-		status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 2, sizeof(cl_uint),
-				(void *) &size);
-		status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 3, reduceMemSize,
-				NULL);
-		checkResult(status, "setKernelArg reduceMemSize");
+			//set iteration-invariant REDUCE kernel args
+			status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 1, sizeof(cl_mem),
+					&(ff_ocl<T, TOCL>::reduceBuffer));
+			status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 2, sizeof(cl_uint),
+					(void *) &size);
+			status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 3, reduceMemSize,
+					NULL);
+			checkResult(status, "setKernelArg reduceMemSize");
 #endif
 		}
 
 		//copy input and environments (h2d)
 		status = clEnqueueWriteBuffer(ff_ocl<T, TOCL>::cmd_queue,
 				ff_ocl<T, TOCL>::inputBuffer, CL_FALSE, 0,
-				ff_ocl<T, TOCL>::Task.getBytesizeIn(),
-				ff_ocl<T, TOCL>::Task.getInPtr(), 0, NULL, &events[0]);
+				ff_ocl<T, TOCL>::Task.getBytesizeIn(), ff_ocl<T, TOCL>::Task.getInPtr(),
+				0, NULL, &events[0]);
 		++nevents;
-		ff_ocl<T, TOCL>::checkResult(status,
-				"copying Task to device input-buffer");
+		ff_ocl<T, TOCL>::checkResult(status, "copying Task to device input-buffer");
 		if (envPtr1 && ff_ocl<T, TOCL>::Task.getCopyEnv1()) {
 			status = clEnqueueWriteBuffer(ff_ocl<T, TOCL>::cmd_queue,
 					ff_ocl<T, TOCL>::envBuffer1, CL_FALSE, 0,
 					ff_ocl<T, TOCL>::Task.getBytesizeEnv1(),
 					ff_ocl<T, TOCL>::Task.getEnvPtr1(), 0, NULL, &events[1]);
-			ff_ocl<T, TOCL>::checkResult(status,
-					"copying Task to device env 1 buffer");
+			ff_ocl<T, TOCL>::checkResult(status, "copying Task to device env 1 buffer");
 			++nevents;
 		}
 		if (envPtr2 && ff_ocl<T, TOCL>::Task.getCopyEnv2()) {
@@ -705,8 +696,7 @@ protected:
 					ff_ocl<T, TOCL>::envBuffer2, CL_FALSE, 0,
 					ff_ocl<T, TOCL>::Task.getBytesizeEnv2(),
 					ff_ocl<T, TOCL>::Task.getEnvPtr2(), 0, NULL, &events[2]);
-			ff_ocl<T, TOCL>::checkResult(status,
-					"copying Task to device env2 buffer");
+			ff_ocl<T, TOCL>::checkResult(status, "copying Task to device env2 buffer");
 			++nevents;
 		}
 		clWaitForEvents(nevents, events);
@@ -773,8 +763,8 @@ protected:
 			if (isPureMap) {
 				//execute MAP kernel
 				status = clEnqueueNDRangeKernel(ff_ocl<T, TOCL>::cmd_queue,
-						ff_ocl<T, TOCL>::kernel_map, 1, NULL, globalThreads,
-						localThreads, 0, NULL, &events[0]);
+						ff_ocl<T, TOCL>::kernel_map, 1, NULL, globalThreads, localThreads,
+						0, NULL, &events[0]);
 				ff_ocl<T, TOCL>::Task.incIter();
 				status |= clWaitForEvents(1, &events[0]);
 			}
@@ -853,7 +843,8 @@ protected:
 					ff_ocl<T, TOCL>::Task.setReduceVar(reduceVar);
 					//end REDUCE
 #endif
-				} while (!ff_ocl<T, TOCL>::Task.stop());
+				} while (ff_ocl<T, TOCL>::Task.getIter() < maxIters
+						&& !ff_ocl<T, TOCL>::Task.stop());
 			}
 
 			//read back output (d2h)
@@ -914,8 +905,7 @@ public:
 			ff_stencilReduceOCL<T, TOCL>("", reducef, initReduceVar) {
 		ff_stencilReduceOCL<T, TOCL>::setPureReduce();
 	}
-	ff_reduceOCL(const T &task, std::string reducef, Tout initReduceVar =
-			(Tout) 0) :
+	ff_reduceOCL(const T &task, std::string reducef, Tout initReduceVar = (Tout) 0) :
 			ff_stencilReduceOCL<T, TOCL>(task, "", reducef, initReduceVar) {
 		ff_stencilReduceOCL<T, TOCL>::setPureReduce();
 	}
