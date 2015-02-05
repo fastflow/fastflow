@@ -30,6 +30,8 @@
 #ifndef FF_STENCILREDUCE_OCL_HPP
 #define FF_STENCILREDUCE_OCL_HPP
 
+#ifdef FF_OCL
+
 #include <string>
 #include <fstream>
 #include <ff/oclnode.hpp>
@@ -66,8 +68,12 @@ public:
 	virtual void setTask(const TaskT *t) = 0;
 
 	//user may override this methods
-	virtual bool stop() {
-		return false;
+	virtual bool iterCondition(Tout, unsigned int) {
+		return true;
+	}
+
+	bool iterCondition_aux() {
+		return iterCondition(reduceVar, iter);
 	}
 
 	size_t getBytesizeIn() const {
@@ -425,18 +431,14 @@ public:
 
 	ff_stencilReduceOCL(std::string mapf, std::string reducef, Tout initReduceVar =
 			(Tout) 0) :
-			ff_ocl<T, TOCL>(mapf, reducef), maxIters(
-					std::numeric_limits<unsigned int>::max()) {
+			ff_ocl<T, TOCL>(mapf, reducef) {
 		ff_ocl<T, TOCL>::Task.setInitReduceVal(initReduceVar);
-		isPureMap = isPureReduce = false;
 	}
 	ff_stencilReduceOCL(const T &task, std::string mapf, std::string reducef,
 			Tout initReduceVar = (Tout) 0) :
-			ff_ocl<T, TOCL>(task, mapf, reducef), maxIters(
-					std::numeric_limits<unsigned int>::max()) {
+			ff_ocl<T, TOCL>(task, mapf, reducef) {
 		ff_node::skipfirstpop(true);
 		ff_ocl<T, TOCL>::Task.setInitReduceVal(initReduceVar);
-		isPureMap = isPureReduce = false;
 	}
 	virtual ~ff_stencilReduceOCL() {
 	}
@@ -485,14 +487,11 @@ public:
 	void setPureReduce() {
 		isPureReduce = true;
 	}
-	void setMaxIters(unsigned int maxIters_) {
-		maxIters = maxIters_;
-	}
 
 protected:
 
-	bool isPureMap, isPureReduce;
-	unsigned int maxIters;
+	virtual bool isPureMap() {return false;}
+	virtual bool isPureReduce() {return false;}
 
 	inline void swapDeviceBuffers() {
 		cl_mem tmp = ff_ocl<T, TOCL>::inputBuffer;
@@ -587,7 +586,7 @@ protected:
 			}
 		}
 
-		if (!isPureMap) {
+		if (!isPureMap()) {
 #if 0 //REDUCE
 			//(eventually) allocate device memory for REDUCE - TODO check size
 			size_t elemSize = sizeof(Tout);
@@ -661,9 +660,9 @@ protected:
 		ff_ocl<T, TOCL>::checkResult(status, "setKernelArg input");
 		status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_map, 1, sizeof(cl_mem),
 				ff_ocl<T, TOCL>::getOutputBuffer());
-		ff_ocl<T, TOCL>::checkResult(status, "setKernelArg output");
+		ff_ocl<T, TOCL>::checkResult(status, "setKernvirtualelArg output");
 
-		if (!isPureMap) {
+		if (!isPureMap()) {
 #if 0 //REDUCE
 			//set iteration-invariant REDUCE kernel args
 			status = clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 1, sizeof(cl_mem),
@@ -702,7 +701,7 @@ protected:
 		clWaitForEvents(nevents, events);
 		nevents = 0;
 
-		if (isPureReduce) {
+		if (isPureReduce()) {
 #if 0 //REDUCE
 			//begin REDUCE
 			//init REDUCE memory - TODO parallel
@@ -760,7 +759,7 @@ protected:
 		else {
 			ff_ocl<T, TOCL>::Task.resetIter();
 
-			if (isPureMap) {
+			if (isPureMap()) {
 				//execute MAP kernel
 				status = clEnqueueNDRangeKernel(ff_ocl<T, TOCL>::cmd_queue,
 						ff_ocl<T, TOCL>::kernel_map, 1, NULL, globalThreads, localThreads,
@@ -843,8 +842,7 @@ protected:
 					ff_ocl<T, TOCL>::Task.setReduceVar(reduceVar);
 					//end REDUCE
 #endif
-				} while (ff_ocl<T, TOCL>::Task.getIter() < maxIters
-						&& !ff_ocl<T, TOCL>::Task.stop());
+				} while (ff_ocl<T, TOCL>::Task.iterCondition_aux());
 			}
 
 			//read back output (d2h)
@@ -879,13 +877,12 @@ class ff_mapOCL: public ff_stencilReduceOCL<T, TOCL> {
 public:
 	ff_mapOCL(std::string mapf) :
 			ff_stencilReduceOCL<T, TOCL>(mapf, "") {
-		ff_stencilReduceOCL<T, TOCL>::setPureMap();
 	}
 
 	ff_mapOCL(const T &task, std::string mapf) :
 			ff_stencilReduceOCL<T, TOCL>(task, mapf, "") {
-		ff_stencilReduceOCL<T, TOCL>::setPureMap();
 	}
+	bool isPureMap() {return true;}
 };
 
 /*
@@ -903,12 +900,11 @@ public:
 
 	ff_reduceOCL(std::string reducef, Tout initReduceVar = (Tout) 0) :
 			ff_stencilReduceOCL<T, TOCL>("", reducef, initReduceVar) {
-		ff_stencilReduceOCL<T, TOCL>::setPureReduce();
 	}
 	ff_reduceOCL(const T &task, std::string reducef, Tout initReduceVar = (Tout) 0) :
 			ff_stencilReduceOCL<T, TOCL>(task, "", reducef, initReduceVar) {
-		ff_stencilReduceOCL<T, TOCL>::setPureReduce();
 	}
+	bool isPureReduce() {return true;}
 };
 
 #if 0
@@ -1149,6 +1145,8 @@ protected:
 
 }
 // namespace ff
+
+#endif // FF_OCL
 
 #endif /* FF_MAP_OCL_HPP */
 
