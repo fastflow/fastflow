@@ -211,13 +211,27 @@ namespace ff {
 	template<typename T, typename TOCL = T>
 	class ff_oclAccelerator {
 	public:
+		typedef typename TOCL::Tin Tin;
+		typedef typename TOCL::Tout Tout;
+		typedef typename TOCL::Tenv1 Tenv1;
+		typedef typename TOCL::Tenv2 Tenv2;
 
 		ff_oclAccelerator() :
 		baseclass_ocl_node_deviceId(NULL) {
-			oldSizeIn = oldSizeOut = oldSizeReduce = oldSizeEnv1 = oldSizeEnv2 = 0;
+			workgroup_size_map = workgroup_size_reduce = 0;
+			inputBuffer = outputBuffer = envBuffer1 = envBuffer2 = NULL;
+			lenEnvBuffer1 = lenEnvBuffer2 = lenInput = lenOutput = 0;
+			sizeInput = sizeOutput = sizeEnvBuffer1 = sizeEnvBuffer2 = 0;
+			offsetInput = offsetOutput = offsetEnvBuffer1 = offsetEnvBuffer2 = 0;
+			nevents = 0;
+			localThreadsMap = globalThreadsMap = 0;
+			kernel_map = kernel_reduce = NULL;
+			context = NULL;
+			program = NULL;
+			cmd_queue = NULL;
 		}
 
-		void init(int dtype, int id, int size, const std::string &kernel_code, const std::string &kernel_name1, const std::string &kernel_name2) {
+		void init(int dtype, int id, const std::string &kernel_code, const std::string &kernel_name1, const std::string &kernel_name2) {
 			switch(dtype) {
 				case CL_DEVICE_TYPE_GPU:
 				baseclass_ocl_node_deviceId = threadMapper::instance()->getOCLgpus()[id]; break;
@@ -226,7 +240,7 @@ namespace ff {
 				case CL_DEVICE_TYPE_ACCELERATOR:
 				baseclass_ocl_node_deviceId = threadMapper::instance()->getOCLaccelerators()[id]; break;
 			}
-			svc_SetUpOclObjects(baseclass_ocl_node_deviceId, size, kernel_code, kernel_name1, kernel_name2);
+			svc_SetUpOclObjects(baseclass_ocl_node_deviceId, kernel_code, kernel_name1, kernel_name2);
 		}
 
 		void release() {
@@ -253,17 +267,280 @@ namespace ff {
 				printOCLErrorString(s, std::cerr);
 			}
 		}
-//	void swapInOut() {
-//		inputBuffer = outputBuffer;
-//	}
-//	void swapBuffers() {
-//		cl_mem tmp = inputBuffer;
-//		inputBuffer = outputBuffer;
-//		outputBuffer = tmp;
-//	}
+
+		void swapBuffers() {
+			cl_mem tmp = inputBuffer;
+			inputBuffer = outputBuffer;
+			outputBuffer = tmp;
+		}
+
+		size_t getOffsetEnvBuffer1() const
+		{
+			return offsetEnvBuffer1;
+		}
+
+		void setOffsetEnvBuffer1(size_t offsetEnvBuffer1)
+		{
+			this->offsetEnvBuffer1 = offsetEnvBuffer1;
+		}
+
+		size_t getOffsetEnvBuffer2() const
+		{
+			return offsetEnvBuffer2;
+		}
+
+		void setOffsetEnvBuffer2(size_t offsetEnvBuffer2)
+		{
+			this->offsetEnvBuffer2 = offsetEnvBuffer2;
+		}
+
+		size_t getOffsetInput() const
+		{
+			return offsetInput;
+		}
+
+		void setOffsetInput(size_t offsetInput)
+		{
+			this->offsetInput = offsetInput;
+		}
+
+		size_t getOffsetOutput() const
+		{
+			return offsetOutput;
+		}
+
+		void setOffsetOutput(size_t offsetOutput)
+		{
+			this->offsetOutput = offsetOutput;
+		}
+
+		size_t getSizeEnvBuffer1() const
+		{
+			return sizeEnvBuffer1;
+		}
+
+		void setSizeEnvBuffer1(size_t sizeEnvBuffer1)
+		{
+			this->sizeEnvBuffer1 = sizeEnvBuffer1;
+		}
+
+		size_t getSizeEnvBuffer2() const
+		{
+			return sizeEnvBuffer2;
+		}
+
+		void setSizeEnvBuffer2(size_t sizeEnvBuffer2)
+		{
+			this->sizeEnvBuffer2 = sizeEnvBuffer2;
+		}
+
+		size_t getSizeInput() const
+		{
+			return sizeInput;
+		}
+
+		void setSizeInput(size_t size)
+		{
+			this->sizeInput = size;
+		}
+
+		size_t getSizeOutput() const
+		{
+			return sizeOutput;
+		}
+
+		void setSizeOutput(size_t sizeOutput)
+		{
+			this->sizeOutput = sizeOutput;
+		}
+
+		size_t getWorkgroupSizeMap() const
+		{
+			return workgroup_size_map;
+		}
+
+		void setWorkgroupSizeMap(size_t workgroupSizeMap)
+		{
+			workgroup_size_map = workgroupSizeMap;
+		}
+
+		size_t getWorkgroupSizeReduce() const
+		{
+			return workgroup_size_reduce;
+		}
+
+		void setWorkgroupSizeReduce(size_t workgroupSizeReduce)
+		{
+			workgroup_size_reduce = workgroupSizeReduce;
+		}
+
+		void relocateInputBuffer(size_t len, size_t first) {
+			offsetInput = first;
+			lenInput = len;
+			sizeInput = len * sizeof(Tin);
+			cl_int status;
+			if (inputBuffer)
+			clReleaseMemObject(inputBuffer);
+			inputBuffer = clCreateBuffer(context,
+					CL_MEM_READ_WRITE, sizeInput, NULL,
+					&status);
+			checkResult(status, "CreateBuffer input");
+			if (len < workgroup_size_map) {
+				localThreadsMap = len;
+				globalThreadsMap = len;
+			} else {
+				localThreadsMap = workgroup_size_map;
+				globalThreadsMap = nextMultipleOfIf(len, workgroup_size_map);
+			}
+		}
+
+		void relocateOutputBuffer(size_t len, size_t first) {
+			offsetOutput = first;
+			lenOutput = len;
+			sizeOutput = len * sizeof(Tout);
+			cl_int status;
+			if (outputBuffer)
+			clReleaseMemObject(outputBuffer);
+			outputBuffer = clCreateBuffer(context,
+					CL_MEM_READ_WRITE, sizeOutput, NULL,
+					&status);
+			checkResult(status, "CreateBuffer output");
+		}
+
+		void relocateEnvBuffer1(size_t len, size_t first) {
+			offsetEnvBuffer1 = first;
+			lenEnvBuffer1 = len;
+			sizeEnvBuffer1 = len * sizeof(Tenv1);
+			cl_int status;
+			if (envBuffer1)
+			clReleaseMemObject(envBuffer1);
+			envBuffer1 = clCreateBuffer(context,
+					CL_MEM_READ_WRITE, sizeEnvBuffer1, NULL,
+					&status);
+			checkResult(status, "CreateBuffer envBuffer1");
+		}
+
+		void relocateEnvBuffer2(size_t len, size_t first) {
+			offsetEnvBuffer2 = first;
+			lenEnvBuffer2 = len;
+			sizeEnvBuffer2 = len * sizeof(Tenv2);
+			cl_int status;
+			if (envBuffer2)
+			clReleaseMemObject(envBuffer2);
+			envBuffer2 = clCreateBuffer(context,
+					CL_MEM_READ_WRITE, sizeEnvBuffer2, NULL,
+					&status);
+			checkResult(status, "CreateBuffer envBuffer2");
+		}
+
+		void setInPlace() {
+			outputBuffer = inputBuffer;
+			sizeOutput = sizeInput;
+		}
+
+		void swap() {
+			cl_mem tmp = inputBuffer;
+			inputBuffer = outputBuffer;
+			outputBuffer = tmp;
+			//set iteration-dynamic MAP kernel args
+			cl_int status = clSetKernelArg(kernel_map, 0,
+					sizeof(cl_mem), &inputBuffer);
+			checkResult(status, "setKernelArg input");
+			status = clSetKernelArg(kernel_map, 1,
+					sizeof(cl_mem), &outputBuffer);
+			checkResult(status, "setKernelArg output");
+		}
+
+		//TODO: optimise
+		void setKernelArgs() {
+			//set iteration-invariant MAP kernel args
+			cl_uint idx = 2;
+			cl_int status = clSetKernelArg(kernel_map, idx++, sizeof(cl_uint),
+					(void *) &lenInput);
+			checkResult(status, "setKernelArg inSize");
+			if (envBuffer1) {
+				status = clSetKernelArg(kernel_map, idx++, sizeof(cl_mem),
+						&envBuffer1);
+				checkResult(status, "setKernelArg env1");
+				if (envBuffer2) {
+					status = clSetKernelArg(kernel_map, idx++, sizeof(cl_mem),
+							&envBuffer2);
+					checkResult(status, "setKernelArg env2");
+				}
+			}
+			status = clSetKernelArg(kernel_map, idx++, sizeof(cl_uint),
+					(void *) &lenInput);
+			checkResult(status, "setKernelArg size");
+
+			//set iteration-dynamic MAP kernel args (init)
+			status = clSetKernelArg(kernel_map, 0, sizeof(cl_mem),
+					&inputBuffer);
+			checkResult(status, "setKernelArg input");
+			status = clSetKernelArg(kernel_map, 1, sizeof(cl_mem),
+					&outputBuffer);
+			checkResult(status, "setKernelArg output");
+		}
+
+		void asyncH2Dinput(Tin *p) {
+			cl_int status = clEnqueueWriteBuffer(cmd_queue,
+					inputBuffer, CL_FALSE, offsetInput * sizeof(Tin),
+					sizeInput, p,
+					0, NULL, &events[0]);
+			checkResult(status, "copying Task to device input-buffer");
+			++nevents;
+		}
+
+		void asyncH2Denv1(Tenv1 *p) {
+			cl_int status = clEnqueueWriteBuffer(cmd_queue,
+					envBuffer1, CL_FALSE, offsetEnvBuffer1 * sizeof(Tenv1),
+					sizeEnvBuffer1, p,
+					0, NULL, &events[1]);
+			checkResult(status, "copying Task to device env1-buffer");
+			++nevents;
+		}
+
+		void asyncH2Denv2(Tenv2 *p) {
+			cl_int status = clEnqueueWriteBuffer(cmd_queue,
+					envBuffer2, CL_FALSE, offsetEnvBuffer2 * sizeof(Tenv2),
+					sizeEnvBuffer2, p,
+					0, NULL, &events[2]);
+			checkResult(status, "copying Task to device env2-buffer");
+			++nevents;
+		}
+
+		void asyncD2Houtput(Tout *p) {
+			cl_int status = clEnqueueReadBuffer(cmd_queue,
+					outputBuffer, CL_FALSE, offsetOutput * sizeof(Tout),
+					sizeOutput,
+					p, 0, NULL, NULL);
+			++nevents;
+		}
+
+		void asyncExecMapKernel() {
+			//execute MAP kernel
+			cl_int status = clEnqueueNDRangeKernel(cmd_queue,
+					kernel_map, 1, NULL, &globalThreadsMap, &localThreadsMap,
+					0, NULL, &events[0]);
+			checkResult(status, "executing map kernel");
+			++nevents;
+		}
+
+		void join() {
+			clWaitForEvents(nevents, events);
+			nevents = 0;
+		}
 
 	public:
+		cl_context context;
+		cl_program program;
+		cl_command_queue cmd_queue;
+#if 0 //REDUCE
+		typename T::Tout *reduceMemInit;
+		cl_mem reduceBuffer;
+#endif
+		cl_kernel kernel_map, kernel_reduce;
 
+	private:
 		void buildKernelCode(const std::string &kc, cl_device_id dId) {
 			cl_int status;
 
@@ -293,26 +570,7 @@ namespace ff {
 			//#endif
 		}
 
-	public:
-
-		size_t workgroup_size_map, workgroup_size_reduce;
-		size_t oldSizeIn, oldSizeOut;
-		size_t oldSizeReduce;
-		size_t oldSizeEnv1, oldSizeEnv2;
-		cl_context context;
-		cl_program program;
-		cl_command_queue cmd_queue;
-		cl_mem inputBuffer;
-		cl_mem outputBuffer;
-		cl_mem reduceBuffer;
-		cl_mem envBuffer1, envBuffer2;
-#if 0 //REDUCE
-		typename T::Tout *reduceMemInit;
-#endif
-		cl_kernel kernel_map, kernel_reduce;
-
-	private:
-		void svc_SetUpOclObjects(cl_device_id dId, size_t size, const std::string &kernel_code, const std::string &kernel_name1, const std::string &kernel_name2) {
+		void svc_SetUpOclObjects(cl_device_id dId, const std::string &kernel_code, const std::string &kernel_name1, const std::string &kernel_name2) {
 			cl_int status;
 			context = clCreateContext(NULL, 1, &dId, NULL, NULL, &status);
 			checkResult(status, "creating context");
@@ -336,13 +594,12 @@ namespace ff {
 					CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_reduce, 0);
 			checkResult(status, "GetKernelWorkGroupInfo (reduce)");
 
-			// allocate memory on device having the initial size
-			if (size) {
-				inputBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE, size,
-						NULL, &status);
-				checkResult(status, "CreateBuffer input (1)");
-				oldSizeIn = size;
-			}
+//			// allocate memory on device having the initial size
+//			if (size) {
+//				inputBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE, size,
+//						NULL, &status);
+//				checkResult(status, "CreateBuffer input (1)");
+//			}
 		}
 
 		void svc_releaseOclObjects() {
@@ -350,15 +607,16 @@ namespace ff {
 			clReleaseKernel(kernel_reduce);
 			clReleaseProgram(program);
 			clReleaseCommandQueue(cmd_queue);
+			if(inputBuffer)
 			clReleaseMemObject(inputBuffer);
-			if (oldSizeEnv1 > 0)
+			if (envBuffer1)
 			clReleaseMemObject(envBuffer1);
-			if (oldSizeEnv2 > 0)
+			if (envBuffer2)
 			clReleaseMemObject(envBuffer2);
-			if (oldSizeOut > 0)
+			if (outputBuffer)
 			clReleaseMemObject(outputBuffer);
 #if 0 //REDUCE
-			if (oldSizeReduce > 0) {
+			if (reduceBuffer) {
 				clReleaseMemObject(reduceBuffer);
 				free(reduceMemInit);
 			}
@@ -366,7 +624,14 @@ namespace ff {
 			clReleaseContext(context);
 		}
 
-		cl_int status;
+		cl_mem inputBuffer, outputBuffer, envBuffer1, envBuffer2;
+		size_t sizeInput, sizeOutput, sizeEnvBuffer1, sizeEnvBuffer2;
+		size_t lenInput, lenOutput, lenEnvBuffer1, lenEnvBuffer2;
+		size_t offsetInput, offsetOutput, offsetEnvBuffer1, offsetEnvBuffer2;
+		size_t workgroup_size_map, workgroup_size_reduce;
+		unsigned int nevents;
+		cl_event events[3];
+		size_t localThreadsMap, globalThreadsMap;
 		cl_device_id baseclass_ocl_node_deviceId;// is the id which is provided for user
 	};
 
@@ -379,30 +644,36 @@ namespace ff {
 	 *
 	 */
 	template<typename T, typename TOCL = T>
-	class ff_stencilReduceOCL: public ff_node_t<T> {
+	class ff_stencilReduceOCL_1D: public ff_node_t<T> {
 	public:
 		typedef typename TOCL::Tout Tout;
 		typedef ff_oclAccelerator<T,TOCL> accelerator_t;
 
-		ff_stencilReduceOCL(const std::string &mapf, const std::string &reducef = std::string(""), Tout initReduceVar =
-				(Tout) 0, int naccelerators_ = 1) : oneshot(false), naccelerators(naccelerators_) {
-			accelerators = (accelerator_t **)malloc(naccelerators * sizeof(accelerator_t *));
-			for(int i=0; i<naccelerators; ++i) accelerators[i] = new accelerator_t();
+		ff_stencilReduceOCL_1D(const std::string &mapf, const std::string &reducef = std::string(""), Tout initReduceVar =
+				(Tout) 0, const size_t NACCELERATORS_ = 1) : oneshot(false),
+		oldSizeIn(0), oldSizeOut(0), oldSizeReduce(0), oldSizeEnv1(0), oldSizeEnv2(0), NACCELERATORS(NACCELERATORS_) {
 			setcode(mapf, reducef);
 			Task.setInitReduceVal(initReduceVar);
+			accelerators = new accelerator_t[NACCELERATORS];
+			acc_len = new size_t[NACCELERATORS];
+			acc_off = new size_t[NACCELERATORS];
 		}
-		ff_stencilReduceOCL(const T &task, const std::string &mapf, const std::string &reducef = std::string(""),
-				Tout initReduceVar = (Tout) 0) : oneshot(true) {
+		ff_stencilReduceOCL_1D(const T &task, const std::string &mapf, const std::string &reducef = std::string(""), Tout initReduceVar = (Tout) 0,
+				const size_t NACCELERATORS_ = 1) : oneshot(true),
+		oldSizeIn(0), oldSizeOut(0), oldSizeReduce(0), oldSizeEnv1(0), oldSizeEnv2(0), NACCELERATORS(NACCELERATORS_) {
 			ff_node::skipfirstpop(true);
-			accelerators = (accelerator_t **)malloc(naccelerators * sizeof(accelerator_t *));
-			for(int i=0; i<naccelerators; ++i) accelerators[i] = new accelerator_t();
 			setcode(mapf, reducef);
 			Task.setTask(task);
 			Task.setInitReduceVal(initReduceVar);
+			accelerators = new accelerator_t[NACCELERATORS];
+			acc_len = new size_t[NACCELERATORS];
+			acc_off = new size_t[NACCELERATORS];
 		}
-		virtual ~ff_stencilReduceOCL() {
-			for(int i=0; i<naccelerators; ++i) delete accelerators[i];
-			free(accelerators);
+
+		virtual ~ff_stencilReduceOCL_1D() {
+			delete[] accelerators;
+			delete[] acc_len;
+			delete[] acc_off;
 		}
 
 		virtual int run(bool = false) {
@@ -441,15 +712,6 @@ namespace ff {
 		virtual bool isPureMap() {return false;}
 		virtual bool isPureReduce() {return false;}
 
-		inline void swapDeviceBuffers() {
-			for(int i=0; i<naccelerators; ++i) {
-				accelerator_t *acc = accelerators[i];
-				cl_mem tmp = acc->inputBuffer;
-				acc->inputBuffer = acc->outputBuffer;
-				acc->outputBuffer = tmp;
-			}
-		}
-
 //		inline void checkResult(cl_int s, const char* msg) {
 //			if (s != CL_SUCCESS) {
 //				std::cerr << msg << ":";
@@ -475,82 +737,71 @@ namespace ff {
 
 		virtual int svc_init() {
 			size_t ngpus = threadMapper::instance()->getOCLgpus().size();
-			for(int i=0; i<naccelerators; ++i) {
-				accelerator_t *acc = accelerators[i];
-				acc->init(CL_DEVICE_TYPE_GPU, i % ngpus, Task.getBytesizeIn(), kernel_code, kernel_name1, kernel_name2);
+			for(int i=0; i<NACCELERATORS; ++i) {
+				accelerator_t &acc = accelerators[i];
+				//pre-allocate per-accelerator memory
+				acc.init(CL_DEVICE_TYPE_GPU, i % ngpus, kernel_code, kernel_name1, kernel_name2);
 			}
+			oldSizeIn = Task.getBytesizeIn();
 			return 0;
 		}
 
 		virtual void svc_end() {
 			if(!ff::ff_node::isfrozen())
-			for(int i=0; i<naccelerators; ++i)
-			accelerators[i]->release();
+			for(int i=0; i<NACCELERATORS; ++i)
+			accelerators[i].release();
 		}
 
 		T *svc(T *task) {
 			cl_int status = CL_SUCCESS;
-			unsigned int nevents = 0;
-			cl_event events[3];
-			size_t globalThreads[2];
-			size_t localThreads[2];
 
 			if (task)
 			Task.setTask(task);
-			size_t size = Task.getSizeOut();
-			const size_t inSize = Task.getSizeIn();
+			const size_t size = Task.getSizeIn();
 			void* inPtr = Task.getInPtr();
 			void* outPtr = Task.getOutPtr();
 			void *envPtr1 = Task.getEnvPtr1();
 			void *envPtr2 = Task.getEnvPtr2();
 
-			accelerator_t *acc = accelerators[0];
-
-			//(eventually) allocate device memory
-			if (acc->oldSizeIn < Task.getBytesizeIn()) {
-				if (acc->oldSizeIn != 0)
-				clReleaseMemObject(acc->inputBuffer);
-				acc->inputBuffer = clCreateBuffer(acc->context,
-						CL_MEM_READ_WRITE, Task.getBytesizeIn(), NULL,
-						&status);
-				acc->checkResult(status, "CreateBuffer input (2)");
-				acc->oldSizeIn = Task.getBytesizeIn();
+			//(eventually) relocate device memory
+			//input
+			if (oldSizeIn < Task.getBytesizeIn()) {
+				compute_accmem(Task.getSizeIn());
+				for(unsigned int i=0; i<NACCELERATORS; ++i)
+				accelerators[i].relocateInputBuffer(acc_len[i], acc_off[i]);
+				oldSizeIn = Task.getBytesizeIn();
 			}
 
+			//output
 			if (inPtr == outPtr) {
-				acc->outputBuffer = acc->inputBuffer;
+				for(unsigned int i=0; i<NACCELERATORS; ++i)
+				accelerators[i].setInPlace();
 			} else {
-				if (acc->oldSizeOut < Task.getBytesizeOut()) {
-					if (acc->oldSizeOut != 0)
-					clReleaseMemObject(acc->outputBuffer);
+				if (oldSizeOut < Task.getBytesizeOut()) {
+					compute_accmem(Task.getSizeOut());
+					for(unsigned int i=0; i<NACCELERATORS; ++i)
+					accelerators[i].relocateOutputBuffer(acc_len[i], acc_off[i]);
+					oldSizeOut = Task.getBytesizeOut();
+				}
+			}
 
-					acc->outputBuffer = clCreateBuffer(acc->context,
-							CL_MEM_READ_WRITE, Task.getBytesizeOut(), NULL,
-							&status);
-					acc->checkResult(status, "CreateBuffer output");
-					acc->oldSizeOut = Task.getBytesizeOut();
-				}
-			}
+			//env1
 			if (envPtr1) {
-				if (acc->oldSizeEnv1 < Task.getBytesizeEnv1()) {
-					if (acc->oldSizeEnv1 != 0)
-					clReleaseMemObject(acc->envBuffer1);
-					acc->envBuffer1 = clCreateBuffer(acc->context,
-							CL_MEM_READ_ONLY, Task.getBytesizeEnv1(), NULL,
-							&status);
-					acc->checkResult(status, "CreateBuffer env");
-					acc->oldSizeEnv1 = Task.getBytesizeEnv1();
+				if (oldSizeEnv1 < Task.getBytesizeEnv1()) {
+					compute_accmem(Task.getSizeEnv1());
+					for(unsigned int i=0; i<NACCELERATORS; ++i)
+					accelerators[i].relocateEnvBuffer1(acc_len[i], acc_off[i]);
+					oldSizeEnv1 = Task.getBytesizeEnv1();
 				}
 			}
+
+			//env2
 			if (envPtr2) {
-				if (acc->oldSizeEnv2 < Task.getBytesizeEnv2()) {
-					if (acc->oldSizeEnv2 != 0)
-					clReleaseMemObject(acc->envBuffer2);
-					acc->envBuffer2 = clCreateBuffer(acc->context,
-							CL_MEM_READ_ONLY, Task.getBytesizeEnv2(), NULL,
-							&status);
-					acc->checkResult(status, "CreateBuffer env2");
-					acc->oldSizeEnv2 = Task.getBytesizeEnv2();
+				if (oldSizeEnv2 < Task.getBytesizeEnv2()) {
+					compute_accmem(Task.getSizeEnv2());
+					for(unsigned int i=0; i<NACCELERATORS; ++i)
+					accelerators[i].relocateEnvBuffer2(acc_len[i], acc_off[i]);
+					oldSizeEnv2 = Task.getBytesizeEnv2();
 				}
 			}
 
@@ -566,159 +817,105 @@ namespace ff {
 //						(2 * numThreads_reduce * elemSize) :
 //						(numThreads_reduce * elemSize);
 				numBlocks_reduce * elemSize;
-				if (acc->oldSizeReduce < reduceMemSize) {
-					if (acc->oldSizeReduce != 0) {
-						clReleaseMemObject(acc->reduceBuffer);
-						free(acc->reduceMemInit);
+				if (oldSizeReduce < reduceMemSize) {
+					if (oldSizeReduce != 0) {
+						clReleaseMemObject(acc.reduceBuffer);
+						free(acc.reduceMemInit);
 					}
-					acc->reduceBuffer = clCreateBuffer(acc->context,
+					acc.reduceBuffer = clCreateBuffer(acc.context,
 							CL_MEM_READ_WRITE, numBlocks_reduce * elemSize, NULL, &status);
-					acc->checkResult(status, "CreateBuffer reduce");
-					acc->reduceMemInit = (Tout *) malloc(numBlocks_reduce * elemSize);
+					acc.checkResult(status, "CreateBuffer reduce");
+					acc.reduceMemInit = (Tout *) malloc(numBlocks_reduce * elemSize);
 					for (size_t i = 0; i < numBlocks_reduce; ++i)
-					acc->reduceMemInit[i] =
+					acc.reduceMemInit[i] =
 					Task.getInitReduceVal();
-					acc->oldSizeReduce = reduceMemSize;
+					oldSizeReduce = reduceMemSize;
 				}
 #endif
 			}
 
-			//configure MAP parallelism
-			if (size < acc->workgroup_size_map) {
-				localThreads[0] = size;
-				globalThreads[0] = size;
-			} else {
-				localThreads[0] = acc->workgroup_size_map;
-				globalThreads[0] = nextMultipleOfIf(size,
-						acc->workgroup_size_map);
-			}
-
-			//set iteration-invariant MAP kernel args
-			status = clSetKernelArg(acc->kernel_map, 2, sizeof(cl_uint),
-					(void *) &inSize);
-			acc->checkResult(status, "setKernelArg inSize");
-			if (envPtr1) {
-				if (envPtr2) {
-					status = clSetKernelArg(acc->kernel_map, 3, sizeof(cl_mem),
-							acc->getEnv1Buffer());
-					acc->checkResult(status, "setKernelArg env1");
-					status = clSetKernelArg(acc->kernel_map, 4, sizeof(cl_mem),
-							acc->getEnv2Buffer());
-					acc->checkResult(status, "setKernelArg env2");
-					status = clSetKernelArg(acc->kernel_map, 5, sizeof(cl_uint),
-							(void *) &size);
-					acc->checkResult(status, "setKernelArg size");
-				} else {
-					status = clSetKernelArg(acc->kernel_map, 3, sizeof(cl_mem),
-							acc->getEnv1Buffer());
-					acc->checkResult(status, "setKernelArg env1");
-					status = clSetKernelArg(acc->kernel_map, 4, sizeof(cl_uint),
-							(void *) &size);
-					acc->checkResult(status, "setKernelArg size");
-				}
-			} else {
-				status = clSetKernelArg(acc->kernel_map, 3, sizeof(cl_uint),
-						(void *) &size);
-				acc->checkResult(status, "setKernelArg size");
-			}
-
-			//set iteration-dynamic MAP kernel args (init)
-			status = clSetKernelArg(acc->kernel_map, 0, sizeof(cl_mem),
-					acc->getInputBuffer());
-			acc->checkResult(status, "setKernelArg input");
-			status = clSetKernelArg(acc->kernel_map, 1, sizeof(cl_mem),
-					acc->getOutputBuffer());
-			acc->checkResult(status, "setKernvirtualelArg output");
+			for(unsigned int i=0; i<NACCELERATORS; ++i)
+			accelerators[i].setKernelArgs();
 
 			if (!isPureMap()) {
 #if 0 //REDUCE
 				//set iteration-invariant REDUCE kernel args
-				status = clSetKernelArg(acc->kernel_reduce, 1, sizeof(cl_mem),
-						&(acc->reduceBuffer));
-				status = clSetKernelArg(acc->kernel_reduce, 2, sizeof(cl_uint),
+				status = clSetKernelArg(acc.kernel_reduce, 1, sizeof(cl_mem),
+						&(acc.reduceBuffer));
+				status = clSetKernelArg(acc.kernel_reduce, 2, sizeof(cl_uint),
 						(void *) &size);
-				status = clSetKernelArg(acc->kernel_reduce, 3, reduceMemSize,
+				status = clSetKernelArg(acc.kernel_reduce, 3, reduceMemSize,
 						NULL);
 				checkResult(status, "setKernelArg reduceMemSize");
 #endif
 			}
 
 			//copy input and environments (h2d)
-			status = clEnqueueWriteBuffer(acc->cmd_queue,
-					acc->inputBuffer, CL_FALSE, 0,
-					Task.getBytesizeIn(), Task.getInPtr(),
-					0, NULL, &events[0]);
-			++nevents;
-			acc->checkResult(status, "copying Task to device input-buffer");
+			//in
+			for(unsigned int i=0; i<NACCELERATORS; ++i)
+			accelerators[i].asyncH2Dinput(Task.getInPtr());
+			//env1
 			if (envPtr1 && Task.getCopyEnv1()) {
-				status = clEnqueueWriteBuffer(acc->cmd_queue,
-						acc->envBuffer1, CL_FALSE, 0,
-						Task.getBytesizeEnv1(),
-						Task.getEnvPtr1(), 0, NULL, &events[1]);
-				acc->checkResult(status, "copying Task to device env 1 buffer");
-				++nevents;
+				for(unsigned int i=0; i<NACCELERATORS; ++i)
+				accelerators[i].asyncH2Denv1(Task.getEnvPtr1());
+				//env2
+				if (envPtr2 && Task.getCopyEnv2())
+				for(unsigned int i=0; i<NACCELERATORS; ++i)
+				accelerators[i].asyncH2Denv2(Task.getEnvPtr2());
 			}
-			if (envPtr2 && Task.getCopyEnv2()) {
-				status = clEnqueueWriteBuffer(acc->cmd_queue,
-						acc->envBuffer2, CL_FALSE, 0,
-						Task.getBytesizeEnv2(),
-						Task.getEnvPtr2(), 0, NULL, &events[2]);
-				acc->checkResult(status, "copying Task to device env2 buffer");
-				++nevents;
-			}
-			clWaitForEvents(nevents, events);
-			nevents = 0;
+			for(unsigned int i=0; i<NACCELERATORS; ++i)
+			accelerators[i].join();
 
 			if (isPureReduce()) {
 #if 0 //REDUCE
 				//begin REDUCE
 				//init REDUCE memory - TODO parallel
-				status = clEnqueueWriteBuffer(acc->cmd_queue,
-						acc->reduceBuffer, CL_FALSE, 0, reduceMemSize,
-						acc->reduceMemInit, 0, NULL, NULL);
-				acc->checkResult(status, "init Reduce buffer");
+				status = clEnqueueWriteBuffer(acc.cmd_queue,
+						acc.reduceBuffer, CL_FALSE, 0, reduceMemSize,
+						acc.reduceMemInit, 0, NULL, NULL);
+				acc.checkResult(status, "init Reduce buffer");
 
 				localThreads[0] = numThreads_reduce;
 				globalThreads[0] = numBlocks_reduce * numThreads_reduce;
 
 				//set iteration-dynamic REDUCE kernel args
-				status |= clSetKernelArg(acc->kernel_reduce, 0, sizeof(cl_mem),
-						acc->getOutputBuffer());
+				status |= clSetKernelArg(acc.kernel_reduce, 0, sizeof(cl_mem),
+						acc.getOutputBuffer());
 
 				//execute first REDUCE kernel (output to blocks)
-				status = clEnqueueNDRangeKernel(acc->cmd_queue,
-						acc->kernel_reduce, 1, NULL, globalThreads, localThreads,
+				status = clEnqueueNDRangeKernel(acc.cmd_queue,
+						acc.kernel_reduce, 1, NULL, globalThreads, localThreads,
 						0, NULL, &events[0]);
 				status = clWaitForEvents(1, &events[0]);
 
 				// Sets the kernel arguments for second REDUCE
 				size = numBlocks_reduce;
-				status |= clSetKernelArg(acc->kernel_reduce, 0, sizeof(cl_mem),
-						&(acc->reduceBuffer));
+				status |= clSetKernelArg(acc.kernel_reduce, 0, sizeof(cl_mem),
+						&(acc.reduceBuffer));
 //			status |= clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 1, sizeof(cl_mem),
 //					&(ff_ocl<T, TOCL>::reduceBuffer));
 //			status |= clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 2, sizeof(cl_uint),
 //					(void*) &size);
 //			status |= clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 3, reduceMemSize,
 //			NULL);
-				acc->checkResult(status, "setKernelArg ");
+				acc.checkResult(status, "setKernelArg ");
 
 				localThreads[0] = numThreads_reduce;
 				globalThreads[0] = numThreads_reduce;
 
 				//execute second REDUCE kernel (blocks to value)
-				status = clEnqueueNDRangeKernel(acc->cmd_queue,
-						acc->kernel_reduce, 1, NULL, globalThreads, localThreads,
+				status = clEnqueueNDRangeKernel(acc.cmd_queue,
+						acc.kernel_reduce, 1, NULL, globalThreads, localThreads,
 						0, NULL, &events[0]);
 
 				//read back REDUCE var (d2h)
 				Tout reduceVar;
 				status |= clWaitForEvents(1, &events[0]);
-				status |= clEnqueueReadBuffer(acc->cmd_queue,
-						acc->reduceBuffer, CL_TRUE, 0, elemSize, &reduceVar, 0,
+				status |= clEnqueueReadBuffer(acc.cmd_queue,
+						acc.reduceBuffer, CL_TRUE, 0, elemSize, &reduceVar, 0,
 						NULL, &events[1]);
 				status |= clWaitForEvents(1, &events[1]);
-				acc->checkResult(status, "ERROR during OpenCL computation");
+				acc.checkResult(status, "ERROR during OpenCL computation");
 				Task.setReduceVar(reduceVar);
 				//end REDUCE
 #endif
@@ -728,85 +925,75 @@ namespace ff {
 				Task.resetIter();
 
 				if (isPureMap()) {
-					//execute MAP kernel
-					status = clEnqueueNDRangeKernel(acc->cmd_queue,
-							acc->kernel_map, 1, NULL, globalThreads, localThreads,
-							0, NULL, &events[0]);
+					for(unsigned int i=0; i<NACCELERATORS; ++i)
+					accelerators[i].asyncExecMapKernel();
 					Task.incIter();
-					status |= clWaitForEvents(1, &events[0]);
+					for(unsigned int i=0; i<NACCELERATORS; ++i)
+					accelerators[i].join();
 				}
 
 				else { //iterative Map-Reduce (aka stencilReduce)
 					do {
 
 						//execute MAP kernel
-						status = clEnqueueNDRangeKernel(acc->cmd_queue,
-								acc->kernel_map, 1, NULL, globalThreads,
-								localThreads, 0, NULL, &events[0]);
-
+						for(unsigned int i=0; i<NACCELERATORS; ++i)
+						accelerators[i].asyncExecMapKernel();
 						Task.incIter();
-						swapDeviceBuffers();
-
-						//set iteration-dynamic MAP kernel args
-						status = clSetKernelArg(acc->kernel_map, 0,
-								sizeof(cl_mem), acc->getInputBuffer());
-						acc->checkResult(status, "setKernelArg input");
-						status = clSetKernelArg(acc->kernel_map, 1,
-								sizeof(cl_mem), acc->getOutputBuffer());
-						acc->checkResult(status, "setKernelArg output");
-
-						status |= clWaitForEvents(1, &events[0]);
+						for(unsigned int i=0; i<NACCELERATORS; ++i)
+						accelerators[i].swap();
+						for(unsigned int i=0; i<NACCELERATORS; ++i)
+						accelerators[i].join();
 						//end MAP
 
 #if 0 //REDUCE
 						//begin REDUCE
 						//init REDUCE memory - TODO parallel
-						status = clEnqueueWriteBuffer(acc->cmd_queue,
-								acc->reduceBuffer, CL_FALSE, 0, reduceMemSize,
-								acc->reduceMemInit, 0, NULL, NULL);
-						acc->checkResult(status, "init Reduce buffer");
+						status = clEnqueueWriteBuffer(acc.cmd_queue,
+								acc.reduceBuffer, CL_FALSE, 0, reduceMemSize,
+								acc.reduceMemInit, 0, NULL, NULL);
+						acc.checkResult(status, "init Reduce buffer");
 
 						localThreads[0] = numThreads_reduce;
 						globalThreads[0] = numBlocks_reduce * numThreads_reduce;
 
 						//set iteration-dynamic REDUCE kernel args
-						status |= clSetKernelArg(acc->kernel_reduce, 0, sizeof(cl_mem),
-								acc->getOutputBuffer());
+						status |= clSetKernelArg(acc.kernel_reduce, 0, sizeof(cl_mem),
+								acc.getOutputBuffer());
 
 						//execute first REDUCE kernel (output to blocks)
-						status = clEnqueueNDRangeKernel(acc->cmd_queue,
-								acc->kernel_reduce, 1, NULL, globalThreads, localThreads,
+						status = clEnqueueNDRangeKernel(acc.cmd_queue,
+								acc.kernel_reduce, 1, NULL, globalThreads, localThreads,
 								0, NULL, &events[0]);
 						status = clWaitForEvents(1, &events[0]);
 
 						// Sets the kernel arguments for second REDUCE
 						size = numBlocks_reduce;
-						status |= clSetKernelArg(acc->kernel_reduce, 0, sizeof(cl_mem),
-								&(acc->reduceBuffer));
+						status |= clSetKernelArg(acc.kernel_reduce, 0, sizeof(cl_mem),
+								&(acc.reduceBuffer));
 //			status |= clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 1, sizeof(cl_mem),
 //					&(ff_ocl<T, TOCL>::reduceBuffer));
 //			status |= clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 2, sizeof(cl_uint),
 //					(void*) &size);
 //			status |= clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 3, reduceMemSize,
 //			NULL);
-						acc->checkResult(status, "setKernelArg ");
+						acc.checkResult(status, "setKernelArg ");
 
 						localThreads[0] = numThreads_reduce;
 						globalThreads[0] = numThreads_reduce;
 
 						//execute second REDUCE kernel (blocks to value)
-						status = clEnqueueNDRangeKernel(acc->cmd_queue,
-								acc->kernel_reduce, 1, NULL, globalThreads, localThreads,
+						status = clEnqueueNDRangeKernel(acc.cmd_queue,
+								acc.kernel_reduce, 1, NULL, globalThreads, localThreads,
 								0, NULL, &events[0]);
 
 						//read back REDUCE var (d2h)
 						Tout reduceVar;
 						status |= clWaitForEvents(1, &events[0]);
-						status |= clEnqueueReadBuffer(acc->cmd_queue,
-								acc->reduceBuffer, CL_TRUE, 0, elemSize, &reduceVar, 0,
+						status |= clEnqueueReadBuffer(acc.cmd_queue,
+								acc.reduceBuffer, CL_TRUE, 0, elemSize, &reduceVar, 0,
 								NULL, &events[1]);
 						status |= clWaitForEvents(1, &events[1]);
-						acc->checkResult(status, "ERROR during OpenCL computation");
+						acc.checkResult(status, "ERROR during OpenCL computation");
 						Task.setReduceVar(reduceVar);
 						//end REDUCE
 #endif
@@ -814,10 +1001,10 @@ namespace ff {
 				}
 
 				//read back output (d2h)
-				status |= clEnqueueReadBuffer(acc->cmd_queue,
-						acc->outputBuffer, CL_TRUE, 0,
-						Task.getBytesizeOut(),
-						Task.getOutPtr(), 0, NULL, NULL);
+				for(unsigned int i=0; i<NACCELERATORS; ++i)
+				accelerators[i].asyncD2Houtput(Task.getOutPtr());
+				for(unsigned int i=0; i<NACCELERATORS; ++i)
+				accelerators[i].join();
 			}
 
 			//TODO check
@@ -871,11 +1058,29 @@ namespace ff {
 			kernel_code = "struct env_t {int x,y;};\n" + kernel_code;
 		}
 
-		int naccelerators;
-		accelerator_t **accelerators;
+		void compute_accmem(size_t len) {
+			size_t start = 0, step = (len + NACCELERATORS - 1) / NACCELERATORS;
+			unsigned int i=0;
+			for(; i<NACCELERATORS-1; ++i) {
+				acc_off[i] = start;
+				acc_len[i] = step;
+				start += step;
+			}
+			acc_off[i] = start;
+			acc_len[i] = len - start;
+		}
+
+		size_t NACCELERATORS;
+		accelerator_t *accelerators;
+		size_t *acc_len, *acc_off;
+
 		std::string kernel_code;
 		std::string kernel_name1;
 		std::string kernel_name2;
+
+		size_t oldSizeIn, oldSizeOut;
+		size_t oldSizeReduce;
+		size_t oldSizeEnv1, oldSizeEnv2;
 	}
 	;
 
@@ -891,14 +1096,14 @@ namespace ff {
 	 *
 	 */
 	template<typename T, typename TOCL = T>
-	class ff_mapOCL: public ff_stencilReduceOCL<T, TOCL> {
+	class ff_mapOCL: public ff_stencilReduceOCL_1D<T, TOCL> {
 	public:
-		ff_mapOCL(std::string mapf) :
-		ff_stencilReduceOCL<T, TOCL>(mapf, "") {
+		ff_mapOCL(std::string mapf, const size_t NACCELERATORS = 1) :
+		ff_stencilReduceOCL_1D<T, TOCL>(mapf, "", 0, NACCELERATORS) {
 		}
 
-		ff_mapOCL(const T &task, std::string mapf) :
-		ff_stencilReduceOCL<T, TOCL>(task, mapf, "") {
+		ff_mapOCL(const T &task, std::string mapf, const size_t NACCELERATORS = 1) :
+		ff_stencilReduceOCL_1D<T, TOCL>(task, mapf, "", 0, NACCELERATORS) {
 		}
 		bool isPureMap() {return true;}
 	};
@@ -912,254 +1117,18 @@ namespace ff {
 	 *
 	 */
 	template<typename T, typename TOCL = T>
-	class ff_reduceOCL: public ff_stencilReduceOCL<T, TOCL> {
+	class ff_reduceOCL_1D: public ff_stencilReduceOCL_1D<T, TOCL> {
 	public:
 		typedef typename TOCL::Tout Tout;
 
-		ff_reduceOCL(std::string reducef, Tout initReduceVar = (Tout) 0) :
-		ff_stencilReduceOCL<T, TOCL>("", reducef, initReduceVar) {
+		ff_reduceOCL_1D(std::string reducef, Tout initReduceVar = (Tout) 0, const size_t NACCELERATORS = 1) :
+		ff_stencilReduceOCL_1D<T, TOCL>("", reducef, initReduceVar, NACCELERATORS) {
 		}
-		ff_reduceOCL(const T &task, std::string reducef, Tout initReduceVar = (Tout) 0) :
-		ff_stencilReduceOCL<T, TOCL>(task, "", reducef, initReduceVar) {
+		ff_reduceOCL_1D(const T &task, std::string reducef, Tout initReduceVar = (Tout) 0, const size_t NACCELERATORS = 1) :
+		ff_stencilReduceOCL_1D<T, TOCL>(task, "", reducef, initReduceVar, NACCELERATORS) {
 		}
 		bool isPureReduce() {return true;}
 	};
-
-#if 0
-	/*
-	 * \class ff_mapreduceOCL
-	 *  \ingroup high_level_patterns_shared_memory
-	 *
-	 * \brief The map reduce skeleton using OpenCL
-	 *
-	 *
-	 */
-	template<typename T, typename TOCL=T>
-	class ff_mapreduceOCL: public ff_oclAccelerator<T,TOCL> {
-	public:
-		typedef typename TOCL::Tout Tout;
-
-		ff_mapreduceOCL(std::string mapf, std::string reducef):ff_oclAccelerator<T,TOCL>(mapf,reducef) {}
-		ff_mapreduceOCL(const T &task, std::string mapf, std::string reducef):
-		ff_oclAccelerator<T,TOCL>(task, mapf, reducef) {
-			ff_node::skipfirstpop(true);
-		}
-		virtual ~ff_mapreduceOCL() {}
-
-		virtual int run(bool=false) {return ff_node::run();}
-		virtual int wait() {return ff_node::wait();}
-
-		virtual int run_and_wait_end() {
-			if (run()<0) return -1;
-			if (wait()<0) return -1;
-			return 0;
-		}
-
-		virtual int run_then_freeze() {
-			return ff_node::freeze_and_run();
-		}
-		virtual int wait_freezing() {
-			return ff_node::wait_freezing();
-		}
-
-		void setTask(const T &task) {ff_oclAccelerator<T,TOCL>::Task.setTask(&task);}
-		const T* getTask() const {return ff_oclAccelerator<T,TOCL>::getTask();}
-
-		double ffTime() {return ff_node::ffTime();}
-		double ffwTime() {return ff_node::wffTime();}
-
-	protected:
-		inline void checkResult(cl_int s, const char* msg) {
-			if(s != CL_SUCCESS) {
-				std::cerr << msg << ":";
-				printOCLErrorString(s,std::cerr);
-			}
-		}
-
-		/*!
-		 * Computes the number of threads and blocks to use for the reduction kernel.
-		 */
-		inline void getBlocksAndThreads(const size_t size,
-				const size_t maxBlocks, const size_t maxThreads,
-				size_t & blocks, size_t &threads) {
-			const size_t half = (size+1)/2;
-			threads = (size < maxThreads*2) ?
-			( isPowerOf2(half) ? nextPowerOf2(half+1) : nextPowerOf2(half) ) : maxThreads;
-			blocks = (size + (threads * 2 - 1)) / (threads * 2);
-			blocks = std::min(maxBlocks, blocks);
-		}
-
-		T *svc(T *task) {
-			cl_int status = CL_SUCCESS;
-			cl_event events[2];
-			size_t globalThreads[1];
-			size_t localThreads[1];
-
-			if (task) ff_oclAccelerator<T,TOCL>::Task.setTask(task);
-			size_t size = ff_oclAccelerator<T,TOCL>::Task.getSizeOut();
-			const size_t inSize = ff_oclAccelerator<T,TOCL>::Task.getSizeIn();
-			void* inPtr = ff_oclAccelerator<T,TOCL>::Task.getInPtr();
-			void* outPtr = ff_oclAccelerator<T,TOCL>::Task.getOutPtr();
-			void *envPtr1 = ff_oclAccelerator<T,TOCL>::Task.getEnvPtr1();
-			void *envPtr2 = ff_oclAccelerator<T,TOCL>::Task.getEnvPtr2();
-
-			// MAP
-			if (size < ff_oclAccelerator<T,TOCL>::workgroup_size) {
-				localThreads[0] = size;
-				globalThreads[0] = size;
-			} else {
-				localThreads[0] = ff_oclAccelerator<T,TOCL>::workgroup_size;
-				globalThreads[0] = nextMultipleOfIf(size,ff_oclAccelerator<T,TOCL>::workgroup_size);
-			}
-
-			if ( ff_oclAccelerator<T,TOCL>::oldSizeIn < ff_oclAccelerator<T,TOCL>::Task.getBytesizeIn() ) {
-				if (ff_oclAccelerator<T,TOCL>::oldSizeIn != 0) clReleaseMemObject(ff_oclAccelerator<T,TOCL>::inputBuffer);
-				ff_oclAccelerator<T,TOCL>::inputBuffer = clCreateBuffer(ff_oclAccelerator<T,TOCL>::context, CL_MEM_READ_WRITE,
-						ff_oclAccelerator<T,TOCL>::Task.getBytesizeIn(), NULL, &status);
-				ff_oclAccelerator<T,TOCL>::checkResult(status, "CreateBuffer input (2)");
-				ff_oclAccelerator<T,TOCL>::oldSizeIn = ff_oclAccelerator<T,TOCL>::Task.getBytesizeIn();
-			}
-
-			if ( inPtr == outPtr ) {
-				ff_oclAccelerator<T,TOCL>::outputBuffer = ff_oclAccelerator<T,TOCL>::inputBuffer;
-			} else {
-				if ( ff_oclAccelerator<T,TOCL>::oldSizeOut < ff_oclAccelerator<T,TOCL>::Task.getBytesizeOut() ) {
-					if (ff_oclAccelerator<T,TOCL>::oldSizeOut != 0) clReleaseMemObject(ff_oclAccelerator<T,TOCL>::outputBuffer);
-
-					ff_oclAccelerator<T,TOCL>::outputBuffer = clCreateBuffer(ff_oclAccelerator<T,TOCL>::context, CL_MEM_READ_WRITE,
-							ff_oclAccelerator<T,TOCL>::Task.getBytesizeOut(), NULL, &status);
-					ff_oclAccelerator<T,TOCL>::checkResult(status, "CreateBuffer output");
-					ff_oclAccelerator<T,TOCL>::oldSizeOut = ff_oclAccelerator<T,TOCL>::Task.getBytesizeOut();
-				}
-			}
-
-			if (envPtr1) {
-				if (ff_oclAccelerator<T,TOCL>::oldSizeEnv1 < ff_oclAccelerator<T,TOCL>::Task.getBytesizeEnv1()) {
-					if (ff_oclAccelerator<T,TOCL>::oldSizeEnv1 != 0) clReleaseMemObject(ff_oclAccelerator<T,TOCL>::envBuffer1);
-					ff_oclAccelerator<T,TOCL>::envBuffer1 = clCreateBuffer(ff_oclAccelerator<T,TOCL>::context, CL_MEM_READ_ONLY,
-							ff_oclAccelerator<T,TOCL>::Task.getBytesizeEnv1(), NULL, &status);
-					ff_oclAccelerator<T,TOCL>::checkResult(status, "CreateBuffer env");
-					ff_oclAccelerator<T,TOCL>::oldSizeEnv1 = ff_oclAccelerator<T,TOCL>::Task.getBytesizeEnv1();
-				}
-			}
-			if (envPtr2) {
-				if (ff_oclAccelerator<T,TOCL>::oldSizeEnv2 < ff_oclAccelerator<T,TOCL>::Task.getBytesizeEnv2()) {
-					if (ff_oclAccelerator<T,TOCL>::oldSizeEnv2 != 0) clReleaseMemObject(ff_oclAccelerator<T,TOCL>::envBuffer2);
-					ff_oclAccelerator<T,TOCL>::envBuffer2 = clCreateBuffer(ff_oclAccelerator<T,TOCL>::context, CL_MEM_READ_ONLY,
-							ff_oclAccelerator<T,TOCL>::Task.getBytesizeEnv2(), NULL, &status);
-					ff_oclAccelerator<T,TOCL>::checkResult(status, "CreateBuffer env2");
-					ff_oclAccelerator<T,TOCL>::oldSizeEnv2 = ff_oclAccelerator<T,TOCL>::Task.getBytesizeEnv2();
-				}
-			}
-
-			status = clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 0, sizeof(cl_mem), ff_oclAccelerator<T,TOCL>::getInputBuffer());
-			ff_oclAccelerator<T,TOCL>::checkResult(status, "setKernelArg input");
-			status = clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 1, sizeof(cl_mem), ff_oclAccelerator<T,TOCL>::getOutputBuffer());
-			ff_oclAccelerator<T,TOCL>::checkResult(status, "setKernelArg output");
-			status = clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 2, sizeof(cl_uint), (void *)&inSize);
-			ff_oclAccelerator<T,TOCL>::checkResult(status, "setKernelArg size");
-			if (envPtr1) {
-				if (envPtr2) {
-					status = clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 3, sizeof(cl_mem), ff_oclAccelerator<T,TOCL>::getEnv1Buffer());
-					ff_oclAccelerator<T,TOCL>::checkResult(status, "setKernelArg env1");
-					status = clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 4, sizeof(cl_mem), ff_oclAccelerator<T,TOCL>::getEnv2Buffer());
-					ff_oclAccelerator<T,TOCL>::checkResult(status, "setKernelArg env2");
-					status = clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 5, sizeof(cl_uint), (void *)&size);
-					ff_oclAccelerator<T,TOCL>::checkResult(status, "setKernelArg size");
-				} else {
-					status = clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 3, sizeof(cl_mem), ff_oclAccelerator<T,TOCL>::getEnv1Buffer());
-					ff_oclAccelerator<T,TOCL>::checkResult(status, "setKernelArg env1");
-					status = clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 4, sizeof(cl_uint), (void *)&size);
-					ff_oclAccelerator<T,TOCL>::checkResult(status, "setKernelArg size");
-				}
-			} else {
-				status = clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 3, sizeof(cl_uint), (void *)&size);
-				ff_oclAccelerator<T,TOCL>::checkResult(status, "setKernelArg size");
-			}
-
-			status = clEnqueueWriteBuffer(ff_oclAccelerator<T,TOCL>::cmd_queue,ff_oclAccelerator<T,TOCL>::inputBuffer,CL_FALSE,0,
-					ff_oclAccelerator<T,TOCL>::Task.getBytesizeIn(), ff_oclAccelerator<T,TOCL>::Task.getInPtr(),
-					0,NULL,NULL);
-			ff_oclAccelerator<T,TOCL>::checkResult(status, "copying Task to device input-buffer");
-			if ( envPtr1 && ff_oclAccelerator<T,TOCL>::Task.getCopyEnv1() ) {
-				status = clEnqueueWriteBuffer(ff_oclAccelerator<T,TOCL>::cmd_queue,ff_oclAccelerator<T,TOCL>::envBuffer1,CL_FALSE,0,
-						ff_oclAccelerator<T,TOCL>::Task.getBytesizeEnv1(), ff_oclAccelerator<T,TOCL>::Task.getEnvPtr1(),
-						0,NULL,NULL);
-				ff_oclAccelerator<T,TOCL>::checkResult(status, "copying Task to device env 1 buffer");
-			}
-			if ( envPtr2 && ff_oclAccelerator<T,TOCL>::Task.getCopyEnv2() ) {
-				status = clEnqueueWriteBuffer(ff_oclAccelerator<T,TOCL>::cmd_queue,ff_oclAccelerator<T,TOCL>::envBuffer2,CL_FALSE,0,
-						ff_oclAccelerator<T,TOCL>::Task.getBytesizeEnv2(), ff_oclAccelerator<T,TOCL>::Task.getEnvPtr2(),
-						0,NULL,NULL);
-				ff_oclAccelerator<T,TOCL>::checkResult(status, "copying Task to device env2 buffer");
-			}
-
-			status = clEnqueueNDRangeKernel(ff_oclAccelerator<T,TOCL>::cmd_queue,ff_oclAccelerator<T,TOCL>::kernel,1,NULL,
-					globalThreads, localThreads,0,NULL,&events[0]);
-
-			status |= clWaitForEvents(1, &events[0]);
-
-			// REDUCE
-			ff_oclAccelerator<T,TOCL>::setKernel2();
-
-			size_t elemSize = sizeof(Tout);
-			size_t numBlocks = 0;
-			size_t numThreads = 0;
-
-			// 64 and 256 are the max number of blocks and threads we want to use
-			getBlocksAndThreads(size, 64, 256, numBlocks, numThreads);
-
-			size_t outMemSize =
-			(numThreads <= 32) ? (2 * numThreads * elemSize) : (numThreads * elemSize);
-
-			localThreads[0] = numThreads;
-			globalThreads[0] = numBlocks * numThreads;
-
-			// input buffer is the output buffer from map stage
-			ff_oclAccelerator<T,TOCL>::swapInOut();
-
-			ff_oclAccelerator<T,TOCL>::outputBuffer = clCreateBuffer(ff_oclAccelerator<T,TOCL>::context, CL_MEM_READ_WRITE,numBlocks*elemSize, NULL, &status);
-			ff_oclAccelerator<T,TOCL>::checkResult(status, "CreateBuffer output");
-
-			status |= clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 0, sizeof(cl_mem), ff_oclAccelerator<T,TOCL>::getInputBuffer());
-			status |= clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 1, sizeof(cl_mem), ff_oclAccelerator<T,TOCL>::getOutputBuffer());
-			status |= clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 2, sizeof(cl_uint), (void *)&size);
-			status |= clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 3, outMemSize, NULL);
-			checkResult(status, "setKernelArg ");
-
-			status = clEnqueueNDRangeKernel(ff_oclAccelerator<T,TOCL>::cmd_queue,ff_oclAccelerator<T,TOCL>::kernel,1,NULL,
-					globalThreads,localThreads,0,NULL,&events[0]);
-			status = clWaitForEvents(1, &events[0]);
-
-			// Sets the kernel arguments for second reduction
-			size = numBlocks;
-			status |= clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 0, sizeof(cl_mem),ff_oclAccelerator<T,TOCL>::getOutputBuffer());
-			status |= clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 1, sizeof(cl_mem),ff_oclAccelerator<T,TOCL>::getOutputBuffer());
-			status |= clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 2, sizeof(cl_uint),(void*)&size);
-			status |= clSetKernelArg(ff_oclAccelerator<T,TOCL>::kernel, 3, outMemSize, NULL);
-			ff_oclAccelerator<T,TOCL>::checkResult(status, "setKernelArg ");
-
-			localThreads[0] = numThreads;
-			globalThreads[0] = numThreads;
-
-			status = clEnqueueNDRangeKernel(ff_oclAccelerator<T,TOCL>::cmd_queue,ff_oclAccelerator<T,TOCL>::kernel,1,NULL,
-					globalThreads,localThreads,0,NULL,&events[0]);
-			Tout *reduceVar = ff_oclAccelerator<T,TOCL>::Task.getReduceVar();
-			assert(reduceVar != NULL);
-			status |= clWaitForEvents(1, &events[0]);
-			status |= clEnqueueReadBuffer(ff_oclAccelerator<T,TOCL>::cmd_queue,ff_oclAccelerator<T,TOCL>::outputBuffer,CL_TRUE, 0,
-					elemSize, reduceVar ,0,NULL,&events[1]);
-			status |= clWaitForEvents(1, &events[1]);
-			ff_oclAccelerator<T,TOCL>::checkResult(status, "ERROR during OpenCL computation");
-
-			clReleaseEvent(events[0]);
-			clReleaseEvent(events[1]);
-
-			//return (ff_ocl<T,TOCL>::oneshot?NULL:task);
-			return (ff_oclAccelerator<T,TOCL>::oneshot?NULL:task);
-		}
-	};
-#endif
 
 }
 // namespace ff
