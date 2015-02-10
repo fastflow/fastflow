@@ -38,7 +38,11 @@ using namespace ff;
 
 FFREDUCEFUNC(reducef, float, x, y, return (x+y););
 
-FF_ARRAY_CENV(mapf, float, in, N, i, int, env, return in[i] + env[i];);
+FF_ARRAY_CENV(mapf, float, in, N, i, int, env,
+		if(i>0 && i<N)
+			return in[i] + env[i] + in[i-1] + in[i+1];
+		return in[i];
+);
 
 struct oclTask: public baseOCLTask<oclTask, float, float, int, int> {
 	oclTask() :
@@ -139,7 +143,7 @@ int main(int argc, char * argv[]) {
 	}
 	float *M_out = new float[size];
 	oclTask oclt(M_in, M_out, env, size);
-	ff_stencilReduceOCL<oclTask> oclStencilReduceOneShot(oclt, mapf, reducef);
+	ff_stencilReduceOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf, reducef, 0, 5);
 	oclStencilReduceOneShot.run_and_wait_end();
 	printf("res[%d]=%.2f\n", size / 2, M_out[size / 2]);
 	//printf("reduceVar=%.2f\n", oclt.getReduceVar());
@@ -149,7 +153,7 @@ int main(int argc, char * argv[]) {
 	ff_pipeline pipe;
 	pipe.add_stage(&e);
 	//pipe.add_stage(new Worker());
-	pipe.add_stage(new ff_stencilReduceOCL<oclTask>(mapf, reducef));
+	pipe.add_stage(new ff_stencilReduceOCL_1D<oclTask>(mapf, reducef));
 	pipe.run_and_wait_end();
 
 	return 0;
