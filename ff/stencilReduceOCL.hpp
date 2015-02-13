@@ -36,7 +36,8 @@
 #include <fstream>
 #include <ff/oclnode.hpp>
 #include <ff/node.hpp>
-#include <ff/oclMacroes.hpp>
+//#include <ff/oclMacroes.hpp>
+#include <ff/stencilReduceOCL_macros.hpp>
 
 namespace ff {
 
@@ -56,21 +57,16 @@ namespace ff {
 		typedef Tenv2_ Tenv2;
 
 		baseOCLTask() :
-		inPtr(NULL), outPtr(NULL), envPtr1(NULL), envPtr2(NULL), size_in(0), size_out(
-				0), size_env1(0), size_env2(0), reduceVar((Tout) 0), copyEnv1(
-				true), copyEnv2(true), iter(0) {
+		inPtr(NULL), outPtr(NULL), envPtr1(NULL), envPtr2(NULL), size_in(0),
+		reduceVar((Tout) 0), copyEnv1(true), copyEnv2(true), iter(0) {
 		}
 
 		virtual ~baseOCLTask() {
 		}
 
-		// user must override this method
+		// user must override this methods
 		virtual void setTask(const TaskT *t) = 0;
-
-		//user may override this methods
-		virtual bool iterCondition(Tout, unsigned int) {
-			return true;
-		}
+		virtual bool iterCondition(Tout, unsigned int) = 0;
 
 		bool iterCondition_aux() {
 			return iterCondition(reduceVar, iter);
@@ -79,40 +75,13 @@ namespace ff {
 		size_t getBytesizeIn() const {
 			return getSizeIn() * sizeof(Tin);
 		}
-		size_t getBytesizeOut() const {
-			return getSizeOut() * sizeof(Tout);
-		}
-		size_t getBytesizeEnv1() const {
-			return getSizeEnv1() * sizeof(Tenv1);
-		}
-		size_t getBytesizeEnv2() const {
-			return getSizeEnv2() * sizeof(Tenv2);
-		}
 
 		void setSizeIn(size_t sizeIn) {
 			size_in = sizeIn;
 		}
-		void setSizeOut(size_t sizeOut) {
-			size_out = sizeOut;
-		}
-		void setSizeEnv1(size_t sizeEnv) {
-			size_env1 = sizeEnv;
-		}
-		void setSizeEnv2(size_t sizeEnv) {
-			size_env2 = sizeEnv;
-		}
 
 		size_t getSizeIn() const {
 			return size_in;
-		}
-		size_t getSizeOut() const {
-			return (size_out == 0) ? size_in : size_out;
-		}
-		size_t getSizeEnv1() const {
-			return size_env1;
-		}
-		size_t getSizeEnv2() const {
-			return size_env2;
 		}
 
 		void setInPtr(Tin* _inPtr) {
@@ -188,8 +157,7 @@ namespace ff {
 		Tenv1 *envPtr1;
 		Tenv2 *envPtr2;
 
-		size_t size_in, size_out;
-		size_t size_env1, size_env2;
+		size_t size_in;
 		Tout reduceVar, initReduceVal;
 
 		bool copyEnv1, copyEnv2;
@@ -216,13 +184,13 @@ namespace ff {
 		typedef typename TOCL::Tenv1 Tenv1;
 		typedef typename TOCL::Tenv2 Tenv2;
 
-		ff_oclAccelerator() :
-		baseclass_ocl_node_deviceId(NULL) {
+		ff_oclAccelerator(const size_t width_) :
+		width(width_), baseclass_ocl_node_deviceId(NULL) {
 			workgroup_size_map = workgroup_size_reduce = 0;
 			inputBuffer = outputBuffer = envBuffer1 = envBuffer2 = NULL;
-			lenEnvBuffer1 = lenEnvBuffer2 = lenInput = lenOutput = 0;
-			sizeInput = sizeOutput = sizeEnvBuffer1 = sizeEnvBuffer2 = 0;
-			offsetInput = offsetOutput = offsetEnvBuffer1 = offsetEnvBuffer2 = 0;
+			lenInput = lenInput_global = 0;
+			sizeInput = sizeInput_padded = 0;
+			offsetInput = 0;
 			nevents = 0;
 			localThreadsMap = globalThreadsMap = 0;
 			kernel_map = kernel_reduce = NULL;
@@ -260,38 +228,18 @@ namespace ff {
 			return (cl_mem*) &envBuffer2;
 		}
 
-		//TODO move
-		inline void checkResult(cl_int s, const char* msg) {
-			if (s != CL_SUCCESS) {
-				std::cerr << msg << ":";
-				printOCLErrorString(s, std::cerr);
-			}
-		}
+//		//TODO move
+//		inline void checkResult(cl_int s, const char* msg) {
+//			if (s != CL_SUCCESS) {
+//				std::cerr << msg << ":";
+//				printOCLErrorString(s, std::cerr);
+//			}
+//		}
 
 		void swapBuffers() {
 			cl_mem tmp = inputBuffer;
 			inputBuffer = outputBuffer;
 			outputBuffer = tmp;
-		}
-
-		size_t getOffsetEnvBuffer1() const
-		{
-			return offsetEnvBuffer1;
-		}
-
-		void setOffsetEnvBuffer1(size_t offsetEnvBuffer1)
-		{
-			this->offsetEnvBuffer1 = offsetEnvBuffer1;
-		}
-
-		size_t getOffsetEnvBuffer2() const
-		{
-			return offsetEnvBuffer2;
-		}
-
-		void setOffsetEnvBuffer2(size_t offsetEnvBuffer2)
-		{
-			this->offsetEnvBuffer2 = offsetEnvBuffer2;
 		}
 
 		size_t getOffsetInput() const
@@ -304,36 +252,6 @@ namespace ff {
 			this->offsetInput = offsetInput;
 		}
 
-		size_t getOffsetOutput() const
-		{
-			return offsetOutput;
-		}
-
-		void setOffsetOutput(size_t offsetOutput)
-		{
-			this->offsetOutput = offsetOutput;
-		}
-
-		size_t getSizeEnvBuffer1() const
-		{
-			return sizeEnvBuffer1;
-		}
-
-		void setSizeEnvBuffer1(size_t sizeEnvBuffer1)
-		{
-			this->sizeEnvBuffer1 = sizeEnvBuffer1;
-		}
-
-		size_t getSizeEnvBuffer2() const
-		{
-			return sizeEnvBuffer2;
-		}
-
-		void setSizeEnvBuffer2(size_t sizeEnvBuffer2)
-		{
-			this->sizeEnvBuffer2 = sizeEnvBuffer2;
-		}
-
 		size_t getSizeInput() const
 		{
 			return sizeInput;
@@ -342,16 +260,6 @@ namespace ff {
 		void setSizeInput(size_t size)
 		{
 			this->sizeInput = size;
-		}
-
-		size_t getSizeOutput() const
-		{
-			return sizeOutput;
-		}
-
-		void setSizeOutput(size_t sizeOutput)
-		{
-			this->sizeOutput = sizeOutput;
 		}
 
 		size_t getWorkgroupSizeMap() const
@@ -374,68 +282,61 @@ namespace ff {
 			workgroup_size_reduce = workgroupSizeReduce;
 		}
 
-		void relocateInputBuffer(size_t len, size_t first) {
+		void relocateInputBuffer(size_t len, size_t len_global, size_t first) {
 			offsetInput = first;
 			lenInput = len;
-			sizeInput = len * sizeof(Tin);
+			lenInput_global = len_global;
+			sizeInput = lenInput * sizeof(Tin);
+			sizeInput_padded = sizeInput + ((std::min)(width, offsetInput) + (std::min)(width, len_global - (len - first))) * sizeof(Tin);
 			cl_int status;
 			if (inputBuffer)
 			clReleaseMemObject(inputBuffer);
+			//allocate input-size + pre/post-windows
 			inputBuffer = clCreateBuffer(context,
-					CL_MEM_READ_WRITE, sizeInput, NULL,
+					CL_MEM_READ_WRITE, sizeInput_padded, NULL,
 					&status);
 			checkResult(status, "CreateBuffer input");
-			if (len < workgroup_size_map) {
-				localThreadsMap = len;
-				globalThreadsMap = len;
+			if (lenInput < workgroup_size_map) {
+				localThreadsMap = lenInput;
+				globalThreadsMap = lenInput;
 			} else {
 				localThreadsMap = workgroup_size_map;
-				globalThreadsMap = nextMultipleOfIf(len, workgroup_size_map);
+				globalThreadsMap = nextMultipleOfIf(lenInput, workgroup_size_map);
 			}
 		}
 
-		void relocateOutputBuffer(size_t len, size_t first) {
-			offsetOutput = first;
-			lenOutput = len;
-			sizeOutput = len * sizeof(Tout);
+		void relocateOutputBuffer() {
 			cl_int status;
 			if (outputBuffer)
 			clReleaseMemObject(outputBuffer);
 			outputBuffer = clCreateBuffer(context,
-					CL_MEM_READ_WRITE, sizeOutput, NULL,
+					CL_MEM_READ_WRITE, sizeInput, NULL,
 					&status);
 			checkResult(status, "CreateBuffer output");
 		}
 
-		void relocateEnvBuffer1(size_t len, size_t first) {
-			offsetEnvBuffer1 = first;
-			lenEnvBuffer1 = len;
-			sizeEnvBuffer1 = len * sizeof(Tenv1);
+		void relocateEnvBuffer1() {
 			cl_int status;
 			if (envBuffer1)
 			clReleaseMemObject(envBuffer1);
 			envBuffer1 = clCreateBuffer(context,
-					CL_MEM_READ_WRITE, sizeEnvBuffer1, NULL,
+					CL_MEM_READ_WRITE, sizeInput_padded, NULL,
 					&status);
 			checkResult(status, "CreateBuffer envBuffer1");
 		}
 
-		void relocateEnvBuffer2(size_t len, size_t first) {
-			offsetEnvBuffer2 = first;
-			lenEnvBuffer2 = len;
-			sizeEnvBuffer2 = len * sizeof(Tenv2);
+		void relocateEnvBuffer2() {
 			cl_int status;
 			if (envBuffer2)
 			clReleaseMemObject(envBuffer2);
 			envBuffer2 = clCreateBuffer(context,
-					CL_MEM_READ_WRITE, sizeEnvBuffer2, NULL,
+					CL_MEM_READ_WRITE, sizeof(Tenv2), NULL,
 					&status);
 			checkResult(status, "CreateBuffer envBuffer2");
 		}
 
 		void setInPlace() {
 			outputBuffer = inputBuffer;
-			sizeOutput = sizeInput;
 		}
 
 		void swap() {
@@ -443,8 +344,10 @@ namespace ff {
 			inputBuffer = outputBuffer;
 			outputBuffer = tmp;
 			//set iteration-dynamic MAP kernel args
+			size_t pad = (std::min)(width, offsetInput) * sizeof(Tin);
+			cl_mem p = (cl_mem)((char *)inputBuffer + pad);
 			cl_int status = clSetKernelArg(kernel_map, 0,
-					sizeof(cl_mem), &inputBuffer);
+					sizeof(cl_mem), &p);
 			checkResult(status, "setKernelArg input");
 			status = clSetKernelArg(kernel_map, 1,
 					sizeof(cl_mem), &outputBuffer);
@@ -453,47 +356,54 @@ namespace ff {
 
 		//TODO: optimise
 		void setKernelArgs() {
-			//set iteration-invariant MAP kernel args
-			cl_uint idx = 2;
-			cl_int status = clSetKernelArg(kernel_map, idx++, sizeof(cl_uint),
-					(void *) &lenInput);
-			checkResult(status, "setKernelArg inSize");
-			if (envBuffer1) {
-				status = clSetKernelArg(kernel_map, idx++, sizeof(cl_mem),
-						&envBuffer1);
-				checkResult(status, "setKernelArg env1");
-				if (envBuffer2) {
-					status = clSetKernelArg(kernel_map, idx++, sizeof(cl_mem),
-							&envBuffer2);
-					checkResult(status, "setKernelArg env2");
-				}
-			}
-			status = clSetKernelArg(kernel_map, idx++, sizeof(cl_uint),
-					(void *) &lenInput);
-			checkResult(status, "setKernelArg size");
-
+			cl_uint idx = 0;
 			//set iteration-dynamic MAP kernel args (init)
-			status = clSetKernelArg(kernel_map, 0, sizeof(cl_mem),
-					&inputBuffer);
+			size_t pad = (std::min)(width, offsetInput) * sizeof(Tin);
+			cl_mem p = (cl_mem)((char *)inputBuffer + pad);
+			cl_int status = clSetKernelArg(kernel_map, idx++, sizeof(cl_mem),
+					&p);
 			checkResult(status, "setKernelArg input");
-			status = clSetKernelArg(kernel_map, 1, sizeof(cl_mem),
+			status = clSetKernelArg(kernel_map, idx++, sizeof(cl_mem),
 					&outputBuffer);
 			checkResult(status, "setKernelArg output");
+			//set iteration-invariant MAP kernel args
+			status = clSetKernelArg(kernel_map, idx++, sizeof(cl_uint),
+					(void *) &lenInput_global);
+			checkResult(status, "setKernelArg global input length");
+			//if (envBuffer1) {
+			p = (cl_mem)((char *)envBuffer1 + pad);
+			status = clSetKernelArg(kernel_map, idx++, sizeof(cl_mem),
+					&p);
+			checkResult(status, "setKernelArg env1");
+			//if (envBuffer2) {
+			status = clSetKernelArg(kernel_map, idx++, sizeof(cl_mem),
+					&envBuffer2);
+			checkResult(status, "setKernelArg env2");
+			//}
+			//}
+			status = clSetKernelArg(kernel_map, idx++, sizeof(cl_uint),
+					(void *) &lenInput);
+			checkResult(status, "setKernelArg local input length");
+			status = clSetKernelArg(kernel_map, idx++, sizeof(cl_uint),
+					(void *) &offsetInput);
+			checkResult(status, "setKernelArg offset");
 		}
 
 		void asyncH2Dinput(Tin *p) {
+			p += offsetInput - (std::min)(width, offsetInput);
 			cl_int status = clEnqueueWriteBuffer(cmd_queue,
-					inputBuffer, CL_FALSE, offsetInput * sizeof(Tin),
-					sizeInput, p,
+					inputBuffer, CL_FALSE, 0,
+					sizeInput_padded, p,
 					0, NULL, &events[0]);
 			checkResult(status, "copying Task to device input-buffer");
 			++nevents;
 		}
 
 		void asyncH2Denv1(Tenv1 *p) {
+			p += offsetInput - (std::min)(width, offsetInput);
 			cl_int status = clEnqueueWriteBuffer(cmd_queue,
-					envBuffer1, CL_FALSE, offsetEnvBuffer1 * sizeof(Tenv1),
-					sizeEnvBuffer1, p,
+					envBuffer1, CL_FALSE, 0, sizeInput_padded,
+					p,
 					0, NULL, &events[1]);
 			checkResult(status, "copying Task to device env1-buffer");
 			++nevents;
@@ -501,8 +411,8 @@ namespace ff {
 
 		void asyncH2Denv2(Tenv2 *p) {
 			cl_int status = clEnqueueWriteBuffer(cmd_queue,
-					envBuffer2, CL_FALSE, offsetEnvBuffer2 * sizeof(Tenv2),
-					sizeEnvBuffer2, p,
+					envBuffer2, CL_FALSE, 0,
+					sizeof(Tenv2), p,
 					0, NULL, &events[2]);
 			checkResult(status, "copying Task to device env2-buffer");
 			++nevents;
@@ -510,9 +420,10 @@ namespace ff {
 
 		void asyncD2Houtput(Tout *p) {
 			cl_int status = clEnqueueReadBuffer(cmd_queue,
-					outputBuffer, CL_FALSE, offsetOutput * sizeof(Tout),
-					sizeOutput,
+					outputBuffer, CL_FALSE, offsetInput * sizeof(Tout),
+					sizeInput,
 					p, 0, NULL, NULL);
+			checkResult(status, "copying output back from device");
 			++nevents;
 		}
 
@@ -625,9 +536,10 @@ namespace ff {
 		}
 
 		cl_mem inputBuffer, outputBuffer, envBuffer1, envBuffer2;
-		size_t sizeInput, sizeOutput, sizeEnvBuffer1, sizeEnvBuffer2;
-		size_t lenInput, lenOutput, lenEnvBuffer1, lenEnvBuffer2;
-		size_t offsetInput, offsetOutput, offsetEnvBuffer1, offsetEnvBuffer2;
+		const size_t width;
+		size_t sizeInput, sizeInput_padded;
+		size_t lenInput, lenInput_global;
+		size_t offsetInput;
 		size_t workgroup_size_map, workgroup_size_reduce;
 		unsigned int nevents;
 		cl_event events[3];
@@ -650,28 +562,34 @@ namespace ff {
 		typedef ff_oclAccelerator<T,TOCL> accelerator_t;
 
 		ff_stencilReduceOCL_1D(const std::string &mapf, const std::string &reducef = std::string(""), Tout initReduceVar =
-				(Tout) 0, const size_t NACCELERATORS_ = 1) : oneshot(false),
-		oldSizeIn(0), oldSizeOut(0), oldSizeReduce(0), oldSizeEnv1(0), oldSizeEnv2(0), NACCELERATORS(NACCELERATORS_) {
+				(Tout) 0, const int NACCELERATORS_ = 1, const int width_ = 1) : oneshot(false),
+		NACCELERATORS(NACCELERATORS_), width(width_), oldSizeIn(0), oldSizeReduce(0) {
 			setcode(mapf, reducef);
 			Task.setInitReduceVal(initReduceVar);
-			accelerators = new accelerator_t[NACCELERATORS];
+			accelerators = (accelerator_t **)malloc(NACCELERATORS * sizeof(accelerator_t *));
+			for(int i=0; i<NACCELERATORS; ++i)
+			accelerators[i] = new accelerator_t(width);
 			acc_len = new size_t[NACCELERATORS];
 			acc_off = new size_t[NACCELERATORS];
 		}
 		ff_stencilReduceOCL_1D(const T &task, const std::string &mapf, const std::string &reducef = std::string(""), Tout initReduceVar = (Tout) 0,
-				const size_t NACCELERATORS_ = 1) : oneshot(true),
-		oldSizeIn(0), oldSizeOut(0), oldSizeReduce(0), oldSizeEnv1(0), oldSizeEnv2(0), NACCELERATORS(NACCELERATORS_) {
+				const int NACCELERATORS_ = 1, const int width_ = 1) : oneshot(true),
+		NACCELERATORS(NACCELERATORS_), width(width_), oldSizeIn(0), oldSizeReduce(0) {
 			ff_node::skipfirstpop(true);
 			setcode(mapf, reducef);
-			Task.setTask(task);
+			Task.setTask(&task);
 			Task.setInitReduceVal(initReduceVar);
-			accelerators = new accelerator_t[NACCELERATORS];
+			accelerators = (accelerator_t **)malloc(NACCELERATORS * sizeof(accelerator_t *));
+			for(int i=0; i<NACCELERATORS; ++i)
+			accelerators[i] = new accelerator_t(width);
 			acc_len = new size_t[NACCELERATORS];
 			acc_off = new size_t[NACCELERATORS];
 		}
 
 		virtual ~ff_stencilReduceOCL_1D() {
-			delete[] accelerators;
+			for(int i=0; i<NACCELERATORS; ++i)
+			delete accelerators[i];
+			free(accelerators);
 			delete[] acc_len;
 			delete[] acc_off;
 		}
@@ -738,71 +656,44 @@ namespace ff {
 		virtual int svc_init() {
 			size_t ngpus = threadMapper::instance()->getOCLgpus().size();
 			for(int i=0; i<NACCELERATORS; ++i) {
-				accelerator_t &acc = accelerators[i];
-				//pre-allocate per-accelerator memory
-				acc.init(CL_DEVICE_TYPE_GPU, i % ngpus, kernel_code, kernel_name1, kernel_name2);
+				accelerators[i]->init(CL_DEVICE_TYPE_GPU, i % ngpus, kernel_code, kernel_name1, kernel_name2);
 			}
-			oldSizeIn = Task.getBytesizeIn();
 			return 0;
 		}
 
 		virtual void svc_end() {
 			if(!ff::ff_node::isfrozen())
 			for(int i=0; i<NACCELERATORS; ++i)
-			accelerators[i].release();
+			accelerators[i]->release();
 		}
 
 		T *svc(T *task) {
-			cl_int status = CL_SUCCESS;
-
 			if (task)
 			Task.setTask(task);
-			const size_t size = Task.getSizeIn();
 			void* inPtr = Task.getInPtr();
 			void* outPtr = Task.getOutPtr();
 			void *envPtr1 = Task.getEnvPtr1();
 			void *envPtr2 = Task.getEnvPtr2();
 
 			//(eventually) relocate device memory
-			//input
 			if (oldSizeIn < Task.getBytesizeIn()) {
 				compute_accmem(Task.getSizeIn());
-				for(unsigned int i=0; i<NACCELERATORS; ++i)
-				accelerators[i].relocateInputBuffer(acc_len[i], acc_off[i]);
+				for(unsigned int i=0; i<NACCELERATORS; ++i) {
+					//input
+					accelerators[i]->relocateInputBuffer(acc_len[i], Task.getSizeIn(), acc_off[i]);
+					//output
+					if (inPtr == outPtr)
+					accelerators[i]->setInPlace();
+					else
+					accelerators[i]->relocateOutputBuffer();
+					//env1
+					if (envPtr1)
+					accelerators[i]->relocateEnvBuffer1();
+					//env2
+					if (envPtr2)
+					accelerators[i]->relocateEnvBuffer2();
+				}
 				oldSizeIn = Task.getBytesizeIn();
-			}
-
-			//output
-			if (inPtr == outPtr) {
-				for(unsigned int i=0; i<NACCELERATORS; ++i)
-				accelerators[i].setInPlace();
-			} else {
-				if (oldSizeOut < Task.getBytesizeOut()) {
-					compute_accmem(Task.getSizeOut());
-					for(unsigned int i=0; i<NACCELERATORS; ++i)
-					accelerators[i].relocateOutputBuffer(acc_len[i], acc_off[i]);
-					oldSizeOut = Task.getBytesizeOut();
-				}
-			}
-
-			//env1
-			if (envPtr1) {
-				if (oldSizeEnv1 < Task.getBytesizeEnv1()) {
-					compute_accmem(Task.getSizeEnv1());
-					for(unsigned int i=0; i<NACCELERATORS; ++i)
-					accelerators[i].relocateEnvBuffer1(acc_len[i], acc_off[i]);
-					oldSizeEnv1 = Task.getBytesizeEnv1();
-				}
-			}
-
-			//env2
-			if (envPtr2) {
-				if (oldSizeEnv2 < Task.getBytesizeEnv2()) {
-					compute_accmem(Task.getSizeEnv2());
-					for(unsigned int i=0; i<NACCELERATORS; ++i)
-					accelerators[i].relocateEnvBuffer2(acc_len[i], acc_off[i]);
-					oldSizeEnv2 = Task.getBytesizeEnv2();
-				}
 			}
 
 			if (!isPureMap()) {
@@ -834,8 +725,9 @@ namespace ff {
 #endif
 			}
 
+			//set kernel args
 			for(unsigned int i=0; i<NACCELERATORS; ++i)
-			accelerators[i].setKernelArgs();
+			accelerators[i]->setKernelArgs();
 
 			if (!isPureMap()) {
 #if 0 //REDUCE
@@ -850,21 +742,21 @@ namespace ff {
 #endif
 			}
 
-			//copy input and environments (h2d)
-			//in
-			for(unsigned int i=0; i<NACCELERATORS; ++i)
-			accelerators[i].asyncH2Dinput(Task.getInPtr());
-			//env1
-			if (envPtr1 && Task.getCopyEnv1()) {
-				for(unsigned int i=0; i<NACCELERATORS; ++i)
-				accelerators[i].asyncH2Denv1(Task.getEnvPtr1());
-				//env2
-				if (envPtr2 && Task.getCopyEnv2())
-				for(unsigned int i=0; i<NACCELERATORS; ++i)
-				accelerators[i].asyncH2Denv2(Task.getEnvPtr2());
+			//(async) copy input and environments (h2d)
+			for(unsigned int i=0; i<NACCELERATORS; ++i) {
+				//in
+				accelerators[i]->asyncH2Dinput(Task.getInPtr());
+				//env1
+				if (envPtr1 && Task.getCopyEnv1()) {
+					accelerators[i]->asyncH2Denv1(Task.getEnvPtr1());
+					//env2
+					if (envPtr2 && Task.getCopyEnv2())
+					accelerators[i]->asyncH2Denv2(Task.getEnvPtr2());
+				}
 			}
+			//join
 			for(unsigned int i=0; i<NACCELERATORS; ++i)
-			accelerators[i].join();
+			accelerators[i]->join();
 
 			if (isPureReduce()) {
 #if 0 //REDUCE
@@ -925,25 +817,30 @@ namespace ff {
 				Task.resetIter();
 
 				if (isPureMap()) {
+					//(async) exec kernel
 					for(unsigned int i=0; i<NACCELERATORS; ++i)
-					accelerators[i].asyncExecMapKernel();
+					accelerators[i]->asyncExecMapKernel();
 					Task.incIter();
+					//join
 					for(unsigned int i=0; i<NACCELERATORS; ++i)
-					accelerators[i].join();
+					accelerators[i]->join();
 				}
 
 				else { //iterative Map-Reduce (aka stencilReduce)
+					//invalidate first swap
+					for(unsigned int i=0; i<NACCELERATORS; ++i)
+					accelerators[i]->swap();
 					do {
+						for(unsigned int i=0; i<NACCELERATORS; ++i)
+						accelerators[i]->swap();
 
-						//execute MAP kernel
+						//(async) execute MAP kernel
 						for(unsigned int i=0; i<NACCELERATORS; ++i)
-						accelerators[i].asyncExecMapKernel();
+						accelerators[i]->asyncExecMapKernel();
 						Task.incIter();
+						//join
 						for(unsigned int i=0; i<NACCELERATORS; ++i)
-						accelerators[i].swap();
-						for(unsigned int i=0; i<NACCELERATORS; ++i)
-						accelerators[i].join();
-						//end MAP
+						accelerators[i]->join();
 
 #if 0 //REDUCE
 						//begin REDUCE
@@ -1000,11 +897,12 @@ namespace ff {
 					}while (Task.iterCondition_aux());
 				}
 
-				//read back output (d2h)
+				//(async)read back output (d2h)
 				for(unsigned int i=0; i<NACCELERATORS; ++i)
-				accelerators[i].asyncD2Houtput(Task.getOutPtr());
+				accelerators[i]->asyncD2Houtput(Task.getOutPtr());
+				//join
 				for(unsigned int i=0; i<NACCELERATORS; ++i)
-				accelerators[i].join();
+				accelerators[i]->join();
 			}
 
 			//TODO check
@@ -1070,17 +968,16 @@ namespace ff {
 			acc_len[i] = len - start;
 		}
 
-		size_t NACCELERATORS;
-		accelerator_t *accelerators;
+		int NACCELERATORS, width;
+		accelerator_t **accelerators;
 		size_t *acc_len, *acc_off;
 
 		std::string kernel_code;
 		std::string kernel_name1;
 		std::string kernel_name2;
 
-		size_t oldSizeIn, oldSizeOut;
+		size_t oldSizeIn;
 		size_t oldSizeReduce;
-		size_t oldSizeEnv1, oldSizeEnv2;
 	}
 	;
 
