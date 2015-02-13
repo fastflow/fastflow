@@ -44,6 +44,7 @@
 #else
 #include <CL/opencl.h>
 #endif
+#include <ff/ocl/ocl_utilities.hpp>
 #endif
 
 namespace ff {
@@ -119,31 +120,30 @@ public:
 		cl_uint n_platforms;
 		cl_platform_id platforms[max_supported_platforms];
 		cl_device_id devices[max_supported_devices];
-		cl_int status;
-		status = clGetPlatformIDs(max_supported_platforms, platforms,
+		cl_int status = clGetPlatformIDs(max_supported_platforms, platforms,
 				&n_platforms); //TODO max 1 platform
 		//checkResult(status, "clGetPlatformIDs");
 		for (cl_uint i = 0; i < n_platforms; ++i) {
 			cl_uint n_devices;
 			//GPUs
-			status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU,
+			status |= clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU,
 					max_supported_devices, devices, &n_devices);
 			//checkResult(status, "clGetDeviceIDs");
 			for (cl_uint j = 0; j < n_devices; ++j)
-				ocl_gpus.push_back(devices[j]);
+			ocl_gpus.push_back(devices[j]);
 			//CPUs
-			status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_CPU,
+			status |= clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_CPU,
 					max_supported_devices, devices, &n_devices);
 			//checkResult(status, "clGetDeviceIDs");
 			for (cl_uint j = 0; j < n_devices; ++j)
-				ocl_cpus.push_back(devices[j]);
+			ocl_cpus.push_back(devices[j]);
 			//accelerators
-			status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ACCELERATOR,
+			status |= clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ACCELERATOR,
 					max_supported_devices, devices, &n_devices);
-			//checkResult(status, "clGetDeviceIDs");
 			for (cl_uint j = 0; j < n_devices; ++j)
-				ocl_accelerators.push_back(devices[j]);
+			ocl_accelerators.push_back(devices[j]);
 		}
+		checkResult(status, "querying OpenCL devices");
 #endif
 	}
 
