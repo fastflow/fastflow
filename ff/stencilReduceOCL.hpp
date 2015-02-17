@@ -180,7 +180,6 @@ namespace ff {
 	class ff_oclAccelerator {
 	public:
 		typedef typename TOCL::Tin Tin;
-		typedef typename TOCL::Tout Tout;
 		typedef typename TOCL::Tenv1 Tenv1;
 		typedef typename TOCL::Tenv2 Tenv2;
 
@@ -188,9 +187,8 @@ namespace ff {
 		width(width_), baseclass_ocl_node_deviceId(NULL) {
 			workgroup_size_map = workgroup_size_reduce = 0;
 			inputBuffer = outputBuffer = envBuffer1 = envBuffer2 = NULL;
-			lenInput = lenInput_global = 0;
-			sizeInput = sizeInput_padded = 0;
-			offsetInput = 0;
+			sizeInput = sizeInput_padded = sizeEnv1_padded = 0;
+			lenInput = offset1 = offset2 = pad1 = pad2 = lenInput_global = 0;
 			nevents = 0;
 			localThreadsMap = globalThreadsMap = 0;
 			kernel_map = kernel_reduce = NULL;
@@ -228,66 +226,22 @@ namespace ff {
 			return (cl_mem*) &envBuffer2;
 		}
 
-//		//TODO move
-//		inline void checkResult(cl_int s, const char* msg) {
-//			if (s != CL_SUCCESS) {
-//				std::cerr << msg << ":";
-//				printOCLErrorString(s, std::cerr);
-//			}
-//		}
-
 		void swapBuffers() {
 			cl_mem tmp = inputBuffer;
 			inputBuffer = outputBuffer;
 			outputBuffer = tmp;
 		}
 
-		size_t getOffsetInput() const
-		{
-			return offsetInput;
-		}
-
-		void setOffsetInput(size_t offsetInput)
-		{
-			this->offsetInput = offsetInput;
-		}
-
-		size_t getSizeInput() const
-		{
-			return sizeInput;
-		}
-
-		void setSizeInput(size_t size)
-		{
-			this->sizeInput = size;
-		}
-
-		size_t getWorkgroupSizeMap() const
-		{
-			return workgroup_size_map;
-		}
-
-		void setWorkgroupSizeMap(size_t workgroupSizeMap)
-		{
-			workgroup_size_map = workgroupSizeMap;
-		}
-
-		size_t getWorkgroupSizeReduce() const
-		{
-			return workgroup_size_reduce;
-		}
-
-		void setWorkgroupSizeReduce(size_t workgroupSizeReduce)
-		{
-			workgroup_size_reduce = workgroupSizeReduce;
-		}
-
-		void relocateInputBuffer(size_t len, size_t len_global, size_t first) {
-			offsetInput = first;
+		void relocateInputBuffer(unsigned long len, unsigned long len_global, unsigned long first) {
+			offset1 = first;
 			lenInput = len;
 			lenInput_global = len_global;
+			pad1 = (std::min)(width, offset1);
+			offset2 = lenInput_global - lenInput - offset1;
+			pad2 = (std::min)(width, offset2);
 			sizeInput = lenInput * sizeof(Tin);
-			sizeInput_padded = sizeInput + ((std::min)(width, offsetInput) + (std::min)(width, len_global - (len - first))) * sizeof(Tin);
+			sizeInput_padded = sizeInput + (pad1 + pad2) * sizeof(Tin);
+			sizeEnv1_padded = (lenInput + pad1 + pad2) * sizeof(Tenv1);
 			cl_int status;
 			if (inputBuffer)
 			clReleaseMemObject(inputBuffer);
@@ -310,7 +264,7 @@ namespace ff {
 			if (outputBuffer)
 			clReleaseMemObject(outputBuffer);
 			outputBuffer = clCreateBuffer(context,
-					CL_MEM_READ_WRITE, sizeInput, NULL,
+					CL_MEM_READ_WRITE, sizeInput_padded, NULL,
 					&status);
 			checkResult(status, "CreateBuffer output");
 		}
@@ -320,7 +274,7 @@ namespace ff {
 			if (envBuffer1)
 			clReleaseMemObject(envBuffer1);
 			envBuffer1 = clCreateBuffer(context,
-					CL_MEM_READ_WRITE, sizeInput_padded, NULL,
+					CL_MEM_READ_WRITE, sizeEnv1_padded, NULL,
 					&status);
 			checkResult(status, "CreateBuffer envBuffer1");
 		}
@@ -344,24 +298,19 @@ namespace ff {
 			inputBuffer = outputBuffer;
 			outputBuffer = tmp;
 			//set iteration-dynamic MAP kernel args
-			size_t pad = (std::min)(width, offsetInput) * sizeof(Tin);
-			cl_mem p = (cl_mem)((char *)inputBuffer + pad);
 			cl_int status = clSetKernelArg(kernel_map, 0,
-					sizeof(cl_mem), &p);
+					sizeof(cl_mem), &inputBuffer);
 			checkResult(status, "setKernelArg input");
 			status = clSetKernelArg(kernel_map, 1,
 					sizeof(cl_mem), &outputBuffer);
 			checkResult(status, "setKernelArg output");
 		}
 
-		//TODO: optimise
 		void setKernelArgs() {
 			cl_uint idx = 0;
 			//set iteration-dynamic MAP kernel args (init)
-			size_t pad = (std::min)(width, offsetInput) * sizeof(Tin);
-			cl_mem p = (cl_mem)((char *)inputBuffer + pad);
 			cl_int status = clSetKernelArg(kernel_map, idx++, sizeof(cl_mem),
-					&p);
+					&inputBuffer);
 			checkResult(status, "setKernelArg input");
 			status = clSetKernelArg(kernel_map, idx++, sizeof(cl_mem),
 					&outputBuffer);
@@ -371,9 +320,8 @@ namespace ff {
 					(void *) &lenInput_global);
 			checkResult(status, "setKernelArg global input length");
 			//if (envBuffer1) {
-			p = (cl_mem)((char *)envBuffer1 + pad);
 			status = clSetKernelArg(kernel_map, idx++, sizeof(cl_mem),
-					&p);
+					&envBuffer1);
 			checkResult(status, "setKernelArg env1");
 			//if (envBuffer2) {
 			status = clSetKernelArg(kernel_map, idx++, sizeof(cl_mem),
@@ -385,12 +333,15 @@ namespace ff {
 					(void *) &lenInput);
 			checkResult(status, "setKernelArg local input length");
 			status = clSetKernelArg(kernel_map, idx++, sizeof(cl_uint),
-					(void *) &offsetInput);
+					(void *) &offset1);
 			checkResult(status, "setKernelArg offset");
+			status = clSetKernelArg(kernel_map, idx++, sizeof(cl_uint),
+					(void *) &pad1);
+			checkResult(status, "setKernelArg pad");
 		}
 
 		void asyncH2Dinput(Tin *p) {
-			p += offsetInput - (std::min)(width, offsetInput);
+			p += offset1 - pad1;
 			cl_int status = clEnqueueWriteBuffer(cmd_queue,
 					inputBuffer, CL_FALSE, 0,
 					sizeInput_padded, p,
@@ -400,9 +351,9 @@ namespace ff {
 		}
 
 		void asyncH2Denv1(Tenv1 *p) {
-			p += offsetInput - (std::min)(width, offsetInput);
+			p += offset1 - pad1;
 			cl_int status = clEnqueueWriteBuffer(cmd_queue,
-					envBuffer1, CL_FALSE, 0, sizeInput_padded,
+					envBuffer1, CL_FALSE, 0, sizeEnv1_padded,
 					p,
 					0, NULL, &events[1]);
 			checkResult(status, "copying Task to device env1-buffer");
@@ -418,12 +369,42 @@ namespace ff {
 			++nevents;
 		}
 
-		void asyncD2Houtput(Tout *p) {
+		void asyncD2Houtput(Tin *p) {
 			cl_int status = clEnqueueReadBuffer(cmd_queue,
-					outputBuffer, CL_FALSE, offsetInput * sizeof(Tout),
+					outputBuffer, CL_FALSE, pad1 * sizeof(Tin),
 					sizeInput,
-					p, 0, NULL, NULL);
+					p + offset1, 0, NULL, &events[0]);
 			checkResult(status, "copying output back from device");
+			++nevents;
+		}
+
+		void asyncD2Hborders(Tin *p) {
+			cl_int status = clEnqueueReadBuffer(cmd_queue,
+					outputBuffer, CL_FALSE, pad1 * sizeof(Tin),
+					width * sizeof(Tin),
+					p + offset1, 0, NULL, &events[0]);
+			checkResult(status, "copying border1 back from device");
+			++nevents;
+			status = clEnqueueReadBuffer(cmd_queue,
+					outputBuffer, CL_FALSE, (pad1 + lenInput - width) * sizeof(Tin),
+					width * sizeof(Tin),
+					p + offset1 + lenInput - width, 0, NULL, &events[1]);
+			checkResult(status, "copying border2 back from device");
+			++nevents;
+		}
+
+		void asyncH2Dborders(Tin *p) {
+			cl_int status = clEnqueueWriteBuffer(cmd_queue,
+					outputBuffer, CL_FALSE, 0,
+					pad1 * sizeof(Tin), p + offset1 - pad1,
+					0, NULL, &events[0]);
+			checkResult(status, "copying Task to device env2-buffer");
+			++nevents;
+			status = clEnqueueWriteBuffer(cmd_queue,
+					outputBuffer, CL_FALSE, (pad1 + lenInput) * sizeof(Tin),
+					pad2 * sizeof(Tin), p + offset1 + lenInput,
+					0, NULL, &events[1]);
+			checkResult(status, "copying Task to device env2-buffer");
 			++nevents;
 		}
 
@@ -436,6 +417,7 @@ namespace ff {
 			++nevents;
 		}
 
+		//TODO: check event management
 		void join() {
 			clWaitForEvents(nevents, events);
 			nevents = 0;
@@ -537,9 +519,8 @@ namespace ff {
 
 		cl_mem inputBuffer, outputBuffer, envBuffer1, envBuffer2;
 		const size_t width;
-		size_t sizeInput, sizeInput_padded;
-		size_t lenInput, lenInput_global;
-		size_t offsetInput;
+		size_t sizeInput, sizeInput_padded, sizeEnv1_padded;
+		unsigned long lenInput, offset1, offset2, pad1, pad2, lenInput_global;
 		size_t workgroup_size_map, workgroup_size_reduce;
 		unsigned int nevents;
 		cl_event events[3];
@@ -678,7 +659,7 @@ namespace ff {
 			//(eventually) relocate device memory
 			if (oldSizeIn < Task.getBytesizeIn()) {
 				compute_accmem(Task.getSizeIn());
-				for(unsigned int i=0; i<NACCELERATORS; ++i) {
+				for(int i=0; i<NACCELERATORS; ++i) {
 					//input
 					accelerators[i]->relocateInputBuffer(acc_len[i], Task.getSizeIn(), acc_off[i]);
 					//output
@@ -726,7 +707,7 @@ namespace ff {
 			}
 
 			//set kernel args
-			for(unsigned int i=0; i<NACCELERATORS; ++i)
+			for(int i=0; i<NACCELERATORS; ++i)
 			accelerators[i]->setKernelArgs();
 
 			if (!isPureMap()) {
@@ -743,19 +724,18 @@ namespace ff {
 			}
 
 			//(async) copy input and environments (h2d)
-			for(unsigned int i=0; i<NACCELERATORS; ++i) {
+			for(int i=0; i<NACCELERATORS; ++i) {
 				//in
 				accelerators[i]->asyncH2Dinput(Task.getInPtr());
 				//env1
-				if (envPtr1 && Task.getCopyEnv1()) {
-					accelerators[i]->asyncH2Denv1(Task.getEnvPtr1());
-					//env2
-					if (envPtr2 && Task.getCopyEnv2())
-					accelerators[i]->asyncH2Denv2(Task.getEnvPtr2());
-				}
+				if (envPtr1 && Task.getCopyEnv1())
+				accelerators[i]->asyncH2Denv1(Task.getEnvPtr1());
+				//env2
+				if (envPtr2 && Task.getCopyEnv2())
+				accelerators[i]->asyncH2Denv2(Task.getEnvPtr2());
 			}
 			//join
-			for(unsigned int i=0; i<NACCELERATORS; ++i)
+			for(int i=0; i<NACCELERATORS; ++i)
 			accelerators[i]->join();
 
 			if (isPureReduce()) {
@@ -818,28 +798,42 @@ namespace ff {
 
 				if (isPureMap()) {
 					//(async) exec kernel
-					for(unsigned int i=0; i<NACCELERATORS; ++i)
+					for(int i=0; i<NACCELERATORS; ++i)
 					accelerators[i]->asyncExecMapKernel();
 					Task.incIter();
 					//join
-					for(unsigned int i=0; i<NACCELERATORS; ++i)
+					for(int i=0; i<NACCELERATORS; ++i)
 					accelerators[i]->join();
 				}
 
 				else { //iterative Map-Reduce (aka stencilReduce)
-					//invalidate first swap
-					for(unsigned int i=0; i<NACCELERATORS; ++i)
+					   //invalidate first swap
+					for(int i=0; i<NACCELERATORS; ++i)
 					accelerators[i]->swap();
 					do {
-						for(unsigned int i=0; i<NACCELERATORS; ++i)
+						for(int i=0; i<NACCELERATORS; ++i)
 						accelerators[i]->swap();
 
 						//(async) execute MAP kernel
-						for(unsigned int i=0; i<NACCELERATORS; ++i)
+						for(int i=0; i<NACCELERATORS; ++i)
 						accelerators[i]->asyncExecMapKernel();
 						Task.incIter();
 						//join
-						for(unsigned int i=0; i<NACCELERATORS; ++i)
+						for(int i=0; i<NACCELERATORS; ++i)
+						accelerators[i]->join();
+
+						//(async) read back borders (d2h)
+						for(int i=0; i<NACCELERATORS; ++i)
+						accelerators[i]->asyncD2Hborders(Task.getOutPtr());
+						//join
+						for(int i=0; i<NACCELERATORS; ++i)
+						accelerators[i]->join();
+
+						//(async) read borders (h2d)
+						for(int i=0; i<NACCELERATORS; ++i)
+						accelerators[i]->asyncH2Dborders(Task.getOutPtr());
+						//join
+						for(int i=0; i<NACCELERATORS; ++i)
 						accelerators[i]->join();
 
 #if 0 //REDUCE
@@ -898,16 +892,12 @@ namespace ff {
 				}
 
 				//(async)read back output (d2h)
-				for(unsigned int i=0; i<NACCELERATORS; ++i)
+				for(int i=0; i<NACCELERATORS; ++i)
 				accelerators[i]->asyncD2Houtput(Task.getOutPtr());
 				//join
-				for(unsigned int i=0; i<NACCELERATORS; ++i)
+				for(int i=0; i<NACCELERATORS; ++i)
 				accelerators[i]->join();
 			}
-
-			//TODO check
-//		for(int i=0; i<3; ++i)
-//			if(events[i]) clReleaseEvent(events[i]);
 
 			return (oneshot ? NULL : task);
 		}
@@ -958,7 +948,7 @@ namespace ff {
 
 		void compute_accmem(size_t len) {
 			size_t start = 0, step = (len + NACCELERATORS - 1) / NACCELERATORS;
-			unsigned int i=0;
+			int i=0;
 			for(; i<NACCELERATORS-1; ++i) {
 				acc_off[i] = start;
 				acc_len[i] = step;

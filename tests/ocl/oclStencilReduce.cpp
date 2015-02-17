@@ -35,14 +35,49 @@
 using namespace ff;
 
 #define SIZE 1024
-#define NITER 5
+#define NITER 2
 #define STREAMLEN 10
+#define NACCELERATORS 2
 
 FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y, return (x+y););
 
 FF_OCL_STENCIL_ELEMFUNC(mapf, float, float, N, i, in, i_, int, env, char, env2,
 //return in[i_] + env[i_] + (i>0) * in[i_-1] + (i<N) * in[i_+1];
-		return in[i_] + (i>0) * in[i_-1] + (i<N) * in[i_+1];);
+		return in[i_] + env[i_] + (i>0) * in[i_-1] + (i<N) * in[i_+1];);
+
+void init(float *M_in, float *out, int *env, int size) {
+	for (int j = 0; j < size; ++j) {
+		M_in[j] = (float) j;
+		env[j] = j * 10;
+		out[j] = 0.0;
+	}
+}
+
+void print_res(const char label[], float *M, int size) {
+	int ip[6] = {0, size/3, size/2-1, size/2, size*2/3, size-1};
+	for(int i=0; i<6; ++i)
+	printf("[%s] res[%d]=%.2f\n", label, ip[i], M[ip[i]]);
+}
+
+void print_expected(int size) {
+	float *in = new float[size], *M_out = new float[size];
+	int *env = new int[size];
+	init(in, M_out, env, size);
+	float *tmp = in;
+	in = M_out;
+	M_out = tmp;
+	for (int k = 0; k < NITER; ++k) {
+		float *tmp = in;
+		in = M_out;
+		M_out = tmp;
+		for (int i = 0; i < size; ++i)
+			M_out[i] = in[i] + env[i] + (i > 0) * in[i - 1] + (i < size) * in[i + 1];
+	}
+	print_res("EXPECTED", M_out, size);
+	delete[] in;
+	delete[] M_out;
+	delete[] env;
+}
 
 struct oclTask: public baseOCLTask<oclTask, float, float, int, int> {
 	oclTask() :
@@ -71,14 +106,6 @@ struct oclTask: public baseOCLTask<oclTask, float, float, int, int> {
 	const int size;
 	int *env;
 };
-
-void init(float *M_in, float *out, int *env, int size) {
-	for (int j = 0; j < size; ++j) {
-		M_in[j] = (float) j;
-		env[j] = j * 10;
-		out[j] = 0.0;
-	}
-}
 
 class Emitter: public ff_node {
 public:
@@ -113,32 +140,11 @@ class Printer: public ff_node {
 public:
 	void *svc(void *task) {
 		oclTask *t = (oclTask *) task;
-		unsigned int size = t->size;
-		printf("[streaming] res[%d]=%.2f\n", size / 2, t->M_out[size / 2]);
+		int size = t->size;
+		print_res("streaming", t->M_out, size);
 		return task;
 	}
 };
-
-float expected(int idx, int size) {
-	float *in = new float[size], *M_out = new float[size];
-	int *env = new int[size];
-	init(in, M_out, env, size);
-	float *tmp = in;
-	in = M_out;
-	M_out = tmp;
-	for (int k = 0; k < NITER; ++k) {
-		float *tmp = in;
-		in = M_out;
-		M_out = tmp;
-		for (int i = 0; i < size; ++i)
-			M_out[i] = in[i] + (i > 0) * in[i - 1] + (i < size) * in[i + 1];
-	}
-	float res = M_out[idx];
-	delete[] in;
-	delete[] M_out;
-	delete[] env;
-	return res;
-}
 
 int main(int argc, char * argv[]) {
 	//one-shot
@@ -151,21 +157,22 @@ int main(int argc, char * argv[]) {
 	init(M_in, M_out, env, size);
 	oclTask oclt(M_in, M_out, env, size);
 	ff_stencilReduceOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf, reducef,
-			0, 1, 1);
+			0, NACCELERATORS, 1);
 	oclStencilReduceOneShot.run_and_wait_end();
-	printf("[oneshot] res[%d]=%.2f\n", size / 2, M_out[size / 2]);
+	print_res("INPUT", M_in, size);
+	print_res("oneshot", M_out, size);
 	//printf("reduceVar=%.2f\n", oclt.getReduceVar());
 
 	//stream
-	Emitter e(size);
-	ff_pipeline pipe;
-	pipe.add_stage(&e);
-	pipe.add_stage(new ff_stencilReduceOCL_1D<oclTask>(mapf, reducef, 0, 1, 1));
-	Printer p;
-	pipe.add_stage(&p);
-	pipe.run_and_wait_end();
+//	Emitter e(size);
+//	ff_pipeline pipe;
+//	pipe.add_stage(&e);
+//	pipe.add_stage(new ff_stencilReduceOCL_1D<oclTask>(mapf, reducef, 0, 1, 1));
+//	Printer p;
+//	pipe.add_stage(&p);
+//	pipe.run_and_wait_end();
 
-	printf("expected=%.2f\n", expected(size / 2, size));
+	print_expected(size);
 
 	return 0;
 }
