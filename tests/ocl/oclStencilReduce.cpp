@@ -79,7 +79,7 @@ void print_expected(int size) {
 	delete[] env;
 }
 
-struct oclTask: public baseOCLTask<oclTask, float, float, int, int> {
+struct oclTask: public baseOCLTask<oclTask, float, int, int> {
 	oclTask() :
 			M_in(NULL), M_out(NULL), size(0), env(NULL) {
 	}
@@ -98,7 +98,7 @@ struct oclTask: public baseOCLTask<oclTask, float, float, int, int> {
 		setOutPtr(t->M_out);
 		setEnvPtr1(t->env);
 	}
-	bool iterCondition(Tout x, unsigned int iter) {
+	bool iterCondition(Tin x, unsigned int iter) {
 		return iter < NITER;
 	}
 
@@ -149,15 +149,18 @@ public:
 int main(int argc, char * argv[]) {
 	//one-shot
 	int size = SIZE;
-	if (argc > 1)
+    int nacc = NACCELERATORS;
+	if(argc > 1)
 		size = atol(argv[1]);
-	printf("arraysize = %d\n", size);
+    if(argc > 2)
+        nacc = atol(argv[2]);
+	printf("arraysize = %d, n. accelerators = %d\n", size, nacc);
 	float *M_in = new float[size], *M_out = new float[size];
 	int *env = new int[size];
 	init(M_in, M_out, env, size);
 	oclTask oclt(M_in, M_out, env, size);
 	ff_stencilReduceOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf, reducef,
-			0, NACCELERATORS, 1);
+			0, nacc, 1);
 	oclStencilReduceOneShot.run_and_wait_end();
 	print_res("INPUT", M_in, size);
 	print_res("oneshot", M_out, size);
@@ -167,7 +170,7 @@ int main(int argc, char * argv[]) {
 //	Emitter e(size);
 //	ff_pipeline pipe;
 //	pipe.add_stage(&e);
-//	pipe.add_stage(new ff_stencilReduceOCL_1D<oclTask>(mapf, reducef, 0, 1, 1));
+//	pipe.add_stage(new ff_stencilReduceOCL_1D<oclTask>(mapf, reducef, 0, nacc, 1));
 //	Printer p;
 //	pipe.add_stage(&p);
 //	pipe.run_and_wait_end();
