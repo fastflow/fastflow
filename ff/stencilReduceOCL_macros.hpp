@@ -33,7 +33,8 @@
         "kern_" #name "|"                                                        			\
         #outT "|"                                                                			\
 "\n\n" #outT " f" #name "(\n"                                                   			\
-"\t__global " #inT "* " #in ",const uint " #size ",\n"                        				\
+"\t__global " #inT "* " #in ",\n"															\
+"\tconst uint " #size ",\n"                        											\
 "\tconst int " #idx ",\n"                                                        			\
 "\tconst int " #idx_ ",\n"                                                        			\
 "\t__global const " #env1T "* " #env1 ",\n"                                      			\
@@ -46,13 +47,14 @@
 "\tconst uint inSize,\n"                                                         			\
 "\t__global const " #env1T "* env1,\n"                                           			\
 "\t__global const " #env2T "* env2,\n"                                           			\
-"\tconst uint maxItems,\n"                                                     			\
-"\tconst uint offset) {\n"                                                     			\
-"\t    int j = get_global_id(0);\n"                                              			\
-"\t    int i = j + offset;\n"                                              					\
+"\tconst uint maxItems,\n"                                                  	   			\
+"\tconst uint offset,\n"                                                  	   			\
+"\tconst uint pad) {\n"                                               	      			\
+"\t    int i = get_global_id(0);\n"                                              			\
+"\t    int ig = i + offset;\n"                                              					\
 "\t    uint gridSize = get_local_size(0)*get_num_groups(0);\n"                   			\
 "\t    while(i < maxItems)  {\n"                                                 			\
-"\t        output[i] = f" #name "(input,inSize,i,j,env1,env2);\n"                  			\
+"\t        output[i+pad] = f" #name "(input+pad,inSize,ig,i,env1+pad,env2);\n"          			\
 "\t        i += gridSize;\n"                                                     			\
 "\t    }\n"                                                                      			\
 "}\n"
