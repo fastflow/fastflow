@@ -46,19 +46,18 @@ namespace ff {
 //
 // TODO: try to implement as a variadic template !!
 //
-	template<typename TaskT_, typename Tin_, typename Tout_ = Tin_, typename Tenv1_ = char,
+	template<typename TaskT_, typename Tin_, typename Tenv1_ = char,
 	typename Tenv2_ = char>
 	class baseOCLTask {
 	public:
 		typedef TaskT_ TaskT;
 		typedef Tin_ Tin;
-		typedef Tout_ Tout;
 		typedef Tenv1_ Tenv1;
 		typedef Tenv2_ Tenv2;
 
 		baseOCLTask() :
 		inPtr(NULL), outPtr(NULL), envPtr1(NULL), envPtr2(NULL), size_in(0),
-		reduceVar((Tout) 0), copyEnv1(true), copyEnv2(true), iter(0) {
+		reduceVar((Tin) 0), copyEnv1(true), copyEnv2(true), iter(0) {
 		}
 
 		virtual ~baseOCLTask() {
@@ -66,7 +65,7 @@ namespace ff {
 
 		// user must override this methods
 		virtual void setTask(const TaskT *t) = 0;
-		virtual bool iterCondition(Tout, unsigned int) = 0;
+		virtual bool iterCondition(Tin, unsigned int) = 0;
 
 		bool iterCondition_aux() {
 			return iterCondition(reduceVar, iter);
@@ -87,7 +86,7 @@ namespace ff {
 		void setInPtr(Tin* _inPtr) {
 			inPtr = _inPtr;
 		}
-		void setOutPtr(Tout* _outPtr) {
+		void setOutPtr(Tin* _outPtr) {
 			outPtr = _outPtr;
 		}
 		void setEnvPtr1(const Tenv1* _envPtr) {
@@ -114,7 +113,7 @@ namespace ff {
 		Tin* getInPtr() const {
 			return inPtr;
 		}
-		Tout* getOutPtr() const {
+		Tin* getOutPtr() const {
 			return outPtr;
 		}
 		Tenv1* getEnvPtr1() const {
@@ -124,19 +123,19 @@ namespace ff {
 			return envPtr2;
 		}
 
-		void setReduceVar(const Tout r) {
+		void setReduceVar(const Tin r) {
 			reduceVar = r;
 		}
 
-		Tout getReduceVar() const {
+		Tin getReduceVar() const {
 			return reduceVar;
 		}
 
-		Tout getInitReduceVal() {
+		Tin getInitReduceVal() {
 			return initReduceVal;
 		}
 
-		void setInitReduceVal(Tout x) {
+		void setInitReduceVal(Tin x) {
 			initReduceVal = x;
 		}
 
@@ -153,12 +152,12 @@ namespace ff {
 
 	protected:
 		Tin *inPtr;
-		Tout *outPtr;
+		Tin *outPtr;
 		Tenv1 *envPtr1;
 		Tenv2 *envPtr2;
 
 		size_t size_in;
-		Tout reduceVar, initReduceVal;
+		Tin reduceVar, initReduceVal;
 
 		bool copyEnv1, copyEnv2;
 
@@ -394,18 +393,22 @@ namespace ff {
 		}
 
 		void asyncH2Dborders(Tin *p) {
+            if(pad1) {
 			cl_int status = clEnqueueWriteBuffer(cmd_queue,
 					outputBuffer, CL_FALSE, 0,
 					pad1 * sizeof(Tin), p + offset1 - pad1,
 					0, NULL, &events[0]);
-			checkResult(status, "copying Task to device env2-buffer");
+			checkResult(status, "copying left border to device");
 			++nevents;
-			status = clEnqueueWriteBuffer(cmd_queue,
+            }
+            if(pad2) {
+			cl_int status = clEnqueueWriteBuffer(cmd_queue,
 					outputBuffer, CL_FALSE, (pad1 + lenInput) * sizeof(Tin),
 					pad2 * sizeof(Tin), p + offset1 + lenInput,
 					0, NULL, &events[1]);
-			checkResult(status, "copying Task to device env2-buffer");
+			checkResult(status, "copying right border to device env2-buffer");
 			++nevents;
+            }
 		}
 
 		void asyncExecMapKernel() {
@@ -428,7 +431,7 @@ namespace ff {
 		cl_program program;
 		cl_command_queue cmd_queue;
 #if 0 //REDUCE
-		typename T::Tout *reduceMemInit;
+		typename T::Tin *reduceMemInit;
 		cl_mem reduceBuffer;
 #endif
 		cl_kernel kernel_map, kernel_reduce;
@@ -539,11 +542,13 @@ namespace ff {
 	template<typename T, typename TOCL = T>
 	class ff_stencilReduceOCL_1D: public ff_node_t<T> {
 	public:
-		typedef typename TOCL::Tout Tout;
+		typedef typename TOCL::Tin Tin;
+        typedef typename TOCL::Tenv1 Tenv1;
+        typedef typename TOCL::Tenv2 Tenv2;
 		typedef ff_oclAccelerator<T,TOCL> accelerator_t;
 
-		ff_stencilReduceOCL_1D(const std::string &mapf, const std::string &reducef = std::string(""), Tout initReduceVar =
-				(Tout) 0, const int NACCELERATORS_ = 1, const int width_ = 1) : oneshot(false),
+		ff_stencilReduceOCL_1D(const std::string &mapf, const std::string &reducef = std::string(""), Tin initReduceVar =
+				(Tin) 0, const int NACCELERATORS_ = 1, const int width_ = 1) : oneshot(false),
 		NACCELERATORS(NACCELERATORS_), width(width_), oldSizeIn(0), oldSizeReduce(0) {
 			setcode(mapf, reducef);
 			Task.setInitReduceVal(initReduceVar);
@@ -553,7 +558,7 @@ namespace ff {
 			acc_len = new size_t[NACCELERATORS];
 			acc_off = new size_t[NACCELERATORS];
 		}
-		ff_stencilReduceOCL_1D(const T &task, const std::string &mapf, const std::string &reducef = std::string(""), Tout initReduceVar = (Tout) 0,
+		ff_stencilReduceOCL_1D(const T &task, const std::string &mapf, const std::string &reducef = std::string(""), Tin initReduceVar = (Tin) 0,
 				const int NACCELERATORS_ = 1, const int width_ = 1) : oneshot(true),
 		NACCELERATORS(NACCELERATORS_), width(width_), oldSizeIn(0), oldSizeReduce(0) {
 			ff_node::skipfirstpop(true);
@@ -651,10 +656,10 @@ namespace ff {
 		T *svc(T *task) {
 			if (task)
 			Task.setTask(task);
-			void* inPtr = Task.getInPtr();
-			void* outPtr = Task.getOutPtr();
-			void *envPtr1 = Task.getEnvPtr1();
-			void *envPtr2 = Task.getEnvPtr2();
+			Tin* inPtr = Task.getInPtr();
+			Tin* outPtr = Task.getOutPtr();
+			Tenv1 *envPtr1 = Task.getEnvPtr1();
+			Tenv2 *envPtr2 = Task.getEnvPtr2();
 
 			//(eventually) relocate device memory
 			if (oldSizeIn < Task.getBytesizeIn()) {
@@ -697,7 +702,7 @@ namespace ff {
 					acc.reduceBuffer = clCreateBuffer(acc.context,
 							CL_MEM_READ_WRITE, numBlocks_reduce * elemSize, NULL, &status);
 					acc.checkResult(status, "CreateBuffer reduce");
-					acc.reduceMemInit = (Tout *) malloc(numBlocks_reduce * elemSize);
+					acc.reduceMemInit = (Tin *) malloc(numBlocks_reduce * elemSize);
 					for (size_t i = 0; i < numBlocks_reduce; ++i)
 					acc.reduceMemInit[i] =
 					Task.getInitReduceVal();
@@ -781,7 +786,7 @@ namespace ff {
 						0, NULL, &events[0]);
 
 				//read back REDUCE var (d2h)
-				Tout reduceVar;
+				Tin reduceVar;
 				status |= clWaitForEvents(1, &events[0]);
 				status |= clEnqueueReadBuffer(acc.cmd_queue,
 						acc.reduceBuffer, CL_TRUE, 0, elemSize, &reduceVar, 0,
@@ -878,7 +883,7 @@ namespace ff {
 								0, NULL, &events[0]);
 
 						//read back REDUCE var (d2h)
-						Tout reduceVar;
+						Tin reduceVar;
 						status |= clWaitForEvents(1, &events[0]);
 						status |= clEnqueueReadBuffer(acc.cmd_queue,
 								acc.reduceBuffer, CL_TRUE, 0, elemSize, &reduceVar, 0,
@@ -1006,12 +1011,12 @@ namespace ff {
 	template<typename T, typename TOCL = T>
 	class ff_reduceOCL_1D: public ff_stencilReduceOCL_1D<T, TOCL> {
 	public:
-		typedef typename TOCL::Tout Tout;
+		typedef typename TOCL::Tin Tin;
 
-		ff_reduceOCL_1D(std::string reducef, Tout initReduceVar = (Tout) 0, const size_t NACCELERATORS = 1) :
+		ff_reduceOCL_1D(std::string reducef, Tin initReduceVar = (Tin) 0, const size_t NACCELERATORS = 1) :
 		ff_stencilReduceOCL_1D<T, TOCL>("", reducef, initReduceVar, NACCELERATORS) {
 		}
-		ff_reduceOCL_1D(const T &task, std::string reducef, Tout initReduceVar = (Tout) 0, const size_t NACCELERATORS = 1) :
+		ff_reduceOCL_1D(const T &task, std::string reducef, Tin initReduceVar = (Tin) 0, const size_t NACCELERATORS = 1) :
 		ff_stencilReduceOCL_1D<T, TOCL>(task, "", reducef, initReduceVar, NACCELERATORS) {
 		}
 		bool isPureReduce() {return true;}
