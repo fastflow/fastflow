@@ -16,7 +16,6 @@
  *
  * API:
  * 'name' is the name of the string variable in which the code is stored
- * 'outT' is the element type of the output
  * 'inT' is the element type of the input
  * 'size' is the global size of the input array
  * 'idx' is the global index
@@ -28,11 +27,11 @@
  * 'env2' is (a pointer to) the constant environment value
  * 'code' is the OpenCL code of the elemental function
  */
-#define FF_OCL_STENCIL_ELEMFUNC(name,outT,inT,size,idx,in,idx_,env1T,env1,env2T,env2,code)	\
+#define FF_OCL_STENCIL_ELEMFUNC(name,inT,size,idx,in,idx_,env1T,env1,env2T,env2,code)	\
     static char name[] =                                                         			\
         "kern_" #name "|"                                                        			\
-        #outT "|"                                                                			\
-"\n\n" #outT " f" #name "(\n"                                                   			\
+        #inT "|"                                                                			\
+"\n\n" #inT " f" #name "(\n"                                                   			\
 "\t__global " #inT "* " #in ",\n"															\
 "\tconst uint " #size ",\n"                        											\
 "\tconst int " #idx ",\n"                                                        			\
@@ -43,7 +42,7 @@
 "}\n\n"                                                                          			\
 "__kernel void kern_" #name "(\n"                                                			\
 "\t__global " #inT  "* input,\n"                                                 			\
-"\t__global " #outT "* output,\n"                                                			\
+"\t__global " #inT "* output,\n"                                                			\
 "\tconst uint inSize,\n"                                                         			\
 "\t__global const " #env1T "* env1,\n"                                           			\
 "\t__global const " #env2T "* env2,\n"                                           			\
