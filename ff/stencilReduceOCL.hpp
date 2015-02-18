@@ -549,25 +549,25 @@ namespace ff {
 
 		ff_stencilReduceOCL_1D(const std::string &mapf, const std::string &reducef = std::string(""), Tin initReduceVar =
 				(Tin) 0, const int NACCELERATORS_ = 1, const int width_ = 1) : oneshot(false),
-		NACCELERATORS(NACCELERATORS_), width(width_), oldSizeIn(0), oldSizeReduce(0) {
+		NACCELERATORS(NACCELERATORS_), stencil_width(width_), oldSizeIn(0), oldSizeReduce(0) {
 			setcode(mapf, reducef);
 			Task.setInitReduceVal(initReduceVar);
 			accelerators = (accelerator_t **)malloc(NACCELERATORS * sizeof(accelerator_t *));
 			for(int i=0; i<NACCELERATORS; ++i)
-			accelerators[i] = new accelerator_t(width);
+			accelerators[i] = new accelerator_t(stencil_width);
 			acc_len = new size_t[NACCELERATORS];
 			acc_off = new size_t[NACCELERATORS];
 		}
 		ff_stencilReduceOCL_1D(const T &task, const std::string &mapf, const std::string &reducef = std::string(""), Tin initReduceVar = (Tin) 0,
 				const int NACCELERATORS_ = 1, const int width_ = 1) : oneshot(true),
-		NACCELERATORS(NACCELERATORS_), width(width_), oldSizeIn(0), oldSizeReduce(0) {
+		NACCELERATORS(NACCELERATORS_), stencil_width(width_), oldSizeIn(0), oldSizeReduce(0) {
 			ff_node::skipfirstpop(true);
 			setcode(mapf, reducef);
 			Task.setTask(&task);
 			Task.setInitReduceVal(initReduceVar);
 			accelerators = (accelerator_t **)malloc(NACCELERATORS * sizeof(accelerator_t *));
 			for(int i=0; i<NACCELERATORS; ++i)
-			accelerators[i] = new accelerator_t(width);
+			accelerators[i] = new accelerator_t(stencil_width);
 			acc_len = new size_t[NACCELERATORS];
 			acc_off = new size_t[NACCELERATORS];
 		}
@@ -963,7 +963,7 @@ namespace ff {
 			acc_len[i] = len - start;
 		}
 
-		int NACCELERATORS, width;
+		int NACCELERATORS, stencil_width;
 		accelerator_t **accelerators;
 		size_t *acc_len, *acc_off;
 

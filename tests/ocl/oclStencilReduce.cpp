@@ -41,7 +41,7 @@ using namespace ff;
 
 FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y, return (x+y););
 
-FF_OCL_STENCIL_ELEMFUNC(mapf, float, float, N, i, in, i_, int, env, char, env2,
+FF_OCL_STENCIL_ELEMFUNC(mapf, float, N, i, in, i_, int, env, char, env2,
 //return in[i_] + env[i_] + (i>0) * in[i_-1] + (i<N) * in[i_+1];
 		return in[i_] + env[i_] + (i>0) * in[i_-1] + (i<N) * in[i_+1];);
 
