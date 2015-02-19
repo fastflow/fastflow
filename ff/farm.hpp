@@ -186,7 +186,7 @@ public:
     	//fftree stuff
     	fftree_ptr = new fftree(this, FARM);
     	fftree_ptr->add_child(lb->fftree_ptr = new fftree(lb, EMITTER));
-    	fftree_ptr->add_child(gt->fftree_ptr = NULL);
+    	fftree_ptr->add_child(gt->fftree_ptr = new fftree(gt, COLLECTOR));
 
         std::vector<ff_node*> w(nw);        
         for(int i=0;i<nw;++i) w[i]=new ff_node_F<T>(F);
@@ -222,7 +222,7 @@ public:
     	//fftree stuff
     	fftree_ptr = new fftree(this, FARM);
     	fftree_ptr->add_child(lb->fftree_ptr = new fftree(lb, EMITTER));
-    	fftree_ptr->add_child(gt->fftree_ptr = NULL);
+    	fftree_ptr->add_child(gt->fftree_ptr = new fftree(gt, COLLECTOR));
 
         assert(W.size()>0);
         add_workers(W);
@@ -339,10 +339,11 @@ public:
             assert(has_input_channel);
             emitter->set_input_buffer(in);
         }
-        if (lb->set_filter(emitter)) return -1;
-        //fftree stuff
-        lb->fftree_ptr->do_comp = true;
-        return 0;
+        int res = lb->set_filter(emitter);
+        if(res >= 0)
+        	//fftree stuff
+        	lb->fftree_ptr->do_comp = true;
+        return res;
     }
 
     /**
@@ -421,7 +422,7 @@ public:
             error("add_collector: collector already defined!\n");
             return -1; 
         }
-        if (!gt) return -1; 
+        if (!gt) return -1; //inconsist state
 
         collector = ((c!=NULL)?c:(ff_node*)gt);
         
@@ -429,7 +430,12 @@ public:
             if (create_output_buffer(out_buffer_entries, false)<0) return -1;
         }
         
-        return gt->set_filter(c);
+        fftree_ptr->update_child(1, gt->fftree_ptr = new fftree(gt, COLLECTOR));
+        int res = gt->set_filter(c);
+        if(res >= 0 && c)
+        	//fftree stuff
+            gt->fftree_ptr->do_comp = true;
+        return res;
     }
     
     /**
@@ -488,6 +494,7 @@ public:
      */
     int remove_collector() { 
         collector_removed = true;
+        fftree_ptr->update_child(1, gt->fftree_ptr = NULL);
         return 0;
     }
 

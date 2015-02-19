@@ -92,6 +92,14 @@ struct fftree {
 			roots.erase(t);
 	}
 
+	void update_child(unsigned int idx, fftree *t) {
+		if (children[idx].first && !children[idx].second)
+			delete children[idx].first;
+		children[idx] = std::make_pair(t,t?t->ispattern():false);
+		if (t && t->isroot)
+			roots.erase(t);
+	}
+
 	std::string fftype_tostr(fftype t) {
 		switch (t) {
 		case FARM:
