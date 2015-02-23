@@ -36,7 +36,6 @@
 #include <fstream>
 #include <ff/oclnode.hpp>
 #include <ff/node.hpp>
-//#include <ff/oclMacroes.hpp>
 #include <ff/stencilReduceOCL_macros.hpp>
 
 namespace ff {
@@ -393,22 +392,22 @@ namespace ff {
 		}
 
 		void asyncH2Dborders(Tin *p) {
-            if(pad1) {
-			cl_int status = clEnqueueWriteBuffer(cmd_queue,
-					outputBuffer, CL_FALSE, 0,
-					pad1 * sizeof(Tin), p + offset1 - pad1,
-					0, NULL, &events[0]);
-			checkResult(status, "copying left border to device");
-			++nevents;
-            }
-            if(pad2) {
-			cl_int status = clEnqueueWriteBuffer(cmd_queue,
-					outputBuffer, CL_FALSE, (pad1 + lenInput) * sizeof(Tin),
-					pad2 * sizeof(Tin), p + offset1 + lenInput,
-					0, NULL, &events[1]);
-			checkResult(status, "copying right border to device env2-buffer");
-			++nevents;
-            }
+			if(pad1) {
+				cl_int status = clEnqueueWriteBuffer(cmd_queue,
+						outputBuffer, CL_FALSE, 0,
+						pad1 * sizeof(Tin), p + offset1 - pad1,
+						0, NULL, &events[0]);
+				checkResult(status, "copying left border to device");
+				++nevents;
+			}
+			if(pad2) {
+				cl_int status = clEnqueueWriteBuffer(cmd_queue,
+						outputBuffer, CL_FALSE, (pad1 + lenInput) * sizeof(Tin),
+						pad2 * sizeof(Tin), p + offset1 + lenInput,
+						0, NULL, &events[1]);
+				checkResult(status, "copying right border to device");
+				++nevents;
+			}
 		}
 
 		void asyncExecMapKernel() {
@@ -543,8 +542,8 @@ namespace ff {
 	class ff_stencilReduceOCL_1D: public ff_node_t<T> {
 	public:
 		typedef typename TOCL::Tin Tin;
-        typedef typename TOCL::Tenv1 Tenv1;
-        typedef typename TOCL::Tenv2 Tenv2;
+		typedef typename TOCL::Tenv1 Tenv1;
+		typedef typename TOCL::Tenv2 Tenv2;
 		typedef ff_oclAccelerator<T,TOCL> accelerator_t;
 
 		ff_stencilReduceOCL_1D(const std::string &mapf, const std::string &reducef = std::string(""), Tin initReduceVar =
@@ -947,8 +946,6 @@ namespace ff {
 				} else
 				kernel_code += tmpstr.substr(n + 1);
 			}
-
-			kernel_code = "struct env_t {int x,y;};\n" + kernel_code;
 		}
 
 		void compute_accmem(size_t len) {
