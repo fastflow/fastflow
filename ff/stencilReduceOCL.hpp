@@ -205,6 +205,9 @@ namespace ff {
 				baseclass_ocl_node_deviceId = threadMapper::instance()->getOCLaccelerators()[id]; break;
 			}
 			svc_SetUpOclObjects(baseclass_ocl_node_deviceId, kernel_code, kernel_name1, kernel_name2);
+			char tmp[1024];
+			clGetDeviceInfo(baseclass_ocl_node_deviceId, CL_DEVICE_NAME, 1024*sizeof(char), (void *)tmp, NULL);
+			std::cerr << "selected device: " << tmp << std::endl;
 		}
 
 		void release() {
@@ -422,6 +425,8 @@ namespace ff {
 		//TODO: check event management
 		void join() {
 			clWaitForEvents(nevents, events);
+			for(unsigned int i=0; i<nevents; ++i)
+			clReleaseEvent(events[i]);
 			nevents = 0;
 		}
 
@@ -446,7 +451,7 @@ namespace ff {
 			program = clCreateProgramWithSource(context, 1, &code, &sourceSize, &status);
 			checkResult(status, "creating program with source");
 
-			status = clBuildProgram(program, 1, &dId, "-cl-fast-relaxed-math", NULL, NULL);
+			status = clBuildProgram(program, 1, &dId, /*"-cl-fast-relaxed-math"*/NULL, NULL, NULL);
 			checkResult(status, "building program");
 
 			//#if 0
@@ -639,9 +644,9 @@ namespace ff {
 #endif
 
 		virtual int svc_init() {
-			size_t ngpus = threadMapper::instance()->getOCLgpus().size();
+			size_t ngpus = threadMapper::instance()->getOCLcpus().size();
 			for(int i=0; i<NACCELERATORS; ++i) {
-				accelerators[i]->init(CL_DEVICE_TYPE_GPU, i % ngpus, kernel_code, kernel_name1, kernel_name2);
+				accelerators[i]->init(CL_DEVICE_TYPE_CPU, i % ngpus, kernel_code, kernel_name1, kernel_name2);
 			}
 			return 0;
 		}
