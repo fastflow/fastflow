@@ -129,21 +129,25 @@ public:
 			status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU,
 					max_supported_devices, devices, &n_devices);
 			checkResult(status, "clGetDeviceIDs GPU");
+			if(!status)
 			for (cl_uint j = 0; j < n_devices; ++j)
-			ocl_gpus.push_back(devices[j]);
+				ocl_gpus.push_back(devices[j]);
 			//CPUs
 			status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_CPU,
 					max_supported_devices, devices, &n_devices);
 			checkResult(status, "clGetDeviceIDs CPU");
+			if(!status)
 			for (cl_uint j = 0; j < n_devices; ++j)
-			ocl_cpus.push_back(devices[j]);
+				ocl_cpus.push_back(devices[j]);
 			//accelerators
 			status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ACCELERATOR,
 					max_supported_devices, devices, &n_devices);
 			checkResult(status, "clGetDeviceIDs Accelerators");
-            for (cl_uint j = 0; j < n_devices; ++j)
-			ocl_accelerators.push_back(devices[j]);
+			if(!status)
+			for (cl_uint j = 0; j < n_devices; ++j)
+				ocl_accelerators.push_back(devices[j]);
 		}
+		ocl_cpu_id = ocl_gpu_id = ocl_accelerator_id = 0;
 #endif
 	}
 
@@ -251,7 +255,7 @@ public:
 
 #if defined(FF_CUDA) 
 	inline int getNumCUDADevices() const {
-		int deviceCount=0;
+		int deviceCount = 0;
 		cudaError_t error_id = cudaGetDeviceCount(&deviceCount);
 		if (error_id != cudaSuccess) {
 			error("getNumCUDADevices: cannot get the number of cuda devices\n");
@@ -262,16 +266,28 @@ public:
 #endif
 
 #if defined(FF_OCL)
-	inline svector<cl_device_id> &getOCLcpus() {
-		return ocl_cpus;
+	cl_device_id getOCLcpu() {
+		cl_device_id res = ocl_cpus[(ocl_cpu_id++) % ocl_cpus.size()];
+		char tmp[1024];
+		clGetDeviceInfo(res, CL_DEVICE_NAME, 1024 * sizeof(char), tmp, NULL);
+		std::cerr << "picked CPU device: " << tmp << std::endl;
+		return res;
 	}
 
-	inline svector<cl_device_id> &getOCLgpus() {
-		return ocl_gpus;
+	cl_device_id getOCLgpu() {
+		cl_device_id res = ocl_gpus[(ocl_gpu_id++) % ocl_gpus.size()];
+		char tmp[1024];
+		clGetDeviceInfo(res, CL_DEVICE_NAME, 1024 * sizeof(char), tmp, NULL);
+		std::cerr << "picked GPU device: " << tmp << std::endl;
+		return res;
 	}
 
-	inline svector<cl_device_id> &getOCLaccelerators() {
-		return ocl_accelerators;
+	cl_device_id getOCLaccelerator() {
+		cl_device_id res = ocl_accelerators[(ocl_accelerator_id++) % ocl_accelerators.size()];
+		char tmp[1024];
+		clGetDeviceInfo(res, CL_DEVICE_NAME, 1024 * sizeof(char), tmp, NULL);
+		std::cerr << "picked Accelerator device: " << tmp << std::endl;
+		return res;
 	}
 #endif
 
@@ -282,6 +298,7 @@ protected:
 	svector<int> CList;
 #ifdef FF_OCL
 	svector<cl_device_id> ocl_cpus, ocl_gpus, ocl_accelerators;
+	std::atomic<unsigned int> ocl_cpu_id, ocl_gpu_id, ocl_accelerator_id;
 #endif
 };
 

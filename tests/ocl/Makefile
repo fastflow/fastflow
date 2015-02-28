@@ -1,5 +1,5 @@
 CXX      = g++ 
-CXXFLAGS = -Wall
+CXXFLAGS = -Wall -std=c++11
 
 OS = $(shell uname)
 ifeq ($(strip $(OS)),Darwin)
@@ -10,12 +10,12 @@ endif
 
 FF_ROOT  = ../../
 #AMD OpenCL location
-OCL_ROOT = /opt/AMDAPP
+OCL_ROOT = /usr/local/cuda
 
 # 
 OCLFLAGS =
 OPTFLAGS = -O0 -DCHECK -g
-LDFLAGS  = -L$(OCL_ROOT)/lib/x86_64
+LDFLAGS  = -L$(OCL_ROOT)/lib64
 LIBS     =  $(OPENCL) -lpthread 
 INCLUDES = -I$(FF_ROOT) -I$(OCL_ROOT)/include
 
