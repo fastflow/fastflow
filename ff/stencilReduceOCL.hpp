@@ -195,19 +195,16 @@ namespace ff {
 			cmd_queue = NULL;
 		}
 
-		void init(int dtype, int id, const std::string &kernel_code, const std::string &kernel_name1, const std::string &kernel_name2) {
+		void init(int dtype, const std::string &kernel_code, const std::string &kernel_name1, const std::string &kernel_name2) {
 			switch(dtype) {
 				case CL_DEVICE_TYPE_GPU:
-				baseclass_ocl_node_deviceId = threadMapper::instance()->getOCLgpus()[id]; break;
+				baseclass_ocl_node_deviceId = threadMapper::instance()->getOCLgpu(); break;
 				case CL_DEVICE_TYPE_CPU:
-				baseclass_ocl_node_deviceId = threadMapper::instance()->getOCLcpus()[id]; break;
+				baseclass_ocl_node_deviceId = threadMapper::instance()->getOCLcpu(); break;
 				case CL_DEVICE_TYPE_ACCELERATOR:
-				baseclass_ocl_node_deviceId = threadMapper::instance()->getOCLaccelerators()[id]; break;
+				baseclass_ocl_node_deviceId = threadMapper::instance()->getOCLaccelerator(); break;
 			}
 			svc_SetUpOclObjects(baseclass_ocl_node_deviceId, kernel_code, kernel_name1, kernel_name2);
-			char tmp[1024];
-			clGetDeviceInfo(baseclass_ocl_node_deviceId, CL_DEVICE_NAME, 1024*sizeof(char), (void *)tmp, NULL);
-			std::cerr << "selected device: " << tmp << std::endl;
 		}
 
 		void release() {
@@ -425,8 +422,8 @@ namespace ff {
 		//TODO: check event management
 		void join() {
 			clWaitForEvents(nevents, events);
-			for(unsigned int i=0; i<nevents; ++i)
-			clReleaseEvent(events[i]);
+//			for(unsigned int i=0; i<nevents; ++i)
+//			clReleaseEvent(events[i]);
 			nevents = 0;
 		}
 
@@ -644,9 +641,8 @@ namespace ff {
 #endif
 
 		virtual int svc_init() {
-			size_t ngpus = threadMapper::instance()->getOCLcpus().size();
 			for(int i=0; i<NACCELERATORS; ++i) {
-				accelerators[i]->init(CL_DEVICE_TYPE_CPU, i % ngpus, kernel_code, kernel_name1, kernel_name2);
+				accelerators[i]->init(CL_DEVICE_TYPE_GPU, kernel_code, kernel_name1, kernel_name2);
 			}
 			return 0;
 		}
