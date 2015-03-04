@@ -36,6 +36,7 @@
 #include <fstream>
 #include <ff/oclnode.hpp>
 #include <ff/node.hpp>
+#include <ff/mapper.hpp>
 #include <ff/stencilReduceOCL_macros.hpp>
 
 namespace ff {
@@ -56,7 +57,7 @@ namespace ff {
 
 		baseOCLTask() :
 		inPtr(NULL), outPtr(NULL), envPtr1(NULL), envPtr2(NULL), size_in(0),
-		reduceVar((Tin) 0), copyEnv1(true), copyEnv2(true), iter(0) {
+		copyEnv1(true), copyEnv2(true), iter(0), reduceVar_((Tin) 0), initReduceVal((Tin)0) {
 		}
 
 		virtual ~baseOCLTask() {
@@ -65,9 +66,14 @@ namespace ff {
 		// user must override this methods
 		virtual void setTask(const TaskT *t) = 0;
 		virtual bool iterCondition(Tin, unsigned int) = 0;
+		virtual Tin combinator(Tin,Tin) = 0;
+
+//		//user may overrider this methods
+//		virtual void before() {} //the very first op of each iter
+//		virtual void after() {} //the very last op of each iter
 
 		bool iterCondition_aux() {
-			return iterCondition(reduceVar, iter);
+			return iterCondition(reduceVar_, iter);
 		}
 
 		size_t getBytesizeIn() const {
@@ -123,11 +129,11 @@ namespace ff {
 		}
 
 		void setReduceVar(const Tin r) {
-			reduceVar = r;
+			reduceVar_ = r;
 		}
 
 		Tin getReduceVar() const {
-			return reduceVar;
+			return reduceVar_;
 		}
 
 		Tin getInitReduceVal() {
@@ -156,11 +162,13 @@ namespace ff {
 		Tenv2 *envPtr2;
 
 		size_t size_in;
-		Tin reduceVar, initReduceVal;
 
 		bool copyEnv1, copyEnv2;
 
 		unsigned int iter;
+
+	private:
+		Tin reduceVar_, initReduceVal;
 	};
 
 	/*
@@ -181,15 +189,17 @@ namespace ff {
 		typedef typename TOCL::Tenv1 Tenv1;
 		typedef typename TOCL::Tenv2 Tenv2;
 
-		ff_oclAccelerator(const size_t width_) :
-		width(width_), baseclass_ocl_node_deviceId(NULL) {
+		ff_oclAccelerator(const size_t width_, Tin initReduceVal_) :
+            width(width_), initReduceVal(initReduceVal_), baseclass_ocl_node_deviceId(NULL) {
 			workgroup_size_map = workgroup_size_reduce = 0;
-			inputBuffer = outputBuffer = envBuffer1 = envBuffer2 = NULL;
+			inputBuffer = outputBuffer = envBuffer1 = envBuffer2 = reduceBuffer = NULL;
 			sizeInput = sizeInput_padded = sizeEnv1_padded = 0;
 			lenInput = offset1 = offset2 = pad1 = pad2 = lenInput_global = 0;
 			nevents = 0;
 			localThreadsMap = globalThreadsMap = 0;
-			kernel_map = kernel_reduce = NULL;
+			localThreadsReduce = globalThreadsReduce = numBlocksReduce = blockMemSize = 0;
+			reduceVar = initReduceVal;
+			kernel_map = kernel_reduce = kernel_init = NULL;
 			context = NULL;
 			program = NULL;
 			cmd_queue = NULL;
@@ -211,18 +221,18 @@ namespace ff {
 			svc_releaseOclObjects();
 		}
 
-		cl_mem* getInputBuffer() const {
-			return (cl_mem*) &inputBuffer;
-		}
-		cl_mem* getOutputBuffer() const {
-			return (cl_mem*) &outputBuffer;
-		}
-		cl_mem* getEnv1Buffer() const {
-			return (cl_mem*) &envBuffer1;
-		}
-		cl_mem* getEnv2Buffer() const {
-			return (cl_mem*) &envBuffer2;
-		}
+//		cl_mem* getInputBuffer() const {
+//			return (cl_mem*) &inputBuffer;
+//		}
+//		cl_mem* getOutputBuffer() const {
+//			return (cl_mem*) &outputBuffer;
+//		}
+//		cl_mem* getEnv1Buffer() const {
+//			return (cl_mem*) &envBuffer1;
+//		}
+//		cl_mem* getEnv2Buffer() const {
+//			return (cl_mem*) &envBuffer2;
+//		}
 
 		void swapBuffers() {
 			cl_mem tmp = inputBuffer;
@@ -255,6 +265,18 @@ namespace ff {
 				localThreadsMap = workgroup_size_map;
 				globalThreadsMap = nextMultipleOfIf(lenInput, workgroup_size_map);
 			}
+			//REDUCE
+			if (reduceBuffer)
+			clReleaseMemObject(reduceBuffer);
+			// 64 and 256 are the max number of blocks and threads we want to use
+			getBlocksAndThreads(lenInput, 64, 256, numBlocksReduce, localThreadsReduce);
+			globalThreadsReduce = numBlocksReduce * localThreadsReduce;
+
+			blockMemSize =
+			(localThreadsReduce <= 32) ? (2 * localThreadsReduce * sizeof(Tin)) : (localThreadsReduce * sizeof(Tin));
+
+			reduceBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE, numBlocksReduce*sizeof(Tin), NULL, &status);
+			checkResult(status, "CreateBuffer reduce");
 		}
 
 		void relocateOutputBuffer() {
@@ -410,6 +432,18 @@ namespace ff {
 			}
 		}
 
+		void initReduce(Tin initReduceVal) {
+			//set kernel args for reduce1
+			int idx = 0;
+			cl_int status = clSetKernelArg(kernel_reduce, idx++, sizeof(cl_mem), &outputBuffer);
+			status |= clSetKernelArg(kernel_reduce, idx++, sizeof(uint), &pad1);
+			status |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_mem), &reduceBuffer);
+			status |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_uint), (void *)&lenInput);
+			status |= clSetKernelArg(kernel_reduce, idx++, blockMemSize, NULL);
+			status |= clSetKernelArg(kernel_reduce, idx++, sizeof(Tin), (void *)&initReduceVal);
+			checkResult(status, "setKernelArg reduce-1");
+		}
+
 		void asyncExecMapKernel() {
 			//execute MAP kernel
 			cl_int status = clEnqueueNDRangeKernel(cmd_queue,
@@ -417,6 +451,37 @@ namespace ff {
 					0, NULL, &events[0]);
 			checkResult(status, "executing map kernel");
 			++nevents;
+		}
+
+		void asyncExecReduceKernel1() {
+			cl_int status = clEnqueueNDRangeKernel(cmd_queue, kernel_reduce, 1, NULL,
+					&globalThreadsReduce, &localThreadsReduce, 0, NULL, &events[0]);
+			checkResult(status, "exec kernel reduce-1");
+			++nevents;
+		}
+
+		void asyncExecReduceKernel2() {
+			cl_uint zeropad = 0;
+			int idx = 0;
+			cl_int status = clSetKernelArg(kernel_reduce, idx++, sizeof(cl_mem), &reduceBuffer);
+			status |= clSetKernelArg(kernel_reduce, idx++, sizeof(uint), &zeropad);
+			status |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_mem), &reduceBuffer);
+			status |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_uint),(void*)&numBlocksReduce);
+			status |= clSetKernelArg(kernel_reduce, idx++, blockMemSize, NULL);
+			status |= clSetKernelArg(kernel_reduce, idx++, sizeof(Tin), (void *)&initReduceVal);
+			checkResult(status, "setKernelArg reduce-2");
+
+			status = clEnqueueNDRangeKernel(cmd_queue,kernel_reduce,1,NULL,
+					&localThreadsReduce,&localThreadsReduce,0,NULL,&events[0]);
+			checkResult(status, "exec kernel reduce-2");
+			++nevents;
+		}
+
+		Tin getReduceVar() {
+			cl_int status = clEnqueueReadBuffer(cmd_queue,reduceBuffer,CL_TRUE, 0,
+					sizeof(Tin), &reduceVar, 0, NULL, NULL);
+			checkResult(status, "d2h reduceVar");
+			return reduceVar;
 		}
 
 		//TODO: check event management
@@ -431,11 +496,8 @@ namespace ff {
 		cl_context context;
 		cl_program program;
 		cl_command_queue cmd_queue;
-#if 0 //REDUCE
-		typename T::Tin *reduceMemInit;
 		cl_mem reduceBuffer;
-#endif
-		cl_kernel kernel_map, kernel_reduce;
+		cl_kernel kernel_map, kernel_reduce, kernel_init;
 
 	private:
 		void buildKernelCode(const std::string &kc, cl_device_id dId) {
@@ -512,13 +574,23 @@ namespace ff {
 			clReleaseMemObject(envBuffer2);
 			if (outputBuffer)
 			clReleaseMemObject(outputBuffer);
-#if 0 //REDUCE
-			if (reduceBuffer) {
-				clReleaseMemObject(reduceBuffer);
-				free(reduceMemInit);
-			}
-#endif
+			if (reduceBuffer)
+			clReleaseMemObject(reduceBuffer);
 			clReleaseContext(context);
+		}
+
+		/*!
+		 * Computes the number of threads and blocks to use for the reduction kernel.
+		 */
+		inline void getBlocksAndThreads(const size_t size, const size_t maxBlocks,
+				const size_t maxThreads, size_t & blocks, size_t &threads) {
+			const size_t half = (size + 1) / 2;
+			threads =
+			(size < maxThreads * 2) ?
+			(isPowerOf2(half) ? nextPowerOf2(half + 1) : nextPowerOf2(half)) :
+			maxThreads;
+			blocks = (size + (threads * 2 - 1)) / (threads * 2);
+			blocks = std::min(maxBlocks, blocks);
 		}
 
 		cl_mem inputBuffer, outputBuffer, envBuffer1, envBuffer2;
@@ -529,6 +601,9 @@ namespace ff {
 		unsigned int nevents;
 		cl_event events[3];
 		size_t localThreadsMap, globalThreadsMap;
+		size_t localThreadsReduce, globalThreadsReduce, numBlocksReduce, blockMemSize;
+		Tin reduceVar;
+		const Tin initReduceVal;
 		cl_device_id baseclass_ocl_node_deviceId;// is the id which is provided for user
 	};
 
@@ -541,25 +616,32 @@ namespace ff {
 	 *
 	 */
 	template<typename T, typename TOCL = T>
-	class ff_stencilReduceOCL_1D: public ff_node_t<T> {
+	class ff_stencilReduceLoopOCL_1D: public ff_node_t<T> {
 	public:
 		typedef typename TOCL::Tin Tin;
 		typedef typename TOCL::Tenv1 Tenv1;
 		typedef typename TOCL::Tenv2 Tenv2;
 		typedef ff_oclAccelerator<T,TOCL> accelerator_t;
 
-		ff_stencilReduceOCL_1D(const std::string &mapf, const std::string &reducef = std::string(""), Tin initReduceVar =
-				(Tin) 0, const int NACCELERATORS_ = 1, const int width_ = 1) : oneshot(false),
+		//template <typename Function>
+		ff_stencilReduceLoopOCL_1D(const std::string &mapf, //OCL elemental
+				const std::string &reducef = std::string(""), //OCL combinator
+				Tin initReduceVar = (Tin) 0,
+				const int NACCELERATORS_ = 1, const int width_ = 1) : oneshot(false),
 		NACCELERATORS(NACCELERATORS_), stencil_width(width_), oldSizeIn(0), oldSizeReduce(0) {
 			setcode(mapf, reducef);
 			Task.setInitReduceVal(initReduceVar);
 			accelerators = (accelerator_t **)malloc(NACCELERATORS * sizeof(accelerator_t *));
 			for(int i=0; i<NACCELERATORS; ++i)
-			accelerators[i] = new accelerator_t(stencil_width);
+			accelerators[i] = new accelerator_t(stencil_width, initReduceVar);
 			acc_len = new size_t[NACCELERATORS];
 			acc_off = new size_t[NACCELERATORS];
 		}
-		ff_stencilReduceOCL_1D(const T &task, const std::string &mapf, const std::string &reducef = std::string(""), Tin initReduceVar = (Tin) 0,
+
+		//template <typename Function>
+		ff_stencilReduceLoopOCL_1D(const T &task, const std::string &mapf, //OCL elemental
+				const std::string &reducef = std::string(""), //OCL combinator
+				Tin initReduceVar = (Tin) 0,
 				const int NACCELERATORS_ = 1, const int width_ = 1) : oneshot(true),
 		NACCELERATORS(NACCELERATORS_), stencil_width(width_), oldSizeIn(0), oldSizeReduce(0) {
 			ff_node::skipfirstpop(true);
@@ -568,12 +650,12 @@ namespace ff {
 			Task.setInitReduceVal(initReduceVar);
 			accelerators = (accelerator_t **)malloc(NACCELERATORS * sizeof(accelerator_t *));
 			for(int i=0; i<NACCELERATORS; ++i)
-			accelerators[i] = new accelerator_t(stencil_width);
+			accelerators[i] = new accelerator_t(stencil_width, initReduceVar);
 			acc_len = new size_t[NACCELERATORS];
 			acc_off = new size_t[NACCELERATORS];
 		}
 
-		virtual ~ff_stencilReduceOCL_1D() {
+		virtual ~ff_stencilReduceLoopOCL_1D() {
 			for(int i=0; i<NACCELERATORS; ++i)
 			delete accelerators[i];
 			free(accelerators);
@@ -612,6 +694,11 @@ namespace ff {
 			return Task.getIter();
 		}
 
+		Tin getReduceVar() {
+			assert(oneshot);
+			return Task.getReduceVar();
+		}
+
 	protected:
 
 		virtual bool isPureMap() {return false;}
@@ -623,22 +710,6 @@ namespace ff {
 //				printOCLErrorString(s, std::cerr);
 //			}
 //		}
-
-#if 0
-		/*!
-		 * Computes the number of threads and blocks to use for the reduction kernel.
-		 */
-		inline void getBlocksAndThreads(const size_t size, const size_t maxBlocks,
-				const size_t maxThreads, size_t & blocks, size_t &threads) {
-			const size_t half = (size + 1) / 2;
-			threads =
-			(size < maxThreads * 2) ?
-			(isPowerOf2(half) ? nextPowerOf2(half + 1) : nextPowerOf2(half)) :
-			maxThreads;
-			blocks = (size + (threads * 2 - 1)) / (threads * 2);
-			blocks = std::min(maxBlocks, blocks);
-		}
-#endif
 
 		virtual int svc_init() {
 			for(int i=0; i<NACCELERATORS; ++i) {
@@ -682,51 +753,9 @@ namespace ff {
 				oldSizeIn = Task.getBytesizeIn();
 			}
 
-			if (!isPureMap()) {
-#if 0 //REDUCE
-				//(eventually) allocate device memory for REDUCE - TODO check size
-				size_t elemSize = sizeof(Tout);
-				size_t numBlocks_reduce = 0;
-				size_t numThreads_reduce = 0;
-				getBlocksAndThreads(size, 64, 256, numBlocks_reduce, numThreads_reduce);// 64 and 256 are the max number of blocks and threads we want to use
-				size_t reduceMemSize =
-//				(numThreads_reduce <= 32) ?
-//						(2 * numThreads_reduce * elemSize) :
-//						(numThreads_reduce * elemSize);
-				numBlocks_reduce * elemSize;
-				if (oldSizeReduce < reduceMemSize) {
-					if (oldSizeReduce != 0) {
-						clReleaseMemObject(acc.reduceBuffer);
-						free(acc.reduceMemInit);
-					}
-					acc.reduceBuffer = clCreateBuffer(acc.context,
-							CL_MEM_READ_WRITE, numBlocks_reduce * elemSize, NULL, &status);
-					acc.checkResult(status, "CreateBuffer reduce");
-					acc.reduceMemInit = (Tin *) malloc(numBlocks_reduce * elemSize);
-					for (size_t i = 0; i < numBlocks_reduce; ++i)
-					acc.reduceMemInit[i] =
-					Task.getInitReduceVal();
-					oldSizeReduce = reduceMemSize;
-				}
-#endif
-			}
-
 			//set kernel args
 			for(int i=0; i<NACCELERATORS; ++i)
 			accelerators[i]->setKernelArgs();
-
-			if (!isPureMap()) {
-#if 0 //REDUCE
-				//set iteration-invariant REDUCE kernel args
-				status = clSetKernelArg(acc.kernel_reduce, 1, sizeof(cl_mem),
-						&(acc.reduceBuffer));
-				status = clSetKernelArg(acc.kernel_reduce, 2, sizeof(cl_uint),
-						(void *) &size);
-				status = clSetKernelArg(acc.kernel_reduce, 3, reduceMemSize,
-						NULL);
-				checkResult(status, "setKernelArg reduceMemSize");
-#endif
-			}
 
 			//(async) copy input and environments (h2d)
 			for(int i=0; i<NACCELERATORS; ++i) {
@@ -746,54 +775,7 @@ namespace ff {
 			if (isPureReduce()) {
 #if 0 //REDUCE
 				//begin REDUCE
-				//init REDUCE memory - TODO parallel
-				status = clEnqueueWriteBuffer(acc.cmd_queue,
-						acc.reduceBuffer, CL_FALSE, 0, reduceMemSize,
-						acc.reduceMemInit, 0, NULL, NULL);
-				acc.checkResult(status, "init Reduce buffer");
 
-				localThreads[0] = numThreads_reduce;
-				globalThreads[0] = numBlocks_reduce * numThreads_reduce;
-
-				//set iteration-dynamic REDUCE kernel args
-				status |= clSetKernelArg(acc.kernel_reduce, 0, sizeof(cl_mem),
-						acc.getOutputBuffer());
-
-				//execute first REDUCE kernel (output to blocks)
-				status = clEnqueueNDRangeKernel(acc.cmd_queue,
-						acc.kernel_reduce, 1, NULL, globalThreads, localThreads,
-						0, NULL, &events[0]);
-				status = clWaitForEvents(1, &events[0]);
-
-				// Sets the kernel arguments for second REDUCE
-				size = numBlocks_reduce;
-				status |= clSetKernelArg(acc.kernel_reduce, 0, sizeof(cl_mem),
-						&(acc.reduceBuffer));
-//			status |= clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 1, sizeof(cl_mem),
-//					&(ff_ocl<T, TOCL>::reduceBuffer));
-//			status |= clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 2, sizeof(cl_uint),
-//					(void*) &size);
-//			status |= clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 3, reduceMemSize,
-//			NULL);
-				acc.checkResult(status, "setKernelArg ");
-
-				localThreads[0] = numThreads_reduce;
-				globalThreads[0] = numThreads_reduce;
-
-				//execute second REDUCE kernel (blocks to value)
-				status = clEnqueueNDRangeKernel(acc.cmd_queue,
-						acc.kernel_reduce, 1, NULL, globalThreads, localThreads,
-						0, NULL, &events[0]);
-
-				//read back REDUCE var (d2h)
-				Tin reduceVar;
-				status |= clWaitForEvents(1, &events[0]);
-				status |= clEnqueueReadBuffer(acc.cmd_queue,
-						acc.reduceBuffer, CL_TRUE, 0, elemSize, &reduceVar, 0,
-						NULL, &events[1]);
-				status |= clWaitForEvents(1, &events[1]);
-				acc.checkResult(status, "ERROR during OpenCL computation");
-				Task.setReduceVar(reduceVar);
 				//end REDUCE
 #endif
 			}
@@ -816,6 +798,9 @@ namespace ff {
 					for(int i=0; i<NACCELERATORS; ++i)
 					accelerators[i]->swap();
 					do {
+
+						//Task.before();
+
 						for(int i=0; i<NACCELERATORS; ++i)
 						accelerators[i]->swap();
 
@@ -841,58 +826,34 @@ namespace ff {
 						for(int i=0; i<NACCELERATORS; ++i)
 						accelerators[i]->join();
 
-#if 0 //REDUCE
-						//begin REDUCE
-						//init REDUCE memory - TODO parallel
-						status = clEnqueueWriteBuffer(acc.cmd_queue,
-								acc.reduceBuffer, CL_FALSE, 0, reduceMemSize,
-								acc.reduceMemInit, 0, NULL, NULL);
-						acc.checkResult(status, "init Reduce buffer");
+						//init reduce
+						for(int i=0; i<NACCELERATORS; ++i)
+						accelerators[i]->initReduce(Task.getInitReduceVal());
 
-						localThreads[0] = numThreads_reduce;
-						globalThreads[0] = numBlocks_reduce * numThreads_reduce;
+						//(async) device-reduce1
+						for(int i=0; i<NACCELERATORS; ++i)
+						accelerators[i]->asyncExecReduceKernel1();
+						//join
+						for(int i=0; i<NACCELERATORS; ++i)
+						accelerators[i]->join();
 
-						//set iteration-dynamic REDUCE kernel args
-						status |= clSetKernelArg(acc.kernel_reduce, 0, sizeof(cl_mem),
-								acc.getOutputBuffer());
+						//(async) device-reduce2
+						for(int i=0; i<NACCELERATORS; ++i)
+						accelerators[i]->asyncExecReduceKernel2();
+						//join
+						for(int i=0; i<NACCELERATORS; ++i)
+						accelerators[i]->join();
 
-						//execute first REDUCE kernel (output to blocks)
-						status = clEnqueueNDRangeKernel(acc.cmd_queue,
-								acc.kernel_reduce, 1, NULL, globalThreads, localThreads,
-								0, NULL, &events[0]);
-						status = clWaitForEvents(1, &events[0]);
+						//host-reduce
+						//TODO: user-defined operation
+						Tin redVar = Task.getInitReduceVal();
+						for(int i=0; i<NACCELERATORS; ++i)
+						redVar = Task.combinator(redVar, accelerators[i]->getReduceVar());
 
-						// Sets the kernel arguments for second REDUCE
-						size = numBlocks_reduce;
-						status |= clSetKernelArg(acc.kernel_reduce, 0, sizeof(cl_mem),
-								&(acc.reduceBuffer));
-//			status |= clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 1, sizeof(cl_mem),
-//					&(ff_ocl<T, TOCL>::reduceBuffer));
-//			status |= clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 2, sizeof(cl_uint),
-//					(void*) &size);
-//			status |= clSetKernelArg(ff_ocl<T, TOCL>::kernel_reduce, 3, reduceMemSize,
-//			NULL);
-						acc.checkResult(status, "setKernelArg ");
+						Task.setReduceVar(redVar);
 
-						localThreads[0] = numThreads_reduce;
-						globalThreads[0] = numThreads_reduce;
+						//Task.after();
 
-						//execute second REDUCE kernel (blocks to value)
-						status = clEnqueueNDRangeKernel(acc.cmd_queue,
-								acc.kernel_reduce, 1, NULL, globalThreads, localThreads,
-								0, NULL, &events[0]);
-
-						//read back REDUCE var (d2h)
-						Tin reduceVar;
-						status |= clWaitForEvents(1, &events[0]);
-						status |= clEnqueueReadBuffer(acc.cmd_queue,
-								acc.reduceBuffer, CL_TRUE, 0, elemSize, &reduceVar, 0,
-								NULL, &events[1]);
-						status |= clWaitForEvents(1, &events[1]);
-						acc.checkResult(status, "ERROR during OpenCL computation");
-						Task.setReduceVar(reduceVar);
-						//end REDUCE
-#endif
 					}while (Task.iterCondition_aux());
 				}
 
@@ -986,14 +947,14 @@ namespace ff {
 	 *
 	 */
 	template<typename T, typename TOCL = T>
-	class ff_mapOCL: public ff_stencilReduceOCL_1D<T, TOCL> {
+	class ff_mapOCL_1D: public ff_stencilReduceLoopOCL_1D<T, TOCL> {
 	public:
-		ff_mapOCL(std::string mapf, const size_t NACCELERATORS = 1) :
-		ff_stencilReduceOCL_1D<T, TOCL>(mapf, "", 0, NACCELERATORS) {
+		ff_mapOCL_1D(std::string mapf, const size_t NACCELERATORS = 1) :
+		ff_stencilReduceLoopOCL_1D<T, TOCL>(mapf, "", 0, NACCELERATORS) {
 		}
 
-		ff_mapOCL(const T &task, std::string mapf, const size_t NACCELERATORS = 1) :
-		ff_stencilReduceOCL_1D<T, TOCL>(task, mapf, "", 0, NACCELERATORS) {
+		ff_mapOCL_1D(const T &task, std::string mapf, const size_t NACCELERATORS = 1) :
+		ff_stencilReduceLoopOCL_1D<T, TOCL>(task, mapf, "", 0, NACCELERATORS) {
 		}
 		bool isPureMap() {return true;}
 	};
@@ -1007,15 +968,15 @@ namespace ff {
 	 *
 	 */
 	template<typename T, typename TOCL = T>
-	class ff_reduceOCL_1D: public ff_stencilReduceOCL_1D<T, TOCL> {
+	class ff_reduceOCL_1D: public ff_stencilReduceLoopOCL_1D<T, TOCL> {
 	public:
 		typedef typename TOCL::Tin Tin;
 
 		ff_reduceOCL_1D(std::string reducef, Tin initReduceVar = (Tin) 0, const size_t NACCELERATORS = 1) :
-		ff_stencilReduceOCL_1D<T, TOCL>("", reducef, initReduceVar, NACCELERATORS) {
+		ff_stencilReduceLoopOCL_1D<T, TOCL>("", reducef, initReduceVar, NACCELERATORS) {
 		}
 		ff_reduceOCL_1D(const T &task, std::string reducef, Tin initReduceVar = (Tin) 0, const size_t NACCELERATORS = 1) :
-		ff_stencilReduceOCL_1D<T, TOCL>(task, "", reducef, initReduceVar, NACCELERATORS) {
+		ff_stencilReduceLoopOCL_1D<T, TOCL>(task, "", reducef, initReduceVar, NACCELERATORS) {
 		}
 		bool isPureReduce() {return true;}
 	};
