@@ -65,12 +65,12 @@
         #basictype "|"                                                  \
 #basictype " f" #name "(" #basictype " " #param1 ",\n"                  \
                           #basictype " " #param2 ") {\n" #code ";\n}\n" \
-"__kernel void kern_" #name "(__global " #basictype "* input, __global " #basictype "* output, const uint n, __local " #basictype "* sdata) {\n" \
+"__kernel void kern_" #name "(__global " #basictype "* input, const uint pad, __global " #basictype "* output, const uint n, __local " #basictype "* sdata, "#basictype" idElem) {\n" \
 "        uint blockSize = get_local_size(0);\n"                         \
 "        uint tid = get_local_id(0);\n"                                 \
 "        uint i = get_group_id(0)*blockSize + get_local_id(0);\n"       \
 "        uint gridSize = blockSize*get_num_groups(0);\n"                \
-"        float result = 0;\n"                                           \
+"        float result = idElem; input += pad;\n"                        \
 "        if(i < n) { result = input[i]; i += gridSize; }\n"             \
 "        while(i < n) {\n"                                              \
 "          result = f" #name "(result, input[i]);\n"                    \
@@ -88,6 +88,9 @@
 "        if(blockSize >=   4) { if (tid <   2 && tid +   2 < n) { sdata[tid] = f" #name "(sdata[tid], sdata[tid +   2]); } barrier(CLK_LOCAL_MEM_FENCE); }\n" \
 "        if(blockSize >=   2) { if (tid <   1 && tid +   1 < n) { sdata[tid] = f" #name "(sdata[tid], sdata[tid +   1]); } barrier(CLK_LOCAL_MEM_FENCE); }\n" \
 "        if(tid == 0) output[get_group_id(0)] = sdata[tid];\n"          \
-"}\n"
+"}\n";
+
+#define FF_CPP_STENCIL_COMBINATOR(name, basictype, param1, param2, code) \
+	static #basictype #name(#basictype param1, #basictype param2) { #code }
 
 #endif /* STENCILREDUCEOCL_MACROS_HPP_ */

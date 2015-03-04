@@ -44,24 +44,28 @@ using namespace ff;
 
 unsigned int niters;
 
-FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y, return (x+y););
+FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y, return (x+y);)
+;
 
 FF_OCL_STENCIL_ELEMFUNC(mapf, float, N, i, in, i_, int, env, char, env2,
-//return in[i_] + env[i_] + (i>0) * in[i_-1] + (i<N) * in[i_+1];
-//return in[i_] * in[i_];
-		float res = in[i_]; if(i>0) res += in[i_-1]; if(i<(N-1)) res += in[i_+1]; return res;);
+		float res = in[i_];
+	if(i>0) res += in[i_-1]; if(i<(N-1)) res += in[i_+1];
+	return res;
+);
 
 void init(float *M_in, float *out, int *env, int size) {
 	for (int j = 0; j < size; ++j) {
-		M_in[j] = (float) j;
+		//M_in[j] = (float) j;
+		M_in[j] = 1;
 		env[j] = j * 10;
 		out[j] = 0.0;
 	}
 }
 
-void print_res(const char label[], float *M, int size) {
+void print_res(const char label[], float *M, float r, int size) {
 	for (int i = 0; i < size; ++i)
 		printf("[%s] res[%d]=%.2f\n", label, i, M[i]);
+	printf("[%s] reduceVar = %.2f\n", label, r);
 }
 
 void print_expected(int size) {
@@ -71,32 +75,37 @@ void print_expected(int size) {
 	float *tmp = in;
 	in = M_out;
 	M_out = tmp;
+	float red = 0;
 	for (unsigned int k = 0; k < niters; ++k) {
 		float *tmp = in;
 		in = M_out;
 		M_out = tmp;
 		for (int i = 0; i < size; ++i)
-			//			M_out[i] = in[i] + env[i] + (i > 0) * in[i - 1]
-			//					+ (i < size) * in[i + 1];
-			M_out[i] = in[i] + (i > 0) * in[i - 1] + (i < size - 1) * in[i + 1];
-		//M_out[i] = in[i] * in[i];
+			M_out[i] = in[i]
+		+ (i > 0) * in[i - 1] + (i < size - 1) * in[i + 1];
+		//reduce
+		red = 0;
+		for (int i = 0; i < size; ++i)
+			red += M_out[i];
 		std::stringstream l;
 		l << "EXPECTED_" << k;
-		print_res(l.str().c_str(), M_out, size);
+		//print_res(l.str().c_str(), M_out, size);
 	}
-	//print_res("EXPECTED", M_out, size);
+	print_res("EXPECTED", M_out, red, size);
 	delete[] in;
 	delete[] M_out;
 	delete[] env;
 }
 
-void check(float *M, int size) {
+void check(float *M, float r, int size) {
+	unsigned int ndiff = 0;
 	float *in = new float[size], *M_out = new float[size];
 	int *env = new int[size];
 	init(in, M_out, env, size);
 	float *tmp = in;
 	in = M_out;
 	M_out = tmp;
+	float red = 0;
 	for (unsigned int k = 0; k < niters; ++k) {
 		float *tmp = in;
 		in = M_out;
@@ -109,12 +118,21 @@ void check(float *M, int size) {
 				res += in[i + 1];
 			M_out[i] = res;
 		}
+		//reduce
+		red = 0;
+		for (int i = 0; i < size; ++i)
+			red += M_out[i];
 	}
-	//print_res("EXPECTED", M_out, size);
 	for (int i = 0; i < size; ++i)
-		if (M[i] != M_out[i])
-			fprintf(stdout, "[i] out[%d]=%.2f, check[%d]=%.2f\n", i, M[i], i,
-					M_out[i]);
+		if (M[i] != M_out[i]) {
+			ndiff++;
+			printf("[i] out[%d]=%.2f, check[%d]=%.2f\n", i, M[i], i, M_out[i]);
+		}
+	if (red != r) {
+		ndiff++;
+		printf("[i] REDUCE-computed=%.2f, REDUCE-expected=%.2f\n", r, red);
+	}
+		printf("check summary: %d diffs\n", ndiff);
 }
 
 struct oclTask: public baseOCLTask<oclTask, float, int, int> {
@@ -138,6 +156,10 @@ struct oclTask: public baseOCLTask<oclTask, float, int, int> {
 	}
 	bool iterCondition(Tin x, unsigned int iter) {
 		return iter < niters;
+	}
+
+	virtual float combinator(float x, float y) {
+		return x + y;
 	}
 
 	float *M_in, *M_out;
@@ -179,7 +201,7 @@ public:
 	void *svc(void *task) {
 		oclTask *t = (oclTask *) task;
 		int size = t->size;
-		print_res("streaming", t->M_out, size);
+		print_res("streaming", t->M_out, /*t->reduceVar*/0, size);
 		return task;
 	}
 };
@@ -200,11 +222,11 @@ int main(int argc, char * argv[]) {
 	int *env = new int[size];
 	init(M_in, M_out, env, size);
 	oclTask oclt(M_in, M_out, env, size);
-	ff_stencilReduceOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf, reducef,
-			0, nacc, WINWIDTH);
+	ff_stencilReduceLoopOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf,
+			reducef, 0, nacc, WINWIDTH);
 	oclStencilReduceOneShot.run_and_wait_end();
 	//print_res("INPUT", M_in, size);
-	//print_res("oneshot", M_out, size);
+	//print_res("oneshot", M_out, oclStencilReduceOneShot.getReduceVar(), size);
 	//printf("reduceVar=%.2f\n", oclt.getReduceVar());
 
 	//stream
@@ -217,7 +239,7 @@ int main(int argc, char * argv[]) {
 	//	pipe.run_and_wait_end();
 
 	//print_expected(size);
-	check(M_out, size);
+	check(M_out, oclStencilReduceOneShot.getReduceVar(), size);
 
 	return 0;
 }
