@@ -1,5 +1,5 @@
 CXX      = g++ 
-CXXFLAGS = -Wall -std=c++11
+CXXFLAGS = -Wall -std=c++11 -DCHECK
 
 OS = $(shell uname)
 ifeq ($(strip $(OS)),Darwin)
@@ -8,7 +8,7 @@ else
   OPENCL = -lOpenCL
 endif
 
-FF_ROOT  = ../../
+FF_ROOT  = ../../../
 #AMD OpenCL location
 OCL_ROOT = /usr/local/cuda
 
@@ -20,7 +20,7 @@ LIBS     =  $(OPENCL) -lpthread
 INCLUDES = -I$(FF_ROOT) -I$(OCL_ROOT)/include
 
 
-TARGETS = oclMap oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct
+TARGETS = oclStencilReduce oclMap oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap #dotProduct
 
 all: $(TARGETS)
 
