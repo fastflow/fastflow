@@ -32,6 +32,8 @@
 #include <ff/stencilReduceOCL.hpp>
 using namespace ff;
 
+#define NDEV 1
+
 FF_OCL_MAP_ELEMFUNC(mapf, float, elem, char, env1, char, env2,
           return (elem+1.0);
           );
@@ -46,6 +48,7 @@ struct oclTask: public baseOCLTask<oclTask, float> {
     void setTask(const oclTask *t) { 
         assert(t);
         setInPtr(t->M);
+        setOutPtr(t->M);
         setSizeIn(t->size);
         setReduceVar(&(t->result));
      }
@@ -66,7 +69,7 @@ int main(int argc, char * argv[]) {
     for(size_t j=0;j<size;++j) M[j]=j;
 
     oclTask oclt(M, size);
-    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef);
+    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0, NDEV);
     oclMR.run_and_wait_end();
 
     delete [] M;

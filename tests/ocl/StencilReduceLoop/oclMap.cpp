@@ -29,7 +29,7 @@
  */
 
 #define FF_OCL
-#define NDEV 2
+#define NDEV 4
 
 #include <ff/stencilReduceOCL.hpp>
 using namespace ff;
