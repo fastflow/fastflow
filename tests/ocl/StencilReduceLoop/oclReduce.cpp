@@ -29,7 +29,7 @@
  */
 
 #define FF_OCL
-#define NDEV 1
+#define NDEV 4
 
 #include <ff/stencilReduceOCL.hpp>
 using namespace ff;
@@ -66,7 +66,7 @@ int main(int argc, char * argv[]) {
     for(size_t j=0;j<size;++j) M[j]=j + 1.0;
 
     oclTask oclt(M, size);
-    ff_reduceOCL_1D<oclTask> oclReduce(oclt, reducef, NDEV);
+    ff_reduceOCL_1D<oclTask> oclReduce(oclt, reducef, 0, NDEV);
     oclReduce.run_and_wait_end();
 
     delete [] M;

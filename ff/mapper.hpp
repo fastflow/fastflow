@@ -128,21 +128,21 @@ public:
 			//GPUs
 			status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU,
 					max_supported_devices, devices, &n_devices);
-			checkResult(status, "clGetDeviceIDs GPU");
+			//checkResult(status, "clGetDeviceIDs GPU");
 			if(!status)
 			for (cl_uint j = 0; j < n_devices; ++j)
 				ocl_gpus.push_back(devices[j]);
 			//CPUs
 			status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_CPU,
 					max_supported_devices, devices, &n_devices);
-			checkResult(status, "clGetDeviceIDs CPU");
+			//checkResult(status, "clGetDeviceIDs CPU");
 			if(!status)
 			for (cl_uint j = 0; j < n_devices; ++j)
 				ocl_cpus.push_back(devices[j]);
 			//accelerators
 			status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ACCELERATOR,
 					max_supported_devices, devices, &n_devices);
-			checkResult(status, "clGetDeviceIDs Accelerators");
+			//checkResult(status, "clGetDeviceIDs Accelerators");
 			if(!status)
 			for (cl_uint j = 0; j < n_devices; ++j)
 				ocl_accelerators.push_back(devices[j]);
