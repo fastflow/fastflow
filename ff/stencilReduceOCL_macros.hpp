@@ -58,6 +58,34 @@
 "\t    }\n"                                                                      			\
 "}\n"
 
+/* The following OpenCL code macros have been "inspired" by the
+ * SkePU OpenCL code
+ * http://www.ida.liu.se/~chrke/skepu/
+ */
+
+//  x=f(param)   'x' and 'param' have the same type
+#define FF_OCL_MAP_ELEMFUNC(name, basictype, param, env1T,env1,env2T,env2, code)           \
+    static char name[] =                                                \
+        "kern_" #name "|"                                               \
+        #basictype "|"                                                  \
+#basictype " f" #name "(" #basictype " " #param ") {\n" #code ";\n}\n"  \
+"__kernel void kern_" #name "(\n"                                                			\
+"\t__global " #basictype  "* input,\n"                                                 			\
+"\t__global " #basictype "* output,\n"                                                			\
+"\tconst uint inSize,\n"                                                         			\
+"\t__global const " #env1T "* env1,\n"                                           			\
+"\t__global const " #env2T "* env2,\n"                                           			\
+"\tconst uint maxItems,\n"                                                  	   			\
+"\tconst uint offset,\n"                                                  	   			\
+"\tconst uint pad) {\n"                                               	      			\
+"\t    int i = get_global_id(0);\n"                                              			\
+"\t    uint gridSize = get_local_size(0)*get_num_groups(0);\n"                   			\
+"\t    while(i < maxItems)  {\n"                                                 			\
+"\t        output[i] = f" #name "(input[i]);\n"          			\
+"\t        i += gridSize;\n"                                                     			\
+"\t    }\n"                                                                      			\
+"}\n"
+
 //  x=f(param1,param2)   'x', 'param1', 'param2' have the same type
 #define FF_OCL_STENCIL_COMBINATOR(name, basictype, param1, param2, code)             \
     static char name[] =                                                \
@@ -89,8 +117,5 @@
 "        if(blockSize >=   2) { if (tid <   1 && tid +   1 < n) { sdata[tid] = f" #name "(sdata[tid], sdata[tid +   1]); } barrier(CLK_LOCAL_MEM_FENCE); }\n" \
 "        if(tid == 0) output[get_group_id(0)] = sdata[tid];\n"          \
 "}\n";
-
-#define FF_CPP_STENCIL_COMBINATOR(name, basictype, param1, param2, code) \
-	static #basictype #name(#basictype param1, #basictype param2) { #code }
 
 #endif /* STENCILREDUCEOCL_MACROS_HPP_ */
