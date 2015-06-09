@@ -44,13 +44,13 @@ endif
 #
 ###############################à#########################################
 CC                   = gcc
-CXX 		     = g++  # clang++
+CXX 		     = g++
 #CC		     = icc  -mmic
 #CXX 		     = icpc -mmic 
 #CXX		     = clang++
 LINK_OPT             = 
 VERSION              = 
-OPTIMIZE_FLAGS       = -O3 -finline-functions #-DTRACE_FASTFLOW
+OPTIMIZE_FLAGS       = -DBLOCKING_MODE -O3 -finline-functions #-DTRACE_FASTFLOW
 CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall 
 CFLAGS               =
 LDFLAGS              = 
@@ -78,7 +78,8 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I. $(INCS)
-TARGET               = simplest test1 test1b test2 test3 test3b test3_farm test4 test5 test6 test7 test8 perf_test1 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_ofarm2 test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_scheduling2 test_dt test_torus perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_sendq test_spinBarrier test_multi_input test_multi_input2 test_multi_input3 test_multi_input4 test_multi_input5 test_multi_input6 test_multi_input7 test_multi_input8 test_accelerator+pinning test_mpmc test_dataflow test_dataflow2 test_noinput_pipe test_stopstartthreads test_stopstartthreads2 test_stopstartall test_MISD test_parfor test_parfor2 test_parforpipereduce test_dotprod_parfor test_parfor_unbalanced test_parfor_multireduce test_parfor_multireduce2 test_lb_affinity test_farm test_pipe  perf_parfor perf_parfor2 test_graphsearch test_multi_output test_multi_output2 test_pool1 test_pool2 test_pool3 test_devicequery test_map test_mdf test_taskf 
+TARGET               = simplest test1 test1b test2 test3 test3b test3_farm test4 test5 test6 test7 test8 perf_test1 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_ofarm2 test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_scheduling2 test_dt test_torus test_torus2 perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_sendq test_spinBarrier test_multi_input test_multi_input2 test_multi_input3 test_multi_input4 test_multi_input5 test_multi_input6 test_multi_input7 test_multi_input8 test_accelerator+pinning test_mpmc test_dataflow test_dataflow2 test_noinput_pipe test_stopstartthreads test_stopstartthreads2 test_stopstartall test_MISD test_parfor test_parfor2 test_parforpipereduce test_dotprod_parfor test_parfor_unbalanced test_parfor_multireduce test_parfor_multireduce2 test_lb_affinity test_farm test_pipe  perf_parfor perf_parfor2 test_graphsearch test_multi_output test_multi_output2 test_pool1 test_pool2 test_pool3 test_devicequery test_map test_mdf test_taskf latptr11
+#test_taskf2 test_taskf3
 #test_mpmc2 test_bmpmc latency_MPMC 
 
 
@@ -176,7 +177,8 @@ test_stopstartthreads2:test_stopstartthreads2.o
 test_stopstartall:test_stopstartall.o
 test_MISD:test_MISD.o
 test_lb_affinity:test_lb_affinity.o
-test_farm:test_farm.o
+test_farm:test_farm.cpp
+	$(CXX) -std=c++0x -DHAS_CXX11_VARIADIC_TEMPLATES $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_pipe:test_pipe.cpp
 	$(CXX) -std=c++0x -DHAS_CXX11_VARIADIC_TEMPLATES $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_parfor:test_parfor.cpp
@@ -192,6 +194,8 @@ test_dotprod_parfor:test_dotprod_parfor.cpp
 test_uBuffer:test_uBuffer.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_torus:test_torus.cpp
+	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+test_torus2:test_torus2.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_mpmc:test_mpmc.cpp
 	$(CXX) -DUNBOUNDED_MPMC -Wno-strict-aliasing $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
@@ -211,6 +215,8 @@ perf_parfor:perf_parfor.cpp
 	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 perf_parfor2:perf_parfor2.cpp
 	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+latptr11:latptr11.cpp
+	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_map:test_map.cpp
 	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
@@ -225,6 +231,10 @@ test_mdf:test_mdf.cpp
 	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_taskf:test_taskf.cpp
 	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+# test_taskf2:test_taskf2.cpp
+# 	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+# test_taskf3:test_taskf3.cpp
+# 	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 test_devicequery: test_devicequery.o
 

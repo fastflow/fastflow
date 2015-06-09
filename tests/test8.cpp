@@ -48,7 +48,7 @@ using namespace ff;
 void * operator new(size_t size) { 
     return ff_malloc(size);
 }
-void operator delete(void* p) {
+void operator delete(void* p) noexcept {
     return ff_free(p);
 }
 
@@ -94,9 +94,10 @@ int main(int argc, char *argv[]) {
         }
         streamlen=atol(argv[1]);
     }
-    ff_pipe<Task> pipe(new firstStage(streamlen),
-                       new secondStage, new thirdStage);
-    pipe.cleanup_nodes();   // perform some cleanup at the end    
+    firstStage  F1(streamlen);
+    secondStage F2;
+    thirdStage  F3;
+    ff_Pipe<> pipe(F1,F2,F3);
     pipe.run_and_wait_end();
     std::cout << "Time: " << pipe.ffTime() << "\n";
     return 0;

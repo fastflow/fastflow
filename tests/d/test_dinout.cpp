@@ -14,6 +14,7 @@
  *
  */
 
+#include <iostream>
 #include <ff/node.hpp>
 #include <ff/dnode.hpp>
 #include <ff/d/inter.hpp>
@@ -125,7 +126,7 @@ int main(int argc, char * argv[]) {
     
     char * name1    = argv[1];
     char * name2    = argv[2];
-    char * P        = argv[3];        // 1 producer 0 consumer
+    char * P        = argv[3];  // 1 producer 0 consumer
     char * address1 = argv[4];  // no check
     char * address2 = argv[5];  // no check
 

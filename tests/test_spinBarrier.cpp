@@ -77,13 +77,13 @@ public:
                 BARRIER;
             }
         }
-        return NULL;
+        return EOS;
     }
     void set_id(int id) {
         ff_node::set_id(id);
     }
-    int run()    { return ff_node::run();}
-    int wait()   { return ff_node::wait();}
+    int run(bool=false)  { return ff_node::run();}
+    int wait()           { return ff_node::wait();}
     
     double wffTime() {
         return ff_node::wffTime();

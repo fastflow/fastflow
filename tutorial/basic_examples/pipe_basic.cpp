@@ -25,6 +25,11 @@
  ****************************************************************************
  */
 
+/* Author: Massimo Torquati
+ * Date  : 2014
+ *         
+ */
+
 /**
  * \file pipe_basic.cpp
  * \ingroup applications
@@ -53,9 +58,12 @@ struct myTask {
 // memory management is up to the user
 
 myTask* f1(myTask* in, ff_node*const) {
-    if (++k == 10) { printf("f1 END\n"); return (myTask*)EOS;}
+    if (++k == 10) { 
+        printf("f1 END\n"); 
+        if (in) {delete [] in->V; delete in;} 
+        return (myTask*)EOS;
+    }
     if (in==nullptr) {
-        //int *V = new int[k+5]{}; brace-init does not work with Intel compiler 
         int *V = new int[k+5];
         for(int i=0;i<(k+5);++i) V[i]=0;
         return new myTask(k+5, V);
@@ -73,14 +81,21 @@ myTask* f3(myTask *in, ff_node*const) {
     return in;
 }
 
-typedef std::function<myTask*(myTask*,ff_node*const)> func_t;
+struct Deleter:ff_node_t<myTask> {
+    myTask *svc(myTask *task) { delete [] task->V; delete task; return GO_ON;}
+};
 
 int main() {
     /* ------------------------------------------- */
-    // Basic 3-stage pipeline f1;f2;f3
-    ff_pipe<myTask> pipe1(f1,f2,f3);
-    pipe1.run_and_wait_end();
-    printf("done 1st\n\n");
+    {
+        // Basic 3-stage pipeline f1;f2;f3 (plus a final stage for deleting tasks)
+        // Task deletion can be embedded in the f3 function but then it cannot be 
+        // used for the next examples
+        ff_node_F<myTask,myTask> F1(f1), F2(f2), F3(f3);
+        ff_Pipe<> pipe1(F1,F2,F3, make_unique<Deleter>());
+        pipe1.run_and_wait_end();
+        printf("done 1st\n\n");
+    }
     /* ------------------------------------------- */
 
     k=-1; // reset k
@@ -91,7 +106,9 @@ int main() {
         auto lambda1 = [] (myTask *in,ff_node*const) -> myTask* {
             return f1(in,nullptr);
         };
-        ff_pipe<myTask> pipe1(lambda1,f2,f3);
+        ff_node_F<myTask,myTask> L1(lambda1), F2(f2), F3(f3);
+
+        ff_Pipe<> pipe1(L1,F2,F3, make_unique<Deleter>());
         pipe1.run_and_wait_end();
         printf("done 1st with lambda\n\n");
     }
@@ -100,100 +117,119 @@ int main() {
     k=-1; // reset k
 
     /* ------------------------------------------- */
-    // ...with some more stages
-    ff_pipe<myTask> pipe2(f1,f2,f2,f2,f3);
-    pipe2.run_and_wait_end();
-    printf("done 2nd\n\n");
+    {
+        // ...with some more stages
+        ff_node_F<myTask,myTask> F1(f1), F21(f2), F22(f2), F23(f2), F3(f3);
+        ff_Pipe<> pipe2(F1,F21,F22,F23,F3, make_unique<Deleter>());
+        pipe2.run_and_wait_end();
+        printf("done 2nd\n\n");
+    }
     /* ------------------------------------------- */
 
     k=-1; // reset k
 
     /* ------------------------------------------- */
-    // composing 2 pipelines
-    ff_pipe<myTask> pipe0(f2,f2);
-    ff_pipe<myTask> pipe3(f1, &pipe0,f3);
-    pipe3.run_and_wait_end();
-    printf("done 3rd\n\n");
+    {
+        // composing 2 pipelines
+        ff_node_F<myTask> F1(f1), F21(f2), F22(f2), F3(f3); 
+        ff_Pipe<myTask> pipe0(F21,F22);
+        ff_Pipe<>       pipe3(F1, pipe0,F3, make_unique<Deleter>());
+        pipe3.run_and_wait_end();
+        printf("done 3rd\n\n");
+    }
     /* ------------------------------------------- */
 
     k=-1; // reset k
 
     /* ------------------------------------------- */
-    // farm introduction. The pipeline has also a feedback channel.
-    ff_pipe<myTask> pipe4(f1,new ff_farm<>((func_t)f2,3),new ff_farm<>((func_t)f3,2));
-    pipe4.wrap_around();
-    pipe4.run_and_wait_end();
-    printf("done 4th\n\n");
-    /* ------------------------------------------- */
-
-    /* ------------------------------------------- */
-    // ... just a little bit more complicated. 
-    // A pipeline with 3 farms, each farm without collector.
-    // The emitter of the first farm produces the stream.
-    auto lambda = []() -> void* {
-        static int k = 0;
-        if (k++ == 10) { printf("Emitter END\n"); return EOS;}
-        int *V = new int[k+5];
-        for(int i=0;i<(k+5);++i) V[i]=0;
-        return new myTask(k+5, V);
-    };
-    struct Emitter:public ff_node {
-        std::function<void*()> F;
-        Emitter(std::function<void*()> F):F(F) {}
-        void *svc(void*) { return F(); }
-    };
-    ff_farm<> farm1((func_t)f1,2);
-    ff_farm<> farm2((func_t)f2,3);
-    ff_farm<> farm3((func_t)f3,2);
-    ff_pipe<myTask> pipe5(&farm1,&farm2,&farm3);
-    farm1.add_emitter(new Emitter(lambda));
-    farm1.remove_collector();
-    farm2.setMultiInput();
-    farm2.remove_collector();
-    farm3.setMultiInput();
-    farm3.remove_collector();
-    pipe5.run_and_wait_end();
-    printf("done 5th\n\n");
+    {
+        // farm introduction. The pipeline has also a feedback channel.
+        ff_node_F<myTask> F1(f1);
+        ff_Farm<myTask> farm1(f2,3);
+        ff_Farm<myTask> farm2(f3,2);
+        ff_Pipe<> pipe4(F1,farm1, farm2);
+        pipe4.wrap_around();
+        pipe4.run_and_wait_end();
+        printf("done 4th\n\n");
+    }
     /* ------------------------------------------- */
 
     k=-1; // reset k
 
     /* ------------------------------------------- */
-    // Pipeline of 3 stages: sequential, sequential     
-    // and farm-with-feedback.
-    ff_farm<> farm0((func_t)f3, 3);
-    ff_pipe<myTask> pipe6(f1,f2,&farm0);
-    struct Scheduler:public ff_node {
-        ff_loadbalancer* lb;
-        Scheduler(ff_loadbalancer* lb):lb(lb) {}
-        void *svc(void *t) {
-            // do something smart here :)
-            if (lb->get_channel_id() == -1) {
-                return t;
+    {
+        // ... just a bit more complex.
+        // A pipeline with 3 farms, each farm without collector.
+        // The emitter of the first farm produces the stream.
+        auto lambda = []() -> myTask* {
+            static int k = 0;
+            if (k++ == 10) { 
+                printf("Emitter END\n"); 
+                return (myTask*)EOS;
             }
-            return GO_ON;
-        }            
-        void eosnotify(ssize_t id) {
-            if (id==-1) lb->broadcast_task(EOS);
-        }
-    };
-    farm0.add_emitter(new Scheduler(farm0.getlb()));
-    farm0.remove_collector();
-    farm0.wrap_around();
-    pipe6.run_and_wait_end();
-    printf("done 6th\n\n");
+            int *V = new int[k+5];
+            for(int i=0;i<(k+5);++i) V[i]=0;
+            return new myTask(k+5, V);
+        };
+
+        struct Emitter:public ff_node_t<myTask> {
+            std::function<myTask*()> F;
+            Emitter(std::function<myTask*()> F):F(F) {}
+            myTask *svc(myTask*) { return F(); }
+        };
+        struct Collector:public ff_node_t<myTask> {
+            myTask *svc(myTask *task) { delete [] task->V; delete task; return GO_ON;}
+        };
+        ff_Farm<myTask> farm1(f1,2);
+        ff_Farm<myTask> farm2(f2,3);
+        ff_Farm<myTask> farm3(f3,2);
+        ff_Pipe<myTask> pipe5(farm1,farm2,farm3);
+        Emitter E(lambda);
+        farm1.add_emitter(E);
+        farm1.remove_collector();
+        farm2.setMultiInput();
+        farm2.remove_collector();
+        farm3.setMultiInput();
+        farm3.remove_collector();
+        Collector C;
+        farm3.add_collector(C);
+        pipe5.run_and_wait_end();
+        printf("done 5th\n\n");
+    }
     /* ------------------------------------------- */
 
     k=-1; // reset k
-    auto _1  = make_ff_node_F<myTask>(f1);
-    auto _2  = make_ff_node_F<myTask>(f2);
-    auto _3  = make_ff_node_F<myTask>(f3);
-    auto nop = make_ff_node_F<myTask>([](myTask*in, ff_node*const) ->myTask* { 
-            return (myTask*)GO_ON;
-        });
-    ff_pipe<myTask> pipe7(&_1, &_2, &_3, &nop);
-    pipe7.run_and_wait_end();
-    printf("done 7th\n\n");
 
+    /* ------------------------------------------- */
+    {
+        // Pipeline of 3 stages: sequential, sequential     
+        // and farm-with-feedback.
+        ff_Farm<myTask> farm0(f3, 3);
+        ff_node_F<myTask> F1(f1), F2(f2);
+        ff_Pipe<myTask> pipe6(F1,F2,farm0);
+        struct Scheduler:public ff_node_t<myTask> {
+            ff_loadbalancer* lb;
+            Scheduler(ff_loadbalancer* lb):lb(lb) {}
+            myTask *svc(myTask *t) {
+                // do something smart here :)
+                if (lb->get_channel_id() == -1) {
+                    return t;
+                }
+                delete [] t->V; delete t;
+                return GO_ON;
+            }            
+            void eosnotify(ssize_t id) {
+                if (id==-1) lb->broadcast_task(EOS);
+            }
+        };
+        Scheduler S(farm0.getlb());
+        farm0.add_emitter(S);
+        farm0.remove_collector();
+        farm0.wrap_around();
+        pipe6.run_and_wait_end();
+        printf("done 6th\n\n");
+    }
+
+    /* ------------------------------------------- */
     return 0;
 }

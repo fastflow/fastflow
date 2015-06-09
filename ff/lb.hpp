@@ -68,6 +68,8 @@ namespace ff {
 
 class ff_loadbalancer: public ff_thread {
     template <typename T1, typename T2>  friend class ff_farm;
+    friend class ff_ofarm;
+    friend class ff_monode;
 public:    
 
     // NOTE:
@@ -76,6 +78,84 @@ public:
     //
     enum {TICKS2WAIT=1000};
 protected:
+
+#if defined(BLOCKING_MODE)
+    inline void put_done(int id) {
+        pthread_mutex_lock(&workers[id]->get_cons_m());
+        if (atomic_long_read(&workers[id]->get_cons_counter()) == 0) {
+            pthread_cond_signal(&workers[id]->get_cons_c());
+        }
+        atomic_long_inc(&(workers[id]->get_cons_counter()));
+        pthread_mutex_unlock(&workers[id]->get_cons_m());       
+        atomic_long_inc(&prod_counter);
+    }
+
+    inline void pop_done(ff_node *node) {
+        if (!node) {
+            pthread_mutex_lock(p_prod_m);
+            if (atomic_long_read(p_prod_counter) >= buffer->buffersize()) {
+                pthread_cond_signal(p_prod_c);
+            }
+            atomic_long_dec(p_prod_counter);
+            pthread_mutex_unlock(p_prod_m);
+        } else {
+            pthread_mutex_lock(&node->get_prod_m());
+            if (atomic_long_read(&(node->get_prod_counter())) >= node->get_out_buffer()->buffersize()) {
+                pthread_cond_signal(&node->get_prod_c());
+            }
+            atomic_long_dec(&(node->get_prod_counter()));
+            pthread_mutex_unlock(&node->get_prod_m());
+        }
+        atomic_long_dec(&cons_counter);                         
+    }
+
+    inline bool init_input_blocking(pthread_mutex_t *&m,
+                                            pthread_cond_t  *&c,
+                                            atomic_long_t   *&counter) {
+        if (atomic_long_read(&cons_counter) == (unsigned long)-1) {
+            if (pthread_mutex_init(&cons_m, NULL) != 0) return false;
+            if (pthread_cond_init(&cons_c, NULL) != 0) {
+                pthread_mutex_destroy(&cons_m);
+                return false;
+            }
+            atomic_long_set(&cons_counter,0);
+        } 
+        m = &cons_m,  c = &cons_c, counter = &cons_counter;
+        return true;
+    }
+    inline void set_input_blocking(pthread_mutex_t *&m,
+                                           pthread_cond_t  *&c,
+                                           atomic_long_t   *&counter) {
+        p_prod_m = m,  p_prod_c = c,  p_prod_counter = counter;
+    }    
+
+    // producer
+    inline bool init_output_blocking(pthread_mutex_t *&m,
+                                             pthread_cond_t  *&c,
+                                             atomic_long_t   *&counter) {
+        if (atomic_long_read(&prod_counter) == (unsigned long)-1) {
+            if (pthread_mutex_init(&prod_m, NULL) != 0) return false;
+            if (pthread_cond_init(&prod_c, NULL) != 0) {
+                pthread_mutex_destroy(&prod_m);
+                return false;
+            }
+            atomic_long_set(&prod_counter,0);
+        } 
+        m = &prod_m, c = &prod_c, counter = &prod_counter;
+        return true;
+    }
+    inline void set_output_blocking(pthread_mutex_t *&m,
+                                    pthread_cond_t  *&c,
+                                    atomic_long_t   *&counter) {
+        assert(1==0);
+    }
+
+    virtual inline pthread_mutex_t &get_cons_m()       { return cons_m;}
+    virtual inline pthread_cond_t  &get_cons_c()       { return cons_c;}
+    virtual inline atomic_long_t   &get_cons_counter() { return cons_counter;}
+
+#endif
+
     /**
      * \brief Pushes EOS to the worker
      *
@@ -86,24 +166,12 @@ protected:
     inline void push_eos(bool nofreeze=false) {
         //register int cnt=0;
         void * eos = nofreeze?EOS_NOFREEZE:EOS;
-        for(register ssize_t i=0;i<running;++i) {
-            while(!workers[i]->put(eos)) {
-                //if (sched_emitter && (++cnt>PUSH_CNT_EMIT)) { 
-                // cnt=0;sched_yield();}
-                //else 
-                losetime_out();
-            }
-        }
+        broadcast_task(eos);
     }
     inline void push_goon() {
         void * goon = (void *)(GO_ON);
-        for(register int i=0;i<running;++i) {
-            while(!workers[i]->put(goon)) {
-                losetime_out();
-            }
-        }
+        broadcast_task(goon);
     }
-        
 
     /** 
      * \brief Virtual function that can be redefined to implement a new scheduling
@@ -155,9 +223,14 @@ protected:
      * It loses some time before the message is sent to the output buffer.
      *
      */
-    virtual inline void losetime_out() { 
-        FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
-        ticks_wait(TICKS2WAIT); 
+    virtual inline void losetime_out(unsigned long ticks=TICKS2WAIT) {
+        FFTRACE(lostpushticks+=ticks; ++pushwait);
+#if defined(SPIN_USE_PAUSE)
+        const long n = (long)ticks/2000;
+        for(int i=0;i<=n;++i) PAUSE();
+#else
+        ticks_wait(ticks);
+#endif /* SPIN_USE_PAUSE */
     }
 
     /**
@@ -165,9 +238,14 @@ protected:
      *
      * It loses time before retrying to get a message from the input buffer.
      */
-    virtual inline void losetime_in() { 
-        FFTRACE(lostpopticks+=TICKS2WAIT;++popwait);
-        ticks_wait(TICKS2WAIT); 
+    virtual inline void losetime_in(unsigned long ticks=TICKS2WAIT) {
+        FFTRACE(lostpopticks+=ticks; ++popwait);
+#if defined(SPIN_USE_PAUSE)
+        const long n = (long)ticks/2000;
+        for(int i=0;i<=n;++i) PAUSE();
+#else
+        ticks_wait(ticks);
+#endif /* SPIN_USE_PAUSE */
     }
 
     /** 
@@ -183,8 +261,11 @@ protected:
      * \return \p true, if successful, or \p false if not successful.
      *
      */
-    virtual bool schedule_task(void * task, unsigned int retry=(unsigned)-1, unsigned int ticks=0) {
-        register unsigned int cnt; //,cnt2;
+#if !defined(BLOCKING_MODE)
+    virtual bool schedule_task(void * task, 
+                               unsigned long retry=((unsigned long)-1), 
+                               unsigned long ticks=0) {
+        unsigned long cnt; //,cnt2;
         do {
             cnt=0;//,cnt2=0;
             do {
@@ -198,18 +279,48 @@ protected:
                     return true;
                 }
                 else {
-                    //std::cerr << ".";
                     ++cnt;
                     if (cnt>=retry) { nextw=-1; return false; }
                     if (cnt == ntentative()) break; 
                 }
             } while(1);
             losetime_out();
-            //std::cerr << "-";
         } while(1);
-
         return false;
     }
+#else
+    virtual bool schedule_task(void * task, 
+                               unsigned long retry=((unsigned long)-1), 
+                               unsigned long ticks=0) {
+        unsigned long cnt;
+        do {
+            cnt=0;
+            do {
+                nextw = selectworker();
+                assert(nextw>=0);
+
+#if defined(LB_CALLBACK)
+                task = callback(nextw, task);
+#endif
+                if(workers[nextw]->put(task)) {
+                    FFTRACE(++taskcnt);
+                    put_done(nextw);
+                    return true;
+                }
+                else {
+                    ++cnt;
+                    if (cnt == ntentative()) break; 
+                }
+            } while(1);
+            pthread_mutex_lock(&prod_m);
+            while(atomic_long_read(&prod_counter) >= (running*workers[0]->get_in_buffer()->buffersize())) {
+                pthread_cond_wait(&prod_c, &prod_m);
+            }
+            pthread_mutex_unlock(&prod_m);
+        } while(1);
+        return true;
+    }
+#endif /* BLOCKING_MODE */
 
     /**
      * \brief Collects tasks
@@ -225,27 +336,46 @@ protected:
     virtual std::deque<ff_node *>::iterator  collect_task(void ** task, 
                                                            std::deque<ff_node *> & availworkers,
                                                            std::deque<ff_node *>::iterator & start) {
-        register int cnt, nw= (int)(availworkers.end()-availworkers.begin());
+        int cnt, nw= (int)(availworkers.end()-availworkers.begin());
         const std::deque<ff_node *>::iterator & ite(availworkers.end());
         do {
             cnt=0;
             do {
                 if (++start == ite) start=availworkers.begin();
+                //if (start == ite) start=availworkers.begin();  // read again next time from the same, needs (**)
                 if((*start)->get(task)) {
                     channelid = 
                         ((start-availworkers.begin()) >= (ssize_t)multi_input_start) ? -1:(*start)->get_my_id();
+
+#if defined(BLOCKING_MODE)
+                    pop_done(*start);
+#endif
                     return start;
                 }
-                else if (++cnt == nw) {
-                    if (filter && !filter->in_active) { *task=NULL; channelid=-2; return ite;}
-                    if (buffer && buffer->pop(task)) {
-                        channelid = -1;
-                        return ite;
+                else { 
+                    //++start;             // (**)
+                    if (++cnt == nw) {
+                        if (filter && !filter->in_active) { *task=NULL; channelid=-2; return ite;}
+                        if (buffer && buffer->pop(task)) {
+#if defined(BLOCKING_MODE)
+                            pop_done(NULL);
+#endif
+                            channelid = -1;
+                            return ite;
+                        }
+                        break;
                     }
-                    break;
                 }
             } while(1);
+#if !defined(BLOCKING_MODE)
             losetime_in();
+#else
+            pthread_mutex_lock(&cons_m);
+            while (atomic_long_read(&cons_counter) == 0) {
+                pthread_cond_wait(&cons_c, &cons_m);
+            }
+            pthread_mutex_unlock(&cons_m);
+#endif
         } while(1);
         return ite;
     }
@@ -263,21 +393,33 @@ protected:
         //register int cnt = 0;       
         if (!filter) {
             while (! buffer->pop(task)) {
-                //    if (ch->thxcore>1) {
-                //if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
-                //else ticks_wait(TICKS2WAIT);
-                //} else 
+#if !defined(BLOCKING_MODE)
                 losetime_in();
-            } 
+            }
+#else
+                pthread_mutex_lock(&cons_m);
+                while (atomic_long_read(&cons_counter) == 0) {
+                    pthread_cond_wait(&cons_c, &cons_m);
+                }
+                pthread_mutex_unlock(&cons_m);
+            } // while
+            pop_done(NULL);
+#endif
             return true;
-        }
+       }
         while (! filter->pop(task)) {
-            //    if (ch->thxcore>1) {
-            //if (++cnt>PUSH_POP_CNT) { sched_yield(); cnt=0;}
-            //else ticks_wait(TICKS2WAIT);
-            //} else 
+#if !defined(BLOCKING_MODE)
             losetime_in();
         } 
+#else
+            pthread_mutex_lock(&cons_m);
+            while (atomic_long_read(&cons_counter) == 0) {
+                pthread_cond_wait(&cons_c, &cons_m);
+            }
+            pthread_mutex_unlock(&cons_m);
+        } //while 
+        pop_done(NULL);
+#endif
         return true;
     }
     
@@ -290,7 +432,9 @@ protected:
      * \return The status of scheduled task, which can be either \p true or \p
      * false.
      */
-    static bool ff_send_out_emitter(void * task,unsigned int retry,unsigned int ticks, void *obj) {
+    static bool ff_send_out_emitter(void * task,
+                                    unsigned long retry,
+                                    unsigned long ticks, void *obj) {
         return ((ff_loadbalancer *)obj)->schedule_task(task, retry, ticks);
     }
 
@@ -311,7 +455,6 @@ protected:
         }
     }
     
-
 public:
     /** 
      *  \brief Default constructor 
@@ -324,11 +467,17 @@ public:
         running(-1),max_nworkers(max_num_workers),nextw(-1),channelid(-2),
         filter(NULL),workers(max_num_workers),
         buffer(NULL),skip1pop(false),master_worker(false),
-        multi_input(256),multi_input_start(max_num_workers+1),
-        int_multi_input(256) {
+        multi_input(MAX_NUM_THREADS),multi_input_start(max_num_workers+1),
+        int_multi_input(MAX_NUM_THREADS) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
+#if defined(BLOCKING_MODE)
+        atomic_long_set(&cons_counter, -1);
+        atomic_long_set(&prod_counter, -1);
+        p_prod_m = NULL, p_prod_c = NULL, p_prod_counter = NULL;
+#endif
+
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
     }
 
@@ -358,6 +507,9 @@ public:
 
         return 0;
     }
+
+    ff_node *get_filter() const { return filter;}
+
 
     /**
      * \brief Sets input buffer
@@ -389,6 +541,12 @@ public:
      * \return the channel id
      */
     ssize_t get_channel_id() const { return channelid;}
+
+
+    // TOGLIERE
+    size_t workerselected() const { return (nextw % running); }  // NEW
+
+
 
     /**
      * \brief Resets the channel id
@@ -475,10 +633,45 @@ public:
         return 0;
     }
 
-    inline bool ff_send_out_to(void *task, int id) const {
-        return workers[id]->put(task);
+#if !defined(BLOCKING_MODE)
+    inline bool ff_send_out_to(void *task, int id,  
+                               unsigned long retry=((unsigned long)-1),
+                               unsigned long ticks=(TICKS2WAIT)) {        
+        for(unsigned long i=0;i<retry;++i) {
+            if (workers[id]->put(task)) {
+                FFTRACE(++taskcnt);
+                return true;
+            }
+            losetime_out(ticks);
+        }    
+        return false;
     }
+#else
+    inline bool ff_send_out_to(void *task, int id,  
+                               unsigned long retry=((unsigned long)-1),
+                               unsigned long ticks=(TICKS2WAIT)) {        
+    _retry:
+        if (workers[id]->put(task)) {
+            FFTRACE(++taskcnt);
 
+            pthread_mutex_lock(&workers[id]->get_cons_m());
+            if (atomic_long_read(&workers[id]->get_cons_counter()) == 0)
+                pthread_cond_signal(&workers[id]->get_cons_c());
+            atomic_long_inc(&(workers[id]->get_cons_counter()));
+            pthread_mutex_unlock(&workers[id]->get_cons_m());            
+            atomic_long_inc(&prod_counter);
+        } else {
+            pthread_mutex_lock(&prod_m);
+            // here we do not use while
+            // the thread can be woken up more frequently
+            if (atomic_long_read(&prod_counter) >= workers[id]->get_in_buffer()->buffersize())
+                pthread_cond_wait(&prod_c, &prod_m);
+            pthread_mutex_unlock(&prod_m);     
+            goto _retry;
+        }
+        return true;
+    }
+#endif
     /** 
      * \brief Send the same task to all workers 
      *
@@ -487,10 +680,11 @@ public:
      * It sends the same task to all workers.
      *
      */
+#if !defined(BLOCKING_MODE)
     inline void broadcast_task(void * task) {
         std::vector<size_t> retry;
 
-        for(register ssize_t i=0;i<running;++i) {
+        for(ssize_t i=0;i<running;++i) {
             if(!workers[i]->put(task))
                 retry.push_back(i);
         }
@@ -500,6 +694,28 @@ public:
             else losetime_out();
         }
     }
+#else
+    inline void broadcast_task(void * task) {
+        std::vector<size_t> retry;
+
+        for(ssize_t i=0;i<running;++i) {
+            if(!workers[i]->put(task))
+                retry.push_back(i);
+            else put_done(i);
+        }
+        while(retry.size()) {
+            if(workers[retry.back()]->put(task)) {
+                put_done(retry.back());
+                retry.pop_back();
+            } else {
+                pthread_mutex_lock(&prod_m);
+                while(atomic_long_read(&prod_counter) >= (retry.size()*workers[0]->get_in_buffer()->buffersize()))
+                    pthread_cond_wait(&prod_c, &prod_m);
+                pthread_mutex_unlock(&prod_m); 
+            }
+        }
+    }
+#endif
 
     /**
      * \brief Gets master worker
@@ -578,12 +794,12 @@ public:
                 }
 
                 if (filter) {
-                    FFTRACE(register ticks t0 = getticks());
+                    FFTRACE(ticks t0 = getticks());
 
                     task = filter->svc(task);
 
 #if defined(TRACE_FASTFLOW)
-                    register ticks diff=(getticks()-t0);
+                    ticks diff=(getticks()-t0);
                     tickstot +=diff;
                     ticksmin=(std::min)(ticksmin,diff);
                     ticksmax=(std::max)(ticksmax,diff);
@@ -669,12 +885,12 @@ public:
                     //}
                 } else {
                     if (filter) {
-                        FFTRACE(register ticks t0 = getticks());
+                        FFTRACE(ticks t0 = getticks());
 
                         task = filter->svc(task);
 
 #if defined(TRACE_FASTFLOW)
-                        register ticks diff=(getticks()-t0);
+                        ticks diff=(getticks()-t0);
                         tickstot +=diff;
                         ticksmin=(std::min)(ticksmin,diff);
                         ticksmax=(std::max)(ticksmax,diff);
@@ -949,6 +1165,9 @@ public:
     inline void freeze(const size_t n) {
         assert(n<workers.size());
         workers[n]->freeze();
+
+        // should I have to decrease running ? CHECK
+        
     }
 
     /**
@@ -1045,6 +1264,25 @@ private:
     ticks         ticksmax;
     ticks         tickstot;
 #endif
+
+ protected:
+#if defined(BLOCKING_MODE)
+    // for the input queue
+    pthread_mutex_t cons_m;
+    pthread_cond_t  cons_c;
+    atomic_long_t   cons_counter;
+
+    // for synchronizing with the previous multi-output stage
+    pthread_mutex_t *p_prod_m;
+    pthread_cond_t  *p_prod_c;
+    atomic_long_t   *p_prod_counter;
+
+    // for the output queue
+    pthread_mutex_t prod_m;
+    pthread_cond_t  prod_c;
+    atomic_long_t   prod_counter;
+#endif    
+
 };
 
 

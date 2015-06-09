@@ -50,7 +50,7 @@
  */
 
 #include <ff/pipeline.hpp>
-#include <ff/farm.hpp> 
+#include <ff/farm.hpp>
 
 using namespace ff;
 const long   NUMTASKS=10;

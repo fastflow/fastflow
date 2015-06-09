@@ -152,7 +152,7 @@ protected:
                 continue;
             }
             uint32_t len = *static_cast<uint32_t*>(hdr.getData());
-            register int ventry   = (sendingPeers==1)?0:sender;
+            int ventry   = (sendingPeers==1)?0:sender;
             prepare(v[ventry], len, sender);
             assert(v[ventry]->size() == len);
             
