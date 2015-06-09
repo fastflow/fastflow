@@ -36,7 +36,7 @@
 #include <ff/platforms/platform.h>
 #include <ff/ubuffer.hpp>
 #include <ff/farm.hpp>
-#include <ff/staticlinkedlist.hpp>
+//#include <ff/staticlinkedlist.hpp>
 
 
 using namespace ff;

@@ -155,7 +155,7 @@ int main(int argc, char * argv[]) {
     std::vector<ff_node *> w;
     w.push_back(new Worker);
     w.push_back(new Worker);
-    //w.push_back(new Worker);
+    w.push_back(new Worker);
     farm.add_workers(w);
 
     farm.wrap_around();

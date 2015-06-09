@@ -102,14 +102,13 @@ int main(int argc, char * argv[]) {
     std::cout << "[Main] EOS arrived\n";
     farm.offload((void *)FF_EOS);
     
-
+#if 0
     // get all remaining results syncronously. 
     while(farm.load_result(&result)) {
         std::cerr << "result= " << *((int*)result) << "\n";
         delete ((int*)result);
     }
-
-#if 0
+#else
     // asynchronously wait results
     do {
         if (farm.load_result_nb(&result)) {

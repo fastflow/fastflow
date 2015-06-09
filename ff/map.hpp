@@ -56,24 +56,25 @@ namespace ff {
  *
  * \todo Map to be documented and exemplified
  */
-template<typename S, typename reduceT=int>
-class ff_Map: public ff_node_t<S>, public ParallelForReduce<reduceT> {
-    using ParallelForReduce<reduceT>::pfr;
+template<typename IN, typename OUT=IN, typename reduceT=int>
+class ff_Map: public ff_node_t<IN, OUT> {
+protected:
+    ParallelForReduce<reduceT> pfr;
 protected:
     int prepare() {
         if (!prepared) {
             // warmup phase
-            pfr->resetskipwarmup();
+            pfr.resetskipwarmup();
             auto r=-1;
-            if (pfr->run_then_freeze() != -1)         
-                r = pfr->wait_freezing();            
+            if (pfr.run_then_freeze() != -1)         
+                r = pfr.wait_freezing();            
             if (r<0) {
                 error("ff_Map: preparing ParallelForReduce\n");
                 return -1;
             }
             
             if (spinWait) { 
-                if (pfr->enableSpinning() == -1) {
+                if (pfr.enableSpinning() == -1) {
                     error("ParallelForReduce: enabling spinwait\n");
                     return -1;
                 }
@@ -89,12 +90,89 @@ protected:
     }
     
 public:
+    
+    typedef IN  in_type;
+    typedef OUT out_type;
+
+
     ff_Map(size_t maxp=-1, bool spinWait=false, bool spinBarrier=false):
-        ParallelForReduce<reduceT>(maxp,false,true,false),// skip loop warmup and disable spinwait
+        pfr(maxp,false,true,false),// skip loop warmup and disable spinwait
         spinWait(spinWait),prepared(false)  {
-        ParallelForReduce<reduceT>::disableScheduler(true);
+        pfr.disableScheduler(true);
     }
     virtual ~ff_Map() {}
+
+
+    /* --------------------------------------- */
+    template <typename Function>
+    inline void parallel_for(long first, long last, const Function& f, 
+                             const long nw=FF_AUTO) {
+        pfr.parallel_for(first,last,f,nw);
+    }
+    template <typename Function>
+    inline void parallel_for(long first, long last, long step, const Function& f, 
+                             const long nw=FF_AUTO) {
+        pfr.parallel_for(first,last,step,f,nw);
+    }
+    template <typename Function>
+    inline void parallel_for(long first, long last, long step, long grain, 
+                             const Function& f, const long nw=FF_AUTO) {
+        pfr.parallel_for(first,last,step,grain,f,nw);
+    }    
+    template <typename Function>
+    inline void parallel_for_thid(long first, long last, long step, long grain, 
+                                  const Function& f, const long nw=FF_AUTO) {
+        pfr.parallel_for_thid(first,last,step,grain,f,nw);
+    }    
+    template <typename Function>
+    inline void parallel_for_idx(long first, long last, long step, long grain, 
+                                  const Function& f, const long nw=FF_AUTO) {
+        pfr.parallel_for_idx(first,last,step,grain,f,nw);        
+    }    
+    template <typename Function>
+    inline void parallel_for_static(long first, long last, long step, long grain, 
+                                    const Function& f, const long nw=FF_AUTO) {
+        pfr.parallel_for_static(first,last,step,grain,f,nw);
+    }
+    template <typename Function, typename FReduction>
+    inline void parallel_reduce(reduceT& var, const reduceT& identity, 
+                                long first, long last, 
+                                const Function& partialreduce_body, const FReduction& finalreduce_body,
+                                const long nw=FF_AUTO) {
+        pfr.parallel_reduce(var,identity,first,last,partialreduce_body,finalreduce_body,nw);
+    }
+    template <typename Function, typename FReduction>
+    inline void parallel_reduce(reduceT& var, const reduceT& identity, 
+                                long first, long last, long step, 
+                                const Function& body, const FReduction& finalreduce,
+                                const long nw=FF_AUTO) {
+        pfr.parallel_reduce(var,identity,first,last,step,body,finalreduce,nw);
+    }
+    template <typename Function, typename FReduction>
+    inline void parallel_reduce(reduceT& var, const reduceT& identity, 
+                                long first, long last, long step, long grain, 
+                                const Function& body, const FReduction& finalreduce,
+                                const long nw=FF_AUTO) {
+        pfr.parallel_reduce(var,identity,first,last,step,grain,body,finalreduce,nw);
+    }
+
+    template <typename Function, typename FReduction>
+    inline void parallel_reduce_thid(reduceT& var, const reduceT& identity,
+                                     long first, long last, long step, long grain,
+                                     const Function& body, const FReduction& finalreduce,
+                                     const long nw=FF_AUTO) {
+        pfr.parallel_reduce_thid(var,identity,first,last,step,grain,body,finalreduce,nw);
+    }
+    template <typename Function, typename FReduction>
+    inline void parallel_reduce_static(reduceT& var, const reduceT& identity,
+                                       long first, long last, long step, long grain, 
+                                       const Function& body, const FReduction& finalreduce,
+                                       const long nw=FF_AUTO) {
+        pfr.parallel_reduce_static(var,identity,first,last,step,grain,body,finalreduce,nw);
+    }
+    /* --------------------------------------- */
+    
+    
 
     virtual int run(bool=false) {
         if (!prepared) if (prepare()<0) return -1;
@@ -107,6 +185,7 @@ public:
 
     virtual int wait() { return ff_node::wait();}
     virtual int wait_freezing() { return ff_node::wait_freezing(); }
+
 protected:
     bool spinWait;
     bool prepared;

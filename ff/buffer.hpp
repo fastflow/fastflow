@@ -55,6 +55,7 @@
 #include <cstdlib>
 #include <cstring>
 //#include <atomic>
+#include <ff/atomic/abstraction_dcas.h>
 
 #include <ff/sysdep.h>
 #include <ff/config.hpp>
@@ -104,10 +105,13 @@ private:
     unsigned long    pwrite;
     long padding2[longxCacheLine-1];
 #else
-    volatile unsigned long    pread;
-    long padding1[longxCacheLine-1];
-    volatile unsigned long    pwrite;
-    long padding2[longxCacheLine-1];
+    ALIGN_TO_PRE(CACHE_LINE_SIZE)
+    volatile unsigned long pread;
+    ALIGN_TO_POST(CACHE_LINE_SIZE)
+
+    ALIGN_TO_PRE(CACHE_LINE_SIZE)
+    volatile unsigned long pwrite;
+    ALIGN_TO_POST(CACHE_LINE_SIZE)
 #endif
     const    unsigned long size;
     void                   ** buf;
@@ -131,8 +135,8 @@ public:
     SWSR_Ptr_Buffer(unsigned long n, const bool=true):
         pread(0),pwrite(0),size(n),buf(0) {
         // Avoid unused private field warning on padding1, padding2
-        (void)padding1;
-        (void)padding2;
+        //(void)padding1;
+        //(void)padding2;
     }
     
     /** 
@@ -161,6 +165,7 @@ public:
         if (!buf) return false;
 
         reset(startatlineend);
+
         return true;
     }
 
@@ -233,9 +238,9 @@ public:
      */
     inline bool multipush(void * const data[], int len) {
         if ((unsigned)len>=size) return false;
-        register unsigned long last = pwrite + ((pwrite+ --len >= size) ? (len-size): len);
-        register unsigned long r    = len-(last+1), l=last;
-        register unsigned long i;
+        unsigned long last = pwrite + ((pwrite+ --len >= size) ? (len-size): len);
+        unsigned long r    = len-(last+1), l=last;
+        unsigned long i;
 
         if (buf[last]==NULL) {
             
@@ -246,7 +251,7 @@ public:
                     buf[i] = data[r];
                 
             } else 
-                for(register int i=len;i>=0;--i) 
+                for(int i=len;i>=0;--i) 
                     buf[pwrite+i] = data[i];
             
             WMB();
@@ -291,20 +296,7 @@ public:
     }
 #endif /* SWSR_MULTIPUSH */
     
-    /** 
-     *  Pop method: get the next value from the FIFO buffer.
-     *
-     *  \param data Pointer to the location where to store the 
-     *  data popped from the buffer.
-     */
-    inline bool  pop(void ** data) {  /* modify only pread pointer */
-        if (!data || empty()) return false;
 
-        *data = buf[pread];
-        //std::atomic_thread_fence(std::memory_order_acquire);
-        return inc();
-    } 
-    
     /**
      * It is like pop but doesn't copy any data.
      *
@@ -315,7 +307,20 @@ public:
         pread += (pread+1 >= size) ? (1-size): 1; // circular buffer       
         return true;
     }           
-    
+
+    /** 
+     *  Pop method: get the next value from the FIFO buffer.
+     *
+     *  \param data Pointer to the location where to store the 
+     *  data popped from the buffer.
+     */
+    inline bool  pop(void ** data) {  /* modify only pread pointer */
+        if (empty()) return false;        
+        *data = buf[pread];
+        //std::atomic_thread_fence(std::memory_order_acquire);
+        return inc();
+    } 
+        
     /** 
      *  It returns the "head" of the buffer, i.e. the element pointed by the read
      *  pointer (it is a FIFO queue, so \p push on the tail and \p pop from the
@@ -361,6 +366,7 @@ public:
         return size;  
     }
 
+    inline const bool isFixedSize() const { return true; }
 };
 
 /*!

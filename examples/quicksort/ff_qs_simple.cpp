@@ -42,6 +42,7 @@
  */
 
 #include <stdio.h>
+#include <ff/config.hpp>
 #include <ff/farm.hpp>
 
 using namespace ff;
@@ -225,7 +226,7 @@ int main(int argc, char *argv[]) {
     int nworkers=atoi(argv[3]);
     if (argc==5) check_result=true;
     
-    if (nworkers > ff::ff_farm<>::DEF_MAX_NUM_WORKERS) {
+    if (nworkers > DEF_MAX_NUM_WORKERS) {
         fprintf(stderr, "too many number of workers\n");
         return -1;
     }

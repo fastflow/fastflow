@@ -28,12 +28,13 @@ FF_ROOT		= $(HOME)/fastflow
 CXX		= g++ -std=c++11
 INCLUDES	= -I $(FF_ROOT) 
 
-CXXFLAGS  	= -Wall -DHAS_CXX11_VARIADIC_TEMPLATES -DHAS_CXX11_LAMBDA #-DNO_DEFAULT_MAPPING
+CXXFLAGS  	= -Wall # -DBLOCKING_MODE -DNO_DEFAULT_MAPPING 
 
 LDFLAGS 	=  -pthread
 OPTFLAGS	=  -O3 -finline-functions -DNDEBUG
 
 TARGETS		=               \
+	basic                   \
 	pipe_basic		\
 	farm_basic		\
 	parfor_basic

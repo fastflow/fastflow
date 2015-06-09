@@ -57,37 +57,41 @@ struct mapWorker: ff_Map<ff_task_t> {
         // this is the parallel_for provided by the ff_Map class
         parallel_for(0,A->size(),[&A](const long i) { 
                 A->operator[](i)=i;
-            },std::min(3,ff_realNumCores()));
+            },std::min(3,(int)ff_realNumCores()));
         ff_send_out(A);
         return EOS;
     }
 };
 
 struct mapStage: ff_Map<ff_task_t> {
-    ff_task_t *svc(ff_task_t *A) {
+    ff_task_t *svc(ff_task_t *inA) {
+        ff_task_t &A = *inA;
         // this is the parallel_for provided by the ff_Map class
-        parallel_for(0,A->size(),[&A](const long i) { 
-                A->operator[](i) += i;
+        parallel_for(0,A.size(),[&A](const long i) { 
+                A[i] += i;
             },2);
         
         printf("mapStage received:\n");
-        for(size_t i=0;i<A->size();++i)
-            printf("%ld ", A->operator[](i));
+        for(size_t i=0;i<A.size();++i)
+            printf("%ld ", A[i]);
         printf("\n");
-        
+        delete inA;
         return GO_ON;
     }    
 };
 
 
 int main() {
-    std::vector<ff_node*> W;
-    W.push_back(new mapWorker);
-    W.push_back(new mapWorker);
-    ff_farm<> farm(W);
-    farm.cleanup_workers();
+
+    // farm having map workers
+    ff_Farm<ff_task_t, ff_task_t> farm( []() {
+            std::vector<std::unique_ptr<ff_node> > W;	
+            for(size_t i=0;i<2;++i) W.push_back(make_unique<mapWorker>());
+            return W;
+        }() );
+    
     mapStage stage;
-    ff_pipe<ff_task_t> pipe(&farm,&stage);
+    ff_Pipe<> pipe(farm,stage);
     if (pipe.run_and_wait_end()<0)
         error("running pipe");   
     return 0;	

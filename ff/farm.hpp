@@ -53,50 +53,23 @@
 #include <iosfwd>
 #include <vector>
 #include <algorithm>
+#include <memory>
 #include <ff/platforms/platform.h>
 #include <ff/lb.hpp>
 #include <ff/gt.hpp>
 #include <ff/node.hpp>
+#include <ff/multinode.hpp>
 #include <ff/fftree.hpp>
 
 namespace ff {
 
-/* ---------------- basic high-level macros ----------------------- */
 
-    /* FF_FARMA creates an accelerator farm with 'nworkers' workers. 
-     * The functions called in each worker must have the following 
-     * signature:
-     *   bool (*F)(type &)
-     * If the function F returns false an EOS is produced in the 
-     * output channel.
-     */
-
-#define FF_FARMA(farmname, F, type, nworkers, qlen)                     \
-    class _FF_node_##farmname_##F: public ff_node {                     \
-    public:                                                             \
-     void* svc(void* task) {                                            \
-        type* _ff_in = (type*)task;                                     \
-        if (!F(*_ff_in)) return NULL;                                   \
-        return task;                                                    \
-     }                                                                  \
-    };                                                                  \
-    ff_farm<> _FF_node_##farmname(true,qlen,qlen,true,nworkers,true);   \
-    _FF_node_##farmname.cleanup_workers();                              \
-    _FF_node_##farmname.set_scheduling_ondemand();                      \
-    std::vector<ff_node*> w_##farmname;                                 \
-    for(int i=0;i<nworkers;++i)                                         \
-        w_##farmname.push_back(new _FF_node_##farmname_##F);            \
-    _FF_node_##farmname.add_workers(w_##farmname);                      \
-    _FF_node_##farmname.add_collector(NULL);
-
-#define FF_FARMARUN(farmname)  _FF_node_##farmname.run()
-#define FF_FARMAOFFLOAD(farmname, task)  _FF_node_##farmname.offload(task);
-#define FF_FARMAGETRESULTNB(farmname, result) _FF_node_##farmname.load_result_nb((void**)result)
-#define FF_FARMAGETRESULT(farmname, result) _FF_node_##farmname.load_result((void**)result)
-#define FF_FARMAWAIT(farmname) _FF_node_##farmname.wait()
-#define FF_FARMAEND(farmname)  _FF_node_##farmname.offload(EOS)
-
-/* ---------------------------------------------------------------- */
+/* This file provides the following classes:
+ *   ff_farm    task-farm pattern 
+ *   ff_ofarm   ordered task-farm pattern
+ *   ff_Farm    typed version of the task-farm pattern (requires c++11)
+ *
+ */
 
 
 /*!
@@ -132,14 +105,61 @@ protected:
         for(size_t i=0;i<nworkers;++i) {
             if (workers[i]->create_input_buffer((int) (ondemand ? ondemand: (in_buffer_entries/nworkers + 1)), 
                                                 (ondemand ? true: fixedsize))<0) return -1;
-            if (collector || lb->masterworker() || collector_removed) 
+            if ((collector && !collector_removed) || lb->masterworker()) 
                 // NOTE: force unbounded queue if masterworker
-                if (workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
+                if (workers[i]->get_out_buffer()==NULL &&
+                    workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
                                                      (lb->masterworker()?false:fixedsize))<0)
                     return -1;
             lb->register_worker(workers[i]);
             if (collector && !collector_removed) gt->register_worker(workers[i]);
         }
+
+#if defined(BLOCKING_MODE)
+        for(size_t i=0;i<nworkers;++i) {
+            pthread_mutex_t *m        = NULL;
+            pthread_cond_t  *c        = NULL;
+            atomic_long_t   *counter  = NULL;
+            if (!workers[i]->init_input_blocking(m,c,counter)) {
+                error("FARM, init input blocking mode for worker %d\n", i);
+                return -1;
+            }
+            if (!workers[i]->init_output_blocking(m,c,counter)) {
+                error("FARM, init output blocking mode for worker %d\n", i);
+                return -1;
+            }
+        }
+        pthread_mutex_t *m        = NULL;
+        pthread_cond_t  *c        = NULL;
+        atomic_long_t   *counter  = NULL;
+        if (lb->init_output_blocking(m,c,counter)<0) {
+            error("FARM, init output blocking mode for LB\n");
+            return -1;
+        }
+        for(size_t i=0;i<nworkers;++i)
+            workers[i]->set_input_blocking(m,c,counter);
+
+        if (collector && !collector_removed) {
+            if (!gt->init_input_blocking(m,c,counter)) {
+                error("FARM, init output blocking mode for GT\n");
+                return -1;
+            }
+            for(size_t i=0;i<nworkers;++i)
+                workers[i]->set_output_blocking(m,c,counter);
+        }    
+
+        if (lb->masterworker()) {
+            pthread_mutex_t *m        = NULL;
+            pthread_cond_t  *c        = NULL;
+            atomic_long_t   *counter  = NULL;
+            if (!init_input_blocking(m,c,counter)) {
+                error("FARM, init input blocking mode for master-worker\n");
+                return -1;
+            }
+            for(size_t i=0;i<nworkers;++i)
+                workers[i]->set_output_blocking(m,c,counter);
+        }    
+#endif
         prepared=true;
         return 0;
     }
@@ -148,62 +168,72 @@ protected:
         if (!prepared) if (prepare()<0) return -1;
         freeze();
         return run(true);
-    } 
+    }
 
     inline void skipfirstpop(bool sk)   { 
         if (sk) lb->skipfirstpop();
         skip1pop=sk;
     }
 
-    
+
+#if defined(BLOCKING_MODE)
+    // consumer
+    virtual inline bool init_input_blocking(pthread_mutex_t *&m,
+                                            pthread_cond_t  *&c,
+                                            atomic_long_t   *&counter) {
+        return lb->init_input_blocking(m,c,counter);
+    }
+    virtual inline void set_input_blocking(pthread_mutex_t *&m,
+                                           pthread_cond_t  *&c,
+                                           atomic_long_t   *&counter) {
+        lb->set_input_blocking(m,c,counter);
+    }    
+
+    // producer
+    virtual inline bool init_output_blocking(pthread_mutex_t *&m,
+                                             pthread_cond_t  *&c,
+                                             atomic_long_t   *&counter) {
+        return gt->init_output_blocking(m,c,counter);
+    }
+    virtual inline void set_output_blocking(pthread_mutex_t *&m,
+                                            pthread_cond_t  *&c,
+                                            atomic_long_t   *&counter) {
+        if (collector && !collector_removed)
+            gt->set_output_blocking(m,c,counter);
+        else {
+            for(size_t i=0;i<workers.size();++i)
+                workers[i]->set_output_blocking(m,c,counter);
+        }
+    }
+
+    virtual inline pthread_mutex_t &get_cons_m()        { return lb->cons_m;}
+    virtual inline pthread_cond_t  &get_cons_c()        { return lb->cons_c;}
+    virtual inline atomic_long_t   &get_cons_counter()  { return lb->cons_counter;}
+
+    virtual inline pthread_mutex_t &get_prod_m()        { return gt->prod_m; }
+    virtual inline pthread_cond_t  &get_prod_c()        { return gt->prod_c; }
+    virtual inline atomic_long_t   &get_prod_counter()  { return gt->prod_counter;}
+#endif /* BLOCKING_MODE */
+
+
 public:
     /*
      *TODO
      */
-    enum { DEF_MAX_NUM_WORKERS=(MAX_NUM_THREADS-2), DEF_IN_BUFF_ENTRIES=2048, DEF_IN_OUT_DIFF=128, 
+    enum { DEF_IN_BUFF_ENTRIES=2048, DEF_IN_OUT_DIFF=128, 
            DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+DEF_IN_OUT_DIFF)};
 
     typedef lb_t LoadBalancer_t;
-
+    
     typedef gt_t Gatherer_t;
 
-    /**
-     * \ingroup high_level_patterns
-     * \brief High-level pattern constructor
-     */
-#if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
-    template<typename T>
-    ff_farm(const std::function<T*(T*,ff_node*const)> &F, int nw, bool input_ch=false):
-        has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
-        in_buffer_entries(DEF_IN_BUFF_ENTRIES),
-        out_buffer_entries(DEF_OUT_BUFF_ENTRIES),
-        worker_cleanup(true),
-        max_nworkers(nw),
-        emitter(NULL),collector(NULL),
-        lb(new lb_t(nw)),gt(new gt_t(nw)),
-        workers(nw),fixedsize(false) {
-
-    	//fftree stuff
-    	fftree_ptr = new fftree(this, FARM);
-    	fftree_ptr->add_child(lb->fftree_ptr = new fftree(lb, EMITTER));
-    	fftree_ptr->add_child(gt->fftree_ptr = new fftree(gt, COLLECTOR));
-
-        std::vector<ff_node*> w(nw);        
-        for(int i=0;i<nw;++i) w[i]=new ff_node_F<T>(F);
-        add_workers(w);
-        add_collector(NULL);
-        if (has_input_channel) { 
-            if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
-                error("FARM, creating input buffer\n");
-            }
-        }
-    }
-#endif
-    /**
+    /*
      * \ingroup core_patterns
      * @brief Core patterns constructor 2
      *
-     * This is a constructor at core patterns level
+     * This is a constructor at core patterns level.
+     * Note that, by using this constructor, the collector IS added automatically !
+     *
      * @param W vector of workers
      * @param Emitter pointer to Emitter object (mandatory)
      * @param Collector pointer to Collector object (optional)
@@ -213,7 +243,7 @@ public:
         has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
         in_buffer_entries(DEF_IN_BUFF_ENTRIES),
         out_buffer_entries(DEF_OUT_BUFF_ENTRIES),
-        worker_cleanup(false),
+        worker_cleanup(false),emitter_cleanup(false),collector_cleanup(false),
         max_nworkers(W.size()),
         emitter(NULL),collector(NULL),
         lb(new lb_t(W.size())),gt(new gt_t(W.size())),
@@ -237,6 +267,18 @@ public:
             if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
                 error("FARM, creating input buffer\n");
             }
+#if defined(BLOCKING_MODE)
+            if (!init_input_blocking(p_cons_m,p_cons_c,p_cons_counter)) {
+                error("FARM, init input blocking mode for accelerator\n");
+            }
+            pthread_mutex_t   *m        = NULL;
+            pthread_cond_t    *c        = NULL;
+            atomic_long_t     *counter  = NULL;
+            if (!ff_node::init_output_blocking(m,c,counter)) {
+                error("FARM, init output blocking mode for accelerator\n");
+            }
+            set_input_blocking(m,c,counter);
+#endif
         }
     }
 
@@ -245,6 +287,7 @@ public:
      * \brief Core patterns constructor 1
      *
      *  This is a constructor at core patterns level. To be coupled with \p add_worker, \p add_emitter, and \p add_collector
+     *  Note that, by using this constructor, the collector is NOT added automatically !
      *
      *  \param input_ch = true to set accelerator mode
      *  \param in_buffer_entries = input queue length
@@ -262,7 +305,7 @@ public:
         has_input_channel(input_ch),prepared(false),collector_removed(false),ondemand(0),
         in_buffer_entries(in_buffer_entries),
         out_buffer_entries(out_buffer_entries),
-        worker_cleanup(worker_cleanup),
+        worker_cleanup(worker_cleanup),emitter_cleanup(false),collector_cleanup(false),
         max_nworkers(max_num_workers),
         emitter(NULL),collector(NULL),
         lb(new lb_t(max_num_workers)),gt(new gt_t(max_num_workers)),
@@ -279,6 +322,18 @@ public:
             if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
                 error("FARM, creating input buffer\n");
             }
+#if defined(BLOCKING_MODE)
+            if (!init_input_blocking(p_cons_m,p_cons_c,p_cons_counter)) {
+                error("FARM, init input blocking mode for accelerator\n");
+            }
+            pthread_mutex_t   *m       = NULL;
+            pthread_cond_t    *c       = NULL;
+            atomic_long_t     *counter = NULL;;
+            if (!ff_node::init_output_blocking(m,c,counter)) {
+                error("FARM, init output blocking mode for accelerator\n");
+            }           
+            set_input_blocking(m,c,counter);
+#endif
         }
     }
     
@@ -294,6 +349,10 @@ public:
             end_callback(end_callback_param);
             end_callback = NULL;
         }
+        if (emitter_cleanup) 
+            if (lb && lb->get_filter()) delete lb->get_filter();
+        if (collector_cleanup)
+            if (gt && gt->get_filter()) delete gt->get_filter();
         if (lb) { delete lb; lb=NULL;}
         if (gt) { delete gt; gt=NULL;}
         if (worker_cleanup) {
@@ -308,7 +367,7 @@ public:
         if (barrier) {delete barrier; barrier=NULL;}
         
         //fftree stuff
-        if(fftree_ptr) delete fftree_ptr;
+        if (fftree_ptr) { delete fftree_ptr; fftree_ptr=NULL; }
     }
 
     /** 
@@ -394,12 +453,14 @@ public:
             workers.push_back(w[i]);
 			(workers.back())->set_id(int(i));
         }
+
         //fftree stuff
         for (size_t i = 0; i < w.size(); ++i) {
         	if (w[i]->fftree_ptr == NULL)
         		w[i]->fftree_ptr = new fftree(w[i], WORKER);
         	fftree_ptr->add_child(w[i]->fftree_ptr);
         }
+
         return 0;
     }
 
@@ -415,19 +476,34 @@ public:
      *  \param outpresent outstream?
      *
      *  \return The status of \p set_filter(x) if successful, otherwise -1 is
-     *  returned.
      */
     int add_collector(ff_node * c, bool outpresent=false) { 
-        if (collector) {
+
+
+        if (collector && !collector_removed) {
             error("add_collector: collector already defined!\n");
             return -1; 
         }
         if (!gt) return -1; //inconsist state
 
         collector = ((c!=NULL)?c:(ff_node*)gt);
-        
+
         if (has_input_channel) { /* it's an accelerator */
+            // NOTE: the queue is forced to be unbounded
             if (create_output_buffer(out_buffer_entries, false)<0) return -1;
+
+#if defined(BLOCKING_MODE)
+            pthread_mutex_t   *mtx      = NULL;
+            pthread_cond_t    *cond     = NULL;
+            atomic_long_t     *counter  = NULL;           
+            if (!ff_node::init_input_blocking(mtx,cond,counter)) {
+                error("FARM, add_collector, init output blocking mode for accelerator\n");
+            }
+            set_output_blocking(mtx,cond,counter);
+            if (!init_output_blocking(p_prod_m,p_prod_c,p_prod_counter)) {
+                error("FARM, add_collector, init input blocking mode for accelerator\n");
+            }
+#endif
         }
         
         fftree_ptr->update_child(1, gt->fftree_ptr = new fftree(gt, COLLECTOR));
@@ -456,6 +532,23 @@ public:
             return 0;
         }
 
+#if defined(BLOCKING_MODE)
+        pthread_mutex_t *m        = NULL;
+        pthread_cond_t  *c        = NULL;
+        atomic_long_t   *counter  = NULL;
+        if (!init_input_blocking(m,c,counter)) {
+            error("FARM, wrap_around, init input blocking mode for emitter\n");
+            return -1;
+        }
+        set_output_blocking(m,c,counter);
+        m=NULL,c=NULL,counter=NULL;
+        if (!init_output_blocking(m,c,counter)) {
+            error("FARM, wrap_around, init output blocking mode for collector\n");
+            return -1;
+        }
+        set_input_blocking(m,c,counter);             
+#endif
+
         if (!multi_input) {
             if (create_input_buffer(in_buffer_entries, false)<0) {
                 error("FARM, creating input buffer\n");
@@ -471,7 +564,12 @@ public:
                 error("FARM, creating output buffer for multi-input configuration\n");
                 return -1;
             }
-            internalSupportNodes.push_back(new ff_buffernode(0, NULL,get_out_buffer()));
+            ff_buffernode *tmpbuffer = new ff_buffernode(0, NULL,get_out_buffer());
+            if (!tmpbuffer) return -1;
+#if defined(BLOCKING_MODE)
+            tmpbuffer->set_input_blocking(m,c,counter);
+#endif
+            internalSupportNodes.push_back(tmpbuffer);
             if (set_output_buffer(get_out_buffer())<0) {
                 error("FARM, setting output buffer for multi-input configuration\n");
                 return -1;
@@ -529,6 +627,12 @@ public:
      */
     void cleanup_workers() {
         worker_cleanup = true;
+    }
+
+    void cleanup_all() {
+        worker_cleanup   = true;
+        emitter_cleanup  = true;
+        collector_cleanup= true;
     }
 
     /**
@@ -694,14 +798,32 @@ public:
      * \return \p true if successful, otherwise \p false
      */
     inline bool offload(void * task,
-                        unsigned int retry=((unsigned int)-1),
-                        unsigned int ticks=ff_loadbalancer::TICKS2WAIT) { 
+                        unsigned long retry=((unsigned long)-1),
+                        unsigned long ticks=ff_loadbalancer::TICKS2WAIT) { 
         FFBUFFER * inbuffer = get_in_buffer();
 
         if (inbuffer) {
-            for(unsigned int i=0;i<retry;++i) {
-                if (inbuffer->push(task)) return true;
-                ticks_wait(ticks);
+            for(unsigned long i=0;i<retry;++i) {
+                if (inbuffer->push(task)) {
+#if defined(BLOCKING_MODE)
+                    pthread_mutex_lock(p_cons_m);
+                    if (atomic_long_read(p_cons_counter) == 0)
+                        pthread_cond_signal(p_cons_c);
+                    atomic_long_inc(p_cons_counter);
+                    pthread_mutex_unlock(p_cons_m);
+                    atomic_long_inc(&prod_counter);
+#endif
+                    return true;
+                }
+#if !defined(BLOCKING_MODE)
+                losetime_out(ticks);
+#else
+                pthread_mutex_lock(&prod_m);
+                while(atomic_long_read(&prod_counter) >= (inbuffer->buffersize())) {
+                    pthread_cond_wait(&prod_c, &prod_m);
+                }
+                pthread_mutex_unlock(&prod_m);
+#endif
             }     
             return false;
         }
@@ -724,19 +846,45 @@ public:
      *
      * \return \p false if EOS arrived or too many retries, \p true if  there is a new value
      */
+#if !defined(BLOCKING_MODE)
     inline bool load_result(void ** task,
-                            unsigned int retry=((unsigned int)-1),
-                            unsigned int ticks=ff_gatherer::TICKS2WAIT) {
+                            unsigned long retry=((unsigned long)-1),
+                            unsigned long ticks=ff_gatherer::TICKS2WAIT) {
         if (!collector) return false;
-        for(unsigned int i=0;i<retry;++i) {
+        for(unsigned long i=0;i<retry;++i) {
             if (gt->pop_nb(task)) {
                 if ((*task != (void *)FF_EOS)) return true;
                 else return false;
             }
-            ticks_wait(ticks);
+            losetime_in(ticks);
         }
         return false;
     }
+#else
+    inline bool load_result(void ** task,
+                            unsigned long retry=((unsigned long)-1),
+                            unsigned long ticks=ff_gatherer::TICKS2WAIT) {
+        if (!collector) return false;
+    _retry:
+        if (gt->pop_nb(task)) {
+            // NOTE: the queue between collector and the main thread is forced to be unbounded
+            // therefore the collector cannot be blocked for the condition buffer full ! 
+            atomic_long_dec(&gt->prod_counter);
+            atomic_long_dec(&cons_counter);
+
+            if ((*task != (void *)FF_EOS)) return true;
+            else return false;
+        } else {
+            pthread_mutex_lock(&cons_m);
+            while(atomic_long_read(&cons_counter) == 0) {
+                pthread_cond_wait(&cons_c, &cons_m);
+            }
+            pthread_mutex_unlock(&cons_m);
+            goto _retry;
+        }   
+        return true;
+    }
+#endif
 
     /**
      * \brief Loads result with non-blocking
@@ -785,6 +933,18 @@ public:
      */
     const svector<ff_node*>& getWorkers() const { return workers; }
 
+    /**
+     * \internal
+     * \brief Resets input/output queues.
+     * 
+     *  Warning: resetting queues while the node is running may 
+     *           produce unexpected results.
+     */
+    void reset() {
+        if (lb)  lb->reset();
+        if (gt)  gt->reset();
+        for(size_t i=0;i<workers.size();++i) workers[i]->reset();
+    }
 
     /**
      * \internal
@@ -814,18 +974,6 @@ public:
 
     /**
      * \internal
-     * \brief Resets input/output queues.
-     * 
-     *  Warning resetting queues while the node is running may produce unexpected results.
-     */
-    void reset() {
-        if (lb)  lb->reset();
-        if (gt)  gt->reset();
-        for(size_t i=0;i<workers.size();++i) workers[i]->reset();
-    }
-
-    /**
-     * \internal
      * \brief Gets the starting time
      *
      * It returns the starting time.
@@ -848,7 +996,7 @@ public:
      * \return A \timeval showing the finishing time of the farm.
      */
     const struct timeval  getstoptime()  const {
-        if (collector) return gt->getstoptime();
+        if (collector && !collector_removed) return gt->getstoptime();
         const struct timeval zero={0,0};
         std::vector<struct timeval > workertime(workers.size()+1,zero);
         for(size_t i=0;i<workers.size();++i)
@@ -880,7 +1028,7 @@ public:
      * \return The vector showing the finishing time.
      */
     const struct timeval  getwstoptime() const {
-        if (collector) return gt->getwstoptime();
+        if (collector && !collector_removed) return gt->getwstoptime();
         const struct timeval zero={0,0};
         std::vector<struct timeval > workertime(workers.size()+1,zero);
         for(size_t i=0;i<workers.size();++i) {
@@ -902,8 +1050,11 @@ public:
      * \return A double value showing the time taken in \p svc_init
      */
     double ffTime() {
-        if (collector)
+        if (collector && !collector_removed)
             return diffmsec(gt->getstoptime(), lb->getstarttime());
+
+        printf("getstoptime=%ld, lb->getstarttime=%ld, lb->getstoptime=%ld\n", getusec(getstoptime()), getusec(lb->getstarttime()), getusec(lb->getstoptime()));
+
         return diffmsec(getstoptime(),lb->getstarttime());
     }
 
@@ -916,7 +1067,7 @@ public:
      * \return A double value showing the time taken in \p svc.
      */
     double ffwTime() {
-        if (collector)
+        if (collector && !collector_removed)
             return diffmsec(gt->getwstoptime(), lb->getwstartime());
 
         return diffmsec(getwstoptime(),lb->getwstartime());
@@ -928,7 +1079,7 @@ public:
         out << "--- farm:\n";
         lb->ffStats(out);
         for(size_t i=0;i<workers.size();++i) workers[i]->ffStats(out);
-        if (collector) gt->ffStats(out);
+        if (collector && !collector_removed) gt->ffStats(out);
     }
 #else
     void ffStats(std::ostream & out) { 
@@ -1008,16 +1159,37 @@ protected:
      */
     int create_output_buffer(int nentries, bool fixedsize=false) {
         if (!collector && !collector_removed) {
-            error("FARM with no collector, cannot create output buffer\n");
+            error("FARM with no collector, cannot create output buffer. Add and then remove the collector !\n");
             return -1;
         }        
         if (out) {
             error("FARM create_output_buffer, buffer already present\n");
             return -1;
         }
-        if (ff_node::create_output_buffer(nentries, fixedsize)<0) return -1;
+
+        if (collector_removed) {
+            size_t nworkers = workers.size();
+            assert(nworkers>0);
+
+            // check to see if workers' output buffer has been already created 
+            if (workers[0]->get_out_buffer() == NULL) {
+                for(size_t i=0;i<nworkers;++i) {
+                    // NOTE: force unbounded queue if masterworker
+                    if (workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
+                                                         (lb->masterworker()?false:fixedsize))<0)
+                        return -1;
+                }
+            }
+            return 0;
+        }
+
+        if (ff_node::create_output_buffer(nentries, fixedsize)<0) return -1;        
         gt->set_out_buffer(out);
-        if (collector && ((ff_node*)gt != collector)) collector->set_output_buffer(out);
+
+        
+        if (collector && !collector_removed) {
+            if (collector != (ff_node*)gt) collector->set_output_buffer(out);
+        }
         return 0;
     }
 
@@ -1039,7 +1211,9 @@ protected:
             return -1;
         }
         gt->set_out_buffer(o);
-        if (collector && ((ff_node*)gt != collector)) collector->set_output_buffer(o);
+        if (collector && !collector_removed) {
+            if (collector != (ff_node*)gt) collector->set_output_buffer(o);
+        }
         return 0;
     }
 
@@ -1071,7 +1245,7 @@ protected:
     int ondemand;          // if >0, emulates on-demand scheduling
     int in_buffer_entries;
     int out_buffer_entries;
-    bool worker_cleanup;
+    bool worker_cleanup, emitter_cleanup,collector_cleanup;
     int max_nworkers;
 
     ff_node          *  emitter;
@@ -1082,7 +1256,13 @@ protected:
     svector<ff_node*>  workers;
     svector<ff_node*>  internalSupportNodes;
     bool               fixedsize;
+
 };
+
+
+
+
+    // TODO: - ff_OrderedFarm  to move in a separate file
 
 
 /**
@@ -1210,7 +1390,7 @@ private:
      * \brief Ordered farm
      */
     class ofarmE: public ff_node {
-        static bool ff_send_out_ofarmE(void * task,unsigned int retry,unsigned int ticks, void *obj) {
+        static bool ff_send_out_ofarmE(void * task,unsigned long retry,unsigned long ticks, void *obj) {
             return ((ofarmE *)obj)->ff_send_out(task, retry, ticks);
         }
     public:
@@ -1302,7 +1482,7 @@ private:
      * \brief Ordered farm default Emitter
      */
     class ofarmC: public ff_node {
-        static bool ff_send_out_ofarmC(void * task,unsigned int retry,unsigned int ticks, void *obj) {
+        static bool ff_send_out_ofarmC(void * task,unsigned long retry,unsigned long ticks, void *obj) {
             return ((ofarmC *)obj)->ff_send_out(task, retry, ticks);
         }
     public:
@@ -1396,6 +1576,44 @@ private:
         ofarm_gt * gt;
         ff_node* C_f;
     };
+
+
+#if defined(BLOCKING_MODE)
+    // consumer
+    virtual inline bool init_input_blocking(pthread_mutex_t *&m,
+                                            pthread_cond_t  *&c,
+                                            atomic_long_t   *&counter) {
+        return (this->getlb())->init_input_blocking(m,c,counter);
+    }
+    virtual inline void set_input_blocking(pthread_mutex_t *&m,
+                                           pthread_cond_t  *&c,
+                                           atomic_long_t   *&counter) {
+        (this->getlb())->set_input_blocking(m,c,counter);
+        E->set_input_blocking(m,c,counter);
+    }    
+
+    // producer
+    virtual inline bool init_output_blocking(pthread_mutex_t *&m,
+                                             pthread_cond_t  *&c,
+                                             atomic_long_t   *&counter) {
+        return (this->getgt())->init_output_blocking(m,c,counter);
+    }
+    virtual inline void set_output_blocking(pthread_mutex_t *&m,
+                                            pthread_cond_t  *&c,
+                                            atomic_long_t   *&counter) {
+        (this->getgt())->set_output_blocking(m,c,counter);
+        C->set_output_blocking(m,c,counter);
+    }
+
+    virtual inline pthread_mutex_t &get_cons_m()        { return (this->getlb())->cons_m;}
+    virtual inline pthread_cond_t  &get_cons_c()        { return (this->getlb())->cons_c;}
+    virtual inline atomic_long_t   &get_cons_counter()  { return (this->getlb())->cons_counter;}
+
+    virtual inline pthread_mutex_t &get_prod_m()        { return (this->getgt())->prod_m; }
+    virtual inline pthread_cond_t  &get_prod_c()        { return (this->getgt())->prod_c; }
+    virtual inline atomic_long_t   &get_prod_counter()  { return (this->getgt())->prod_counter;}
+#endif /* BLOCKING_MODE */
+
     
 public:
     /**
@@ -1471,361 +1689,183 @@ protected:
 };
 
 
-    /* ************************* Multi-Input node ************************* */
 
-/*!
- * \ingroup building_blocks
- *
- * \brief Multiple input ff_node (the SPMC mediator)
- *
- * The ff_node with many input channels.
- *
- * This class is defined in \ref farm.hpp
- */
+#if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
 
-class ff_minode: public ff_node {
+#include <ff/make_unique.hpp>
+
+template<typename IN=char, typename OUT=IN>
+class ff_Farm: public ff_farm<> {
 protected:
+    // unique_ptr based data
+    std::vector<std::unique_ptr<ff_node> > Workers;
+    std::unique_ptr<ff_node>               Emitter;
+    std::unique_ptr<ff_node>               Collector;
+public:    
+    typedef IN  in_type;
+    typedef OUT out_type;
 
-    /**
-     * \brief Gets the number of input channels
-     */
-    inline int cardinality(BARRIER_T * const barrier)  { 
-        gt->set_barrier(barrier);
-        return 1;
+    // NOTE: the ownership of the ff_node (unique) pointers is transfered to the farm !!!!
+    //       All workers, the Emitter and the Collector will be deleted in the ff_Farm destructor !
+
+    ff_Farm(std::vector<std::unique_ptr<ff_node> > &&W,
+            std::unique_ptr<ff_node> E  =std::unique_ptr<ff_node>(nullptr), 
+            std::unique_ptr<ff_node> C  =std::unique_ptr<ff_node>(nullptr), 
+            bool input_ch=false): 
+        ff_farm<>(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false,W.size()), 
+        Workers(std::move(W)), Emitter(std::move(E)), Collector(std::move(C)) { 
+
+        const size_t nw = Workers.size();
+        assert(nw>0);
+        std::vector<ff_node*> w(nw);        
+        for(size_t i=0;i<nw;++i) w[i]= Workers[i].get(); 
+        ff_farm<>::add_workers(w);
+
+        // add default collector even if Collector is NULL, 
+        // if you don't want the collector you have to call remove_collector
+        ff_farm<>::add_collector(Collector.get());
+        ff_node *e = Emitter.get();
+        if (e) ff_farm<>::add_emitter(e); 
     }
 
-    /**
-     * \brief Creates the input channels
-     *
-     * \return >=0 if successful, otherwise -1 is returned.
-     */
-    int create_input_buffer(int nentries, bool fixedsize=true) {      
-        if (inputNodes.size()==0) {
-            int r = ff_node::create_input_buffer(nentries, fixedsize);
-            if (r!=0) return r;
-            return 1;
-        }
-        return 0;
+    ff_Farm(std::vector<std::unique_ptr<ff_node> > &&W,
+            ff_node &E, ff_node &C, 
+            bool input_ch=false):
+        ff_farm<>(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false,W.size()),
+        Workers(std::move(W)) {
+
+        const size_t nw = Workers.size();
+        assert(nw>0);
+        std::vector<ff_node*> w(nw);        
+        for(size_t i=0;i<nw;++i) w[i]=Workers[i].get();
+        ff_farm<>::add_workers(w);
+
+        ff_farm<>::add_collector(&C);
+        ff_farm<>::add_emitter(&E); 
+    }
+    ff_Farm(std::vector<std::unique_ptr<ff_node> > &&W,  
+            ff_node &E, bool input_ch=false):
+        ff_farm<>(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false,W.size()),
+        Workers(std::move(W)) {
+
+        const size_t nw = Workers.size();
+        assert(nw>0);
+        std::vector<ff_node*> w(nw);        
+        for(size_t i=0;i<nw;++i) w[i]=Workers[i].get();
+        ff_farm<>::add_workers(w);
+
+        ff_farm<>::add_collector(nullptr);
+        ff_farm<>::add_emitter(&E); 
     }
 
-    int  wait(/* timeout */) { 
-        if (gt->wait()<0) return -1;
-        return 0;
-    }
-
-public:
-    /**
-     * \brief Constructor
-     */
-    ff_minode(int max_num_workers=ff_farm<>::DEF_MAX_NUM_WORKERS):
-        ff_node(), gt(new ff_gatherer(max_num_workers)) { ff_node::setMultiInput(); }
-
-    /**
-     * \brief Destructor 
-     */
-    virtual ~ff_minode() {
-        if (gt) delete gt;
+    ff_Farm(std::vector<std::unique_ptr<ff_node> > &&W, bool input_ch):
+        ff_Farm(std::move(W), std::unique_ptr<ff_node>(nullptr), 
+                std::unique_ptr<ff_node>(nullptr), input_ch) {
     }
     
-    /**
-     * \brief Assembly input channels
-     *
-     * Assembly input channelnames to ff_node channels
-     */
-    virtual inline int set_input(svector<ff_node *> & w) { 
-        inputNodes += w;
-        return 0; 
+    /* --- */
+
+    template <typename FUNC_t>
+    explicit ff_Farm(FUNC_t F, ssize_t nw, bool input_ch=false): 
+        ff_farm<>(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,
+                  true, nw) {
+
+        std::vector<ff_node*> w(nw);        
+        for(int i=0;i<nw;++i) w[i]=new ff_node_F<IN,OUT>(F);
+        ff_farm<>::add_workers(w);
+        ff_farm<>::add_collector(NULL);
+
+        ff_farm<>::cleanup_workers();  
     }
 
-    /**
-     * \brief Assembly a input channel
-     *
-     * Assembly a input channelname to a ff_node channel
-     */
-    virtual inline int set_input(ff_node *node) { 
-        inputNodes.push_back(node); 
-        return 0;
+    virtual ~ff_Farm() { }
+
+    int add_emitter(ff_node &e) {
+        int r =ff_farm<>::add_emitter(&e);
+        if (r>=0) emitter_cleanup=false;
+        return r;
+    }
+    int add_collector(ff_node &c) {
+        ff_farm<>::remove_collector();
+        int r=ff_farm<>::add_collector(&c);
+        if (r>=0) collector_cleanup=false;
+        ff_farm<>::collector_removed = false;
+        return r;
     }
 
-    virtual bool isMultiInput() const { return true;}
+    bool load_result(OUT *&task,
+                     unsigned long retry=((unsigned long)-1),
+                     unsigned long ticks=ff_gatherer::TICKS2WAIT) {
+        return ff_farm<>::load_result((void**)&task, retry,ticks);
+    }
+    bool load_result_nb(OUT *&r) {
+        return ff_farm<>::load_result_nb((void**)&r);
+    }    
 
-    virtual inline void get_out_nodes(svector<ff_node*>&w) {
-        w.push_back(this);
+    // ------------------- deleted method --------------------------------- 
+    int add_workers(std::vector<ff_node *> & w)                   = delete;
+    int add_emitter(ff_node * e)                                  = delete;
+    int add_collector(ff_node * c)                                = delete;    
+    bool load_result(void ** task,
+                     unsigned long retry=((unsigned long)-1),
+                     unsigned long ticks=ff_gatherer::TICKS2WAIT) = delete;
+    void cleanup_workers()                                        = delete;
+    void cleanup_all()                                            = delete;
+    bool load_result_nb(void ** task)                             = delete;
+};
+
+    // ************************************
+    // TO COMPLETE  !!!!!!!!!!!!!!!!!!!!!!!
+    // ************************************
+template<typename IN=char, typename OUT=IN>
+class ff_OFarm: public ff_ofarm {
+protected:
+    // unique_ptr based data
+    std::vector<std::unique_ptr<ff_node> > Workers;
+public:    
+    typedef IN  in_type;
+    typedef OUT out_type;
+
+    // NOTE: the ownership of the ff_node (unique) pointers is transfered to the farm !!!!
+    //       All workers, the Emitter and the Collector will be deleted in the ff_Farm destructor !
+
+    ff_OFarm(std::vector<std::unique_ptr<ff_node> > &&W,  bool input_ch=false): 
+        ff_ofarm(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false,W.size()), 
+        Workers(std::move(W)) { 
+
+        const size_t nw = Workers.size();
+        assert(nw>0);
+        std::vector<ff_node*> w(nw);        
+        for(size_t i=0;i<nw;++i) w[i]= Workers[i].get(); 
+        ff_ofarm::add_workers(w);
     }
 
-    /**
-     * \brief Skip first pop
-     *
-     * Set up spontaneous start
-     */
-    inline void skipfirstpop(bool sk)   { ff_node::skipfirstpop(sk);}
+    virtual ~ff_OFarm() { }
 
-    /**
-     * \brief run
-     *
-     * \return 0 if successful, otherwise -1 is returned.
-     *
-     */
-    int run(bool skip_init=false) {
-        if (!gt) return -1;
-        
-        gt->set_filter(this);
-
-        for(size_t i=0;i<inputNodes.size();++i)
-            gt->register_worker(inputNodes[i]);
-        if (ff_node::skipfirstpop()) gt->skipfirstpop();       
-        if (gt->run()<0) {
-            error("ff_minode, running gather module\n");
-            return -1;
-        }
-        return 0;
-    }
-    int freeze_and_run(bool=false) { 
-        gt->freeze();
-        return run();
-    }
-    int run_then_freeze(ssize_t nw=-1) {
-        if (gt->isfrozen()) {
-            // true means that next time threads are frozen again
-            gt->thaw(true, nw); 
-            return 0;
-        }
-        gt->freeze();
-        return run();
+    int add_workers(std::vector<ff_node *> & w) = delete;
+    int add_emitter(ff_node * e) = delete;
+    int add_collector(ff_node * c) = delete;
+    int remove_collector() = delete;
+    
+    bool load_result(void ** task,
+                     unsigned long retry=((unsigned long)-1),
+                     unsigned long ticks=ff_gatherer::TICKS2WAIT) = delete;
+    bool load_result(OUT *&task,
+                     unsigned long retry=((unsigned long)-1),
+                     unsigned long ticks=ff_gatherer::TICKS2WAIT) {
+        return ff_ofarm::load_result((void**)&task, retry,ticks);
     }
 
 
-
-    int wait_freezing() { return gt->wait_freezing(); }
-
-
-    /**
-     * \brief Gets the channel id from which the data has just been received
-     *
-     */
-    ssize_t get_channel_id() const { return gt->get_channel_id();}
-
-    /**
-     * \internal
-     * \brief Gets the gt
-     *
-     * It gets the internal gatherer.
-     *
-     * \return A pointer to the FastFlow gatherer.
-     */
-    inline ff_gatherer * getgt() const { return gt;}
-
-#if defined(TRACE_FASTFLOW) 
-    /**
-     * \brief Prints the FastFlow trace
-     *
-     * It prints the trace of FastFlow.
-     */
-    inline void ffStats(std::ostream & out) { 
-        gt->ffStats(out);
+    bool load_result_nb(void ** task) = delete;
+    bool load_result_nb(OUT *&r) {
+        return ff_ofarm::load_result_nb((void**)&r);
     }
+
+};
+
+
 #endif
-
-private:
-    svector<ff_node*> inputNodes;
-    ff_gatherer* gt;
-};
-
-/*!
- *  \class ff_minode_t
- *  \ingroup building_blocks
- *
- *  \brief Typed multiple input ff_node (the SPMC mediator).
- *
- *  Key method is: \p svc (pure virtual).
- *
- *  This class is defined in \ref node.hpp
- */
-
-template <typename T>
-struct ff_minode_t: ff_minode {
-    ff_minode_t():
-        GO_ON((T*)FF_GO_ON),
-        EOS((T*)FF_EOS),
-        GO_OUT((T*)FF_GO_OUT),
-        EOS_NOFREEZE((T*)FF_EOS_NOFREEZE) {}
-    T *GO_ON, *EOS, *GO_OUT, *EOS_NOFREEZE;
-    virtual ~ff_minode_t()  {}
-    void *svc(void *task) { return svc(reinterpret_cast<T*>(task));};
-    virtual T* svc(T*)=0;
-};
-
-
-    /* ************************* Multi-Ouput node ************************* */
-
-/*!
- *  \ingroup building_blocks
- *
- * \brief Multiple output ff_node (the MPSC mediator)
- *
- * The ff_node with many output channels.
- *
- * This class is defined in \ref farm.hpp
- */
-
-class ff_monode: public ff_node {
-protected:
-    /**
-     * \brief Cardinatlity
-     *
-     * Defines the cardinatlity of the FastFlow node.
-     *
-     * \param barrier defines the barrier
-     *
-     * \return 1 is always returned.
-     */
-    inline int   cardinality(BARRIER_T * const barrier)  { 
-        lb->set_barrier(barrier);
-        return 1;
-    }
-
-    int  wait(/* timeout */) { 
-        if (lb->waitlb()<0) return -1;
-        return 0;
-    }
-
-public:
-    /**
-     * \brief Constructor
-     *
-     * \param max_num_workers defines the maximum number of workers
-     *
-     */
-    ff_monode(int max_num_workers=ff_farm<>::DEF_MAX_NUM_WORKERS):
-        ff_node(), lb(new ff_loadbalancer(max_num_workers)) {}
-
-    /**
-     * \brief Destructor 
-     */
-    virtual ~ff_monode() {
-        if (lb) delete lb;
-    }
-    
-    /**
-     * \brief Assembly the output channels
-     *
-     * Attach output channelnames to ff_node channels
-     */
-    virtual inline int set_output(svector<ff_node *> & w) {
-        for(size_t i=0;i<w.size();++i)
-            outputNodes.push_back(w[i]);
-        return 0; 
-    }
-
-    /**
-     * \brief Assembly an output channels
-     *
-     * Attach a output channelname to ff_node channel
-     */
-    virtual inline int set_output(ff_node *node) { 
-        outputNodes.push_back(node); 
-        return 0;
-    }
-
-    virtual bool isMultiOutput() const { return true;}
-
-    virtual inline void get_out_nodes(svector<ff_node*>&w) {
-        w = outputNodes;
-    }
-
-    /**
-     * \brief Skips the first pop
-     *
-     * Set up spontaneous start
-     */
-    inline void skipfirstpop(bool sk)   {
-        if (sk) lb->skipfirstpop();
-    }
-
-    /**
-     * \brief Sends one task to a specific node id.
-     *
-     */
-    inline bool ff_send_out_to(void *task, int id) {
-        return lb->ff_send_out_to(task,id);
-    }
-    
-    /**
-     * \brief run
-     *
-     * \param skip_init defines if the initilization should be skipped
-     *
-     * \return 0 if successful, otherwsie -1 is returned.
-     */
-    int run(bool skip_init=false) {
-        if (!lb) return -1;
-        lb->set_filter(this);
-
-        for(size_t i=0;i<outputNodes.size();++i)
-            lb->register_worker(outputNodes[i]);
-        if (ff_node::skipfirstpop()) lb->skipfirstpop();       
-        if (lb->runlb()<0) {
-            error("ff_monode, running loadbalancer module\n");
-            return -1;
-        }
-        return 0;
-    }
-
-    int freeze_and_run(bool=false) {
-        lb->freeze();
-        return run(true);
-    }
-
-    /**
-     * \internal
-     * \brief Gets the internal lb (Emitter)
-     *
-     * It gets the internal lb (Emitter)
-     *
-     * \return A pointer to the lb
-     */
-    inline ff_loadbalancer * getlb() const { return lb;}
-
-#if defined(TRACE_FASTFLOW) 
-    /*
-     * \brief Prints the FastFlow trace
-     *
-     * It prints the trace of FastFlow.
-     */
-    inline void ffStats(std::ostream & out) { 
-        lb->ffStats(out);
-    }
-#endif
-
-protected:
-    svector<ff_node*> outputNodes;
-    ff_loadbalancer* lb;
-};
-
-/*!
- *  \class ff_monode_t
- *  \ingroup building_blocks
- *
- *  \brief Typed multiple output ff_node (the MPSC mediator).
- *
- *  Key method is: \p svc (pure virtual).
- *
- *  This class is defined in \ref node.hpp
- */
-
-template <typename T>
-struct ff_monode_t: ff_monode {
-    ff_monode_t():
-        GO_ON((T*)FF_GO_ON),
-        EOS((T*)FF_EOS),
-        GO_OUT((T*)FF_GO_OUT),
-        EOS_NOFREEZE((T*)FF_EOS_NOFREEZE) {}
-    T *GO_ON, *EOS, *GO_OUT, *EOS_NOFREEZE;
-    virtual ~ff_monode_t()  {}
-    void *svc(void *task) { return svc(reinterpret_cast<T*>(task));};
-    virtual T* svc(T*)=0;
-};
-
 
 
 } // namespace ff

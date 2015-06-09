@@ -160,7 +160,7 @@ public:
     }
     
     // it starts all workers
-    virtual inline int run()  { 
+    virtual inline int run(bool=false) {
         sched->thaw(true,farmworkers);
         return 0;
     }
@@ -170,6 +170,17 @@ public:
         taskscounter=0;
         return r;
     }
+
+#if defined(TRACE_FASTFLOW)
+    void ffStats(std::ostream & out) { 
+        out << "--- taskf:\n";
+        ff_farm<>::ffStats(out);
+    }
+#else
+    void ffStats(std::ostream & out) { 
+        out << "FastFlow trace not enabled\n";
+    }
+#endif
     
 protected:
     int farmworkers;

@@ -29,14 +29,14 @@
 #ifndef FF_PIPELINE_HPP
 #define FF_PIPELINE_HPP
 
+#include <memory>
 #include <functional>
-#include <ff/node.hpp>
 #include <ff/svector.hpp>
 #include <ff/fftree.hpp>
+#include <ff/node.hpp>
+
 
 namespace ff {
-
-
 
 /**
  * \class ff_pipeline
@@ -45,23 +45,54 @@ namespace ff {
  *  \brief The Pipeline skeleton (low-level syntax)
  *
  */
- 
 class ff_pipeline: public ff_node {
 protected:
     inline int prepare() {
         // create input FFBUFFER
-        int nstages=static_cast<int>(nodes_list.size());
+        const int nstages=static_cast<int>(nodes_list.size());
         for(int i=1;i<nstages;++i) {
+#if defined(BLOCKING_MODE)
+            pthread_mutex_t *m        = NULL;
+            pthread_cond_t  *c        = NULL;
+            atomic_long_t   *counter  = NULL;
+            if (!nodes_list[i]->init_input_blocking(m,c,counter)) {
+                error("PIPE, init input blocking mode for node %d\n", i);
+                return -1;
+            }
+            nodes_list[i-1]->set_output_blocking(m,c,counter);
+#endif
             if (nodes_list[i]->isMultiInput()) {
                 if (nodes_list[i-1]->create_output_buffer(out_buffer_entries, 
                                                           fixedsize)<0)
                     return -1;
-                svector<ff_node*> w(256);
+                svector<ff_node*> w(MAX_NUM_THREADS);
                 nodes_list[i-1]->get_out_nodes(w);
-                if (w.size() == 0)
+                if (w.size() == 0) {
                     nodes_list[i]->set_input(nodes_list[i-1]);
-                else
+#if defined(BLOCKING_MODE)
+                    if (!nodes_list[i-1]->init_output_blocking(m,c,counter)) {
+                        error("PIPE, buffernode condition, init output blocking mode for node %d\n", i);
+                        return -1;
+                    }
+#endif
+                }
+                else {
                     nodes_list[i]->set_input(w);
+#if defined(BLOCKING_MODE)
+                    for(size_t i=0;i<w.size();++i) {
+                        w[i]->set_output_blocking(m,c,counter);
+
+                        // the following is needed because w[i] can be a buffernode and not a real node
+                        pthread_mutex_t *mo        = NULL;
+                        pthread_cond_t  *co        = NULL;
+                        atomic_long_t   *countero  = NULL;
+                        if (!w[i]->init_output_blocking(mo,co,countero)) {
+                            error("PIPE, buffernode condition, init output blocking mode for node %d\n", i);
+                            return -1;
+                        }
+                    }
+#endif
+                }
             } else {
                 if (nodes_list[i]->create_input_buffer(in_buffer_entries, fixedsize)<0) {
                     error("PIPE, creating input buffer for node %d\n", i);
@@ -73,13 +104,23 @@ protected:
         // set output buffer
         for(int i=0;i<(nstages-1);++i) {
             if (nodes_list[i+1]->isMultiInput()) continue;
+#if defined(BLOCKING_MODE)
+            pthread_mutex_t *m        = NULL;
+            pthread_cond_t  *c        = NULL;
+            atomic_long_t   *counter  = NULL;
+            if (!nodes_list[i]->init_output_blocking(m,c,counter)) {
+                error("PIPE, init output blocking mode for node %d\n", i);
+                return -1;
+            }
+            nodes_list[i+1]->set_input_blocking(m,c,counter);
+#endif
             if (nodes_list[i]->isMultiOutput()) {
                 nodes_list[i]->set_output(nodes_list[i+1]);
-                continue;
-            }
-            if (nodes_list[i]->set_output_buffer(nodes_list[i+1]->get_in_buffer())<0) {
-                error("PIPE, setting output buffer to node %d\n", i);
-                return -1;
+            } else {
+                if (nodes_list[i]->set_output_buffer(nodes_list[i+1]->get_in_buffer())<0) {
+                    error("PIPE, setting output buffer to node %d\n", i);
+                    return -1;
+                }
             }
         }
         
@@ -94,13 +135,55 @@ protected:
                     error("PIPE, output buffer already present for the accelerator\n");
                     ret=-1;
                 } else {
-                    if (create_output_buffer(out_buffer_entries,fixedsize)<0) {
+                    // the last buffer is forced to be unbounded
+                    if (create_output_buffer(out_buffer_entries, false)<0) {
                         error("PIPE, creating output buffer for the accelerator\n");
                         ret = -1;
                     }
                 }
             }
+
+#if defined(BLOCKING_MODE)
+            pthread_mutex_t   *m        = NULL;
+            pthread_cond_t    *c        = NULL;
+            atomic_long_t     *counter  = NULL;
+
+            // set blocking input for the first stage (cons_m,...)
+            if (!init_input_blocking(m,c,counter)) {
+                error("PIPE, init input blocking mode for accelerator\n");
+            }
+            // set my pointers to the first stage input blocking staff
+            ff_node::set_output_blocking(m,c,counter);
+            
+            m=NULL,c=NULL,counter=NULL;
+
+            // set my blocking output (prod_m, ....)
+            if (!ff_node::init_output_blocking(m,c,counter)) {
+                error("PIPE, init output blocking mode for accelerator\n");
+            }
+            // give pointers to pipeline first stage (p_prod_m, ...)
+            set_input_blocking(m,c,counter);
+
+            m=NULL,c=NULL,counter=NULL;
+
+            // pipeline's first stage blocking output staff (prod_m, ....)
+            if (!init_output_blocking(m,c,counter)) {
+                error("FARM, add_collector, init input blocking mode for accelerator\n");
+            }
+            // set my pointers (p_prod_m,....)
+            ff_node::set_input_blocking(m,c,counter);
+
+            m=NULL,c=NULL,counter=NULL;
+            
+            // set my blocking input (cons_m, ....)
+            if (!ff_node::init_input_blocking(m,c,counter)) {
+                error("PIPE, init input blocking mode for accelerator\n");
+            }
+            // give pointers to my blocking input to the last pipeline stage (p_cons_m,...)
+            set_output_blocking(m,c,counter);
+#endif      
         }
+
         prepared=true; 
         return ret;
     }
@@ -143,21 +226,21 @@ public:
      *  \param fixedsize \p true uses bound channels (SPSC queue)
      */
     explicit ff_pipeline(bool input_ch=false,
-                         int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
-                         int out_buffer_entries=DEF_OUT_BUFF_ENTRIES, 
-                         bool fixedsize=true):
+                                   int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
+                                   int out_buffer_entries=DEF_OUT_BUFF_ENTRIES, 
+                                   bool fixedsize=true):
         has_input_channel(input_ch),prepared(false),
         node_cleanup(false),fixedsize(fixedsize),
         in_buffer_entries(in_buffer_entries),
-        out_buffer_entries(out_buffer_entries) {
-    	//fftree stuff
-    	fftree_ptr = new fftree(this, PIPE);
+        out_buffer_entries(out_buffer_entries) {            
+        //fftree stuff
+        fftree_ptr = new fftree(this, PIPE);
     }
     
     /**
      * \brief Destructor
      */
-    ~ff_pipeline() {
+    virtual ~ff_pipeline() {
         if (end_callback) end_callback(end_callback_param);
         if (barrier) delete barrier;
         if (node_cleanup) {
@@ -173,14 +256,17 @@ public:
         }
 
         //fftree stuff
-        delete fftree_ptr;
+        if (fftree_ptr) { delete fftree_ptr; fftree_ptr=NULL; }
     }
 
-    //  WARNING: if these methods are called after prepare (i.e. after having called
-    //  run_and_wait_end/run_then_freeze/run/....) they have no effect.
-     
-    void setXNodeInputQueueLength(int sz) { in_buffer_entries = sz; }
+    /*  WARNING: if these methods are called after prepare (i.e. after having called
+     *  run_and_wait_end/run_then_freeze/run/....) they have no effect.     
+     *
+     */
+    void setFixedSize(bool fs)             { fixedsize = fs;         }
+    void setXNodeInputQueueLength(int sz)  { in_buffer_entries = sz; }
     void setXNodeOutputQueueLength(int sz) { out_buffer_entries = sz;}
+
 
     /**
      *  \brief It adds a stage to the pipeline
@@ -188,7 +274,7 @@ public:
      *  \param s a ff_node (or derived, e.g. farm) object that is the stage to be added 
      *  to the pipeline
      */
-    int add_stage(ff_node * s) {
+    int add_stage(ff_node * s) {  
         if (nodes_list.size()==0 && s->isMultiInput())
             ff_node::setMultiInput();
         nodes_list.push_back(s);        
@@ -203,7 +289,6 @@ public:
         ff_node::setMultiOutput();        
     }
 
-
     /**
      * \brief Feedback channel (pattern modifier)
      * 
@@ -215,26 +300,48 @@ public:
             error("PIPE, too few pipeline nodes\n");
             return -1;
         }
-
         fixedsize=false; // NOTE: forces unbounded size for the queues!
-        int last = static_cast<int>(nodes_list.size())-1;
+        const int last = static_cast<int>(nodes_list.size())-1;
+
+#if defined(BLOCKING_MODE)
+        pthread_mutex_t *mi        = NULL;
+        pthread_cond_t  *ci        = NULL;
+        atomic_long_t   *counteri  = NULL;
+        if (!init_input_blocking(mi,ci,counteri)) {
+            error("PIPE, init input blocking mode for node %d\n", 0);
+            return -1;
+        }
+        set_output_blocking(mi,ci,counteri);
+        pthread_mutex_t *mo        = NULL;
+        pthread_cond_t  *co        = NULL;
+        atomic_long_t   *countero  = NULL;
+        if (!init_output_blocking(mo,co,countero)) {
+            error("PIPE, init output blocking mode for node %d\n", last);
+            return -1;
+        }
+        set_input_blocking(mo,co,countero);
+#endif
+
         if (nodes_list[0]->isMultiInput()) {
             if (nodes_list[last]->isMultiOutput()) {
                 ff_node *t = new ff_buffernode(out_buffer_entries,fixedsize);
                 if (!t) return -1;
                 t->set_id(last); // NOTE: that's not the real node id !
+#if defined(BLOCKING_MODE)
+                t->set_input_blocking(mo,co,countero);
+                t->set_output_blocking(mi,ci,counteri);
+#endif
                 internalSupportNodes.push_back(t);
                 nodes_list[0]->set_input(t);
                 nodes_list[last]->set_output(t);
             } else {
                 if (create_output_buffer(out_buffer_entries, fixedsize)<0)
                     return -1;
-                svector<ff_node*> w(256);
+                svector<ff_node*> w(MAX_NUM_THREADS);
                 this->get_out_nodes(w);
                 nodes_list[0]->set_input(w);
             }
             if (!multi_input) nodes_list[0]->skipfirstpop(true);
-
         } else {
             if (create_input_buffer(out_buffer_entries, fixedsize)<0)
                 return -1;
@@ -247,13 +354,10 @@ public:
             
             nodes_list[0]->skipfirstpop(true);
         }
-
         return 0;
     }
-
    
     inline void cleanup_nodes() { node_cleanup = true; }
-
 
     inline void get_out_nodes(svector<ff_node*>&w) {
         assert(nodes_list.size()>0);
@@ -329,10 +433,10 @@ public:
      * Run-time threads are suspended by way of a distrubuted protocol. 
      * The same pipeline can be re-started by calling again run_then_freeze 
      */
-    virtual int run_then_freeze(bool skip_init=false) {
+    int run_then_freeze(ssize_t nw=-1) {
         if (isfrozen()) {
             // true means that next time threads are frozen again
-            thaw(true);
+            thaw(true, nw);
             return 0;
         }
         if (!prepared) if (prepare()<0) return -1;
@@ -342,7 +446,7 @@ public:
          * there isn't no manager thread, which allows to freeze other 
          * threads before starting the computation
          */
-        return freeze_and_run(skip_init);
+        return freeze_and_run(false);
     }
     
     /**
@@ -362,7 +466,7 @@ public:
     /**
      * \brief wait for pipeline to complete and suspend (all stages received EOS)
      * 
-     * Should be coupled with ??? 
+     * 
      */
     inline int wait_freezing(/* timeval */ ) {
         int ret=0;
@@ -387,8 +491,8 @@ public:
     }
 
     
-    inline void thaw(bool _freeze=false) {
-        for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->thaw(_freeze);
+    inline void thaw(bool _freeze=false, ssize_t nw=-1) {
+        for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->thaw(_freeze, nw);
     }
     
     inline bool isfrozen() const { 
@@ -407,22 +511,47 @@ public:
      *
      * \note to be used in accelerator mode only
      */
+#if !defined(BLOCKING_MODE)
     inline bool offload(void * task,
-                        unsigned int retry=((unsigned int)-1),
-                        unsigned int ticks=ff_node::TICKS2WAIT) { 
+                        unsigned long retry=((unsigned long)-1),
+                        unsigned long ticks=ff_node::TICKS2WAIT) { 
         FFBUFFER * inbuffer = get_in_buffer();
         assert(inbuffer != NULL);
         // if (!has_input_channel) 
         //     error("PIPE: accelerator is not set, offload not available\n");
         // else
         //     error("PIPE: input buffer creation failed\n");
-        for(unsigned int i=0;i<retry;++i) {
+        for(unsigned long i=0;i<retry;++i) {
             if (inbuffer->push(task)) return true;
-            ticks_wait(ticks);
+            losetime_out(ticks);
         }     
         return false;
     }    
-    
+#else
+    inline bool offload(void * task,
+                        unsigned long retry=((unsigned long)-1),
+                        unsigned long ticks=ff_node::TICKS2WAIT) { 
+        FFBUFFER * inbuffer = get_in_buffer();
+    _retry:
+        if (inbuffer->push(task)) {
+            pthread_mutex_lock(p_cons_m);
+            if (atomic_long_read(p_cons_counter) == 0)
+                pthread_cond_signal(p_cons_c);
+            atomic_long_inc(p_cons_counter);
+            pthread_mutex_unlock(p_cons_m);
+            atomic_long_inc(&prod_counter);
+            return true;
+        } else {
+            pthread_mutex_lock(&prod_m);
+            while(atomic_long_read(&prod_counter) >= (inbuffer->buffersize())) {
+                pthread_cond_wait(&prod_c, &prod_m);
+            }
+            pthread_mutex_unlock(&prod_m);
+            goto _retry;
+        }
+        return false;
+    }    
+#endif
     /** 
      * \brief gets a result from a task to the pipeline from the main thread 
      * (accelator mode)
@@ -436,17 +565,18 @@ public:
      * (related to nonblocking get from channel - expert use only)
      * \return \p true is a task is returned, \p false if End-Of-Stream (EOS)
      */
+#if !defined(BLOCKING_MODE)
     inline bool load_result(void ** task, 
-                            unsigned int retry=((unsigned int)-1),
-                            unsigned int ticks=ff_node::TICKS2WAIT) {
+                            unsigned long retry=((unsigned long)-1),
+                            unsigned long ticks=ff_node::TICKS2WAIT) {
         FFBUFFER * outbuffer = get_out_buffer();
         if (outbuffer) {
-            for(unsigned int i=0;i<retry;++i) {
+            for(unsigned long i=0;i<retry;++i) {
                 if (outbuffer->pop(task)) {
                     if ((*task != (void *)FF_EOS)) return true;
                     else return false;
                 }
-                ticks_wait(ticks);
+                losetime_in(ticks);
             }     
             return false;
         }
@@ -457,6 +587,40 @@ public:
             error("PIPE: output buffer not created");
         return false;
     }
+#else
+    inline bool load_result(void ** task, 
+                            unsigned long retry=((unsigned long)-1),
+                            unsigned long ticks=ff_node::TICKS2WAIT) {
+        FFBUFFER * outbuffer = get_out_buffer();
+        if (outbuffer) {
+        _retry:
+            if (outbuffer->pop(task)) {
+                pthread_mutex_lock(p_prod_m);
+                if (atomic_long_read(p_prod_counter) >= outbuffer->buffersize()) {
+                    pthread_cond_signal(p_prod_c);
+                }
+                atomic_long_dec(p_prod_counter);
+                pthread_mutex_unlock(p_prod_m);
+                atomic_long_dec(&cons_counter);
+
+                if ((*task != (void *)FF_EOS)) return true;
+                else return false;
+            }
+            pthread_mutex_lock(&cons_m);
+            while(atomic_long_read(&cons_counter) == 0) {
+                pthread_cond_wait(&cons_c, &cons_m);
+            }
+            pthread_mutex_unlock(&cons_m);
+            goto _retry;
+        }
+        
+        if (!has_input_channel) 
+            error("PIPE: accelerator is not set, offload not available");
+        else
+            error("PIPE: output buffer not created");
+        return false;
+    }
+#endif
 
 /** 
      * \brief try to get a result from a task to the pipeline from the main thread 
@@ -524,29 +688,74 @@ public:
 #endif
     
 protected:
-    
-    void* svc(void * task) { return NULL; }
-    
-    int   svc_init() { return -1; };
-    
+
+    void* svc(void * task) { return NULL; }    
+    int   svc_init() { return -1; };    
     void  svc_end()  {}
-    
+
     void  setAffinity(int) { 
         error("PIPE, setAffinity: cannot set affinity for the pipeline\n");
     }
     
     int   getCPUId() const { return -1;}
 
+#if defined(BLOCKING_MODE)
+    // consumer
+    virtual inline bool init_input_blocking(pthread_mutex_t *&m,
+                                            pthread_cond_t  *&c,
+                                            atomic_long_t   *&counter) {
+        return nodes_list[0]->init_input_blocking(m,c,counter);
+    }
+    virtual inline void set_input_blocking(pthread_mutex_t *&m,
+                                   pthread_cond_t  *&c,
+                                   atomic_long_t   *&counter) {
+        nodes_list[0]->set_input_blocking(m,c,counter);
+    }    
+
+    // producer
+    virtual inline bool init_output_blocking(pthread_mutex_t *&m,
+                                     pthread_cond_t  *&c,
+                                     atomic_long_t   *&counter) {
+        const int last = static_cast<int>(nodes_list.size())-1;
+        if (last<0) return false;
+        return nodes_list[last]->init_output_blocking(m,c,counter);
+    }
+    virtual inline void set_output_blocking(pthread_mutex_t *&m,
+                                            pthread_cond_t  *&c,
+                                            atomic_long_t   *&counter) {
+        const int last = static_cast<int>(nodes_list.size())-1;
+        if (last<0) return;
+        nodes_list[last]->set_output_blocking(m,c,counter);
+    }
+
+    virtual inline pthread_mutex_t &get_cons_m()        { return nodes_list[0]->get_cons_m();}
+    virtual inline pthread_cond_t  &get_cons_c()        { return nodes_list[0]->get_cons_c();}
+    virtual inline atomic_long_t   &get_cons_counter()  { return nodes_list[0]->get_cons_counter();}
+
+    virtual inline pthread_mutex_t &get_prod_m()        { 
+        const int last = static_cast<int>(nodes_list.size())-1;
+        return nodes_list[last]->get_prod_m();
+    }
+    virtual inline pthread_cond_t  &get_prod_c()        { 
+        const int last = static_cast<int>(nodes_list.size())-1;
+        return nodes_list[last]->get_prod_c();
+    }
+    virtual inline atomic_long_t   &get_prod_counter()  { 
+        const int last = static_cast<int>(nodes_list.size())-1;
+        return nodes_list[last]->get_prod_counter();
+    }
+
+#endif /* BLOCKING_MODE */
+
     int create_input_buffer(int nentries, bool fixedsize) { 
         if (in) return -1;  
-
+        
         if (nodes_list[0]->create_input_buffer(nentries, fixedsize)<0) {
             error("PIPE, creating input buffer for node 0\n");
             return -1;
         }
         if (!nodes_list[0]->isMultiInput()) 
             ff_node::set_input_buffer(nodes_list[0]->get_in_buffer());
-
         return 0;
     }
     
@@ -564,7 +773,7 @@ protected:
 
     int set_output_buffer(FFBUFFER * const o) {
         int last = static_cast<int>(nodes_list.size())-1;
-        if (!last) return -1;
+        if (last<0) return -1;
 
         if (nodes_list[last]->set_output_buffer(o)<0) {
             error("PIPE, setting output buffer for node %d\n",last);
@@ -607,9 +816,12 @@ private:
 
 #ifndef WIN32 //VS12
     // ------------------------ high-level (simpler) pipeline ------------------
-#if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
+#if ((__cplusplus >= 201103L) && (defined __GXX_EXPERIMENTAL_CXX0X__)) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
+
+#include <ff/make_unique.hpp>
+
     /** 
-     * \class ff_pipe
+     * \class ff_Pipe
      * \ingroup high_level_patterns
      * 
      * \brief Pipeline pattern (high-level pattern syntax)
@@ -623,53 +835,60 @@ private:
      *
      * \example pipe_basic.cpp
      */ 
-    template<typename TaskType>
-    class ff_pipe: public ff_pipeline {
+    template<typename IN=char,typename OUT=IN>
+    class ff_Pipe: public ff_pipeline {
     private:
-        typedef TaskType*(*F_t)(TaskType*);
-
-#if 0   // old code  that uses tuple
+        // 
+        // Thanks to Suter Toni (HSR) for suggesting the following code for checking
+        // correct input-output types ordering.
+        //
+        template<class A, class...>
+        struct valid_stage_types : std::true_type {};
         
-        template<std::size_t I = 1, typename FuncT, typename... Tp>
-        inline typename std::enable_if< (I+1) == (sizeof...(Tp)), void>::type
-        for_each_pipe(std::tuple<Tp...> & t, FuncT f) { f(std::get<I>(t)); } // last one
-        
-        template<std::size_t I = 1, typename FuncT, typename... Tp>
-        inline typename std::enable_if<(I+1) < (sizeof...(Tp)), void>::type
-        for_each_pipe(std::tuple<Tp...>& t, FuncT f) {
-            f(std::get<I>(t));
-            for_each_pipe<I + 1, FuncT, Tp...>(t, f);  // all but the first
-        }
+        template<class A, class B, class... Bs>
+        struct valid_stage_types<A&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};        
 
-        inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }        
-        // TODO: try to avoid std::function here !
-        inline void add2pipe(std::function<TaskType*(TaskType*,ff_node*const)> F) { 
-            ff_pipeline::add_stage(new ff_node_F<TaskType>(F));  
-        }        
-        struct add_to_pipe {
-            ff_pipe *const P;
-            add_to_pipe(ff_pipe *const P):P(P) {}
-            template<typename T>
-            void operator()(T t) const { P->add2pipe(t); }
-        };
-#endif
+        template<class A, class B, class... Bs>
+        struct valid_stage_types<std::unique_ptr<A>&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {}; 
+
+        template<class A, class B, class... Bs>
+        struct valid_stage_types<std::unique_ptr<A>&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {}; 
+        template<class A, class B, class... Bs>
+        struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {}; 
+
         // 
         // Thanks to Peter Sommerlad for suggesting the following simpler code
         //
         void add2pipeall(){} // base case
         // need to see this before add2pipeall variadic template function
-        inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node); }
-        // TODO: try to avoid std::function here !  
-        inline void add2pipe(std::function<TaskType*(TaskType*,ff_node*const)> F) {
-            ff_pipeline::add_stage(new ff_node_F<TaskType>(F));
+        inline void add2pipe(ff_node &node) { ff_pipeline::add_stage(&node); }
+        // need to see this before add2pipeall variadic template function
+        inline void add2pipe(ff_node *node) { 
+            cleanup_stages.push_back(node);
+            ff_pipeline::add_stage(node); 
         }
         template<typename FIRST,typename ...ARGS>
-        void add2pipeall(FIRST stage,ARGS...args){
+        void add2pipeall(FIRST &stage,ARGS&...args){
         	add2pipe(stage);
         	add2pipeall(args...); // recurse
         }
+        template<typename FIRST,typename ...ARGS>
+        void add2pipeall(std::unique_ptr<FIRST> & stage,ARGS&...args){            
+        	add2pipe(stage.release());
+        	add2pipeall(args...); // recurse
+        }
+
+    protected:
+        std::vector<ff_node*> cleanup_stages;
         
     public:
+
+        // NOTE: The ff_Pipe accepts as stages either l-value references or std::unique_ptr l-value references.
+        //       The ownership of the (unique) pointer stage is transfered to the pipeline !!!!
+
+        typedef IN  in_type;
+        typedef OUT out_type;
+
         /**
          * \brief Create a stand-alone pipeline (no input/output streams). Run with \p run_and_wait_end or \p run_the_freeze.
          *
@@ -677,20 +896,14 @@ private:
          * in parallel. 
          * It does require a stream of tasks, either external of created by the 
          * first stage.
-         * \param args pipeline stages, i.e. a list f1,f2,... of functions 
-         * with the following type <tt> T* ()(T*,ff_node*const) </tt>
+         * \param stages pipeline stages
          * 
          * Example: \ref pipe_basic.cpp
          */
-        template<typename... Arguments>
-        ff_pipe(Arguments...args) {
-            this->add2pipeall(args...); 
-#if 0  // old code
-            std::tuple<Arguments...> t = std::make_tuple(args...);
-            auto firstF = std::get<0>(t);
-            add2pipe(firstF);
-            for_each_pipe(t,add_to_pipe(this));
-#endif
+        template<typename... STAGES>
+        ff_Pipe(STAGES &&...stages) {    // forwarding reference (aka universal reference)
+            static_assert(valid_stage_types<STAGES...>{}, "Input & output types of the pipe's stages don't match");
+            this->add2pipeall(stages...); //this->add2pipeall(std::forward<STAGES>(stages)...); 
         }
         /**
          * \brief Create a pipeline (with input stream). Run with \p run_and_wait_end or \p run_the_freeze.
@@ -700,125 +913,38 @@ private:
          * It does require a stream of tasks, either external of created by the 
          * first stage.
          * \param input_ch \p true to enable first stage input stream
-         * \param args pipeline stages, i.e. a list f1,f2,... of functions 
-         * with the following type
-         * <tt> T*(*)(T*,ff_node*const) /tt>
+         * \param stages pipeline stages
          *
          * Example: \ref pipe_basic.cpp
          */
-        template<typename... Arguments>
-        ff_pipe(bool input_ch, Arguments...args):ff_pipeline(input_ch) {
-            this->add2pipeall(args...); 
-#if 0 // old code
-            std::tuple<Arguments...> t = std::make_tuple(args...);
-            auto firstF = std::get<0>(t);
-            add2pipe(firstF);
-            for_each_pipe(t,add_to_pipe(this));
-#endif
+        template<typename... STAGES>
+        explicit ff_Pipe(bool input_ch, STAGES &&...stages):ff_pipeline(input_ch) {
+            static_assert(valid_stage_types<STAGES...>{}, 
+                          "Input & output types of the pipe's stages don't match");
+            this->add2pipeall(stages...); 
         }
         
+        ~ff_Pipe() {
+            for (auto s: cleanup_stages) delete s;
+        }
+
         operator ff_node* () { return this;}
+
+        bool load_result(OUT *&task,
+                         unsigned long retry=((unsigned long)-1),
+                         unsigned long ticks=ff_node::TICKS2WAIT) {
+            return ff_pipeline::load_result((void**)&task, retry,ticks);
+        }
+        
+        // deleted members
+        bool load_result(void ** task,
+                         unsigned long retry=((unsigned long)-1),
+                         unsigned long ticks=ff_node::TICKS2WAIT) = delete;
+        int add_stage(ff_node * s) = delete;
+        void cleanup_nodes() = delete;       
     };
 #endif /* HAS_CXX11_VARIADIC_TEMPLATES */
 #endif //VS12
-
-    template<typename T>
-    ff_node* toffnode(T* p) { return p;}
-    template<typename T>
-    ff_node* toffnode(T& p) { return (ff_node*)p;}
-    
-    // ---------------------------------------------------------------
-
-
-#if 0  // old code
-
-
-/* ---------------- basic high-level macros ----------------------- */
-
-    /* FF_PIPEA creates an n-stage accelerator pipeline (max 16 stages) 
-     * where channels have type 'type'. The functions called in each stage
-     * must have the following signature:
-     *   bool (*F)(type &)
-     * If the function F returns false an EOS is produced in the 
-     * output channel.
-     *
-     * Usage example:
-     *
-     *  struct task_t { .....};
-     *
-     *  bool F(task_t &task) { .....; return true;}
-     *  bool G(task_t &task) { .....; return true;}
-     *  bool H(task_t &task) { .....; return true;}
-     * 
-     *  FF_PIPEA(pipe1, task_t, F, G);     // 2-stage
-     *  FF_PIPEA(pipe2, task_t, F, G, H);  // 3-stage
-     *
-     *  FF_PIPEARUN(pipe1); FF_PIPEARUN(pipe2);
-     *  for(...) {
-     *     if (even_task) FF_PIPEAOFFLOAD(pipe1, new task_t(...));
-     *     else FF_PIPEAOFFLOAD(pipe2, new task_t(...));
-     *  }
-     *  FF_PIEAEND(pipe1);  FF_PIPEAEND(pipe2);
-     *  FF_PIEAWAIT(pipe1); FF_PIPEAWAIT(pipe2);
-     *
-     */
-#define FF_PIPEA(pipename, type, ...)                                   \
-    ff_pipeline _FF_node_##pipename(true);                              \
-    _FF_node_##pipename.cleanup_nodes();                                \
-    {                                                                   \
-      class _FF_pipe_stage: public ff_node {                            \
-          typedef bool (*type_f)(type &);                               \
-          type_f F;                                                     \
-      public:                                                           \
-       _FF_pipe_stage(type_f F):F(F) {}                                 \
-       void* svc(void *task) {                                          \
-          type* _ff_in = (type*)task;                                   \
-          if (!F(*_ff_in)) return NULL;                                 \
-          return task;                                                  \
-       }                                                                \
-      };                                                                \
-      ff_pipeline *p = &_FF_node_##pipename;                            \
-      FOREACHPIPE(p->add_stage, __VA_ARGS__);                           \
-    }
-
-#define FF_PIPEARUN(pipename)  _FF_node_##pipename.run()
-#define FF_PIPEAWAIT(pipename) _FF_node_##pipename.wait()
-#define FF_PIPEAOFFLOAD(pipename, task)  _FF_node_##pipename.offload(task);
-#define FF_PIPEAEND(pipename)  _FF_node_##pipename.offload(EOS)
-#define FF_PIPEAGETRESULTNB(pipename, result) _FF_node_##pipename.load_result_nb((void**)result)
-#define FF_PIPEAGETRESULT(pipename, result) _FF_node_##pipename.load_result((void**)result)
-/* ---------------------------------------------------------------- */
-
-
-#define CONCAT(x, y)  x##y
-#define FFPIPE_1(apply, x, ...)  apply(new _FF_pipe_stage(x))
-#define FFPIPE_2(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_1(apply,  __VA_ARGS__)
-#define FFPIPE_3(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_2(apply, __VA_ARGS__)
-#define FFPIPE_4(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_3(apply,  __VA_ARGS__)
-#define FFPIPE_5(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_4(apply,  __VA_ARGS__)
-#define FFPIPE_6(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_5(apply,  __VA_ARGS__)
-#define FFPIPE_7(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_6(apply,  __VA_ARGS__)
-#define FFPIPE_8(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_7(apply,  __VA_ARGS__)
-#define FFPIPE_9(apply, x, ...)  apply(new _FF_pipe_stage(x)); FFPIPE_8(apply,  __VA_ARGS__)
-#define FFPIPE_10(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_9(apply,  __VA_ARGS__)
-#define FFPIPE_11(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_10(apply,  __VA_ARGS__)
-#define FFPIPE_12(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_11(apply,  __VA_ARGS__)
-#define FFPIPE_13(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_12(apply,  __VA_ARGS__)
-#define FFPIPE_14(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_13(apply,  __VA_ARGS__)
-#define FFPIPE_15(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_14(apply,  __VA_ARGS__)
-#define FFPIPE_16(apply, x, ...) apply(new _FF_pipe_stage(x)); FFPIPE_15(apply,  __VA_ARGS__)
-
-#define FFPIPE_NARG(...) FFPIPE_NARG_(__VA_ARGS__, FFPIPE_RSEQ_N())
-#define FFPIPE_NARG_(...) FFPIPE_ARG_N(__VA_ARGS__) 
-#define FFPIPE_ARG_N(_1,_2,_3,_4,_5,_6,_7,_8, _9,_10,_11,_12,_13,_14,_15,_16, N, ...) N
-#define FFPIPE_RSEQ_N() 16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0
-#define FFPIPE_(N, apply, x, ...) CONCAT(FFPIPE_, N)(apply, x, __VA_ARGS__)
-#define FFCOUNT_(_0,_1,_2,_3,_4,_5,_6,_7,_8, _9,_10,_11,_12,_13,_14,_15,_16, N, ...) N
-#define FFCOUNT(...) COUNT_(X,##__VA_ARGS__, 16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
-
-#define FOREACHPIPE(apply, x, ...) FFPIPE_(FFPIPE_NARG(x, __VA_ARGS__), apply, x, __VA_ARGS__)
-
-#endif // if 0
 
 } // namespace ff
 

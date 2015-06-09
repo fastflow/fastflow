@@ -255,7 +255,7 @@ protected:
                 continue;
             }
             uint32_t len = *static_cast<uint32_t*>(hdr.getData());
-            register int ventry   = (sendingPeers==1)?0:sender;
+            int ventry   = (sendingPeers==1)?0:sender;
             prepare(v[ventry], len, sender);
             assert(v[ventry]->size() == len);
             
@@ -273,6 +273,16 @@ protected:
         return true;
     } 
     
+    virtual inline bool Push(void *ptr, unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {
+        if (skipdnode || !P) return ff_node::Push(ptr,retry,ticks);
+        return push(ptr);
+    }
+    
+    virtual inline bool Pop(void **ptr, unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {        
+        if (skipdnode || P) return ff_node::Pop(ptr,retry,ticks);
+        return pop(ptr);
+    }
+
 public:
     /**
      *  \brief Initializes distributed communication channel

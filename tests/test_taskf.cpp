@@ -25,6 +25,12 @@
  ****************************************************************************
  */
 
+/* Author: Massimo
+ * Date  : August 2014
+ *         
+ */
+// simple test for the ff_taskf pattern
+
 #include <ff/taskf.hpp>
 #include <ff/parallel_for.hpp>
 using namespace ff;

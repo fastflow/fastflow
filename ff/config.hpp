@@ -24,6 +24,10 @@
 
 #include <cstddef> 
 #include <climits>
+#if defined(TRACE_FASTFLOW)
+#include <iostream>
+#endif
+
 
 #if !defined(CACHE_LINE_SIZE)
 #define CACHE_LINE_SIZE 64
@@ -38,6 +42,12 @@
 #else  // unbounded buffer
 #define FFBUFFER uSWSR_Ptr_Buffer
 #endif
+
+/* To save energy and improve hyperthreading performance
+ * define the following macro
+ */
+//#define SPIN_USE_PAUSE 1
+
 
 namespace ff {
 static const size_t FF_EOS           = (ULONG_MAX);  /// automatically propagated
@@ -65,6 +75,9 @@ static const size_t FF_GO_OUT        = (FF_EOS-0x3); /// non automatically propa
 #if !defined(MAX_NUM_THREADS)
 #define MAX_NUM_THREADS       256 
 #endif
+
+// maximum number of workers in a farm
+#define DEF_MAX_NUM_WORKERS   (MAX_NUM_THREADS-2)
 
 // NOTE: BACKOFF_MIN/MAX are lower and upper bound backoff values.
 // Notice that backoff bounds are highly dependent from the system and 

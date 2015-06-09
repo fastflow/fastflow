@@ -59,10 +59,16 @@ private:
         struct Node * next;
     };
 
-    Node * volatile   head;
-    long padding1[longxCacheLine-(sizeof(Node *)/sizeof(long))];
-    Node * volatile   tail;
-    long padding2[longxCacheLine-(sizeof(Node*)/sizeof(long))];
+    union {
+        Node * volatile   head;
+        char padding1[CACHE_LINE_SIZE];
+        //long padding1[longxCacheLine-(sizeof(Node *)/sizeof(long))];
+    };
+    union {
+        Node * volatile   tail;
+        char padding2[CACHE_LINE_SIZE];
+        //long padding2[longxCacheLine-(sizeof(Node*)/sizeof(long))];
+    };
 
     /* ----- two-lock used only in the mp_push and mp_pop methods ------- */
     /*                                                                    */    

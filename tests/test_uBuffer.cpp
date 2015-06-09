@@ -287,7 +287,7 @@ void * C(void *) {
 #else 
 	LOCK(block);
 	if (b->size()) {
-	    task = b->front();
+	    task.b = b->front();
 	    b->pop_front();
 	    UNLOCK(block);
 #endif

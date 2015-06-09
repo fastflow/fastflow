@@ -195,7 +195,6 @@ private:
     
 // --------------------------------------------------------------------------------------
     
- 
  /*! 
   * \class uSWSR_Ptr_Buffer
  *  \ingroup building_blocks
@@ -282,6 +281,7 @@ public:
         if (!buf_r->init()) return false;
 #endif
         buf_w = buf_r;
+
         return true;
     }
     
@@ -301,7 +301,8 @@ public:
     inline bool available()   { 
         return buf_w->available();
     }
- 
+
+
     /**
      *  \brief Push
      *
@@ -319,7 +320,7 @@ public:
     inline bool push(void * const data) {
         /* NULL values cannot be pushed in the queue */
         assert(data != NULL);
-        
+
         // If fixedsize has been set to \p true, this method may
         // return false. This means EWOULDBLOCK 
         if (!available()) {
@@ -339,7 +340,6 @@ public:
         buf_w->push(data);
         return true;
     }
-
 
     inline bool mp_push(void *const data) {
         spin_lock(P_lock);
@@ -406,9 +406,8 @@ public:
         return buf_r->pop(data);
     }    
 
+
 #if defined(UBUFFER_STATS)
-
-
     inline unsigned long queue_status() {
         return (unsigned long)atomic_long_read(&numBuffers);
     }
@@ -430,7 +429,18 @@ public:
         spin_unlock(C_lock);
         return r;
     }
-    
+
+
+    /** 
+     * It returns the size of the buffer.
+     *
+     * \return The size of the buffer.
+     */
+    inline unsigned long buffersize() const { 
+        if (!fixedsize) return (unsigned long)-1;        
+        return buf_w->buffersize(); 
+    };
+
     /**
      * \brief number of elements in the queue
      * \note This is just a rough estimation of the actual queue length. Not really possible
@@ -444,6 +454,7 @@ public:
         return len+(in_use_buffers-2)*size+buf_w->length();
     }
 
+    inline const bool isFixedSize() const { return fixedsize; }
 
     inline void reset() {
         if (buf_r) buf_r->reset();
@@ -455,28 +466,22 @@ public:
 private:
     // Padding is required to avoid false-sharing between 
     // core's private cache
-    /* 
+    ALIGN_TO_PRE(CACHE_LINE_SIZE) 
     INTERNAL_BUFFER_T * buf_r;
-    long padding1[longxCacheLine-1];
-    INTERNAL_BUFFER_T * buf_w;
-    long padding2[longxCacheLine-1];
-    */ 
-    ALIGN_TO_PRE(CACHE_LINE_SIZE)
-        INTERNAL_BUFFER_T * buf_r;
     ALIGN_TO_POST(CACHE_LINE_SIZE)
 
     ALIGN_TO_PRE(CACHE_LINE_SIZE)
-        INTERNAL_BUFFER_T * buf_w;
+    INTERNAL_BUFFER_T * buf_w;
     ALIGN_TO_POST(CACHE_LINE_SIZE)
 
     /* ----- two-lock used only in the mp_push and mc_pop methods ------- */
-	ALIGN_TO_PRE(CACHE_LINE_SIZE)
-		lock_t P_lock;
-	ALIGN_TO_POST(CACHE_LINE_SIZE)
+	ALIGN_TO_PRE(CACHE_LINE_SIZE) 
+    lock_t P_lock;
+    ALIGN_TO_POST(CACHE_LINE_SIZE)
 
-	ALIGN_TO_PRE(CACHE_LINE_SIZE)
-		lock_t C_lock;
-	ALIGN_TO_POST(CACHE_LINE_SIZE)
+	ALIGN_TO_PRE(CACHE_LINE_SIZE) 
+    lock_t C_lock;
+    ALIGN_TO_POST(CACHE_LINE_SIZE)
     /* -------------------------------------------------------------- */
 #if defined(UBUFFER_STATS)
     atomic_long_t numBuffers;
@@ -490,6 +495,7 @@ private:
     void  * multipush_buf[MULTIPUSH_BUFFER_SIZE];
     int     mcnt;
 #endif
+
     unsigned long       in_use_buffers; // used to estimate queue length
     const unsigned long	size;
     const bool			fixedsize;

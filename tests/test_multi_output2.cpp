@@ -142,7 +142,10 @@ int main(int argc,  char * argv[]) {
     farm.remove_collector(); // this is needed here to avoid init errors!
     farm.wrap_around();
 
-    ff_pipe<long> pipe(&farm,new N);
+    ff_pipeline pipe;
+    pipe.add_stage(&farm);
+    pipe.add_stage(new N);
+       
     if (pipe.run_and_wait_end()<0) return -1;
     printf("DONE\n");
     return 0;

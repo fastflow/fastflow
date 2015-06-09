@@ -130,6 +130,10 @@ static inline unsigned long getusec() {
     return (unsigned long)(tv.tv_sec*1e6+tv.tv_usec);
 }
 
+static inline unsigned long getusec(const struct timeval &tv) {
+    return  (unsigned long)(tv.tv_sec*1e6+tv.tv_usec);
+}
+
 static inline double diffmsec(const struct timeval & a, 
                               const struct timeval & b) {
     long sec  = (a.tv_sec  - b.tv_sec);
@@ -160,10 +164,9 @@ static inline void time_setzero(struct timeval & a) {
     a.tv_usec=0;
 }
 
-static inline bool isPowerOf2(unsigned int x) {
-    return (x==1 || (x & (x-1)) == 0);
+static inline bool isPowerOf2(unsigned x) {
+	return (x != 0 && (x & (x-1)) == 0);
 }
-
 
 static inline unsigned long nextPowerOf2(unsigned long x) {
     assert(isPowerOf2(x)==false); // x is not a power of two!

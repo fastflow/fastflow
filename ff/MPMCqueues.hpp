@@ -222,11 +222,14 @@ public:
     }
     
 private:
-    // WARNING: on 64bit Windows platform sizeof(unsigned long) = 32 !!
-    std::atomic<unsigned long>  pwrite; /// Pointer to the location where to write to
-    long padding1[longxCacheLine-1];
-    std::atomic<unsigned long>  pread;  /// Pointer to the location where to read from
-    long padding2[longxCacheLine-1];
+    union {
+        std::atomic<unsigned long>  pwrite; /// Pointer to the location where to write to
+        char padding1[CACHE_LINE_SIZE]; 
+    };
+    union {
+        std::atomic<unsigned long>  pread;  /// Pointer to the location where to read from
+        char padding2[CACHE_LINE_SIZE]; 
+    };
     element_t *                 buf;
     unsigned long               mask;
 };
@@ -358,10 +361,14 @@ public:
     
 private:
     // WARNING: on 64bit Windows platform sizeof(unsigned long) = 32 !!
-    atomic_long_t  pwrite;
-    long           padding1[longxCacheLine-1];
-    atomic_long_t  pread;
-    long           padding2[longxCacheLine-1];
+    union {
+        atomic_long_t  pwrite;
+        char           padding1[CACHE_LINE_SIZE];
+    };
+    union {
+        atomic_long_t  pread;
+        char           padding2[CACHE_LINE_SIZE];
+    };
 protected:
     element_t *    buf;
     unsigned long  mask;
@@ -493,11 +500,14 @@ public:
     }
 
 private:
-    // WARNING: on 64bit Windows platform sizeof(unsigned long) = 32 !!
-    atomic_long_t  preadP;
-    long           padding1[longxCacheLine-1];
-    atomic_long_t  preadC;
-    long           padding2[longxCacheLine-1];
+    union {
+        atomic_long_t  preadP;
+        char           padding1[CACHE_LINE_SIZE];
+    };
+    union {
+        atomic_long_t  preadC;
+        char           padding2[CACHE_LINE_SIZE];
+    };
 protected:
     data_element_t *  buf;
     sequenceP_t    *  seqP;
@@ -605,9 +615,9 @@ private:
     } ALIGN_TO_POST(ALIGN_DOUBLE_POINTER);
 
     Pointer  head;
-    long padding1[longxCacheLine-(sizeof(Pointer)/sizeof(long))];
+    long     padding1[longxCacheLine-1];
     Pointer  tail;
-    long padding2[longxCacheLine-(sizeof(Pointer)/sizeof(long))];
+    long     padding2[longxCacheLine-1];;
     FFAllocator *delayedAllocator;
 
 private:
@@ -796,12 +806,18 @@ public:
     }
 
 private:
-    atomic_long_t  enqueue;
-    long           padding1[longxCacheLine-1];
-    atomic_long_t  dequeue;
-    long           padding2[longxCacheLine-1];
-    atomic_long_t  count;
-    long           padding3[longxCacheLine-1];
+    union {
+        atomic_long_t  enqueue;
+        char           padding1[CACHE_LINE_SIZE];
+    };
+    union {
+        atomic_long_t  dequeue;
+        char           padding2[CACHE_LINE_SIZE];
+    };
+    union {
+        atomic_long_t  count;
+        char           padding3[CACHE_LINE_SIZE];
+    };
 protected:
     uSWSR_Ptr_Buffer **buf;
     CLHSpinLock *PLock;    
@@ -856,7 +872,7 @@ public:
 
     // insert method, it never fails if data is not NULL
     inline bool push(void * const data) {
-        register long q = atomic_long_inc_return(&enqueue) % pool.size();
+        long q = atomic_long_inc_return(&enqueue) % pool.size();
         bool r = pool[q].push(data);
         if (r) atomic_long_inc(&count);
         return r;
@@ -870,7 +886,7 @@ public:
         //
         // enforce FIFO ordering for the consumers
         //
-        register long q, q1;
+        long q, q1;
         do {
             q  = atomic_long_read(&dequeue), q1 = atomic_long_read(&enqueue);            
             if (q > q1) return false;
@@ -890,7 +906,7 @@ public:
         return false;
         
 #else  // MULTI_MPMC_RELAX_FIFO_ORDERING
-        register long q = atomic_long_inc_return(&dequeue) % pool.size();
+        long q = atomic_long_inc_return(&dequeue) % pool.size();
         bool r = pool[q].pop(data);
         if (r) { atomic_long_dec(&count); return true;}
         return false;

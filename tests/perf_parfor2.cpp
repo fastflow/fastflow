@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
     }
     
     long *V;
-    posix_memalign((void**)&V, 64, numtasks*sizeof(long));
+    if (posix_memalign((void**)&V, 64, numtasks*sizeof(long)) != 0) abort();
     //long *V = new long[numtasks];
     
 #if defined(USE_OPENMP)

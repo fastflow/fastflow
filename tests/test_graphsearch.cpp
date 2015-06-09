@@ -90,10 +90,10 @@ int main(int argc, char *argv[]) {
     bool found = gs.search(node1, &s, result, 2);
 
     if (found) { 
-	printf("FOUND\n"); 
-	for(auto r: result) 
-	    printf("Id=%ld\n", r->getId());
+        printf("FOUND\n"); 
+        for(auto r: result) 
+            printf("Id=%ld\n", r->getId());
     } else printf("NOT FOUND\n");
-
+    
     return 0;
 }

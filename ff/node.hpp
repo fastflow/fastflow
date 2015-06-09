@@ -148,7 +148,7 @@ protected:
         stp(true), // only one shot by default
         spawned(false),
         freezing(0), frozen(false), //thawed(false),
-        init_error(false) {
+        init_error(false), attr(NULL) {
         
         /* Attr is NULL, default mutex attributes are used. Upon successful
          * initialization, the state of the mutex becomes initialized and
@@ -263,15 +263,19 @@ public:
     int spawn(int cpuId=-1) {
         if (spawned) return -1;
 
-        if (pthread_attr_init(&attr)) {
+        if ((attr = (pthread_attr_t*)malloc(sizeof(pthread_attr_t))) == NULL) {
+            printf("spawn: pthread can not be created, malloc failed\n");
+            return -1;
+        }
+        if (pthread_attr_init(attr)) {
                 perror("pthread_attr_init: pthread can not be created.");
                 return -1;
         }
 
-        int CPUId = init_thread_affinity(&attr, cpuId);
+        int CPUId = init_thread_affinity(attr, cpuId);
         if (CPUId==-2) return -2;
         if (barrier) tid= (unsigned) barrier->getCounter();
-        if (pthread_create(&th_handle, &attr,
+        if (pthread_create(&th_handle, attr,
                            proxy_thread_routine, this) != 0) {
             perror("pthread_create: pthread creation failed.");
             return -2;
@@ -293,9 +297,13 @@ public:
             pthread_join(th_handle, NULL);
             if (barrier) barrier->decCounter();
         }
-        if (pthread_attr_destroy(&attr)) {
-            error("ERROR: ff_thread.wait: pthread_attr_destroy fails!");
-            r=-1;
+        if (attr) {
+            if (pthread_attr_destroy(attr)) {
+                error("ERROR: ff_thread.wait: pthread_attr_destroy fails!");
+                r=-1;
+            }        
+            free(attr);
+            attr = NULL;
         }
         spawned=false;
         return r;
@@ -339,8 +347,6 @@ public:
 
     inline bool isfrozen() const { return freezing>0;} 
 
-    inline bool iswaiting() const { return frozen;}
-
     pthread_t get_handle() const { return th_handle;}
 
     inline int getTid() const { return tid; }
@@ -359,7 +365,7 @@ private:
     //bool            thawed;
     bool            init_error;
     pthread_t       th_handle;
-    pthread_attr_t  attr;
+    pthread_attr_t *attr;
     pthread_mutex_t mutex; 
     pthread_cond_t  cond;
     pthread_cond_t  cond_frozen;
@@ -424,32 +430,129 @@ protected:
     
     void set_id(int id) { myid = id;}
     
-#if defined(TEST_QUEUE_LOCK)
-    virtual inline bool push(void * ptr) { 
-        pthread_mutex_lock(&mutex_out);
-        while(!out->push(ptr)) 
-            pthread_cond_wait(&queue_out_task_out,&mutex_out);
-        pthread_cond_signal(&queue_out_task_in);
-        pthread_mutex_unlock(&mutex_out);
-        return true;
-    }
-    virtual inline bool pop(void ** ptr) { 
-        if (!in_active) return false; // it does not want to receive data
-        
-        pthread_mutex_lock(&mutex_in);
-        while(!in->pop(ptr))
-            pthread_cond_wait(&queue_in_task_in,&mutex_in);
-        pthread_cond_signal(&queue_in_task_out);
-        pthread_mutex_unlock(&mutex_in);
-        return true;
-    }
-#else
     virtual inline bool push(void * ptr) { return out->push(ptr); }
     virtual inline bool pop(void ** ptr) { 
         if (!in_active) return false; // it does not want to receive data
         return in->pop(ptr);
     }
-#endif
+#if !defined(BLOCKING_MODE)
+    virtual inline bool Push(void *ptr, unsigned long retry=((unsigned long)-1), unsigned long ticks=(TICKS2WAIT)) {
+        for(unsigned long i=0;i<retry;++i) {
+            if (push(ptr)) return true;
+            losetime_out(ticks);
+        }     
+        return false;
+    }
+    
+    virtual inline bool Pop(void **ptr, unsigned long retry=((unsigned long)-1), unsigned long ticks=(TICKS2WAIT)) {        
+        for(unsigned long i=0;i<retry;++i) {
+            if (!in_active) { *ptr=NULL; return false; }
+            if (pop(ptr)) return true;
+            losetime_in(ticks);
+        } 
+        return true;
+    }
+#else
+    virtual inline bool Push(void *ptr, unsigned long=0, unsigned long=0) {
+    retry:
+        bool r = push(ptr);
+        if (r) { // OK
+            pthread_mutex_lock(p_cons_m);
+            if (atomic_long_read(p_cons_counter) == 0) {
+                pthread_cond_signal(p_cons_c);
+            }
+            atomic_long_inc(p_cons_counter);
+            pthread_mutex_unlock(p_cons_m);
+            atomic_long_inc(&prod_counter);
+        } else { // FULL
+            //assert(fixedsize);
+            pthread_mutex_lock(&prod_m);
+            while(atomic_long_read(&prod_counter) >= out->buffersize()) {
+                pthread_cond_wait(&prod_c,&prod_m);
+            }
+            pthread_mutex_unlock(&prod_m);
+            goto retry;
+        }
+        return true;
+    }
+    
+    virtual inline bool Pop(void **ptr, unsigned long=0, unsigned long=0) {
+        if (!in_active) { *ptr=NULL; return false; }
+    retry:
+        bool r = in->pop(ptr);
+        if (r) { // OK
+            // TODO: possible optimization, p_prod_m is NULL if the queue is unbounded
+            //if (p_prod_m) { // this is true only if fixedsize==true
+            pthread_mutex_lock(p_prod_m);
+            if (atomic_long_read(p_prod_counter) >= in->buffersize()) {
+                pthread_cond_signal(p_prod_c);
+            }
+            atomic_long_dec(p_prod_counter);
+            pthread_mutex_unlock(p_prod_m);
+            //}
+            atomic_long_dec(&cons_counter);
+        } else { // EMPTY
+            pthread_mutex_lock(&cons_m);
+            while (atomic_long_read(&cons_counter) == 0) {
+                pthread_cond_wait(&cons_c, &cons_m);
+            }
+            pthread_mutex_unlock(&cons_m);
+            goto retry;
+        }
+        return true;
+    }
+
+    // consumer
+    virtual inline bool init_input_blocking(pthread_mutex_t *&m,
+                                            pthread_cond_t  *&c,
+                                            atomic_long_t   *&counter) {
+        if (atomic_long_read(&cons_counter) == (unsigned long)-1) {
+            if (pthread_mutex_init(&cons_m, NULL) != 0) return false;
+            if (pthread_cond_init(&cons_c, NULL) != 0) {
+                pthread_mutex_destroy(&cons_m);
+                return false;
+            }
+            atomic_long_set(&cons_counter,0);
+        } 
+        m = &cons_m,  c = &cons_c, counter = &cons_counter;
+        return true;
+    }
+    virtual inline void set_input_blocking(pthread_mutex_t *&m,
+                                           pthread_cond_t  *&c,
+                                           atomic_long_t   *&counter) {
+        p_prod_m = m,  p_prod_c = c,  p_prod_counter = counter;
+    }    
+
+    // producer
+    virtual inline bool init_output_blocking(pthread_mutex_t *&m,
+                                             pthread_cond_t  *&c,
+                                             atomic_long_t   *&counter) {
+        if (atomic_long_read(&prod_counter) == (unsigned long)-1) {
+            if (pthread_mutex_init(&prod_m, NULL) != 0) return false;
+            if (pthread_cond_init(&prod_c, NULL) != 0) {
+                pthread_mutex_destroy(&prod_m);
+                return false;
+            }
+            atomic_long_set(&prod_counter,0);
+        } 
+        m = &prod_m, c = &prod_c, counter = &prod_counter;
+        return true;
+    }
+    virtual inline void set_output_blocking(pthread_mutex_t *&m,
+                                            pthread_cond_t  *&c,
+                                            atomic_long_t   *&counter) {
+        p_cons_m = m, p_cons_c = c, p_cons_counter = counter;
+    }
+
+    virtual inline pthread_mutex_t &get_cons_m()       { return cons_m;}
+    virtual inline pthread_cond_t  &get_cons_c()       { return cons_c;}
+    virtual inline atomic_long_t   &get_cons_counter() { return cons_counter;}
+
+    virtual inline pthread_mutex_t &get_prod_m()       { return prod_m;}
+    virtual inline pthread_cond_t  &get_prod_c()       { return prod_c;}
+    virtual inline atomic_long_t   &get_prod_counter() { return prod_counter;}
+
+#endif /* BLOCKING_MODE */
 
     /**
      * \brief Set the ff_node to start with no input task
@@ -491,7 +594,8 @@ protected:
 		in = new FFBUFFER(nentries,fixedsize);        
         if (!in) return -1;
         myinbuffer=true;
-        return (in->init()?0:-1);
+        if (!in->init()) return -1;
+        return 0;
     }
     
     /** 
@@ -508,7 +612,8 @@ protected:
         out = new FFBUFFER(nentries,fixedsize); 
         if (!out) return -1;
         myoutbuffer=true;
-        return (out->init()?0:-1);
+        if (!out->init()) return -1;
+        return 0;
     }
 
     /** 
@@ -526,6 +631,7 @@ protected:
         out = o;
         return 0;
     }
+
 
     /** 
      *  \brief Assign the input channelname to a channel
@@ -560,6 +666,7 @@ protected:
      * \return 0 success, -1 otherwise
      */
     virtual int run(bool=false) { 
+        if (thread) delete thread;
         thread = new thWorker(this);
         if (!thread) return -1;
         return thread->run();
@@ -574,6 +681,7 @@ protected:
      * \return 0 success, -1 otherwise
      */
     virtual int freeze_and_run(bool=false) {
+        if (thread) delete thread;
         thread = new thWorker(this);
         if (!thread) return 0;
         freeze();
@@ -620,7 +728,7 @@ protected:
      * \internal
      * \brief Thaw (resume) a ff_node
      */
-    virtual void thaw(bool _freeze=false) { 
+    virtual void thaw(bool _freeze=false, ssize_t=-1) { 
         if (!thread) return; 
         thread->thaw(_freeze);
     }
@@ -666,22 +774,22 @@ protected:
     }
 
 public:
-
-
-
-    // TOGLIERE
-    virtual bool iswaiting() const { 
-        if (!thread) return false;
-        return thread->iswaiting();
-    }
-
-
-
-    
     /*
      * \brief Default retry delay in nonblocking get/put on channels
      */
     enum {TICKS2WAIT=1000};
+
+    /** 
+     *  \brief Destructor, polymorphic deletion through base pointer is allowed.
+     *
+     *  
+     */
+    virtual  ~ff_node() {
+        if (end_callback) end_callback(end_callback_param);
+        if (in && myinbuffer) delete in;
+        if (out && myoutbuffer) delete out;
+        if (thread) delete thread;
+    };
 
     /**
      * \brief The service callback (should be filled by user with parallel activity business code)
@@ -703,7 +811,7 @@ public:
      */
     virtual int svc_init() { return 0; }
     
-     /**
+    /**
      *
      * \brief Service finalisation
      *
@@ -739,27 +847,6 @@ public:
      */
     virtual int getCPUId() const { return CPUId; }
 
-#if defined(TEST_QUEUE_LOCK)
-    virtual bool put(void * ptr) { 
-        pthread_mutex_lock(&mutex_in);
-        while(!in->push(ptr)){
-            pthread_cond_wait(&queue_in_task_out,&mutex_in);
-        }
-        pthread_cond_signal(&queue_in_task_in);
-        pthread_mutex_unlock(&mutex_in);
-        return true;
-    }
-
-    virtual bool  get(void **ptr) { 
-        pthread_mutex_lock(&mutex_out);
-        while(!out->pop(ptr)) {
-            pthread_cond_wait(&queue_out_task_in,&mutex_out);
-        }
-        pthread_cond_signal(&queue_out_task_out);
-        pthread_mutex_unlock(&mutex_out);
-        return true;
-    }
-#else // TEST_QUEUE_LOCK
     /**
      * \brief Nonblocking put onto output channel
      *
@@ -781,18 +868,25 @@ public:
      *
      */
     virtual inline bool  get(void **ptr) { return out->pop(ptr);}
-#endif
-    
    
-    virtual inline void losetime_out(void) {
-        FFTRACE(lostpushticks+=ff_node::TICKS2WAIT; ++pushwait);
-        ticks_wait(ff_node::TICKS2WAIT);
+    virtual inline void losetime_out(unsigned long ticks=ff_node::TICKS2WAIT) {
+        FFTRACE(lostpushticks+=ticks; ++pushwait);
+#if defined(SPIN_USE_PAUSE)
+        const long n = (long)ticks/2000;
+        for(int i=0;i<=n;++i) PAUSE();
+#else
+        ticks_wait(ticks);
+#endif /* SPIN_USE_PAUSE */
     }
 
-    
-    virtual inline void losetime_in(void) {
-        FFTRACE(lostpopticks+=ff_node::TICKS2WAIT; ++popwait);
-        ticks_wait(ff_node::TICKS2WAIT);
+    virtual inline void losetime_in(unsigned long ticks=ff_node::TICKS2WAIT) {
+        FFTRACE(lostpopticks+=ticks; ++popwait);
+#if defined(SPIN_USE_PAUSE)
+        const long n = (long)ticks/2000;
+        for(int i=0;i<=n;++i) PAUSE();
+#else
+        ticks_wait(ticks);
+#endif /* SPIN_USE_PAUSE */
     }
 
     /**
@@ -848,16 +942,10 @@ public:
      * 
      */
     virtual bool ff_send_out(void * task, 
-                             unsigned int retry=((unsigned int)-1),
-                             unsigned int ticks=(TICKS2WAIT)) { 
+                             unsigned long retry=((unsigned long)-1),
+                             unsigned long ticks=(TICKS2WAIT)) { 
         if (callback) return  callback(task,retry,ticks,callback_arg);
-
-        for(unsigned int i=0;i<retry;++i) {
-            if (push(task)) return true;
-            FFTRACE(lostpushticks+=ticks; ++pushwait);
-            ticks_wait(ticks);
-        }     
-        return false;
+        return Push(task,retry,ticks);
     }
 
     // Warning resetting queues while the node is running may produce unexpected results.
@@ -887,27 +975,14 @@ protected:
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
-#if defined(TEST_QUEUE_LOCK)
-        
-        pthread_mutex_init(&mutex_in,NULL);
-        pthread_mutex_init(&mutex_out,NULL);
-        pthread_cond_init(&queue_out_task_in, NULL);
-        pthread_cond_init(&queue_out_task_out, NULL);
-        pthread_cond_init(&queue_in_task_in,  NULL);
-        pthread_cond_init(&queue_in_task_out,  NULL);
+#if defined(BLOCKING_MODE)
+        atomic_long_set(&cons_counter, -1);
+        atomic_long_set(&prod_counter, -1);
+        p_prod_m = NULL, p_prod_c = NULL, p_prod_counter = NULL;
+        p_cons_m = NULL, p_cons_c = NULL, p_cons_counter = NULL;
 #endif
     };
-    
-    /** 
-     *  \brief Destructor
-     */
-    virtual  ~ff_node() {
-        if (end_callback) end_callback(end_callback_param);
-        if (in && myinbuffer) delete in;
-        if (out && myoutbuffer) delete out;
-        if (thread) delete thread;
-    };
-    
+        
     virtual inline void input_active(const bool onoff) {
         if (in_active != onoff)
             in_active= onoff;
@@ -916,7 +991,7 @@ protected:
 private:
     
 
-    void registerCallback(bool (*cb)(void *,unsigned int,unsigned int,void *), void * arg) {
+    void registerCallback(bool (*cb)(void *,unsigned long,unsigned long,void *), void * arg) {
         callback=cb;
         callback_arg=arg;
     }
@@ -932,23 +1007,17 @@ private:
         thWorker(ff_node * const filter):
             ff_thread(filter->barrier),filter(filter) {}
         
-
         inline bool push(void * task) {
             /* NOTE: filter->push and not buffer->push because of the filter can be a dnode
              */
-            while (! filter->push(task)) filter->losetime_out();
-            return true;
+            return filter->Push(task);
         }
         
         inline bool pop(void ** task) {
             /* 
              * NOTE: filter->pop and not buffer->pop because of the filter can be a dnode
              */
-            while (! filter->pop(task)) {
-                if (!filter->in_active) { *task=NULL; return false;}
-                filter->losetime_in();
-            } 
-            return true;
+            return filter->Pop(task);
         }
 
         inline bool put(void * ptr) { return filter->put(ptr);}
@@ -984,12 +1053,12 @@ private:
                     if (task == GO_OUT) break;
                 }
                 FFTRACE(++filter->taskcnt);
-                FFTRACE(register ticks t0 = getticks());
+                FFTRACE(ticks t0 = getticks());
 
                 ret = filter->svc(task);
 
 #if defined(TRACE_FASTFLOW)
-                register ticks diff=(getticks()-t0);
+                ticks diff=(getticks()-t0);
                 filter->tickstot +=diff;
                 filter->ticksmin=(std::min)(filter->ticksmin,diff); // (std::min) for win portability)
                 filter->ticksmax=(std::max)(filter->ticksmax,diff);
@@ -1061,7 +1130,7 @@ private:
     bool              multiInput;   // if the node is a multi input node this is true
     bool              multiOutput;  // if the node is a multi output node this is true
     thWorker        * thread;       /// A \p thWorker object, which extends the \p ff_thread class 
-    bool (*callback)(void *,unsigned int,unsigned int, void *);
+    bool (*callback)(void *,unsigned long,unsigned long, void *);
     void            * callback_arg;
     BARRIER_T       * barrier;      /// A \p Barrier object
     void (*end_callback)(void*);  
@@ -1071,12 +1140,6 @@ private:
     struct timeval wtstart;
     struct timeval wtstop;
     double wttime;
-
-#if defined(TEST_QUEUE_LOCK)
-    pthread_mutex_t mutex_in, mutex_out;
-    pthread_cond_t  queue_out_task_out, queue_out_task_in;
-    pthread_cond_t  queue_in_task_out, queue_in_task_in;
-#endif
 
 #if defined(TRACE_FASTFLOW)
     unsigned long taskcnt;
@@ -1088,15 +1151,37 @@ private:
     ticks         ticksmax;
     ticks         tickstot;
 #endif
+
+protected:
+#if defined(BLOCKING_MODE)
+    // for the input queue
+    pthread_mutex_t cons_m;
+    pthread_cond_t  cons_c;
+    atomic_long_t   cons_counter;
+
+    // for synchronizing with the previous multi-output stage
+    pthread_mutex_t *p_prod_m;
+    pthread_cond_t  *p_prod_c;
+    atomic_long_t   *p_prod_counter;
+
+
+    // for the output queue
+    pthread_mutex_t prod_m;
+    pthread_cond_t  prod_c;
+    atomic_long_t   prod_counter;
+
+    // for synchronizing with the next multi-input stage
+    pthread_mutex_t *p_cons_m;
+    pthread_cond_t  *p_cons_c;
+    atomic_long_t   *p_cons_counter;
+#endif    
 };
 
 /* just a node interface for the input and output buffers */
 struct ff_buffernode: ff_node {
     ff_buffernode() {}
     ff_buffernode(int nentries, bool fixedsize=true, int id=-1) {
-        set_id(id);
-        if (create_input_buffer(nentries,fixedsize)<0) abort();
-        set_output_buffer(ff_node::get_in_buffer());
+        set(nentries,fixedsize,id);
     }
     ff_buffernode(int id, FFBUFFER *in, FFBUFFER *out) {
         set_id(id);
@@ -1106,18 +1191,62 @@ struct ff_buffernode: ff_node {
     void* svc(void*){return NULL;}
     void set(int nentries, bool fixedsize=true, int id=-1) {
         set_id(id);
-        if (create_input_buffer(nentries,fixedsize) < 0) abort();
+        if (create_input_buffer(nentries,fixedsize) < 0) {
+            error("FATAL ERROR: ff_buffernode::set: create_input_buffer fails!\n");
+            abort();
+        }
         set_output_buffer(ff_node::get_in_buffer());
     }
 
     template<typename T>
-    inline bool  put(T *ptr) {  return ff_node::put(ptr);  }
+    inline bool  put(T *ptr) {  
+#if !defined(BLOCKING_MODE)
+        return ff_node::put(ptr);  
+#else        
+        if (ff_node::get_in_buffer()->isFixedSize()) {
+            do {
+                if (ff_node::put(ptr)) {
+                    pthread_mutex_lock(p_cons_m);
+                    if (atomic_long_read(p_cons_counter) == 0) {
+                        pthread_cond_signal(p_cons_c);
+                    }
+                    atomic_long_inc(p_cons_counter);
+                    pthread_mutex_unlock(p_cons_m);       
+                    atomic_long_inc(&prod_counter);
+                    return true;
+                }
+                pthread_mutex_lock(&prod_m);
+                while(atomic_long_read(&prod_counter) >= (ff_node::get_in_buffer()->buffersize())) {
+                    pthread_cond_wait(&prod_c, &prod_m);
+                }
+                pthread_mutex_unlock(&prod_m);
+
+            } while(1);
+        } else {
+            ff_node::put(ptr);
+            pthread_mutex_lock(p_cons_m);
+            if (atomic_long_read(p_cons_counter) == 0) {
+                pthread_cond_signal(p_cons_c);
+            }
+            atomic_long_inc(p_cons_counter);
+            pthread_mutex_unlock(p_cons_m);       
+            atomic_long_inc(&prod_counter);            
+        }
+        return true;
+#endif
+    }
+#if defined(BLOCKING_MODE)
+    virtual inline pthread_mutex_t &get_prod_m()       { return prod_m;}
+    virtual inline pthread_cond_t  &get_prod_c()       { return prod_c;}
+    virtual inline atomic_long_t   &get_prod_counter() { return prod_counter;}
+#endif
 };
 
+/* *************************** Typed node ************************* */
 
 #ifndef WIN32 //VS12
 /*!
- *  \class ff_node_t
+ *  \class ff_node_base_t
  *  \ingroup building_blocks
  *
  *  \brief The FastFlow typed abstract contanier for a parallel activity (actor).
@@ -1126,8 +1255,11 @@ struct ff_buffernode: ff_node {
  *
  *  This class is defined in \ref node.hpp
  */
+
 template<typename IN, typename OUT = IN>
-struct ff_node_t:ff_node {
+struct ff_node_t: ff_node {
+    typedef IN  in_type;
+    typedef OUT out_type;
     ff_node_t():
         GO_ON((OUT*)FF_GO_ON),
         EOS((OUT*)FF_EOS),
@@ -1137,7 +1269,7 @@ struct ff_node_t:ff_node {
     OUT * const GO_ON,  *const EOS, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_node_t()  {}
     virtual OUT* svc(IN*)=0;
-    inline  void *svc(void *task) { return svc(reinterpret_cast<IN*>(task));};
+    inline  void *svc(void *task) { return svc(reinterpret_cast<IN*>(task)); };
 };
 
 #if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
@@ -1152,22 +1284,16 @@ struct ff_node_t:ff_node {
  *
  *  This class is defined in \ref node.hpp
  */
-template<typename T, typename FUNC=std::function<T*(T*,ff_node*const)> >
-struct ff_node_F: public ff_node_t<T> {
+template<typename TIN, typename TOUT=TIN, 
+         typename FUNC=std::function<TOUT*(TIN*,ff_node*const)> >
+struct ff_node_F: public ff_node_t<TIN,TOUT> {
    ff_node_F(FUNC f):F(f) {}
-   T* svc(T* task) { return F(task, this); }
+   TOUT* svc(TIN* task) { return F(task, this); }
    FUNC F;
 };
-// factory function used to deduce function type
-template <typename T, typename FUNC>
-static ff_node_F<T,FUNC> make_ff_node_F(FUNC f) {
-    return ff_node_F<T,FUNC>(f); 
-}
 
 #endif
 #endif
-
-
 
 } // namespace ff
 

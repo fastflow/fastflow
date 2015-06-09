@@ -70,7 +70,8 @@ int main(int argc, char * argv[]) {
     for(long i=0;i<streamlen;++i)
         printf("%ld ", G(F(i)));
 #else
-    ff_pipe<fftask_t> pipe(true, wrapF,wrapG); // accelerator mode turned on
+    ff_node_F<fftask_t> wrapf(wrapF), wrapg(wrapG);
+    ff_Pipe<fftask_t, fftask_t> pipe(true, wrapf,wrapg); // accelerator mode turned on
     pipe.run_then_freeze();
     for(long i=0;i<streamlen;++i) {
         fftask_t *task = new fftask_t(i);
@@ -79,7 +80,7 @@ int main(int argc, char * argv[]) {
     pipe.offload(EOS);
     for(long i=0;i<streamlen;++i) {
         fftask_t *task = nullptr;
-        pipe.load_result(reinterpret_cast<void**>(&task));
+        pipe.load_result(task);
         assert(task != (void*)EOS);
         printf("result %ld\n", task->r);
         delete task;

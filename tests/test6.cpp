@@ -142,6 +142,7 @@ int main(int argc, char * argv[]) {
     Collector c;
     farm.add_emitter(&e);
     farm.add_collector(&c);
+    
 
     ff_farm<> farm1;
     farm1.add_collector(NULL); // just a pass by filter
@@ -151,7 +152,6 @@ int main(int argc, char * argv[]) {
     farm3.add_collector(NULL); // just a pass by filter
 
     std::vector<ff_node *> w;
-
     w.push_back(new Worker1);
     w.push_back(new Worker1);
     farm1.add_workers(w);
@@ -173,14 +173,11 @@ int main(int argc, char * argv[]) {
     w.push_back(&farm1);
     w.push_back(&farm2);
     w.push_back(&farm3);
-
     farm.add_workers(w);
     
-
     if (farm.run_and_wait_end()<0) {
         error("running pipeline\n");
         return -1;
     }
-
     return 0;
 }

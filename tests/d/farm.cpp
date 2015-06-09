@@ -120,7 +120,7 @@ public:
     void * svc(void* task) {
 	if (--nTasks == 0) {
 	    ff_send_out(task);
-	    return NULL; // generates EOS
+	    return EOS; // generates EOS
 	}
 	return task;
     }

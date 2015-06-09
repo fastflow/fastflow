@@ -408,7 +408,7 @@ struct dataPair {
 //  used just to redefine losetime_in
 class foralllb_t: public ff_loadbalancer {
 protected:
-    virtual inline void losetime_in() { 
+    virtual inline void losetime_in(unsigned long) { 
         if ((int)(getnworkers())>=ncores) {
             //FFTRACE(lostpopticks+=(100*TICKS2WAIT);++popwait); // FIX: adjust tracing
             ff_relax(0);
@@ -781,7 +781,7 @@ public:
     typedef Tres Tres_t;
     typedef std::function<void(const long,const long, const int, Tres&)> F_t;
 protected:
-    virtual inline void losetime_in(void) {
+    virtual inline void losetime_in(unsigned long) {
         //FFTRACE(lostpopticks+=ff_node::TICKS2WAIT; ++popwait); // FIX
         workerlosetime_in(aggressive);
     }
@@ -875,7 +875,7 @@ public:
 protected:
     // removes possible EOS still in the input queues of the workers
     inline void resetqueues(const int _nw) {
-        const svector<ff_node*> nodes = getWorkers();
+        const svector<ff_node*> &nodes = getWorkers();
         for(int i=0;i<_nw;++i) nodes[i]->reset();
     }
 
@@ -886,11 +886,11 @@ private:
 public:
 
     ff_forall_farm(ssize_t maxnw, const bool spinwait=false, const bool skipwarmup=false, const bool spinbarrier=false):
-        ff_farm<foralllb_t>(false,8*ff_farm<>::DEF_MAX_NUM_WORKERS,8*ff_farm<>::DEF_MAX_NUM_WORKERS,
-                            true, ff_farm<>::DEF_MAX_NUM_WORKERS,true), // cleanup at exit !
+        ff_farm<foralllb_t>(false,8*DEF_MAX_NUM_WORKERS,8*DEF_MAX_NUM_WORKERS,
+                            true, DEF_MAX_NUM_WORKERS,true), // cleanup at exit !
         loopbar( (spinwait && spinbarrier) ? 
-                 (ffBarrier*)(new spinBarrier(maxnw<=0?ff_farm<>::DEF_MAX_NUM_WORKERS+1:(size_t)(maxnw+1))) :
-                 (ffBarrier*)(new Barrier(maxnw<=0?ff_farm<>::DEF_MAX_NUM_WORKERS+1:(size_t)(maxnw+1))) ),
+                 (ffBarrier*)(new spinBarrier(maxnw<=0?DEF_MAX_NUM_WORKERS+1:(size_t)(maxnw+1))) :
+                 (ffBarrier*)(new Barrier(maxnw<=0?DEF_MAX_NUM_WORKERS+1:(size_t)(maxnw+1))) ),
         skipwarmup(skipwarmup),spinwait(spinwait) {
         numCores = ((foralllb_t*const)getlb())->getNCores();
         if (maxnw<=0) maxnw=numCores;
@@ -926,9 +926,10 @@ public:
             }
             //resetqueues(maxnw);
         }
+        ff_farm<foralllb_t>::cleanup_all(); // delete everything at exit
     }
     virtual ~ff_forall_farm() {
-        if (loopbar) delete loopbar;
+        if (loopbar) delete loopbar;        
     }
 
 

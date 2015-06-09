@@ -93,29 +93,27 @@ private:
 // emitter filter
 class Emitter: public ff_node {
 public:
-    Emitter(long ntasks, int nworkers, my_loadbalancer * const lb):
-        ntasks(ntasks),nworkers(nworkers),lb(lb) {}
+    Emitter(size_t ntasks, my_loadbalancer * const lb):
+        ntasks(ntasks),lb(lb) {}
 
-    void * svc(void * task) {
-        for(long i=1;i<=ntasks;++i) {
+    void * svc(void *) {
+        for(size_t i=1;i<=ntasks;++i) {
             ff_send_out((void*)i);
             lb->putDone();
         }
-
-        return NULL;
+        return EOS;
     }
     
 private:
-    long ntasks;
-    int nworkers;
+    size_t ntasks;
     my_loadbalancer * lb;
 };
 
 
 
 int main(int argc, char * argv[]) {    
-    int nworkers = 4;
-    int ntask = 1000;
+    int    nworkers = 4;
+    size_t ntask = 1000;
     if (argc>1) {
         if (argc<3) {
             std::cerr << "use: " 
@@ -125,7 +123,7 @@ int main(int argc, char * argv[]) {
         }
         
         nworkers=atoi(argv[1]);
-        ntask=atoi(argv[2]);
+        ntask=atol(argv[2]);
     }
     if (nworkers<=0 || ntask<=0) {
         std::cerr << "Wrong parameters values\n";
@@ -133,7 +131,7 @@ int main(int argc, char * argv[]) {
     }
     
     ff_farm<my_loadbalancer> farm;
-    Emitter emitter(ntask,nworkers,farm.getlb());
+    Emitter emitter(ntask,farm.getlb());
     farm.add_emitter(&emitter);
     farm.set_scheduling_ondemand();
 

@@ -25,6 +25,11 @@
  ****************************************************************************
  */
 
+/* Author: Massimo Torquati
+ * Date  : 2014
+ *         
+ */
+
 /* Some basic usage examples of the ff_farm  */
 
 #include <ff/farm.hpp>
@@ -41,24 +46,19 @@ ff_task *F(ff_task *t, ff_node*const node) {
 }
 
 // just an ff_node
-struct seq: ff_node {
-    void *svc(void *t) {
-	printf("seq %d got one task\n", get_my_id());
-	return t;
+struct seq: ff_node_t<ff_task> {
+    ff_task *svc(ff_task *t) {
+        printf("seq %d got one task\n", get_my_id());
+        return t;
     }
 };
 
-template<typename T, typename FUNC_t>
-std::function<T*(T*,ff_node*const)> make_ff_function(FUNC_t f) {
-    return f;
-}
 
 int main() {    
     /* ------------------------------------------- */
     // First version using functional replication
     // NOTE: no data stream in input to the farm
-    //ff_farm<> farm((std::function<ff_task*(ff_task*,ff_node*const)>)F, 5);
-    ff_farm<> farm(make_ff_function<ff_task>(F), 5);
+    ff_Farm<ff_task> farm(F, 5);
     farm.run_and_wait_end();    
     printf("done 1st\n\n");
     /* ------------------------------------------- */
@@ -67,9 +67,9 @@ int main() {
     // As in the previous case but the farm is set up
     // as a software accelerator. The stream of tasks
     // is generated from the main.
-    ff_farm<> farmA(make_ff_function<ff_task>(F), 5,true);
+    ff_Farm<ff_task> farmA(F, 5,true);
     farmA.run();
-    for(int i=0;i<10;++i) farmA.offload(new long(i));
+    for(long i=1;i<=10;++i) farmA.offload((ff_task*)i);
     farmA.offload(EOS);
     farmA.wait();
     printf("done 2nd\n\n");
@@ -79,86 +79,87 @@ int main() {
     // Farm using a pool of ff_node and a skeleton 
     // without the Collector
     // NOTE: no data stream in input to the farm
-    std::vector<ff_node*> W;
-    for(int i=0;i<4;++i) W.push_back(new seq);
-    ff_farm<> farm_wo_collector(W);
+
+#if 1  // first option for building an "external" vector of unique pointers
+       // then moving the vector to the farm
+    std::vector<std::unique_ptr<ff_node> > W;
+    for(int i=0;i<4;++i) W.push_back(make_unique<seq>()); 
+    ff_Farm<> farm_wo_collector(std::move(W));
+#else  // second option, using lambdas
+    ff_Farm<> farm_wo_collector( []() { 
+            std::vector<std::unique_ptr<ff_node> > W; 
+            for(int i=0;i<4;++i) W.push_back(make_unique<seq>()); 
+            return W; 
+        }() );
+#endif
     farm_wo_collector.remove_collector(); 
     farm_wo_collector.run_and_wait_end();
     printf("done 3nd\n\n");
     /* ------------------------------------------- */
 
-#if defined(HAS_CXX11_LAMBDA)
     /* ------------------------------------------- */
     // Version using a lambda function to define the Emitter thread,
     // which generates the stream. No collector present.
-#if 0
-    ff_farm<> farm2;
-    const int K = 10;
-    auto lambda = [K]() -> void* {
-        static int k = 0;
-        if (k++ == K) return NULL;
-        return new int(k);
-    };
-    struct Emitter:public ff_node {
-        std::function<void*()> F;
-        Emitter(std::function<void*()> F):F(F) {}
-        void *svc(void*) { return F(); }
-    };
-    farm2.add_emitter(new Emitter(lambda));
-    W.clear();
-    for(int i=0;i<4;++i) W.push_back(new seq);
-    farm2.add_workers(W);
-    farm2.run_and_wait_end();
-#else
     const int K = 10;
     int k = 0;
-    auto lambda = [K,&k]() -> void* {
+    auto lambda = [K,&k]() -> long* {
         if (k++ == K) return NULL;
-        return new int(k);
+        return new long(k);
     };
-    auto myF=[](ff_task *t,ff_node*const node)->ff_task*{ 
+    auto myF=[](long *t,ff_node*const node)->long*{ 
         printf("hello I've got one task my id is=%d\n", node->get_my_id());
+        delete t;
         return t;
     };
-    struct Emitter:public ff_node {
-        std::function<void*()> F;
-        Emitter(std::function<void*()> F):F(F) {}
-        void *svc(void*) { return F(); }
+    struct Emitter:public ff_node_t<long> {
+        std::function<long*()> F;
+        Emitter(std::function<long*()> F):F(F) {}
+        long *svc(long*) { return F(); }
     };
-    ff_farm<> farm2(make_ff_function<ff_task>(myF),4);
+    ff_Farm<long> farm2(myF,4);
 
     farm2.remove_collector();
-    farm2.add_emitter(new Emitter(lambda));
+    Emitter E(lambda);
+    farm2.add_emitter(E);
     farm2.run_and_wait_end();
-#endif
     printf("done 4th\n\n");
     /* ------------------------------------------- */
-
+    
     /* ------------------------------------------- */
     // Another version using a lambda function to define the Emitter thread,
     // which generates the stream. No collector present.
 
     // just an ff_node
-    struct MyNode: ff_node {
-        void *svc(void *t) {
+    struct MyNode: ff_node_t<ff_task> {
+        ff_task *svc(ff_task *t) {
             printf("worker %d got one task\n", get_my_id());
+            delete t;
             return t;
         }
     };
     const int K2 = 20;
-    auto lambda2 = [K2]() -> void* {
+    auto lambda2 = [K2]() -> ff_task* {
         static int k = 0;
         if (k++ == K2) return NULL;
-        return new int(k);
+        return new ff_task;
     };
-    W.clear();
-    for(int i=0;i<7;++i) W.push_back(new MyNode);
-    ff_farm<> farm3(W, new Emitter(lambda2));
+    struct Emitter2:public ff_node_t<long, ff_task> {
+        std::function<ff_task*()> F;
+        Emitter2(std::function<ff_task*()> F):F(F) {}
+        ff_task *svc(long*) { return F(); }
+    };
+
+    Emitter2 E2(lambda2);
+    ff_Farm<long,ff_task> farm3([]() {     
+            std::vector<std::unique_ptr<ff_node> > W;
+            for(int i=0;i<2;++i) W.push_back(make_unique<MyNode>());
+            return W;
+        }() );
+    farm3.add_emitter(E2);
+    farm3.remove_collector();
     farm3.run_and_wait_end();
     printf("done 5th\n\n");
 
-
-#endif
     return 0;
 }
 

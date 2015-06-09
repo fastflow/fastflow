@@ -108,7 +108,6 @@
 
 
 //#include <pthread.h>
-#include <ff/buffer.hpp>
 #include <ff/ubuffer.hpp>
 #include <ff/spin-lock.hpp>
 #include <ff/svector.hpp>
@@ -364,8 +363,8 @@ namespace ff {
             if (leak) { leak->~uSWSR_Ptr_Buffer(); freeAlignedMemory(leak); } // free(leak)
         }
     
-        uSWSR_Ptr_Buffer      * leak;   //
-        const pthread_t    key;         // used to identify a thread (threadID)
+        uSWSR_Ptr_Buffer * leak;   //
+        const pthread_t    key;    // used to identify a thread (threadID)
         long padding[longxCacheLine-((sizeof(const pthread_t)+sizeof(uSWSR_Ptr_Buffer*))/sizeof(long))]; //
     };
 
@@ -537,7 +536,7 @@ namespace ff {
 
         inline void * getfrom_fb_delayed() {
             if (fb_size==1) return 0;
-            for(register unsigned i=1;i<fb_size;++i) {
+            for(unsigned i=1;i<fb_size;++i) {
                 if (fb[i]->leak->length()<(unsigned)delayedReclaim)  {
                     return 0; // cache is empty
                 }
@@ -545,7 +544,7 @@ namespace ff {
 
             union { Buf_ctl * buf; void * ptr; } b={NULL};
 
-            for(register unsigned i=2;i<fb_size;++i) {
+            for(unsigned i=2;i<fb_size;++i) {
                 fb[i]->leak->pop(&b.ptr);
                 DBG(assert(b.ptr));
                 checkReclaimD(getsegctl(b.buf));
@@ -572,7 +571,7 @@ namespace ff {
         }
 
         inline int searchfb(const pthread_t key) {
-            for(register unsigned i=0;i<fb_size;++i)
+            for(unsigned i=0;i<fb_size;++i)
                 if (fb[i]->key == key) return (int)i;
             return -1;
         }
@@ -710,7 +709,7 @@ namespace ff {
             atomic_long_set(&nomoremalloc,1);
 
             // try to reclaim some memory
-            for(register unsigned i=0;i<fb_size;++i) {
+            for(unsigned i=0;i<fb_size;++i) {
                 DBG(assert(fb[i]));
                 if (reclaim) {
                     union { Buf_ctl * buf2; void * ptr; } b={NULL};
@@ -942,7 +941,8 @@ namespace ff {
         /// Default Constructor
 
         ff_allocator(size_t max_size=0, const int delayedReclaim=0) :
-            alloc(0), max_size(max_size), delayedReclaim(delayedReclaim) { }
+            alloc(0), /* max_size(max_size), */ delayedReclaim(delayedReclaim) { 
+        }
 
         /*
          * Destructor
@@ -1312,7 +1312,7 @@ namespace ff {
         private:
         svector<SlabCache *>   slabcache;       // List of caches
         SegmentAllocator     * alloc;
-        const size_t           max_size;
+        /* const size_t           max_size; */  // TODO
         const int              delayedReclaim;
     };
 
@@ -1476,7 +1476,7 @@ namespace ff {
          * \param delayedReclaim Deferred reclamation configuration
          */
         FFAllocator(int delayedReclaim=0) :
-            AA(0), A(0), A_capacity(0), A_size(0),
+            A(0), A_capacity(0), A_size(0),
             delayedReclaim(delayedReclaim)
         {
             init_unlocked(lock);
@@ -1751,7 +1751,6 @@ namespace ff {
             })
 
         private:
-        size_t          AA;             //
         FFAxThreadData **A;             // ffa_wrapper : ff_allocator
         size_t          A_capacity;     //
         size_t          A_size;         //

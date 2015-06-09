@@ -10,7 +10,7 @@ endif
 
 FF_ROOT  = ../../
 #AMD OpenCL location
-OCL_ROOT = /usr/local/cuda
+OCL_ROOT = /opt/AMDAPP
 
 # 
 OCLFLAGS =
