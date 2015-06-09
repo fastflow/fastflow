@@ -43,14 +43,14 @@ struct masterStage: public ff_node {
     void * svc(void * task) {
         if (task==NULL) {
             for(long i=0;i<bigbatchSize;++i)
-                ff_send_out((void*)(i+1));
+                if (!ff_send_out((void*)(i+1))) abort();
             if (numBatch>0) --numBatch;
             return GO_ON;
         }
         
         if (numBatch) {
             for(long i=0;i<smallbatchSize;++i)
-                ff_send_out((void*)(i+1));
+                if (!ff_send_out((void*)(i+1))) abort();
             --numBatch;
         } else if (!eossent) {
             ff_send_out(EOS);
@@ -93,7 +93,7 @@ int main(int argc, char * argv[]) {
         return -1;
     }
     
-    ff_pipeline pipe;
+    ff_pipeline pipe(false,512,512,true);
     
     pipe.add_stage(new masterStage);
     for(unsigned i=1;i<nstages;++i)

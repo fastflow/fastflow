@@ -24,6 +24,7 @@
  *
  ****************************************************************************
  */
+// simple task-farm pattern test used as software accelerator 
 
 #include <ff/farm.hpp>
   
@@ -40,9 +41,9 @@ struct fftask_t {
     fftask_t(long r, long i):r(r),i(i) {}
     long r, i;
 };
-static inline bool Wrapper(fftask_t &t) {
-    t.r = Func(t.r, t.i);
-    return true;
+static inline fftask_t* Wrapper(fftask_t *t, ff_node *const) {
+    t->r = Func(t->r, t->i);
+    return t;
 }
 #endif
 
@@ -68,33 +69,32 @@ int main(int argc, char * argv[]) {
             printf("found %ld in i %ld iterations\n",number, i);
             break;
         }
-    } while( ++i< (10*1e6) );
+    } while( ++i< 10000/*1e6*/ );
 #else
     long i=0;
     fftask_t *r = NULL;
-    FF_FARMA(farmA, Wrapper, fftask_t, nworkers, nworkers);
-    FF_FARMARUN(farmA);
+    ff_node_F<fftask_t> wrapper(Wrapper);
+    ff_Farm<fftask_t> farm(wrapper, nworkers, true);
+    farm.run();
+
     do {
-        FF_FARMAOFFLOAD(farmA, new fftask_t(random(),i+1));
-        if (FF_FARMAGETRESULTNB(farmA, &r)) {
+        farm.offload(new fftask_t(random(),i+1));
+        if (farm.load_result_nb(r)) {
             if (r->r == number) {
-                printf("found %ld in i %ld iterations\n",number, i);
+                printf("found %ld in %ld iterations\n",number, i);
                 break;
-            }
+            } 
             delete r;
+        } 
+    } while( ++i< 100000); //1e6);
+    farm.offload(EOS);
+    while(farm.load_result(r)) {
+        if (r->r == number) {
+            printf("found %ld after all iterations\n",number);
         }
-    } while( ++i< (10*1e6) );
-    FF_FARMAEND(farmA);
-    if (r->r != number) {
-        while(FF_FARMAGETRESULT(farmA,&r)) {
-            if (r->r == number) {
-                printf("found %ld after all iterations\n",number);
-                break;
-            }
-            delete r;
-        }
+        delete r;
     }
-    FF_FARMAWAIT(farmA);
+    farm.wait();
 #endif
     return 0;
 }

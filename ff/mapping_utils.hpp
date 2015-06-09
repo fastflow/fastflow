@@ -133,12 +133,12 @@ static inline unsigned long ff_getCpuFreq() {
  *
  *  \return An integer value showing the number of cores.
  */
-static inline int ff_numCores() {
-    int  n=-1;
+static inline ssize_t ff_numCores() {
+    ssize_t  n=-1;
 #if defined(__linux__)
     FILE       *f;    
     f = popen("cat /proc/cpuinfo |grep processor | wc -l", "r");
-    if (fscanf(f, "%d", &n) == EOF) { pclose(f); return n;}
+    if (fscanf(f, "%ld", &n) == EOF) { pclose(f); return n;}
     pclose(f);
 #elif defined(__APPLE__) // BSD
     size_t len = 4;
@@ -163,8 +163,8 @@ static inline int ff_numCores() {
  *
  *  \return An integer value showing the number of cores.
  */
-static inline int ff_realNumCores() {
-    int  n=-1;
+static inline ssize_t ff_realNumCores() {
+    ssize_t  n=-1;
 #if defined(_WIN32)
 	n = 2; // Not yet implemented
 #else
@@ -180,7 +180,7 @@ static inline int ff_realNumCores() {
     FILE       *f; 
     f = popen(inspect, "r");
     if (f) {
-        if (fscanf(f, "%d", &n) == EOF) { 
+        if (fscanf(f, "%ld", &n) == EOF) { 
             perror("fscanf");
         }
         pclose(f);
@@ -196,8 +196,8 @@ static inline int ff_realNumCores() {
  *
  *  \return An integer value showing the number of sockets.
  */
-static inline int ff_numSockets() {
-   int  n=-1;
+static inline ssize_t ff_numSockets() {
+   ssize_t  n=-1;
 #if defined(_WIN32)
    n = 1;
 #else
@@ -213,7 +213,7 @@ static inline int ff_numSockets() {
     FILE       *f; 
     f = popen(inspect, "r");
     if (f) {
-        if (fscanf(f, "%d", &n) == EOF) { 
+        if (fscanf(f, "%ld", &n) == EOF) { 
             perror("fscanf");
         }
         pclose(f);
@@ -239,8 +239,8 @@ static inline int ff_numSockets() {
  * \return An integer value showing the priority of the scheduling policy.
  *
  */
-static inline int ff_setPriority(int priority_level=0) {
-    int ret=0;
+static inline ssize_t ff_setPriority(ssize_t priority_level=0) {
+    ssize_t ret=0;
 #if (defined(__GNUC__) && defined(__linux))
     //if (priority_level) {
         if (setpriority(PRIO_PROCESS, gettid(),priority_level) != 0) {
@@ -297,7 +297,7 @@ if (ret!=0) perror("ff_setPriority");
  *  \return An integer value showing the ID of the core. If the ID of the core
  *  is not found, then -1 is returned.
  */
-static inline int ff_getMyCore() {
+static inline ssize_t ff_getMyCore() {
 #if defined(__linux__) && defined(CPU_SET)
     cpu_set_t mask;
     CPU_ZERO(&mask);
@@ -315,7 +315,7 @@ static inline int ff_getMyCore() {
     thread_policy_get(mach_thread_self(), THREAD_AFFINITY_POLICY,
                       (integer_t*) &mypolicy,
                       &thread_info_count, &get_default);
-    int res = mypolicy.affinity_tag;
+    ssize_t res = mypolicy.affinity_tag;
     return(res);
 #else
 #if __GNUC__
@@ -327,7 +327,7 @@ static inline int ff_getMyCore() {
 return -1;
 }
 // NOTE: this function will be discarded, please use ff_getMyCore() instead
-static inline int ff_getMyCpu() { return ff_getMyCore(); }
+static inline ssize_t ff_getMyCpu() { return ff_getMyCore(); }
 
 /** 
  *  \brief Maps the calling thread to the given CPU.
@@ -341,7 +341,7 @@ static inline int ff_getMyCpu() { return ff_getMyCore(); }
  *  \return An integet value showing the priority level is returned if
  *  successful. Otherwise \p EINVAL is returned.
  */
-static inline int ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
+static inline ssize_t ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
     if (cpu_id > ff_numCores()) return EINVAL;
 #if defined(__linux__) && defined(CPU_SET)
     cpu_set_t mask;

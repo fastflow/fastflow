@@ -186,7 +186,7 @@ private:
 class spinBarrier: public ffBarrier {
 public:
    
-    spinBarrier(const size_t maxNThreads=MAX_NUM_THREADS):_barrier(0),threadCounter(0),maxNThreads(maxNThreads) {
+    spinBarrier(const size_t _maxNThreads=MAX_NUM_THREADS):maxNThreads(_maxNThreads), _barrier(0),threadCounter(0) {
         barArray=new bool[maxNThreads];
         assert(barArray!=NULL);
     }
@@ -227,9 +227,9 @@ public:
     inline void   decCounter()       { --threadCounter;}
     
 private:
+    const size_t maxNThreads;
     size_t _barrier;
     size_t threadCounter;
-    const size_t maxNThreads;
     bool* barArray;          
     atomic_long_t B[2];
 };

@@ -108,9 +108,7 @@ namespace ff {
   * 
   * \example parfor_basic.cpp
   */ 
-class ParallelFor {
-protected:
-    ff_forall_farm<forallreduce_W<int> > *pf; 
+class ParallelFor: public ff_forall_farm<forallreduce_W<int> > {
 public:
     /**
      * \brief Constructor
@@ -134,14 +132,17 @@ public:
      * calls, the <b>threadPause</b> method may be called.
      */
     explicit ParallelFor(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
-        pf(new ff_forall_farm<forallreduce_W<int> >(maxnw,spinwait,false,spinbarrier)) {}
+        ff_forall_farm<forallreduce_W<int> >(maxnw,spinwait,false,spinbarrier) {}
     /**
      * \brief Destructor
      * 
      *  Terminate ParallelFor run-time support and makes resources housekeeping.
      * Both nonlocking and blocking worker threads are terminated.
      */
-    ~ParallelFor()                { if (pf) { FF_PARFOR_DONE(pf); pf=nullptr;}  }
+    ~ParallelFor()                { 
+        ff_forall_farm<forallreduce_W<int> >::stop();
+        ff_forall_farm<forallreduce_W<int> >::wait();
+    }
 
     /**
      * \brief Disable active scheduler (i.e. Emitter thread)
@@ -159,13 +160,13 @@ public:
      */ 
 
     inline void disableScheduler(bool onoff=true) { 
-        pf->disableScheduler(onoff);
+        ff_forall_farm<forallreduce_W<int> >::disableScheduler(onoff);
     }
 
     // It puts all spinning threads to sleep. It does not disable the spinWait flag
     // so at the next call, threads start spinning again.
     inline int threadPause() {
-        return pf->stopSpinning();
+        return ff_forall_farm<forallreduce_W<int> >::stopSpinning();
     }
 
     // -------------------- parallel_for --------------------
@@ -186,9 +187,9 @@ public:
     template <typename Function>
     inline void parallel_for(long first, long last, const Function& f, 
                              const long nw=FF_AUTO) {
-        FF_PARFOR_START(pf, parforidx,first,last,1,PARFOR_STATIC(0),nw) {
+        FF_PARFOR_START(this, parforidx,first,last,1,PARFOR_STATIC(0),nw) {
             f(parforidx);            
-        } FF_PARFOR_STOP(pf);
+        } FF_PARFOR_STOP(this);
     }
 
     /**
@@ -208,9 +209,9 @@ public:
     template <typename Function>
     inline void parallel_for(long first, long last, long step, const Function& f, 
                              const long nw=FF_AUTO) {
-        FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_STATIC(0),nw) {
+        FF_PARFOR_START(this, parforidx,first,last,step,PARFOR_STATIC(0),nw) {
             f(parforidx);            
-        } FF_PARFOR_STOP(pf);
+        } FF_PARFOR_STOP(this);
     }
 
 
@@ -233,9 +234,9 @@ public:
     template <typename Function>
     inline void parallel_for(long first, long last, long step, long grain, 
                              const Function& f, const long nw=FF_AUTO) {
-        FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+        FF_PARFOR_START(this, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(parforidx);            
-        } FF_PARFOR_STOP(pf);
+        } FF_PARFOR_STOP(this);
     }    
 
     /**
@@ -256,9 +257,9 @@ public:
     template <typename Function>
     inline void parallel_for_thid(long first, long last, long step, long grain, 
                                   const Function& f, const long nw=FF_AUTO) {
-        FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+        FF_PARFOR_START(this, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(parforidx,_ff_thread_id);            
-        } FF_PARFOR_STOP(pf);
+        } FF_PARFOR_STOP(this);
     }    
 
     /**
@@ -287,9 +288,9 @@ public:
     template <typename Function>
     inline void parallel_for_idx(long first, long last, long step, long grain, 
                                   const Function& f, const long nw=FF_AUTO) {
-        FF_PARFOR_START_IDX(pf,parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+        FF_PARFOR_START_IDX(this,parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(ff_start_idx, ff_stop_idx,_ff_thread_id);            
-        } FF_PARFOR_STOP(pf);
+        } FF_PARFOR_STOP(this);
     }
 
     /**
@@ -317,13 +318,13 @@ public:
                                     const Function& f, const long nw=FF_AUTO) {
         if (grain==0 || nw==1) {
             // Divide in evenly partioned parts
-            FF_PARFOR_START(pf, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
+            FF_PARFOR_START(this, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
                 f(parforidx);            
-            } FF_PARFOR_STOP(pf);
+            } FF_PARFOR_STOP(this);
         } else {
-            FF_PARFOR_T_START_STATIC(pf, int, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
+            FF_PARFOR_T_START_STATIC(this, int, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
                 f(parforidx);
-            } FF_PARFOR_T_STOP(pf,int);
+            } FF_PARFOR_T_STOP(this,int);
         }
     }
 };
@@ -348,9 +349,19 @@ public:
   */
 
 template<typename T>
-class ParallelForReduce {
-protected:
-    ff_forall_farm<forallreduce_W<T> > * pfr; 
+class ParallelForReduce: public ff_forall_farm<forallreduce_W<T> > {
+public:
+    /**
+     * @brief Constructor
+     * @param maxnw Maximum number of worker threads
+     * @param spinwait \p true for noblocking support (run-time thread
+     * will never suspend, even between successive calls to \p parallel_for
+     * and \p parallel_reduce, useful when they are called in sequence on
+     * small kernels), \p false blocking support
+     */
+    explicit ParallelForReduce(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
+        ff_forall_farm<forallreduce_W<T> >(maxnw,spinwait,false,spinbarrier) {}
+
 
     // this constructor is useful to skip loop warmup and to disable spinwait
     /**
@@ -363,32 +374,25 @@ protected:
      * @param skipWarmup Skip warmup phase (autotuning)
      */
     ParallelForReduce(const long maxnw, bool spinWait, bool skipWarmup, bool spinbarrier): 
-        pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,false, true, false)) {}
-public:
-    /**
-     * @brief Constructor
-     * @param maxnw Maximum number of worker threads
-     * @param spinwait \p true for noblocking support (run-time thread
-     * will never suspend, even between successive calls to \p parallel_for
-     * and \p parallel_reduce, useful when they are called in sequence on
-     * small kernels), \p false blocking support
-     */
-    explicit ParallelForReduce(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
-        pfr(new ff_forall_farm<forallreduce_W<T> >(maxnw,spinwait,false,spinbarrier)) {}
+        ff_forall_farm<forallreduce_W<T> >(maxnw,false, true, false) {}
 
-    ~ParallelForReduce()                { if (pfr) { FF_PARFORREDUCE_DONE(pfr); pfr=nullptr; }}
+
+    ~ParallelForReduce()                { 
+        ff_forall_farm<forallreduce_W<T> >::stop();
+        ff_forall_farm<forallreduce_W<T> >::wait();
+    }
 
     // By calling this method with 'true' the scheduler will be disabled,
     // to restore the usage of the scheduler thread just pass 'false' as 
     // parameter
     inline void disableScheduler(bool onoff=true) { 
-        pfr->disableScheduler(onoff);
+        ff_forall_farm<forallreduce_W<T> >::disableScheduler(onoff);
     }
 
     // It puts all spinning threads to sleep. It does not disable the spinWait flag
     // so at the next call, threads start spinning again.
     inline int threadPause() {
-        return pfr->stopSpinning();
+        return ff_forall_farm<forallreduce_W<T> >::stopSpinning();
     }
 
     /* -------------------- parallel_for -------------------- */
@@ -408,9 +412,9 @@ public:
     template <typename Function>
     inline void parallel_for(long first, long last, const Function& f, 
                              const long nw=FF_AUTO) {
-        FF_PARFOR_T_START(pfr, T, parforidx,first,last,1,PARFOR_STATIC(0),nw) {
+        FF_PARFOR_T_START(this, T, parforidx,first,last,1,PARFOR_STATIC(0),nw) {
             f(parforidx);            
-        } FF_PARFOR_T_STOP(pfr,T);
+        } FF_PARFOR_T_STOP(this,T);
     }
     /**
      * \brief Parallel for region (step) - static
@@ -428,9 +432,9 @@ public:
     template <typename Function>
     inline void parallel_for(long first, long last, long step, const Function& f, 
                              const long nw=FF_AUTO) {
-        FF_PARFOR_T_START(pfr, T, parforidx,first,last,step,PARFOR_STATIC(0),nw) {
+        FF_PARFOR_T_START(this, T, parforidx,first,last,step,PARFOR_STATIC(0),nw) {
             f(parforidx);            
-        } FF_PARFOR_T_STOP(pfr,T);
+        } FF_PARFOR_T_STOP(this,T);
     }
     /**
      * @brief Parallel for region (step, grain) - dynamic
@@ -451,9 +455,9 @@ public:
     template <typename Function>
     inline void parallel_for(long first, long last, long step, long grain, 
                              const Function& f, const long nw=FF_AUTO) {
-        FF_PARFOR_T_START(pfr, T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+        FF_PARFOR_T_START(this, T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(parforidx);            
-        } FF_PARFOR_STOP(pfr);
+        } FF_PARFOR_STOP(this);
     }    
     /**
      * @brief Parallel for region with threadID (step, grain, thid) - dynamic
@@ -473,9 +477,9 @@ public:
     template <typename Function>
     inline void parallel_for_thid(long first, long last, long step, long grain, 
                                   const Function& f, const long nw=FF_AUTO) {
-        FF_PARFOR_T_START(pfr,T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+        FF_PARFOR_T_START(this,T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(parforidx,_ff_thread_id);            
-        } FF_PARFOR_T_STOP(pfr,T);
+        } FF_PARFOR_T_STOP(this,T);
     }    
     /**
      * @brief Parallel for region with indexes ranges (step, grain, thid, idx) -
@@ -504,9 +508,9 @@ public:
     inline void parallel_for_idx(long first, long last, long step, long grain, 
                                   const Function& f, const long nw=FF_AUTO) {
 
-        FF_PARFOR_T_START_IDX(pfr,T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+        FF_PARFOR_T_START_IDX(this,T, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             f(ff_start_idx, ff_stop_idx,_ff_thread_id);            
-        } FF_PARFOR_T_STOP(pfr,T);
+        } FF_PARFOR_T_STOP(this,T);
     }    
     /**
      * \brief Parallel for region (step) - static
@@ -526,13 +530,13 @@ public:
     inline void parallel_for_static(long first, long last, long step, long grain, 
                                     const Function& f, const long nw=FF_AUTO) {
         if (grain==0 || nw==1) {
-            FF_PARFOR_T_START(pfr, T, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
+            FF_PARFOR_T_START(this, T, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
                 f(parforidx);            
-            } FF_PARFOR_T_STOP(pfr,T);
+            } FF_PARFOR_T_STOP(this,T);
         } else {
-            FF_PARFOR_T_START_STATIC(pfr, T, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
+            FF_PARFOR_T_START_STATIC(this, T, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
                 f(parforidx);
-            } FF_PARFOR_T_STOP(pfr,T);
+            } FF_PARFOR_T_STOP(this,T);
         }
     }
 
@@ -561,9 +565,9 @@ public:
                                 long first, long last, 
                                 const Function& partialreduce_body, const FReduction& finalreduce_body,
                                 const long nw=FF_AUTO) {
-        FF_PARFORREDUCE_START(pfr, var, identity, parforidx, first, last, 1, PARFOR_STATIC(0), nw) {
+        FF_PARFORREDUCE_START(this, var, identity, parforidx, first, last, 1, PARFOR_STATIC(0), nw) {
             partialreduce_body(parforidx, var);
-        } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce_body);
+        } FF_PARFORREDUCE_F_STOP(this, var, finalreduce_body);
     }
     /**
      * \brief Parallel reduce (step)
@@ -591,9 +595,9 @@ public:
                                 long first, long last, long step, 
                                 const Function& body, const FReduction& finalreduce,
                                 const long nw=FF_AUTO) {
-        FF_PARFORREDUCE_START(pfr, var, identity, parforidx,first,last,step,PARFOR_STATIC(0),nw) {
+        FF_PARFORREDUCE_START(this, var, identity, parforidx,first,last,step,PARFOR_STATIC(0),nw) {
             body(parforidx, var);            
-        } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
+        } FF_PARFORREDUCE_F_STOP(this, var, finalreduce);
     }
     /**
      * \brief Parallel reduce (step, grain)
@@ -621,9 +625,9 @@ public:
                                 long first, long last, long step, long grain, 
                                 const Function& body, const FReduction& finalreduce,
                                 const long nw=FF_AUTO) {
-        FF_PARFORREDUCE_START(pfr, var, identity, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+        FF_PARFORREDUCE_START(this, var, identity, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             body(parforidx, var);            
-        } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
+        } FF_PARFORREDUCE_F_STOP(this, var, finalreduce);
     }
 
     template <typename Function, typename FReduction>
@@ -631,9 +635,9 @@ public:
                                      long first, long last, long step, long grain,
                                      const Function& body, const FReduction& finalreduce,
                                      const long nw=FF_AUTO) {
-        FF_PARFORREDUCE_START(pfr, var, identity, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+        FF_PARFORREDUCE_START(this, var, identity, parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
             body(parforidx, var, _ff_thread_id);
-        } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
+        } FF_PARFORREDUCE_F_STOP(this, var, finalreduce);
     }
 
     /**
@@ -659,13 +663,13 @@ public:
                                        const Function& body, const FReduction& finalreduce,
                                        const long nw=FF_AUTO) {
         if (grain==0 || nw==1) {
-            FF_PARFORREDUCE_START(pfr, var, identity, parforidx,first,last,step,grain,nw) {
+            FF_PARFORREDUCE_START(this, var, identity, parforidx,first,last,step,grain,nw) {
                 body(parforidx, var);            
-            } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
+            } FF_PARFORREDUCE_F_STOP(this, var, finalreduce);
         } else {
-            FF_PARFORREDUCE_START_STATIC(pfr, var, identity, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
+            FF_PARFORREDUCE_START_STATIC(this, var, identity, parforidx,first,last,step,PARFOR_STATIC(grain),nw) {
                 body(parforidx, var);
-            } FF_PARFORREDUCE_F_STOP(pfr, var, finalreduce);
+            } FF_PARFORREDUCE_F_STOP(this, var, finalreduce);
         }
     }
     
@@ -677,9 +681,9 @@ public:
 
 //! ParallelForPipeReduce class
 template<typename task_t>
-class ParallelForPipeReduce {
+class ParallelForPipeReduce: public ff_pipeline {
 protected:
-    ff_forall_farm<forallpipereduce_W> *pfr; 
+    ff_forall_farm<forallpipereduce_W> pfr; 
     struct reduceStage: ff_minode {        
         typedef std::function<void(const task_t &)> F_t;
         inline void *svc(void *t) {
@@ -692,53 +696,52 @@ protected:
 
         F_t F;
     } reduce;
-    ff_pipe<task_t>  pipe;
 
 public:
     explicit ParallelForPipeReduce(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
-        pfr(new ff_forall_farm<forallpipereduce_W>(maxnw,false,true,false)), // skip loop warmup and disable spinwait/spinbarrier
-        pipe(pfr,&reduce) {
-        
+        pfr(maxnw,false,true,false) // skip loop warmup and disable spinwait/spinbarrier
+    {
+        ff_pipeline::add_stage(&pfr);
+        ff_pipeline::add_stage(&reduce);
+
         // required to avoid error
-        pfr->remove_collector();
+        pfr.remove_collector();
 
         // avoiding initial barrier
-        if (pipe.dryrun()<0)  // preparing all connections
+        if (ff_pipeline::dryrun()<0)  // preparing all connections
             error("ParallelForPipeReduce: preparing pipe\n");
         
         // warmup phase
-        pfr->resetskipwarmup();
+        pfr.resetskipwarmup();
         auto r=-1;
-        if (pfr->run_then_freeze() != -1)         
+        if (pfr.run_then_freeze() != -1)         
             if (reduce.run_then_freeze() != -1)
-                r = pipe.wait_freezing();            
+                r = ff_pipeline::wait_freezing();            
         if (r<0) error("ParallelForPipeReduce: running pipe\n");
 
 
         if (spinwait) { // NOTE: spinning is enabled only for the Map part and not for the Reduce part
-            if (pfr->enableSpinning() == -1)
+            if (pfr.enableSpinning() == -1)
                 error("ParallelForPipeReduce: enabling spinwait\n");
         }
     }
     
-    ~ParallelForPipeReduce()                { 
-        if (pfr) { 
-            FF_PARFOR_DONE(pfr); pfr=nullptr;
-            reduce.wait(); 
-        }
+    ~ParallelForPipeReduce() {
+        pfr.stop(); pfr.wait();
+        reduce.wait(); 
     }
 
     // By calling this method with 'true' the scheduler will be disabled,
     // to restore the usage of the scheduler thread just pass 'false' as 
     // parameter
     inline void disableScheduler(bool onoff=true) { 
-        pfr->disableScheduler(onoff);
+        pfr.disableScheduler(onoff);
     }
 
     // It puts all spinning threads to sleep. It does not disable the spinWait flag
     // so at the next call, threads start spinning again.
     inline int threadPause() {
-        return pfr->stopSpinning();
+        return pfr.stopSpinning();
     }
 
 
@@ -746,14 +749,14 @@ public:
     inline void parallel_for_idx(long first, long last, long step, long grain, 
                                  const Function& Map, const long nw=FF_AUTO) {
         
-        pfr->setloop(first,last,step,grain,nw);
-        pfr->setF(Map);
+        pfr.setloop(first,last,step,grain,nw);
+        pfr.setF(Map);
         auto donothing=[](task_t) { };
         reduce.setF(donothing);
         auto r=-1;
-        if (pfr->run_then_freeze(nw) != -1)
+        if (pfr.run_then_freeze(nw) != -1)
             if (reduce.run_then_freeze(nw) != -1)
-                r = pipe.wait_freezing();                               
+                r = ff_pipeline::wait_freezing();                               
         if (r<0) error("ParallelForPipeReduce: parallel_for_idx, starting pipe\n");      
     }
 
@@ -762,13 +765,13 @@ public:
                                     const Function& Map, const FReduction& Reduce,
                                     const long nw=FF_AUTO) {
         
-        pfr->setloop(first,last,step,grain,nw);
-        pfr->setF(Map);
+        pfr.setloop(first,last,step,grain,nw);
+        pfr.setF(Map);
         reduce.setF(Reduce);
         auto r=-1;
-        if (pfr->run_then_freeze(nw) != -1)
+        if (pfr.run_then_freeze(nw) != -1)
             if (reduce.run_then_freeze(nw) != -1)
-                r = pipe.wait_freezing();            
+                r = ff_pipeline::wait_freezing();            
         if (r<0) error("ParallelForPipeReduce: parallel_reduce_idx, starting pipe\n");
     }
 };

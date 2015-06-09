@@ -164,7 +164,6 @@ class TrajectoriesAlignment: public ff_node {
 public:
   TrajectoriesAlignment(int nsims) :
   n_simulations(nsims),
-  n_monitors(1),
   n_samples(NOFFLOADS * POINTSPEROFFLOAD)
   {
     //sampling queues
@@ -228,7 +227,6 @@ public:
 
 private:
   unsigned int n_simulations;
-  unsigned int n_monitors;
   int n_samples;
   //sampling queues:
   // - one for each sim.
@@ -351,8 +349,7 @@ class WindowsGenerator: public ff_node {
 public:
   WindowsGenerator(int nsims) :
   n_simulations(nsims),
-  n_monitors(1),
-  time_limit(0.1 * NOFFLOADS * POINTSPEROFFLOAD)
+  n_monitors(1)
   {
     //stat windows
     for(int i=0; i<n_monitors; ++i)
@@ -394,7 +391,6 @@ public:
 private:
   int n_simulations;
   int n_monitors;
-  double time_limit;
   //statistical windows (one for each monitor)
   vector<Stat_Window<double> *> stat_windows;
 };
@@ -532,9 +528,6 @@ public:
 
 private:
   int n_monitors;
-  int n_engines;
-  double sampling_period;
-  double time_limit;
   vector<Stat_Window<double> *> *stat_windows; //the most recent stat. windows
   int n_stat_workers;
   ff_farm<> *St;

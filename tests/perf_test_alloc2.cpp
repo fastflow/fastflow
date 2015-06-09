@@ -307,12 +307,18 @@ private:
 class Collector: public ff_node {
 public:
     Collector(int itemsize, ff_gatherer*const gt):itemsize(itemsize),gt(gt) {}
-
+    
     int svc_init() {
 #if defined(USE_PROC_AFFINITY)
         if (ff_mapThreadToCpu(collector_mapping)!=0)
             printf("Cannot map Collector to CPU %d\n",collector_mapping);
         //else  printf("Collector mapped to CPU %d\n", collector_mapping);                                                                                                                                         
+#endif
+#if !defined(USE_TBB)
+        itemsize = 0;          // just to avoid warnings
+#endif
+#if !defined(DONT_USE_FFA)
+        gt->get_channel_id();  // just to avoid warnings
 #endif
         return 0;
     }
