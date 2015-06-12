@@ -196,8 +196,10 @@ int main(int argc, char *argv[]) {
         return static_cast<Task*>(GO_ON);
     };
 
+    ff_node_F<Task> Reader(reader);
     ff_mapOCL<Task, oclTask> sobel(mapf); // OpenCL map node
-    ff_pipe<Task> pipe(reader, &sobel, writer);
+    ff_node_F<Task> Writer(writer);
+    ff_Pipe<> pipe(Reader, sobel, Writer);
     if (pipe.run_and_wait_end()<0) {
         error("running pipeline\n");
         return -1;
