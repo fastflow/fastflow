@@ -838,6 +838,7 @@ private:
     template<typename IN=char,typename OUT=IN>
     class ff_Pipe: public ff_pipeline {
     private:
+#ifndef __CUDACC__
         // 
         // Thanks to Suter Toni (HSR) for suggesting the following code for checking
         // correct input-output types ordering.
@@ -855,6 +856,7 @@ private:
         struct valid_stage_types<std::unique_ptr<A>&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {}; 
         template<class A, class B, class... Bs>
         struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {}; 
+#endif
 
         // 
         // Thanks to Peter Sommerlad for suggesting the following simpler code
@@ -902,8 +904,10 @@ private:
          */
         template<typename... STAGES>
         ff_Pipe(STAGES &&...stages) {    // forwarding reference (aka universal reference)
-            static_assert(valid_stage_types<STAGES...>{}, "Input & output types of the pipe's stages don't match");
-            this->add2pipeall(stages...); //this->add2pipeall(std::forward<STAGES>(stages)...); 
+#ifndef __CUDACC__
+        	static_assert(valid_stage_types<STAGES...>{}, "Input & output types of the pipe's stages don't match");
+#endif
+        	this->add2pipeall(stages...); //this->add2pipeall(std::forward<STAGES>(stages)...);
         }
         /**
          * \brief Create a pipeline (with input stream). Run with \p run_and_wait_end or \p run_the_freeze.
@@ -919,9 +923,11 @@ private:
          */
         template<typename... STAGES>
         explicit ff_Pipe(bool input_ch, STAGES &&...stages):ff_pipeline(input_ch) {
-            static_assert(valid_stage_types<STAGES...>{}, 
+#ifndef __CUDACC__
+        	static_assert(valid_stage_types<STAGES...>{},
                           "Input & output types of the pipe's stages don't match");
-            this->add2pipeall(stages...); 
+#endif
+        	this->add2pipeall(stages...);
         }
         
         ~ff_Pipe() {
