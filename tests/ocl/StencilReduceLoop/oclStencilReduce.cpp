@@ -24,11 +24,13 @@
  *
  ****************************************************************************
  */
-/* Author: Massimo Torquati
- *         torquati@di.unipi.it  massimotor@gmail.com
+/* Author: Maurizio Drocco
+ *         
  */
 
-#define FF_OCL
+#if !defined(FF_OPENCL)
+#define FF_OPENCL
+#endif
 
 #include <ff/pipeline.hpp>
 #include <ff/stencilReduceOCL.hpp>
@@ -43,13 +45,12 @@ using namespace ff;
 #define NACCELERATORS 2
 #define WINWIDTH 5
 
-unsigned int niters;
+size_t niters;
 typedef int basictype;
 
-FF_OCL_STENCIL_COMBINATOR(reducef, int, x, y, return (x+y);)
-;
+FF_OCL_STENCIL_COMBINATOR(reducef, int, x, y, return (x+y) );
 
-FF_OCL_STENCIL_ELEMFUNC(mapf, int, N, i, in, i_, int, env, char, env2,
+FF_OCL_STENCIL_ELEMFUNC1(mapf, int, N, i, in, i_, int, env,
 		int res = in[i_];
 	//if(i>0) res += in[i_-1]; if(i<(N-1)) res += in[i_+1];
 	++res;
@@ -141,7 +142,7 @@ void check(basictype *M, basictype r, int size) {
 		//std::cout <<"expected REDUCE = " << red << " (max " << std::numeric_limits<basictype>::max() << ")\n";
 }
 
-struct oclTask: public baseOCLTask<oclTask, basictype, int, int> {
+struct oclTask: public baseOCLTask<oclTask, basictype, int> {
 	oclTask() :
 			M_in(NULL), M_out(NULL), result(0), size(0), env(NULL) {
 	}
@@ -155,13 +156,12 @@ struct oclTask: public baseOCLTask<oclTask, basictype, int, int> {
 	}
 	void setTask(const oclTask *t) {
 		assert(t);
-		setInPtr(t->M_in);
-		setSizeIn(t->size);
+		setInPtr(t->M_in, t->size);
 		setOutPtr(t->M_out);
-		setEnvPtr1(t->env);
+		setEnvPtr(t->env, t->size);
 		setReduceVar(&(t->result));
 	}
-	bool iterCondition(Tin x, unsigned int iter) {
+	bool iterCondition(const Tin &x, size_t iter) {
 		return iter < niters;
 	}
 
@@ -229,8 +229,7 @@ int main(int argc, char * argv[]) {
 	int *env = new int[size];
 	init(M_in, M_out, env, size);
 	oclTask oclt(M_in, M_out, env, size);
-	ff_stencilReduceLoopOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf,
-			reducef, 0, nacc, WINWIDTH);
+	ff_stencilReduceLoopOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf,	reducef, 0, nacc, WINWIDTH);
 	oclStencilReduceOneShot.run_and_wait_end();
 	//print_res("INPUT", M_in, size);
 	//print_res("oneshot", M_out, oclStencilReduceOneShot.getReduceVar(), size);
