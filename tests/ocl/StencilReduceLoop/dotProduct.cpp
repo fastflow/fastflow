@@ -30,19 +30,26 @@
  * Date:   October 2014
  */
 
-#include <ff/mapOCL.hpp>
+#if !defined(FF_OPENCL)
+#define FF_OPENCL
+#endif
+
+#include <ff/stencilReduceOCL.hpp>
 
 using namespace ff;
 
 // the corresponding OpenCL type is in the (local) file 'ff_opencl_datatypes.cl'
 struct mypair { float a; float b; };
 
-FFMAPFUNC2(mapf, float, mypair, p, 
-          return (p.a * p.b);
-          );
-FFREDUCEFUNC(reducef, float, x, y, 
+
+FF_OCL_MAP_ELEMFUNC2(mapf, float, mypair, elem, 
+                    return (elem.a * elem.b);
+);
+
+FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
              return (x+y); 
              );
+
 
 struct oclTask: public baseOCLTask<oclTask, mypair, float> {
     oclTask():M(NULL),Mout(NULL),result(0.0), size(0) {}
@@ -53,10 +60,9 @@ struct oclTask: public baseOCLTask<oclTask, mypair, float> {
     ~oclTask() { if (Mout) delete [] Mout; }
     void setTask(const oclTask *t) { 
        assert(t);
-       setInPtr(t->M);
-       setSizeIn(t->size);
-       setReduceVar(&(t->result));
+       setInPtr(t->M, t->size);
        setOutPtr(t->Mout);
+       setReduceVar(&(t->result));
      }
 
     mypair *M;
@@ -70,13 +76,23 @@ int main(int argc, char * argv[]) {
     printf("arraysize = %ld\n", size);
 
     mypair *M        = new mypair[size];
-    for(size_t j=0;j<size;++j) {M[j].a=j*1.0; M[j].b=j*2.0;}
+    for(size_t j=0;j<size;++j) {M[j].a=j*1.0; M[j].b=1; /*j*2.0;*/}
 
+#if defined(CHECK)
+    float r = 0.0;
+    for(size_t j=0;j<size;++j) {
+        r += M[j].a * M[j].b;
+    }
+#endif
     oclTask oclt(M, size);
-    ff_mapreduceOCL<oclTask> oclMR(oclt, mapf, reducef);
+    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0.0, 1);
     oclMR.run_and_wait_end();
 
     delete [] M;
     printf("res=%.2f\n", oclt.result);
+#if defined(CHECK)
+    if (r != oclt.result) printf("Wrong result, should be %.2f\n", r);
+    else printf("OK\n");
+#endif
     return 0;
 }

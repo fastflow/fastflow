@@ -28,14 +28,17 @@
  *         torquati@di.unipi.it  massimotor@gmail.com
  */
 
-#define FF_OCL
+#if !defined(FF_OPENCL)
+#define FF_OPENCL
+#endif
+
 #include <ff/stencilReduceOCL.hpp>
 #include <ff/farm.hpp>
 #include <ff/pipeline.hpp>
 
 using namespace ff;
 
-FF_OCL_MAP_ELEMFUNC(mapf, float, elem, char, env1, char, env2,
+FF_OCL_MAP_ELEMFUNC(mapf, float, elem,
 		return (elem+1.0););
 
 // stream task
@@ -53,9 +56,8 @@ struct oclTask: public baseOCLTask<myTask, float> {
 	}
 	void setTask(const myTask *task) {
 		assert(task);
-		setInPtr(task->M);
+		setInPtr(task->M, task->size);
 		setOutPtr(task->M);
-		setSizeIn(task->size);
 	}
 };
 

@@ -28,8 +28,9 @@
  *         torquati@di.unipi.it  massimotor@gmail.com
  */
 
-#define FF_OCL
-#define NDEV 4
+#if !defined(FF_OPENCL)
+#define FF_OPENCL
+#endif
 
 #include <ff/stencilReduceOCL.hpp>
 using namespace ff;
@@ -43,8 +44,7 @@ struct oclTask: public baseOCLTask<oclTask, float> {
     oclTask(float *M, size_t size):M(M),result(0.0),size(size) {}
     void setTask(const oclTask *t) { 
         assert(t);
-        setInPtr(t->M);
-        setSizeIn(t->size);
+        setInPtr(t->M, t->size);
         setReduceVar(&(t->result));
     }
 
@@ -66,7 +66,7 @@ int main(int argc, char * argv[]) {
     for(size_t j=0;j<size;++j) M[j]=j + 1.0;
 
     oclTask oclt(M, size);
-    ff_reduceOCL_1D<oclTask> oclReduce(oclt, reducef, 0, NDEV);
+    ff_reduceOCL_1D<oclTask> oclReduce(oclt, reducef, 0.0);
     oclReduce.run_and_wait_end();
 
     delete [] M;

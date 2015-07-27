@@ -55,8 +55,7 @@ struct oclTask: public baseOCLTask<myTask, float> {
     oclTask() {}
     void setTask(const myTask *task) { 
         assert(task);
-        setInPtr(task->M);
-        setSizeIn(task->size);
+        setInPtr(task->M, task->size);
         setReduceVar(&task->sum);
     }
 

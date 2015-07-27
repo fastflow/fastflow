@@ -28,13 +28,16 @@
  *         torquati@di.unipi.it  massimotor@gmail.com
  */
 
-#define FF_OCL
-#define NDEV 4
+#if !defined(FF_OPENCL)
+#define FF_OPENCL
+#endif
 
 #include <ff/stencilReduceOCL.hpp>
+
 using namespace ff;
 
-FF_OCL_MAP_ELEMFUNC(mapf, float, elem, char, env1, char, env2,
+
+FF_OCL_MAP_ELEMFUNC(mapf, float, elem, 
           return (elem+1.0);
           );
 
@@ -43,9 +46,8 @@ struct oclTask: public baseOCLTask<oclTask, float> {
     oclTask(float *M, size_t size):M(M),size(size) {}
     void setTask(const oclTask *t) { 
         assert(t);
-        setInPtr(t->M);
+        setInPtr(t->M, t->size);
         setOutPtr(t->M);
-        setSizeIn(t->size);
     }
 
     float *M;
@@ -61,7 +63,7 @@ int main(int argc, char * argv[]) {
     for(size_t j=0;j<size;++j) M[j]=j;
 
     oclTask oclt(M, size);
-    ff_mapOCL_1D<oclTask> oclMap(oclt, mapf, NDEV);
+    ff_mapOCL_1D<oclTask> oclMap(oclt, mapf);
     oclMap.run_and_wait_end();
 
 #if defined(CHECK)
