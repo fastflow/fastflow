@@ -29,12 +29,13 @@
 #ifndef FF_PIPELINE_HPP
 #define FF_PIPELINE_HPP
 
+#include <cassert>
 #include <memory>
 #include <functional>
 #include <ff/svector.hpp>
 #include <ff/fftree.hpp>
 #include <ff/node.hpp>
-
+#include <ff/ocl/clEnvironment.hpp>
 
 namespace ff {
 
@@ -235,6 +236,7 @@ public:
         out_buffer_entries(out_buffer_entries) {            
         //fftree stuff
         fftree_ptr = new fftree(this, PIPE);
+        assert(fftree_ptr);
     }
     
     /**
@@ -259,6 +261,8 @@ public:
         if (fftree_ptr) { delete fftree_ptr; fftree_ptr=NULL; }
     }
 
+
+
     /*  WARNING: if these methods are called after prepare (i.e. after having called
      *  run_and_wait_end/run_then_freeze/run/....) they have no effect.     
      *
@@ -279,9 +283,13 @@ public:
             ff_node::setMultiInput();
         nodes_list.push_back(s);        
         //fftree stuff
-        if (s->fftree_ptr == NULL)
-        	s->fftree_ptr = new fftree(s, WORKER);
-        fftree_ptr->add_child(s->fftree_ptr);
+        fftree *treeptr = s->getfftree();
+        if (treeptr==NULL) {
+            treeptr = new fftree(s, s->getFFType());
+            assert(treeptr);
+        	s->setfftree(treeptr);
+        }
+        fftree_ptr->add_child(treeptr);
         return 0;
     }
 
@@ -387,6 +395,13 @@ public:
                 return -1;
             }
             barrier->barrierSetup(nthreads);
+
+            // check if we have to setup the OpenCL environment !
+            if (fftree_ptr->hasOpenCLNode()) {
+                // setup openCL environment
+                clEnvironment::instance();
+            }
+
         }
         if (!prepared) if (prepare()<0) return -1;
 

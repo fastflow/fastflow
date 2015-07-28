@@ -37,13 +37,19 @@
  *  Public License.
  *
  ****************************************************************************
-  Mehdi Goli: m.goli@rgu.ac.uk*/
+ */
+
+/*  Mehdi Goli:            m.goli@rgu.ac.uk    goli.mehdi@gmail.com
+ *  Massimo Torquati:      torquati@di.unipi.it
+ *
+ *
+ */
 
 #ifndef FF_OCLNODE_HPP
 #define FF_OCLNODE_HPP
 
-#include <ff/node.hpp>
 #include <ff/ocl/clEnvironment.hpp>
+#include <ff/node.hpp>
 
 namespace ff{
 
@@ -61,117 +67,96 @@ namespace ff{
  *
  *
  */
-class ff_oclNode : public ff_node, public Ocl_Utilities { 
+class ff_oclNode : public ff_node {
 public:
+    enum device_type { CPU, GPU, ANY};
 
-    /**
-     * \brief Setup a OCL device
-     *
-     * \param id is the identifier of the opencl device
-     */
-    virtual void svc_SetUpOclObjects(cl_device_id id)=0;
+    virtual void setDeviceType(device_type dt = device_type::ANY) { dtype = dt; }
     
-    /**
-     * \brief Releases a OCL device
-     *    
-     */
-    virtual void svc_releaseOclObjects()=0;
+    // returns the kind of node
+    virtual fftype getFFType() const   { return OCL_WORKER; }
+
+    int getOCLID() const { return oclId; }
      
 protected:
-    cl_device_id baseclass_ocl_node_deviceId; // is the id which is provided for user
-
-    /**
-     * \brief Initializes OpenCL instance
-     *
-     * \return If successful \p true is returned, otherwise \p false is
-     * returned.
-     */
-    bool initOCLInstance() {
-        Environment::instance()->createEntry(tId, this);
-        if(tId>=0) {
-            baseclass_ocl_node_deviceId = Environment::instance()->getDeviceId(tId);
-            return true;
-        }
-        return false;
-    }
-    
     /**
      * \brief Constructor
      *
      * It construct the OpenCL node for the device.
      *
      */
-    ff_oclNode():baseclass_ocl_node_deviceId(NULL),tId(-1) { }
+    ff_oclNode():oclId(-1), deviceId(NULL) {}
     
-    /**
-     * \brief Device rules
-     *
-     * It defines the rules for the device.
-     *
-     * \param id is the identifier of the device
-     *
-     * \return \p true is always returned
-     */
-    bool  device_rules(cl_device_id id){ return true;}
     
-    /**
-     * \brief Creates OpenCL
-     *
-     */
-    inline void svc_createOCL(){
-        if (baseclass_ocl_node_deviceId==NULL) {
-            if (initOCLInstance()){
-                svc_SetUpOclObjects(baseclass_ocl_node_deviceId);
-            }else{
-                error("FATAL ERROR: Instantiating the Device: Failed to instatiate the device!\n");
-                abort();
-            }
-        }
-        else if (evaluation()) {
-            svc_releaseOclObjects();
-            svc_SetUpOclObjects(baseclass_ocl_node_deviceId);
-        }
-    } 
-    
-    /**
-     * \brief Releases OpenCL
-     *
-     */
-    inline void svc_releaseOCL(){ 
-        svc_releaseOclObjects();
-    }
-    
-    /**
-     * \brief Evaluation
-     *
-     *
-     * \return If successful \p true, otherwise \p false
-     */
-    inline bool evaluation(){
-        cl_device_id nDId = Environment::instance()->reallocation(tId); 
-        if (nDId != baseclass_ocl_node_deviceId) {
-            baseclass_ocl_node_deviceId = nDId; 
-            return true;
-        }
-        return false;
-    }
-    
+    int svc_init() {
+        if (oclId < 0) oclId = clEnvironment::instance()->getOCLID();
 
-private:
-    int tId; // the node id
+        // initial static mapping
+        // A static greedy algorithm is used to allocate openCL components
+        switch (dtype) {
+        case ANY: {
+            ssize_t GPUdevId =clEnvironment::instance()->getGPUDevice();
+            if( (GPUdevId !=-1) && ( oclId < clEnvironment::instance()->getNumGPU())) { 
+                printf("%d: Allocated a GPU device, the id is %ld\n", oclId, GPUdevId);
+                deviceId=clEnvironment::instance()->getDevice(GPUdevId);
+                return 0;
+            }
+            // fall back to CPU either GPU has reached its max or there is no GPU available
+            ssize_t CPUdevId =clEnvironment::instance()->getCPUDevice();
+            if (CPUdevId != -1) {
+                printf("%d: Allocated a CPU device as either no GPU device is available or no GPU slot is available (cpuId=%ld)\n",oclId, CPUdevId);
+                deviceId=clEnvironment::instance()->getDevice(CPUdevId);
+                return 0;
+            }
+            printf("%d: cannot allocate neither a GPU nor a CPU device\n", oclId);            
+            return -1;
+        } break;
+        case GPU: {
+            ssize_t GPUdevId =clEnvironment::instance()->getGPUDevice();
+            if( (GPUdevId !=-1) && ( oclId < clEnvironment::instance()->getNumGPU())) { 
+                printf("%d: Allocated a GPU device, the id is %ld\n", oclId, GPUdevId);
+                deviceId=clEnvironment::instance()->getDevice(GPUdevId);
+                return 0;
+            }
+            printf("%d: cannot allocate a GPU device\n", oclId);            
+            return -1;
+        } break;
+        case CPU: {
+            ssize_t CPUdevId =clEnvironment::instance()->getCPUDevice();
+            if (CPUdevId != -1) {
+                printf("%d: Allocated a CPU device (cpuId=%ld)\n",oclId, CPUdevId);
+                deviceId=clEnvironment::instance()->getDevice(CPUdevId);        
+                return 0;
+            }
+            printf("%d: cannot allocate a CPU device\n", oclId);
+            return -1;
+        } break;
+        default : return -1;
+        }
+        return 0;
+    } 
+
+    void svc_end() {}
+
+protected:    
+    int            oclId;      // the OpenCL node id
+    cl_device_id   deviceId;   // is the id which is provided for user
+    device_type    dtype; 
 };
 
-template<typename T>
+template<typename IN, typename OUT=IN>
 struct ff_oclNode_t: ff_oclNode {
+    typedef IN  in_type;
+    typedef OUT out_type;
     ff_oclNode_t():
-        GO_ON((T*)FF_GO_ON),
-        EOS((T*)FF_EOS),
-        GO_OUT((T*)FF_GO_OUT),
-        EOS_NOFREEZE((T*)FF_EOS_NOFREEZE) {}
-    T *GO_ON, *EOS, *GO_OUT, *EOS_NOFREEZE;
+        GO_ON((OUT*)FF_GO_ON),
+        EOS((OUT*)FF_EOS),
+        GO_OUT((OUT*)FF_GO_OUT),
+        EOS_NOFREEZE((OUT*)FF_EOS_NOFREEZE) {}
+    OUT *GO_ON, *EOS, *GO_OUT, *EOS_NOFREEZE;
     virtual ~ff_oclNode_t()  {}
-    virtual T* svc(T*)=0;
-    inline  void *svc(void *task) { return svc(reinterpret_cast<T*>(task));};
+    virtual OUT* svc(IN*)=0;
+    inline  void *svc(void *task) { return svc(reinterpret_cast<IN*>(task));};
 };
 
 /*!
