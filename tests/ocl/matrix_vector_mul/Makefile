@@ -36,7 +36,7 @@
 FF_ROOT		= $(HOME)/fastflow
 OCL_ROOT        = /opt/AMDAPP
 
-CXX		= g++ -DCHECK #-DNO_DEFAULT_MAPPING
+CXX		= g++ -std=c++11 -DCHECK #-DNO_DEFAULT_MAPPING
 INCLUDES	= -I $(FF_ROOT)  -I $(OCL_ROOT)/include
 CXXFLAGS  	= -Wall 
 

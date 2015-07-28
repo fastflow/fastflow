@@ -29,20 +29,27 @@
  * Author: Massimo Torquati <torquati@di.unipi.it> 
  * Date:   October 2014
  */
+
+#if !defined(FF_OPENCL)
+#define FF_OPENCL
+#endif
+
 #include <cassert>
 #include <iostream>
-#include <ff/mapOCL.hpp>
+#include <ff/stencilReduceOCL.hpp>
 
 using namespace ff;
 
 /* --------------- OpenCL code ------------------- */
-FF_ARRAY2_CENV(mapf, float, float, V, cols, i, float, M,
-	       const long offset = i*cols;
-	       float sum       = 0.0;
-	       for(long j=0; j < cols; ++j)
-		   sum += M[offset + j] * V[j];
-	       return sum;
+FF_OCL_STENCIL_ELEMFUNC1(mapf, float, cols, i, V, i_, float, M,
+                         const long offset = i_*cols;
+                         float sum       = 0.0;
+                         for(long j=0; j < cols; ++j) {
+                             sum += M[offset + j] * V[j];
+                         }
+                         return sum;
 );
+
 
 /* this is the task used in the OpenCL map 
  * 
@@ -50,7 +57,8 @@ FF_ARRAY2_CENV(mapf, float, float, V, cols, i, float, M,
 struct oclTask: public baseOCLTask<oclTask, float, float> {
     oclTask() {}
     oclTask(size_t cols, size_t rows, float *M, float *V, float *R):
-        cols(cols),rows(rows),M(M),V(V),R(R),copy(true) {}
+        cols(cols),rows(rows),M(M),V(V),R(R),copy(true) {
+    }
 	
     void setTask(const oclTask *t) { 
         assert(t);
@@ -76,8 +84,9 @@ void checkResult(size_t cols, size_t rows, float *M, float *V, float *R) {
     bool wrong = false;
     for(size_t i=0;i<rows; ++i) {
         float sum = 0.0;
-        for(size_t j=0;j<cols; ++j)
+        for(size_t j=0;j<cols; ++j) {
             sum += M[i*cols + j] * V[j];
+        }
         if (R[i] != sum) {
             wrong = true;
             std::cerr << "Wrong result " << R[i] << " expected " << sum << "\n";
@@ -115,11 +124,12 @@ int main(int argc, char *argv[]) {
     for(size_t j=0;j<cols; ++j) V[j] = 1.0;
 
     oclTask oclt(cols, rows, M, V, R);
-    ff_mapOCL<oclTask> mv(oclt, mapf);
+    ff_mapOCL_1D<oclTask> mv(oclt, mapf);
 
     mv.run_then_freeze(); mv.wait_freezing();
 
     checkResult(cols,rows,M,V,R);
+
 
     // 2nd input
     for(size_t j=0;j<cols; ++j) V[j] = 2.0; 
@@ -141,12 +151,20 @@ int main(int argc, char *argv[]) {
     checkResult(cols,rows,M,V,R);
     delete [] M;
 
+
     // now change the environment 
     oclt.copyEnv(true);
     oclt.setM(M2);
     mv.setTask(oclt);
     mv.run_and_wait_end();
     checkResult(cols,rows,M2,V,R);
+
+    delete [] M2;
+    delete [] V;
+    delete [] R;
+
+    printf("DONE\n");
+    fflush(stdout);
 
     return 0;
 }
