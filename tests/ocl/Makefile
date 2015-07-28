@@ -12,7 +12,7 @@ else
   OPENCL = -lOpenCL
 endif
 
-FF_ROOT  = ../../../
+FF_ROOT  = ../../
 
 # 
 OCLFLAGS =
