@@ -251,8 +251,14 @@ public:
 
     	//fftree stuff
     	fftree_ptr = new fftree(this, FARM);
-    	fftree_ptr->add_child(lb->fftree_ptr = new fftree(lb, EMITTER));
-    	fftree_ptr->add_child(gt->fftree_ptr = new fftree(gt, COLLECTOR));
+        fftree *treeptr = new fftree(lb, EMITTER);
+        assert(treeptr);
+        lb->setfftree(treeptr);
+    	fftree_ptr->add_child(treeptr);
+        treeptr = new fftree(gt, COLLECTOR);
+        assert(treeptr);
+        gt->setfftree(treeptr);
+    	fftree_ptr->add_child(treeptr);
 
         assert(W.size()>0);
         add_workers(W);
@@ -311,10 +317,15 @@ public:
         lb(new lb_t(max_num_workers)),gt(new gt_t(max_num_workers)),
         workers(max_num_workers),fixedsize(fixedsize) {
 
-    	//fftree stuff
+        //fftree stuff
     	fftree_ptr = new fftree(this, FARM);
-    	fftree_ptr->add_child(lb->fftree_ptr = new fftree(lb, EMITTER));
-    	fftree_ptr->add_child(gt->fftree_ptr = NULL);
+        fftree *treeptr = new fftree(lb, EMITTER);
+        assert(treeptr);
+        lb->setfftree(treeptr);
+    	fftree_ptr->add_child(treeptr);
+        gt->setfftree(NULL);
+    	fftree_ptr->add_child(NULL);
+
 
         for(int i=0;i<max_num_workers;++i) workers[i]=NULL;
 
@@ -369,7 +380,7 @@ public:
         //fftree stuff
         if (fftree_ptr) { delete fftree_ptr; fftree_ptr=NULL; }
     }
-
+    
     /** 
      *
      *  \brief Adds the emitter
@@ -399,9 +410,9 @@ public:
             emitter->set_input_buffer(in);
         }
         int res = lb->set_filter(emitter);
-        if(res >= 0)
-        	//fftree stuff
-        	lb->fftree_ptr->do_comp = true;
+        if(res >= 0) {
+            lb->getfftree()->do_comp = true;  // fftree stuff
+        }
         return res;
     }
 
@@ -456,9 +467,13 @@ public:
 
         //fftree stuff
         for (size_t i = 0; i < w.size(); ++i) {
-        	if (w[i]->fftree_ptr == NULL)
-        		w[i]->fftree_ptr = new fftree(w[i], WORKER);
-        	fftree_ptr->add_child(w[i]->fftree_ptr);
+            fftree *treeptr = w[i]->getfftree();
+        	if (treeptr == NULL) {
+                treeptr = new fftree(w[i], w[i]->getFFType());
+                assert(treeptr);
+                w[i]->setfftree(treeptr);
+            }
+        	fftree_ptr->add_child(treeptr);
         }
 
         return 0;
@@ -506,11 +521,16 @@ public:
 #endif
         }
         
-        fftree_ptr->update_child(1, gt->fftree_ptr = new fftree(gt, COLLECTOR));
+        fftree *treeptr = new fftree(gt, COLLECTOR);
+        assert(treeptr);
+        gt->setfftree(treeptr);
+        fftree_ptr->update_child(1, treeptr);
+
         int res = gt->set_filter(c);
-        if(res >= 0 && c)
-        	//fftree stuff
-            gt->fftree_ptr->do_comp = true;
+
+        if(res >= 0 && c) {
+            gt->getfftree()->do_comp = true;          	//fftree stuff
+        }
         return res;
     }
     
@@ -592,7 +612,8 @@ public:
      */
     int remove_collector() { 
         collector_removed = true;
-        fftree_ptr->update_child(1, gt->fftree_ptr = NULL);
+        gt->setfftree(NULL);
+        fftree_ptr->update_child(1, NULL);
         return 0;
     }
 
