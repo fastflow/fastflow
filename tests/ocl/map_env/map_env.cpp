@@ -1,3 +1,7 @@
+#if !defined(FF_OPENCL)
+#define FF_OPENCL
+#endif
+
 #include <ff/stencilReduceOCL.hpp>
 using namespace ff;
 

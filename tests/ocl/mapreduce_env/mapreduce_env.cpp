@@ -1,15 +1,20 @@
-#include <ff/mapOCL.hpp>
+#if !defined(FF_OPENCL)
+#define FF_OPENCL
+#endif
+
+#include <ff/stencilReduceOCL.hpp>
 using namespace ff;
 
 // in place
-FF_ARRAY_CENV(mapfenv, float, M, size, k, env_t, env,
-	      (void)size;
-	      return env->coeff * M[k];
+FF_OCL_STENCIL_ELEMFUNC1(mapfenv, float, size, k, M, k_, env_t, env,
+			 (void)size;
+			 return env->coeff * M[k_];
 );
 
-FFREDUCEFUNC(reducef, float, x, y,
+FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
              return (x+y);
              );
+
 
 struct env_t {
     env_t() {}
@@ -46,9 +51,9 @@ int main(int argc, char * argv[]) {
     for(size_t j=0;j<size;++j) M[j]=j;
 
     Task task(M, 2, (long)size);
-    ff_mapreduceOCL<Task, oclTaskEnv> oclMR(task, mapfenv, reducef);
+    ff_mapReduceOCL_1D<Task, oclTaskEnv> oclMR(task, mapfenv, reducef);
     oclMR.run_and_wait_end();
-
+    
 #if defined(CHECK)
     printf("%g \n", task.result);
 #endif
