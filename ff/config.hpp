@@ -49,6 +49,12 @@
 //#define SPIN_USE_PAUSE 1
 
 
+/* To enable OPENCL support
+ *
+ */
+//#define FF_OPENCL 1 
+
+
 namespace ff {
 static const size_t FF_EOS           = (ULONG_MAX);  /// automatically propagated
 static const size_t FF_EOS_NOFREEZE  = (FF_EOS-0x1); /// non automatically propagated

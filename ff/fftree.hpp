@@ -18,14 +18,17 @@
  *
  ****************************************************************************
  */
-
 /*
  * fftree.hpp
  *
  *  Created on: 1 Oct 2014
  *      Author: drocco
+ *
+ *  Modified:  
+ *    - 20 Jul 2015   Massimo
+ *      added mutex to protect the roots set
+ *
  */
-
 #ifndef FFTREE_HPP_
 #define FFTREE_HPP_
 
@@ -36,11 +39,11 @@
 
 namespace ff {
 
+#undef DEBUG_FFTREE
+
+static pthread_mutex_t treeLock = PTHREAD_MUTEX_INITIALIZER;
 static std::set<fftree *> roots;
 
-enum fftype {
-	FARM, PIPE, EMITTER, WORKER, COLLECTOR
-};
 
 union ffnode_ptr {
 	ff_node *ffnode;
@@ -55,49 +58,84 @@ struct threadcount_t {
 };
 
 struct fftree {
-	bool isroot, do_comp;
+	bool isroot, do_comp, hasocl;
 	fftype nodetype;
 	std::vector<std::pair<fftree *, bool> > children;
 	ffnode_ptr ffnode;
 
 	fftree(ff_node *ffnode_, fftype nodetype_) :
 			nodetype(nodetype_) {
-		do_comp = (nodetype == WORKER);
+		do_comp = (nodetype == WORKER || nodetype == OCL_WORKER);
 		ffnode.ffnode = ffnode_;
 		isroot = ispattern();
-		if (isroot)
-			roots.insert(this);
+        hasocl = (nodetype == OCL_WORKER);
+		if (isroot){
+            pthread_mutex_lock(&treeLock);
+#if defined(DEBUG_FFTREE)
+            std::pair<std::set<fftree*>::iterator,bool> it;
+			it = roots.insert(this);
+            assert(it.second != false);
+#else
+            roots.insert(this);
+#endif
+            pthread_mutex_unlock(&treeLock);
+        }
 	}
 
 	fftree(ff_thread *ffnode_, fftype nodetype_) :
 			nodetype(nodetype_) {
-		do_comp = (nodetype == WORKER);
-		ffnode.ffthread = ffnode_;
+		do_comp = (nodetype == WORKER || nodetype == OCL_WORKER);
+        ffnode.ffthread = ffnode_;
 		isroot = ispattern();
-		if (isroot)
-			roots.insert(this);
+        hasocl = (nodetype == OCL_WORKER);
+		if (isroot) {
+            pthread_mutex_lock(&treeLock);
+#if defined(DEBUG_FFTREE)
+            std::pair<std::set<fftree*>::iterator,bool> it;
+			it = roots.insert(this);
+            assert(it.second != false);
+#else
+            roots.insert(this);
+#endif
+            pthread_mutex_unlock(&treeLock);
+        }
 	}
 
 	~fftree() {
 		for (size_t i = 0; i < children.size(); ++i)
 			if (children[i].first && !children[i].second)
 				delete children[i].first;
-		if (isroot)
-			roots.erase(this);
+		if (isroot) {
+            pthread_mutex_lock(&treeLock);
+#if defined(DEBUG_FFTREE)
+            std::set<fftree *>::iterator it = roots.find(this);
+            assert(it != roots.end());
+            roots.erase(it);
+#else
+            roots.erase(this);
+#endif
+            pthread_mutex_unlock(&treeLock);
+        }
 	}
 
 	void add_child(fftree *t) {
 		children.push_back(std::make_pair(t,t?t->ispattern():false));
-		if (t && t->isroot)
+		if (t && t->isroot) {
+            pthread_mutex_lock(&treeLock);
 			roots.erase(t);
+            pthread_mutex_unlock(&treeLock);
+        }
 	}
 
 	void update_child(unsigned int idx, fftree *t) {
 		if (children[idx].first && !children[idx].second)
 			delete children[idx].first;
 		children[idx] = std::make_pair(t,t?t->ispattern():false);
-		if (t && t->isroot)
+		if (t && t->isroot) {
+            pthread_mutex_lock(&treeLock);
 			roots.erase(t);
+            pthread_mutex_unlock(&treeLock);
+        }
 	}
 
 	std::string fftype_tostr(fftype t) {
@@ -110,21 +148,30 @@ struct fftree {
 			return "EMITTER";
 		case WORKER:
 			return "WORKER";
+        case OCL_WORKER:
+            return "OPENCL WORKER";
 		case COLLECTOR:
 			return "COLLECTOR";
 		}
 		return std::string("puppa"); //never reached
 	}
 
-	bool ispattern() {
+	bool ispattern() const {
 		return nodetype == FARM || nodetype == PIPE;
 	}
+
+    bool hasOpenCLNode() const { 
+        if (hasocl) return true;
+        for (size_t i = 0; i < children.size(); ++i)
+            if (children[i].first && children[i].first->hasOpenCLNode()) return true;
+        return false;
+    }
 
 	void print(std::ostream &os) {
 		os << (ispattern() ? "[" : "(") << fftype_tostr(nodetype);
 		if (do_comp)
 			os << " docomp";
-		for (unsigned long i = 0; i < children.size(); ++i) {
+		for (size_t i = 0; i < children.size(); ++i) {
 			if (children[i].first) {
 				os << " ";
 				children[i].first->print(os);
@@ -136,10 +183,10 @@ struct fftree {
 	size_t threadcount(threadcount_t *tc) {
 		size_t cnt = !ispattern();
 		if (cnt) {
-			tc->n_emitter += nodetype == EMITTER;
-			tc->n_emitter += nodetype == COLLECTOR;
-			tc->n_emitter += nodetype == WORKER;
-			tc->n_docomp += do_comp;
+			tc->n_emitter   += nodetype == EMITTER;
+			tc->n_collector += nodetype == COLLECTOR;
+			tc->n_workers   += (nodetype == WORKER || nodetype == OCL_WORKER);
+			tc->n_docomp    += do_comp;
 		}
 		for (size_t i = 0; i < children.size(); ++i)
 			if (children[i].first)

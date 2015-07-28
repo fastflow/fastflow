@@ -53,9 +53,13 @@ static void *EOS          = (void*)ff::FF_EOS;
 
 namespace ff {
 
-struct fftree;
-
-
+// fftree stuff
+struct fftree;   // forward declaration
+enum fftype {
+	FARM, PIPE, EMITTER, WORKER, OCL_WORKER, COLLECTOR
+};
+    
+    
 // TODO: Should be rewritten in terms of mapping_utils.hpp 
 #if defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
 
@@ -181,7 +185,6 @@ protected:
                 break;
             } else  {
                 ret = svc(NULL);
-                svc_releaseOCL();
             }
             svc_end();
             
@@ -239,24 +242,17 @@ protected:
         }
         return 0;
     }
+
+    fftree *getfftree() const   { return fftree_ptr;}
+    void setfftree(const fftree *ptr) { 
+        fftree_ptr=const_cast<fftree*>(ptr); 
+    }
     
 public:
  
     virtual void* svc(void * task) = 0;
     virtual int   svc_init() { return 0; };
     virtual void  svc_end()  {}
-
-    /*
-     * \brief The OpenCL initialisation
-     *
-     */
-    virtual void  svc_createOCL()  {}
-
-    /*
-     * \brief OpenCL finsalisation
-     *
-     */
-    virtual void  svc_releaseOCL() {}
 
     void set_barrier(BARRIER_T * const b) { barrier=b;}
 
@@ -351,10 +347,8 @@ public:
 
     inline int getTid() const { return tid; }
 
-    //fftree stuff
-    fftree *fftree_ptr;
-
 protected:
+    fftree       *  fftree_ptr;         /// fftree stuff
     unsigned        tid;
 private:
     BARRIER_T    *  barrier;            /// A \p Barrier object
@@ -660,6 +654,9 @@ protected:
 
     virtual inline void get_out_nodes(svector<ff_node*>&w) {}
 
+    // returns the kind of node
+    virtual inline fftype getFFType() const   { return WORKER; }
+
     /**
      * \brief Run the ff_node
      *
@@ -915,10 +912,6 @@ public:
 
     virtual const struct timeval getwstoptime() const { return wtstop;}    
 
-    virtual inline void svc_createOCL()  {} 
-
-    virtual inline void svc_releaseOCL() {}
-
 #if defined(TRACE_FASTFLOW)
     virtual void ffStats(std::ostream & out) {
         out << "ID: " << get_my_id()
@@ -960,12 +953,9 @@ public:
         end_callback_param = param;
     }
 
-    //fftree stuff
-    fftree *fftree_ptr;
-
 protected:
 
-    ff_node():fftree_ptr(NULL),in(0),out(0),myid(-1),CPUId(-1),
+    ff_node():in(0),out(0),myid(-1),CPUId(-1),
               myoutbuffer(false),myinbuffer(false),
               skip1pop(false), in_active(true), 
               multiInput(false), multiOutput(false), 
@@ -975,6 +965,9 @@ protected:
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
+        
+        fftree_ptr = NULL;
+
 #if defined(BLOCKING_MODE)
         atomic_long_set(&cons_counter, -1);
         atomic_long_set(&prod_counter, -1);
@@ -986,6 +979,11 @@ protected:
     virtual inline void input_active(const bool onoff) {
         if (in_active != onoff)
             in_active= onoff;
+    }
+
+    fftree *getfftree() const   { return fftree_ptr;}
+    void setfftree(const fftree *ptr) { 
+        fftree_ptr=const_cast<fftree*>(ptr); 
     }
 
 private:
@@ -1024,10 +1022,6 @@ private:
 
         inline bool get(void **ptr) { return filter->get(ptr);}
 
-        inline void svc_createOCL()  { filter-> svc_createOCL();}
-        
-        inline void svc_releaseOCL() { filter-> svc_releaseOCL();}
-
         void* svc(void * ) {
             void * task = NULL;
             void * ret = (void*)FF_EOS;
@@ -1038,8 +1032,6 @@ private:
 
             gettimeofday(&filter->wtstart,NULL);
             do {
-                svc_createOCL();
-
                 if (inpresent) {
                     if (!skipfirstpop) pop(&task); 
                     else skipfirstpop=false;
@@ -1153,6 +1145,9 @@ private:
 #endif
 
 protected:
+
+    fftree *fftree_ptr;       //fftree stuff
+
 #if defined(BLOCKING_MODE)
     // for the input queue
     pthread_mutex_t cons_m;

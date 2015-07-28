@@ -38,13 +38,18 @@
 #include <cuda.h>
 #endif
 
-#if defined(FF_OCL)
+#if 0
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
 #else
 #include <CL/opencl.h>
+#include <ff/ocl/clEnvironment.hpp>
 #endif
-#include <ff/ocl/ocl_utilities.hpp>
+
+
+
+
+
 #endif
 
 namespace ff {
@@ -114,7 +119,7 @@ public:
 
 		rrcnt = 0;
 
-#ifdef FF_OCL
+#if 0
 		const int max_supported_platforms = 10;
 		const int max_supported_devices = 10;
 		cl_uint n_platforms;
@@ -141,11 +146,11 @@ public:
 				ocl_cpus.push_back(devices[j]);
 			//accelerators
 			status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ACCELERATOR,
-					max_supported_devices, devices, &n_devices);
+                                    max_supported_devices, devices, &n_devices);
 			//checkResult(status, "clGetDeviceIDs Accelerators");
 			if(!status)
-			for (cl_uint j = 0; j < n_devices; ++j)
-				ocl_accelerators.push_back(devices[j]);
+                for (cl_uint j = 0; j < n_devices; ++j)
+                    ocl_accelerators.push_back(devices[j]);
 		}
 		ocl_cpu_id = ocl_gpu_id = ocl_accelerator_id = 0;
 #endif
@@ -265,7 +270,7 @@ public:
 	}
 #endif
 
-#if defined(FF_OCL)
+#if 0
 	cl_device_id getOCLcpu() {
 		cl_device_id res = ocl_cpus[(ocl_cpu_id++) % ocl_cpus.size()];
 		char tmp[1024];
@@ -296,7 +301,7 @@ protected:
 	unsigned int mask;
 	unsigned int num_cores;
 	svector<int> CList;
-#ifdef FF_OCL
+#if 0
 	svector<cl_device_id> ocl_cpus, ocl_gpus, ocl_accelerators;
 	std::atomic<unsigned int> ocl_cpu_id, ocl_gpu_id, ocl_accelerator_id;
 #endif

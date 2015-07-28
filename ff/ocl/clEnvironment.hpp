@@ -25,46 +25,336 @@
  *  the GNU General Public License.
  *
  ****************************************************************************
- Mehdi Goli: m.goli@rgu.ac.uk*/
+ */
+/*
+ * Mehdi Goli:         m.goli@rgu.ac.uk  goli.mehdi@gmail.com
+ * Massimo Torquati:   torquati@di.unipi.it
+ *
+ */
 
 #ifndef FF_OCLENVIRONMENT_HPP
 #define FF_OCLENVIRONMENT_HPP
 
-#include <vector>
+#if defined(FF_OPENCL)
+
+#ifdef __APPLE__
+#include <OpenCL/opencl.h>
+#else
+#include <CL/opencl.h>
+#endif
+
 #include <pthread.h>
+#include <cassert>
 #include <cstdio>
 #include <cstdlib>
-#include <ff/ocl/clDeviceInfo.hpp>
-#include <ff/ocl/ocl_utilities.hpp>
+#include <iostream>   // FIX: check if it is possible to remove this include
 
-#define THRESHOLD (512*1024*1024)
-
-
-pthread_mutex_t instanceMutex = PTHREAD_MUTEX_INITIALIZER;
+#include <map>
+#include <vector>
+#include <ff/atomic/atomic.h>
 
 
-class Environment{
+static pthread_mutex_t instanceMutex = PTHREAD_MUTEX_INITIALIZER;
 
-private:
-  
-  static Environment * m_Environment;
-  std::vector<int> clNodesDevice;
-  std::vector<CLDevice*> clDevices;
-  pthread_mutex_t mutex_set_policy;
-  int nodeId;
-  
-  Environment ();
-  Environment(Environment const&){};
-  Environment& operator=(Environment const&){ return *this;};
-  int staticSelectionPolicy(cl_device_type, Ocl_Utilities*);
-   
-public:   
-  cl_device_id getDeviceId(int);
-  void createEntry(int&,  Ocl_Utilities*);
-  static Environment * instance();
-  cl_device_id reallocation(int);
+struct oclParameter {
+    oclParameter(cl_device_id d_id):d_id(d_id){}
+    cl_device_id d_id;
+    cl_context context;
+    cl_command_queue commandQueue;    
 };
 
-#include <ff/ocl/clEnvironment.cpp>  
+
+class clEnvironment{
+private:
+    clEnvironment() {
+        atomic_long_set(&oclId, 0);
+
+        cl_platform_id *platforms = NULL;
+        cl_uint numPlatforms;
+        
+        // FIX: what is this ???
+#if defined(FF_GPUCOMPONETS)
+        numGPU=FF_GPUCOMPONETS;
+#else
+        numGPU=10000;
+#endif
+       
+        clGetPlatformIDs(0, NULL, &(numPlatforms));
+        platforms =new cl_platform_id[numPlatforms];    // FIX: memory leak !!!!
+        assert(platforms);
+        clGetPlatformIDs(numPlatforms, platforms,NULL);
+        
+        for (size_t i = 0; i<numPlatforms; i++)  {
+            cl_uint numDevices;
+            clGetDeviceIDs(platforms[i],CL_DEVICE_TYPE_ALL,0,NULL,&(numDevices));
+            cl_device_id* deviceIds =new cl_device_id[numDevices];    // FIX: memory leak !!!!
+            assert(deviceIds);  
+            // Fill in CLDevice with clGetDeviceIDs()
+            clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL,numDevices,deviceIds,NULL);
+            
+            for(size_t j=0; j<numDevices; j++)   {
+                // estimating max number of thread per device 
+                cl_bool b;
+                cl_context context;
+                cl_int status;
+                cl_device_type dt;
+                
+                
+                clGetDeviceInfo(deviceIds[j], CL_DEVICE_AVAILABLE, sizeof(cl_bool), &(b), NULL);
+                context = clCreateContext(NULL,1,&deviceIds[j],NULL,NULL,&status);
+                clGetDeviceInfo(deviceIds[j], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
+                if((dt) & CL_DEVICE_TYPE_GPU)      printf("%ld is a GPU device\n",j);
+                else if((dt) & CL_DEVICE_TYPE_CPU) printf("%ld is a CPU device\n",j);
+
+                if((b & CL_TRUE) && (status == CL_SUCCESS)) clDevices.push_back(deviceIds[j]);
+                
+                clReleaseContext(context);
+            }
+        }
+        
+        // prepare per device parameters: context and command queue
+        for(std::vector<cl_device_id>::iterator iter=clDevices.begin(); iter < clDevices.end(); ++iter) {
+                cl_device_id dId = *iter;
+                oclParameter* oclParams = new oclParameter(dId);
+                assert(oclParams);
+                cl_int status;
+                oclParams->context = clCreateContext(NULL,1,&dId,NULL,NULL,&status);
+                
+                cl_command_queue_properties prop = 0;
+                oclParams->commandQueue = clCreateCommandQueue(oclParams->context, dId, prop, &status);
+                
+                dynamicParameters[dId]=oclParams;
+            }
+    }
+ 
+public:
+    // TODO : free platform, map  ???
+    ~clEnvironment() { } 
+
+    static inline clEnvironment * instance() {        
+         if (!m_clEnvironment) {
+             pthread_mutex_lock(&instanceMutex);
+             if (!m_clEnvironment) m_clEnvironment = new clEnvironment();
+             assert(m_clEnvironment);                      
+             pthread_mutex_unlock(&instanceMutex);
+         }
+         return m_clEnvironment; 
+    }
+
+    unsigned long getOCLID() {  return atomic_long_inc_return(&oclId); }
+
+    ssize_t getGPUDevice() {
+        cl_device_type dt;
+        for(size_t i=0; i<clDevices.size(); i++)  {
+            clGetDeviceInfo(clDevices[i], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
+            if((dt) & CL_DEVICE_TYPE_GPU) return i;
+        }
+        return -1;
+    }
+
+    ssize_t getCPUDevice() {
+        cl_device_type dt;
+        for(size_t i=0; i<clDevices.size(); i++) {
+            clGetDeviceInfo(clDevices[i], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
+            if((dt) & CL_DEVICE_TYPE_CPU) return i;
+        }
+        return -1;
+    }
+
+    int getNumGPU() const { return numGPU; }
+
+    cl_device_id getDevice(size_t id) const { return clDevices[id]; }        
+
+    oclParameter *getParameter(cl_device_id id) { return dynamicParameters[id]; }
+    
+private:
+    clEnvironment(clEnvironment const&){};
+    clEnvironment& operator=(clEnvironment const&){ return *this;};
+private:    
+    static clEnvironment * m_clEnvironment;
+    atomic_long_t oclId;
+
+    std::map<cl_device_id, oclParameter*> dynamicParameters;
+	std::vector<cl_device_id> clDevices;
+	int numGPU;  
+};
+
+clEnvironment* clEnvironment::m_clEnvironment = NULL;
+
+static inline void printOCLErrorString(cl_int error, std::ostream & out) {
+	switch (error) {
+	case CL_SUCCESS:
+		out << "CL_SUCCESS" << std::endl;
+		break;
+	case CL_DEVICE_NOT_FOUND:
+		out << "CL_DEVICE_NOT_FOUND" << std::endl;
+		break;
+	case CL_DEVICE_NOT_AVAILABLE:
+		out << "CL_DEVICE_NOT_AVAILABLE" << std::endl;
+		break;
+	case CL_COMPILER_NOT_AVAILABLE:
+		out << "CL_COMPILER_NOT_AVAILABLE" << std::endl;
+		break;
+	case CL_MEM_OBJECT_ALLOCATION_FAILURE:
+		out << "CL_MEM_OBJECT_ALLOCATION_FAILURE" << std::endl;
+		break;
+	case CL_OUT_OF_RESOURCES:
+		out << "CL_OUT_OF_RESOURCES" << std::endl;
+		break;
+	case CL_OUT_OF_HOST_MEMORY:
+		out << "CL_OUT_OF_HOST_MEMORY" << std::endl;
+		break;
+	case CL_PROFILING_INFO_NOT_AVAILABLE:
+		out << "CL_PROFILING_INFO_NOT_AVAILABLE" << std::endl;
+		break;
+	case CL_MEM_COPY_OVERLAP:
+		out << "CL_MEM_COPY_OVERLAP" << std::endl;
+		break;
+	case CL_IMAGE_FORMAT_MISMATCH:
+		out << "CL_IMAGE_FORMAT_MISMATCH" << std::endl;
+		break;
+	case CL_IMAGE_FORMAT_NOT_SUPPORTED:
+		out << "CL_IMAGE_FORMAT_NOT_SUPPORTED" << std::endl;
+		break;
+	case CL_BUILD_PROGRAM_FAILURE:
+		out << "CL_BUILD_PROGRAM_FAILURE" << std::endl;
+		break;
+	case CL_MAP_FAILURE:
+		out << "CL_MAP_FAILURE" << std::endl;
+		break;
+	case CL_MISALIGNED_SUB_BUFFER_OFFSET:
+		out << "CL_MISALIGNED_SUB_BUFFER_OFFSET" << std::endl;
+		break;
+	case CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST:
+		out << "CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST" << std::endl;
+		break;
+	case CL_INVALID_VALUE:
+		out << "CL_INVALID_VALUE" << std::endl;
+		break;
+	case CL_INVALID_DEVICE_TYPE:
+		out << "CL_INVALID_DEVICE_TYPE" << std::endl;
+		break;
+	case CL_INVALID_PLATFORM:
+		out << "CL_INVALID_PLATFORM" << std::endl;
+		break;
+	case CL_INVALID_DEVICE:
+		out << "CL_INVALID_DEVICE" << std::endl;
+		break;
+	case CL_INVALID_CONTEXT:
+		out << "CL_INVALID_CONTEXT" << std::endl;
+		break;
+	case CL_INVALID_QUEUE_PROPERTIES:
+		out << "CL_INVALID_QUEUE_PROPERTIES" << std::endl;
+		break;
+	case CL_INVALID_COMMAND_QUEUE:
+		out << "CL_INVALID_COMMAND_QUEUE" << std::endl;
+		break;
+	case CL_INVALID_HOST_PTR:
+		out << "CL_INVALID_HOST_PTR" << std::endl;
+		break;
+	case CL_INVALID_MEM_OBJECT:
+		out << "CL_INVALID_MEM_OBJECT" << std::endl;
+		break;
+	case CL_INVALID_IMAGE_FORMAT_DESCRIPTOR:
+		out << "CL_INVALID_IMAGE_FORMAT_DESCRIPTOR" << std::endl;
+		break;
+	case CL_INVALID_IMAGE_SIZE:
+		out << "CL_INVALID_IMAGE_SIZE" << std::endl;
+		break;
+	case CL_INVALID_SAMPLER:
+		out << "CL_INVALID_SAMPLER" << std::endl;
+		break;
+	case CL_INVALID_BINARY:
+		out << "CL_INVALID_BINARY" << std::endl;
+		break;
+	case CL_INVALID_BUILD_OPTIONS:
+		out << "CL_INVALID_BUILD_OPTIONS" << std::endl;
+		break;
+	case CL_INVALID_PROGRAM:
+		out << "CL_INVALID_PROGRAM" << std::endl;
+		break;
+	case CL_INVALID_PROGRAM_EXECUTABLE:
+		out << "CL_INVALID_PROGRAM_EXECUTABLE" << std::endl;
+		break;
+	case CL_INVALID_KERNEL_NAME:
+		out << "CL_INVALID_KERNEL_NAME" << std::endl;
+		break;
+	case CL_INVALID_KERNEL_DEFINITION:
+		out << "CL_INVALID_KERNEL_DEFINITION" << std::endl;
+		break;
+	case CL_INVALID_KERNEL:
+		out << "CL_INVALID_KERNEL" << std::endl;
+		break;
+	case CL_INVALID_ARG_INDEX:
+		out << "CL_INVALID_ARG_INDEX" << std::endl;
+		break;
+	case CL_INVALID_ARG_VALUE:
+		out << "CL_INVALID_ARG_VALUE" << std::endl;
+		break;
+	case CL_INVALID_ARG_SIZE:
+		out << "CL_INVALID_ARG_SIZE" << std::endl;
+		break;
+	case CL_INVALID_KERNEL_ARGS:
+		out << "CL_INVALID_KERNEL_ARGS" << std::endl;
+		break;
+	case CL_INVALID_WORK_DIMENSION:
+		out << "CL_INVALID_WORK_DIMENSION" << std::endl;
+		break;
+	case CL_INVALID_WORK_GROUP_SIZE:
+		out << "CL_INVALID_WORK_GROUP_SIZE" << std::endl;
+		break;
+	case CL_INVALID_WORK_ITEM_SIZE:
+		out << "CL_INVALID_WORK_ITEM_SIZE" << std::endl;
+		break;
+	case CL_INVALID_GLOBAL_OFFSET:
+		out << "CL_INVALID_GLOBAL_OFFSET" << std::endl;
+		break;
+	case CL_INVALID_EVENT_WAIT_LIST:
+		out << "CL_INVALID_EVENT_WAIT_LIST" << std::endl;
+		break;
+	case CL_INVALID_EVENT:
+		out << "CL_INVALID_EVENT" << std::endl;
+		break;
+	case CL_INVALID_OPERATION:
+		out << "CL_INVALID_OPERATION" << std::endl;
+		break;
+	case CL_INVALID_GL_OBJECT:
+		out << "CL_INVALID_GL_OBJECT" << std::endl;
+		break;
+	case CL_INVALID_BUFFER_SIZE:
+		out << "CL_INVALID_BUFFER_SIZE" << std::endl;
+		break;
+	case CL_INVALID_MIP_LEVEL:
+		out << "CL_INVALID_MIP_LEVEL" << std::endl;
+		break;
+	case CL_INVALID_GLOBAL_WORK_SIZE:
+		out << "CL_INVALID_GLOBAL_WORK_SIZE" << std::endl;
+		break;
+	case CL_INVALID_PROPERTY:
+		out << "CL_INVALID_PROPERTY" << std::endl;
+		break;
+	default:
+		out << "Unknown OpenCL error " << error << std::endl;
+	}
+}
+
+static  inline void checkResult(cl_int s, const char* msg) {
+    if(s != CL_SUCCESS) {
+        std::cerr << msg << ":";
+        printOCLErrorString(s,std::cerr);
+    }
+}    
+
+
+#else
+
+class clEnvironment{
+private:
+    clEnvironment() {}
+public:
+    static inline clEnvironment * instance() { return NULL; }
+};
+
+#endif /* FASTFLOW_OPENCL */
 
 #endif /* FF_OCLENVIRONMENT_HPP */
