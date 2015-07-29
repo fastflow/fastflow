@@ -2,7 +2,7 @@ ifndef OCL_ROOT
 $(error The OCL_ROOT variable is not defined in your environment)
 endif
 
-CXX      = g++ 
+CXX      = clang++ 
 CXXFLAGS = -Wall -std=c++11 -DCHECK -DFF_OPENCL
 
 OS = $(shell uname)

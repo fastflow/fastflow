@@ -85,6 +85,20 @@ add_test( test_scheduling2 ${CMAKE_CURRENT_BINARY_DIR}/test_scheduling2 )
 
 add_subdirectory( layer2-tests-HAL )
 
+#OpenCL
+
+find_package(OpenCL REQUIRED)
+if ( NOT OPENCL_FOUND )
+	message ( WARNING "OpenCL not found" )	
+else  ( NOT OPENCL_FOUND )
+      message (STATUS "OpenCL supported (version not detected) ")
+      if (  ( CMAKE_SYSTEM_NAME MATCHES "Darwin" ) AND ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU") )
+        message ( WARNING "***** SKIPPING OPENCL tests -> GCC+opencl on OS/Yosemite require to patch system headers - See: http://hamelot.co.uk/programming/osx-gcc-dispatch_block_t-has-not-been-declared-invalid-typedef/" )
+      else ( )
+        add_subdirectory( ocl )
+      endif (  )	
+endif ( NOT OPENCL_FOUND )
+
 # Distributed
 
 find_package(ZeroMQ)
