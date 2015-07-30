@@ -59,6 +59,7 @@ struct oclTask: public baseOCLTask<myTask, float> {
         setReduceVar(&task->sum);
     }
 
+    //float combinator(float const &x, float const &y) {
     float combinator(float x, float y) {
     	return x+y;
     }
@@ -88,14 +89,22 @@ struct Collector: public ff_node_t<myTask> {
 
 
 int main(int argc, char * argv[]) {
-    if (argc<4) {
-        printf("use %s arraysize streamlen nworkers\n", argv[0]);
-        return -1;
+    
+    size_t inputsize   = 1024;
+    long   streamlen   = 2048;
+    int    nworkers    = 4;
+    
+     if  (argc > 1) {
+        if (argc < 4) { 
+            printf("use %s arraysize streamlen nworkers\n", argv[0]);
+            return 0;
+        } else {
+            inputsize = atol(argv[1]);
+            streamlen = atol(argv[2]);
+            nworkers = atoi(argv[3]);
+        }
     }
-
-    size_t inputsize   =atol(argv[1]);
-    long   streamlen   =atoi(argv[2]);
-    int    nworkers    =atoi(argv[3]);
+   
 
     ff_farm<> farm;
     Emitter   E(streamlen,inputsize);
