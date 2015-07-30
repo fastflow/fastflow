@@ -218,13 +218,22 @@ int main(int argc, char * argv[]) {
 	int size = SIZE;
 	int nacc = NACCELERATORS;
 	niters = NITERS;
-	if (argc > 1)
-		size = atol(argv[1]);
-	if (argc > 2)
-		nacc = atol(argv[2]);
-	if (argc > 3)
-		niters = atol(argv[3]);
-	fprintf(stderr, "arraysize = %d, n. accelerators = %d\n", size, nacc);
+    if (argc > 1) {
+        if (argc == 2) {
+            //printf("-> %d %s\n",argc,argv[1]);
+            if (argv[1] != std::string("-h")) 
+                size = atol(argv[1]);
+            else {
+                std::cout << "Usage: arraysize accelerators niters (ex. "
+                          << size << " " << nacc << " " << niters << ")" << std::endl;
+                return 0;
+            }
+        }
+        if (argc > 2)
+                 nacc = atol(argv[2]);
+        if (argc > 3)
+            niters = atol(argv[3]);
+    }        
 	basictype *M_in = new basictype[size], *M_out = new basictype[size];
 	int *env = new int[size];
 	init(M_in, M_out, env, size);
