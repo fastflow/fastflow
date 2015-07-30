@@ -36,7 +36,7 @@
 using namespace ff;
 
 FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
-             return (x+y);
+                          //return (x+y);
              );
 
 struct oclTask: public baseOCLTask<oclTask, float> {
@@ -59,7 +59,7 @@ struct oclTask: public baseOCLTask<oclTask, float> {
 
 int main(int argc, char * argv[]) {
     size_t size=1024;
-    if(argc>1) size     =atol(argv[1]);
+    if(argc > 1) size = atol(argv[1]);
     printf("arraysize = %ld\n", size);
 
     float *M        = new float[size];

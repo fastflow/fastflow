@@ -210,18 +210,23 @@ public:
     }
 
 	void relocateInputBuffer() {
+
 		cl_int status;
+
+        // MA patch - map not defined => workgroup_size_map
+        size_t workgroup_size = workgroup_size_map==0?workgroup_size_reduce:workgroup_size_map;
+        
 		if (inputBuffer)  clReleaseMemObject(inputBuffer);
 		//allocate input-size + pre/post-windows
 		inputBuffer = clCreateBuffer(context,
                                      CL_MEM_READ_WRITE, sizeInput_padded, NULL, &status);
 		checkResult(status, "CreateBuffer input");
-		if (lenInput < workgroup_size_map) {
+		if (lenInput < workgroup_size) {
 			localThreadsMap = lenInput;
 			globalThreadsMap = lenInput;
 		} else {
-			localThreadsMap = workgroup_size_map;
-			globalThreadsMap = nextMultipleOfIf(lenInput, workgroup_size_map);
+			localThreadsMap = workgroup_size;
+			globalThreadsMap = nextMultipleOfIf(lenInput, workgroup_size);
 		}
 		//REDUCE
 		if (reduceBuffer) clReleaseMemObject(reduceBuffer);
@@ -483,6 +488,7 @@ private:
 
 	void svc_SetUpOclObjects(cl_device_id dId, const std::string &kernel_code,
                              const std::string &kernel_name1, const std::string &kernel_name2) {
+
 		cl_int status;
         const oclParameter *param = clEnvironment::instance()->getParameter(dId);
         assert(param);
@@ -508,6 +514,7 @@ private:
 			CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_reduce, 0);
 			checkResult(status, "GetKernelWorkGroupInfo (reduce)");
 		}
+
 	}
 
 	void svc_releaseOclObjects() {
