@@ -6,7 +6,7 @@ include_directories(
 
 ADD_DEFINITIONS(-DFF_OPENCL)
 
-include_directories( ${OPENCL_INCLUDE_DIR} )
+include_directories( ${OPENCL_INCLUDE_DIRS} )
 
 
 set( TESTS                               
