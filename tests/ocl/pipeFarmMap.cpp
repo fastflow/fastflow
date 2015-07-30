@@ -96,15 +96,22 @@ public:
 };
 
 int main(int argc, char * argv[]) {
-	if (argc < 4) {
-		printf("use %s arraysize streamlen nworkers\n", argv[0]);
-		return -1;
-	}
 
-	size_t size = atol(argv[1]);
-	long streamlen = atol(argv[2]);
-	int nworkers = atoi(argv[3]);
-
+    size_t size = 1024;
+	long streamlen = 1000;
+	int nworkers = 2;
+    
+    if  (argc > 1) {
+        if (argc < 4) { 
+            printf("use %s arraysize streamlen nworkers\n", argv[0]);
+            return 0;
+        } else {
+            size = atol(argv[1]);
+            streamlen = atol(argv[2]);
+            nworkers = atoi(argv[3]);
+        }
+    }
+    
 	ff_pipeline pipe;
 	pipe.add_stage(new ArrayGenerator(streamlen, size));
 	ff_farm<> *farm = new ff_farm<>;
