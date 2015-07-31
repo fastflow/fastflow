@@ -22,7 +22,7 @@ LIBS     =  $(OPENCL) -lpthread
 INCLUDES = -I$(FF_ROOT) -I$(OCL_ROOT)/include
 
 
-TARGETS = oclStencilReduce oclMap oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct
+TARGETS = oclStencilReduce oclMap oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct device_selection
 
 all: $(TARGETS)
 
@@ -48,6 +48,9 @@ pipeFarmMap: pipeFarmMap.cpp
 	$(CXX) -DCHECK $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 dotProduct: dotProduct.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+device_selection: device_selection.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 clean:

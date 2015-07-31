@@ -31,6 +31,7 @@
  *  Authors:
  *    Maurizio Drocco
  *    Massimo Torquati
+ *    Marco Aldinucci 
  *
  */
 
