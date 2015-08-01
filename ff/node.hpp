@@ -247,6 +247,11 @@ protected:
     void setfftree(const fftree *ptr) { 
         fftree_ptr=const_cast<fftree*>(ptr); 
     }
+
+#if defined(FF_TASK_CALLBACK)
+    virtual void callbackIn(void  *t=NULL) {  }
+    virtual void callbackOut(void *t=NULL) {  }
+#endif
     
 public:
  
@@ -654,8 +659,6 @@ protected:
 
     virtual inline void get_out_nodes(svector<ff_node*>&w) {}
 
-    // returns the kind of node
-    virtual inline fftype getFFType() const   { return WORKER; }
 
     /**
      * \brief Run the ff_node
@@ -817,10 +820,25 @@ public:
      */
     virtual void  svc_end() {}
 
+
+    virtual int   nodeInit() { return 0; }
+
+    virtual void  nodeEnd()  { }
+
     virtual void eosnotify(ssize_t id=-1) {}
     
     virtual int get_my_id() const { return myid; };
-    
+
+
+#if defined(FF_TASK_CALLBACK)
+    virtual void callbackIn(void *t=NULL)  { }
+    virtual void callbackOut(void *t=NULL) { }
+#endif
+
+    // returns the kind of node
+    virtual inline fftype getFFType() const   { return WORKER; }
+
+   
     /**
      * \internal
      * \brief Force ff_node-to-core pinning
@@ -1032,6 +1050,9 @@ private:
 
             gettimeofday(&filter->wtstart,NULL);
             do {
+#if defined(FF_TASK_CALLBACK)
+                if (filter) callbackIn();
+#endif
                 if (inpresent) {
                     if (!skipfirstpop) pop(&task); 
                     else skipfirstpop=false;
@@ -1040,9 +1061,18 @@ private:
                         ret = task;
                         filter->eosnotify();
                         if (outpresent && (task == (void*)FF_EOS))  push(task); // only EOS is propagated
+
+#if defined(FF_TASK_CALLBACK)
+                        if (filter) callbackOut(this);
+#endif
                         break;
                     }
-                    if (task == GO_OUT) break;
+                    if (task == GO_OUT) { 
+#if defined(FF_TASK_CALLBACK)
+                        if (filter) callbackOut(this);
+#endif
+                        break;
+                    }
                 }
                 FFTRACE(++filter->taskcnt);
                 FFTRACE(ticks t0 = getticks());
@@ -1055,6 +1085,11 @@ private:
                 filter->ticksmin=(std::min)(filter->ticksmin,diff); // (std::min) for win portability)
                 filter->ticksmax=(std::max)(filter->ticksmax,diff);
 #endif           
+
+#if defined(FF_TASK_CALLBACK)
+                if (filter) callbackOut();
+#endif
+
                 if (ret == GO_OUT) break;     
                 if (!ret || (ret == EOS) || (ret == EOS_NOFREEZE)) {
                     // NOTE: The EOS is gonna be produced in the output queue
@@ -1103,6 +1138,12 @@ private:
         bool isfrozen() const { return ff_thread::isfrozen();}
 
         int get_my_id() const { return filter->get_my_id(); };
+
+    protected:
+#if defined(FF_TASK_CALLBACK)
+        virtual void callbackIn(void  *t=NULL) { filter->callbackIn(t);  }
+        virtual void callbackOut(void *t=NULL) { filter->callbackOut(t); }
+#endif
         
     protected:    
         ff_node * const filter;
@@ -1133,6 +1174,8 @@ private:
     struct timeval wtstop;
     double wttime;
 
+protected:
+
 #if defined(TRACE_FASTFLOW)
     unsigned long taskcnt;
     ticks         lostpushticks;
@@ -1143,8 +1186,6 @@ private:
     ticks         ticksmax;
     ticks         tickstot;
 #endif
-
-protected:
 
     fftree *fftree_ptr;       //fftree stuff
 
