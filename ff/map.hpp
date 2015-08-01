@@ -102,7 +102,6 @@ public:
     }
     virtual ~ff_Map() {}
 
-
     /* --------------------------------------- */
     template <typename Function>
     inline void parallel_for(long first, long last, const Function& f, 
@@ -171,9 +170,8 @@ public:
         pfr.parallel_reduce_static(var,identity,first,last,step,grain,body,finalreduce,nw);
     }
     /* --------------------------------------- */
-    
-    
 
+    
     virtual int run(bool=false) {
         if (!prepared) if (prepare()<0) return -1;
         return ff_node::run(true);
@@ -185,6 +183,10 @@ public:
 
     virtual int wait() { return ff_node::wait();}
     virtual int wait_freezing() { return ff_node::wait_freezing(); }
+
+
+    int nodeInit() { if (!prepared) return prepare(); return 0;  }
+    void nodeEnd() {}
 
 protected:
     bool spinWait;

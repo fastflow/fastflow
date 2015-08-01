@@ -1426,17 +1426,8 @@ private:
          *
          */
         ofarmE(ofarm_lb * const lb):
-            nworkers(0),nextone(0), lb(lb),E_f(NULL) {}
+            nextone(0), lb(lb),E_f(NULL) {}
 
-        /**
-         * \internal
-         * \brief Sets number of workers
-         *
-         * It sets the number of workers.
-         *
-         * \param nw is the number of workers
-         */
-        void setnworkers(size_t nw) { nworkers=nw;}
 
         /**
          * \brief Set filtering policy for scheduling
@@ -1455,7 +1446,7 @@ private:
          * \return 0 if not successful, otherwise the status of \p svc_init
          */
         int svc_init() {
-            assert(nworkers>0);
+            assert(lb->getnworkers()>0);
             int ret = 0;
             if (E_f) ret = E_f->svc_init();
             nextone = 0;
@@ -1478,7 +1469,7 @@ private:
             if (E_f) task = E_f->svc(task);
             if (task == (void*)FF_EOS) return task;
             ff_send_out(task);
-            nextone = (nextone+1) % nworkers;
+            nextone = (nextone+1) % lb->getnworkers();
             lb->set_victim(nextone);
             return GO_ON;
         }
@@ -1492,9 +1483,9 @@ private:
             if (E_f) E_f->svc_end();
         }
     private:
-        size_t nworkers, nextone;
+        size_t     nextone;
         ofarm_lb * lb;
-        ff_node* E_f;
+        ff_node*   E_f;
     };
 
     /**
@@ -1512,17 +1503,7 @@ private:
          *
          */
         ofarmC(ofarm_gt * const gt):
-            nworkers(0),nextone(0), gt(gt),C_f(NULL) {}
-
-        /**
-         * \internal
-         * \brief Sets worker
-         *
-         * It sets the number of workers
-         *
-         * \param nw is the number of workers
-         */
-        void setnworkers(size_t nw) { nworkers=nw;}
+            nextone(0), gt(gt),C_f(NULL) {}
 
         /**
          * \internal
@@ -1545,7 +1526,7 @@ private:
          * \return 0 if successful, otherwise the status of \p set_victim
          */
         int svc_init() {
-            assert(nworkers>0);
+            assert(gt->getrunning()>0);
             int ret = 0;
             if (C_f) ret = C_f->svc_init();
             nextone=0;
@@ -1564,7 +1545,7 @@ private:
         void * svc(void * task) {
             if (C_f) task = C_f->svc(task);
             if (ff_node::get_out_buffer()) ff_send_out(task);
-            do nextone = (nextone+1) % nworkers;
+            do nextone = (nextone+1) % gt->getrunning();
             while(!gt->set_victim(nextone));
             return GO_ON;
         }
@@ -1579,7 +1560,11 @@ private:
         void eosnotify(ssize_t id=-1) { 
             gt->set_dead(id);
             if (nextone == (size_t)id) {
-                nextone= (nextone+1) % nworkers;
+                // NOTE: here we need the number of activated workers (running) cause 
+                // the management of "dead" workers is internal.
+                // gt->getnworkers() already takes into account the "dead" ones therefore
+                // is not suitable
+                nextone= (nextone+1) % gt->getrunning();
                 gt->set_victim(nextone);
             }
         }
@@ -1593,9 +1578,9 @@ private:
             if (C_f) C_f->svc_end();
         }
     private:
-        size_t nworkers, nextone;
+        size_t     nextone;
         ofarm_gt * gt;
-        ff_node* C_f;
+        ff_node*   C_f;
     };
 
 
@@ -1675,7 +1660,7 @@ public:
      * \internal
      *  \brief Sets emitter
      *
-     * It sets the emitter.
+     * It sets the emitter function.
      *
      * \param f is the FastFlow node.
      */
@@ -1696,8 +1681,6 @@ public:
      *
      */
     int run(bool skip_init=false) {
-        E->setnworkers(this->getNWorkers());
-        C->setnworkers(this->getNWorkers());
         E->setfilter(E_f);
         C->setfilter(C_f);
         return ff_farm<ofarm_lb,ofarm_gt>::run(skip_init);

@@ -6,7 +6,7 @@
 using namespace ff;
 
 
-static long WITER = 2400000;
+static long WITER = 2400;
 static float comptime=0.0;
 
 struct firstStage: public ff_node_t<unsigned long> {
