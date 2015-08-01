@@ -55,6 +55,8 @@
 #include <ff/atomic/atomic.h>
 
 
+namespace ff {
+
 static pthread_mutex_t instanceMutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct oclParameter {
@@ -99,20 +101,17 @@ private:
         clGetPlatformIDs(numPlatforms, platforms, NULL);
         
         if (numPlatforms>1) {
-            std::cerr << "Multiple OpenCL platforms detected. Using default platform according "
-                      << "to clGetPlatformIDs\n";
+            printf("Multiple OpenCL platforms detected. Using default platform according to clGetPlatformIDs\n");
         }
-        // Here manage multiple platforms
-        delete platforms;
 
         // for (int i = 0; i< numPlatforms; ++i) {
-        
-        clGetDeviceIDs(NULL,CL_DEVICE_TYPE_ALL,0,NULL,&(numDevices));
+        int i=0;
+        clGetDeviceIDs(platforms[i],CL_DEVICE_TYPE_ALL,0,NULL,&(numDevices));
         deviceIds = new cl_device_id[numDevices];  
         assert(deviceIds); 
         // Fill in CLDevice with clGetDeviceIDs()            
-        clGetDeviceIDs(NULL, CL_DEVICE_TYPE_ALL,numDevices,deviceIds,NULL);
-        std::cerr << "OpenCL platform detection - begin\n";
+        clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL,numDevices,deviceIds,NULL);
+        //std::cerr << "OpenCL platform detection - begin\n";
         for(size_t j=0; j<numDevices; j++)   {
             // estimating max number of thread per device 
             cl_bool b;
@@ -124,17 +123,18 @@ private:
             context = clCreateContext(NULL,1,&deviceIds[j],NULL,NULL,&status);
             clGetDeviceInfo(deviceIds[j], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
             
-            if((dt) & CL_DEVICE_TYPE_GPU)
-                std::cerr << "#" << j << " CPU device\n";
-            else if((dt) & CL_DEVICE_TYPE_CPU)
-                std::cerr << "#" << j << " GPU device\n";
-            else std::cerr << "#" << j << " Other device (not yet implemented)\n";
+            // if((dt) & CL_DEVICE_TYPE_GPU)
+            //     std::cerr << "#" << j << " CPU device\n";
+            // else if((dt) & CL_DEVICE_TYPE_CPU)
+            //     std::cerr << "#" << j << " GPU device\n";
+            // else std::cerr << "#" << j << " Other device (not yet implemented)\n";
             
             if((b & CL_TRUE) && (status == CL_SUCCESS)) clDevices.push_back(deviceIds[j]);    
             clReleaseContext(context);
         }
         delete deviceIds;
-        std::cerr << "OpenCL platform detection - end \n";
+        delete platforms;
+        //std::cerr << "OpenCL platform detection - end \n";
         
         // prepare per device parameters: context and command queue
         for(std::vector<cl_device_id>::iterator iter=clDevices.begin(); iter < clDevices.end(); ++iter) {
@@ -206,7 +206,7 @@ public:
     std::vector<std::string> getDevsInfo( ) {
         std::vector<std::string> res;
         //fprintf(stdout, "%d\n", numDevices);
-        for (int j = 0; j < clDevices.size(); j++) {
+        for(size_t j = 0; j < clDevices.size(); j++) {
             char buf[128];
             std::string s1, s2;    
             clGetDeviceInfo(clDevices[j], CL_DEVICE_NAME, 128, buf, NULL);
@@ -400,16 +400,18 @@ static  inline void checkResult(cl_int s, const char* msg) {
     }
 }    
 
+} // namespace
 
 #else
 
+namespace ff {
 class clEnvironment{
 private:
     clEnvironment() {}
 public:
     static inline clEnvironment * instance() { return NULL; }
 };
-
+} // namespace
 #endif /* FASTFLOW_OPENCL */
 
 #endif /* FF_OCLENVIRONMENT_HPP */
