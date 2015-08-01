@@ -29,6 +29,7 @@
 /*
  * Mehdi Goli:         m.goli@rgu.ac.uk  goli.mehdi@gmail.com
  * Massimo Torquati:   torquati@di.unipi.it
+ * Marco Aldinucci:    aldinuc@di.unito.it
  *
  */
 
@@ -64,75 +65,98 @@ struct oclParameter {
 };
 
 
+/*!
+ *  \class clEnvironment
+ *  \ingroup aux_classes
+ *
+ *  \brief OpenCL platform inspection and setup
+ *
+ * \note Multiple paltforms are not managed. Platforms[0] is always adopted. Support for multiple 
+ * platforms will be implemented when needed.
+ *
+ */
+
 class clEnvironment{
 private:
-    clEnvironment() {
+    cl_platform_id *platforms;
+    cl_uint numPlatforms;
+    cl_uint numDevices;
+    //cl_device_id* devlist_for_platform;
+    cl_device_id* deviceIds;
+    
+    clEnvironment(): platforms(NULL), numPlatforms(0) {
         atomic_long_set(&oclId, 0);
-
-        cl_platform_id *platforms = NULL;
-        cl_uint numPlatforms;
         
         // FIX: what is this ???
 #if defined(FF_GPUCOMPONETS)
         numGPU=FF_GPUCOMPONETS;
 #else
         numGPU=10000;
-#endif
-       
-        clGetPlatformIDs(0, NULL, &(numPlatforms));
-        platforms =new cl_platform_id[numPlatforms];    // FIX: memory leak !!!!
+#endif       
+        clGetPlatformIDs(0, NULL, &numPlatforms);
+        platforms = new cl_platform_id[numPlatforms]; 
         assert(platforms);
-        clGetPlatformIDs(numPlatforms, platforms,NULL);
+        clGetPlatformIDs(numPlatforms, platforms, NULL);
         
-        for (size_t i = 0; i<numPlatforms; i++)  {
-            cl_uint numDevices;
-            clGetDeviceIDs(platforms[i],CL_DEVICE_TYPE_ALL,0,NULL,&(numDevices));
-            cl_device_id* deviceIds =new cl_device_id[numDevices];    // FIX: memory leak !!!!
-            assert(deviceIds);  
-            // Fill in CLDevice with clGetDeviceIDs()
-            clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL,numDevices,deviceIds,NULL);
-            
-            for(size_t j=0; j<numDevices; j++)   {
-                // estimating max number of thread per device 
-                cl_bool b;
-                cl_context context;
-                cl_int status;
-                cl_device_type dt;
-                
-                
-                clGetDeviceInfo(deviceIds[j], CL_DEVICE_AVAILABLE, sizeof(cl_bool), &(b), NULL);
-                context = clCreateContext(NULL,1,&deviceIds[j],NULL,NULL,&status);
-                clGetDeviceInfo(deviceIds[j], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
-                if((dt) & CL_DEVICE_TYPE_GPU)      printf("%ld is a GPU device\n",j);
-                else if((dt) & CL_DEVICE_TYPE_CPU) printf("%ld is a CPU device\n",j);
-
-                if((b & CL_TRUE) && (status == CL_SUCCESS)) clDevices.push_back(deviceIds[j]);
-                
-                clReleaseContext(context);
-            }
+        if (numPlatforms>1) {
+            std::cerr << "Multiple OpenCL platforms detected. Using default platform according "
+                      << "to clGetPlatformIDs\n";
         }
+        // Here manage multiple platforms
+        delete platforms;
+
+        // for (int i = 0; i< numPlatforms; ++i) {
+        
+        clGetDeviceIDs(NULL,CL_DEVICE_TYPE_ALL,0,NULL,&(numDevices));
+        deviceIds = new cl_device_id[numDevices];  
+        assert(deviceIds); 
+        // Fill in CLDevice with clGetDeviceIDs()            
+        clGetDeviceIDs(NULL, CL_DEVICE_TYPE_ALL,numDevices,deviceIds,NULL);
+        std::cerr << "OpenCL platform detection - begin\n";
+        for(size_t j=0; j<numDevices; j++)   {
+            // estimating max number of thread per device 
+            cl_bool b;
+            cl_context context;
+            cl_int status;
+            cl_device_type dt;       
+                
+            clGetDeviceInfo(deviceIds[j], CL_DEVICE_AVAILABLE, sizeof(cl_bool), &(b), NULL);
+            context = clCreateContext(NULL,1,&deviceIds[j],NULL,NULL,&status);
+            clGetDeviceInfo(deviceIds[j], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
+            
+            if((dt) & CL_DEVICE_TYPE_GPU)
+                std::cerr << "#" << j << " CPU device\n";
+            else if((dt) & CL_DEVICE_TYPE_CPU)
+                std::cerr << "#" << j << " GPU device\n";
+            else std::cerr << "#" << j << " Other device (not yet implemented)\n";
+            
+            if((b & CL_TRUE) && (status == CL_SUCCESS)) clDevices.push_back(deviceIds[j]);    
+            clReleaseContext(context);
+        }
+        delete deviceIds;
+        std::cerr << "OpenCL platform detection - end \n";
         
         // prepare per device parameters: context and command queue
         for(std::vector<cl_device_id>::iterator iter=clDevices.begin(); iter < clDevices.end(); ++iter) {
-                cl_device_id dId = *iter;
-                oclParameter* oclParams = new oclParameter(dId);
-                assert(oclParams);
-                cl_int status;
-                oclParams->context = clCreateContext(NULL,1,&dId,NULL,NULL,&status);
-                
-                cl_command_queue_properties prop = 0;
-                oclParams->commandQueue = clCreateCommandQueue(oclParams->context, dId, prop, &status);
-                
-                dynamicParameters[dId]=oclParams;
-            }
+            cl_device_id dId = *iter;
+            oclParameter* oclParams = new oclParameter(dId);
+            assert(oclParams);
+            cl_int status;
+            oclParams->context = clCreateContext(NULL,1,&dId,NULL,NULL,&status);
+            
+            cl_command_queue_properties prop = 0;
+            oclParams->commandQueue = clCreateCommandQueue(oclParams->context, dId, prop, &status);
+            
+            dynamicParameters[dId]=oclParams;
+        }
     }
  
 public:
-    // TODO : free platform, map  ???
-    ~clEnvironment() { } 
-
+    ~clEnvironment() {
+    }
+   
     static inline clEnvironment * instance() {        
-         if (!m_clEnvironment) {
+        while (!m_clEnvironment) {
              pthread_mutex_lock(&instanceMutex);
              if (!m_clEnvironment) m_clEnvironment = new clEnvironment();
              assert(m_clEnvironment);                      
@@ -161,11 +185,42 @@ public:
         return -1;
     }
 
+    std::vector<ssize_t> getGPUallDevices() {
+        cl_device_type dt;
+        std::vector<ssize_t> ret;
+        for(size_t i=0; i<clDevices.size(); i++) {
+            clGetDeviceInfo(clDevices[i], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
+            if((dt) & CL_DEVICE_TYPE_GPU)
+                ret.push_back(i);
+        }
+        return ret;
+    }
+
+
     int getNumGPU() const { return numGPU; }
 
-    cl_device_id getDevice(size_t id) const { return clDevices[id]; }        
-
+    cl_device_id getDevice(size_t id) const { return clDevices[id]; }     
+    
     oclParameter *getParameter(cl_device_id id) { return dynamicParameters[id]; }
+     
+    std::vector<std::string> getDevsInfo( ) {
+        std::vector<std::string> res;
+        //fprintf(stdout, "%d\n", numDevices);
+        for (int j = 0; j < clDevices.size(); j++) {
+            char buf[128];
+            std::string s1, s2;    
+            clGetDeviceInfo(clDevices[j], CL_DEVICE_NAME, 128, buf, NULL);
+            //fprintf(stdout, "Device %s supports ", buf);
+            s1 = std::string(buf);
+            clGetDeviceInfo(clDevices[j], CL_DEVICE_VERSION, 128, buf, NULL);
+            //fprintf(stdout, "%s\n", buf);
+            s2 = std::string(buf);
+            res.push_back(s1+" "+s2);
+        }
+        return res;
+    }
+    
+    
     
 private:
     clEnvironment(clEnvironment const&){};

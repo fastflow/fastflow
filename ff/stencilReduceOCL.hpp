@@ -403,6 +403,8 @@ public:
 	}
 
 	void asyncExecReduceKernel1() {
+        std::cerr << "globalThreadsReduce " << globalThreadsReduce << "\n";
+        std::cerr << "localThreadsReduce " << localThreadsReduce << "\n";
 		cl_int status = clEnqueueNDRangeKernel(cmd_queue, kernel_reduce, 1, NULL,
                                                &globalThreadsReduce, &localThreadsReduce, nevents_map, 
                                                (nevents_map==0)?NULL:&event_map,
@@ -498,7 +500,7 @@ private:
 
 		//compile kernel on device
 		buildKernelCode(kernel_code, dId);
-
+        
 		//create kernel objects
 		if (kernel_name1 != "") {
 			kernel_map = clCreateKernel(program, kernel_name1.c_str(), &status);
@@ -506,6 +508,7 @@ private:
 			status = clGetKernelWorkGroupInfo(kernel_map, dId,
 			CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_map, 0);
 			checkResult(status, "GetKernelWorkGroupInfo (map)");
+            std::cerr << "workgroup_size_map " << workgroup_size_map << "\n";
 		}
 
 		if (kernel_name2 != "") {
@@ -514,6 +517,7 @@ private:
 			status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
 			CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_reduce, 0);
 			checkResult(status, "GetKernelWorkGroupInfo (reduce)");
+            std::cerr << "workgroup_size_reduce " << workgroup_size_reduce << "\n";
 		}
 
 	}
@@ -626,6 +630,14 @@ public:
         Task.setTask(&task); 
     }
 
+    virtual void willRunOnCPU () {
+        ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_CPU);
+    }
+    
+    virtual void willRunOnGPU () {
+        ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_GPU);
+    }
+    
 	virtual int run(bool = false) {
 		return ff_node::run();
 	}
@@ -679,24 +691,36 @@ protected:
         if (ff_oclNode_t<T>::oclId < 0) {
             ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
             cl_device_id deviceId; 
-            
-            for (int i = 0; i < accelerators.size(); ++i) {
-                ssize_t GPUdevId =clEnvironment::instance()->getGPUDevice();
-                if( (GPUdevId !=-1) && ( ff_oclNode_t<T>::oclId < clEnvironment::instance()->getNumGPU())) { 
-                    printf("%d: Allocated a GPU device for accelerator %d, the id is %ld\n", ff_oclNode_t<T>::oclId, i, GPUdevId);
-                    deviceId=clEnvironment::instance()->getDevice(GPUdevId);
-                } else  {	
-                    // fall back to CPU either GPU has reached its max or there is no GPU available
-                    ssize_t CPUdevId =clEnvironment::instance()->getCPUDevice();
-                    printf("%d: Allocated a CPU device as either no GPU device is available or no GPU slot is available (cpuId=%ld)\n",ff_oclNode_t<T>::oclId, CPUdevId);
-                    deviceId=clEnvironment::instance()->getDevice(CPUdevId);
+
+            // Forced devices
+            if (ff_oclNode_t<T>::getDeviceType()==CL_DEVICE_TYPE_CPU) {
+                ssize_t CPUdevId = ff_oclNode_t<T>::getIdCPU();
+                printf("%d: Allocated a CPU device as either no GPU device is available or no GPU slot is available (cpuId=%ld)\n",ff_oclNode_t<T>::oclId, CPUdevId);
+                if (accelerators.size()!=1)
+                    std::cerr << "Too many accelerators rquested for CL_CPU device\n";
+                deviceId=clEnvironment::instance()->getDevice(CPUdevId);
+                accelerators[0].init(deviceId, kernel_code, kernel_name1,kernel_name2);
+            } else {
+                // TO BE REVIEWED
+
+                
+                for (int i = 0; i < accelerators.size(); ++i) {
+                    ssize_t GPUdevId =clEnvironment::instance()->getGPUDevice();
+                    if( (GPUdevId !=-1) && ( ff_oclNode_t<T>::oclId < clEnvironment::instance()->getNumGPU())) { 
+                        printf("%d: Allocated a GPU device for accelerator %d, the id is %ld\n", ff_oclNode_t<T>::oclId, i, GPUdevId);
+                        deviceId=clEnvironment::instance()->getDevice(GPUdevId);
+                    } else  {	
+                        // fall back to CPU either GPU has reached its max or there is no GPU available
+                        ssize_t CPUdevId =clEnvironment::instance()->getCPUDevice();
+                        printf("%d: Allocated a CPU device as either no GPU device is available or no GPU slot is available (cpuId=%ld)\n",ff_oclNode_t<T>::oclId, CPUdevId);
+                        deviceId=clEnvironment::instance()->getDevice(CPUdevId);
+                    }
+                    accelerators[i].init(deviceId, kernel_code, kernel_name1,kernel_name2);
                 }
-                accelerators[i].init(deviceId, kernel_code, kernel_name1,kernel_name2);
             }
         }
-		return 0;
-	}
-
+        return 0;
+    }
 	virtual void svc_end() {
 		if (!ff::ff_node::isfrozen())
 			for (int i = 0; i < accelerators.size(); ++i)
