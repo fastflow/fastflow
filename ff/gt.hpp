@@ -327,6 +327,11 @@ protected:
         return ((ff_gatherer *)obj)->push(task, retry, ticks);
     }
 
+#if defined(FF_TASK_CALLBACK)
+    void callbackIn(void  *t=NULL) { filter->callbackIn(t);  }
+    void callbackOut(void *t=NULL) { filter->callbackOut(t); }
+#endif
+
 public:
 
     /**
@@ -397,7 +402,11 @@ public:
      * \return Number of worker threads
      */
     inline size_t getnworkers() const { return (size_t)(running-neos-neosnofreeze); }
+
     
+    inline size_t getrunning() const { return (size_t)running;}
+    
+
     /**
      * \brief Get the number of workers
      *
@@ -442,6 +451,7 @@ public:
         return 0;
     }
 
+
     /**
      * \brief Initializes the gatherer task.
      *
@@ -478,6 +488,9 @@ public:
         gettimeofday(&wtstart,NULL);
         do {
             task = NULL;
+#if defined(FF_TASK_CALLBACK)
+            if (filter) callbackIn(this);
+#endif
             if (!skipfirstpop) 
                 nextr = gather_task(&task); 
             else skipfirstpop=false;
@@ -506,6 +519,10 @@ public:
                     ticksmax=(std::max)(ticksmax,diff);
 #endif    
                 }
+
+#if defined(FF_TASK_CALLBACK)
+                if (filter) callbackOut(this);
+#endif
 
                 // if the filter returns NULL we exit immediatly
                 if (task == GO_ON) continue;
@@ -671,6 +688,7 @@ public:
     virtual const struct timeval & getwstartime() const { return wtstart;}
     virtual const struct timeval & getwstoptime() const { return wtstop;}
 
+
 #if defined(TRACE_FASTFLOW)  
     /**
      * \brief The trace of FastFlow
@@ -708,6 +726,8 @@ private:
     struct timeval wtstart;
     struct timeval wtstop;
     double wttime;
+
+protected:
 
 #if defined(BLOCKING_MODE)
     // for the input queue

@@ -455,6 +455,12 @@ protected:
         }
     }
     
+
+#if defined(FF_TASK_CALLBACK)
+    virtual void callbackIn(void  *t=NULL) { filter->callbackIn(t);  }
+    virtual void callbackOut(void *t=NULL) { filter->callbackOut(t); }
+#endif
+
 public:
     /** 
      *  \brief Default constructor 
@@ -541,12 +547,6 @@ public:
      * \return the channel id
      */
     ssize_t get_channel_id() const { return channelid;}
-
-
-    // TOGLIERE
-    size_t workerselected() const { return (nextw % running); }  // NEW
-
-
 
     /**
      * \brief Resets the channel id
@@ -778,16 +778,29 @@ public:
         if (!master_worker && (multi_input.size()==0) && (int_multi_input.size()==0)) {
 
             do {
+#if defined(FF_TASK_CALLBACK)
+                if (filter) callbackIn(this);
+#endif
                 if (inpresent) {
                     if (!skipfirstpop) pop(&task);
                     else skipfirstpop=false;
                     
                     if (task == EOS) {
-                        if (filter) filter->eosnotify();
+                        if (filter) {
+                            filter->eosnotify();
+#if defined(FF_TASK_CALLBACK)
+                            callbackOut(this);
+#endif
+                        }
                         push_eos(); 
                         break;
                     } else if (task == EOS_NOFREEZE) {
-                        if (filter) filter->eosnotify();
+                        if (filter) {
+                            filter->eosnotify();
+#if defined(FF_TASK_CALLBACK)
+                            callbackOut(this);
+#endif
+                        }
                         ret = task;
                         break;
                     }
@@ -804,6 +817,10 @@ public:
                     ticksmin=(std::min)(ticksmin,diff);
                     ticksmax=(std::max)(ticksmax,diff);
 #endif  
+
+#if defined(FF_TASK_CALLBACK)
+                    callbackOut(this);
+#endif
                     if (task == GO_ON) continue; // going to get another task
                     if ((task == GO_OUT) || (task == EOS_NOFREEZE)) {
                         ret = task;
@@ -852,11 +869,20 @@ public:
             std::deque<ff_node *>::iterator start(availworkers.begin());
             std::deque<ff_node *>::iterator victim(availworkers.begin());
             do {
+#if defined(FF_TASK_CALLBACK)
+                if (filter) callbackIn(this);
+#endif
                 if (!skipfirstpop) {  
                     victim=collect_task(&task, availworkers, start);
                 } else skipfirstpop=false;
                 
-                if (task == GO_OUT) { ret = task; break; }
+                if (task == GO_OUT) { 
+#if defined(FF_TASK_CALLBACK)
+                    if (filter) callbackOut(this);
+#endif
+                    ret = task; 
+                    break; 
+                }
 
                 if ((task == EOS) || 
                     (task == EOS_NOFREEZE)) {
@@ -880,6 +906,9 @@ public:
                             push_eos();
                         }
                         ret = task;
+#if defined(FF_TASK_CALLBACK)
+                        if (filter) callbackOut(this);
+#endif
                         break; // received all EOS, exit
                     }
                     //}
@@ -896,10 +925,14 @@ public:
                         ticksmax=(std::max)(ticksmax,diff);
 #endif  
 
+#if defined(FF_TASK_CALLBACK)
+                        callbackOut(this);
+#endif      
+
                         if (task == GO_ON) continue;
                         if ((task == GO_OUT) || (task == EOS_NOFREEZE)){
-                            ret = task;
-                            break; // exiting from the loop without sending out the task
+                           ret = task;
+                           break; // exiting from the loop without sending out the task
                         }
                         // if the filter returns NULL we exit immediatly
                         if (!task || (task==(void*)FF_EOS)) {
@@ -1254,17 +1287,6 @@ private:
     struct timeval wtstop;
     double wttime;
 
-#if defined(TRACE_FASTFLOW)
-    unsigned long taskcnt;
-    ticks         lostpushticks;
-    unsigned long pushwait;
-    ticks         lostpopticks;
-    unsigned long popwait;
-    ticks         ticksmin;
-    ticks         ticksmax;
-    ticks         tickstot;
-#endif
-
  protected:
 #if defined(BLOCKING_MODE)
     // for the input queue
@@ -1282,6 +1304,17 @@ private:
     pthread_cond_t  prod_c;
     atomic_long_t   prod_counter;
 #endif    
+
+#if defined(TRACE_FASTFLOW)
+    unsigned long taskcnt;
+    ticks         lostpushticks;
+    unsigned long pushwait;
+    ticks         lostpopticks;
+    unsigned long popwait;
+    ticks         ticksmin;
+    ticks         ticksmax;
+    ticks         tickstot;
+#endif
 
 };
 

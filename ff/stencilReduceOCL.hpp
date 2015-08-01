@@ -403,8 +403,6 @@ public:
 	}
 
 	void asyncExecReduceKernel1() {
-        std::cerr << "globalThreadsReduce " << globalThreadsReduce << "\n";
-        std::cerr << "localThreadsReduce " << localThreadsReduce << "\n";
 		cl_int status = clEnqueueNDRangeKernel(cmd_queue, kernel_reduce, 1, NULL,
                                                &globalThreadsReduce, &localThreadsReduce, nevents_map, 
                                                (nevents_map==0)?NULL:&event_map,
@@ -508,7 +506,6 @@ private:
 			status = clGetKernelWorkGroupInfo(kernel_map, dId,
 			CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_map, 0);
 			checkResult(status, "GetKernelWorkGroupInfo (map)");
-            std::cerr << "workgroup_size_map " << workgroup_size_map << "\n";
 		}
 
 		if (kernel_name2 != "") {
@@ -517,7 +514,6 @@ private:
 			status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
 			CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_reduce, 0);
 			checkResult(status, "GetKernelWorkGroupInfo (reduce)");
-            std::cerr << "workgroup_size_reduce " << workgroup_size_reduce << "\n";
 		}
 
 	}
@@ -581,7 +577,7 @@ private:
 
     std::vector<cl_event> events_h2d;
 
-	cl_device_id deviceId; 
+    cl_device_id deviceId; 
 };
 
 
@@ -630,14 +626,30 @@ public:
         Task.setTask(&task); 
     }
 
-    virtual void willRunOnCPU () {
+    // sets the OpenCL devices that have to be used
+    int setDevices(std::vector<cl_device_id> &dev) {
+        if (dev.size() > accelerators.size()) return -1; 
+        devices = dev;
+        if (ff_oclNode_t<T>::oclId < 0) 
+            ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
+
+        for (size_t i = 0; i < devices.size(); ++i) 
+            accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);
+
+        return 0;
+    }
+
+    // force execution on the CPU
+    void willRunOnCPU () {        
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_CPU);
     }
     
-    virtual void willRunOnGPU () {
+    // force execution on the GPU
+    void willRunOnGPU () {
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_GPU);
     }
     
+
 	virtual int run(bool = false) {
 		return ff_node::run();
 	}
@@ -678,6 +690,29 @@ public:
 		return Task.getReduceVar();
 	}
 
+    // FIX: 
+    int nodeInit() { 
+        if (devices.size()==0) {
+            if (ff_oclNode_t<T>::deviceId == NULL) return -1;
+            accelerators[0].init(ff_oclNode_t<T>::deviceId, 
+                                 kernel_code, kernel_name1,kernel_name2);                
+        }
+        if (devices.size() > accelerators.size()) return -1; 
+        for (size_t i = 0; i < devices.size(); ++i) 
+            accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);
+        return 0;
+    }
+
+    void nodeEnd() {
+        if (devices.size()==0) {
+            if (ff_oclNode_t<T>::deviceId != NULL)
+                accelerators[0].release();
+        } else 
+            for (size_t i = 0; i < devices.size(); ++i) 
+                accelerators[i].release();     
+    }
+
+
 protected:
 
 	virtual bool isPureMap() const    { return false; }
@@ -690,37 +725,48 @@ protected:
 	virtual int svc_init() {
         if (ff_oclNode_t<T>::oclId < 0) {
             ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
-            cl_device_id deviceId; 
-
-            // Forced devices
-            if (ff_oclNode_t<T>::getDeviceType()==CL_DEVICE_TYPE_CPU) {
-                ssize_t CPUdevId = ff_oclNode_t<T>::getIdCPU();
-                printf("%d: Allocated a CPU device as either no GPU device is available or no GPU slot is available (cpuId=%ld)\n",ff_oclNode_t<T>::oclId, CPUdevId);
-                if (accelerators.size()!=1)
-                    std::cerr << "Too many accelerators rquested for CL_CPU device\n";
-                deviceId=clEnvironment::instance()->getDevice(CPUdevId);
-                accelerators[0].init(deviceId, kernel_code, kernel_name1,kernel_name2);
+            
+            if (devices.size()>0) {
+                if (devices.size() > accelerators.size()) {
+                    error("stencilReduceOCL::svc_init: more devices than accelerators !\n");
+                    return -1; 
+                }
+                for (size_t i = 0; i < devices.size(); ++i) 
+                    accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);                
             } else {
-                // TO BE REVIEWED
-
+                cl_device_id deviceId; 
                 
-                for (int i = 0; i < accelerators.size(); ++i) {
-                    ssize_t GPUdevId =clEnvironment::instance()->getGPUDevice();
-                    if( (GPUdevId !=-1) && ( ff_oclNode_t<T>::oclId < clEnvironment::instance()->getNumGPU())) { 
-                        printf("%d: Allocated a GPU device for accelerator %d, the id is %ld\n", ff_oclNode_t<T>::oclId, i, GPUdevId);
-                        deviceId=clEnvironment::instance()->getDevice(GPUdevId);
-                    } else  {	
-                        // fall back to CPU either GPU has reached its max or there is no GPU available
-                        ssize_t CPUdevId =clEnvironment::instance()->getCPUDevice();
-                        printf("%d: Allocated a CPU device as either no GPU device is available or no GPU slot is available (cpuId=%ld)\n",ff_oclNode_t<T>::oclId, CPUdevId);
-                        deviceId=clEnvironment::instance()->getDevice(CPUdevId);
+                // Forced devices
+                if (ff_oclNode_t<T>::getDeviceType()==CL_DEVICE_TYPE_CPU) {
+                    ssize_t CPUdevId = clEnvironment::instance()->getCPUDevice();
+                    printf("%d: Allocated a CPU device as either no GPU device is available or no GPU slot is available (cpuId=%ld)\n",ff_oclNode_t<T>::oclId, CPUdevId);
+                    if (accelerators.size()!=1)  printf("WARNING: Too many accelerators rquested for CL_CPU device\n");
+                    deviceId=clEnvironment::instance()->getDevice(CPUdevId);
+                    accelerators[0].init(deviceId, kernel_code, kernel_name1,kernel_name2);
+                } else {
+                    // TO BE REVIEWED
+                    
+                    
+                    for (int i = 0; i < accelerators.size(); ++i) {
+                        ssize_t GPUdevId =clEnvironment::instance()->getGPUDevice();
+                        if( (GPUdevId !=-1) && ( ff_oclNode_t<T>::oclId < clEnvironment::instance()->getNumGPU())) { 
+                            printf("%d: Allocated a GPU device for accelerator %d, the id is %ld\n", ff_oclNode_t<T>::oclId, i, GPUdevId);
+                            deviceId=clEnvironment::instance()->getDevice(GPUdevId);
+                        } else  {	
+                            // fall back to CPU either GPU has reached its max or there is no GPU available
+                            ssize_t CPUdevId =clEnvironment::instance()->getCPUDevice();
+                            printf("%d: Allocated a CPU device as either no GPU device is available or no GPU slot is available (cpuId=%ld)\n",ff_oclNode_t<T>::oclId, CPUdevId);
+                            deviceId=clEnvironment::instance()->getDevice(CPUdevId);
+                        }
+                        accelerators[i].init(deviceId, kernel_code, kernel_name1,kernel_name2);
                     }
-                    accelerators[i].init(deviceId, kernel_code, kernel_name1,kernel_name2);
                 }
             }
         }
         return 0;
     }
+    
+
 	virtual void svc_end() {
 		if (!ff::ff_node::isfrozen())
 			for (int i = 0; i < accelerators.size(); ++i)
@@ -906,9 +952,6 @@ protected:
 		return (oneshot ? NULL : task);
 	}
 
-	TOCL Task;
-	const bool oneshot;
-
 private:
 	void setcode(const std::string &codestr1, const std::string &codestr2) {
 		int n = 0;
@@ -982,9 +1025,13 @@ private:
 	}
 
 private:
+	TOCL Task;
+	const bool oneshot;
+
     std::vector<accelerator_t> accelerators;
     std::vector<std::pair<size_t, size_t> > acc_in;
     std::vector<std::pair<size_t, size_t> > acc_out;
+    std::vector<cl_device_id> devices;
 	int stencil_width;
 
 	std::string kernel_code;
