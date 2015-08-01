@@ -34,82 +34,24 @@
 #define FF_OPENCL
 #endif
 
-#define CHECK 1
-
-#include <ff/stencilReduceOCL.hpp>
+#include <string>
 #include <vector>
+#include <ff/ocl/clEnvironment.hpp>
 
 using namespace ff;
 
-// the corresponding OpenCL type is in the (local) file 'ff_opencl_datatypes.cl'
-struct mypair { float a; float b; };
-
-
-FF_OCL_MAP_ELEMFUNC2(mapf, float, mypair, elem, 
-                    return (elem.a * elem.b);
-);
-
-FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
-             return (x+y); 
-             );
-
-
-struct oclTask: public baseOCLTask<oclTask, mypair, float> {
-    oclTask():M(NULL),Mout(NULL),result(0.0), size(0) {}
-    oclTask(mypair *M, size_t size):M(M),Mout(NULL),result(0.0),size(size) {
-        Mout = new float[size];
-        assert(Mout);
-    }
-    ~oclTask() { if (Mout) delete [] Mout; }
-    void setTask(const oclTask *t) { 
-       assert(t);
-       setInPtr(t->M, t->size);
-       setOutPtr(t->Mout);
-       setReduceVar(&(t->result));
-     }
-
-    mypair *M;
-    float  *Mout, result;
-    const size_t  size;
-};
-
 int main(int argc, char * argv[]) {
-    size_t size = 1024;
-    if (argc>1) size     =atol(argv[1]);
-    printf("arraysize = %ld\n", size);
-
-    mypair *M        = new mypair[size];
-    for(size_t j=0;j<size;++j) {M[j].a=j*1.0; M[j].b=1; /*j*2.0;*/}
-
-#if defined(CHECK)
-    float r = 0.0;
-    for(size_t j=0;j<size;++j) {
-        r += M[j].a * M[j].b;
-    }
-#endif
+    std::vector<std::string> res = clEnvironment::instance()->getDevsInfo();
     
-    oclTask oclt(M, size);
-    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0.0, 1);
-    std::vector<std::string> res = oclMR.getOCLDeviceInfo();
-    
-    for (int i=0; i<res.size(); ++i)
+    for (size_t i=0; i<res.size(); ++i)
         std::cout << i << " - " << res[i] << std::endl;
     
-    std::cout << "First CPU is " << oclMR.getOCL_firstCPUId() << "\n";
-    std::cout << "First GPU is " << oclMR.getOCL_firstGPUId() << "\n";
-    
-    std::vector<int> *allgpus = oclMR.getOCL_AllGPUIds();
-    for (int i=0; i<allgpus->size(); ++i)
-        std::cout << "GPU #" << i << " ID " << allgpus->at(i) << std::endl;
-    delete (allgpus); // This is to be checked - where is better to allocate the vector?
-    
-    oclMR.run_and_wait_end();
+    std::cout << "First CPU is " << clEnvironment::instance()->getCPUDevice() << "\n";
+    std::cout << "First GPU is " << clEnvironment::instance()->getGPUDevice() << "\n";
 
-    delete [] M;
-    printf("res=%.2f\n", oclt.result);
-#if defined(CHECK)
-    if (r != oclt.result) printf("Wrong result, should be %.2f\n", r);
-    else printf("OK\n");
-#endif
+    std::vector<ssize_t> allgpus = clEnvironment::instance()->getGPUallDevices();
+    for (size_t i=0; i<allgpus.size(); ++i)
+        std::cout << "GPU #" << i << " ID " << allgpus.at(i) << std::endl;
+    
     return 0;
 }
