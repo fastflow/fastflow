@@ -421,6 +421,8 @@ private:
     friend class ff_farm;
     friend class ff_pipeline;
     friend class ff_map;
+    template <typename IN,typename OUT>
+    friend class ff_nodeSelector;
     friend class ff_loadbalancer;
     friend class ff_gatherer;
     friend class ff_ofarm;
@@ -781,7 +783,6 @@ public:
      *  
      */
     virtual  ~ff_node() {
-        if (end_callback) end_callback(end_callback_param);
         if (in && myinbuffer) delete in;
         if (out && myoutbuffer) delete out;
         if (thread) delete thread;
@@ -817,8 +818,22 @@ public:
     virtual void  svc_end() {}
 
 
+    /**
+     * \brief Node initialisation
+     *
+     * This is a different initialization method with respect to svc_init (the default method).
+     * This can be used to explicitly initialize the object when the node is not running as a thread.
+     *
+     * \return 0
+     */
     virtual int   nodeInit() { return 0; }
 
+    /**
+     * \brief Node finalisation.
+     *
+     * This is a different finalisation method with respect to svc_end (the default method).
+     * This can be used to explicitly finalise the object when the node is not running as a thread.
+     */
     virtual void  nodeEnd()  { }
 
     virtual void eosnotify(ssize_t id=-1) {}
@@ -960,20 +975,13 @@ public:
         if (out) out->reset();
     }
 
-    virtual void registerEndCallback(void(*cb)(void*), void *param=NULL) {
-        assert(cb != NULL);
-        end_callback=cb;
-        end_callback_param = param;
-    }
-
 protected:
 
     ff_node():in(0),out(0),myid(-1),CPUId(-1),
               myoutbuffer(false),myinbuffer(false),
               skip1pop(false), in_active(true), 
               multiInput(false), multiOutput(false), 
-              thread(NULL),callback(NULL),barrier(NULL),
-              end_callback(NULL), end_callback_param(NULL) {
+              thread(NULL),callback(NULL),barrier(NULL) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
@@ -999,13 +1007,12 @@ protected:
         fftree_ptr=const_cast<fftree*>(ptr); 
     }
 
-private:
-    
-
     void registerCallback(bool (*cb)(void *,unsigned long,unsigned long,void *), void * arg) {
         callback=cb;
         callback_arg=arg;
     }
+
+private:
 
     void  setCPUId(int id) { CPUId = id;}
 
@@ -1161,8 +1168,6 @@ private:
     bool (*callback)(void *,unsigned long,unsigned long, void *);
     void            * callback_arg;
     BARRIER_T       * barrier;      /// A \p Barrier object
-    void (*end_callback)(void*);  
-    void *end_callback_param;
     struct timeval tstart;
     struct timeval tstop;
     struct timeval wtstart;

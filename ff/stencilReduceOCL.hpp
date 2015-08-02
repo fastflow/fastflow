@@ -68,7 +68,7 @@ public:
     /* --- the user may overrider these methods --- */ 
 
 	virtual bool   iterCondition(const Tout&, size_t) { return false; } 
-	virtual Tout   combinator(Tout const &, Tout const &)  { return Tout(); }
+	virtual Tout   combinator(const Tout&, const Tout&)  { return Tout(); }
     virtual void   incIter()                     { ++iter; }
 	virtual size_t getIter() const               { return iter; }
 	virtual void   resetIter(const size_t val=0) { iter = val; } 
@@ -633,12 +633,12 @@ public:
     }
 
     // force execution on the CPU
-    void willRunOnCPU () {        
+    void runOnCPU () {        
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_CPU);
     }
     
     // force execution on the GPU
-    void willRunOnGPU () {
+    void runOnGPU () {
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_GPU);
     }
     
@@ -686,9 +686,24 @@ public:
     // FIX: 
     int nodeInit() { 
         if (devices.size()==0) {
-            if (ff_oclNode_t<T>::deviceId == NULL) return -1;
-            accelerators[0].init(ff_oclNode_t<T>::deviceId, 
-                                 kernel_code, kernel_name1,kernel_name2);                
+            ssize_t devId;
+            switch(ff_oclNode_t<T>::getDeviceType()) {
+            case CL_DEVICE_TYPE_CPU: {                
+                devId = clEnvironment::instance()->getCPUDevice();
+                if (accelerators.size()!=1)  printf("WARNING: Too many accelerators rquested for CL_CPU device\n");
+                ff_oclNode_t<T>::deviceId=clEnvironment::instance()->getDevice(devId);
+            } break;
+            case CL_DEVICE_TYPE_GPU: {
+                devId = clEnvironment::instance()->getGPUDevice();
+                if (accelerators.size()!=1)  printf("WARNING: Too many accelerators rquested for CL_GPU device\n");
+                ff_oclNode_t<T>::deviceId=clEnvironment::instance()->getDevice(devId);
+            } break;
+            default: {
+                error("stencilReduceOCL::nodeInit: no device selected\n");
+                return -1;
+            }
+            }
+            accelerators[0].init(ff_oclNode_t<T>::deviceId, kernel_code, kernel_name1,kernel_name2);                
         }
         if (devices.size() > accelerators.size()) return -1; 
         for (size_t i = 0; i < devices.size(); ++i) 
