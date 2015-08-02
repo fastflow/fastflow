@@ -56,10 +56,10 @@ FF_OCL_STENCIL_ELEMFUNC1(map2f, float, useless, i, A, i_, float, B,
 
                          return A[i_] * B[i_];
                          );
-FF_OCL_STENCIL_ELEMFUNC2(map3f, float, useless, i, R, i_, float, A, float, sum_,
+FF_OCL_STENCIL_ELEMFUNC2(map3f, float, useless, i, A, i_, float, R, float, sum_,
                          (void)useless; const float sum = *sum_;
 
-                         return R[i_] + (1 / (A[i_] + sum));
+                         return R[i_] + 1 / (A[i_] + sum);
                          );
 FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
 
@@ -77,6 +77,7 @@ struct Task: public baseOCLTask<Task, float, float> {
        case 1: {
            setInPtr(const_cast<float*>(t->A.data()),  t->A.size());
            setEnvPtr(&(t->k), 1);
+           setOutPtr(const_cast<float*>(t->A.data()));
        } break;
        case 2: {
            setInPtr(const_cast<float*>(t->A.data()),  t->A.size());
@@ -85,6 +86,7 @@ struct Task: public baseOCLTask<Task, float, float> {
        } break;
        case 3: {
            setInPtr(const_cast<float*>(t->A.data()),  t->A.size());
+           setEnvPtr(const_cast<float*>(t->R->data()),  t->R->size());
            setEnvPtr(&(t->sum), 1);
            setOutPtr(const_cast<float*>(t->R->data()),  t->R->size());
        } break;
@@ -121,30 +123,28 @@ struct Kernel: ff_nodeSelector<Task> {
             for(size_t k=0;k<NVECTORS;++k) {
                 Task *task = new Task(arraySize, k);
                 task->kernelId = 1;
-                //task = reinterpret_cast<Task*>(getNode(selectedDevice)->svc(task));
-                task = reinterpret_cast<Task*>(getNode(0)->svc(task));
+                task = reinterpret_cast<Task*>(getNode(selectedDevice)->svc(task));
                 ff_send_out(task);
             }
             return EOS;                
         } break;
         case 2: {
-            in->C = C;
+            in->C = C;                // FIX
             in->kernelId = 2;
             in = reinterpret_cast<Task*>(getNode(selectedDevice)->svc(in));
             return in;            
         } break;
         case 3: {
-            in->R = R;
+            in->R = R;                // FIX
             in->kernelId = 3;
-            //in = reinterpret_cast<Task*>(getNode(selectedDevice)->svc(in));
-            in = reinterpret_cast<Task*>(getNode(0)->svc(in));
+            in = reinterpret_cast<Task*>(getNode(selectedDevice)->svc(in));
             return in;            
         } break;
         default: abort();
         }
         return EOS;
     }
-        
+    
     const size_t      kernelId;
     const std::string command;
     const size_t      NVECTORS;

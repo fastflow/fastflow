@@ -391,8 +391,7 @@ public:
 	}
 
 	void asyncExecReduceKernel1() {
-        std::cerr << "asyncExecReduceKernel1 global " << globalThreadsReduce << " local" << localThreadsReduce << "\n";
-
+        //std::cerr << "asyncExecReduceKernel1 global " << globalThreadsReduce << " local" << localThreadsReduce << "\n";
 		cl_int status = clEnqueueNDRangeKernel(cmd_queue, kernel_reduce, 1, NULL,
                                                &globalThreadsReduce, &localThreadsReduce, nevents_map, 
                                                (nevents_map==0)?NULL:&event_map,
@@ -504,8 +503,7 @@ private:
 			status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
 			CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_reduce, 0);
 			checkResult(status, "GetKernelWorkGroupInfo (reduce)");
-            std::cerr << "GetKernelWorkGroupInfo (reduce) " << workgroup_size_reduce << "\n";
-            
+            //std::cerr << "GetKernelWorkGroupInfo (reduce) " << workgroup_size_reduce << "\n";            
 		}
 
 	}
@@ -937,13 +935,14 @@ protected:
 
 					go = Task.iterCondition_aux();
 					if (go) {
+                        assert(outPtr);
 						//(async) read back borders (d2h)
 						for (int i = 0; i < accelerators.size(); ++i)
-							accelerators[i].asyncD2Hborders(Task.getOutPtr());
+							accelerators[i].asyncD2Hborders(outPtr);
 						waitford2h(); //wait for cross-accelerators d2h
 						//(async) read borders (h2d)
 						for (int i = 0; i < accelerators.size(); ++i)
-							accelerators[i].asyncH2Dborders(Task.getOutPtr());
+							accelerators[i].asyncH2Dborders(outPtr);
 					}
 
 					//Task.after();
@@ -952,9 +951,11 @@ protected:
 			}
 
             //(async)read back output (d2h)
-            for (int i = 0; i < accelerators.size(); ++i)
-                accelerators[i].asyncD2Houtput(Task.getOutPtr());
-            waitford2h(); //wait for cross-accelerators d2h
+            if (outPtr) {
+                for (int i = 0; i < accelerators.size(); ++i)
+                    accelerators[i].asyncD2Houtput(outPtr);
+                waitford2h(); //wait for cross-accelerators d2h
+            }
 		}
 
 		return (oneshot ? NULL : task);
