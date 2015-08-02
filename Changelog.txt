@@ -1,3 +1,8 @@
+* 
+   - nodeInit and nodeEnd added in the ff_node class as virtual methods
+   - added ff_selectNode, a simple pattern for selecting between different ff_node
+   - stencilReduceOCL used for map, reduce and map-reduce
+   - OpenCL support completely re-implemented
 * 10/06/15 - v.2.0.8
    - added BLOCKING_MODE compile time optione. Now it is possible to select 
      a blocking run-time. The default mode is unblocking.

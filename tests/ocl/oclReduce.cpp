@@ -36,8 +36,8 @@
 using namespace ff;
 
 FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
-                          //return (x+y);
-             );
+                          return (x+y);
+                          );
 
 struct oclTask: public baseOCLTask<oclTask, float> {
     oclTask():M(NULL),result(0.0),size(0) {}
@@ -46,10 +46,6 @@ struct oclTask: public baseOCLTask<oclTask, float> {
         assert(t);
         setInPtr(t->M, t->size);
         setReduceVar(&(t->result));
-    }
-
-    float combinator(float const &x, float const &y) {
-    	return (x+y);
     }
 
     float        *M;
