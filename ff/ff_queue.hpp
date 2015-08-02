@@ -4,8 +4,6 @@
 #define FF_QUEUE_HPP
 
 /*!
- *
- * \link
  * \file ff_queue.hpp
  * \ingroup aux_classes
  *

@@ -1,11 +1,10 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-/*! 
-
- *  \file stecilReduceOCL.hpp
+/*!
+ *  \file stencilReduceOCL.hpp
  *  \ingroup high_level_patterns
  *
- *  \brief OpenCL map and non-iterative data-parallel patterns
+ *  \brief StencilReduceLoop data-parallel pattern and derived data-parallel patterns
  *
  */
 
@@ -45,7 +44,6 @@
 #include <ff/oclnode.hpp>
 #include <ff/node.hpp>
 #include <ff/mapper.hpp>
-#include <ff/oclnode.hpp>
 #include <ff/stencilReduceOCL_macros.hpp>
 
 namespace ff {
@@ -144,17 +142,7 @@ protected:
 
 
 
-/*
- * \class ff_ocl
- *  \ingroup high_level_patterns
- *
- * \brief The FF ocl kernel interface
- *
- * The kernel skeleton using OpenCL
- *
- * This class is defined in \ref map.hpp
- *
- */
+
 template<typename T, typename TOCL = T>
 class ff_oclAccelerator {
 public:
@@ -403,6 +391,8 @@ public:
 	}
 
 	void asyncExecReduceKernel1() {
+        std::cerr << "asyncExecReduceKernel1 global " << globalThreadsReduce << " local" << localThreadsReduce << "\n";
+
 		cl_int status = clEnqueueNDRangeKernel(cmd_queue, kernel_reduce, 1, NULL,
                                                &globalThreadsReduce, &localThreadsReduce, nevents_map, 
                                                (nevents_map==0)?NULL:&event_map,
@@ -514,6 +504,8 @@ private:
 			status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
 			CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_reduce, 0);
 			checkResult(status, "GetKernelWorkGroupInfo (reduce)");
+            std::cerr << "GetKernelWorkGroupInfo (reduce) " << workgroup_size_reduce << "\n";
+            
 		}
 
 	}
@@ -581,14 +573,15 @@ private:
 };
 
 
-/*
- * \class ff_mapreduceOCL
- *  \ingroup high_level_patterns_shared_memory
+/*!
+ * \class ff_stencilReduceLoopOCL_1D
+ * \ingroup high_level_patterns
  *
- * \brief The map reduce skeleton using OpenCL
+ * \brief The OpenCL-based StencilReduceLoop pattern in 1 dimension
  *
- *
+ * This class is defined in \ref stencilReduceOCL.hpp
  */
+    
 template<typename T, typename TOCL = T>
 class ff_stencilReduceLoopOCL_1D: public ff_oclNode_t<T> {
 public:
@@ -1042,15 +1035,13 @@ private:
 };
 
 
-/*
- * \class ff_mapOCL
- *  \ingroup high_level_patterns_shared_memory
+/*!
+ * \class ff_mapOCL_1D
+ *  \ingroup high_level_patterns
  *
- * \brief The map skeleton.
+ * \brief The OpenCL-based Map pattern in 1 dimension
  *
- * The map skeleton using OpenCL
- *
- * This class is defined in \ref map.hpp
+ * This class is defined in \ref stencilReduceOCL.hpp
  *
  */
 template<typename T, typename TOCL = T>
@@ -1066,12 +1057,14 @@ public:
 	bool isPureMap() const { return true; }
 };
 
-/*
+/*!
  * \class ff_reduceOCL_1D
- *  \ingroup high_level_patterns_shared_memory
  *
- * \brief The reduce skeleton using OpenCL
+ * \ingroup high_level_patterns
  *
+ * \brief The OpenCL-based Reduce pattern in 1 dimension
+ *
+ * This class is defined in \ref stencilReduceOCL.hpp
  *
  */
 template<typename T, typename TOCL = T>
@@ -1092,8 +1085,8 @@ public:
 };
 
 /*
- * \class ff_mapReduceOCL
- *  \ingroup high_level_patterns_shared_memory
+ * \class f_mapReduceOCL_1D
+ *  \ingroup high_level_patterns
  *
  * \brief The mapReduce skeleton.
  *

@@ -1,0 +1,84 @@
+/*!
+\namespace ff
+\brief The principal namespace for the FastFlow library.
+
+All classes and functions in the FastFlow library are contained within this namespace.
+*/
+ 
+
+
+/*!
+\defgroup applications Applications & Benchmarks
+\brief Benchmarks and applications for the FastFlow framework.
+  
+Benchmarks and applications are not part of the FastFlow development
+framework and are provided to show main features and to provide users
+with coding examples and benchmarks. In many case they are porting of
+existing open-source applications.
+
+We encourage FastFlow users to send us their applications and
+examples. You can email us your benchmarks at aldinuc[@]di.unito.it.
+*/
+
+/*!
+\defgroup high_level_patterns High-level patterns
+
+\brief Patterns for "in-place" (easy) parallelisation of sequential code. 
+
+They are clearly characterised in a specific usage context and are targeted to the parallelisation of sequential (legacy) code. Examples are exploitation of loop parallelism, stream parallelism, data-parallel algorithms, execution of general workflows of tasks, etc. The are typically equipped with self-optimisation capabilities (e.g. load-balancing, grain auto-tuning, parallelism-degree auto-tuning) and exhibit no or limited nesting capability. Examples are: parallel-for, pipeline, stencil-reduce, mdf (macro-data-flow). Some of them targets specific devices (e.g. GPGPUs). They are implemented on top of core patterns. 
+*/
+
+/*!
+\defgroup core_patterns Core patterns
+
+\brief Core patterns (basic streaming patterns)
+
+Basic streaming patterns: pipeline, farm and loopback qualifier
+*/
+
+/*!
+\defgroup building_blocks Building blocks
+
+\brief Run-time support building blocks
+
+Set up of Parallel activities, synchronisations, communications, ...
+
+*/
+
+/*!
+\defgroup aux_classes Auxiliary classes and functions
+
+\brief Auxiliary classes
+
+Auxiliary classes: general utility classes and algorithms
+*/
+
+ 
+/*!
+\defgroup extra_functional_features Extra Functional Features
+
+\brief Not yet documented
+*/
+
+/*!
+\defgroup supported_platforms Supported platforms
+
+\brief Supported HW platforms
+
+FastFlow targets multicore, many-core (GPGPUs) and distributed systems.
+
+\li Multicore: x86_64, Arm, PPC - Linux, Mac OS, Win 7/8
+\li Manycore: NVidia and AMD GPGPUs via CUDA and OpenCL. Experimental support for TILE64 and Xeon Phi (not documented)
+\li Distributed: TCP/IP via 0MQ and IB/OFED (not documented)
+*/
+
+/*!
+\page related_pages Related Pages
+
+\brief Scientific papers, website, code download, tutorial
+
+\li  FastFlow-related <a href="http://alpha.di.unito.it/parallel-programming-papers/fastflow-papers/" target="_blank">scientific papers</a> (only those authored by FastFlow core developers, for a comprehensive listing search on Google)
+\li Latest source code on <a href="https://sourceforge.net/p/mc-fastflow/code/HEAD/tree/">Sourceforge SVN</a>
+\li FastFlow web site <a href="calvados.di.unipi.it">home</a>
+\li Tutorial and programming examples (cooming soon)
+*/
