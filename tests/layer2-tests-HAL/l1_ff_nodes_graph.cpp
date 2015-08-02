@@ -128,7 +128,7 @@ public:
         return false;
     }
     
-    int run()   { return ff_node::run(); }
+    virtual int run(bool=false)   { return ff_node::run(); }
     int wait()  { return ff_node::wait(); }
     int create_input_buffer(int nentries, bool fixedsize=true) {
         return ff_node::create_input_buffer(nentries, fixedsize);
@@ -148,7 +148,7 @@ public:
         return GO_ON;
     }
 
-    int run()  { return ff_node::run(); }
+    virtual int run(bool=false)  { return ff_node::run(); }
     int wait() { return ff_node::wait(); }
     int create_input_buffer(int nentries, bool fixedsize=true) {
         return ff_node::create_input_buffer(nentries, fixedsize);
