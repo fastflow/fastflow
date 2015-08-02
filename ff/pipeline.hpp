@@ -835,7 +835,7 @@ private:
 
 #include <ff/make_unique.hpp>
 
-    /** 
+    /*! 
      * \class ff_Pipe
      * \ingroup high_level_patterns
      * 
@@ -849,7 +849,8 @@ private:
      * require one core per stage. If you need to model a workflow use \ref ff::ff_mdf
      *
      * \example pipe_basic.cpp
-     */ 
+     */
+    
     template<typename IN=char,typename OUT=IN>
     class ff_Pipe: public ff_pipeline {
     private:

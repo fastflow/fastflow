@@ -215,8 +215,8 @@ install( FILES ${FFHEADERS_PLAT} DESTINATION /include/ff/platforms )
 install( FILES ${FFHEADERS_D} DESTINATION /include/ff/d )
 
 if( BUILD_EXAMPLES )
-    enable_testing()
-    add_subdirectory( examples )
+#    enable_testing()
+#    add_subdirectory( examples )
 endif( BUILD_EXAMPLES )
 
 if( BUILD_TESTS )

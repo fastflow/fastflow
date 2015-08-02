@@ -36,6 +36,7 @@
 
 #include <string>
 #include <vector>
+#include <iostream>
 #include <ff/ocl/clEnvironment.hpp>
 
 using namespace ff;

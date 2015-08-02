@@ -1,9 +1,8 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*! 
- *  \link
  *  \file gsearch.hpp
- *  \ingroup high_level_patterns_shared_memory
+ *  \ingroup high_level_pattern
  *
  *  \brief This file implements the graph search skeleton.
  */

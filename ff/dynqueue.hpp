@@ -1,7 +1,6 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*!
- * \link
  * \file dynqueue.hpp
  * \ingroup aux_classes
  *

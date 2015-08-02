@@ -1,5 +1,15 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
+/*!
+ *  \file clEnvironment.hpp
+ *  \ingroup aux_classes
+ *
+ *  \brief This file includes the bsic support for OpenCL platforms
+ *
+ *  Realises a singleton class that keep the status of the OpenCL platform
+ *  creates contexts, command queues etc.
+ */
+
 
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify
@@ -26,6 +36,7 @@
  *
  ****************************************************************************
  */
+
 /*
  * Mehdi Goli:         m.goli@rgu.ac.uk  goli.mehdi@gmail.com
  * Massimo Torquati:   torquati@di.unipi.it
@@ -49,7 +60,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>   // FIX: check if it is possible to remove this include
-
+#include <sstream>
 #include <map>
 #include <vector>
 #include <ff/atomic/atomic.h>
@@ -74,18 +85,18 @@ struct oclParameter {
  *  \brief OpenCL platform inspection and setup
  *
  * \note Multiple paltforms are not managed. Platforms[0] is always adopted. Support for multiple 
- * platforms will be implemented when needed.
+ * platforms will be implemented if needed.
  *
  */
-
-class clEnvironment{
+    
+class clEnvironment {
 private:
     cl_platform_id *platforms;
     cl_uint numPlatforms;
     cl_uint numDevices;
     //cl_device_id* devlist_for_platform;
     cl_device_id* deviceIds;
-    
+protected:
     clEnvironment(): platforms(NULL), numPlatforms(0) {
         atomic_long_set(&oclId, 0);
         
@@ -185,7 +196,7 @@ public:
         return -1;
     }
 
-    std::vector<ssize_t> getGPUallDevices() {
+    std::vector<ssize_t> getAllGPUDevices() {
         cl_device_type dt;
         std::vector<ssize_t> ret;
         for(size_t i=0; i<clDevices.size(); i++) {
@@ -203,19 +214,24 @@ public:
     
     oclParameter *getParameter(cl_device_id id) { return dynamicParameters[id]; }
      
-    std::vector<std::string> getDevsInfo( ) {
+    std::vector<std::string> getDevicesInfo( ) {
         std::vector<std::string> res;
         //fprintf(stdout, "%d\n", numDevices);
         for(size_t j = 0; j < clDevices.size(); j++) {
             char buf[128];
-            std::string s1, s2;    
+            std::string s1, s2;
             clGetDeviceInfo(clDevices[j], CL_DEVICE_NAME, 128, buf, NULL);
             //fprintf(stdout, "Device %s supports ", buf);
             s1 = std::string(buf);
             clGetDeviceInfo(clDevices[j], CL_DEVICE_VERSION, 128, buf, NULL);
             //fprintf(stdout, "%s\n", buf);
             s2 = std::string(buf);
-            res.push_back(s1+" "+s2);
+            size_t max_workgroup_size = 0;
+            clGetDeviceInfo(clDevices[j], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t),
+                                &max_workgroup_size, NULL);
+            std::stringstream s3;
+            s3 << max_workgroup_size;
+            res.push_back(s1+" "+s2 + "MAX Work Group size " + s3.str());
         }
         return res;
     }

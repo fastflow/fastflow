@@ -47,7 +47,7 @@ namespace ff {
 
 
 /*!
- * \class Map pattern
+ * \class ff_Map
  *  \ingroup high_level_patterns
  *
  * \brief Map pattern
