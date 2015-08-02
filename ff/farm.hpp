@@ -356,10 +356,6 @@ public:
      * gatherer, all the workers
      */
     virtual ~ff_farm() { 
-        if (end_callback) { 
-            end_callback(end_callback_param);
-            end_callback = NULL;
-        }
         if (emitter_cleanup) 
             if (lb && lb->get_filter()) delete lb->get_filter();
         if (collector_cleanup)

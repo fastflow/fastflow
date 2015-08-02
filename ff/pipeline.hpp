@@ -243,7 +243,6 @@ public:
      * \brief Destructor
      */
     virtual ~ff_pipeline() {
-        if (end_callback) end_callback(end_callback_param);
         if (barrier) delete barrier;
         if (node_cleanup) {
             while(nodes_list.size()>0) {
