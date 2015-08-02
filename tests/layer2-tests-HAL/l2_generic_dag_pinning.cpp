@@ -99,7 +99,7 @@ public:
 
     void* svc(void *t) {
         long data = (long) t;
-        printf("N%ld running on core [%d] received task [%ld]\n",id,ff_getMyCore(),data);
+        printf("N%ld running on core [%ld] received task [%ld]\n",id,ff_getMyCore(),data);
         int nextcore = 1+ff_getMyCore()%ff_numCores();
         ff_mapThreadToCpu(nextcore);
         printf("Now pinning N%ld on core [%d]\n", id, nextcore);  
@@ -107,7 +107,7 @@ public:
         return t;
     }
     
-    int run()   { return ff_node::run(); }
+    virtual int run(bool=false)   { return ff_node::run(); }
     int wait()  { return ff_node::wait(); }
     int create_input_buffer(int nentries, bool fixedsize=true) {
         return ff_node::create_input_buffer(nentries, fixedsize);
@@ -115,7 +115,8 @@ public:
     int create_output_buffer(int nentries, bool fixedsize=true) {
         return ff_node::create_output_buffer(nentries, fixedsize);
     }
-    int set_output(FFBUFFER * const o) {
+    
+    virtual int set_output_buffer(FFBUFFER * const o) {
         return ff_node::set_output_buffer(o); 
     }
 
@@ -166,7 +167,7 @@ private:
 int main() {
     long ntasks = 10;
     
-    printf("\nN. of cores %d\n\n", ff_numCores());
+    printf("\nN. of cores %ld\n\n", ff_numCores());
     
     // Crete 6 generic nodes - max 1 in channel 1 out channel
     N n1(1),n2(2),n3(3),n4(4),n5(5),n6(6);
@@ -190,8 +191,8 @@ int main() {
     e2.skipfirstpop(true);
 
     // link n1->n5 and n4->n6
-    n1.set_output(n5.get_in_buffer());
-    n4.set_output(n6.get_in_buffer());
+    n1.set_output_buffer(n5.get_in_buffer());
+    n4.set_output_buffer(n6.get_in_buffer());
     
     // Create 1 collector and the links
     // n2->c1, n3->c1

@@ -673,7 +673,6 @@ protected:
     }
     
     /**
-     * \internal
      * \brief Suspend (freeze) the ff_node and run it
      *
      * Only initialisation will be performed
@@ -716,7 +715,6 @@ protected:
     }
     
     /**
-     * \internal
      * \brief Freeze (suspend) a ff_node
      */
     virtual void freeze() { 
@@ -725,7 +723,6 @@ protected:
     }
     
     /**
-     * \internal
      * \brief Thaw (resume) a ff_node
      */
     virtual void thaw(bool _freeze=false, ssize_t=-1) { 
@@ -734,7 +731,6 @@ protected:
     }
     
     /**
-     * \internal
      * \brief Checks if a ff_node is frozen
      * \return \p true is it frozen
      */
@@ -840,7 +836,6 @@ public:
 
    
     /**
-     * \internal
      * \brief Force ff_node-to-core pinning
      *
      * \param cpuID is the ID of the CPU to which the thread will be pinned.
