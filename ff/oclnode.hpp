@@ -1,15 +1,13 @@
 /* -*- Mode: C++; tab-width: 2; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*!
- * \link
  * \file oclnode.hpp
  * \ingroup building_blocks
  *
  * \brief FastFlow OpenCL interface node
  *
- * @detail This class bridges multicore with GPGPUs using OpenCL
+ * This class bridges multicore with GPGPUs using OpenCL
  *
- * \note This class is deprecated in the current form. It will be updated soon  
  */
 
 /* ***************************************************************************
@@ -43,7 +41,6 @@
  *  Massimo Torquati:      torquati@di.unipi.it
  *  Marco Aldinucci
  *
- *
  */
 
 #ifndef FF_OCLNODE_HPP
@@ -68,7 +65,7 @@ namespace ff{
  *
  */
     
-class ff_oclNode : public ff_node {
+class ff_oclNode : public ff_node, public clEnvironment {
 public:
 /* cl_device_type - bitfield 
    #define CL_DEVICE_TYPE_DEFAULT                      (1 << 0)
@@ -164,6 +161,15 @@ protected:
     cl_device_type    dtype;
 };
 
+
+/*!
+ *  \class ff_oclNode_t
+ *  \ingroup buiding_blocks
+ *
+ *  \brief OpenCL specialisation of the ff_node class (typed)
+ *
+ *
+ */    
 template<typename IN, typename OUT=IN>
 struct ff_oclNode_t: ff_oclNode {
     typedef IN  in_type;

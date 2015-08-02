@@ -675,10 +675,7 @@ public:
     /** 
      * \brief Send the same task to all workers 
      *
-     * \parm task is a void pointer
-     *
-     * It sends the same task to all workers.
-     *
+     * It sends the same task to all workers.   
      */
 #if !defined(BLOCKING_MODE)
     inline void broadcast_task(void * task) {
@@ -718,12 +715,7 @@ public:
 #endif
 
     /**
-     * \brief Gets master worker
-     *
-     * It returns master worker
-     *
-     * \return The master worker
-     *
+     * \brief Gets the masterworker flags
      */
     bool masterworker() const { return master_worker;}
     
@@ -732,7 +724,7 @@ public:
      *
      * It registers the given node in the worker list.
      *
-     * \parm w is the worker
+     * \param w is the worker
      *
      * \return 0 if successful, or -1 if not successful
      */
