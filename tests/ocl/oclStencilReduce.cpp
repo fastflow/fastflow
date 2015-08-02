@@ -165,7 +165,7 @@ struct oclTask: public baseOCLTask<oclTask, basictype, int> {
 		return iter < niters;
 	}
 
-	virtual basictype combinator(basictype x, basictype y) {
+	virtual basictype combinator(basictype const &x, basictype const &y) {
 		return x + y;
 	}
 

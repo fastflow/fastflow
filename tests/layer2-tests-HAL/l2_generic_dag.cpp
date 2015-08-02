@@ -103,7 +103,7 @@ public:
         return t;
     }
     
-    int run()   { return ff_node::run(); }
+    virtual int run(bool=false)   { return ff_node::run(); }
     int wait()  { return ff_node::wait(); }
     int create_input_buffer(int nentries, bool fixedsize=true) {
         return ff_node::create_input_buffer(nentries, fixedsize);
@@ -111,7 +111,7 @@ public:
     int create_output_buffer(int nentries, bool fixedsize=true) {
         return ff_node::create_output_buffer(nentries, fixedsize);
     }
-    int set_output(FFBUFFER * const o) {
+    virtual int set_output_buffer(FFBUFFER * const o) {
         return ff_node::set_output_buffer(o); 
     }
 
@@ -184,8 +184,8 @@ int main() {
     e2.skipfirstpop(true);
 
     // link n1->n5 and n4->n6
-    n1.set_output(n5.get_in_buffer());
-    n4.set_output(n6.get_in_buffer());
+    n1.set_output_buffer(n5.get_in_buffer());
+    n4.set_output_buffer(n6.get_in_buffer());
     
     // Create 1 collector and the links
     // n2->c1, n3->c1

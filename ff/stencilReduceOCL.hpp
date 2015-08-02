@@ -68,7 +68,7 @@ public:
     /* --- the user may overrider these methods --- */ 
 
 	virtual bool   iterCondition(const Tout&, size_t) { return false; } 
-	virtual Tout   combinator(const Tout&, const Tout&)  { return Tout(); } 
+	virtual Tout   combinator(Tout const &, Tout const &)  { return Tout(); }
     virtual void   incIter()                     { ++iter; }
 	virtual size_t getIter() const               { return iter; }
 	virtual void   resetIter(const size_t val=0) { iter = val; } 

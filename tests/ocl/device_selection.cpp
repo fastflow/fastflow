@@ -42,7 +42,7 @@
 using namespace ff;
 
 int main(int argc, char * argv[]) {
-    std::vector<std::string> res = clEnvironment::instance()->getDevsInfo();
+    std::vector<std::string> res = clEnvironment::instance()->getDevicesInfo();
     
     for (size_t i=0; i<res.size(); ++i)
         std::cout << i << " - " << res[i] << std::endl;
@@ -50,7 +50,7 @@ int main(int argc, char * argv[]) {
     std::cout << "First CPU is " << clEnvironment::instance()->getCPUDevice() << "\n";
     std::cout << "First GPU is " << clEnvironment::instance()->getGPUDevice() << "\n";
 
-    std::vector<ssize_t> allgpus = clEnvironment::instance()->getGPUallDevices();
+    std::vector<ssize_t> allgpus = clEnvironment::instance()->getAllGPUDevices();
     for (size_t i=0; i<allgpus.size(); ++i)
         std::cout << "GPU #" << i << " ID " << allgpus.at(i) << std::endl;
     
