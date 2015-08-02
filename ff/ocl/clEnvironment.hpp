@@ -88,7 +88,7 @@ struct oclParameter {
  * platforms will be implemented if needed.
  *
  */
-    
+
 class clEnvironment {
 private:
     cl_platform_id *platforms;
