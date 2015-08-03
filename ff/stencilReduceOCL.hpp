@@ -72,6 +72,9 @@ public:
     virtual void   incIter()                     { ++iter; }
 	virtual size_t getIter() const               { return iter; }
 	virtual void   resetIter(const size_t val=0) { iter = val; } 
+
+    // called at the end of loop
+    virtual void   afterLoop(TaskT_ &task)         {}
     /* -------------------------------------------- */ 	
 
     void resetTask() {
@@ -143,8 +146,6 @@ protected:
 };
 
 
-
-
 template<typename T, typename TOCL = T>
 class ff_oclAccelerator {
 public:
@@ -201,7 +202,6 @@ public:
     }
 
 	void relocateInputBuffer() {
-
 		cl_int status;
 
         // MA patch - map not defined => workgroup_size_map
@@ -647,7 +647,6 @@ public:
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_GPU);
     }
     
-
 	virtual int run(bool = false) {
 		return ff_node::run();
 	}
@@ -688,8 +687,6 @@ public:
 		return Task.getReduceVar();
 	}
 
-    // FIX:
-    /*
     int nodeInit() { 
         if (devices.size()==0) {
             ssize_t devId;
@@ -716,8 +713,7 @@ public:
             accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);
         return 0;
     }
-     */
-    /*
+
     void nodeEnd() {
         if (devices.size()==0) {
             if (ff_oclNode_t<T>::deviceId != NULL)
@@ -726,22 +722,16 @@ public:
             for (size_t i = 0; i < devices.size(); ++i) 
                 accelerators[i].release();     
     }
-     */
      
 protected:
 
 	virtual bool isPureMap() const    { return false; }
 	virtual bool isPureReduce() const { return false; }
 
-
     /* static mapping
      * Performs a static GPU greedy algorithm to allocate openCL resources
      */
 	virtual int svc_init() {
-        std::cerr << "svc_init()\n";
-        
-        
-        
         if (ff_oclNode_t<T>::oclId < 0) {
             ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
             
@@ -784,12 +774,9 @@ protected:
         }
         return 0;
     }
-    
 
 	virtual void svc_end() {
-		if (!ff::ff_node::isfrozen())
-			for (int i = 0; i < accelerators.size(); ++i)
-				accelerators[i].release();
+		if (!ff::ff_node::isfrozen()) nodeEnd();
 	}
 
 	T *svc(T *task) {
@@ -963,7 +950,7 @@ protected:
 
 				} while (go);
 			}
-
+            
             //(async)read back output (d2h)
             if (outPtr) {
                 for (int i = 0; i < accelerators.size(); ++i)
@@ -971,6 +958,7 @@ protected:
                 waitford2h(); //wait for cross-accelerators d2h
             }
 		}
+        Task.afterLoop(oneshot ? Task: *task);
 
 		return (oneshot ? NULL : task);
 	}
