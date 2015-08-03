@@ -143,8 +143,8 @@ protected:
             if((b & CL_TRUE) && (status == CL_SUCCESS)) clDevices.push_back(deviceIds[j]);    
             clReleaseContext(context);
         }
-        delete deviceIds;
-        delete platforms;
+        delete [] deviceIds;
+        delete [] platforms;
         //std::cerr << "OpenCL platform detection - end \n";
         
         // prepare per device parameters: context and command queue
