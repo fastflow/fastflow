@@ -159,7 +159,8 @@ struct Kernel: ff_nodeSelector<Task> {
             in->R = R;                
             in->kernelId = 3;
             in = reinterpret_cast<Task*>(getNode(selectedDevice)->svc(in));
-            return in;            
+            delete in;
+            return GO_ON;         
         } break;
         default: abort();
         }
@@ -171,7 +172,7 @@ struct Kernel: ff_nodeSelector<Task> {
     const size_t      NVECTORS;
     const size_t      arraySize;
 
-    // these are not part of the stream, they are data neede to compute the kernel (kernel2 and kernel3)
+    // these are not part of the stream, they are data needed to compute the kernel (kernel2 and kernel3)
     std::vector<float> *C;
     std::vector<float> *R;
 };
@@ -220,7 +221,7 @@ struct Map_kernel3: ff_Map<Task,Task,float> {
             R[i] += 1 / (A[i] + sum);
         /* ----------------------------------- */
 
-        return GO_ON;
+        return task;
     }
 };
 /* ------------------------------------------------------------ */
