@@ -59,7 +59,7 @@ public:
     typedef Tout_   Tout;
 
     baseOCLTask(): inPtr(NULL),outPtr(NULL),reduceVar(NULL),
-                   size_in(0),size_out(0),iter(0)   { }   
+                   size_in(0),size_out(0),iter(0),copy_in(true)   { }   
     virtual ~baseOCLTask() { }
     
     // user must override this method
@@ -72,14 +72,13 @@ public:
     virtual void   incIter()                     { ++iter; }
 	virtual size_t getIter() const               { return iter; }
 	virtual void   resetIter(const size_t val=0) { iter = val; } 
-
     /* -------------------------------------------- */ 	
 
     void resetTask() {
         envPtr.resize(0);
         copyEnv.resize(0);
     }
-    void setInPtr(Tin*    _inPtr,  size_t sizeIn=1)  { inPtr  = _inPtr; size_in = sizeIn; }
+    void setInPtr(Tin*    _inPtr,  size_t sizeIn=1, bool copy=true)  { inPtr  = _inPtr; size_in = sizeIn; copy_in = copy; }
     void setOutPtr(Tout*  _outPtr, size_t sizeOut=0) { outPtr = _outPtr; size_out = sizeOut; }
     template<typename ptrT>
     void setEnvPtr(const ptrT* _envPtr, size_t size, bool copy=true)  { 
@@ -106,6 +105,8 @@ public:
         return copyEnv[idx].second;
     }
     
+    bool getCopyIn() const { return copy_in; }
+
     size_t getSizeIn()   const { return size_in;   }
     size_t getSizeOut()  const { return (size_out==0)?size_in:size_out;  }
     size_t getSizeEnv(const size_t idx)  const { 
@@ -135,6 +136,7 @@ protected:
     Tout    *outPtr;
     Tout    *reduceVar, identityVal;
     size_t   size_in, size_out, iter;
+    bool     copy_in;
 
     std::vector<std::pair<void*,size_t> > envPtr;   // pointer and byte-size
     std::vector<std::pair<size_t, bool> > copyEnv;  // size and copy flag 
@@ -230,7 +232,7 @@ public:
 						(localThreadsReduce * sizeof(Tin));
 
 		reduceBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE,
-				numBlocksReduce * sizeof(Tin), NULL, &status);
+                                      numBlocksReduce * sizeof(Tin), NULL, &status);
 		checkResult(status, "CreateBuffer reduce");
 	}
 
@@ -425,9 +427,11 @@ public:
 	}
 
 	void waitforh2d() {
-		cl_int status = clWaitForEvents(nevents_h2d, events_h2d.data());
-		checkResult(status, "h2d wait for");
-		nevents_h2d = 0;
+        if (nevents_h2d>0) {
+            cl_int status = clWaitForEvents(nevents_h2d, events_h2d.data());
+            checkResult(status, "h2d wait for");
+            nevents_h2d = 0;
+        }
 	}
 
 	void waitford2h() {
@@ -844,7 +848,8 @@ protected:
 		//(async) copy input and environments (h2d)
 		for (int i = 0; i < accelerators.size(); ++i) {
 
-			accelerators[i].asyncH2Dinput(Task.getInPtr());  //in
+            if (Task.getCopyIn())
+                accelerators[i].asyncH2Dinput(Task.getInPtr());  //in
 
             for(size_t k=0; k < envSize; ++k) {
                 if (Task.getCopyEnv(k)) {
