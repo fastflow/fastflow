@@ -43,9 +43,9 @@
 
 
 #if defined(SYSTEM_HAS_GPU)
-#define DEVICE(x) x.runOnGPU()
+#define DEVICE(x) x.pickGPU()
 #else
-#define DEVICE(x) x.runOnCPU()
+#define DEVICE(x) x.pickCPU()
 #endif
 
 using namespace ff;
