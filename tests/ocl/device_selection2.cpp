@@ -34,6 +34,8 @@
 #define FF_OPENCL
 #endif
 
+#define CHECK 1
+
 #include <string>
 #include <vector>
 #include <ff/stencilReduceOCL.hpp>
@@ -50,8 +52,7 @@ FF_OCL_MAP_ELEMFUNC2(mapf, float, mypair, elem,
 );
 
 FF_OCL_STENCIL_COMBINATOR(reducef, float, (x), (y),
-                          float tmp = x + y;             
-             return (tmp); 
+             return (x+y);
 );
 
 
@@ -102,7 +103,7 @@ int main(int argc, char * argv[]) {
     for (int i=0; i<allgpus.size(); ++i)
         std::cout << "GPU #" << i << " ID " << allgpus[i] << std::endl;
 
-    oclMR.willRunOnGPU();
+    oclMR.pickGPU();
     
     oclMR.run_and_wait_end();
 
