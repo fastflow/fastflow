@@ -635,12 +635,15 @@ public:
     }
 
     // force execution on the CPU
-    void runOnCPU () {        
+    void pickCPU () {
+        std::cerr << "select CPU\n";
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_CPU);
+        
     }
     
     // force execution on the GPU
-    void runOnGPU () {
+    void pickGPU () {
+        std::cerr << "select GPU\n";
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_GPU);
     }
     
@@ -685,7 +688,8 @@ public:
 		return Task.getReduceVar();
 	}
 
-    // FIX: 
+    // FIX:
+    /*
     int nodeInit() { 
         if (devices.size()==0) {
             ssize_t devId;
@@ -712,7 +716,8 @@ public:
             accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);
         return 0;
     }
-
+     */
+    /*
     void nodeEnd() {
         if (devices.size()==0) {
             if (ff_oclNode_t<T>::deviceId != NULL)
@@ -721,8 +726,8 @@ public:
             for (size_t i = 0; i < devices.size(); ++i) 
                 accelerators[i].release();     
     }
-
-
+     */
+     
 protected:
 
 	virtual bool isPureMap() const    { return false; }
@@ -733,6 +738,10 @@ protected:
      * Performs a static GPU greedy algorithm to allocate openCL resources
      */
 	virtual int svc_init() {
+        std::cerr << "svc_init()\n";
+        
+        
+        
         if (ff_oclNode_t<T>::oclId < 0) {
             ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
             
@@ -1052,6 +1061,11 @@ private:
 	std::string kernel_name1;
 	std::string kernel_name2;
 
+    size_t forced_cpu;
+    size_t forced_gpu;
+    size_t forced_other;
+    
+    
 	size_t oldSizeIn, oldSizeOut, oldSizeReduce;
 };
 

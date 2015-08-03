@@ -166,12 +166,13 @@ public:
     ~clEnvironment() {
     }
    
-    static inline clEnvironment * instance() {        
+    static inline clEnvironment * instance() {
         while (!m_clEnvironment) {
-             pthread_mutex_lock(&instanceMutex);
-             if (!m_clEnvironment) m_clEnvironment = new clEnvironment();
-             assert(m_clEnvironment);                      
-             pthread_mutex_unlock(&instanceMutex);
+            std::cerr << "clEnvironment instance\n";
+            pthread_mutex_lock(&instanceMutex);
+            if (!m_clEnvironment) m_clEnvironment = new clEnvironment();
+            assert(m_clEnvironment);
+            pthread_mutex_unlock(&instanceMutex);
          }
          return m_clEnvironment; 
     }
