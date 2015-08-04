@@ -107,6 +107,7 @@ protected:
         numGPU=10000;
 #endif       
         clGetPlatformIDs(0, NULL, &numPlatforms);
+        assert(numPlatforms>0);
         platforms = new cl_platform_id[numPlatforms]; 
         assert(platforms);
         clGetPlatformIDs(numPlatforms, platforms, NULL);
