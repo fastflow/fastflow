@@ -238,7 +238,7 @@ int main(int argc, char * argv[]) {
 	int *env = new int[size];
 	init(M_in, M_out, env, size);
 	oclTask oclt(M_in, M_out, env, size);
-	ff_stencilReduceLoopOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf,	reducef, 0, nacc, WINWIDTH);
+	ff_stencilReduceLoopOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf,	reducef, 0, ff_oclallocator(), nacc, WINWIDTH);
 	oclStencilReduceOneShot.run_and_wait_end();
 	//print_res("INPUT", M_in, size);
 	//print_res("oneshot", M_out, oclStencilReduceOneShot.getReduceVar(), size);

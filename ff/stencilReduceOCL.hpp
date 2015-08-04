@@ -41,9 +41,10 @@
 
 #include <string>
 #include <fstream>
+#include <tuple>
 #include <ff/oclnode.hpp>
 #include <ff/node.hpp>
-#include <ff/mapper.hpp>
+#include <ff/oclallocator.hpp>
 #include <ff/stencilReduceOCL_macros.hpp>
 
 namespace ff {
@@ -59,7 +60,9 @@ public:
     typedef Tout_   Tout;
 
     baseOCLTask(): inPtr(NULL),outPtr(NULL),reduceVar(NULL),
-                   size_in(0),size_out(0),iter(0),copy_in(true)   { }   
+                   size_in(0),size_out(0),iter(0),
+                   tuple_in(std::make_tuple(true,false,false)),
+                   tuple_out(std::make_tuple(true,false,false))   { }   
     virtual ~baseOCLTask() { }
     
     // user must override this method
@@ -73,21 +76,25 @@ public:
 	virtual size_t getIter() const               { return iter; }
 	virtual void   resetIter(const size_t val=0) { iter = val; } 
 
-    // called at the end of loop
-    virtual void   afterLoop(TaskT_ &task)         {}
     /* -------------------------------------------- */ 	
 
     void resetTask() {
         envPtr.resize(0);
         copyEnv.resize(0);
     }
-    void setInPtr(Tin*    _inPtr,  size_t sizeIn=1, bool copy=true)  { inPtr  = _inPtr; size_in = sizeIn; copy_in = copy; }
-    void setOutPtr(Tout*  _outPtr, size_t sizeOut=0) { outPtr = _outPtr; size_out = sizeOut; }
+    void setInPtr(Tin* _inPtr, size_t sizeIn=1, bool copy=true, bool reuse=false, bool release=false)  { 
+        inPtr  = _inPtr; size_in = sizeIn; 
+        tuple_in = std::make_tuple(copy,reuse,release);
+    }
+    void setOutPtr(Tout* _outPtr, size_t sizeOut=0, bool copyback=true, bool reuse=false, bool release=false)  { 
+        outPtr = _outPtr; size_out = sizeOut; 
+        tuple_out = std::make_tuple(copyback,reuse,release);
+    }
     template<typename ptrT>
-    void setEnvPtr(const ptrT* _envPtr, size_t size, bool copy=true)  { 
+    void setEnvPtr(const ptrT* _envPtr, size_t size, bool copy=true, bool reuse=false, bool release=false)  { 
         assert(envPtr.size() == copyEnv.size());
         envPtr.push_back(std::make_pair((void*)_envPtr,size*sizeof(ptrT)));
-        copyEnv.push_back(std::make_pair(sizeof(ptrT), copy));
+        copyEnv.push_back(std::make_tuple(sizeof(ptrT), copy,reuse,release));
     }
     
     Tin *   getInPtr()    const { return inPtr;  }
@@ -105,16 +112,31 @@ public:
     
     bool  getCopyEnv(const size_t idx) const { 
         assert(idx < copyEnv.size());
-        return copyEnv[idx].second;
+        return std::get<1>(copyEnv[idx]);
+    }
+    bool  getReuseEnv(const size_t idx) const { 
+        assert(idx < copyEnv.size());
+        return std::get<2>(copyEnv[idx]);
+    }
+    bool  getReleaseEnv(const size_t idx) const { 
+        assert(idx < copyEnv.size());
+        return std::get<3>(copyEnv[idx]);
     }
     
-    bool getCopyIn() const { return copy_in; }
+    bool getCopyIn()     const { return std::get<0>(tuple_in); }
+    bool getReuseIn()    const { return std::get<1>(tuple_in); }
+    bool getReleaseIn()  const { return std::get<2>(tuple_in); }
+
+    bool getCopyOut()    const { return std::get<0>(tuple_out); }
+    bool getReuseOut()   const { return std::get<1>(tuple_out); }
+    bool getReleaseOut() const { return std::get<2>(tuple_out); }
+
 
     size_t getSizeIn()   const { return size_in;   }
     size_t getSizeOut()  const { return (size_out==0)?size_in:size_out;  }
     size_t getSizeEnv(const size_t idx)  const { 
         assert(idx < copyEnv.size());
-        return copyEnv[idx].first;
+        return std::get<0>(copyEnv[idx]);
     }
     
     size_t getBytesizeIn()    const { return getSizeIn() * sizeof(Tin); }
@@ -139,10 +161,11 @@ protected:
     Tout    *outPtr;
     Tout    *reduceVar, identityVal;
     size_t   size_in, size_out, iter;
-    bool     copy_in;
+    std::tuple<bool,bool,bool> tuple_in;
+    std::tuple<bool,bool,bool> tuple_out;
 
-    std::vector<std::pair<void*,size_t> > envPtr;   // pointer and byte-size
-    std::vector<std::pair<size_t, bool> > copyEnv;  // size and copy flag 
+    std::vector<std::pair<void*,size_t> > envPtr;             // pointer and byte-size
+    std::vector<std::tuple<size_t,bool,bool,bool> > copyEnv;  // size and flags
 };
 
 
@@ -152,8 +175,8 @@ public:
 	typedef typename TOCL::Tin  Tin;
 	typedef typename TOCL::Tout Tout;
 
-	ff_oclAccelerator(const size_t width_, const Tout &identityVal) :
-        width(width_), identityVal(identityVal), events_h2d(16), deviceId(NULL) {
+	ff_oclAccelerator(const ff_oclallocator &alloc, const size_t width_, const Tout &identityVal) :
+        allocator(alloc), width(width_), identityVal(identityVal), events_h2d(16), deviceId(NULL) {
 		workgroup_size_map = workgroup_size_reduce = 0;
 		inputBuffer = outputBuffer = reduceBuffer = NULL;
 
@@ -201,16 +224,16 @@ public:
 		sizeInput_padded = sizeInput + (pad1_in + pad2_in) * sizeof(Tin);
     }
 
-	void relocateInputBuffer() {
+	void relocateInputBuffer(const Tin *inPtr, const Tout *reducePtr) {
 		cl_int status;
 
         // MA patch - map not defined => workgroup_size_map
         size_t workgroup_size = workgroup_size_map==0?workgroup_size_reduce:workgroup_size_map;
         
-		if (inputBuffer)  clReleaseMemObject(inputBuffer);
+		if (inputBuffer)  allocator.releaseBuffer(inPtr, context, inputBuffer);
 		//allocate input-size + pre/post-windows
-		inputBuffer = clCreateBuffer(context,
-                                     CL_MEM_READ_WRITE, sizeInput_padded, NULL, &status);
+		inputBuffer = allocator.createBuffer(inPtr, context,
+                                              CL_MEM_READ_WRITE, sizeInput_padded, &status);
 		checkResult(status, "CreateBuffer input");
 		if (lenInput < workgroup_size) {
 			localThreadsMap = lenInput;
@@ -219,21 +242,22 @@ public:
 			localThreadsMap = workgroup_size;
 			globalThreadsMap = nextMultipleOfIf(lenInput, workgroup_size);
 		}
-		//REDUCE
-		if (reduceBuffer) clReleaseMemObject(reduceBuffer);
 
-		// 64 and 256 are the max number of blocks and threads we want to use
-		getBlocksAndThreads(lenInput, 64, 256, numBlocksReduce, localThreadsReduce);
-		globalThreadsReduce = numBlocksReduce * localThreadsReduce;
-        
-		blockMemSize =
+        if (reducePtr) {
+            // 64 and 256 are the max number of blocks and threads we want to use
+            getBlocksAndThreads(lenInput, 64, 256, numBlocksReduce, localThreadsReduce);
+            globalThreadsReduce = numBlocksReduce * localThreadsReduce;
+            
+            blockMemSize =
 				(localThreadsReduce <= 32) ?
-						(2 * localThreadsReduce * sizeof(Tin)) :
-						(localThreadsReduce * sizeof(Tin));
-
-		reduceBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE,
-                                      numBlocksReduce * sizeof(Tin), NULL, &status);
-		checkResult(status, "CreateBuffer reduce");
+                (2 * localThreadsReduce * sizeof(Tin)) :
+                (localThreadsReduce * sizeof(Tin));
+            
+            if (reduceBuffer) allocator.releaseBuffer(reducePtr, context, reduceBuffer);            
+            reduceBuffer = allocator.createBuffer(reducePtr, context, 
+                                                   CL_MEM_READ_WRITE, numBlocksReduce * sizeof(Tin), &status);
+            checkResult(status, "CreateBuffer reduce");
+        }
 	}
 
     void adjustOutputBufferOffset(std::pair<size_t, size_t> &P, size_t len_global) {
@@ -247,27 +271,27 @@ public:
 		sizeOutput_padded = sizeOutput + (pad1_out + pad2_out) * sizeof(Tout);
     }
 
-	void relocateOutputBuffer() {
+	void relocateOutputBuffer(const Tout  *outPtr) {
 		cl_int status;
-		if (outputBuffer) clReleaseMemObject(outputBuffer);
-		outputBuffer = clCreateBuffer(context,
-                                      CL_MEM_READ_WRITE, sizeOutput_padded, NULL, &status);
+		if (outputBuffer) allocator.releaseBuffer(outPtr, context, outputBuffer);
+		outputBuffer = allocator.createBuffer(outPtr, context,
+                                               CL_MEM_READ_WRITE, sizeOutput_padded,&status);
 		checkResult(status, "CreateBuffer output");
 	}
-    
-	void relocateEnvBuffer(const size_t idx, const size_t envbytesize) {
+
+	void relocateEnvBuffer(const void *envptr, const size_t idx, const size_t envbytesize) {
 		cl_int status;
 
         if (idx <= envBuffer.size()) {
-            cl_mem envb = clCreateBuffer(context,
-                                         CL_MEM_READ_WRITE, envbytesize, NULL, &status);
+            cl_mem envb = allocator.createBuffer(envptr, context,
+                                                  CL_MEM_READ_WRITE, envbytesize, &status);
             checkResult(status, "CreateBuffer envBuffer");
             envBuffer.push_back(std::make_pair(envb,envbytesize));
         } else { 
             if (envBuffer[idx].second < envbytesize) {
-                if (envBuffer[idx].first) clReleaseMemObject(envBuffer[idx].first);            
-                envBuffer[idx].first = clCreateBuffer(context,
-                                                      CL_MEM_READ_WRITE, envbytesize, NULL, &status);
+                if (envBuffer[idx].first) allocator.releaseBuffer(envptr, context, envBuffer[idx].first);            // FIX: envptr E' QUELLO GIUSTO ??? ci vuole un oldEnv anche un oldIn ed un oldOut ????
+                envBuffer[idx].first = allocator.createBuffer(envptr, context,
+                                                               CL_MEM_READ_WRITE, envbytesize, &status);
                 checkResult(status, "CreateBuffer envBuffer");
                 envBuffer[idx].second = envbytesize;
             }
@@ -516,16 +540,15 @@ private:
 		if (kernel_map)     clReleaseKernel(kernel_map);
 		if (kernel_reduce)	clReleaseKernel(kernel_reduce);
 		clReleaseProgram(program);
-		if (inputBuffer)    clReleaseMemObject(inputBuffer);
 
-        for(size_t i=0; i < envBuffer.size(); ++i)
-            clReleaseMemObject(envBuffer[i].first);
-
-		if (outputBuffer && outputBuffer != inputBuffer)
-			clReleaseMemObject(outputBuffer);
-		if (reduceBuffer)
-			clReleaseMemObject(reduceBuffer);
-
+		// if (inputBuffer)    clReleaseMemObject(inputBuffer);
+        // for(size_t i=0; i < envBuffer.size(); ++i)
+        //     clReleaseMemObject(envBuffer[i].first);
+		// if (outputBuffer && outputBuffer != inputBuffer)
+		// 	clReleaseMemObject(outputBuffer);
+		// if (reduceBuffer)
+		// 	clReleaseMemObject(reduceBuffer);
+        allocator.releaseAllBuffers(context);
 	}
 
 	/*!
@@ -542,13 +565,14 @@ private:
 		blocks = std::min(maxBlocks, blocks);
 	}
 
-public:   // FIX:
+protected:  
 	cl_context context;
 	cl_program program;
 	cl_command_queue cmd_queue;
 	cl_mem reduceBuffer;
 	cl_kernel kernel_map, kernel_reduce, kernel_init;
 private:
+    ff_oclallocator allocator;
 	const size_t width;
 	const Tout identityVal;
 	Tout reduceVar;
@@ -594,8 +618,9 @@ public:
 	ff_stencilReduceLoopOCL_1D(const std::string &mapf,			              //OCL elemental
                                const std::string &reducef = std::string(""),  //OCL combinator
                                const Tout &identityVal = Tout(),
+                               const ff_oclallocator &allocator = ff_oclallocator(),
                                const int NACCELERATORS = 1, const int width = 1) :
-        oneshot(false), accelerators(NACCELERATORS, accelerator_t(width,identityVal)), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
+        oneshot(false), accelerators(NACCELERATORS, accelerator_t(allocator, width,identityVal)), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
         stencil_width(width), oldSizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
 		setcode(mapf, reducef);
 	}
@@ -604,8 +629,9 @@ public:
 	ff_stencilReduceLoopOCL_1D(const T &task, const std::string &mapf,	                //OCL elemental
                                const std::string &reducef = std::string(""),			//OCL combinator
                                const Tout &identityVal = Tout(),
+                               const ff_oclallocator &allocator = ff_oclallocator(),
                                const int NACCELERATORS = 1, const int width = 1) :
-        oneshot(true), accelerators(NACCELERATORS, accelerator_t(width,identityVal)), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
+        oneshot(true), accelerators(NACCELERATORS, accelerator_t(allocator, width,identityVal)), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
         stencil_width(width), oldSizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
 		ff_node::skipfirstpop(true);
 		setcode(mapf, reducef);
@@ -682,7 +708,7 @@ public:
 		return Task.getIter();
 	}
 
-	Tout getReduceVar() {
+	Tout *getReduceVar() {
 		assert(oneshot);
 		return Task.getReduceVar();
 	}
@@ -786,6 +812,7 @@ protected:
         }
 		Tin   *inPtr = Task.getInPtr();
 		Tout  *outPtr = Task.getOutPtr();
+        Tout  *reducePtr = Task.getReduceVar();
         const size_t envSize = Task.getEnvNum();
         
 		// relocate input device memory if needed
@@ -798,7 +825,7 @@ protected:
 
             if (oldSizeIn < Task.getBytesizeIn()) {
                 for (int i = 0; i < accelerators.size(); ++i) {
-                    accelerators[i].relocateInputBuffer();
+                    accelerators[i].relocateInputBuffer(inPtr,reducePtr);
                 }
                 oldSizeIn = Task.getBytesizeIn();
             }            
@@ -820,7 +847,7 @@ protected:
                 
                 if (oldSizeOut < Task.getBytesizeOut()) {
                     for (int i = 0; i < accelerators.size(); ++i) {
-                        accelerators[i].relocateOutputBuffer(); 
+                        accelerators[i].relocateOutputBuffer(outPtr); 
                     }
                     oldSizeOut = Task.getBytesizeOut();
                 }
@@ -833,8 +860,11 @@ protected:
          *
          */  
         for (int i = 0; i < accelerators.size(); ++i)
-            for(size_t k=0; k < envSize; ++k) 
-                accelerators[i].relocateEnvBuffer(k, Task.getBytesizeEnv(k));
+            for(size_t k=0; k < envSize; ++k) {
+                char *envptr;
+                Task.getEnvPtr(k, envptr);
+                accelerators[i].relocateEnvBuffer(envptr, k, Task.getBytesizeEnv(k));
+            }
         
 
 		if (!isPureReduce())  //set kernel args
@@ -958,7 +988,6 @@ protected:
                 waitford2h(); //wait for cross-accelerators d2h
             }
 		}
-        Task.afterLoop(oneshot ? Task: *task);
 
 		return (oneshot ? NULL : task);
 	}
@@ -1070,12 +1099,15 @@ private:
 template<typename T, typename TOCL = T>
 class ff_mapOCL_1D: public ff_stencilReduceLoopOCL_1D<T, TOCL> {
 public:
-	ff_mapOCL_1D(std::string mapf, const size_t NACCELERATORS = 1) :
-			ff_stencilReduceLoopOCL_1D<T, TOCL>(mapf, "", 0, NACCELERATORS, 0) {
+	ff_mapOCL_1D(std::string mapf, const ff_oclallocator &alloc= ff_oclallocator(), 
+                 const size_t NACCELERATORS = 1) :
+        ff_stencilReduceLoopOCL_1D<T, TOCL>(mapf, "", 0, alloc, NACCELERATORS, 0) {
 	}
 
-	ff_mapOCL_1D(const T &task, std::string mapf, const size_t NACCELERATORS = 1) :
-			ff_stencilReduceLoopOCL_1D<T, TOCL>(task, mapf, "", 0, NACCELERATORS, 0) {
+	ff_mapOCL_1D(const T &task, std::string mapf, 
+                 const ff_oclallocator &alloc= ff_oclallocator(), 
+                 const size_t NACCELERATORS = 1) :
+        ff_stencilReduceLoopOCL_1D<T, TOCL>(task, mapf, "", 0, alloc, NACCELERATORS, 0) {
 	}
 	bool isPureMap() const { return true; }
 };
@@ -1097,12 +1129,14 @@ public:
 	typedef typename TOCL::Tout Tout;
 
 	ff_reduceOCL_1D(std::string reducef, const Tout &identityVal = Tout(),
+                    const ff_oclallocator &alloc= ff_oclallocator(), 
                     const size_t NACCELERATORS = 1) :
-        ff_stencilReduceLoopOCL_1D<T, TOCL>("", reducef, identityVal, NACCELERATORS, 0) {
+        ff_stencilReduceLoopOCL_1D<T, TOCL>("", reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
 	ff_reduceOCL_1D(const T &task, std::string reducef, const Tout identityVal = Tout(),
+                    const ff_oclallocator &alloc= ff_oclallocator(), 
                     const size_t NACCELERATORS = 1) :
-        ff_stencilReduceLoopOCL_1D<T, TOCL>(task, "", reducef, identityVal, NACCELERATORS, 0) {
+        ff_stencilReduceLoopOCL_1D<T, TOCL>(task, "", reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
 	bool isPureReduce() const { return true; }
 };
@@ -1125,13 +1159,16 @@ public:
 	typedef typename TOCL::Tout Tout;
 
 	ff_mapReduceOCL_1D(std::string mapf, std::string reducef, const Tout &identityVal = Tout(),
+                       const ff_oclallocator &alloc= ff_oclallocator(), 
                        const size_t NACCELERATORS = 1) :
-			ff_stencilReduceLoopOCL_1D<T, TOCL>(mapf, reducef, identityVal, NACCELERATORS, 0) {
+        ff_stencilReduceLoopOCL_1D<T, TOCL>(mapf, reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
 
 	ff_mapReduceOCL_1D(const T &task, std::string mapf, std::string reducef,
-                       const Tout &identityVal = Tout(), const size_t NACCELERATORS = 1) :
-        ff_stencilReduceLoopOCL_1D<T, TOCL>(task, mapf, reducef, identityVal, NACCELERATORS, 0) {
+                       const Tout &identityVal = Tout(), 
+                       const ff_oclallocator &alloc= ff_oclallocator(), 
+                       const size_t NACCELERATORS = 1) :
+        ff_stencilReduceLoopOCL_1D<T, TOCL>(task, mapf, reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
 };
 
