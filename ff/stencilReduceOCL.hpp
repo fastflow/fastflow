@@ -847,12 +847,17 @@ protected:
     /* static mapping
      * Performs a static GPU greedy algorithm to allocate openCL resources
      */
-    virtual int svc_init() {
-        return(nodeInit());
-    }
-    
-    
     /*
+    virtual int svc_init() {
+        if (ff_oclNode_t<T>::oclId < 0) {
+            ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
+        nodeInit();
+        }
+        return 0;
+    }
+    */
+    
+    // To be rewritten in terms of nodeinit 
 	virtual int svc_init() {
         if (ff_oclNode_t<T>::oclId < 0) {
             ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
@@ -896,7 +901,7 @@ protected:
         }
         return 0;
     }
-     */
+    
 
 	virtual void svc_end() {
 		if (!ff::ff_node::isfrozen()) nodeEnd();
