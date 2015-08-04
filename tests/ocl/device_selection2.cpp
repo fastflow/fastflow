@@ -76,7 +76,7 @@ struct oclTask: public baseOCLTask<oclTask, mypair, float> {
 };
 
 int main(int argc, char * argv[]) {
-    size_t size = 1024;
+    size_t size = 640;
     if (argc>1) size     =atol(argv[1]);
     printf("arraysize = %ld\n", size);
 
@@ -90,8 +90,9 @@ int main(int argc, char * argv[]) {
     }
 #endif
     oclTask oclt(M, size);
-    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0.0);
-
+    //ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0.0);
+    ff_mapOCL_1D<oclTask> oclMR(oclt, mapf);
+   
     std::vector<std::string> res = oclMR.getDevicesInfo();
     
     for (size_t i=0; i<res.size(); ++i)
@@ -103,12 +104,10 @@ int main(int argc, char * argv[]) {
     for (size_t i=0; i<allgpus.size(); ++i)
         std::cout << "GPU #" << i << " ID " << allgpus[i] << std::endl;
 
-    oclMR.pickGPU();
+    oclMR.pickGPU(1);
     
     oclMR.run_and_wait_end();
 
-    //oclMR.willRunOnGPU();
-    
     //oclMR.run_and_wait_end();
 
 
