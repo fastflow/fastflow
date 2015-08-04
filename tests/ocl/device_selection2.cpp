@@ -90,17 +90,17 @@ int main(int argc, char * argv[]) {
     }
 #endif
     oclTask oclt(M, size);
-    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0.0, 1);
+    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0.0);
 
     std::vector<std::string> res = oclMR.getDevicesInfo();
     
-    for (int i=0; i<res.size(); ++i)
+    for (size_t i=0; i<res.size(); ++i)
         std::cout << i << " - " << res[i] << std::endl;
     std::cout << "First CPU is " << oclMR.getCPUDevice() << "\n";
     std::cout << "First GPU is " << oclMR.getGPUDevice() << "\n";
 
     std::vector<ssize_t> allgpus = oclMR.getAllGPUDevices();
-    for (int i=0; i<allgpus.size(); ++i)
+    for (size_t i=0; i<allgpus.size(); ++i)
         std::cout << "GPU #" << i << " ID " << allgpus[i] << std::endl;
 
     oclMR.pickGPU();

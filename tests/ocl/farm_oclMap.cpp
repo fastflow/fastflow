@@ -116,7 +116,7 @@ int main(int argc, char * argv[]) {
     oclTask oclt;
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) 
-        w.push_back(new ff_mapOCL_1D<myTask, oclTask>(mapf, NDEV));
+        w.push_back(new ff_mapOCL_1D<myTask, oclTask>(mapf, ff_oclallocator(), NDEV));
     farm.add_workers(w);
     farm.cleanup_workers();
     farm.run_and_wait_end();

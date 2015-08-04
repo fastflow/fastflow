@@ -128,7 +128,7 @@ int main(int argc, char * argv[]) {
     }
 
     Map map;
-    ff_mapReduceOCL_1D<Task> oclmap(mapf, reducef, 0.0, 1);
+    ff_mapReduceOCL_1D<Task> oclmap(mapf, reducef, 0.0);
 
     std::vector<cl_device_id> dev;
     dev.push_back(clEnvironment::instance()->getDevice(gpudev));

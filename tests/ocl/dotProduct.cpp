@@ -85,7 +85,7 @@ int main(int argc, char * argv[]) {
     }
 #endif
     oclTask oclt(M, size);
-    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0.0, 1);
+    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0.0);
     oclMR.run_and_wait_end();
 
     delete [] M;
