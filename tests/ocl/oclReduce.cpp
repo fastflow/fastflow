@@ -54,7 +54,7 @@ struct oclTask: public baseOCLTask<oclTask, float> {
 };
 
 int main(int argc, char * argv[]) {
-    size_t size=1024;
+    size_t size=5000;
     if(argc > 1) size = atol(argv[1]);
     printf("arraysize = %ld\n", size);
 
@@ -63,6 +63,7 @@ int main(int argc, char * argv[]) {
 
     oclTask oclt(M, size);
     ff_reduceOCL_1D<oclTask> oclReduce(oclt, reducef, 0.0);
+    oclReduce.pickGPU(1);
     oclReduce.run_and_wait_end();
 
     delete [] M;
