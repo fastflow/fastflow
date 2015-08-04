@@ -88,7 +88,7 @@ struct Task: public baseOCLTask<Task, float, float> {
         case 1: {
             setInPtr(const_cast<float*>(t->A.data()), t->A.size(), false);                   // A not copied 
             setEnvPtr(&(t->k), 1);                                                           // k always copied
-            setOutPtr(const_cast<float*>(t->A.data()));                                      // A received back
+            setOutPtr(const_cast<float*>(t->A.data()), t->A.size(),false);                   // A not received back
         } break;                                                                             // A kept
         case 2: {
             setInPtr(const_cast<float*>(t->A.data()),  t->A.size(), false, true);            // A not copied, reusing the previous buffer
@@ -241,6 +241,11 @@ int main(int argc, char * argv[]) {
     size_t NVECTORS  = atol(argv[2]);
     std::string command(argv[3]);
 
+    if (command != "0:0:0" && command != "1:1:1") {
+        std::cerr << "Wrong command, for this test the only valid commands are 0:0:0, 1:1:1\n";
+        return -1;
+    }
+
     std::vector<float> A(arraySize);
     std::vector<float> C(arraySize);    
     std::vector<float> R(arraySize);    
@@ -255,10 +260,13 @@ int main(int argc, char * argv[]) {
     Map_kernel2 map2;
     Map_kernel3 map3;
 
+    // we have to use the same OpenCL allocator for each kernel
+    ff_oclallocator allocator;
+
     // GPU map and map-reduce
-    ff_mapOCL_1D<Task>       oclmap1(map1f);             DEVICE(oclmap1);
-    ff_mapReduceOCL_1D<Task> oclmap2(map2f,reducef,0.0); DEVICE(oclmap2);
-    ff_mapOCL_1D<Task>       oclmap3(map3f);             DEVICE(oclmap3);
+    ff_mapOCL_1D<Task>       oclmap1(map1f,allocator);             DEVICE(oclmap1);
+    ff_mapReduceOCL_1D<Task> oclmap2(map2f,reducef,0.0,allocator); DEVICE(oclmap2);
+    ff_mapOCL_1D<Task>       oclmap3(map3f,allocator);             DEVICE(oclmap3);
     
     Kernel k1(1,command, NVECTORS,arraySize, C, R);
     Kernel k2(2,command, NVECTORS,arraySize, C, R);
