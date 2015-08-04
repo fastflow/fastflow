@@ -643,9 +643,9 @@ public:
 	ff_stencilReduceLoopOCL_1D(const std::string &mapf,			              //OCL elemental
                                const std::string &reducef = std::string(""),  //OCL combinator
                                const Tout &identityVal = Tout(),
-                               ff_oclallocator &allocator = ff_oclallocator(),
+                               const ff_oclallocator &allocator = ff_oclallocator(),
                                const int NACCELERATORS = 1, const int width = 1) :
-        oneshot(false), accelerators(NACCELERATORS, accelerator_t(allocator, width,identityVal)), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
+        oneshot(false), accelerators(NACCELERATORS, accelerator_t(const_cast<ff_oclallocator&>(allocator), width,identityVal)), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
         stencil_width(width), oldSizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
 		setcode(mapf, reducef);
 	}
@@ -654,9 +654,9 @@ public:
 	ff_stencilReduceLoopOCL_1D(const T &task, const std::string &mapf,	                //OCL elemental
                                const std::string &reducef = std::string(""),			//OCL combinator
                                const Tout &identityVal = Tout(),
-                               ff_oclallocator &allocator = ff_oclallocator(),
+                               const ff_oclallocator &allocator = ff_oclallocator(),
                                const int NACCELERATORS = 1, const int width = 1) :
-        oneshot(true), accelerators(NACCELERATORS, accelerator_t(allocator, width,identityVal)), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
+        oneshot(true), accelerators(NACCELERATORS, accelerator_t(const_cast<ff_oclallocator&>(allocator), width,identityVal)), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
         stencil_width(width), oldSizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
 		ff_node::skipfirstpop(true);
 		setcode(mapf, reducef);
@@ -1195,13 +1195,13 @@ private:
 template<typename T, typename TOCL = T>
 class ff_mapOCL_1D: public ff_stencilReduceLoopOCL_1D<T, TOCL> {
 public:
-	ff_mapOCL_1D(std::string mapf, ff_oclallocator &alloc= ff_oclallocator(), 
+	ff_mapOCL_1D(std::string mapf, const ff_oclallocator &alloc= ff_oclallocator(), 
                  const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(mapf, "", 0, alloc, NACCELERATORS, 0) {
 	}
 
 	ff_mapOCL_1D(const T &task, std::string mapf, 
-                 ff_oclallocator &alloc= ff_oclallocator(), 
+                 const ff_oclallocator &alloc= ff_oclallocator(), 
                  const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(task, mapf, "", 0, alloc, NACCELERATORS, 0) {
 	}
@@ -1225,12 +1225,12 @@ public:
 	typedef typename TOCL::Tout Tout;
 
 	ff_reduceOCL_1D(std::string reducef, const Tout &identityVal = Tout(),
-                    ff_oclallocator &alloc= ff_oclallocator(), 
+                    const ff_oclallocator &alloc= ff_oclallocator(), 
                     const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>("", reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
 	ff_reduceOCL_1D(const T &task, std::string reducef, const Tout identityVal = Tout(),
-                    ff_oclallocator &alloc= ff_oclallocator(), 
+                    const ff_oclallocator &alloc= ff_oclallocator(), 
                     const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(task, "", reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
@@ -1255,14 +1255,14 @@ public:
 	typedef typename TOCL::Tout Tout;
 
 	ff_mapReduceOCL_1D(std::string mapf, std::string reducef, const Tout &identityVal = Tout(),
-                       ff_oclallocator &alloc= ff_oclallocator(), 
+                       const ff_oclallocator &alloc= ff_oclallocator(), 
                        const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(mapf, reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
 
 	ff_mapReduceOCL_1D(const T &task, std::string mapf, std::string reducef,
                        const Tout &identityVal = Tout(), 
-                       ff_oclallocator &alloc= ff_oclallocator(), 
+                       const ff_oclallocator &alloc= ff_oclallocator(), 
                        const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(task, mapf, reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
