@@ -258,13 +258,17 @@ public:
 
         if (reducePtr) {
             // 64 and 256 are the max number of blocks and threads we want to use
+            std::cerr << "Reduce inlen " << lenInput;
             getBlocksAndThreads(lenInput, 64, 256, numBlocksReduce, localThreadsReduce);
             globalThreadsReduce = numBlocksReduce * localThreadsReduce;
+            //std::cerr << "numBlocksReduce " << numBlocksReduce << " localThreadsReduce " << localThreadsReduce << "\n";
             
             blockMemSize =
 				(localThreadsReduce <= 32) ?
                 (2 * localThreadsReduce * sizeof(Tin)) :
                 (localThreadsReduce * sizeof(Tin));
+
+            //std::cerr << "blockMemSize " << blockMemSize << "\n";
             
             if (reduceBuffer) allocator->releaseBuffer(reducePtr, context, reduceBuffer);            
             reduceBuffer = allocator->createBuffer(reducePtr, context, 
@@ -438,13 +442,14 @@ public:
 		cl_int status = clEnqueueNDRangeKernel(cmd_queue, kernel_map, 1, NULL,
                                                &globalThreadsMap, &localThreadsMap, 0, NULL, &event_map);
 		checkResult(status, "executing map kernel");
+        //std::cerr << "Exec map WI " << globalThreadsMap << " localThreadsMap " << localThreadsMap << "\n";
 		++nevents_map;
 	}
 
 	void asyncExecReduceKernel1() {
-        //std::cerr << "asyncExecReduceKernel1 global " << globalThreadsReduce << " local" << localThreadsReduce << "\n";
+        //std::cerr << "Exec reduce1 WI " << globalThreadsReduce << " localThreadsReduce " << localThreadsReduce <<  "\n";
 		cl_int status = clEnqueueNDRangeKernel(cmd_queue, kernel_reduce, 1, NULL,
-                                               &globalThreadsReduce, &localThreadsReduce, nevents_map, 
+                                               &globalThreadsReduce, &localThreadsReduce, nevents_map,
                                                (nevents_map==0)?NULL:&event_map,
                                                &event_reduce1);
 		checkResult(status, "exec kernel reduce-1");
@@ -461,7 +466,7 @@ public:
 		status        |= clSetKernelArg(kernel_reduce, idx++, blockMemSize, NULL);
 		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(Tout), (void *) &identityVal);
 		checkResult(status, "setKernelArg reduce-2");
-        
+        //std::cerr << "Exec reduce2 WI " << globalThreadsReduce << " localThreadsReduce " << localThreadsReduce <<  "\n";
 		status = clEnqueueNDRangeKernel(cmd_queue, kernel_reduce, 1, NULL,
                                         &localThreadsReduce, &localThreadsReduce, 1, &event_reduce1,
                                         &event_reduce2);
@@ -541,6 +546,15 @@ private:
 		//compile kernel on device
 		buildKernelCode(kernel_code, dId);
         
+        char buf[128];
+        size_t s, ss[3];
+        
+        clGetDeviceInfo(dId, CL_DEVICE_NAME, 128, buf, NULL);
+        clGetDeviceInfo(dId, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &s, NULL);
+        clGetDeviceInfo(dId, CL_DEVICE_MAX_WORK_ITEM_SIZES, 3*sizeof(size_t), &ss, NULL);
+        //std::cerr << "svc_SetUpOclObjects dev " << dId << " " << buf << " MAX_WORK_GROUP_SIZE " << s << " MAX_WORK_ITEM_SIZES " << ss[0] << " " << ss[1] << " " << ss[2] << "\n";
+        
+        
 		//create kernel objects
 		if (kernel_name1 != "") {
 			kernel_map = clCreateKernel(program, kernel_name1.c_str(), &status);
@@ -548,6 +562,7 @@ private:
 			status = clGetKernelWorkGroupInfo(kernel_map, dId,
 			CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_map, 0);
 			checkResult(status, "GetKernelWorkGroupInfo (map)");
+            //std::cerr << "GetKernelWorkGroupInfo (map) " << workgroup_size_map << "\n";
 		}
 
 		if (kernel_name2 != "") {
@@ -556,7 +571,7 @@ private:
 			status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
 			CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_reduce, 0);
 			checkResult(status, "GetKernelWorkGroupInfo (reduce)");
-            //std::cerr << "GetKernelWorkGroupInfo (reduce) " << workgroup_size_reduce << "\n";            
+            //std::cerr << "GetKernelWorkGroupInfo (reduce) " << workgroup_size_reduce << "\n";
 		}
 
 	}
@@ -646,7 +661,7 @@ public:
                                const ff_oclallocator &allocator = ff_oclallocator(),
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(false), accelerators(NACCELERATORS, accelerator_t(const_cast<ff_oclallocator&>(allocator), width,identityVal)), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-        stencil_width(width), oldSizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
+    stencil_width(width), preferred_dev(0), oldSizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setcode(mapf, reducef);
 	}
 
@@ -693,8 +708,9 @@ public:
     }
     
     // force execution on the GPU
-    void pickGPU () {
+    void pickGPU (size_t offset=0 /* picks first GPU */) {
         std::cerr << "select GPU\n";
+        preferred_dev=offset;
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_GPU);
     }
     
@@ -774,20 +790,23 @@ public:
                 case CL_DEVICE_TYPE_ALL:
                     fprintf(stderr,"STATUS: requested ALL\n");
                 case CL_DEVICE_TYPE_GPU: {// One or more GPUs
-                    if (accelerators.size()==1) {
-                        ssize_t devId = clEnvironment::instance()->getGPUDevice();
-                        ff_oclNode_t<T>::deviceId=clEnvironment::instance()->getDevice(devId);
-                        accelerators[0].init(ff_oclNode_t<T>::deviceId, kernel_code, kernel_name1,kernel_name2);
-                        device_found = true;
+                    std::vector<ssize_t> devIds = clEnvironment::instance()->getAllGPUDevices();
+                    if (devIds.size()==0) {
+                        fprintf(stderr,"WARNING: no GPUs available\n");
                     } else {
-                        std::vector<ssize_t> devIds = clEnvironment::instance()->getAllGPUDevices();
-                        if (devIds.size()>=accelerators.size()) {
-                            for (size_t j=0; accelerators.size(); ++j)
-                                accelerators[j].init(clEnvironment::instance()->getDevice(devIds[j]), kernel_code, kernel_name1,kernel_name2);
+                        if (accelerators.size()==1) {
+                            ssize_t devId = devIds[preferred_dev];
+                            ff_oclNode_t<T>::deviceId=clEnvironment::instance()->getDevice(devId);
+                            accelerators[0].init(ff_oclNode_t<T>::deviceId, kernel_code, kernel_name1,kernel_name2);
                             device_found = true;
-                        }
-                        else {
-                            fprintf(stderr,"WARNING: requested number of devices not matching number of logical accelerators\n");
+                        } else {
+                            if (devIds.size()>=accelerators.size()) {
+                                for (size_t j=0; accelerators.size(); ++j)
+                                    accelerators[j].init(clEnvironment::instance()->getDevice(devIds[j]), kernel_code, kernel_name1,kernel_name2);
+                                device_found = true;
+                            } else {
+                                fprintf(stderr,"WARNING: requested number of devices not matching number of logical accelerators\n");
+                            }
                         }
                     }
                 } if (device_found) break;
@@ -1169,6 +1188,7 @@ private:
     std::vector<std::pair<size_t, size_t> > acc_out;
     std::vector<cl_device_id> devices;
 	int stencil_width;
+    size_t preferred_dev;
 
 	std::string kernel_code;
 	std::string kernel_name1;

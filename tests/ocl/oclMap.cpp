@@ -55,7 +55,7 @@ struct oclTask: public baseOCLTask<oclTask, float> {
 };
 
 int main(int argc, char * argv[]) {
-    size_t size=1024;
+    size_t size=2048;
     if(argc>1) size     =atol(argv[1]);
     printf("arraysize = %ld\n", size);
 
@@ -64,6 +64,8 @@ int main(int argc, char * argv[]) {
 
     oclTask oclt(M, size);
     ff_mapOCL_1D<oclTask> oclMap(oclt, mapf);
+    oclMap.pickGPU(1);
+    
     oclMap.run_and_wait_end();
 
 #if defined(CHECK)
