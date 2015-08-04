@@ -50,9 +50,9 @@
 
 
 #if defined(SYSTEM_HAS_GPU)
-#define DEVICE(x) x.runOnGPU()
+#define DEVICE(x) x.pickGPU()
 #else
-#define DEVICE(x) x.runOnCPU()
+#define DEVICE(x) x.pickCPU()
 #endif
 
 using namespace ff;
@@ -91,15 +91,13 @@ struct Task: public baseOCLTask<Task, float, float> {
             setOutPtr(const_cast<float*>(t->A.data()));                                      // A received back
         } break;                                                                             // A kept
         case 2: {
-            setInPtr(const_cast<float*>(t->A.data()),  t->A.size(), false,                   // A not copied but
-                     t->getInOCLBuffer());                                                   // reuse the previous
-            setEnvPtr(const_cast<float*>(t->C->data()), t->C->size(), true, nullptr, true);  // C copied and then released
+            setInPtr(const_cast<float*>(t->A.data()),  t->A.size(), false, true);            // A not copied, reusing the previous buffer
+            setEnvPtr(const_cast<float*>(t->C->data()), t->C->size(), true, false, true);    // C copied and then released
             setReduceVar(&(t->sum));                                                         // sum 
         } break;                                                                             // A kept (by default)
         case 3: {
             setInPtr(const_cast<float*>(t->R->data()), t->R->size(), (t->k==0)?true:false);  // R copied only the 1st time
-            setEnvPtr(const_cast<float*>(t->A.data()),  t->A.size(), false,                  // A reuse the previous
-                      t->getInOCLBuffer()); 
+            setEnvPtr(const_cast<float*>(t->A.data()),  t->A.size(), false, true);           // A not copied, reusing the previous buffer
             setEnvPtr(&(t->sum), 1);                                                         // sum
             setOutPtr(const_cast<float*>(t->R->data()),  t->R->size());                      // R get back result
         } break;                                                                             // R kept (by default)
@@ -273,6 +271,7 @@ int main(int argc, char * argv[]) {
     k3.addNode(map3);
     k3.addNode(oclmap3);
 
+    // needed because threads are not started so svc_init is not called 
     k1.nodeInit();
     k2.nodeInit();
     k3.nodeInit();
