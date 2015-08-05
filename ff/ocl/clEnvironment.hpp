@@ -258,6 +258,11 @@ public:
         return ret;
     }
 
+    void releaseDevice(ssize_t id) {
+        std::cerr << "Not yet implemented\n";
+    }
+    
+    
     std::vector<ssize_t> getAllGPUDevices() {
         cl_device_type dt;
         std::vector<ssize_t> ret;
@@ -474,11 +479,15 @@ static inline void printOCLErrorString(cl_int error, std::ostream & out) {
 	}
 }
 
-static  inline void checkResult(cl_int s, const char* msg) {
+static  inline bool checkResult(cl_int s, const char* msg) {
     if(s != CL_SUCCESS) {
         std::cerr << msg << ":";
         printOCLErrorString(s,std::cerr);
+        return (false);
+        // Not Ok
     }
+    return (true);
+    // Ok
 }    
 
 } // namespace
