@@ -96,8 +96,9 @@ private:
     cl_uint numDevices;
     //cl_device_id* devlist_for_platform;
     cl_device_id* deviceIds;
+    
 protected:
-    clEnvironment(): platforms(NULL), numPlatforms(0) {
+    clEnvironment(): platforms(NULL), numPlatforms(0),lastAssigned(0) {
         atomic_long_set(&oclId, 0);
         
         // FIX: what is this ???
@@ -141,7 +142,10 @@ protected:
             //     std::cerr << "#" << j << " GPU device\n";
             // else std::cerr << "#" << j << " Other device (not yet implemented)\n";
             
-            if((b & CL_TRUE) && (status == CL_SUCCESS)) clDevices.push_back(deviceIds[j]);    
+            if((b & CL_TRUE) && (status == CL_SUCCESS)) {
+                clDeviceInUse.push_back(false);
+                clDevices.push_back(deviceIds[j]);
+            }
             clReleaseContext(context);
         }
         delete [] deviceIds;
@@ -180,6 +184,51 @@ public:
 
     unsigned long getOCLID() {  return atomic_long_inc_return(&oclId); }
 
+    
+   
+    
+    std::vector<ssize_t> coAllocateGPUDeviceRR(size_t n=1, bool exclusive=false, bool identical=false) {
+        cl_device_type dt;
+        size_t count = n;
+        std::vector<ssize_t> ret;
+        pthread_mutex_lock(&instanceMutex);
+        for(size_t i=0; i<clDevices.size(); i++) {
+            clGetDeviceInfo(clDevices[lastAssigned], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
+            if ((!clDeviceInUse[lastAssigned] | !exclusive) && ((dt) & CL_DEVICE_TYPE_GPU)) {
+                //clDeviceInUse[lastAssigned]=true;
+                ret.push_back(lastAssigned);
+                --count;
+                char buf[128];
+                clGetDeviceInfo(clDevices[lastAssigned], CL_DEVICE_NAME, 128, buf, NULL);
+                std::cerr << "clEnvironment: assigned GPU "<< lastAssigned << " " << buf << "\n";
+                ++lastAssigned;
+                lastAssigned%=clDevices.size();
+                if (count==0) break;
+            } else {
+                ++lastAssigned;
+                lastAssigned%=clDevices.size();
+            }
+        }
+        if (count>0) { // roll back
+            std::cerr << "Not enough GPUs: aborting\n";
+            ret.clear();
+        } else { // commit
+            // check if identical, TO BE DONE
+            for (size_t i=0; i<ret.size();++i)
+                clDeviceInUse[ret[i]]=true;
+        }
+        pthread_mutex_unlock(&instanceMutex);
+        return ret;
+    }
+   
+    
+    ssize_t getGPUDeviceRR(bool exclusive=false) {
+        std::vector<ssize_t> r = coAllocateGPUDeviceRR(1, false);
+        if (r.size()>0) return r[0];
+        else return -1;
+    }
+    
+    /*
     ssize_t getGPUDevice() {
         cl_device_type dt;
         for(size_t i=0; i<clDevices.size(); i++)  {
@@ -188,14 +237,25 @@ public:
         }
         return -1;
     }
-
-    ssize_t getCPUDevice() {
+     */
+    ssize_t getCPUDevice(bool exclusive=false) {
         cl_device_type dt;
+        ssize_t ret=-1;
+        pthread_mutex_lock(&instanceMutex);
         for(size_t i=0; i<clDevices.size(); i++) {
             clGetDeviceInfo(clDevices[i], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
-            if((dt) & CL_DEVICE_TYPE_CPU) return i;
+            if ((!clDeviceInUse[i] | !exclusive) && ((dt) & CL_DEVICE_TYPE_CPU)) {
+                clDeviceInUse[i]=true;
+                char buf[128];
+                clGetDeviceInfo(clDevices[i], CL_DEVICE_NAME, 128, buf, NULL);
+                std::cerr << "clEnvironment: assigned CPU "<< i << " " << buf << "\n";
+                ret=i;
+                break;
+            }
         }
-        return -1;
+        pthread_mutex_unlock(&instanceMutex);
+        if (ret==-1)  std::cerr << "CPU not available or in exclusive use: aborting\n";
+        return ret;
     }
 
     std::vector<ssize_t> getAllGPUDevices() {
@@ -249,7 +309,10 @@ private:
 
     std::map<cl_device_id, oclParameter*> dynamicParameters;
 	std::vector<cl_device_id> clDevices;
-	int numGPU;  
+    std::vector<bool> clDeviceInUse;
+    size_t lastAssigned;
+    //std::vector<bool> clDEviceBusy;
+	int numGPU;
 };
 
 clEnvironment* clEnvironment::m_clEnvironment = NULL;
