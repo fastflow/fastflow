@@ -205,13 +205,19 @@ public:
 
 	void releaseAll() { svc_releaseOclObjects(); }
     void releaseInput(const Tin *inPtr)     { 
-        allocator->releaseBuffer(inPtr, context, inputBuffer);
+        if (allocator->releaseBuffer(inPtr, context, inputBuffer) != CL_SUCCESS)
+            checkResult(CL_INVALID_MEM_OBJECT, "releaseInput");
+        inputBuffer = NULL;
     }
     void releaseOutput(const Tout *outPtr)  {
-        allocator->releaseBuffer(outPtr, context, outputBuffer);
+        if (allocator->releaseBuffer(outPtr, context, outputBuffer) != CL_SUCCESS)
+            checkResult(CL_INVALID_MEM_OBJECT, "releaseOutput");
+        outputBuffer = NULL;
     }
     void releaseEnv(size_t idx, const void *envPtr) {
-        allocator->releaseBuffer(envPtr, context, envBuffer[idx].first);
+        if (allocator->releaseBuffer(envPtr, context, envBuffer[idx].first) != CL_SUCCESS)
+            checkResult(CL_INVALID_MEM_OBJECT, "releaseEnv");
+        envBuffer[idx].first = NULL, envBuffer[idx].second = 0;
     }
         
 	void swapBuffers() {
@@ -240,14 +246,16 @@ public:
         if (reuseIn) {
             inputBuffer = allocator->createBufferUnique(inPtr, context,
                                                        CL_MEM_READ_WRITE, sizeInput_padded, &status);
+            checkResult(status, "CreateBuffer(Unique) input");
         } else {
             if (inputBuffer)  allocator->releaseBuffer(inPtr, context, inputBuffer);
             //allocate input-size + pre/post-windows
             inputBuffer = allocator->createBuffer(inPtr, context,
                                                  CL_MEM_READ_WRITE, sizeInput_padded, &status);
+            checkResult(status, "CreateBuffer input");
         }
 
-        checkResult(status, "CreateBuffer input");
+
 		if (lenInput < workgroup_size) {
 			localThreadsMap = lenInput;
 			globalThreadsMap = lenInput;
@@ -258,7 +266,7 @@ public:
 
         if (reducePtr) {
             // 64 and 256 are the max number of blocks and threads we want to use
-            std::cerr << "Reduce inlen " << lenInput;
+            //std::cerr << "Reduce inlen " << lenInput;
             getBlocksAndThreads(lenInput, 64, 256, numBlocksReduce, localThreadsReduce);
             globalThreadsReduce = numBlocksReduce * localThreadsReduce;
             //std::cerr << "numBlocksReduce " << numBlocksReduce << " localThreadsReduce " << localThreadsReduce << "\n";
@@ -299,7 +307,7 @@ public:
 	void relocateEnvBuffer(const void *envptr, const bool reuseEnv, const size_t idx, const size_t envbytesize) {
 		cl_int status = CL_SUCCESS;
 
-        if (idx <= envBuffer.size()) {
+        if (idx >= envBuffer.size()) {
             cl_mem envb;
             if (reuseEnv) 
                 envb = allocator->createBufferUnique(envptr, context,
@@ -311,22 +319,20 @@ public:
                 envBuffer.push_back(std::make_pair(envb,envbytesize));
         } else { 
 
-            if (reuseEnv)
+            if (reuseEnv) {
                 envBuffer[idx].first = allocator->createBufferUnique(envptr, context,
                                                                      CL_MEM_READ_WRITE, envbytesize, &status);
-            else {
+                if (checkResult(status, "CreateBuffer envBuffer"))
+                    envBuffer[idx].second = envbytesize;
+            } else {
                 if (envBuffer[idx].second < envbytesize) {
                     if (envBuffer[idx].first) allocator->releaseBuffer(envptr, context, envBuffer[idx].first);
                     envBuffer[idx].first = allocator->createBuffer(envptr, context,
                                                                    CL_MEM_READ_WRITE, envbytesize, &status);
-                    
-                } else {
-                    std::cerr << "relocateEnvBuffer: envBuffer[idx].second >= envbytesize\n";
+                    if (checkResult(status, "CreateBuffer envBuffer"))
+                        envBuffer[idx].second = envbytesize;
                 }
-                
             }
-            if (checkResult(status, "CreateBuffer envBuffer"))
-                envBuffer[idx].second = envbytesize;
         }
     }
     
@@ -555,7 +561,7 @@ private:
         clGetDeviceInfo(dId, CL_DEVICE_NAME, 128, buf, NULL);
         clGetDeviceInfo(dId, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &s, NULL);
         clGetDeviceInfo(dId, CL_DEVICE_MAX_WORK_ITEM_SIZES, 3*sizeof(size_t), &ss, NULL);
-        std::cerr << "svc_SetUpOclObjects dev " << dId << " " << buf << " MAX_WORK_GROUP_SIZE " << s << " MAX_WORK_ITEM_SIZES " << ss[0] << " " << ss[1] << " " << ss[2] << "\n";
+        //std::cerr << "svc_SetUpOclObjects dev " << dId << " " << buf << " MAX_WORK_GROUP_SIZE " << s << " MAX_WORK_ITEM_SIZES " << ss[0] << " " << ss[1] << " " << ss[2] << "\n";
         
         
 		//create kernel objects
@@ -1096,10 +1102,12 @@ protected:
         if (Task.getReleaseIn()) {
             for (size_t i = 0; i < accelerators.size(); ++i) 
                 accelerators[i].releaseInput(inPtr);
+            oldSizeIn = 0;
         }
         if (Task.getReleaseOut()) {
             for (size_t i = 0; i < accelerators.size(); ++i) 
                 accelerators[i].releaseOutput(outPtr);
+            oldSizeOut = 0;
         }
 
         for(size_t k=0; k < envSize; ++k) {
@@ -1107,11 +1115,11 @@ protected:
                 for (size_t i = 0; i < accelerators.size(); ++i) {
                     char *envptr;
                     Task.getEnvPtr(k, envptr);
-                    accelerators[i].releaseEnv(k,outPtr);
+                    accelerators[i].releaseEnv(k,envptr);
                 }
             }
         }
-        
+
 		return (oneshot ? NULL : task);
 	}
 

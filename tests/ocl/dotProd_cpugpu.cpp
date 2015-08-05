@@ -61,10 +61,6 @@ struct Task: public baseOCLTask<Task, float, float> {
     void setTask(const Task *t) { 
        assert(t);
        
-       // qui andrebbe interpretata la stringa dei comandi
-       // ci vuole una fase post eleaborazione per fare le free ??
-
-
        setInPtr(const_cast<float*>(t->A.data()),  t->A.size());
        setEnvPtr(const_cast<float*>(t->B.data()), t->B.size(), t->copy);
        setOutPtr(const_cast<float*>(t->M.data()));
@@ -93,6 +89,8 @@ struct Map: ff_Map<Task,Task,float> {
                                                  0, arraySize, 
                                                  [&A,&B](const long i, float &sum) { sum += A[i] * B[i]; },
                                                  [](float &v, const float e) { v += e; });
+        
+        printf("sum = %f\n", sum);
         
         in->setResult(sum);
         return in;

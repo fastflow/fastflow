@@ -227,17 +227,9 @@ public:
         if (r.size()>0) return r[0];
         else return -1;
     }
-    
-    /*
-    ssize_t getGPUDevice() {
-        cl_device_type dt;
-        for(size_t i=0; i<clDevices.size(); i++)  {
-            clGetDeviceInfo(clDevices[i], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
-            if((dt) & CL_DEVICE_TYPE_GPU) return i;
-        }
-        return -1;
-    }
-     */
+
+    ssize_t getGPUDevice() { return getGPUDeviceRR(); }
+
     ssize_t getCPUDevice(bool exclusive=false) {
         cl_device_type dt;
         ssize_t ret=-1;

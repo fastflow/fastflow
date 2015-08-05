@@ -97,14 +97,15 @@ struct Task: public baseOCLTask<Task, float, float> {
         } break;                                                                             // A kept (by default)
         case 3: {
             setInPtr(const_cast<float*>(t->R->data()), t->R->size(), (t->k==0)?true:false);  // R copied only the 1st time
-            setEnvPtr(const_cast<float*>(t->A.data()),  t->A.size(), false, true);           // A not copied, reusing the previous buffer
+            setEnvPtr(const_cast<float*>(t->A.data()),  t->A.size(), false, true);           // A not copied, reusing the previous buffer (*)
             setEnvPtr(&(t->sum), 1);                                                         // sum
             setOutPtr(const_cast<float*>(t->R->data()),  t->R->size());                      // R get back result
         } break;                                                                             // R kept (by default)
         default: abort();
         }
-    }
-    
+    } // (*): note that A cannot be release here because kernel3 is re-using the buffer allocated in the first kernel !    
+
+
     /* stream items */
     std::vector<float> A;
     float sum;

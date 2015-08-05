@@ -63,15 +63,18 @@ public:
                               cl_context ctx, cl_mem_flags flags, size_t size, cl_int *status) {
         if (allocated.find(ctx) != allocated.end()) {
             inner_map_t::iterator it = allocated[ctx].find(key);
-            if (it != allocated[ctx].end()) 
+            if (it != allocated[ctx].end()) {
+                *status = CL_SUCCESS;
                 return it->second;
+            }
         }
         return createBuffer(key,ctx,flags,size,status);
     }
 
     cl_int releaseBuffer(const void *key, cl_context ctx, cl_mem ptr) {
+        assert(allocated.find(ctx) != allocated.end());
+        assert(allocated[ctx].find(key) != allocated[ctx].end());
         if (clReleaseMemObject(ptr) == CL_SUCCESS) {
-            assert(allocated.find(ctx) != allocated.end());
             allocated[ctx].erase(key);
             return CL_SUCCESS;
         }
