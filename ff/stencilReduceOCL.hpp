@@ -552,7 +552,7 @@ private:
         clGetDeviceInfo(dId, CL_DEVICE_NAME, 128, buf, NULL);
         clGetDeviceInfo(dId, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &s, NULL);
         clGetDeviceInfo(dId, CL_DEVICE_MAX_WORK_ITEM_SIZES, 3*sizeof(size_t), &ss, NULL);
-        //std::cerr << "svc_SetUpOclObjects dev " << dId << " " << buf << " MAX_WORK_GROUP_SIZE " << s << " MAX_WORK_ITEM_SIZES " << ss[0] << " " << ss[1] << " " << ss[2] << "\n";
+        std::cerr << "svc_SetUpOclObjects dev " << dId << " " << buf << " MAX_WORK_GROUP_SIZE " << s << " MAX_WORK_ITEM_SIZES " << ss[0] << " " << ss[1] << " " << ss[2] << "\n";
         
         
 		//create kernel objects
@@ -875,7 +875,7 @@ protected:
                 // Forced devices
                 if (ff_oclNode_t<T>::getDeviceType()==CL_DEVICE_TYPE_CPU) {
                     ssize_t CPUdevId = clEnvironment::instance()->getCPUDevice();
-                    printf("%d: Allocated a CPU device as either no GPU device is available or no GPU slot is available (cpuId=%ld)\n",ff_oclNode_t<T>::oclId, CPUdevId);
+                    //fprintf(stderr,"%d: Allocated a CPU device as either no GPU device is available or no GPU slot is available (cpuId=%ld)\n",ff_oclNode_t<T>::oclId, CPUdevId);
                     if (accelerators.size()!=1)  printf("WARNING: Too many accelerators rquested for CL_CPU device\n");
                     deviceId=clEnvironment::instance()->getDevice(CPUdevId);
                     accelerators[0].init(deviceId, kernel_code, kernel_name1,kernel_name2);
@@ -884,14 +884,14 @@ protected:
                     
                     
                     for (size_t i = 0; i < accelerators.size(); ++i) {
-                        ssize_t GPUdevId =clEnvironment::instance()->getGPUDevice();
+                        ssize_t GPUdevId =clEnvironment::instance()->getGPUDeviceRR();
                         if( (GPUdevId !=-1) && ( ff_oclNode_t<T>::oclId < clEnvironment::instance()->getNumGPU())) { 
-                            printf("%d: Allocated a GPU device for accelerator %ld, the id is %ld\n", ff_oclNode_t<T>::oclId, i, GPUdevId);
+                            //fprintf(stderr,"%d: Allocated a GPU device for accelerator %ld, the id is %ld\n", ff_oclNode_t<T>::oclId, i, GPUdevId);
                             deviceId=clEnvironment::instance()->getDevice(GPUdevId);
                         } else  {	
                             // fall back to CPU either GPU has reached its max or there is no GPU available
                             ssize_t CPUdevId =clEnvironment::instance()->getCPUDevice();
-                            printf("%d: Allocated a CPU device as either no GPU device is available or no GPU slot is available (cpuId=%ld)\n",ff_oclNode_t<T>::oclId, CPUdevId);
+                            //fprintf(stderr,"%d: Allocated a CPU device as either no GPU device is available or no GPU slot is available (cpuId=%ld)\n",ff_oclNode_t<T>::oclId, CPUdevId);
                             deviceId=clEnvironment::instance()->getDevice(CPUdevId);
                         }
                         accelerators[i].init(deviceId, kernel_code, kernel_name1,kernel_name2);

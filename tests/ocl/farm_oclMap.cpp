@@ -37,7 +37,7 @@
 #include <ff/stencilReduceOCL.hpp>
 #include <ff/farm.hpp>
 
-#define NDEV 4
+#define NDEV 1
 
 
 using namespace ff;
@@ -94,7 +94,7 @@ int main(int argc, char * argv[]) {
 
     size_t inputsize   = 1024;
     long   streamlen   = 2048;
-    int    nworkers    = 4;
+    int    nworkers    = 2;
     
      if  (argc > 1) {
         if (argc < 4) { 
@@ -115,8 +115,12 @@ int main(int argc, char * argv[]) {
 
     oclTask oclt;
     std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) 
-        w.push_back(new ff_mapOCL_1D<myTask, oclTask>(mapf, ff_oclallocator(), NDEV));
+    for(int i=0;i<nworkers;++i)  {
+        auto worker = new ff_mapOCL_1D<myTask, oclTask>(mapf, ff_oclallocator(), NDEV);
+        worker->pickCPU();
+        w.push_back(worker);
+        
+    }
     farm.add_workers(w);
     farm.cleanup_workers();
     farm.run_and_wait_end();

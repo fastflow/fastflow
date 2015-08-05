@@ -98,7 +98,7 @@ int main(int argc, char * argv[]) {
     for (size_t i=0; i<res.size(); ++i)
         std::cout << i << " - " << res[i] << std::endl;
     std::cout << "First CPU is " << oclMR.getCPUDevice() << "\n";
-    std::cout << "First GPU is " << oclMR.getGPUDevice() << "\n";
+    std::cout << "First GPU is " << oclMR.getGPUDeviceRR() << "\n";
 
     std::vector<ssize_t> allgpus = oclMR.getAllGPUDevices();
     for (size_t i=0; i<allgpus.size(); ++i)

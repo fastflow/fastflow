@@ -111,7 +111,7 @@ protected:
        switch (dtype) {
        case CL_DEVICE_TYPE_ALL: {
            // no user choice, a static greedy algorithm is used to allocate openCL components
-           ssize_t GPUdevId =clEnvironment::instance()->getGPUDevice();
+           ssize_t GPUdevId =clEnvironment::instance()->getGPUDeviceRR();
            if( (GPUdevId !=-1) && ( oclId < clEnvironment::instance()->getNumGPU())) { 
                printf("%d: Allocated a GPU device, the id is %ld\n", oclId, GPUdevId);
                deviceId=clEnvironment::instance()->getDevice(GPUdevId);
@@ -128,7 +128,7 @@ protected:
             return -1;
        } break;
        case CL_DEVICE_TYPE_GPU: {
-           ssize_t GPUdevId =clEnvironment::instance()->getGPUDevice();
+           ssize_t GPUdevId =clEnvironment::instance()->getGPUDeviceRR();
            if( (GPUdevId !=-1) && ( oclId < clEnvironment::instance()->getNumGPU())) { 
                printf("%d: Allocated a GPU device, the id is %ld\n", oclId, GPUdevId);
                deviceId=clEnvironment::instance()->getDevice(GPUdevId);

@@ -48,7 +48,7 @@ int main(int argc, char * argv[]) {
         std::cout << i << " - " << res[i] << std::endl;
     
     std::cout << "First CPU is " << clEnvironment::instance()->getCPUDevice() << "\n";
-    std::cout << "First GPU is " << clEnvironment::instance()->getGPUDevice() << "\n";
+    std::cout << "First GPU is " << clEnvironment::instance()->getGPUDeviceRR() << "\n";
 
     std::vector<ssize_t> allgpus = clEnvironment::instance()->getAllGPUDevices();
     for (size_t i=0; i<allgpus.size(); ++i)
