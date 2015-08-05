@@ -94,7 +94,7 @@ int main(int argc, char * argv[]) {
 
     size_t inputsize   = 1024;
     long   streamlen   = 2048;
-    int    nworkers    = 2;
+    int    nworkers    = 3;
     
      if  (argc > 1) {
         if (argc < 4) { 
@@ -117,7 +117,9 @@ int main(int argc, char * argv[]) {
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i)  {
         auto worker = new ff_mapOCL_1D<myTask, oclTask>(mapf, ff_oclallocator(), NDEV);
-        worker->pickCPU();
+        //if (i%2) worker->pickCPU();
+        //else worker->pickGPU();
+        worker->pickGPU();
         w.push_back(worker);
         
     }
