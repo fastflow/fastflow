@@ -51,9 +51,7 @@ FF_OCL_MAP_ELEMFUNC2(mapf, float, mypair, elem,
                     return (elem.a * elem.b);
 );
 
-FF_OCL_STENCIL_COMBINATOR(reducef, float, (x), (y),
-             return (x+y);
-);
+//FF_OCL_STENCIL_COMBINATOR(reducef, float, (x), (y), return (x+y) );
 
 
 struct oclTask: public baseOCLTask<oclTask, mypair, float> {
@@ -105,11 +103,7 @@ int main(int argc, char * argv[]) {
         std::cout << "GPU #" << i << " ID " << allgpus[i] << std::endl;
 
     oclMR.pickGPU(1);
-    
     oclMR.run_and_wait_end();
-
-    //oclMR.run_and_wait_end();
-
 
     delete [] M;
     printf("res=%.2f\n", oclt.result);
