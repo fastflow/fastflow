@@ -297,7 +297,7 @@ public:
 	}
 
 	void relocateEnvBuffer(const void *envptr, const bool reuseEnv, const size_t idx, const size_t envbytesize) {
-		cl_int status;
+		cl_int status = CL_SUCCESS;
 
         if (idx <= envBuffer.size()) {
             cl_mem envb;
@@ -307,23 +307,26 @@ public:
             else 
                 envb = allocator->createBuffer(envptr, context,
                                                CL_MEM_READ_WRITE, envbytesize, &status);
-            checkResult(status, "CreateBuffer envBuffer");
-            envBuffer.push_back(std::make_pair(envb,envbytesize));
+            if (checkResult(status, "CreateBuffer envBuffer"))
+                envBuffer.push_back(std::make_pair(envb,envbytesize));
         } else { 
 
-            if (reuseEnv) {
+            if (reuseEnv)
                 envBuffer[idx].first = allocator->createBufferUnique(envptr, context,
                                                                      CL_MEM_READ_WRITE, envbytesize, &status);
-            } else {
+            else {
                 if (envBuffer[idx].second < envbytesize) {
                     if (envBuffer[idx].first) allocator->releaseBuffer(envptr, context, envBuffer[idx].first);
                     envBuffer[idx].first = allocator->createBuffer(envptr, context,
                                                                    CL_MEM_READ_WRITE, envbytesize, &status);
                     
+                } else {
+                    std::cerr << "relocateEnvBuffer: envBuffer[idx].second >= envbytesize\n";
                 }
+                
             }
-            checkResult(status, "CreateBuffer envBuffer");
-            envBuffer[idx].second = envbytesize;
+            if (checkResult(status, "CreateBuffer envBuffer"))
+                envBuffer[idx].second = envbytesize;
         }
     }
     
