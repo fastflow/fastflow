@@ -269,7 +269,7 @@ public:
 
     int getNumGPU() const { return numGPU; }
 
-    cl_device_id getDevice(size_t id) const { return clDevices[id]; }     
+    inline cl_device_id getDevice(size_t id) const { return clDevices[id]; }
     
     oclParameter *getParameter(cl_device_id id) { return dynamicParameters[id]; }
      

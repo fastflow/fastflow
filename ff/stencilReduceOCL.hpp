@@ -866,11 +866,58 @@ protected:
     }
     */
     
-    // To be rewritten in terms of nodeinit 
+    // To be rewritten in terms of nodeinit
+    // Currently, it never mix GPUs with CPU
 	virtual int svc_init() {
         if (ff_oclNode_t<T>::oclId < 0) {
             ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
             
+            switch(ff_oclNode_t<T>::getDeviceType()) {
+                case CL_DEVICE_TYPE_ALL:
+                    fprintf(stderr,"STATUS: requested ALL\n");
+                case CL_DEVICE_TYPE_GPU: {// One or more GPUs
+                    // Not exclusive
+                    // Retrive logical devices
+                    std::vector<ssize_t> logdev = clEnvironment::instance()->coAllocateGPUDeviceRR(accelerators.size());
+                    // Convert into opencl Ids
+                    devices.clear();
+                    for (size_t i = 0; i < logdev.size(); ++i)
+                        devices.push_back(clEnvironment::instance()->getDevice(logdev[i]));
+                    if (devices.size() == 0) {
+                        error("stencilReduceOCL::svc_init:not enough GPUs found !\n");
+                        return -1;
+                        } else {
+                        // Ok
+                        for (size_t i = 0; i < devices.size(); ++i)
+                            accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);
+                        break;
+                        }
+                }
+                case CL_DEVICE_TYPE_CPU: {
+                    if (accelerators.size()>1) {
+                        error ("Multiple (>1) virtual accelerators on CPU are requested. Not yet implemented.\n");
+                        return -1;
+                    } else {
+                        // Ok
+                        devices.clear();
+                        devices.push_back(clEnvironment::instance()->getDevice(clEnvironment::instance()->getCPUDevice()));
+                        accelerators[0].init(devices[0], kernel_code, kernel_name1,kernel_name2);
+                    }
+                } break;
+                default: {
+                    error("stencilReduceOCL::Other device. Not yet implemented.\n");
+                } break;
+            }
+        }
+        return 0;
+    }
+            /*
+                    devices = clEnvironment::instance()->coAllocateGPUDeviceRR(accelerators.size());
+                    if (devices.size() == 0) && (CL_DEVICE_TYPE_GPU==ff_oclNode_t<T>::getDeviceType()) {
+                        error("stencilReduceOCL::svc_init:not enough GPUs found !\n");
+                        return -1;
+                    }
+                    
             if (devices.size()>0) {
                 if (devices.size() > accelerators.size()) {
                     error("stencilReduceOCL::svc_init: more devices than accelerators !\n");
@@ -878,7 +925,7 @@ protected:
                 }
                 for (size_t i = 0; i < devices.size(); ++i) 
                     accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);                
-            } else {
+            } els {
                 cl_device_id deviceId; 
                 
                 // Forced devices
@@ -910,7 +957,7 @@ protected:
         }
         return 0;
     }
-    
+    */
 
 	virtual void svc_end() {
 		if (!ff::ff_node::isfrozen()) nodeEnd();
