@@ -20,7 +20,7 @@ FF_ROOT  = ../../
 
 # 
 OCLFLAGS =
-OPTFLAGS =  -g -O3 $(EXTRA_FLAGS) 
+OPTFLAGS =  -g $(EXTRA_FLAGS) 
 LIBS =  $(OPENCL) -lpthread  	
 INCLUDES = -I$(FF_ROOT) -I$(OCL_ROOT)/include
 

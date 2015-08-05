@@ -66,7 +66,17 @@ int main(int argc, char * argv[]) {
     oclReduce.pickGPU(1);
     oclReduce.run_and_wait_end();
 
+    float res = 0.0;
+    for (size_t i=0; i<size; ++i) {
+        res +=M[i];
+    }
+    
     delete [] M;
-    printf("res=%.2f\n", oclt.result);
+    printf("\nres=%.2f\n", oclt.result);
+    if (res!= oclt.result) {
+        printf("Error\n");
+        return -1;
+    }
+    printf("Result correct\n");
     return 0;
 }
