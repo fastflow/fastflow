@@ -100,7 +100,7 @@ protected:
   
     ~ff_oclNode() { }
    
-    
+    // To be rewritten
    int svc_init() {
        
        if (oclId < 0) oclId = clEnvironment::instance()->getOCLID();
