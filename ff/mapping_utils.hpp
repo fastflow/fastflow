@@ -79,7 +79,7 @@
  *  negative vlue is returned.
  *
  */
-static inline long ff_getThreadID() {
+static inline size_t ff_getThreadID() {
 #if (defined(__GNUC__) && defined(__linux))
     return  gettid();
 #elif defined(__APPLE__) && MAC_OS_X_HAS_AFFINITY

@@ -148,7 +148,7 @@ class ff_thread {
 protected:
     ff_thread(BARRIER_T * barrier=NULL):
     	fftree_ptr(NULL),
-        tid((unsigned)-1),barrier(barrier),
+        tid((size_t)-1),threadid(0), barrier(barrier),
         stp(true), // only one shot by default
         spawned(false),
         freezing(0), frozen(false), //thawed(false),
@@ -175,6 +175,7 @@ protected:
     virtual ~ff_thread() {}
     
     void thread_routine() {
+        threadid = ff_getThreadID();
         if (barrier) barrier->doBarrier(tid);
         void * ret;
         do {
@@ -275,7 +276,7 @@ public:
 
         int CPUId = init_thread_affinity(attr, cpuId);
         if (CPUId==-2) return -2;
-        if (barrier) tid= (unsigned) barrier->getCounter();
+        if (barrier) tid= barrier->getCounter();
         if (pthread_create(&th_handle, attr,
                            proxy_thread_routine, this) != 0) {
             perror("pthread_create: pthread creation failed.");
@@ -350,11 +351,13 @@ public:
 
     pthread_t get_handle() const { return th_handle;}
 
-    inline int getTid() const { return tid; }
+    inline size_t getTid() const { return tid; }
+    inline size_t getOSThreadId() const { return threadid; }
 
 protected:
     fftree       *  fftree_ptr;         /// fftree stuff
-    unsigned        tid;
+    size_t          tid;                /// unique logical id of the thread
+    size_t          threadid;           /// OS specific thread ID
 private:
     BARRIER_T    *  barrier;            /// A \p Barrier object
     bool            stp;
@@ -840,6 +843,14 @@ public:
     
     virtual int get_my_id() const { return myid; };
 
+    /**
+     * \brief Returns the OS specific thread id of the node.
+     *
+     * The returned id is valid (>0) only if the node is an active node (i.e. the thread has been created).
+     *
+     */
+    inline size_t getOSThreadId() const { return thread->getOSThreadId(); }
+
 
 #if defined(FF_TASK_CALLBACK)
     virtual void callbackIn(void *t=NULL)  { }
@@ -1016,7 +1027,7 @@ private:
 
     void  setCPUId(int id) { CPUId = id;}
 
-    inline int   getTid() const { return thread->getTid();} 
+    inline size_t   getTid() const { return thread->getTid();} 
     
 
     class thWorker: public ff_thread {
