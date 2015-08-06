@@ -40,13 +40,16 @@
 #include <ff/map.hpp>
 #include <ff/stencilReduceOCL.hpp>
 #include <ff/selector.hpp>
+#include <math.h>
 
+//#define SYSTEM_HAS_GPU 1
 
 #if defined(SYSTEM_HAS_GPU)
 #define DEVICE(x) x.pickGPU()
 #else
 #define DEVICE(x) x.pickCPU()
 #endif
+
 
 using namespace ff;
 
@@ -306,7 +309,7 @@ int main(int argc, char * argv[]) {
 
         bool wrong = false;
         for(size_t i=0;i<arraySize;++i)
-            if (abs(R[i] -_R[i]) > 0.0001) {
+            if (std::abs(R[i] -_R[i]) > 0.0001) {
                 std::cerr << "Wrong result " <<  R[i] << " should be " << _R[i] << "\n";
                 wrong = true;
             }
