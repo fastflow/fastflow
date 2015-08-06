@@ -65,7 +65,11 @@ public:
                    tuple_out(std::make_tuple(true,false,false))   { }   
     virtual ~baseOCLTask() { }
     
-    // user must override this method
+    // user must override this method using:
+    // - setInPtr for setting the host-pointer to the input array
+    // - setOutPtr for setting the host-pointer to the output array
+    // - setEnvPtr for adding to env-list the host-pointer to a read-only env
+    // NOTE: order of setEnvPtr calls matters! TODO refine interface?
     virtual void setTask(const TaskT *t) = 0;
     
     /* --- the user may overrider these methods --- */ 
@@ -82,14 +86,37 @@ public:
         envPtr.resize(0);
         copyEnv.resize(0);
     }
+
+    /**
+     * set the host-pointer to the input array.
+     *
+     * @param _inPtr the host-pointer
+     * @param sizeIn the number of elements in the input array
+     * @param copy TODO
+     * @param reuse TODO
+     * @param release TODO
+     */
     void setInPtr(Tin* _inPtr, size_t sizeIn=1, bool copy=true, bool reuse=false, bool release=false)  { 
         inPtr  = _inPtr; size_in = sizeIn; 
         tuple_in = std::make_tuple(copy,reuse,release);
     }
+
+    /**
+     * set the host-pointer to the output array.
+     *
+     * @see setInPtr()
+     * @param copyback TODO
+     */
     void setOutPtr(Tout* _outPtr, size_t sizeOut=0, bool copyback=true, bool reuse=false, bool release=false)  { 
         outPtr = _outPtr; size_out = sizeOut; 
         tuple_out = std::make_tuple(copyback,reuse,release);
     }
+
+    /**
+     * add to env-list the host-pointer to a read-only env.
+     *
+     * @see setInPtr()
+     */
     template<typename ptrT>
     void setEnvPtr(const ptrT* _envPtr, size_t size, bool copy=true, bool reuse=false, bool release=false)  { 
         assert(envPtr.size() == copyEnv.size());
@@ -181,10 +208,10 @@ public:
 		inputBuffer = outputBuffer = reduceBuffer = NULL;
 
 		sizeInput = sizeInput_padded = 0;
-		lenInput = offset1_in = offset2_in = pad1_in = pad2_in = lenInput_global = 0;
+		lenInput = offset1_in = pad1_in = pad2_in = lenInput_global = 0;
 
 		sizeOutput = sizeOutput_padded = 0;
-		lenOutput = offset1_out = offset2_out = pad1_out = pad2_out = lenOutput_global = 0;
+		lenOutput = offset1_out = pad1_out = pad2_out = lenOutput_global = 0;
 
 		nevents_h2d = nevents_map = 0;
 		event_d2h = event_map = event_reduce1 = event_reduce2 = NULL;
@@ -226,13 +253,13 @@ public:
 		outputBuffer = tmp;
 	}
 
+	//see comments for members
     void adjustInputBufferOffset(std::pair<size_t, size_t> &P, size_t len_global) {
         offset1_in = P.first;
         lenInput   = P.second;
         lenInput_global = len_global;
         pad1_in = (std::min)(width, offset1_in);
-        offset2_in = lenInput_global - lenInput - offset1_in;
-        pad2_in = (std::min)(width, offset2_in);
+        pad2_in = (std::min)(width, lenInput_global - lenInput - offset1_in);
 		sizeInput = lenInput * sizeof(Tin);
 		sizeInput_padded = sizeInput + (pad1_in + pad2_in) * sizeof(Tin);
     }
@@ -290,8 +317,7 @@ public:
 		lenOutput   = P.second;
 		lenOutput_global = len_global;
 		pad1_out = (std::min)(width, offset1_out);
-		offset2_out = lenOutput_global - lenOutput - offset1_out;
-		pad2_out = (std::min)(width, offset2_out);
+		pad2_out = (std::min)(width, lenOutput_global - lenOutput - offset1_out);
 		sizeOutput = lenOutput * sizeof(Tout);
 		sizeOutput_padded = sizeOutput + (pad1_out + pad2_out) * sizeof(Tout);
     }
@@ -343,7 +369,6 @@ public:
 		pad1_out          = pad1_in;
 		pad2_out          = pad2_in;
 		offset1_out       = offset1_in;
-		offset2_out       = offset2_in;
 		sizeOutput        = sizeInput;
 		sizeOutput_padded = sizeInput_padded;
     }
@@ -629,11 +654,21 @@ private:
 	cl_mem inputBuffer, outputBuffer;
     std::vector<std::pair<cl_mem, size_t> > envBuffer;
 
-	size_t sizeInput, sizeInput_padded;
-	size_t lenInput, offset1_in, offset2_in, pad1_in, pad2_in, lenInput_global;
+    /*
+     * each accelerator works on the following subset of the input array:
+     * [left-border][input-portion][right-border]
+     * input portion is accessed RW, border are accessed read-only
+     */
+    size_t sizeInput; //byte-size of the input-portion
+    size_t sizeInput_padded; //byte-size of the input-portion plus left and right borders
+	size_t lenInput; //n. elements in the input-portion
+	size_t offset1_in; //left-offset (begin input-portion wrt to begin input)
+	size_t pad1_in; //n. elements in the left-border
+	size_t pad2_in; //n. elements in the right-border
+	size_t lenInput_global; //n. elements in the input
 
 	size_t sizeOutput, sizeOutput_padded;
-	size_t lenOutput, offset1_out, offset2_out, pad1_out, pad2_out, lenOutput_global;
+	size_t lenOutput, offset1_out, pad1_out, pad2_out, lenOutput_global;
 
 
 	size_t workgroup_size_map, workgroup_size_reduce;
@@ -670,7 +705,7 @@ public:
                                const ff_oclallocator &allocator = ff_oclallocator(),
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(false), accelerators(NACCELERATORS, accelerator_t(const_cast<ff_oclallocator&>(allocator), width,identityVal)), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-    stencil_width(width), preferred_dev(0), oldSizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
+    stencil_width(width), preferred_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setcode(mapf, reducef);
 	}
 
@@ -681,7 +716,7 @@ public:
                                const ff_oclallocator &allocator = ff_oclallocator(),
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(true), accelerators(NACCELERATORS, accelerator_t(const_cast<ff_oclallocator&>(allocator), width,identityVal)), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-        stencil_width(width), oldSizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
+        stencil_width(width), oldBytesizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
 		ff_node::skipfirstpop(true);
 		setcode(mapf, reducef);
 		Task.setTask(const_cast<T*>(&task));
@@ -689,37 +724,36 @@ public:
 
 	virtual ~ff_stencilReduceLoopOCL_1D() {}
 
-    // used to set tasks when in onshot mode 
-    void setTask(const T &task) { 
-        assert(oneshot);
-        Task.resetTask();
-        Task.setTask(&task); 
-    }
+//    // used to set tasks when in onshot mode
+//    void setTask(const T &task) {
+//        assert(oneshot);
+//        Task.resetTask();
+//        Task.setTask(&task);
+//    }
 
     // sets the OpenCL devices that have to be used
     int setDevices(std::vector<cl_device_id> &dev) {
         if (dev.size() > accelerators.size()) return -1; 
         devices = dev;
-        if (ff_oclNode_t<T>::oclId < 0) 
-            ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
-
-        for (size_t i = 0; i < devices.size(); ++i) 
-            accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);
+//        if (ff_oclNode_t<T>::oclId < 0)
+//            ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
+//
+//        for (size_t i = 0; i < devices.size(); ++i)
+//            accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);
 
         return 0;
     }
 
     // force execution on the CPU
     void pickCPU () {
-        std::cerr << "select CPU\n";
+        std::cerr << "forced execution on CPU\n";
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_CPU);
-        
     }
     
     // force execution on the GPU
     void pickGPU (size_t offset=0 /* picks first GPU */) {
-        std::cerr << "select GPU\n";
-        preferred_dev=offset;
+        std::cerr << "forced execution on GPU\n";
+        preferred_dev=offset; //TODO check numbering
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_GPU);
     }
     
@@ -792,60 +826,65 @@ public:
     }
 */
     
-    int nodeInit() {
-        bool device_found = false;
-        if (devices.size()==0) {
-            switch(ff_oclNode_t<T>::getDeviceType()) {
-                case CL_DEVICE_TYPE_ALL:
-                    fprintf(stderr,"STATUS: requested ALL\n");
-                case CL_DEVICE_TYPE_GPU: {// One or more GPUs
-                    std::vector<ssize_t> devIds = clEnvironment::instance()->getAllGPUDevices();
-                    if (devIds.size()==0) {
-                        fprintf(stderr,"WARNING: no GPUs available\n");
-                    } else {
-                        if (accelerators.size()==1) {
-                            ssize_t devId = devIds[preferred_dev];
-                            ff_oclNode_t<T>::deviceId=clEnvironment::instance()->getDevice(devId);
-                            accelerators[0].init(ff_oclNode_t<T>::deviceId, kernel_code, kernel_name1,kernel_name2);
-                            device_found = true;
-                        } else {
-                            if (devIds.size()>=accelerators.size()) {
-                                for (size_t j=0; accelerators.size(); ++j)
-                                    accelerators[j].init(clEnvironment::instance()->getDevice(devIds[j]), kernel_code, kernel_name1,kernel_name2);
-                                device_found = true;
-                            } else {
-                                fprintf(stderr,"WARNING: requested number of devices not matching number of logical accelerators\n");
-                            }
-                        }
-                    }
-                } if (device_found) break;
-                case CL_DEVICE_TYPE_CPU: {
-                    fprintf(stderr,"STATUS: requested 1CPU\n");
-                    ssize_t devId = clEnvironment::instance()->getCPUDevice();
-                    if (accelerators.size()!=1)  fprintf(stderr,"WARNING: Too many accelerators requested for CL_CPU device\n");
-                    // accelerators num should be modified
-                    ff_oclNode_t<T>::deviceId=clEnvironment::instance()->getDevice(devId);
-                    accelerators[0].init(ff_oclNode_t<T>::deviceId, kernel_code, kernel_name1,kernel_name2);
-                    device_found = true;
-                } break;
-                default: {
-                    error("stencilReduceOCL::nodeInit: no device selected\n");
-                    return -1;
-                }
-                    
-            }
-        }
-        return (device_found?0:-1);
-    }
+//    int nodeInit() {
+//        bool device_found = false;
+//        if (devices.size()==0) {
+//            switch(ff_oclNode_t<T>::getDeviceType()) {
+//                case CL_DEVICE_TYPE_ALL:
+//                    fprintf(stderr,"STATUS: requested ALL\n");
+//                case CL_DEVICE_TYPE_GPU: {// One or more GPUs
+//                    std::vector<ssize_t> devIds = clEnvironment::instance()->getAllGPUDevices();
+//                    if (devIds.size()==0) {
+//                        fprintf(stderr,"WARNING: no GPUs available\n");
+//                    } else {
+//                        if (accelerators.size()==1) {
+//                            ssize_t devId = devIds[preferred_dev];
+//                            ff_oclNode_t<T>::deviceId=clEnvironment::instance()->getDevice(devId);
+//                            accelerators[0].init(ff_oclNode_t<T>::deviceId, kernel_code, kernel_name1,kernel_name2);
+//                            device_found = true;
+//                        } else {
+//                            if (devIds.size()>=accelerators.size()) {
+//                                for (size_t j=0; accelerators.size(); ++j)
+//                                    accelerators[j].init(clEnvironment::instance()->getDevice(devIds[j]), kernel_code, kernel_name1,kernel_name2);
+//                                device_found = true;
+//                            } else {
+//                                fprintf(stderr,"WARNING: requested number of devices not matching number of logical accelerators\n");
+//                            }
+//                        }
+//                    }
+//                } if (device_found) break;
+//                case CL_DEVICE_TYPE_CPU: {
+//                    fprintf(stderr,"STATUS: requested 1CPU\n");
+//                    ssize_t devId = clEnvironment::instance()->getCPUDevice();
+//                    if (accelerators.size()!=1)  fprintf(stderr,"WARNING: Too many accelerators requested for CL_CPU device\n");
+//                    // accelerators num should be modified
+//                    ff_oclNode_t<T>::deviceId=clEnvironment::instance()->getDevice(devId);
+//                    accelerators[0].init(ff_oclNode_t<T>::deviceId, kernel_code, kernel_name1,kernel_name2);
+//                    device_found = true;
+//                } break;
+//                default: {
+//                    error("stencilReduceOCL::nodeInit: no device selected\n");
+//                    return -1;
+//                }
+//
+//            }
+//        }
+//        return (device_found?0:-1);
+//    }
     
         
     void nodeEnd() {
-        if (devices.size()==0) {
-            if (ff_oclNode_t<T>::deviceId != NULL)
-                accelerators[0].releaseAll();
-        } else 
-            for (size_t i = 0; i < devices.size(); ++i) 
-                accelerators[i].releaseAll();     
+//        if (devices.size()==0) {
+//            if (ff_oclNode_t<T>::deviceId != NULL)
+//                accelerators[0].releaseAll();
+//        } else
+//            for (size_t i = 0; i < devices.size(); ++i)
+//                accelerators[i].releaseAll();
+
+    	//TODO check:
+    	// if multi-device, casuses multiple releaseAllBuffers calls to same object
+		for (size_t i = 0; i < accelerators.size(); ++i)
+			accelerators[i].releaseAll();
     }
      
 protected:
@@ -965,31 +1004,32 @@ protected:
 
 	T *svc(T *task) {
 		if (task) {
+			assert(!oneshot); //TODO remove
             Task.resetTask();
             Task.setTask(task);
         }
 		Tin   *inPtr = Task.getInPtr();
 		Tout  *outPtr = Task.getOutPtr();
         Tout  *reducePtr = Task.getReduceVar();
-        const size_t envSize = Task.getEnvNum();
+        const size_t envSize = Task.getEnvNum(); //n. added environments
         
-		// relocate input device memory if needed
-		if (oldSizeIn != Task.getBytesizeIn()) {
+		// adjust allocator input-portions and relocate input device memory if needed
+		if (oldBytesizeIn != Task.getBytesizeIn()) {
 			compute_accmem(Task.getSizeIn(),  acc_in);
 
             for (size_t i = 0; i < accelerators.size(); ++i) {
                 accelerators[i].adjustInputBufferOffset(acc_in[i], Task.getSizeIn());
             }
 
-            if (oldSizeIn < Task.getBytesizeIn()) {
+            if (oldBytesizeIn < Task.getBytesizeIn()) {
                 for (size_t i = 0; i < accelerators.size(); ++i) {
                     accelerators[i].relocateInputBuffer(inPtr, Task.getReuseIn(), reducePtr);
                 }
-                oldSizeIn = Task.getBytesizeIn();
+                oldBytesizeIn = Task.getBytesizeIn();
             }            
 		}
 
-		// relocate output device memory if needed
+		// adjust allocator output-portions and relocate output device memory if needed
         if (oldSizeOut != Task.getBytesizeOut()) {
 
             if ((void*)inPtr == (void*)outPtr) {
@@ -1012,11 +1052,11 @@ protected:
             }
         }
 
-
+        //relocate env device memory
+        //TODO on-demand relocate, as for input/output memory
         /* NOTE: env buffer are replicated on all devices.
-         *       It would be nice to have different polices: replicated, partitioned, etc....
-         *
-         */  
+         *       It would be nice to have replicated/partitioned polices
+         */
         for (size_t i = 0; i < accelerators.size(); ++i)
             for(size_t k=0; k < envSize; ++k) {
                 char *envptr;
@@ -1149,7 +1189,7 @@ protected:
         if (Task.getReleaseIn()) {
             for (size_t i = 0; i < accelerators.size(); ++i) 
                 accelerators[i].releaseInput(inPtr);
-            oldSizeIn = 0;
+            oldBytesizeIn = 0;
         }
         if (Task.getReleaseOut()) {
             for (size_t i = 0; i < accelerators.size(); ++i) 
@@ -1212,6 +1252,10 @@ private:
 		}
 	}
 
+	//assign input partition to accelerators
+	//acc[i] = (start, size) where:
+	//         - start is the first element assigned to accelerator i
+	//         - size is the number of elements assigned to accelerator i
 	void compute_accmem(const size_t len, std::vector<std::pair<size_t,size_t> > &acc) {
 		size_t start = 0, step = (len + accelerators.size() - 1) / accelerators.size();
 		int i = 0;
@@ -1262,7 +1306,7 @@ private:
     size_t forced_other;
     
     
-	size_t oldSizeIn, oldSizeOut, oldSizeReduce;
+	size_t oldBytesizeIn, oldSizeOut, oldSizeReduce;
 };
 
 
