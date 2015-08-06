@@ -63,7 +63,8 @@ int main(int argc, char * argv[]) {
 
     oclTask oclt(M, size);
     ff_reduceOCL_1D<oclTask> oclReduce(oclt, reducef, 0.0);
-    oclReduce.pickGPU(1);
+
+    //oclReduce.pickGPU(1);
     oclReduce.run_and_wait_end();
 
     float res = 0.0;
