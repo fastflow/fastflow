@@ -37,8 +37,7 @@
 #include <ff/stencilReduceOCL.hpp>
 #include <ff/farm.hpp>
 
-#define NDEV 1
-
+const int NDEV = 1;
 
 using namespace ff;
 
@@ -54,7 +53,7 @@ struct myTask {
 };
 
 // OpenCL task
-struct oclTask: public baseOCLTask<myTask, float> {
+struct oclTask: baseOCLTask<myTask, float> {
     oclTask() {}
     void setTask(const myTask *task) { 
         assert(task);
@@ -63,7 +62,7 @@ struct oclTask: public baseOCLTask<myTask, float> {
     }
 };
 
-struct Emitter: public ff_node {
+struct Emitter: ff_node {
     Emitter(long streamlen, size_t size):streamlen(streamlen),size(size) {}
     void *svc(void*) {
         for(int i=0;i<streamlen;++i) {
@@ -78,7 +77,7 @@ struct Emitter: public ff_node {
     size_t size;
 };
 
-struct Collector: public ff_node_t<myTask> {
+struct Collector: ff_node_t<myTask> {
     myTask* svc(myTask *t) {
 #if defined(CHECK)    
         for(size_t i=0;i<t->size;++i)  printf("%.2f ", t->M[i]);
@@ -89,14 +88,21 @@ struct Collector: public ff_node_t<myTask> {
     }
 };
 
+struct Worker: ff_mapOCL_1D<myTask, oclTask> {
+    Worker(std::string mapf, const size_t NACCELERATORS):
+        ff_mapOCL_1D<myTask,oclTask>(mapf,ff_oclallocator(),NACCELERATORS) {
+        pickGPU();
+    }
+};
+
 
 int main(int argc, char * argv[]) {
-
+    
     size_t inputsize   = 1024;
     long   streamlen   = 2048;
     int    nworkers    = 3;
     
-     if  (argc > 1) {
+    if  (argc > 1) {
         if (argc < 4) { 
             printf("use %s arraysize streamlen nworkers\n", argv[0]);
             return 0;
@@ -106,25 +112,12 @@ int main(int argc, char * argv[]) {
             nworkers = atoi(argv[3]);
         }
     }
-   
-    ff_farm<> farm;
+    
+    std::vector<std::unique_ptr<ff_node> > W;
+    for(int i=0;i<nworkers;++i)  W.push_back(make_unique<Worker>(mapf,NDEV));
     Emitter   E(streamlen,inputsize);
-    Collector C;
-    farm.add_emitter(&E);
-    farm.add_collector(&C);
-
-    oclTask oclt;
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i)  {
-        auto worker = new ff_mapOCL_1D<myTask, oclTask>(mapf, ff_oclallocator(), NDEV);
-        //if (i%2) worker->pickCPU();
-        //else worker->pickGPU();
-        worker->pickGPU();
-        w.push_back(worker);
-        
-    }
-    farm.add_workers(w);
-    farm.cleanup_workers();
+    Collector C;         
+    ff_Farm<> farm(std::move(W), E, C);
     farm.run_and_wait_end();
 
     printf("DONE\n");
