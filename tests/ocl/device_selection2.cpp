@@ -94,12 +94,6 @@ int main(int argc, char * argv[]) {
     
     for (size_t i=0; i<res.size(); ++i)
         std::cout << i << " - " << res[i] << std::endl;
-    std::cout << "First CPU is " << oclMR.getCPUDevice() << "\n";
-    std::cout << "First GPU is " << oclMR.getGPUDevice() << "\n";
-
-    std::vector<ssize_t> allgpus = oclMR.getAllGPUDevices();
-    for (size_t i=0; i<allgpus.size(); ++i)
-        std::cout << "GPU #" << i << " ID " << allgpus[i] << std::endl;
 
     oclMR.pickGPU(1);
     oclMR.run_and_wait_end();

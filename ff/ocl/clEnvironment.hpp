@@ -187,26 +187,27 @@ public:
     
    
     
-    std::vector<ssize_t> coAllocateGPUDeviceRR(size_t n=1, bool exclusive=false, bool identical=false) {
+    std::vector<ssize_t> coAllocateGPUDeviceRR(size_t n=1, ssize_t preferred_dev=-1, bool exclusive=false, bool identical=false) {
         cl_device_type dt;
         size_t count = n;
         std::vector<ssize_t> ret;
         pthread_mutex_lock(&instanceMutex);
+        size_t dev = (preferred_dev>0)? (preferred_dev%clDevices.size()): lastAssigned;
         for(size_t i=0; i<clDevices.size(); i++) {
-            clGetDeviceInfo(clDevices[lastAssigned], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
-            if ((!clDeviceInUse[lastAssigned] | !exclusive) && ((dt) & CL_DEVICE_TYPE_GPU)) {
+            clGetDeviceInfo(clDevices[dev], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
+            if ((!clDeviceInUse[dev] | !exclusive) && ((dt) & CL_DEVICE_TYPE_GPU)) {
                 //clDeviceInUse[lastAssigned]=true;
-                ret.push_back(lastAssigned);
+                ret.push_back(dev);
                 --count;
                 char buf[128];
-                clGetDeviceInfo(clDevices[lastAssigned], CL_DEVICE_NAME, 128, buf, NULL);
-                std::cerr << "clEnvironment: assigned GPU "<< lastAssigned << " " << buf << "\n";
-                ++lastAssigned;
-                lastAssigned%=clDevices.size();
+                clGetDeviceInfo(clDevices[dev], CL_DEVICE_NAME, 128, buf, NULL);
+                std::cerr << "clEnvironment: assigned GPU "<< dev << " " << buf << "\n";
+                ++dev;
+                dev%=clDevices.size();
                 if (count==0) break;
             } else {
-                ++lastAssigned;
-                lastAssigned%=clDevices.size();
+                ++dev;
+                dev%=clDevices.size();
             }
         }
         if (count>0) { // roll back
@@ -216,6 +217,7 @@ public:
             // check if identical, TO BE DONE
             for (size_t i=0; i<ret.size();++i)
                 clDeviceInUse[ret[i]]=true;
+            lastAssigned=dev;
         }
         pthread_mutex_unlock(&instanceMutex);
         return ret;

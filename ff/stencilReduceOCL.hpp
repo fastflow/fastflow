@@ -720,7 +720,7 @@ public:
                                ff_oclallocator *allocator = nullptr,
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(false), accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-    stencil_width(width), preferred_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
+    stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setcode(mapf, reducef);
         for(size_t i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width,identityVal);
@@ -733,7 +733,7 @@ public:
                                ff_oclallocator *allocator = nullptr,
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(true), accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-        stencil_width(width), preferred_dev(0), oldBytesizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
+        stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
 		ff_node::skipfirstpop(true);
 		setcode(mapf, reducef);
 		Task.setTask(const_cast<T*>(&task));
@@ -765,14 +765,14 @@ public:
 
     // force execution on the CPU
     void pickCPU () {
-        std::cerr << "forced execution on CPU\n";
+        std::cerr << "STATUS: Execution on CPU requested\n";
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_CPU);
     }
     
-    // force execution on the GPU
-    void pickGPU (size_t id=0 /* picks first GPU */) {
+    // force execution on the GPU - as many as requested by the co-allocation strategy
+    void pickGPU (size_t offset=0 /* referred to global list of devices */) {
         std::cerr << "forced execution on GPU\n";
-        preferred_dev=id; //TODO check numbering
+        offset_dev=offset; //TODO check numbering
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_GPU);
     }
     
@@ -818,6 +818,53 @@ public:
     
     /* Performs a static allocation of OpenCL devices
      */
+    // simplified version
+    int nodeInit() {
+        if (ff_oclNode_t<T>::oclId < 0) {
+            ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
+            
+            switch(ff_oclNode_t<T>::getDeviceType()) {
+                case CL_DEVICE_TYPE_ALL:
+                    fprintf(stderr,"STATUS: requested ALL\n");
+                case CL_DEVICE_TYPE_GPU: {// One or more GPUs
+                    // Not exclusive
+                    // Retrive logical devices
+                    std::vector<ssize_t> logdev = clEnvironment::instance()->coAllocateGPUDeviceRR(accelerators.size(),(offset_dev==0)?-1:offset_dev);
+                    // Convert into opencl Ids
+                    devices.clear();
+                    for (size_t i = 0; i < logdev.size(); ++i)
+                        devices.push_back(clEnvironment::instance()->getDevice(logdev[i]));
+                    if (devices.size() == 0) {
+                        error("stencilReduceOCL::svc_init:not enough GPUs found !\n");
+                        return -1;
+                    } else {
+                        // Ok
+                        for (size_t i = 0; i < devices.size(); ++i)
+                            accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);
+                        break;
+                    }
+                }
+                case CL_DEVICE_TYPE_CPU: {
+                    if (accelerators.size()>1) {
+                        error ("Multiple (>1) virtual accelerators on CPU are requested. Not yet implemented.\n");
+                        return -1;
+                    } else {
+                        // Ok
+                        devices.clear();
+                        devices.push_back(clEnvironment::instance()->getDevice(clEnvironment::instance()->getCPUDevice()));
+                        accelerators[0].init(devices[0], kernel_code, kernel_name1,kernel_name2);
+                    }
+                } break;
+                default: {
+                    error("stencilReduceOCL::Other device. Not yet implemented.\n");
+                } break;
+            }
+        }
+        return 0;
+    }
+
+    
+#if 0 // old version
    int nodeInit() {
        if (ff_oclNode_t<T>::oclId < 0) {
            ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
@@ -877,7 +924,8 @@ public:
        }
        return 0;
    }
-            
+#endif
+    
     void nodeEnd() {
     	//TODO check:
     	// if multi-device, casuses multiple releaseAllBuffers calls to same object
@@ -1235,7 +1283,8 @@ private:
     std::vector<std::pair<size_t, size_t> > acc_out;
     std::vector<cl_device_id> devices;
 	int stencil_width;
-    size_t preferred_dev;
+    //size_t preferred_dev;
+    size_t offset_dev;
 
 	std::string kernel_code;
 	std::string kernel_name1;

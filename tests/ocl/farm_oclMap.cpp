@@ -90,7 +90,9 @@ struct Collector: ff_node_t<myTask> {
 
 struct Worker: ff_mapOCL_1D<myTask, oclTask> {
     Worker(std::string mapf, const size_t NACCELERATORS):
-        ff_mapOCL_1D<myTask,oclTask>(mapf, nullptr, NACCELERATORS) {
+
+        ff_mapOCL_1D<myTask,oclTask>(mapf,*(new ff_oclallocator()),NACCELERATORS) {
+        //        ff_mapOCL_1D<myTask,oclTask>(mapf, nullptr, NACCELERATORS) {
         pickGPU();
     }
 };
