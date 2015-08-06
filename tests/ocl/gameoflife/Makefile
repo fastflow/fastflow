@@ -57,7 +57,7 @@ all : $(TARGET)
 	$(CXX) -c -o $@ $< $(CXXFLAGS) $(OPTFLAGS) $(INCS)
 
 gameoflife: $(OBJ)
-	$(CXX) -o $@ $^ $(LIBS) $(OPTFLAGS)
+	$(CXX) $(OPTFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS) 
 
 #clean
 clean: 

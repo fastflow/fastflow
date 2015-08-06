@@ -42,7 +42,7 @@ using namespace ff;
 #define SIZE 1024
 #define NITERS 1
 #define STREAMLEN 10
-#define NACCELERATORS 2
+#define NACCELERATORS 1
 #define WINWIDTH 5
 
 size_t niters;
