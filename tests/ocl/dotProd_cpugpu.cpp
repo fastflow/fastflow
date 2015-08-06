@@ -90,8 +90,6 @@ struct Map: ff_Map<Task,Task,float> {
                                                  [&A,&B](const long i, float &sum) { sum += A[i] * B[i]; },
                                                  [](float &v, const float e) { v += e; });
         
-        printf("sum = %f\n", sum);
-        
         in->setResult(sum);
         return in;
     }
