@@ -840,7 +840,7 @@ public:
                     } else {
                         // Ok
                         for (size_t i = 0; i < devices.size(); ++i)
-                            accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);
+                            accelerators[i]->init(devices[i], kernel_code, kernel_name1,kernel_name2);
                         break;
                     }
                 }
@@ -852,7 +852,7 @@ public:
                         // Ok
                         devices.clear();
                         devices.push_back(clEnvironment::instance()->getDevice(clEnvironment::instance()->getCPUDevice()));
-                        accelerators[0].init(devices[0], kernel_code, kernel_name1,kernel_name2);
+                        accelerators[0]->init(devices[0], kernel_code, kernel_name1,kernel_name2);
                     }
                 } break;
                 default: {
