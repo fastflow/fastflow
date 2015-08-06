@@ -232,10 +232,10 @@ struct Map_kernel3: ff_Map<Task,Task,float> {
 int main(int argc, char * argv[]) {    
     if (argc < 4) {
         std::cerr << "use: " << argv[0]  << " size nvectors command-string\n";
-        std::cerr << " command-string (example) : \"0:1:0\"\n";
-        std::cerr << "    first kernel on device  0\n";
+        std::cerr << " command-string (example) : \"1:1:1\"\n";
+        std::cerr << "    first kernel on device  1\n";
         std::cerr << "    second kernel on device 1\n";
-        std::cerr << "    third kernel on device  0\n";
+        std::cerr << "    third kernel on device  1\n";
         return -1;
     }
     size_t arraySize = atol(argv[1]);
@@ -265,9 +265,9 @@ int main(int argc, char * argv[]) {
     ff_oclallocator allocator;
 
     // GPU map and map-reduce
-    ff_mapOCL_1D<Task>       oclmap1(map1f,allocator);             DEVICE(oclmap1);
-    ff_mapReduceOCL_1D<Task> oclmap2(map2f,reducef,0.0,allocator); DEVICE(oclmap2);
-    ff_mapOCL_1D<Task>       oclmap3(map3f,allocator);             DEVICE(oclmap3);
+    ff_mapOCL_1D<Task>       oclmap1(map1f,&allocator);             DEVICE(oclmap1);
+    ff_mapReduceOCL_1D<Task> oclmap2(map2f,reducef,0.0,&allocator); DEVICE(oclmap2);
+    ff_mapOCL_1D<Task>       oclmap3(map3f,&allocator);             DEVICE(oclmap3);
     
     Kernel k1(1,command, NVECTORS,arraySize, C, R);
     Kernel k2(2,command, NVECTORS,arraySize, C, R);
@@ -323,7 +323,7 @@ int main(int argc, char * argv[]) {
 
         bool wrong = false;
         for(size_t i=0;i<arraySize;++i)
-            if (R[i] != _R[i]) {
+            if (std::abs(R[i] - _R[i]) > 0.0001) {
                 std::cerr << "Wrong result " <<  R[i] << " should be " << _R[i] << "\n";
                 wrong = true;
             }

@@ -202,8 +202,8 @@ public:
 	typedef typename TOCL::Tin  Tin;
 	typedef typename TOCL::Tout Tout;
 
-	ff_oclAccelerator(ff_oclallocator &alloc, const size_t width_, const Tout &identityVal) :
-        allocator(&alloc), width(width_), identityVal(identityVal), events_h2d(16), deviceId(NULL) {
+	ff_oclAccelerator(ff_oclallocator *alloc, const size_t width_, const Tout &identityVal) :
+        my_own_allocator(false), allocator(alloc), width(width_), identityVal(identityVal), events_h2d(16), deviceId(NULL) {
 		workgroup_size_map = workgroup_size_reduce = 0;
 		inputBuffer = outputBuffer = reduceBuffer = NULL;
 
@@ -222,7 +222,21 @@ public:
 		context = NULL;
 		program = NULL;
 		cmd_queue = NULL;
+
+        if (!allocator) {
+            my_own_allocator = true;
+            allocator = new ff_oclallocator;
+            assert(allocator);
+        }
 	}
+
+    ~ff_oclAccelerator() {
+        if (my_own_allocator) {
+            delete allocator;
+            allocator = NULL;
+            my_own_allocator = false;
+        }
+    }
 
 	void init(cl_device_id dId, const std::string &kernel_code, const std::string &kernel_name1,
               const std::string &kernel_name2) {
@@ -230,7 +244,7 @@ public:
 		svc_SetUpOclObjects(deviceId, kernel_code, kernel_name1,kernel_name2);
 	}
 
-	void releaseAll() { if (deviceId) svc_releaseOclObjects(); }
+	void releaseAll() { if (deviceId) { svc_releaseOclObjects(); deviceId = NULL; }}
     void releaseInput(const Tin *inPtr)     { 
         if (allocator->releaseBuffer(inPtr, context, inputBuffer) != CL_SUCCESS)
             checkResult(CL_INVALID_MEM_OBJECT, "releaseInput");
@@ -646,6 +660,7 @@ protected:
 	cl_mem reduceBuffer;
 	cl_kernel kernel_map, kernel_reduce, kernel_init;
 private:
+    bool my_own_allocator; 
     ff_oclallocator *allocator;
 	const size_t width;
 	const Tout identityVal;
@@ -702,45 +717,49 @@ public:
 	ff_stencilReduceLoopOCL_1D(const std::string &mapf,			              //OCL elemental
                                const std::string &reducef = std::string(""),  //OCL combinator
                                const Tout &identityVal = Tout(),
-                               const ff_oclallocator &allocator = ff_oclallocator(),
+                               ff_oclallocator *allocator = nullptr,
                                const int NACCELERATORS = 1, const int width = 1) :
-        oneshot(false), accelerators(NACCELERATORS, accelerator_t(const_cast<ff_oclallocator&>(allocator), width,identityVal)), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
+        oneshot(false), accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
     stencil_width(width), preferred_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setcode(mapf, reducef);
+        for(size_t i = 0; i< NACCELERATORS; ++i)
+            accelerators[i]= new accelerator_t(allocator, width,identityVal);
 	}
 
 	//template <typename Function>
 	ff_stencilReduceLoopOCL_1D(const T &task, const std::string &mapf,	                //OCL elemental
                                const std::string &reducef = std::string(""),			//OCL combinator
                                const Tout &identityVal = Tout(),
-                               const ff_oclallocator &allocator = ff_oclallocator(),
+                               ff_oclallocator *allocator = nullptr,
                                const int NACCELERATORS = 1, const int width = 1) :
-        oneshot(true), accelerators(NACCELERATORS, accelerator_t(const_cast<ff_oclallocator&>(allocator), width,identityVal)), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
+        oneshot(true), accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
         stencil_width(width), preferred_dev(0), oldBytesizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
 		ff_node::skipfirstpop(true);
 		setcode(mapf, reducef);
 		Task.setTask(const_cast<T*>(&task));
+        for(size_t i = 0; i< NACCELERATORS; ++i)
+            accelerators[i]= new accelerator_t(allocator, width,identityVal);
 	}
 
-	virtual ~ff_stencilReduceLoopOCL_1D() {}
+	virtual ~ff_stencilReduceLoopOCL_1D() {
+        for(size_t i = 0; i< accelerators.size(); ++i)
+            if (accelerators[i]) delete accelerators[i];
+    }
 
-//    // used to set tasks when in onshot mode
-//    void setTask(const T &task) {
-//        assert(oneshot);
-//        Task.resetTask();
-//        Task.setTask(&task);
-//    }
+    // used to set tasks when in onshot mode
+    void setTask(const T &task) {
+        assert(oneshot);
+        Task.resetTask();
+        Task.setTask(&task);
+    }
 
     // sets the OpenCL devices that have to be used
     int setDevices(std::vector<cl_device_id> &dev) {
-        if (dev.size() > accelerators.size()) return -1; 
+        if (dev.size() > accelerators.size()) {
+            error("ff_stencilReduceLoopOCL_1D::setDevices: Too many devices provided, please increase the number of logical accelerators\n");
+            return -1; 
+        }
         devices = dev;
-//        if (ff_oclNode_t<T>::oclId < 0)
-//            ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
-//
-//        for (size_t i = 0; i < devices.size(); ++i)
-//            accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);
-
         return 0;
     }
 
@@ -815,12 +834,12 @@ public:
                        if (accelerators.size()==1) {
                            ssize_t devId = devIds[preferred_dev];
                            ff_oclNode_t<T>::deviceId=clEnvironment::instance()->getDevice(devId);
-                           accelerators[0].init(ff_oclNode_t<T>::deviceId, kernel_code, kernel_name1,kernel_name2);
+                           accelerators[0]->init(ff_oclNode_t<T>::deviceId, kernel_code, kernel_name1,kernel_name2);
                            device_found = true;
                        } else {
                            if (devIds.size()>=accelerators.size()) {
                                for (size_t j=0; accelerators.size(); ++j)
-                                   accelerators[j].init(clEnvironment::instance()->getDevice(devIds[j]), kernel_code, kernel_name1,kernel_name2);
+                                   accelerators[j]->init(clEnvironment::instance()->getDevice(devIds[j]), kernel_code, kernel_name1,kernel_name2);
                                device_found = true;
                            } else {
                                fprintf(stderr,"WARNING: requested number of logical accelerators bigger than the number of available ddevices\n");
@@ -835,7 +854,7 @@ public:
                        fprintf(stderr,"WARNING: Too many accelerators requested for CL_CPU device\n");
                    // accelerators num should be modified
                    ff_oclNode_t<T>::deviceId=clEnvironment::instance()->getDevice(devId);
-                   accelerators[0].init(ff_oclNode_t<T>::deviceId, kernel_code, kernel_name1,kernel_name2);
+                   accelerators[0]->init(ff_oclNode_t<T>::deviceId, kernel_code, kernel_name1,kernel_name2);
                    device_found = true;
                } break;
                default: {
@@ -850,7 +869,7 @@ public:
                }
                // NOTE: the number of devices requested can be lower than the number of accelerators.
                for (size_t i = 0; i < devices.size(); ++i) 
-                   accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);
+                   accelerators[i]->init(devices[i], kernel_code, kernel_name1,kernel_name2);
                
                device_found = true;
            }
@@ -863,7 +882,7 @@ public:
     	//TODO check:
     	// if multi-device, casuses multiple releaseAllBuffers calls to same object
 		for (size_t i = 0; i < accelerators.size(); ++i)
-			accelerators[i].releaseAll();
+			accelerators[i]->releaseAll();
     }
      
 protected:
@@ -896,7 +915,7 @@ protected:
                 } else {
                     // Ok
                     for (size_t i = 0; i < devices.size(); ++i)
-                        accelerators[i].init(devices[i], kernel_code, kernel_name1,kernel_name2);
+                        accelerators[i]->init(devices[i], kernel_code, kernel_name1,kernel_name2);
                     break;
                 }
             }
@@ -908,7 +927,7 @@ protected:
                     // Ok
                     devices.clear();
                     devices.push_back(clEnvironment::instance()->getDevice(clEnvironment::instance()->getCPUDevice()));
-                    accelerators[0].init(devices[0], kernel_code, kernel_name1,kernel_name2);
+                    accelerators[0]->init(devices[0], kernel_code, kernel_name1,kernel_name2);
                 }
             } break;
             default: {
@@ -926,7 +945,6 @@ protected:
 
 	T *svc(T *task) {
 		if (task) {
-			assert(!oneshot); //TODO remove
             Task.resetTask();
             Task.setTask(task);
         }
@@ -940,12 +958,12 @@ protected:
 			compute_accmem(Task.getSizeIn(),  acc_in);
 
             for (size_t i = 0; i < accelerators.size(); ++i) {
-                accelerators[i].adjustInputBufferOffset(acc_in[i], Task.getSizeIn());
+                accelerators[i]->adjustInputBufferOffset(acc_in[i], Task.getSizeIn());
             }
 
             if (oldBytesizeIn < Task.getBytesizeIn()) {
                 for (size_t i = 0; i < accelerators.size(); ++i) {
-                    accelerators[i].relocateInputBuffer(inPtr, Task.getReuseIn(), reducePtr);
+                    accelerators[i]->relocateInputBuffer(inPtr, Task.getReuseIn(), reducePtr);
                 }
                 oldBytesizeIn = Task.getBytesizeIn();
             }            
@@ -956,18 +974,18 @@ protected:
 
             if ((void*)inPtr == (void*)outPtr) {
                 for (size_t i = 0; i < accelerators.size(); ++i) {
-                    accelerators[i].setInPlace();
+                    accelerators[i]->setInPlace();
                 }
             } else {
                 compute_accmem(Task.getSizeOut(), acc_out);
 
                 for (size_t i = 0; i < accelerators.size(); ++i) {
-                    accelerators[i].adjustOutputBufferOffset(acc_out[i], Task.getSizeOut());
+                    accelerators[i]->adjustOutputBufferOffset(acc_out[i], Task.getSizeOut());
                 }
                 
                 if (oldSizeOut < Task.getBytesizeOut()) {
                     for (size_t i = 0; i < accelerators.size(); ++i) {
-                        accelerators[i].relocateOutputBuffer(outPtr); 
+                        accelerators[i]->relocateOutputBuffer(outPtr); 
                     }
                     oldSizeOut = Task.getBytesizeOut();
                 }
@@ -983,24 +1001,24 @@ protected:
             for(size_t k=0; k < envSize; ++k) {
                 char *envptr;
                 Task.getEnvPtr(k, envptr);
-                accelerators[i].relocateEnvBuffer(envptr, Task.getReuseEnv(k), k, Task.getBytesizeEnv(k));
+                accelerators[i]->relocateEnvBuffer(envptr, Task.getReuseEnv(k), k, Task.getBytesizeEnv(k));
             }        
 
 		if (!isPureReduce())  //set kernel args
 			for (size_t i = 0; i < accelerators.size(); ++i)
-				accelerators[i].setMapKernelArgs(envSize);
+				accelerators[i]->setMapKernelArgs(envSize);
 
 		//(async) copy input and environments (h2d)
 		for (size_t i = 0; i < accelerators.size(); ++i) {
 
             if (Task.getCopyIn())
-                accelerators[i].asyncH2Dinput(Task.getInPtr());  //in
+                accelerators[i]->asyncH2Dinput(Task.getInPtr());  //in
 
             for(size_t k=0; k < envSize; ++k) {
                 if (Task.getCopyEnv(k)) {
                     char *envptr;
                     Task.getEnvPtr(k, envptr);
-                    accelerators[i].asyncH2Denv(k, envptr);
+                    accelerators[i]->asyncH2Denv(k, envptr);
                 }
             }
         } 
@@ -1008,25 +1026,25 @@ protected:
 		if (isPureReduce()) {
 			//init reduce
 			for (size_t i = 0; i < accelerators.size(); ++i)
-                accelerators[i].initReduce(REDUCE_INPUT);
+                accelerators[i]->initReduce(REDUCE_INPUT);
 
 			//wait for cross-accelerator h2d
 			waitforh2d();
 
 			//(async) device-reduce1
 			for (size_t i = 0; i < accelerators.size(); ++i)
-				accelerators[i].asyncExecReduceKernel1();
+				accelerators[i]->asyncExecReduceKernel1();
 
 			//(async) device-reduce2
 			for (size_t i = 0; i < accelerators.size(); ++i)
-				accelerators[i].asyncExecReduceKernel2();
+				accelerators[i]->asyncExecReduceKernel2();
 
 			waitforreduce(); //wait for cross-accelerator reduce
 
 			//host-reduce
-			Tout redVar = accelerators[0].getReduceVar();
+			Tout redVar = accelerators[0]->getReduceVar();
 			for (size_t i = 1; i < accelerators.size(); ++i)
-				redVar = Task.combinator(redVar, accelerators[i].getReduceVar());
+				redVar = Task.combinator(redVar, accelerators[i]->getReduceVar());
 			Task.writeReduceVar(redVar);
 		} else {
 			Task.resetIter();
@@ -1037,7 +1055,7 @@ protected:
 
 				//(async) exec kernel
 				for (size_t i = 0; i < accelerators.size(); ++i)
-					accelerators[i].asyncExecMapKernel();
+					accelerators[i]->asyncExecMapKernel();
 				Task.incIter();
 
 				waitformap(); //join
@@ -1045,42 +1063,42 @@ protected:
 			} else { //iterative Map-Reduce (aka stencilReduceLoop)
 
                 //invalidate first swap
-				for (size_t i = 0; i < accelerators.size(); ++i)	accelerators[i].swap();
+				for (size_t i = 0; i < accelerators.size(); ++i)	accelerators[i]->swap();
 
 				bool go = true;
 				do {
 					//Task.before();
 
-					for (size_t i = 0; i < accelerators.size(); ++i)	accelerators[i].swap();
+					for (size_t i = 0; i < accelerators.size(); ++i)	accelerators[i]->swap();
 
 					//wait for cross-accelerator h2d
 					waitforh2d();
 
 					//(async) execute MAP kernel
 					for (size_t i = 0; i < accelerators.size(); ++i)
-						accelerators[i].asyncExecMapKernel();
+						accelerators[i]->asyncExecMapKernel();
 					Task.incIter();
 
 					//start async-interleaved: reduce + borders sync
 					//init reduce
 					for (size_t i = 0; i < accelerators.size(); ++i)
-                        accelerators[i].initReduce();
+                        accelerators[i]->initReduce();
 
 					//(async) device-reduce1
 					for (size_t i = 0; i < accelerators.size(); ++i)
-						accelerators[i].asyncExecReduceKernel1();
+						accelerators[i]->asyncExecReduceKernel1();
 
 					//(async) device-reduce2
 					for (size_t i = 0; i < accelerators.size(); ++i)
-						accelerators[i].asyncExecReduceKernel2();
+						accelerators[i]->asyncExecReduceKernel2();
 
 					//wait for cross-accelerators reduce
 					waitforreduce();
 
 					//host-reduce
-					Tout redVar = accelerators[0].getReduceVar();
+					Tout redVar = accelerators[0]->getReduceVar();
 					for (size_t i = 1; i < accelerators.size(); ++i) 
-						redVar = Task.combinator(redVar, accelerators[i].getReduceVar());
+						redVar = Task.combinator(redVar, accelerators[i]->getReduceVar());
                     Task.writeReduceVar(redVar);
 
 					go = Task.iterCondition_aux();
@@ -1088,11 +1106,11 @@ protected:
                         assert(outPtr);
 						//(async) read back borders (d2h)
 						for (size_t i = 0; i < accelerators.size(); ++i)
-							accelerators[i].asyncD2Hborders(outPtr);
+							accelerators[i]->asyncD2Hborders(outPtr);
 						waitford2h(); //wait for cross-accelerators d2h
 						//(async) read borders (h2d)
 						for (size_t i = 0; i < accelerators.size(); ++i)
-							accelerators[i].asyncH2Dborders(outPtr);
+							accelerators[i]->asyncH2Dborders(outPtr);
 					}
 
 					//Task.after();
@@ -1103,19 +1121,19 @@ protected:
             //(async)read back output (d2h)
             if (outPtr && Task.getCopyOut()) { // do we have to copy back the output result ?
                 for (size_t i = 0; i < accelerators.size(); ++i)
-                    accelerators[i].asyncD2Houtput(outPtr);
+                    accelerators[i]->asyncD2Houtput(outPtr);
                 waitford2h(); //wait for cross-accelerators d2h
             }
 		}
 
         if (Task.getReleaseIn()) {
             for (size_t i = 0; i < accelerators.size(); ++i) 
-                accelerators[i].releaseInput(inPtr);
+                accelerators[i]->releaseInput(inPtr);
             oldBytesizeIn = 0;
         }
         if (Task.getReleaseOut()) {
             for (size_t i = 0; i < accelerators.size(); ++i) 
-                accelerators[i].releaseOutput(outPtr);
+                accelerators[i]->releaseOutput(outPtr);
             oldSizeOut = 0;
         }
 
@@ -1124,7 +1142,7 @@ protected:
                 for (size_t i = 0; i < accelerators.size(); ++i) {
                     char *envptr;
                     Task.getEnvPtr(k, envptr);
-                    accelerators[i].releaseEnv(k,envptr);
+                    accelerators[i]->releaseEnv(k,envptr);
                 }
             }
         }
@@ -1190,29 +1208,29 @@ private:
 
 	void waitforh2d() {
 		for (size_t i = 0; i < accelerators.size(); ++i)
-			accelerators[i].waitforh2d();
+			accelerators[i]->waitforh2d();
 	}
 
 	void waitford2h() {
 		for (size_t i = 0; i < accelerators.size(); ++i)
-			accelerators[i].waitford2h();
+			accelerators[i]->waitford2h();
 	}
 
 	void waitforreduce() {
 		for (size_t i = 0; i < accelerators.size(); ++i)
-			accelerators[i].waitforreduce();
+			accelerators[i]->waitforreduce();
 	}
 
 	void waitformap() {
 		for (size_t i = 0; i < accelerators.size(); ++i)
-			accelerators[i].waitformap();
+			accelerators[i]->waitformap();
 	}
 
 private:
 	TOCL Task;
 	const bool oneshot;
 
-    std::vector<accelerator_t> accelerators;
+    std::vector<accelerator_t*> accelerators;
     std::vector<std::pair<size_t, size_t> > acc_in;
     std::vector<std::pair<size_t, size_t> > acc_out;
     std::vector<cl_device_id> devices;
@@ -1244,13 +1262,13 @@ private:
 template<typename T, typename TOCL = T>
 class ff_mapOCL_1D: public ff_stencilReduceLoopOCL_1D<T, TOCL> {
 public:
-	ff_mapOCL_1D(std::string mapf, const ff_oclallocator &alloc= ff_oclallocator(), 
+	ff_mapOCL_1D(std::string mapf, ff_oclallocator *alloc=nullptr,
                  const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(mapf, "", 0, alloc, NACCELERATORS, 0) {
 	}
 
 	ff_mapOCL_1D(const T &task, std::string mapf, 
-                 const ff_oclallocator &alloc= ff_oclallocator(), 
+                 ff_oclallocator *alloc=nullptr,
                  const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(task, mapf, "", 0, alloc, NACCELERATORS, 0) {
 	}
@@ -1274,12 +1292,12 @@ public:
 	typedef typename TOCL::Tout Tout;
 
 	ff_reduceOCL_1D(std::string reducef, const Tout &identityVal = Tout(),
-                    const ff_oclallocator &alloc= ff_oclallocator(), 
+                    ff_oclallocator *alloc=nullptr,
                     const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>("", reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
 	ff_reduceOCL_1D(const T &task, std::string reducef, const Tout identityVal = Tout(),
-                    const ff_oclallocator &alloc= ff_oclallocator(), 
+                    ff_oclallocator *alloc=nullptr,
                     const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(task, "", reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
@@ -1304,14 +1322,14 @@ public:
 	typedef typename TOCL::Tout Tout;
 
 	ff_mapReduceOCL_1D(std::string mapf, std::string reducef, const Tout &identityVal = Tout(),
-                       const ff_oclallocator &alloc= ff_oclallocator(), 
+                       ff_oclallocator *alloc=nullptr,
                        const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(mapf, reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
 
 	ff_mapReduceOCL_1D(const T &task, std::string mapf, std::string reducef,
                        const Tout &identityVal = Tout(), 
-                       const ff_oclallocator &alloc= ff_oclallocator(), 
+                       ff_oclallocator *alloc=nullptr,
                        const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(task, mapf, reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}

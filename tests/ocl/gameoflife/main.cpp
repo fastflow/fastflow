@@ -96,7 +96,7 @@ int main(int argc, char * argv[]) {
 	memcpy(bitmap_out, bitmap_seed, length * sizeof(unsigned char));
 	oclTask oclt(bitmap_seed, bitmap_out, length, niters, nrows);
 	ff::ff_stencilReduceLoopOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf,
-			reducef, 0, ff::ff_oclallocator(), NACC, nrows + 1);
+			reducef, 0, NULL, NACC, nrows + 1);
 	gettimeofday(&tv1, NULL);
 	oclStencilReduceOneShot.run_and_wait_end();
 	gettimeofday(&tv2, NULL);
