@@ -950,6 +950,30 @@ public:
      */
     const svector<ff_node*>& getWorkers() const { return workers; }
 
+
+    /**
+     * \brief Gets Emitter
+     *
+     * It returns a pointer to the emitter.
+     *
+     * \return A pointer of the FastFlow node which is actually the emitter.
+     */
+    ff_node* getEmitter() const   { return emitter;}
+
+    /**
+     * \brief Gets Collector
+     * 
+     * It returns a pointer to the collector.
+     *
+     * \return A pointer to collector node if exists, otherwise a \p NULL
+     */
+    ff_node* getCollector() const { 
+        if (collector == (ff_node*)gt) return NULL;
+        return collector;
+    }
+
+
+
     /**
      * \internal
      * \brief Resets input/output queues.
@@ -1232,27 +1256,6 @@ protected:
             if (collector != (ff_node*)gt) collector->set_output_buffer(o);
         }
         return 0;
-    }
-
-    /**
-     * \brief Gets Emitter
-     *
-     * It returns a pointer to the emitter.
-     *
-     * \return A pointer of the FastFlow node which is actually the emitter.
-     */
-    ff_node* getEmitter()   { return emitter;}
-
-    /**
-     * \brief Gets Collector
-     * 
-     * It returns a pointer to the collector.
-     *
-     * \return A pointer to collector node if exists, otherwise a \p NULL
-     */
-    ff_node* getCollector() { 
-        if (collector == (ff_node*)gt) return NULL;
-        return collector;
     }
 
 protected:
