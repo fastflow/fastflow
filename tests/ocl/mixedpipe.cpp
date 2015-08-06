@@ -306,7 +306,7 @@ int main(int argc, char * argv[]) {
 
         bool wrong = false;
         for(size_t i=0;i<arraySize;++i)
-            if (R[i] != _R[i]) {
+            if (abs(R[i] -_R[i]) > 0.0001) {
                 std::cerr << "Wrong result " <<  R[i] << " should be " << _R[i] << "\n";
                 wrong = true;
             }
