@@ -99,6 +99,7 @@ int main(int argc, char * argv[]) {
     for (size_t i=0; i<res.size(); ++i)
         std::cout << i << " - " << res[i] << std::endl;
 
+    //    oclMR.pickGPU(2);
     SET_DEVICE_TYPE(oclMR);
     oclMR.run_and_wait_end();
 
