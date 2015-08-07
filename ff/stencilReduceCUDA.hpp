@@ -653,8 +653,8 @@ protected:
         return (oneShot?NULL:task);
     }
     
-    size_t getIter()     const { return iter; }
-    int    getDeviceID() const { return deviceID;}
+    size_t  getIter()     const { return iter; }
+    ssize_t getDeviceID() const { return deviceID;}
     
 public:
     virtual inline int run_and_wait_end() {
@@ -678,7 +678,7 @@ protected:
     taskT Task;
     
 private:
-    int deviceID;
+    ssize_t deviceID;
     cudaStream_t stream;
     size_t maxThreads;
     size_t maxBlocks;

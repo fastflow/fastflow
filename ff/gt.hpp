@@ -474,7 +474,7 @@ public:
      * \return It returns the task.
      */
     virtual void * svc(void *) {
-        void * ret  = (void*)FF_EOS;
+        void * ret  = EOS;
         void * task = NULL;
         bool outpresent  = (get_out_buffer() != NULL);
         bool skipfirstpop = skip1pop;
@@ -495,7 +495,7 @@ public:
                 nextr = gather_task(&task); 
             else skipfirstpop=false;
 
-            if (task == EOS) {
+            if ((task == EOS) || (task == EOSW)) {
                 if (filter) filter->eosnotify(workers[nextr]->get_my_id());
                 offline[nextr]=true;
                 ++neos;
@@ -526,10 +526,10 @@ public:
 
                 // if the filter returns NULL we exit immediatly
                 if (task == GO_ON) continue;
-                if ((task == GO_OUT) || (task == EOS_NOFREEZE) ) {
+                if ((task == GO_OUT) || (task == EOS_NOFREEZE) || (task == EOSW) ) {
                     ret = task;
                     break;   // exiting from the loop without sending the task
-                }
+                } 
                 if (!task || (task == EOS)) {
                     ret = EOS;
                     break;
@@ -538,11 +538,13 @@ public:
             }
         } while((neos<(size_t)running) && (neosnofreeze<(size_t)running));
 
-        if (outpresent && (ret != GO_OUT && ret != EOS_NOFREEZE)) {
+        // GO_OUT, EOS_NOFREEZE and EOSW are not propagated !
+        if (outpresent && ((ret != GO_OUT) && (ret != EOS_NOFREEZE) && (ret != EOSW))) {
             // push EOS
             task = ret;
             push(task);
         }
+        if (ret == EOSW) ret = EOS; // EOSW is like an EOS but it is not propagated
 
         gettimeofday(&wtstop,NULL);
         wttime+=diffmsec(wtstop,wtstart);
