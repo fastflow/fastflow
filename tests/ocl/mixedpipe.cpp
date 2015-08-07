@@ -50,8 +50,13 @@
 #define DEVICE(x) x.pickCPU()
 #endif
 
-
 using namespace ff;
+
+#define CHECK 1
+
+#define DEFAULT_ARRAYSIZE 1024
+#define DEFAULT_NVECTORS 2048
+#define DEFAULT_COMMAND "0:0:0"
 
 FF_OCL_STENCIL_ELEMFUNC1(map1f, float, useless, i, in, i_, int, k_,
                          (void)useless; const int k = *k_;
@@ -229,18 +234,28 @@ struct Map_kernel3: ff_Map<Task,Task,float> {
 };
 /* ------------------------------------------------------------ */
 
-int main(int argc, char * argv[]) {    
-    if (argc < 4) {
+int main(int argc, char * argv[]) {
+    //if (argc < 4) {
         std::cerr << "use: " << argv[0]  << " size nvectors command-string\n";
         std::cerr << " command-string (example) : \"0:1:0\"\n";
         std::cerr << "    first kernel on device  0\n";
         std::cerr << "    second kernel on device 1\n";
         std::cerr << "    third kernel on device  0\n";
-        return -1;
-    }
-    size_t arraySize = atol(argv[1]);
-    size_t NVECTORS  = atol(argv[2]);
-    std::string command(argv[3]);
+        //return -1;
+    //}
+    size_t arraySize = DEFAULT_ARRAYSIZE;
+    size_t NVECTORS = DEFAULT_NVECTORS;
+    std::string command(DEFAULT_COMMAND);
+
+	if (argc > 1) {
+		arraySize = atol(argv[1]);
+		if (argc > 2) {
+			NVECTORS = atol(argv[2]);
+			if (argc > 3) {
+				command = std::string(argv[3]);
+			}
+		}
+	}
 
     std::vector<float> A(arraySize);
     std::vector<float> C(arraySize);    
@@ -314,6 +329,7 @@ int main(int argc, char * argv[]) {
                 wrong = true;
             }
         if (!wrong) std::cerr << "OK!\n";
+        else exit(1); //ctest
     }
 #else
     std::cerr << "Result not checked\n";

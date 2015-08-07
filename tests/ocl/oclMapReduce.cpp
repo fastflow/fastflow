@@ -35,6 +35,8 @@
 #include <ff/stencilReduceOCL.hpp>
 using namespace ff;
 
+#define CHECK 1
+
 const int NDEV=1;
 
 FF_OCL_MAP_ELEMFUNC(mapf, float, elem, 
@@ -70,11 +72,29 @@ int main(int argc, char * argv[]) {
     float *M        = new float[size];
     for(size_t j=0;j<size;++j) M[j]=j;
 
+#ifdef CHECK
+    float *M_        = new float[size];
+    memcpy(M_, M, size * sizeof(float));
+#endif
+
     oclTask oclt(M, size);
     ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0, nullptr, NDEV);
     oclMR.run_and_wait_end();
 
-    delete [] M;
     printf("res=%.2f\n", oclt.result);
+
+#ifdef CHECK
+    float res = 0.0;
+    for (size_t i=0; i<size; ++i) {
+        res +=M_[i]+1;
+    }
+    if (res!= oclt.result) {
+        printf("Error\n");
+        exit(1); //ctest
+    }
+    else printf("Result correct\n");
+#endif
+
+    delete [] M;
     return 0;
 }
