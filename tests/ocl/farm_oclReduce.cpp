@@ -36,6 +36,8 @@
 #include <ff/stencilReduceOCL.hpp>
 #include <ff/farm.hpp>
 
+#define CHECK 1
+
 using namespace ff;
 
 FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
@@ -44,10 +46,17 @@ FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
 
 // stream task
 struct myTask {
-    myTask(float *M, const size_t size):M(M),sum(0.0),size(size) {}
+    myTask(float *M, const size_t size):M(M),sum(0.0),size(size)
+#ifdef CHECK
+    , expected_sum(0)
+#endif
+    {}
     float *M;
     float  sum;
     const size_t size;
+#ifdef CHECK
+    float expected_sum;
+#endif
 };
 
 // OpenCL task
@@ -59,8 +68,8 @@ struct oclTask: public baseOCLTask<myTask, float> {
         setReduceVar(&task->sum);
     }
 
-    //float combinator(float const &x, float const &y) {
-    float combinator(float x, float y) {
+    float combinator(float const &x, float const &y) {
+    //float combinator(float x, float y) {
     	return x+y;
     }
 };
@@ -72,6 +81,11 @@ struct Emitter: public ff_node {
             float* task = new float[size];            
             for(size_t j=0;j<size;++j) task[j]=j+i;
             myTask *T = new myTask(task, size);
+#ifdef CHECK
+            T->expected_sum = 0;
+            for(size_t j=0; j<size; ++j)
+            	T->expected_sum += task[j];
+#endif
             ff_send_out(T);
         }
         return EOS;
@@ -83,8 +97,16 @@ struct Emitter: public ff_node {
 struct Collector: public ff_node_t<myTask> {
     myTask *svc(myTask *t) {
         printf("%.2f\n", t->sum);
+#if defined(CHECK)
+    	check &= (t->sum == t->expected_sum);
+#endif
+    	delete [] t->M; delete t;
         return GO_ON;
     }
+#ifdef CHECK
+    bool check;
+    Collector() : check(true) {}
+#endif
 };
 
 
@@ -119,6 +141,14 @@ int main(int argc, char * argv[]) {
     farm.add_workers(w);
     farm.cleanup_workers();
     farm.run_and_wait_end();
+
+#if defined(CHECK)
+    if (!C.check) {
+    	printf("Wrong result\n");
+    	exit(1); //ctest
+    }
+    else printf("OK\n");
+#endif
 
     printf("DONE\n");
     return 0;

@@ -38,16 +38,23 @@
 
 using namespace ff;
 
+#define CHECK 1
+
 FF_OCL_MAP_ELEMFUNC(mapf, float, elem,
 		return (elem+1.0););
 
 // stream task
 struct myTask {
-	myTask(float *M, const size_t size) :
-			M(M), size(size) {
-	}
-	float *M;
-	const size_t size;
+    myTask(float *M, const size_t size):M(M),size(size)
+#ifdef CHECK
+    , expected_sum(0)
+#endif
+    {}
+    float *M;
+    const size_t size;
+#ifdef CHECK
+    float expected_sum;
+#endif
 };
 
 // OpenCL task
@@ -73,6 +80,11 @@ public:
 			for (size_t j = 0; j < size; ++j)
 				t[j] = j + i;
 			myTask *task = new myTask(t, size);
+#ifdef CHECK
+            task->expected_sum = 0;
+            for(size_t j=0; j<size; ++j)
+            	task->expected_sum += task->M[j] + 1;
+#endif
 			ff_send_out(task);
 		}
 		return EOS;
@@ -86,13 +98,21 @@ class ArrayGatherer: public ff_node_t<myTask> {
 public:
 	myTask* svc(myTask *task) {
 #if defined(CHECK)
-		for(size_t i=0;i<task->size;++i) printf("%.2f ", task->M[i]);
-		printf("\n");
+//		for(size_t i=0;i<task->size;++i) printf("%.2f ", task->M[i]);
+//		printf("\n");
+    	float sum = 0;
+    	for(size_t i=0; i<task->size; ++i)
+    		sum += task->M[i];
+    	check &= (sum == task->expected_sum);
 #endif
 		delete[] task->M;
 		delete task;
 		return GO_ON;
 	}
+#ifdef CHECK
+    bool check;
+    ArrayGatherer() : check(true) {}
+#endif
 };
 
 int main(int argc, char * argv[]) {
@@ -100,9 +120,9 @@ int main(int argc, char * argv[]) {
     size_t size = 1024;
 	long streamlen = 1000;
 	int nworkers = 2;
-    
+
     if  (argc > 1) {
-        if (argc < 4) { 
+        if (argc < 4) {
             printf("use %s arraysize streamlen nworkers\n", argv[0]);
             return 0;
         } else {
@@ -111,7 +131,7 @@ int main(int argc, char * argv[]) {
             nworkers = atoi(argv[3]);
         }
     }
-    
+
 	ff_pipeline pipe;
 	pipe.add_stage(new ArrayGenerator(streamlen, size));
 	ff_farm<> *farm = new ff_farm<>;
@@ -122,9 +142,18 @@ int main(int argc, char * argv[]) {
 	farm->add_workers(w);
 	farm->cleanup_workers();
 	pipe.add_stage(farm);
-	pipe.add_stage(new ArrayGatherer);
+	ArrayGatherer *gatherer = new ArrayGatherer();
+	pipe.add_stage(gatherer);
 	pipe.cleanup_nodes();
 	pipe.run_and_wait_end();
+
+#if defined(CHECK)
+    if (!gatherer->check) {
+    	printf("Wrong result\n");
+    	exit(1); //ctest
+    }
+    else printf("OK\n");
+#endif
 
 	printf("DONE\n");
 	return 0;

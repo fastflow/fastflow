@@ -11,7 +11,8 @@ include_directories( ${OPENCL_INCLUDE_DIRS} )
 
 set( TESTS                               
 dotProduct farm_oclMap farm_oclReduce oclMap oclMapReduce oclReduce
-oclStencilReduce pipeFarmMap device_selection device_selection2
+oclStencilReduceLoop pipeFarmMap device_selection device_selection2
+mixedpipe mixedpipe2
 )
 
 

@@ -35,6 +35,8 @@
 #include <ff/stencilReduceOCL.hpp>
 using namespace ff;
 
+#define CHECK 1
+
 FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
                           return (x+y);
                           );
@@ -67,17 +69,19 @@ int main(int argc, char * argv[]) {
     //oclReduce.pickGPU(1);
     oclReduce.run_and_wait_end();
 
+    printf("\nres=%.2f\n", oclt.result);
+
+#ifdef CHECK
     float res = 0.0;
     for (size_t i=0; i<size; ++i) {
         res +=M[i];
     }
-    
-    delete [] M;
-    printf("\nres=%.2f\n", oclt.result);
     if (res!= oclt.result) {
         printf("Error\n");
-        return -1;
+        exit(1); //ctest
     }
-    printf("Result correct\n");
+    else printf("Result correct\n");
+#endif
+    delete [] M;
     return 0;
 }
