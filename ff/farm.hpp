@@ -1145,7 +1145,7 @@ protected:
      */
     void svc_end()        {}
 
-    int get_my_id() const { return -1; };
+    ssize_t get_my_id() const { return -1; };
 
 
     void setAffinity(int) { 

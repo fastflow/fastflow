@@ -49,7 +49,7 @@ static void *GO_ON        = (void*)ff::FF_GO_ON;
 static void *GO_OUT       = (void*)ff::FF_GO_OUT;
 static void *EOS_NOFREEZE = (void*)ff::FF_EOS_NOFREEZE;
 static void *EOS          = (void*)ff::FF_EOS;
-
+static void *EOSW         = (void*)ff::FF_EOSW;
 
 namespace ff {
 
@@ -198,7 +198,7 @@ protected:
             // freeze and wait. 
             pthread_mutex_lock(&mutex);
             if (ret != EOS_NOFREEZE && !stp) {
-                if (freezing == 0 && ret == (void*)FF_EOS) stp = true;
+                if ((freezing == 0) && (ret == EOS)) stp = true;
                 while(freezing==1) { // NOTE: freezing can change to 2
                     frozen=true; 
                     pthread_cond_signal(&cond_frozen);
@@ -841,7 +841,7 @@ public:
 
     virtual void eosnotify(ssize_t id=-1) {}
     
-    virtual int get_my_id() const { return myid; };
+    virtual ssize_t get_my_id() const { return myid; };
 
     /**
      * \brief Returns the OS specific thread id of the node.
@@ -1055,7 +1055,7 @@ private:
 
         void* svc(void * ) {
             void * task = NULL;
-            void * ret = (void*)FF_EOS;
+            void * ret  = EOS;
             bool inpresent  = (filter->get_in_buffer() != NULL);
             bool outpresent = (filter->get_out_buffer() != NULL);
             bool skipfirstpop = filter->skipfirstpop(); 
@@ -1069,12 +1069,13 @@ private:
                 if (inpresent) {
                     if (!skipfirstpop) pop(&task); 
                     else skipfirstpop=false;
-                    if ((task == EOS) || 
+                    if ((task == EOS) || (task == EOSW) ||
                         (task == EOS_NOFREEZE)) {
                         ret = task;
                         filter->eosnotify();
-                        if (outpresent && (task == (void*)FF_EOS))  push(task); // only EOS is propagated
-
+                        // only EOS and EOSW are propagated
+                        if (outpresent && ( (task == EOS) || (task == EOSW)) )  push(task); 
+                        
 #if defined(FF_TASK_CALLBACK)
                         if (filter) callbackOut(this);
 #endif
@@ -1104,14 +1105,14 @@ private:
 #endif
 
                 if (ret == GO_OUT) break;     
-                if (!ret || (ret == EOS) || (ret == EOS_NOFREEZE)) {
+                if (!ret || (ret >= EOSW)) { // EOS or EOS_NOFREEZE or EOSW
                     // NOTE: The EOS is gonna be produced in the output queue
                     // and the thread exits even if there might be some tasks
                     // in the input queue !!!
                     if (!ret) ret = EOS;
                     exit=true;
                 }
-                if (outpresent && (ret != GO_ON && ret != EOS_NOFREEZE)) push(ret);
+                if ( outpresent && ((ret != GO_ON) && (ret != EOS_NOFREEZE)) ) push(ret);
             } while(!exit);
             
             gettimeofday(&filter->wtstop,NULL);
@@ -1167,8 +1168,8 @@ private:
                                     ///< (un)bounded FIFO queue                                 
     FFBUFFER        * out;          ///< Output buffer, built upon SWSR lock-free (wait-free) 
                                     ///< (un)bounded FIFO queue 
-    int               myid;         ///< This is the node id, it is valid only for farm's workers
-    int               CPUId;    
+    ssize_t           myid;         ///< This is the node id, it is valid only for farm's workers
+    ssize_t           CPUId;    
     bool              myoutbuffer;
     bool              myinbuffer;
     bool              skip1pop;
@@ -1310,10 +1311,11 @@ struct ff_node_t: ff_node {
     ff_node_t():
         GO_ON((OUT*)FF_GO_ON),
         EOS((OUT*)FF_EOS),
+        EOSW((OUT*)FF_EOSW),
         GO_OUT((OUT*)FF_GO_OUT),
         EOS_NOFREEZE((OUT*) FF_EOS_NOFREEZE) {
 	}
-    OUT * const GO_ON,  *const EOS, *const GO_OUT, *const EOS_NOFREEZE;
+    OUT * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_node_t()  {}
     virtual OUT* svc(IN*)=0;
     inline  void *svc(void *task) { return svc(reinterpret_cast<IN*>(task)); };

@@ -159,13 +159,12 @@ protected:
     /**
      * \brief Pushes EOS to the worker
      *
-     * It pushes the EOS to the queue of the worker.
+     * It pushes the EOS into the queue of all workers.
      *
-     * \parm nofreeze is a booleon value to determine if the EOS should be freezed or not
      */
-    inline void push_eos(bool nofreeze=false) {
+    inline void push_eos(void *task=NULL) {
         //register int cnt=0;
-        void * eos = nofreeze?EOS_NOFREEZE:EOS;
+        void * eos = (!task) ? EOS : task;
         broadcast_task(eos);
     }
     inline void push_goon() {
@@ -818,14 +817,14 @@ public:
                         ret = task;
                         break; // exiting from the loop without sending out the task
                     }
-                    // if the filter returns NULL we exit immediatly
-                    if (!task || task==EOS) {
-                        push_eos();
+                    // if the filter returns NULL/EOS we exit immediatly
+                    if (!task || (task==EOS) || (task==EOSW)) {  // EOSW is propagated to workers
+                        push_eos(task);
                         ret = EOS;
                         break;
                     }
                 } else 
-                    if (!inpresent) { push_goon(); push_eos(); ret=(void*)FF_EOS; break;}
+                    if (!inpresent) { push_goon(); push_eos(); ret = EOS; break;}
                 
                 const bool r = schedule_task(task);
                 assert(r); (void)r;
@@ -927,15 +926,15 @@ public:
                            break; // exiting from the loop without sending out the task
                         }
                         // if the filter returns NULL we exit immediatly
-                        if (!task || (task==(void*)FF_EOS)) {
-                            push_eos();
+                        if (!task || (task == EOS) || (task == EOSW) ) {
+                            push_eos(task);
                             // try to remove the additional EOS due to 
                             // the feedback channel
                             if (inpresent || multi_input.size()>0) {
                                 if (master_worker) absorb_eos(workers);
                                 if (int_multi_input.size()>0) absorb_eos(int_multi_input);
                             }
-                            ret = (void*)FF_EOS;
+                            ret = EOS;
                             break;
                         }
                     }

@@ -66,13 +66,14 @@
 namespace ff {
 static const size_t FF_EOS           = (ULONG_MAX);  /// automatically propagated
 static const size_t FF_EOS_NOFREEZE  = (FF_EOS-0x1); /// non automatically propagated
-static const size_t FF_GO_ON         = (FF_EOS-0x2); /// non automatically propagated
-static const size_t FF_GO_OUT        = (FF_EOS-0x3); /// non automatically propagated
-static const size_t FF_EOSW          = (FF_EOS-0x4); /// propagated only by farm's stages
+static const size_t FF_EOSW          = (FF_EOS-0x2); /// propagated only by farm's stages
+static const size_t FF_GO_ON         = (FF_EOS-0x3); /// non automatically propagated
+static const size_t FF_GO_OUT        = (FF_EOS-0x4); /// non automatically propagated
 // The FF_GO_OUT is quite similar to the FF_EOS_NOFREEZE, both are not propagated automatically but while 
 // the first one is used to exit the main computation loop and in case being freezed, the second one is used 
 // to exit the computation loop and keep spinning on the input queue for a new task without being freezed.
-
+// EOSW is like EOS but it is not propagated outside a farm pattern. If an emitter receives EOSW in input,
+// than it will be discarded.
 }
 
 #if defined(TRACE_FASTFLOW)
