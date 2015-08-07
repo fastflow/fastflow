@@ -36,6 +36,8 @@
 
 using namespace ff;
 
+#define CHECK 1
+
 
 FF_OCL_MAP_ELEMFUNC(mapf, float, elem, 
           return (elem+1.0);
@@ -62,6 +64,11 @@ int main(int argc, char * argv[]) {
     float *M        = new float[size];
     for(size_t j=0;j<size;++j) M[j]=j;
 
+#ifdef CHECK
+    float *M_        = new float[size];
+    memcpy(M_, M, size * sizeof(float));
+#endif
+
     oclTask oclt(M, size);
     ff_mapOCL_1D<oclTask> oclMap(oclt, mapf);
     oclMap.pickGPU(1);
@@ -69,9 +76,16 @@ int main(int argc, char * argv[]) {
     oclMap.run_and_wait_end();
 
 #if defined(CHECK)
-    for(size_t i=0;i<size;++i)
-        printf("%g ", M[i]);
-    printf("\n");
+	float res_ = 0.0, res = 0.0;;
+	for (size_t i = 0; i < size; ++i) {
+		res_ += M_[i] + 1;
+		res += M[i];
+	}
+	if (res_ != res_) {
+		printf("Error\n");
+		exit(1); //ctest
+	} else
+		printf("Result correct\n");
 #endif
 
     delete [] M;

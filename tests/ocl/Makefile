@@ -1,7 +1,3 @@
-ifndef OCL_ROOT
-$(error The OCL_ROOT variable is not defined in your environment)
-endif
-
 CXX      = g++ 
 CXXFLAGS = -Wall -std=c++11 -DCHECK -DFF_OPENCL
 
@@ -9,8 +5,11 @@ OS = $(shell uname)
 ifeq ($(strip $(OS)),Darwin)
   CXX = clang++	
   OPENCL =  -framework OpenCL
-  EXTRA_FLAGS = 
+  EXTRA_FLAGS =
 else
+ifndef OCL_ROOT
+$(error The OCL_ROOT variable is not defined in your environment)
+endif
   OPENCL = -lOpenCL
   LDFLAGS  = -L$(OCL_ROOT)/lib/x86_64   #-L$(OCL_ROOT)/lib64	
   EXTRA_FLAGS = -finline-functions
@@ -25,12 +24,12 @@ LIBS =  $(OPENCL) -lpthread
 INCLUDES = -I$(FF_ROOT) -I$(OCL_ROOT)/include
 
 
-TARGETS = oclStencilReduce oclMap oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct device_selection dotProd_cpugpu device_selection2 mixedpipe mixedpipe2
+TARGETS = oclStencilReduceLoop oclMap oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct device_selection dotProd_cpugpu device_selection2 mixedpipe mixedpipe2
 
 
 all: $(TARGETS)
 
-oclStencilReduce: oclStencilReduce.cpp
+oclStencilReduceLoop: oclStencilReduceLoop.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 oclMap: oclMap.cpp

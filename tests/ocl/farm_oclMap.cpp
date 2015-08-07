@@ -37,6 +37,8 @@
 #include <ff/stencilReduceOCL.hpp>
 #include <ff/farm.hpp>
 
+#define CHECK 1
+
 const int NDEV = 1;
 
 using namespace ff;
@@ -47,9 +49,16 @@ FF_OCL_MAP_ELEMFUNC(mapf, float, elem,
 
 // stream task
 struct myTask {
-    myTask(float *M, const size_t size):M(M),size(size) {}
+    myTask(float *M, const size_t size):M(M),size(size)
+#ifdef CHECK
+    , expected_sum(0)
+#endif
+    {}
     float *M;
     const size_t size;
+#ifdef CHECK
+    float expected_sum;
+#endif
 };
 
 // OpenCL task
@@ -69,6 +78,11 @@ struct Emitter: ff_node {
             float* task = new float[size];            
             for(size_t j=0;j<size;++j) task[j]=j+i;
             myTask *T = new myTask(task, size);
+#ifdef CHECK
+            T->expected_sum = 0;
+            for(size_t j=0; j<size; ++j)
+            	T->expected_sum += task[j] + 1;
+#endif
             ff_send_out(T);
         }
         return EOS;
@@ -79,20 +93,29 @@ struct Emitter: ff_node {
 
 struct Collector: ff_node_t<myTask> {
     myTask* svc(myTask *t) {
-#if defined(CHECK)    
-        for(size_t i=0;i<t->size;++i)  printf("%.2f ", t->M[i]);
-        printf("\n");
+#if defined(CHECK)
+//        for(size_t i=0;i<t->size;++i)  printf("%.2f ", t->M[i]);
+//        printf("\n");
+    	float sum = 0;
+    	for(size_t i=0; i<t->size; ++i)
+    		sum += t->M[i];
+    	check &= (sum == t->expected_sum);
+    	//printf("sum = %f, exp = %f\n", sum, t->expected_sum);
 #endif
         delete [] t->M; delete t;
         return GO_ON;
     }
+#ifdef CHECK
+    bool check;
+    Collector() : check(true) {}
+#endif
 };
 
 struct Worker: ff_mapOCL_1D<myTask, oclTask> {
     Worker(std::string mapf, const size_t NACCELERATORS):
 
         //ff_mapOCL_1D<myTask,oclTask>(mapf,*(new ff_oclallocator()),NACCELERATORS) {
-                ff_mapOCL_1D<myTask,oclTask>(mapf, nullptr, NACCELERATORS) {
+        ff_mapOCL_1D<myTask,oclTask>(mapf, nullptr, NACCELERATORS) {
         pickGPU();
     }
 };
@@ -118,9 +141,16 @@ int main(int argc, char * argv[]) {
     std::vector<std::unique_ptr<ff_node> > W;
     for(int i=0;i<nworkers;++i)  W.push_back(make_unique<Worker>(mapf,NDEV));
     Emitter   E(streamlen,inputsize);
-    Collector C;         
+    Collector C;
     ff_Farm<> farm(std::move(W), E, C);
     farm.run_and_wait_end();
+#if defined(CHECK)
+    if (!C.check) {
+    	printf("Wrong result\n");
+    	exit(1); //ctest
+    }
+    else printf("OK\n");
+#endif
 
     printf("DONE\n");
     return 0;

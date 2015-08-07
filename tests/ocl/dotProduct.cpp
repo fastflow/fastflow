@@ -34,6 +34,8 @@
 #define FF_OPENCL
 #endif
 
+#define CHECK 1
+
 #include <ff/stencilReduceOCL.hpp>
 
 using namespace ff;
@@ -91,7 +93,10 @@ int main(int argc, char * argv[]) {
     delete [] M;
     printf("res=%.2f\n", oclt.result);
 #if defined(CHECK)
-    if (r != oclt.result) printf("Wrong result, should be %.2f\n", r);
+    if (r != oclt.result) {
+    	printf("Wrong result, should be %.2f\n", r);
+    	exit(1); //ctest
+    }
     else printf("OK\n");
 #endif
     return 0;
