@@ -44,15 +44,12 @@
 
 //#define SYSTEM_HAS_GPU 1
 
-#if defined(SYSTEM_HAS_GPU)
-#define DEVICE(x) x.pickGPU()
-#else
-#define DEVICE(x) x.pickCPU()
-#endif
-
 using namespace ff;
 
 #define CHECK 1
+#ifdef CHECK
+#include "ctest.h"
+#endif
 
 #define DEFAULT_ARRAYSIZE 1024
 #define DEFAULT_NVECTORS 2048
@@ -272,9 +269,9 @@ int main(int argc, char * argv[]) {
     Map_kernel3 map3;
 
     // GPU map and map-reduce
-    ff_mapOCL_1D<Task>       oclmap1(map1f);             DEVICE(oclmap1);
-    ff_mapReduceOCL_1D<Task> oclmap2(map2f,reducef,0.0); DEVICE(oclmap2);
-    ff_mapOCL_1D<Task>       oclmap3(map3f);             DEVICE(oclmap3);
+    ff_mapOCL_1D<Task>       oclmap1(map1f);             SET_DEVICE_TYPE(oclmap1);
+    ff_mapReduceOCL_1D<Task> oclmap2(map2f,reducef,0.0); SET_DEVICE_TYPE(oclmap2);
+    ff_mapOCL_1D<Task>       oclmap3(map3f);             SET_DEVICE_TYPE(oclmap3);
     
     Kernel k1(1,command, NVECTORS,arraySize, C, R);
     Kernel k2(2,command, NVECTORS,arraySize, C, R);

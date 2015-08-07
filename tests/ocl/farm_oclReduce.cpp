@@ -37,6 +37,9 @@
 #include <ff/farm.hpp>
 
 #define CHECK 1
+#ifdef CHECK
+#include "ctest.h"
+#endif
 
 using namespace ff;
 
@@ -109,6 +112,13 @@ struct Collector: public ff_node_t<myTask> {
 #endif
 };
 
+struct Worker: ff_reduceOCL_1D<myTask, oclTask> {
+	Worker(std::string reducef) :
+			ff_reduceOCL_1D<myTask, oclTask>(reducef) {
+		SET_DEVICE_TYPE((*this));
+	}
+};
+
 
 int main(int argc, char * argv[]) {
     
@@ -137,7 +147,7 @@ int main(int argc, char * argv[]) {
     oclTask oclt;
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) 
-        w.push_back(new ff_reduceOCL_1D<myTask, oclTask>(reducef));
+        w.push_back(new Worker(reducef));
     farm.add_workers(w);
     farm.cleanup_workers();
     farm.run_and_wait_end();

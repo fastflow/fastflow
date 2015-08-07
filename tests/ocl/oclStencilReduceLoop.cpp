@@ -40,6 +40,9 @@
 using namespace ff;
 
 #define CHECK 1
+#ifdef CHECK
+#include "ctest.h"
+#endif
 
 #define SIZE 1024
 #define NITERS 100
@@ -238,6 +241,7 @@ int main(int argc, char * argv[]) {
 	oclTask oclt(M_in, M_out, env, size);
 	ff_stencilReduceLoopOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf,
 			reducef, 0, nullptr, nacc, WINWIDTH);
+	SET_DEVICE_TYPE(oclStencilReduceOneShot);
 	oclStencilReduceOneShot.run_and_wait_end();
 	//print_res("INPUT", M_in, size);
 	//print_res("oneshot", M_out, oclStencilReduceOneShot.getReduceVar(), size);
