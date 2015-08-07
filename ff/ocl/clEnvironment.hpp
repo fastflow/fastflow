@@ -114,11 +114,11 @@ protected:
         clGetPlatformIDs(numPlatforms, platforms, NULL);
         
         if (numPlatforms>1) {
-            printf("Multiple OpenCL platforms detected. Using default platform according to clGetPlatformIDs\n");
+            printf("Multiple OpenCL platforms detected. Experimental code\n");
         }
 
-        // for (int i = 0; i< numPlatforms; ++i) {
-        int i=0;
+        for (int i = 0; i< numPlatforms; ++i) {
+        //int i=0;
         clGetDeviceIDs(platforms[i],CL_DEVICE_TYPE_ALL,0,NULL,&(numDevices));
         deviceIds = new cl_device_id[numDevices];  
         assert(deviceIds); 
@@ -147,6 +147,7 @@ protected:
                 clDevices.push_back(deviceIds[j]);
             }
             clReleaseContext(context);
+        }
         }
         delete [] deviceIds;
         delete [] platforms;
