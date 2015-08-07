@@ -36,6 +36,10 @@
 
 #define CHECK 1
 
+#ifdef CHECK
+#include "ctest.h"
+#endif
+
 #include <string>
 #include <vector>
 #include <ff/stencilReduceOCL.hpp>
@@ -95,7 +99,7 @@ int main(int argc, char * argv[]) {
     for (size_t i=0; i<res.size(); ++i)
         std::cout << i << " - " << res[i] << std::endl;
 
-    oclMR.pickGPU(1);
+    SET_DEVICE_TYPE(oclMR);
     oclMR.run_and_wait_end();
 
     delete [] M;

@@ -36,6 +36,9 @@
 using namespace ff;
 
 #define CHECK 1
+#ifdef CHECK
+#include "ctest.h"
+#endif
 
 FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
                           return (x+y);
@@ -66,7 +69,7 @@ int main(int argc, char * argv[]) {
     oclTask oclt(M, size);
     ff_reduceOCL_1D<oclTask> oclReduce(oclt, reducef, 0.0);
 
-    //oclReduce.pickGPU(1);
+    SET_DEVICE_TYPE(oclReduce);
     oclReduce.run_and_wait_end();
 
     printf("\nres=%.2f\n", oclt.result);

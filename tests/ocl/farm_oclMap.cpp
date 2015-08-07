@@ -38,6 +38,9 @@
 #include <ff/farm.hpp>
 
 #define CHECK 1
+#ifdef CHECK
+#include "ctest.h"
+#endif
 
 const int NDEV = 1;
 
@@ -112,12 +115,10 @@ struct Collector: ff_node_t<myTask> {
 };
 
 struct Worker: ff_mapOCL_1D<myTask, oclTask> {
-    Worker(std::string mapf, const size_t NACCELERATORS):
-
-        //ff_mapOCL_1D<myTask,oclTask>(mapf,*(new ff_oclallocator()),NACCELERATORS) {
-        ff_mapOCL_1D<myTask,oclTask>(mapf, nullptr, NACCELERATORS) {
-        pickGPU();
-    }
+	Worker(std::string mapf, const size_t NACCELERATORS) :
+			ff_mapOCL_1D<myTask, oclTask>(mapf, nullptr, NACCELERATORS) {
+		SET_DEVICE_TYPE((*this));
+	}
 };
 
 
