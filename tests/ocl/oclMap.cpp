@@ -37,6 +37,9 @@
 using namespace ff;
 
 #define CHECK 1
+#ifdef CHECK
+#include "ctest.h"
+#endif
 
 
 FF_OCL_MAP_ELEMFUNC(mapf, float, elem, 
@@ -71,7 +74,7 @@ int main(int argc, char * argv[]) {
 
     oclTask oclt(M, size);
     ff_mapOCL_1D<oclTask> oclMap(oclt, mapf);
-    oclMap.pickGPU(1);
+    SET_DEVICE_TYPE(oclMap);
     
     oclMap.run_and_wait_end();
 

@@ -36,6 +36,10 @@
 
 #define CHECK 1
 
+#ifdef CHECK
+#include "ctest.h"
+#endif
+
 #include <ff/stencilReduceOCL.hpp>
 
 using namespace ff;
@@ -88,6 +92,7 @@ int main(int argc, char * argv[]) {
 #endif
     oclTask oclt(M, size);
     ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0.0);
+    SET_DEVICE_TYPE(oclMR);
     oclMR.run_and_wait_end();
 
     delete [] M;

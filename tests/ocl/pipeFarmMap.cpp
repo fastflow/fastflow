@@ -39,6 +39,9 @@
 using namespace ff;
 
 #define CHECK 1
+#ifdef CHECK
+#include "ctest.h"
+#endif
 
 FF_OCL_MAP_ELEMFUNC(mapf, float, elem,
 		return (elem+1.0););
