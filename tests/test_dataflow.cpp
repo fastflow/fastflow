@@ -82,7 +82,7 @@ struct Scheduler: public ff_node {
 
 struct FU: public ff_node {
     void* svc(void* task) {
-        printf("FU (%d) got one task\n", get_my_id());
+        printf("FU (%ld) got one task\n", get_my_id());
         return task;
     }
 };

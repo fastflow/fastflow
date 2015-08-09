@@ -226,8 +226,7 @@ protected:
         }
     }
 
-    int disable_cancelability()
-    {
+    int disable_cancelability() {
         if (pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancelstate)) {
             perror("pthread_setcanceltype");
             return -1;
@@ -235,8 +234,7 @@ protected:
         return 0;
     }
 
-    int enable_cancelability()
-    {
+    int enable_cancelability() {
         if (pthread_setcancelstate(old_cancelstate, 0)) {
             perror("pthread_setcanceltype");
             return -1;
@@ -260,9 +258,11 @@ public:
     virtual int   svc_init() { return 0; };
     virtual void  svc_end()  {}
 
-    void set_barrier(BARRIER_T * const b) { barrier=b;}
+    virtual void set_barrier(BARRIER_T * const b) { barrier=b;}
 
-    int spawn(int cpuId=-1) {
+    virtual int run() { return spawn(); }
+    
+    virtual int spawn(int cpuId=-1) {
         if (spawned) return -1;
 
         if ((attr = (pthread_attr_t*)malloc(sizeof(pthread_attr_t))) == NULL) {
@@ -286,9 +286,8 @@ public:
         spawned = true;
         return CPUId;
     }
-   
-  
-    int wait() {
+     
+    virtual int wait() {
         int r=0;
         stp=true;
         if (isfrozen()) {
@@ -311,21 +310,21 @@ public:
         return r;
     }
 
-    inline int wait_freezing() {
+    virtual int wait_freezing() {
         pthread_mutex_lock(&mutex);
         while(!frozen) pthread_cond_wait(&cond_frozen,&mutex);
         pthread_mutex_unlock(&mutex);
         return (init_error?-1:0);
     }
 
-    inline void stop() { stp = true; };
+    virtual void stop() { stp = true; };
 
-    inline void freeze() {  
+    virtual void freeze() {  
         stp=false;
         freezing = 1;
     }
     
-    inline void thaw(bool _freeze=false) {
+    virtual void thaw(bool _freeze=false) {
         pthread_mutex_lock(&mutex);
         // if this function is called even if the thread is not 
         // in frozen state, then freezing has to be set to 1 and not 2
@@ -346,8 +345,7 @@ public:
         //thawed=false;
         //pthread_mutex_unlock(&mutex);
     }
-
-    inline bool isfrozen() const { return freezing>0;} 
+    virtual bool isfrozen() const { return freezing>0;} 
 
     pthread_t get_handle() const { return th_handle;}
 
@@ -671,7 +669,7 @@ protected:
      * \return 0 success, -1 otherwise
      */
     virtual int run(bool=false) { 
-        if (thread) delete thread;
+        if (thread) delete reinterpret_cast<thWorker*>(thread);
         thread = new thWorker(this);
         if (!thread) return -1;
         return thread->run();
@@ -685,7 +683,7 @@ protected:
      * \return 0 success, -1 otherwise
      */
     virtual int freeze_and_run(bool=false) {
-        if (thread) delete thread;
+        if (thread) delete reinterpret_cast<thWorker*>(thread);
         thread = new thWorker(this);
         if (!thread) return 0;
         freeze();
@@ -788,7 +786,7 @@ public:
     virtual  ~ff_node() {
         if (in && myinbuffer) delete in;
         if (out && myoutbuffer) delete out;
-        if (thread) delete thread;
+        if (thread && my_own_thread) delete reinterpret_cast<thWorker*>(thread);
     };
 
     /**
@@ -991,7 +989,7 @@ protected:
     ff_node():in(0),out(0),myid(-1),CPUId(-1),
               myoutbuffer(false),myinbuffer(false),
               skip1pop(false), in_active(true), 
-              multiInput(false), multiOutput(false), 
+              multiInput(false), multiOutput(false), my_own_thread(true),
               thread(NULL),callback(NULL),barrier(NULL) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
@@ -1023,16 +1021,10 @@ protected:
         callback_arg=arg;
     }
 
-private:
-
-    void  setCPUId(int id) { CPUId = id;}
-
-    inline size_t   getTid() const { return thread->getTid();} 
-    
-
+private:  
+    /* ------------------------------------------------------------------------------------- */
     class thWorker: public ff_thread {
     public:
-
         thWorker(ff_node * const filter):
             ff_thread(filter->barrier),filter(filter) {}
         
@@ -1053,7 +1045,7 @@ private:
 
         inline bool get(void **ptr) { return filter->get(ptr);}
 
-        void* svc(void * ) {
+        inline void* svc(void * ) {
             void * task = NULL;
             void * ret  = EOS;
             bool inpresent  = (filter->get_in_buffer() != NULL);
@@ -1132,7 +1124,7 @@ private:
             return filter->svc_init(); 
         }
         
-        virtual void svc_end() {
+        void svc_end() {
             filter->svc_end();
             gettimeofday(&filter->tstop,NULL);
         }
@@ -1143,25 +1135,25 @@ private:
             return (CPUId==-2)?-1:0;
         }
 
-        virtual inline int wait() { return ff_thread::wait();}
-
-        virtual inline int wait_freezing() { return ff_thread::wait_freezing();}
-
-        virtual inline void freeze() { ff_thread::freeze();}
-
-        bool isfrozen() const { return ff_thread::isfrozen();}
-
-        int get_my_id() const { return filter->get_my_id(); };
+        inline int  wait() { return ff_thread::wait();}
+        inline int  wait_freezing() { return ff_thread::wait_freezing();}
+        inline void freeze() { ff_thread::freeze();}
+        inline bool isfrozen() const { return ff_thread::isfrozen();}
+        inline int  get_my_id() const { return filter->get_my_id(); };
 
     protected:
 #if defined(FF_TASK_CALLBACK)
-        virtual void callbackIn(void  *t=NULL) { filter->callbackIn(t);  }
-        virtual void callbackOut(void *t=NULL) { filter->callbackOut(t); }
-#endif
-        
+        void callbackIn(void  *t=NULL) { filter->callbackIn(t);  }
+        void callbackOut(void *t=NULL) { filter->callbackOut(t); }
+#endif        
     protected:    
         ff_node * const filter;
     };
+    /* ------------------------------------------------------------------------------------- */
+
+    inline void   setCPUId(int id) { CPUId = id;}
+    inline void   setThread(ff_thread *const th) { my_own_thread = false; thread = th; }        
+    inline size_t getTid() const { return thread->getTid();} 
 
 private:
     FFBUFFER        * in;           ///< Input buffer, built upon SWSR lock-free (wait-free) 
@@ -1176,7 +1168,8 @@ private:
     bool              in_active;    // allows to disable/enable input tasks receiving   
     bool              multiInput;   // if the node is a multi input node this is true
     bool              multiOutput;  // if the node is a multi output node this is true
-    thWorker        * thread;       /// A \p thWorker object, which extends the \p ff_thread class 
+    bool              my_own_thread;
+    ff_thread       * thread;       /// A \p thWorker object, which extends the \p ff_thread class 
     bool (*callback)(void *,unsigned long,unsigned long, void *);
     void            * callback_arg;
     BARRIER_T       * barrier;      /// A \p Barrier object

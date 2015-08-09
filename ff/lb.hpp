@@ -510,6 +510,9 @@ public:
         filter = f;
         filter->registerCallback(ff_send_out_emitter, this);
 
+        // setting the thread for the filter
+        filter->setThread(this);
+
         return 0;
     }
 
@@ -1190,8 +1193,7 @@ public:
         assert(n<workers.size());
         workers[n]->freeze();
 
-        // should I have to decrease running ? CHECK
-        
+        // FIX: should I have to decrease running ? CHECK        
     }
 
     /**

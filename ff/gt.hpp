@@ -371,8 +371,11 @@ public:
             return -1;
         }
         filter = f;
-        if (filter) 
+        if (filter) { 
             filter->registerCallback(ff_send_out_collector, this);
+            // setting the thread for the filter
+            filter->setThread(this);
+        }
         return 0;
     }
 
