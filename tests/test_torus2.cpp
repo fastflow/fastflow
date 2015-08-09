@@ -72,13 +72,13 @@ struct masterStage: public ff_node_t<unsigned int> {
     void check_input(unsigned int *msg) {
         unsigned int size = msg[0];
         if (size < MIN_SIZE || size > MAX_SIZE) {
-            fprintf(stderr, "Stage%d: inconsistent size, exit\n", get_my_id());
+            fprintf(stderr, "Stage%ld: inconsistent size, exit\n", get_my_id());
             abort();
         }
         ++msg;
         for (unsigned int k=0; k<size; ++k) {
             if (counter_in++ != msg[k]) {
-                fprintf(stderr, "Stage%d: inconsistent data, exit\n", get_my_id()); 
+                fprintf(stderr, "Stage%ld: inconsistent data, exit\n", get_my_id()); 
                 abort();
             }
         }
@@ -118,13 +118,13 @@ struct Stage: public ff_node_t<unsigned int> {
     void check_input(unsigned int *msg) {
         unsigned int size = msg[0];
         if (size < MIN_SIZE || size > MAX_SIZE) {
-            fprintf(stderr, "Stage%d: inconsistent size, exit\n", get_my_id());
+            fprintf(stderr, "Stage%ld: inconsistent size, exit\n", get_my_id());
             abort();
         }
         ++msg;
         for (unsigned int k=0; k<size; ++k) {
             if (counter_in++ != msg[k]) {
-                fprintf(stderr, "Stage%d: inconsistent data, exit\n", get_my_id()); 
+                fprintf(stderr, "Stage%ld: inconsistent data, exit\n", get_my_id()); 
                 abort();
             }
         }

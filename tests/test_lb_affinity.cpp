@@ -37,10 +37,10 @@ using namespace ff;
 #define CORES 4
 
 typedef struct ff_task {
-    int sourceW;
-    int mnode;
-	int core;
-	int done;
+    size_t sourceW;
+    size_t mnode;
+	size_t core;
+	size_t done;
 } ff_task_t;
 
 class emitter: public ff_node {
@@ -58,7 +58,7 @@ public:
 		if (worker_task == NULL) {
             for (int j = 0; j < INBUF_Q_SIZE; j++) {
                 for (int i = 0; i < NWORKERS; i++) {
-                    int targetworker = workers[i]->get_my_id();                 
+                    size_t targetworker = workers[i]->get_my_id();                 
                     int targetcore = threadMapper::instance()->getCoreId(lb->getTid(workers[i]));
                     int targetmnode = targetcore/8;
                     // here allocate the task
@@ -72,7 +72,7 @@ public:
                     worker_task->done = 0;
                     bool res = lb->ff_send_out_to(worker_task, targetworker);
                     if (res) 
-                        printf("sent to worker %d on core %d mnode %d\n",
+                        printf("sent to worker %ld on core %ld mnode %ld\n",
                                worker_task->sourceW,
                                worker_task->core,
                                worker_task->mnode);
@@ -82,7 +82,7 @@ public:
 		} else {		  
             if (worker_task->done<10) {
 		   
-                printf("[E] recv from worker %d on core %d mnode %d\n",
+                printf("[E] recv from worker %ld on core %ld mnode %ld\n",
                        worker_task->sourceW, worker_task->core,
                        worker_task->mnode);
                 lb->ff_send_out_to(worker_task, worker_task->sourceW);
@@ -120,7 +120,7 @@ public:
 		ff_task_t* worker_task = (ff_task_t*) t;
         ++worker_task->done;
 		usleep(worker_task->sourceW * 100);
-		printf("[%d] received from emitter task workerid %d on core %d\n",
+		printf("[%ld] received from emitter task workerid %ld on core %ld\n",
 		       get_my_id(), worker_task->sourceW, worker_task->core);
 		//ff_send_out(worker_task); //inutile
 		// return GO_ON ; // no
@@ -128,7 +128,7 @@ public:
         return (worker_task);
 	}
     void svc_end (){
-        printf("[%d] processed %d tasks\n",get_my_id(),taskcount);
+        printf("[%ld] processed %d tasks\n",get_my_id(),taskcount);
     }
 private:
     int taskcount;

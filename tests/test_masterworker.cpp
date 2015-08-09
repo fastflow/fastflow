@@ -56,7 +56,7 @@ using namespace ff;
 
 struct W: ff_node {
     void *svc(void *task){
-        printf("W(%d) got task %ld\n", get_my_id(), *(long*)task);
+        printf("W(%ld) got task %ld\n", get_my_id(), *(long*)task);
         return task;
     }
 };

@@ -96,11 +96,11 @@ private:
 class Worker:public ff_node {
 public:
     void *svc(void *t) {
-        printf("worker %d received %d\n", get_my_id(), *(int*)t);
+        printf("worker %ld received %d\n", get_my_id(), *(int*)t);
         return GO_ON;
     }
     void svc_end() {
-        printf("worker %d going to sleep\n", get_my_id());
+        printf("worker %ld going to sleep\n", get_my_id());
     }
 };
 
