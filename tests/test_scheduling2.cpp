@@ -53,7 +53,7 @@ public:
         return GO_ON;
     }     
     void svc_end() {
-        printf("Worker %d gets %ld tasks\n", get_my_id(), ntasks);
+        printf("Worker %ld gets %ld tasks\n", get_my_id(), ntasks);
     }
 private:
     long ntasks;

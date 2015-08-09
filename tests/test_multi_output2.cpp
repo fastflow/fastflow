@@ -73,7 +73,7 @@ struct W: ff_node {
     W():outbuffer(100,false) {}
 
     void *svc(void *task){
-        printf("W(%d) got task %ld\n", get_my_id(), (long)task);
+        printf("W(%ld) got task %ld\n", get_my_id(), (long)task);
         outbuffer.put(task);
         return task;
     }

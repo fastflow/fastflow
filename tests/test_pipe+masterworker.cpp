@@ -59,7 +59,7 @@ struct  Worker1: ff_node {
 
 struct Worker2: ff_node {
     void * svc(void * task) {
-        printf("W2(%d) got %ld\n", get_my_id(), *(long*)task);
+        printf("W2(%ld) got %ld\n", get_my_id(), *(long*)task);
         usleep(500);
         return task;
     }

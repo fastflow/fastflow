@@ -77,13 +77,13 @@ public:
     void* svc(void* t) {
         fftask_t* task = (fftask_t*)t;
         if (task->op == WAIT) {
-            printf("[%d] I have to wait! Waiting to be woken up\n", get_my_id());
+            printf("[%ld] I have to wait! Waiting to be woken up\n", get_my_id());
             WAIT_SIGNAL();
-            printf("[%d] I'm wide awake\n", get_my_id());
+            printf("[%ld] I'm wide awake\n", get_my_id());
             return GO_ON;
         }
         
-        printf("[%d] I'm working\n", get_my_id());
+        printf("[%ld] I'm working\n", get_my_id());
         for(volatile unsigned i=0;i<task->iter;++i);
         
         return t;

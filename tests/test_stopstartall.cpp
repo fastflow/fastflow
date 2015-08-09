@@ -89,15 +89,15 @@ struct Collector: ff_node {
 };
 struct  Worker: ff_node {
     int svc_init() {
-        printf("Worker%d: woken-up\n",get_my_id());
+        printf("Worker%ld: woken-up\n",get_my_id());
         return 0;
     }
     void *svc(void *t) {
-        //printf("Worker%d: received %ld\n", get_my_id(), (long)t);
+        //printf("Worker%ld: received %ld\n", get_my_id(), (long)t);
         return t;
     }
     void svc_end() {
-        printf("Worker%d: going to sleep\n", get_my_id());
+        printf("Worker%ld: going to sleep\n", get_my_id());
     }
 };
 

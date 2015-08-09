@@ -190,7 +190,7 @@ public:
     void* svc(void* task) {
         fftask_t* t = (fftask_t*)task;
         assert(t->op != 0);
-        printf("FU (%d) got one task %d\n", get_my_id(), t->op);
+        printf("FU (%ld) got one task %d\n", get_my_id(), t->op);
         switch(t->op) {
         case 1: usleep(10); break;
         case 2: usleep(100); break;

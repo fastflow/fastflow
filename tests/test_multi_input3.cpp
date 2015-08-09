@@ -87,7 +87,7 @@ public:
 class Worker2: public ff_node {
 public:
     void* svc(void* task) {
-        printf("Worker2(%d): TASK COMPUTED\n", get_my_id());
+        printf("Worker2(%ld): TASK COMPUTED\n", get_my_id());
         return task;
     }
 };

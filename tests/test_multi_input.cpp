@@ -64,11 +64,11 @@ struct Worker1: ff_node {
 
 struct Worker2: ff_node {
     void* svc(void* task) { 
-        printf("Worker2: %d got %ld\n", get_my_id(), (long)task);
+        printf("Worker2: %ld got %ld\n", get_my_id(), (long)task);
         return GO_ON; 
     }
     void svc_end() {
-        printf("Worker2 %d got EOS\n", get_my_id());
+        printf("Worker2 %ld got EOS\n", get_my_id());
     }
 };
 
