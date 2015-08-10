@@ -71,13 +71,13 @@ struct oclTask: public baseOCLTask<myTask, float> {
 	}
 };
 
-class ArrayGenerator: public ff_node {
+class ArrayGenerator: public ff_node_t<myTask> {
 public:
 	ArrayGenerator(int streamlen, size_t size) :
 			streamlen(streamlen), size(size) {
 	}
 
-	void* svc(void*) {
+	myTask* svc(myTask*) {
 		for (int i = 0; i < streamlen; ++i) {
 			float *t = new float[size];
 			for (size_t j = 0; j < size; ++j)
@@ -118,6 +118,12 @@ public:
 #endif
 };
 
+struct oclMap: ff_mapOCL_1D<myTask, oclTask> {
+    oclMap(const std::string &mapf):ff_mapOCL_1D<myTask, oclTask>(mapf) {
+        SET_DEVICE_TYPE((*this));
+    }
+};
+
 int main(int argc, char * argv[]) {
 
     size_t size = 1024;
@@ -134,24 +140,20 @@ int main(int argc, char * argv[]) {
             nworkers = atoi(argv[3]);
         }
     }
+    ArrayGenerator  generator(streamlen,size);
+    ArrayGatherer   gatherer;
+    ff_Farm<myTask> farm([nworkers]() {
+            std::vector<std::unique_ptr<ff_node> > W;
+            for (int i = 0; i < nworkers; ++i)
+                W.push_back(make_unique<oclMap>(mapf));            
+            return W;
+        } ());
 
-	ff_pipeline pipe;
-	pipe.add_stage(new ArrayGenerator(streamlen, size));
-	ff_farm<> *farm = new ff_farm<>;
-	farm->add_collector(NULL);
-	std::vector<ff_node *> w;
-	for (int i = 0; i < nworkers; ++i)
-		w.push_back(new ff_mapOCL_1D<myTask, oclTask>(mapf));
-	farm->add_workers(w);
-	farm->cleanup_workers();
-	pipe.add_stage(farm);
-	ArrayGatherer *gatherer = new ArrayGatherer();
-	pipe.add_stage(gatherer);
-	pipe.cleanup_nodes();
+    ff_Pipe<> pipe(generator, farm, gatherer);
 	pipe.run_and_wait_end();
 
 #if defined(CHECK)
-    if (!gatherer->check) {
+    if (!gatherer.check) {
     	printf("Wrong result\n");
     	exit(1); //ctest
     }

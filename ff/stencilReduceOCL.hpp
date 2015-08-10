@@ -924,93 +924,45 @@ public:
     /* Performs a static allocation of OpenCL devices
      */
     // simplified version, currently it does not mix GPUs with CPU
+    // NOT£: nodeInit must take into account that the user has requested specific devices 
+    // (by using setDevices)
     int nodeInit() {
         if (ff_oclNode_t<T>::oclId < 0) {
             ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
-            
-            switch(ff_oclNode_t<T>::getDeviceType()) {
+            if (devices.size()==0) {  // the user didn't set any specific device
+                switch(ff_oclNode_t<T>::getDeviceType()) {
                 case CL_DEVICE_TYPE_ALL:
-                    fprintf(stderr,"STATUS: requested ALL\n");
                 case CL_DEVICE_TYPE_GPU: {// One or more GPUs
                     // Not exclusive
                     // Retrive logical devices
                     std::vector<ssize_t> logdev = clEnvironment::instance()->coAllocateGPUDeviceRR(accelerators.size(),(offset_dev==0)?-1:offset_dev);
                     // Convert into opencl Ids
-                    devices.clear();
-                    for (size_t i = 0; i < logdev.size(); ++i)
-                        devices.push_back(clEnvironment::instance()->getDevice(logdev[i]));
-                    if (devices.size() == 0) {
-                        error("stencilReduceOCL::svc_init:not enough GPUs found !\n");
-                        return -1;
-                    } else {
-                        // Ok
-                        for (size_t i = 0; i < devices.size(); ++i)
-                            if (accelerators[i]->init(devices[i], kernel_code, kernel_name1,kernel_name2, saveBinary) <0) return -1;
-                        break;
-                    }
-                }
-                case CL_DEVICE_TYPE_CPU: {
-                    if (accelerators.size()>1) {
-                        error ("Multiple (>1) virtual accelerators on CPU are requested. Not yet implemented.\n");
-                        return -1;
-                    } else {
-                        // Ok
-                        devices.clear();
-                        devices.push_back(clEnvironment::instance()->getDevice(clEnvironment::instance()->getCPUDevice()));
-                        if (accelerators[0]->init(devices[0], kernel_code, kernel_name1,kernel_name2,saveBinary)<0) return -1;
-                    }
-                } break;
-                default: {
-                    error("stencilReduceOCL::Other device. Not yet implemented.\n");
-                } break;
-            }
-        }
-        return 0;
-    }
-
-    
-#if 0 // old version
-   int nodeInit() {
-       if (ff_oclNode_t<T>::oclId < 0) {
-           ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
-           bool device_found = false;
-           if (devices.size()==0) {
-               switch(ff_oclNode_t<T>::getDeviceType()) {
-               case CL_DEVICE_TYPE_ALL:
-                   fprintf(stderr,"STATUS: requested ALL\n");
-               case CL_DEVICE_TYPE_GPU: {// One or more GPUs
-                   std::vector<ssize_t> devIds = clEnvironment::instance()->getAllGPUDevices();
-                   if (devIds.size()==0) {
-                       fprintf(stderr,"WARNING: no GPUs available\n");
+                   devices.clear();
+                   for (size_t i = 0; i < logdev.size(); ++i)
+                       devices.push_back(clEnvironment::instance()->getDevice(logdev[i]));
+                   if (devices.size() == 0) {
+                       error("stencilReduceOCL::svc_init:not enough GPUs found !\n");
+                       return -1;
                    } else {
-                       if (accelerators.size()==1) {
-                           ssize_t devId = devIds[preferred_dev];
-                           ff_oclNode_t<T>::deviceId=clEnvironment::instance()->getDevice(devId);
-                           accelerators[0]->init(ff_oclNode_t<T>::deviceId, kernel_code, kernel_name1,kernel_name2);
-                           device_found = true;
-                       } else {
-                           if (devIds.size()>=accelerators.size()) {
-                               for (size_t j=0; accelerators.size(); ++j)
-                                   accelerators[j]->init(clEnvironment::instance()->getDevice(devIds[j]), kernel_code, kernel_name1,kernel_name2);
-                               device_found = true;
-                           } else {
-                               fprintf(stderr,"WARNING: requested number of logical accelerators bigger than the number of available ddevices\n");
-                           }
-                       }
+                       // Ok
+                       for (size_t i = 0; i < devices.size(); ++i)
+                           if (accelerators[i]->init(devices[i], kernel_code, kernel_name1,kernel_name2, saveBinary) <0) return -1;
+                       break;
                    }
-               } if (device_found) break;
+               }
                case CL_DEVICE_TYPE_CPU: {
-                   fprintf(stderr,"STATUS: requested 1CPU\n");
-                   ssize_t devId = clEnvironment::instance()->getCPUDevice();
-                   if (accelerators.size()!=1)  
-                       fprintf(stderr,"WARNING: Too many accelerators requested for CL_CPU device\n");
-                   // accelerators num should be modified
-                   ff_oclNode_t<T>::deviceId=clEnvironment::instance()->getDevice(devId);
-                   accelerators[0]->init(ff_oclNode_t<T>::deviceId, kernel_code, kernel_name1,kernel_name2);
-                   device_found = true;
+                   if (accelerators.size()>1) {
+                       error ("Multiple (>1) virtual accelerators on CPU are requested. Not yet implemented.\n");
+                       return -1;
+                   } else {
+                       // Ok
+                       devices.clear();
+                       devices.push_back(clEnvironment::instance()->getDevice(clEnvironment::instance()->getCPUDevice()));
+                       if (accelerators[0]->init(devices[0], kernel_code, kernel_name1,kernel_name2,saveBinary)<0) return -1;
+                   }
                } break;
                default: {
-                   error("stencilReduceOCL::nodeInit: no device selected\n");
+                   error("stencilReduceOCL::Other device. Not yet implemented.\n");
                    return -1;
                }                   
                }
@@ -1021,15 +973,11 @@ public:
                }
                // NOTE: the number of devices requested can be lower than the number of accelerators.
                for (size_t i = 0; i < devices.size(); ++i) 
-                   accelerators[i]->init(devices[i], kernel_code, kernel_name1,kernel_name2);
-               
-               device_found = true;
+                   accelerators[i]->init(devices[i], kernel_code, kernel_name1,kernel_name2,saveBinary);
            }
-           return (device_found?0:-1);
        }
        return 0;
    }
-#endif
     
     void nodeEnd() {
     	//TODO check:

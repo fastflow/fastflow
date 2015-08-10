@@ -190,9 +190,7 @@ public:
 
     unsigned long getOCLID() {  return atomic_long_inc_return(&oclId); }
 
-    
-   
-    
+        
     std::vector<ssize_t> coAllocateGPUDeviceRR(size_t n=1, ssize_t preferred_dev=-1, bool exclusive=false, bool identical=false) {
         cl_device_type dt;
         size_t count = n;
@@ -207,7 +205,7 @@ public:
                 --count;
                 char buf[128];
                 clGetDeviceInfo(clDevices[dev], CL_DEVICE_NAME, 128, buf, NULL);
-                std::cerr << "clEnvironment: assigned GPU "<< dev << " " << buf << "\n";
+                //std::cerr << "clEnvironment: assigned GPU "<< dev << " " << buf << "\n";
                 ++dev;
                 dev%=clDevices.size();
                 if (count==0) break;
@@ -217,7 +215,7 @@ public:
             }
         }
         if (count>0) { // roll back
-            std::cerr << "Not enough GPUs: aborting\n";
+            //std::cerr << "Not enough GPUs: aborting\n";
             ret.clear();
         } else { // commit
             // check if identical, TO BE DONE

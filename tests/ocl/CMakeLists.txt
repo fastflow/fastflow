@@ -10,7 +10,7 @@ include_directories( ${OPENCL_INCLUDE_DIRS} )
 
 
 set( TESTS                               
-dotProduct farm_oclMap farm_oclReduce oclMap oclMapReduce oclReduce
+dotProduct dotprod_cpugpu farm_oclMap farm_oclReduce oclMap oclMap2 oclMapReduce oclReduce
 oclStencilReduceLoop pipeFarmMap device_selection device_selection2
 mixedpipe mixedpipe2
 )
