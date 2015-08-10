@@ -27,6 +27,10 @@
 /* Author: Massimo Torquati
  *         torquati@di.unipi.it  massimotor@gmail.com
  */
+// This is the same of the oclMap test but the source code is loaded from a file.
+// The compiled version of the OpenCL program is saved in binary file (.bin) 
+// so that next times the program is not recompiled.
+
 
 #if !defined(FF_OPENCL)
 #define FF_OPENCL
@@ -41,10 +45,6 @@ using namespace ff;
 #include "ctest.h"
 #endif
 
-
-FF_OCL_MAP_ELEMFUNC(mapf, float, elem, 
-                    return (elem+1.0);
-                    );
 
 struct oclTask: public baseOCLTask<oclTask, float> {
     oclTask():M(NULL),size(0) {}
@@ -73,11 +73,11 @@ int main(int argc, char * argv[]) {
 #endif
 
     oclTask oclt(M, size);
-    ff_mapOCL_1D<oclTask> oclMap(oclt, mapf);
+    ff_mapOCL_1D<oclTask> oclMap(oclt, "cl_code/oclMap.cl","mapf");
     SET_DEVICE_TYPE(oclMap);
-    
-    oclMap.run_and_wait_end();
 
+    oclMap.saveBinaryFile(); // save the compiled version in cl_code/oclMap.cl.bin
+    oclMap.run_and_wait_end();
 
 #if defined(CHECK)
 	for (size_t i = 0; i < size; ++i) {
