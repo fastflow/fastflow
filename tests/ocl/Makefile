@@ -24,7 +24,7 @@ LIBS =  $(OPENCL) -lpthread
 INCLUDES = -I$(FF_ROOT) -I$(OCL_ROOT)/include
 
 
-TARGETS = oclStencilReduceLoop oclMap oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct device_selection dotProd_cpugpu device_selection2 mixedpipe mixedpipe2
+TARGETS = oclStencilReduceLoop oclMap oclMap2 oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct device_selection dotProd_cpugpu device_selection2 mixedpipe mixedpipe2
 
 
 all: $(TARGETS)
@@ -33,6 +33,9 @@ oclStencilReduceLoop: oclStencilReduceLoop.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 oclMap: oclMap.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+oclMap2: oclMap2.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 oclReduce: oclReduce.cpp
@@ -71,4 +74,4 @@ clean:
 	-rm -f $(TARGETS)
 
 cleanall: clean
-	rm -f *~
+	rm -f *~ cl_code/*.cl.bin

@@ -49,6 +49,12 @@
 
 #if defined(FF_OPENCL)
 
+// to avoid deprecated warnings
+#if !defined(CL_USE_DEPRECATED_OPENCL_2_0_APIS)
+#define CL_USE_DEPRECATED_OPENCL_1_1_APIS 1
+#define CL_USE_DEPRECATED_OPENCL_2_0_APIS 1
+#endif
+
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
 #else
@@ -117,37 +123,36 @@ protected:
             printf("Multiple OpenCL platforms detected. Experimental code\n");
         }
 
-        for (int i = 0; i< numPlatforms; ++i) {
-        //int i=0;
-        clGetDeviceIDs(platforms[i],CL_DEVICE_TYPE_ALL,0,NULL,&(numDevices));
-        deviceIds = new cl_device_id[numDevices];  
-        assert(deviceIds); 
-        // Fill in CLDevice with clGetDeviceIDs()            
-        clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL,numDevices,deviceIds,NULL);
-        //std::cerr << "OpenCL platform detection - begin\n";
-        for(size_t j=0; j<numDevices; j++)   {
-            // estimating max number of thread per device 
-            cl_bool b;
-            cl_context context;
-            cl_int status;
-            cl_device_type dt;       
+        for (unsigned int i = 0; i< numPlatforms; ++i) {
+            clGetDeviceIDs(platforms[i],CL_DEVICE_TYPE_ALL,0,NULL,&(numDevices));
+            deviceIds = new cl_device_id[numDevices];  
+            assert(deviceIds); 
+            // Fill in CLDevice with clGetDeviceIDs()            
+            clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL,numDevices,deviceIds,NULL);
+            //std::cerr << "OpenCL platform detection - begin\n";
+            for(size_t j=0; j<numDevices; j++)   {
+                // estimating max number of thread per device 
+                cl_bool b;
+                cl_context context;
+                cl_int status;
+                cl_device_type dt;       
                 
-            clGetDeviceInfo(deviceIds[j], CL_DEVICE_AVAILABLE, sizeof(cl_bool), &(b), NULL);
-            context = clCreateContext(NULL,1,&deviceIds[j],NULL,NULL,&status);
-            clGetDeviceInfo(deviceIds[j], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
-            
-            // if((dt) & CL_DEVICE_TYPE_GPU)
-            //     std::cerr << "#" << j << " CPU device\n";
-            // else if((dt) & CL_DEVICE_TYPE_CPU)
-            //     std::cerr << "#" << j << " GPU device\n";
-            // else std::cerr << "#" << j << " Other device (not yet implemented)\n";
-            
-            if((b & CL_TRUE) && (status == CL_SUCCESS)) {
-                clDeviceInUse.push_back(false);
-                clDevices.push_back(deviceIds[j]);
+                clGetDeviceInfo(deviceIds[j], CL_DEVICE_AVAILABLE, sizeof(cl_bool), &(b), NULL);
+                context = clCreateContext(NULL,1,&deviceIds[j],NULL,NULL,&status);
+                clGetDeviceInfo(deviceIds[j], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
+                
+                // if((dt) & CL_DEVICE_TYPE_GPU)
+                //     std::cerr << "#" << j << " CPU device\n";
+                // else if((dt) & CL_DEVICE_TYPE_CPU)
+                //     std::cerr << "#" << j << " GPU device\n";
+                // else std::cerr << "#" << j << " Other device (not yet implemented)\n";
+                
+                if((b & CL_TRUE) && (status == CL_SUCCESS)) {
+                    clDeviceInUse.push_back(false);
+                    clDevices.push_back(deviceIds[j]);
+                }
+                clReleaseContext(context);
             }
-            clReleaseContext(context);
-        }
         }
         delete [] deviceIds;
         delete [] platforms;

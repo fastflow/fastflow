@@ -202,8 +202,8 @@ public:
 	typedef typename TOCL::Tin  Tin;
 	typedef typename TOCL::Tout Tout;
 
-	ff_oclAccelerator(ff_oclallocator *alloc, const size_t width_, const Tout &identityVal) :
-        my_own_allocator(false), allocator(alloc), width(width_), identityVal(identityVal), events_h2d(16), deviceId(NULL) {
+	ff_oclAccelerator(ff_oclallocator *alloc, const size_t width_, const Tout &identityVal, const bool from_source=false) :
+        from_source(from_source), my_own_allocator(false), allocator(alloc), width(width_), identityVal(identityVal), events_h2d(16), deviceId(NULL) {
 		workgroup_size_map = workgroup_size_reduce = 0;
 		inputBuffer = outputBuffer = reduceBuffer = NULL;
 
@@ -238,10 +238,10 @@ public:
         }
     }
 
-	void init(cl_device_id dId, const std::string &kernel_code, const std::string &kernel_name1,
-              const std::string &kernel_name2) {
+	int init(cl_device_id dId, const std::string &kernel_code, const std::string &kernel_name1,
+             const std::string &kernel_name2, const bool save_binary) {
         deviceId = dId;
-		svc_SetUpOclObjects(deviceId, kernel_code, kernel_name1,kernel_name2);
+		return svc_SetUpOclObjects(deviceId, kernel_code, kernel_name1,kernel_name2, from_source, save_binary);
 	}
 
 	void releaseAll() { if (deviceId) { svc_releaseOclObjects(); deviceId = NULL; }}
@@ -553,20 +553,10 @@ public:
 	}
 
 private:
-	void buildKernelCode(const std::string &kc, cl_device_id dId) {
-		cl_int status;
-
-		size_t sourceSize = kc.length();
-		const char* code = kc.c_str();
-
-		//printf("code=\n%s\n", code);
-		program = clCreateProgramWithSource(context, 1, &code, &sourceSize, &status);
-		checkResult(status, "creating program with source");
-
-		status = clBuildProgram(program, 1, &dId, /*"-cl-fast-relaxed-math"*/NULL, NULL,NULL);
+    int buildProgram(cl_device_id dId) {
+		cl_int status = clBuildProgram(program, 1, &dId, /*"-cl-fast-relaxed-math"*/NULL, NULL,NULL);
 		checkResult(status, "building program");
 
-		//#if 0
 		// DEBUGGING CODE for checking OCL compilation errors
 		if (status != CL_SUCCESS) {
 			printf("\nFail to build the program\n");
@@ -578,12 +568,82 @@ private:
 			clGetProgramBuildInfo(program, dId, CL_PROGRAM_BUILD_LOG, len * sizeof(char),
 					buffer, NULL);
 			printf("LOG: %s\n\n", buffer);
+            
+            return -1;
 		}
-		//#endif
+        return 0;
+    }
+
+	int buildKernelCode(const std::string &kc, cl_device_id dId) {
+		cl_int status;
+
+		size_t sourceSize = kc.length();
+		const char* code = kc.c_str();
+
+		//printf("code=\n%s\n", code);
+		program = clCreateProgramWithSource(context, 1, &code, &sourceSize, &status);
+        if (!program) {
+            checkResult(status, "creating program with source");
+            return -1;
+        }
+        return buildProgram(dId);
 	}
 
-	void svc_SetUpOclObjects(cl_device_id dId, const std::string &kernel_code,
-                             const std::string &kernel_name1, const std::string &kernel_name2) {
+    // create the program with the binary file or from the source code
+	int createProgram(const std::string &filepath, cl_device_id dId, const bool save_binary) {
+        cl_int status, binaryStatus;
+        const std::string binpath = filepath + ".bin";
+
+        std::ifstream ifs(binpath, std::ios::binary );
+        if (!ifs.is_open()) { // try with filepath
+            ifs.open(filepath, std::ios::binary);
+            if (!ifs.is_open()) {
+                error("createProgram: cannot open %s (nor %s)\n", filepath.c_str(), binpath.c_str());
+                return -1;
+            }
+        }
+        std::vector<char> buf((std::istreambuf_iterator<char>(ifs)),
+                              (std::istreambuf_iterator<char>()));
+        
+        size_t bufsize      = buf.size();
+        const char *bufptr  = buf.data();
+        program = clCreateProgramWithBinary(context, 1, &dId, &bufsize,
+                                            reinterpret_cast<const unsigned char **>(&bufptr),
+                                            &binaryStatus, &status);
+        
+        if (status != CL_SUCCESS) { // maybe is not a binary file
+            program = clCreateProgramWithSource(context, 1,&bufptr, &bufsize, &status);
+            if (!program) {
+                checkResult(status, "creating program with source");
+                return -1;  
+            }
+            if (buildProgram(dId)<0) return -1;
+            if (save_binary) { // TODO: the logical deviceId has to be attached to the file name !                
+                size_t programBinarySize;
+                status = clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
+                                          sizeof(size_t) * 1,
+                                          &programBinarySize, NULL);
+                checkResult(status, "createProgram clGetProgramInfo (binary size)");                    
+                
+                std::vector<char> binbuf(programBinarySize);
+                const char *binbufptr = binbuf.data();
+                status = clGetProgramInfo(program, CL_PROGRAM_BINARIES, sizeof(char*) * 1,
+                                          &binbufptr, NULL);
+                checkResult(status, "createProgram clGetProgramInfo (binary data)");                          
+                
+                std::ofstream ofs(binpath, std::ios::out | std::ios::binary);
+                ofs.write(binbuf.data(), binbuf.size());
+                ofs.close();
+            }
+            return 0;
+        }             
+        return buildProgram(dId);
+    }
+
+
+	int svc_SetUpOclObjects(cl_device_id dId, const std::string &kernel_code,
+                            const std::string &kernel_name1, const std::string &kernel_name2,
+                            const bool from_source, const bool save_binary) {
 
 		cl_int status;
         const oclParameter *param = clEnvironment::instance()->getParameter(dId);
@@ -591,8 +651,11 @@ private:
         context    = param->context;
         cmd_queue  = param->commandQueue;
 
-		//compile kernel on device
-		buildKernelCode(kernel_code, dId);
+        if (!from_source) { 		//compile kernel on device
+            if (buildKernelCode(kernel_code, dId)<0) return -1;
+        } else {  // kernel_code is the path to the (binary?) source
+            if (createProgram(kernel_code, dId, save_binary)<0) return -1;
+        }
         
         char buf[128];
         size_t s, ss[3];
@@ -608,7 +671,7 @@ private:
 			kernel_map = clCreateKernel(program, kernel_name1.c_str(), &status);
 			checkResult(status, "CreateKernel (map)");
 			status = clGetKernelWorkGroupInfo(kernel_map, dId,
-			CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_map, 0);
+                                              CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_map, 0);
 			checkResult(status, "GetKernelWorkGroupInfo (map)");
             //std::cerr << "GetKernelWorkGroupInfo (map) " << workgroup_size_map << "\n";
 		}
@@ -622,6 +685,7 @@ private:
             //std::cerr << "GetKernelWorkGroupInfo (reduce) " << workgroup_size_reduce << "\n";
 		}
 
+        return 0;
 	}
 
 	void svc_releaseOclObjects() {
@@ -660,6 +724,7 @@ protected:
 	cl_mem reduceBuffer;
 	cl_kernel kernel_map, kernel_reduce, kernel_init;
 private:
+    const bool from_source;
     bool my_own_allocator; 
     ff_oclallocator *allocator;
 	const size_t width;
@@ -714,21 +779,40 @@ public:
 	typedef typename TOCL::Tout        Tout;
 	typedef ff_oclAccelerator<T, TOCL> accelerator_t;
 
-	ff_stencilReduceLoopOCL_1D(const std::string &mapf,			              //OCL elemental
-                               const std::string &reducef = std::string(""),  //OCL combinator
-                               const Tout &identityVal = Tout(),
+    // build the program from the mapf and reducef functions
+	ff_stencilReduceLoopOCL_1D(const std::string &mapf,			              //OpenCL elemental function 
+                               const std::string &reducef = std::string(""),  //OpenCL combinator function
+                               const Tout &identityVal = Tout(),               
                                ff_oclallocator *allocator = nullptr,
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(false), accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-    stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
+        stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setcode(mapf, reducef);
         for(size_t i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width,identityVal);
 	}
+    
+    // build the program from source code file, 
+    // first attempts to load a cached binary file (kernels_source in this case is the path to the binary file)
+    // ff that file is not available, then it creates the program from source and store the binary for future use
+    // with the extention ".bin"
+    ff_stencilReduceLoopOCL_1D(const std::string &kernels_source,            // OpenCL source code path
+                               const std::string &mapf_name,                 // name of the map function
+                               const std::string &reducef_name,              // name of the reduce function
+                               const Tout &identityVal = Tout(),
+                               ff_oclallocator *allocator = nullptr,
+                               const int NACCELERATORS = 1, const int width = 1) :
+        oneshot(false), accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
+        stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
+		setsourcecode(kernels_source, mapf_name, reducef_name);
+        for(size_t i = 0; i< NACCELERATORS; ++i)
+            accelerators[i]= new accelerator_t(allocator, width, identityVal, true);
+	}
 
-	//template <typename Function>
-	ff_stencilReduceLoopOCL_1D(const T &task, const std::string &mapf,	                //OCL elemental
-                               const std::string &reducef = std::string(""),			//OCL combinator
+    // the task is provided in the constructor -- one shot computation
+	ff_stencilReduceLoopOCL_1D(const T &task, 
+                               const std::string &mapf,	               
+                               const std::string &reducef = std::string(""),	
                                const Tout &identityVal = Tout(),
                                ff_oclallocator *allocator = nullptr,
                                const int NACCELERATORS = 1, const int width = 1) :
@@ -740,6 +824,23 @@ public:
         for(size_t i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width,identityVal);
 	}
+
+    // the task is provided in the constructor -- one shot computation
+    ff_stencilReduceLoopOCL_1D(const T &task, 
+                               const std::string &kernels_source,            // OpenCL source code path
+                               const std::string &mapf_name,           // name of the map kernel function
+                               const std::string &reducef_name,        // name of the reduce kernel function
+                               const Tout &identityVal = Tout(),
+                               ff_oclallocator *allocator = nullptr,
+                               const int NACCELERATORS = 1, const int width = 1) :
+        oneshot(false), accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
+        stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
+		setsourcecode(kernels_source, mapf_name, reducef_name);
+        Task.setTask(const_cast<T*>(&task));
+        for(size_t i = 0; i< NACCELERATORS; ++i)
+            accelerators[i]= new accelerator_t(allocator, width, identityVal, true);
+	}
+   
 
 	virtual ~ff_stencilReduceLoopOCL_1D() {
         for(size_t i = 0; i< accelerators.size(); ++i)
@@ -775,6 +876,10 @@ public:
         offset_dev=offset; //TODO check numbering
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_GPU);
     }
+
+    // after the compilation and building phases, the OpenCL program will be saved a binary file 
+    // this takes effect only if the compilation is made with source file (i.e. not using macroes)
+    void saveBinaryFile() { saveBinary = true; }
     
 	virtual int run(bool = false) {
 		return ff_node::run();
@@ -818,7 +923,7 @@ public:
     
     /* Performs a static allocation of OpenCL devices
      */
-    // simplified version
+    // simplified version, currently it does not mix GPUs with CPU
     int nodeInit() {
         if (ff_oclNode_t<T>::oclId < 0) {
             ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
@@ -840,7 +945,7 @@ public:
                     } else {
                         // Ok
                         for (size_t i = 0; i < devices.size(); ++i)
-                            accelerators[i]->init(devices[i], kernel_code, kernel_name1,kernel_name2);
+                            if (accelerators[i]->init(devices[i], kernel_code, kernel_name1,kernel_name2, saveBinary) <0) return -1;
                         break;
                     }
                 }
@@ -852,7 +957,7 @@ public:
                         // Ok
                         devices.clear();
                         devices.push_back(clEnvironment::instance()->getDevice(clEnvironment::instance()->getCPUDevice()));
-                        accelerators[0]->init(devices[0], kernel_code, kernel_name1,kernel_name2);
+                        if (accelerators[0]->init(devices[0], kernel_code, kernel_name1,kernel_name2,saveBinary)<0) return -1;
                     }
                 } break;
                 default: {
@@ -941,7 +1046,6 @@ protected:
     virtual int svc_init() { return nodeInit(); }
 
 #if 0    
-    // Currently, it never mix GPUs with CPU
 	virtual int svc_init() {
         if (ff_oclNode_t<T>::oclId < 0) {
             ff_oclNode_t<T>::oclId = clEnvironment::instance()->getOCLID();
@@ -1240,6 +1344,12 @@ private:
 		}
 	}
 
+	void setsourcecode(const std::string &source, const std::string &kernel1, const std::string &kernel2) {		
+        if (kernel1 != "") kernel_name1 = "kern_"+kernel1;
+        if (kernel2 != "") kernel_name2 = "kern_"+kernel2;
+        kernel_code  = source;
+    }
+
 	//assign input partition to accelerators
 	//acc[i] = (start, size) where:
 	//         - start is the first element assigned to accelerator i
@@ -1277,7 +1387,7 @@ private:
 private:
 	TOCL Task;
 	const bool oneshot;
-
+    bool saveBinary;
     std::vector<accelerator_t*> accelerators;
     std::vector<std::pair<size_t, size_t> > acc_in;
     std::vector<std::pair<size_t, size_t> > acc_out;
@@ -1316,11 +1426,23 @@ public:
         ff_stencilReduceLoopOCL_1D<T, TOCL>(mapf, "", 0, alloc, NACCELERATORS, 0) {
 	}
 
+    ff_mapOCL_1D(const std::string &kernels_source, const std::string &mapf_name, 
+                 ff_oclallocator *alloc=nullptr, const size_t NACCELERATORS = 1) :
+        ff_stencilReduceLoopOCL_1D<T, TOCL>(kernels_source, mapf_name, "", 0, alloc, NACCELERATORS, 0) {
+	}
+    
+
 	ff_mapOCL_1D(const T &task, std::string mapf, 
                  ff_oclallocator *alloc=nullptr,
                  const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(task, mapf, "", 0, alloc, NACCELERATORS, 0) {
 	}
+    ff_mapOCL_1D(const T &task, const std::string &kernels_source, const std::string &mapf_name, 
+                 ff_oclallocator *alloc=nullptr,
+                 const size_t NACCELERATORS = 1) :
+        ff_stencilReduceLoopOCL_1D<T, TOCL>(task, kernels_source, mapf_name, "", 0, alloc, NACCELERATORS, 0) {
+	}
+
 	bool isPureMap() const { return true; }
 };
 
@@ -1345,10 +1467,22 @@ public:
                     const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>("", reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
+	ff_reduceOCL_1D(const std::string &kernels_source, const std::string &reducef_name, const Tout &identityVal = Tout(),
+                    ff_oclallocator *alloc=nullptr,
+                    const size_t NACCELERATORS = 1) :
+        ff_stencilReduceLoopOCL_1D<T, TOCL>(kernels_source, "", reducef_name, identityVal, alloc, NACCELERATORS, 0) {
+	}
+
 	ff_reduceOCL_1D(const T &task, std::string reducef, const Tout identityVal = Tout(),
                     ff_oclallocator *alloc=nullptr,
                     const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(task, "", reducef, identityVal, alloc, NACCELERATORS, 0) {
+	}
+	ff_reduceOCL_1D(const T &task, const std::string &kernels_source,const std::string &reducef_name, 
+                    const Tout identityVal = Tout(),
+                    ff_oclallocator *alloc=nullptr,
+                    const size_t NACCELERATORS = 1) :
+        ff_stencilReduceLoopOCL_1D<T, TOCL>(task, kernels_source, "", reducef_name, identityVal, alloc, NACCELERATORS, 0) {
 	}
 	bool isPureReduce() const { return true; }
 };
@@ -1376,12 +1510,27 @@ public:
         ff_stencilReduceLoopOCL_1D<T, TOCL>(mapf, reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
 
+	ff_mapReduceOCL_1D(const std::string &kernels_code, const std::string &mapf_name, 
+                       const std::string &reducef_name, const Tout &identityVal = Tout(),
+                       ff_oclallocator *alloc=nullptr,
+                       const size_t NACCELERATORS = 1) :
+        ff_stencilReduceLoopOCL_1D<T, TOCL>(kernels_code, mapf_name, reducef_name, identityVal, alloc, NACCELERATORS, 0) {
+	}
+
+
 	ff_mapReduceOCL_1D(const T &task, std::string mapf, std::string reducef,
                        const Tout &identityVal = Tout(), 
                        ff_oclallocator *alloc=nullptr,
                        const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(task, mapf, reducef, identityVal, alloc, NACCELERATORS, 0) {
 	}
+	ff_mapReduceOCL_1D(const T &task, const std::string &kernels_code, const std::string &mapf_name, 
+                       const std::string &reducef_name, const Tout &identityVal = Tout(), 
+                       ff_oclallocator *alloc=nullptr,
+                       const size_t NACCELERATORS = 1) :
+        ff_stencilReduceLoopOCL_1D<T, TOCL>(task, kernels_code, mapf_name, reducef_name, identityVal, alloc, NACCELERATORS, 0) {
+	}
+
 };
 
 }

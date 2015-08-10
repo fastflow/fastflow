@@ -9,7 +9,8 @@
 #define TESTS_OCL_CTEST_H_
 
 
-#define SET_DEVICE_TYPE(obj) obj.pickGPU();
+//#define SET_DEVICE_TYPE(obj) obj.pickGPU();
+#define SET_DEVICE_TYPE(obj) obj.pickCPU();
 
 
 #endif /* TESTS_OCL_CTEST_H_ */
