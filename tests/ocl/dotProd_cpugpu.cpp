@@ -97,14 +97,16 @@ struct Map: ff_Map<Task,Task,float> {
 
 
 int main(int argc, char * argv[]) {    
-    if (argc < 3) {
+    size_t arraySize = 1024;
+    int cpugpu       = 1;  
+    if (argc>3) {
         std::cerr << "use: " << argv[0]  << " size 0|1\n";
         std::cerr << "    0: CPU\n";
         std::cerr << "    1: GPU\n";
         return -1;
     }
-    size_t arraySize = atol(argv[1]);
-    int cpugpu = atoi(argv[2]);
+    if (argc > 1) arraySize = atol(argv[1]);
+    if (argc > 2) cpugpu = atoi(argv[2]);
     assert(cpugpu == 0 || cpugpu == 1);
     int gpudev = clEnvironment::instance()->getCPUDevice(); // this exists for sure
     if (cpugpu != 0) {
