@@ -239,9 +239,10 @@ public:
     }
 
 	int init(cl_device_id dId, const std::string &kernel_code, const std::string &kernel_name1,
-             const std::string &kernel_name2, const bool save_binary) {
+             const std::string &kernel_name2, const bool save_binary, const bool reuse_binary) {
         deviceId = dId;
-		return svc_SetUpOclObjects(deviceId, kernel_code, kernel_name1,kernel_name2, from_source, save_binary);
+		return svc_SetUpOclObjects(deviceId, kernel_code, kernel_name1,kernel_name2, 
+                                   from_source, save_binary, reuse_binary);
 	}
 
 	void releaseAll() { if (deviceId) { svc_releaseOclObjects(); deviceId = NULL; }}
@@ -590,21 +591,30 @@ private:
 	}
 
     // create the program with the binary file or from the source code
-	int createProgram(const std::string &filepath, cl_device_id dId, const bool save_binary) {
+	int createProgram(const std::string &filepath, cl_device_id dId, const bool save_binary, const bool reuse_binary) {
         cl_int status, binaryStatus;
         const std::string binpath = filepath + ".bin";
 
-        std::ifstream ifs(binpath, std::ios::binary );
-        if (!ifs.is_open()) { // try with filepath
+        std::ifstream ifs;
+        if (reuse_binary) {
+            ifs.open(binpath, std::ios::binary );
+            if (!ifs.is_open()) { // try with filepath
+                ifs.open(filepath, std::ios::binary);
+                if (!ifs.is_open()) {
+                    error("createProgram: cannot open %s (nor %s)\n", filepath.c_str(), binpath.c_str());
+                    return -1;
+                }
+            }
+        } else {
             ifs.open(filepath, std::ios::binary);
             if (!ifs.is_open()) {
-                error("createProgram: cannot open %s (nor %s)\n", filepath.c_str(), binpath.c_str());
+                error("createProgram: cannot open source file %s\n", filepath.c_str());
                 return -1;
             }
         }
         std::vector<char> buf((std::istreambuf_iterator<char>(ifs)),
                               (std::istreambuf_iterator<char>()));
-        
+        ifs.close();
         size_t bufsize      = buf.size();
         const char *bufptr  = buf.data();
         program = clCreateProgramWithBinary(context, 1, &dId, &bufsize,
@@ -643,7 +653,7 @@ private:
 
 	int svc_SetUpOclObjects(cl_device_id dId, const std::string &kernel_code,
                             const std::string &kernel_name1, const std::string &kernel_name2,
-                            const bool from_source, const bool save_binary) {
+                            const bool from_source, const bool save_binary, const bool reuse_binary) {
 
 		cl_int status;
         const oclParameter *param = clEnvironment::instance()->getParameter(dId);
@@ -654,7 +664,7 @@ private:
         if (!from_source) { 		//compile kernel on device
             if (buildKernelCode(kernel_code, dId)<0) return -1;
         } else {  // kernel_code is the path to the (binary?) source
-            if (createProgram(kernel_code, dId, save_binary)<0) return -1;
+            if (createProgram(kernel_code, dId, save_binary, reuse_binary)<0) return -1;
         }
         
         char buf[128];
@@ -785,7 +795,8 @@ public:
                                const Tout &identityVal = Tout(),               
                                ff_oclallocator *allocator = nullptr,
                                const int NACCELERATORS = 1, const int width = 1) :
-        oneshot(false), accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
+        oneshot(false), saveBinary(false), reuseBinary(false), 
+        accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
         stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setcode(mapf, reducef);
         for(size_t i = 0; i< NACCELERATORS; ++i)
@@ -802,7 +813,8 @@ public:
                                const Tout &identityVal = Tout(),
                                ff_oclallocator *allocator = nullptr,
                                const int NACCELERATORS = 1, const int width = 1) :
-        oneshot(false), accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
+        oneshot(false), saveBinary(false), reuseBinary(false), 
+        accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
         stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setsourcecode(kernels_source, mapf_name, reducef_name);
         for(size_t i = 0; i< NACCELERATORS; ++i)
@@ -816,7 +828,8 @@ public:
                                const Tout &identityVal = Tout(),
                                ff_oclallocator *allocator = nullptr,
                                const int NACCELERATORS = 1, const int width = 1) :
-        oneshot(true), accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
+        oneshot(true), saveBinary(false), reuseBinary(false), 
+        accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
         stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
 		ff_node::skipfirstpop(true);
 		setcode(mapf, reducef);
@@ -833,7 +846,8 @@ public:
                                const Tout &identityVal = Tout(),
                                ff_oclallocator *allocator = nullptr,
                                const int NACCELERATORS = 1, const int width = 1) :
-        oneshot(false), accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
+        oneshot(true), saveBinary(false), reuseBinary(false), 
+        accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
         stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setsourcecode(kernels_source, mapf_name, reducef_name);
         Task.setTask(const_cast<T*>(&task));
@@ -881,9 +895,12 @@ public:
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_GPU);
     }
 
-    // after the compilation and building phases, the OpenCL program will be saved a binary file 
-    // this takes effect only if the compilation is made with source file (i.e. not using macroes)
+    // after the compilation and building phases, the OpenCL program will be saved as binary file 
+    // this action takes effect only if the compilation is made with source file (i.e. not using macroes)
     void saveBinaryFile() { saveBinary = true; }
+
+    // tells the run-time to re-use the binary file available
+    void reuseBinaryFile() { reuseBinary = true; }
     
 	virtual int run(bool = false) {
 		return ff_node::run();
@@ -959,7 +976,7 @@ public:
 											logdev[i]));
 						for (size_t i = 0; i < devices.size(); ++i)
 							if (accelerators[i]->init(devices[i], kernel_code,
-									kernel_name1, kernel_name2, saveBinary) < 0)
+                                                      kernel_name1, kernel_name2, saveBinary, reuseBinary) < 0)
 								return -1;
 						break;
 					}
@@ -975,7 +992,7 @@ public:
 						devices.push_back(clEnvironment::instance()->getDevice( //convert to OpenCL Id
 								clEnvironment::instance()->getCPUDevice())); //retrieve logical device
 						if (accelerators[0]->init(devices[0], kernel_code,
-								kernel_name1, kernel_name2, saveBinary) < 0)
+                                                  kernel_name1, kernel_name2, saveBinary, reuseBinary) < 0)
 							return -1;
 					}
 				}
@@ -997,7 +1014,7 @@ public:
 				// TODO must be managed
 				for (size_t i = 0; i < devices.size(); ++i)
 					accelerators[i]->init(devices[i], kernel_code, kernel_name1,
-							kernel_name2, saveBinary);
+                                          kernel_name2, saveBinary, reuseBinary);
 			}
 		}
 		return 0;
@@ -1359,7 +1376,7 @@ private:
 private:
 	TOCL Task;
 	const bool oneshot;
-    bool saveBinary;
+    bool saveBinary, reuseBinary;    
     std::vector<accelerator_t*> accelerators;
     std::vector<std::pair<size_t, size_t> > acc_in;
     std::vector<std::pair<size_t, size_t> > acc_out;

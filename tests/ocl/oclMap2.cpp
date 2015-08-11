@@ -77,6 +77,7 @@ int main(int argc, char * argv[]) {
     SET_DEVICE_TYPE(oclMap);
 
     oclMap.saveBinaryFile(); // save the compiled version in cl_code/oclMap.cl.bin
+    oclMap.reuseBinaryFile(); // if the binary file is present it will be used
     oclMap.run_and_wait_end();
 
 #if defined(CHECK)
