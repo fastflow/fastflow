@@ -10,7 +10,7 @@ include_directories( ${OPENCL_INCLUDE_DIRS} )
 
 
 set( TESTS                               
-dotProduct dotprod_cpugpu farm_oclMap farm_oclReduce oclMap oclMap2 oclMapReduce oclReduce
+dotProduct dotProd_cpugpu farm_oclMap farm_oclReduce oclMap oclMap2 oclMapReduce oclReduce
 oclStencilReduceLoop pipeFarmMap device_selection device_selection2
 mixedpipe mixedpipe2
 )
@@ -35,13 +35,19 @@ foreach( t ${TESTS} )
     target_link_libraries( ${t} ${CMAKE_THREAD_LIBS_INIT} ${OPENCL_LIBRARIES} )
 endforeach( t )
 
-foreach( t ${TESTS} )
-add_custom_command(TARGET ${t} POST_BUILD
+#foreach( t ${TESTS} )
+add_custom_command(TARGET dotProduct POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
                        ${CMAKE_CURRENT_SOURCE_DIR}/ff_opencl_datatypes.cl
                        $<TARGET_FILE_DIR:dotProduct>
                  )
-endforeach( t )
+#endforeach( t )
+
+add_custom_command(TARGET oclMap2 POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                       ${CMAKE_CURRENT_SOURCE_DIR}/cl_code/oclMap.cl
+                       ${CMAKE_CURRENT_BINARY_DIR}/cl_code/oclMap.cl
+                 )
 
 foreach( t ${TESTS} )
     add_test( ${t} ${CMAKE_CURRENT_BINARY_DIR}/${t} )
