@@ -15,7 +15,11 @@
 #include <string>
 #include <sys/time.h>
 
+#include <ff/parallel_for.hpp>
 #include "gameoflifeSRL.hpp"
+
+using namespace ff;
+
 
 #define at(r,c,w) (r)*w+c
 #define has_top(r) (r > 0)
@@ -120,28 +124,35 @@ int main(int argc, char * argv[]) {
 #ifdef PRINT
 	print(bitmap_in_seq, nrows, "SEED");
 #endif
+
+	ParallelFor pf(FF_AUTO, true);
+
 	gettimeofday(&tv1, NULL);
 	swap(bitmap_in_seq, bitmap_out_seq);
 	for (unsigned int iter = 0; iter < niters; ++iter) {
 		swap(bitmap_in_seq, bitmap_out_seq);
-		for (unsigned long r = 0; r < nrows; ++r)
-		for (unsigned long c = 0; c < nrows; ++c) {
-			unsigned char alive_in = bitmap_in_seq[at(r, c, w)];
-			unsigned char naliven = 0;
-			naliven +=
-			has_top(r) && has_left(c) ? bitmap_in_seq[at(r - 1, c-1, w)] : 0;
-			naliven += has_top(r) ? bitmap_in_seq[at(r - 1, c, w)] : 0;
-			naliven +=
-			has_top(r) && has_right(c, w) ? bitmap_in_seq[at(r - 1, c+1, w)] : 0;
-			naliven += has_right(c,w) ? bitmap_in_seq[at(r, c+1, w)] : 0;
-			naliven +=
-			has_bottom(r,w) && has_right(c, w) ? bitmap_in_seq[at(r + 1, c+1, w)] : 0;
-			naliven += has_bottom(r,w) ? bitmap_in_seq[at(r + 1, c, w)] : 0;
-			naliven +=
-			has_bottom(r,w) && has_left(c) ? bitmap_in_seq[at(r + 1, c-1, w)] : 0;
-			naliven += has_left(c) ? bitmap_in_seq[at(r, c-1, w)] : 0;
-			bitmap_out_seq[at(r, c, w)] = naliven == 3 || (alive_in && naliven == 2);
-		}
+
+		//for (unsigned long r = 0; r < nrows; ++r) {
+		pf.parallel_for(0, nrows, [&](const long r) {
+		  for (unsigned long c = 0; c < nrows; ++c) {
+		    unsigned char alive_in = bitmap_in_seq[at(r, c, w)];
+		    unsigned char naliven = 0;
+		    naliven +=
+		      has_top(r) && has_left(c) ? bitmap_in_seq[at(r - 1, c-1, w)] : 0;
+		    naliven += has_top(r) ? bitmap_in_seq[at(r - 1, c, w)] : 0;
+		    naliven +=
+		      has_top(r) && has_right(c, w) ? bitmap_in_seq[at(r - 1, c+1, w)] : 0;
+		    naliven += has_right(c,w) ? bitmap_in_seq[at(r, c+1, w)] : 0;
+		    naliven +=
+		      has_bottom(r,w) && has_right(c, w) ? bitmap_in_seq[at(r + 1, c+1, w)] : 0;
+		    naliven += has_bottom(r,w) ? bitmap_in_seq[at(r + 1, c, w)] : 0;
+		    naliven +=
+		      has_bottom(r,w) && has_left(c) ? bitmap_in_seq[at(r + 1, c-1, w)] : 0;
+		    naliven += has_left(c) ? bitmap_in_seq[at(r, c-1, w)] : 0;
+		    bitmap_out_seq[at(r, c, w)] = naliven == 3 || (alive_in && naliven == 2);
+		  }
+		  }
+		  );
 	}
 	gettimeofday(&tv2, NULL);
 	double extime_seq = ((double)tv2.tv_sec - (double)tv1.tv_sec) * 1000 + ((double)tv2.tv_usec - (double)tv1.tv_usec) / 1000;
@@ -150,8 +161,11 @@ int main(int argc, char * argv[]) {
 #endif
 	print_diff(bitmap_out, bitmap_out_seq, nrows);
 	free(bitmap_out_seq);
-	printf("seq ex. time = %f ms\n", extime_seq);
-	printf("par vs seq speedup = %f\n", extime_seq / extime_par);
+	//printf("seq ex. time = %f ms\n", extime_seq);
+	//printf("par vs seq speedup = %f\n", extime_seq / extime_par);
+	printf("parfor ex. time = %f ms\n", extime_seq);
+	printf("par vs parfor speedup = %f\n", extime_seq / extime_par);
+
 #endif
 
 	free(bitmap_out);
