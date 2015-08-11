@@ -44,7 +44,7 @@ LDFLAGS  = -L$(OCL_ROOT)/lib/x86_64   #-L$(OCL_ROOT)/lib64
 LIBS     = $(OPENCL) -lpthread 
 INCS     += -I$(FF_ROOT) 
 
-OBJ      = main.o
+OBJ      = gameoflife.o
 DEPS     = gameoflifeSRL.hpp $(FF_ROOT)/ff/stencilReduceOCL.hpp
 TARGET   = gameoflife
 
