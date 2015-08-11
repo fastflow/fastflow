@@ -38,6 +38,8 @@ using namespace ff;
 #define CHECK 1
 #ifdef CHECK
 #include "ctest.h"
+#else
+#define NACC 1
 #endif
 
 FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
@@ -67,7 +69,7 @@ int main(int argc, char * argv[]) {
     for(size_t j=0;j<size;++j) M[j]=j + 1.0;
 
     oclTask oclt(M, size);
-    ff_reduceOCL_1D<oclTask> oclReduce(oclt, reducef, 0.0);
+    ff_reduceOCL_1D<oclTask> oclReduce(oclt, reducef, 0.0, nullptr, NACC);
 
     SET_DEVICE_TYPE(oclReduce);
     oclReduce.run_and_wait_end();

@@ -7,7 +7,6 @@
 
 #define NROWS 10
 #define NITERS 20
-#define NACC 1
 #define SEEDALIVE 30 //%
 
 #include <cstdio>
@@ -19,6 +18,13 @@
 #include "gameoflifeSRL.hpp"
 
 using namespace ff;
+
+#define CHECK 1
+#ifdef CHECK
+#include "../ctest.h"
+#else
+#define NACC 1
+#endif
 
 
 #define at(r,c,w) (r)*w+c

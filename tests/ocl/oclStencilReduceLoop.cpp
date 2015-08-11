@@ -42,12 +42,12 @@ using namespace ff;
 #define CHECK 1
 #ifdef CHECK
 #include "ctest.h"
+#else
+#define NACC 1
 #endif
 
 #define SIZE 1024
 #define NITERS 100
-//#define STREAMLEN 2048
-#define NACCELERATORS 1
 #define WINWIDTH 5
 
 size_t niters;
@@ -82,34 +82,6 @@ void print_res(const char label[], basictype *M, basictype r, int size) {
 		std::cout << "[" << label << " ] res[" << i << "]=" << M[i] << "\n";
 	std::cout << "[" << label << " ] reduceVar = " << r << "\n";
 }
-//
-//void print_expected(int size) {
-//	basictype *in = new basictype[size], *M_out = new basictype[size];
-//	int *env = new int[size];
-//	init(in, M_out, env, size);
-//	basictype *tmp = in;
-//	in = M_out;
-//	M_out = tmp;
-//	basictype red = 0;
-//	for (unsigned int k = 0; k < niters; ++k) {
-//		basictype *tmp = in;
-//		in = M_out;
-//		M_out = tmp;
-//		for (int i = 0; i < size; ++i)
-//			M_out[i] = mapf_(in, i, env, NULL);
-//		//reduce
-//		red = 0;
-//		for (int i = 0; i < size; ++i)
-//			red = reducef_(red, M_out[i]);
-//		std::stringstream l;
-//		l << "EXPECTED_" << k;
-//		//print_res(l.str().c_str(), M_out, size);
-//	}
-//	print_res("EXPECTED", M_out, red, size);
-//	delete[] in;
-//	delete[] M_out;
-//	delete[] env;
-//}
 
 unsigned int check(basictype *M, basictype r, int size) {
 	unsigned int ndiff = 0;
@@ -174,49 +146,10 @@ struct oclTask: public baseOCLTask<oclTask, basictype, int> {
 	int *env;
 };
 
-//class Emitter: public ff_node {
-//public:
-//	Emitter(int size_) :
-//			n(0), size(size_) {
-//		for (int i = 0; i < STREAMLEN; ++i) {
-//			basictype *M_in = new basictype[size], *M_out = new basictype[size];
-//			int *env = new int[size];
-//			init(M_in, M_out, env, size);
-//			tasks[i] = new oclTask(M_in, M_out, env, size);
-//		}
-//	}
-//
-//	~Emitter() {
-//		for (int i = 0; i < STREAMLEN; ++i) {
-//			delete tasks[i];
-//		}
-//	}
-//
-//	virtual void *svc(void *task) {
-//		if (n < STREAMLEN)
-//			return tasks[n++];
-//		return EOS;
-//	}
-//
-//private:
-//	int n, size;
-//	oclTask *tasks[STREAMLEN];
-//};
-//
-//class Printer: public ff_node {
-//public:
-//	void *svc(void *task) {
-//		oclTask *t = (oclTask *) task;
-//		int size = t->size;
-//		print_res("streaming", t->M_out, /*t->reduceVar*/0, size);
-//		return task;
-//	}
-//};
-
 int main(int argc, char * argv[]) {
 	//one-shot
 	int size = SIZE;
-	int nacc = NACCELERATORS;
+	int nacc = NACC;
 	niters = NITERS;
 	if (argc > 1) {
 		if (argc == 2) {
@@ -243,20 +176,8 @@ int main(int argc, char * argv[]) {
 			reducef, 0, nullptr, nacc, WINWIDTH);
 	SET_DEVICE_TYPE(oclStencilReduceOneShot);
 	oclStencilReduceOneShot.run_and_wait_end();
-	//print_res("INPUT", M_in, size);
-	//print_res("oneshot", M_out, oclStencilReduceOneShot.getReduceVar(), size);
-	//printf("reduceVar=%.2f\n", oclt.getReduceVar());
 
-	//stream
-	//	Emitter e(size);
-	//	ff_pipeline pipe;
-	//	pipe.add_stage(&e);
-	//	pipe.add_stage(new ff_stencilReduceOCL_1D<oclTask>(mapf, reducef, 0, nacc, 1));
-	//	Printer p;
-	//	pipe.add_stage(&p);
-	//	pipe.run_and_wait_end();
 
-	//print_expected(size);
 #ifdef CHECK
 	if (check(M_out, oclt.result, size)) {
 		printf("Error\n");
