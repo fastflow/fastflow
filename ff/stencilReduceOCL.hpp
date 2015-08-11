@@ -269,7 +269,7 @@ public:
 	}
 
 	//see comments for members
-    void adjustInputBufferOffset(std::pair<size_t, size_t> &P, size_t len_global) {
+    void adjustInputBufferOffset(const Tin *newPtr, const Tin *oldPtr, std::pair<size_t, size_t> &P, size_t len_global) {
         offset1_in = P.first;
         lenInput   = P.second;
         lenInput_global = len_global;
@@ -277,6 +277,8 @@ public:
         pad2_in = (std::min)(width, lenInput_global - lenInput - offset1_in);
 		sizeInput = lenInput * sizeof(Tin);
 		sizeInput_padded = sizeInput + (pad1_in + pad2_in) * sizeof(Tin);
+
+        if (oldPtr != NULL) allocator->updateKey(oldPtr, newPtr, context);
     }
 
 	void relocateInputBuffer(const Tin *inPtr, const bool reuseIn, const Tout *reducePtr) {
@@ -327,7 +329,7 @@ public:
         }
 	}
 
-    void adjustOutputBufferOffset(std::pair<size_t, size_t> &P, size_t len_global) {
+    void adjustOutputBufferOffset(const Tout *newPtr, const Tout *oldPtr, std::pair<size_t, size_t> &P, size_t len_global) {
         offset1_out = P.first;
 		lenOutput   = P.second;
 		lenOutput_global = len_global;
@@ -335,6 +337,8 @@ public:
 		pad2_out = (std::min)(width, lenOutput_global - lenOutput - offset1_out);
 		sizeOutput = lenOutput * sizeof(Tout);
 		sizeOutput_padded = sizeOutput + (pad1_out + pad2_out) * sizeof(Tout);
+
+        if (oldPtr != NULL) allocator->updateKey(oldPtr, newPtr, context);
     }
 
 	void relocateOutputBuffer(const Tout  *outPtr) {
@@ -797,7 +801,8 @@ public:
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(false), saveBinary(false), reuseBinary(false), 
         accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-        stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
+        stencil_width(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL), 
+        oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setcode(mapf, reducef);
         for(size_t i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width,identityVal);
@@ -830,7 +835,8 @@ public:
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(true), saveBinary(false), reuseBinary(false), 
         accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-        stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
+        stencil_width(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL), 
+        oldBytesizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
 		ff_node::skipfirstpop(true);
 		setcode(mapf, reducef);
 		Task.setTask(const_cast<T*>(&task));
@@ -848,7 +854,8 @@ public:
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(true), saveBinary(false), reuseBinary(false), 
         accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-        stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
+        stencil_width(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL), 
+        oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setsourcecode(kernels_source, mapf_name, reducef_name);
         Task.setTask(const_cast<T*>(&task));
         for(size_t i = 0; i< NACCELERATORS; ++i)
@@ -1089,8 +1096,8 @@ protected:
             Task.resetTask();
             Task.setTask(task);
         }
-		Tin   *inPtr = Task.getInPtr();
-		Tout  *outPtr = Task.getOutPtr();
+		Tin   *inPtr     = Task.getInPtr();
+		Tout  *outPtr    = Task.getOutPtr();
         Tout  *reducePtr = Task.getReduceVar();
         const size_t envSize = Task.getEnvNum(); //n. added environments
         
@@ -1099,7 +1106,7 @@ protected:
 			compute_accmem(Task.getSizeIn(),  acc_in);
 
             for (size_t i = 0; i < accelerators.size(); ++i) {
-                accelerators[i]->adjustInputBufferOffset(acc_in[i], Task.getSizeIn());
+                accelerators[i]->adjustInputBufferOffset(inPtr, old_inPtr, acc_in[i], Task.getSizeIn());
             }
 
             if (oldBytesizeIn < Task.getBytesizeIn()) {
@@ -1121,7 +1128,7 @@ protected:
                 compute_accmem(Task.getSizeOut(), acc_out);
 
                 for (size_t i = 0; i < accelerators.size(); ++i) {
-                    accelerators[i]->adjustOutputBufferOffset(acc_out[i], Task.getSizeOut());
+                    accelerators[i]->adjustOutputBufferOffset(outPtr, old_outPtr, acc_out[i], Task.getSizeOut());
                 }
                 
                 if (oldSizeOut < Task.getBytesizeOut()) {
@@ -1271,12 +1278,15 @@ protected:
             for (size_t i = 0; i < accelerators.size(); ++i) 
                 accelerators[i]->releaseInput(inPtr);
             oldBytesizeIn = 0;
-        }
+            old_inPtr = NULL;
+        } else old_inPtr = inPtr;
+
         if (Task.getReleaseOut()) {
             for (size_t i = 0; i < accelerators.size(); ++i) 
                 accelerators[i]->releaseOutput(outPtr);
             oldSizeOut = 0;
-        }
+            old_outPtr = NULL;
+        } else old_outPtr = outPtr;
 
         for(size_t k=0; k < envSize; ++k) {
             if (Task.getReleaseEnv(k)) {
@@ -1286,6 +1296,8 @@ protected:
                     accelerators[i]->releaseEnv(k,envptr);
                 }
             }
+
+            // TODO: management of oldEnvPtr !!
         }
 
 		return (oneshot ? NULL : task);
@@ -1393,7 +1405,8 @@ private:
     size_t forced_gpu;
     size_t forced_other;
     
-    
+    Tin   *old_inPtr;
+    Tout  *old_outPtr;
 	size_t oldBytesizeIn, oldSizeOut, oldSizeReduce;
 };
 
