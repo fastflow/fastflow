@@ -190,7 +190,18 @@ public:
 
     unsigned long getOCLID() {  return atomic_long_inc_return(&oclId); }
 
-        
+    /**
+     * allocate multiple GPU devices.
+     * Return a list of GPU devices, picked round-robin from the environment GPU list
+     *
+     * @param n is the number of GPU devices to be allocated
+     * @param preferred_dev TODO
+     * @param exclusive TODO
+     * @param identical TODO
+     * @return the vector of allocated GPU devices.
+     * If allocation request cannot be fulfilled,
+     * an empty vector is returned
+     */
     std::vector<ssize_t> coAllocateGPUDeviceRR(size_t n=1, ssize_t preferred_dev=-1, bool exclusive=false, bool identical=false) {
         cl_device_type dt;
         size_t count = n;
@@ -203,9 +214,9 @@ public:
                 //clDeviceInUse[lastAssigned]=true;
                 ret.push_back(dev);
                 --count;
-                char buf[128];
-                clGetDeviceInfo(clDevices[dev], CL_DEVICE_NAME, 128, buf, NULL);
-                //std::cerr << "clEnvironment: assigned GPU "<< dev << " " << buf << "\n";
+//                char buf[128];
+//                clGetDeviceInfo(clDevices[dev], CL_DEVICE_NAME, 128, buf, NULL);
+//                std::cerr << "clEnvironment: assigned GPU "<< dev << " " << buf << "\n";
                 ++dev;
                 dev%=clDevices.size();
                 if (count==0) break;
@@ -244,9 +255,9 @@ public:
             clGetDeviceInfo(clDevices[i], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
             if ((!clDeviceInUse[i] | !exclusive) && ((dt) & CL_DEVICE_TYPE_CPU)) {
                 clDeviceInUse[i]=true;
-                char buf[128];
-                clGetDeviceInfo(clDevices[i], CL_DEVICE_NAME, 128, buf, NULL);
-                std::cerr << "clEnvironment: assigned CPU "<< i << " " << buf << "\n";
+//                char buf[128];
+//                clGetDeviceInfo(clDevices[i], CL_DEVICE_NAME, 128, buf, NULL);
+//                std::cerr << "clEnvironment: assigned CPU "<< i << " " << buf << "\n";
                 ret=i;
                 break;
             }
