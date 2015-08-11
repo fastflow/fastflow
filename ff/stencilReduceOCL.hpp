@@ -1024,6 +1024,10 @@ public:
                                           kernel_name2, saveBinary, reuseBinary);
 			}
 		}
+        
+        for (size_t i = 0; i < devices.size(); ++i)
+            std::cerr << "Using " << clEnvironment::instance()->getDeviceInfo(devices[i]) << std::endl;
+
 		return 0;
 	}
     
