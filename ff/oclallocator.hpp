@@ -71,6 +71,16 @@ public:
         return createBuffer(key,ctx,flags,size,status);
     }
 
+    void updateKey(const void *oldkey, const void *newkey, cl_context ctx) {
+        assert(allocated.find(ctx) != allocated.end());
+        assert(allocated[ctx].find(oldkey) != allocated[ctx].end());
+        
+        cl_mem ptr = allocated[ctx][oldkey];
+        allocated[ctx][newkey] = ptr;
+        allocated[ctx].erase(oldkey);
+    }
+
+
     cl_int releaseBuffer(const void *key, cl_context ctx, cl_mem ptr) {
         assert(allocated.find(ctx) != allocated.end());
         assert(allocated[ctx].find(key) != allocated[ctx].end());
