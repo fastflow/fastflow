@@ -54,6 +54,7 @@ struct oclTask: public baseOCLTask<oclTask, float> {
         setInPtr(t->M, t->size);
         setReduceVar(&(t->result));
     }
+    float combinator(float const &x, float const &y) {return x+y;}
 
     float        *M;
     float         result;
