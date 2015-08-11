@@ -179,9 +179,12 @@ public:
    
     static inline clEnvironment * instance() {
         while (!m_clEnvironment) {
-            std::cerr << "clEnvironment instance\n";
+            //std::cerr << "clEnvironment instance\n";
             pthread_mutex_lock(&instanceMutex);
-            if (!m_clEnvironment) m_clEnvironment = new clEnvironment();
+            if (!m_clEnvironment) {
+                m_clEnvironment = new clEnvironment();
+                //std::cerr << "clEnvironment instance\n";
+            }
             assert(m_clEnvironment);
             pthread_mutex_unlock(&instanceMutex);
          }
@@ -294,6 +297,7 @@ public:
         std::vector<std::string> res;
         //fprintf(stdout, "%d\n", numDevices);
         for(size_t j = 0; j < clDevices.size(); j++) {
+            /*
             char buf[128];
             std::string s1, s2;
             clGetDeviceInfo(clDevices[j], CL_DEVICE_NAME, 128, buf, NULL);
@@ -308,7 +312,27 @@ public:
             std::stringstream s3;
             s3 << max_workgroup_size;
             res.push_back(s1+" "+s2 + "MAX Work Group size " + s3.str());
+            */
+            res.push_back(getDeviceInfo(clDevices[j]));
         }
+        return res;
+    }
+    
+    
+    std::string getDeviceInfo(cl_device_id dev) {
+        char buf[128];
+        std::string s1, s2;
+        clGetDeviceInfo(dev, CL_DEVICE_NAME, 128, buf, NULL);
+        s1 = std::string(buf);
+        clGetDeviceInfo(dev, CL_DEVICE_VERSION, 128, buf, NULL);
+        s2 = std::string(buf);
+        size_t max_workgroup_size = 0;
+        clGetDeviceInfo(dev, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t),
+                            &max_workgroup_size, NULL);
+        std::stringstream s3;
+        s3 << max_workgroup_size;
+        std::string res;
+        res = s1+" "+s2 + "Max-WorkGroup-size " + s3.str();
         return res;
     }
     
