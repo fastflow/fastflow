@@ -59,7 +59,7 @@ struct oclTask: public ff::baseOCLTask<oclTask, unsigned char> {
 		assert(t);
 		setInPtr(t->M_in, t->size);
 		setOutPtr(t->M_out, t->size);
-		setEnvPtr<unsigned long>(t->nrows_ptr, 1, true);
+		setEnvPtr(t->nrows_ptr, 1, true);
 		setReduceVar(&(t->someone));
 		niters = t->niters;
 	}

@@ -57,6 +57,14 @@ using namespace ff;
 #define DEFAULT_NVECTORS 2048
 #define DEFAULT_COMMAND "0:0:0"
 
+#if defined(BUILD_WITH_SOURCE)
+
+const std::string path_k1("cl_code/mixedpipe_k1.cl");
+const std::string path_k2("cl_code/mixedpipe_k2.cl");
+const std::string path_k3("cl_code/mixedpipe_k3.cl");
+
+#else 
+
 FF_OCL_STENCIL_ELEMFUNC1(map1f, float, useless, i, in, i_, int, k_,
                          (void)useless; const int k = *k_;
 
@@ -76,7 +84,12 @@ FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
 
                           return (x+y); 
                           );
+#endif
 
+
+/* This is the stream type. Each element of the stream is a Task.
+ *
+ */
 struct Task: public baseOCLTask<Task, float, float> {
     Task():sum(0.0),arraySize(0),k(0) {}
     Task(const size_t size, size_t k):A(size),sum(0.0),arraySize(size), k(k) {}
@@ -120,7 +133,13 @@ struct Task: public baseOCLTask<Task, float, float> {
 
 };
 
-/* Kernel class, it selects the device on which to run the kernel code.
+/* 
+ * Kernel class, it dynamically selects the logical device where the kernel has to be executed.
+ *  0 is the first logical device, in this test the C++ Map (based on the parallel_for)
+ *  1 is the second logical device, in this test the OpenCL Map 
+ *
+ * The OpenCL Map can be executed either on the CPUs or on the GPU (if any) depending on the 
+ * SET_DEVICE_TYPE setting.
  *
  *
  */
@@ -174,12 +193,14 @@ struct Kernel: ff_nodeSelector<Task> {
         return EOS;
     }
     
+    // ---------  configuration value ----------
     const size_t      kernelId;
     const std::string command;
     const size_t      NVECTORS;
     const size_t      arraySize;
 
-    // these are not part of the stream, they are data needed to compute the kernel (kernel2 and kernel3)
+    // these are not part of the stream, they are data needed to compute the kernel 
+    // (both kernel2 and kernel3)
     std::vector<float> *C;
     std::vector<float> *R;
 };
@@ -234,14 +255,13 @@ struct Map_kernel3: ff_Map<Task,Task,float> {
 /* ------------------------------------------------------------ */
 
 int main(int argc, char * argv[]) {
-    //if (argc < 4) {
-        std::cerr << "use: " << argv[0]  << " size nvectors command-string\n";
-        std::cerr << " command-string (example) : \"0:1:0\"\n";
-        std::cerr << "    first kernel on device  0\n";
-        std::cerr << "    second kernel on device 1\n";
-        std::cerr << "    third kernel on device  0\n";
-        //return -1;
-    //}
+
+    std::cerr << "use: " << argv[0]  << " size nvectors command-string\n";
+    std::cerr << " command-string (example) : \"0:1:0\"\n";
+    std::cerr << "    first kernel on device  0\n";
+    std::cerr << "    second kernel on device 1\n";
+    std::cerr << "    third kernel on device  0\n";
+
     size_t arraySize = DEFAULT_ARRAYSIZE;
     size_t NVECTORS = DEFAULT_NVECTORS;
     std::string command(DEFAULT_COMMAND);
@@ -271,9 +291,22 @@ int main(int argc, char * argv[]) {
     Map_kernel3 map3;
 
     // GPU map and map-reduce
-    ff_mapOCL_1D<Task>       oclmap1(map1f, nullptr, NACC);             SET_DEVICE_TYPE(oclmap1);
-    ff_mapReduceOCL_1D<Task> oclmap2(map2f,reducef,0.0,nullptr,NACC);   SET_DEVICE_TYPE(oclmap2);
-    ff_mapOCL_1D<Task>       oclmap3(map3f, nullptr, NACC);             SET_DEVICE_TYPE(oclmap3);
+#if defined(BUILD_WITH_SOURCE)
+    ff_mapOCL_1D<Task>       oclmap1(path_k1, "map1f", nullptr, NACC);             
+    ff_mapReduceOCL_1D<Task> oclmap2(path_k2, "map2f", "reducef",0.0,nullptr,NACC);   
+    ff_mapOCL_1D<Task>       oclmap3(path_k3, "map3f", nullptr, NACC);     
+    oclmap1.saveBinaryFile(); oclmap1.reuseBinaryFile();
+    oclmap2.saveBinaryFile(); oclmap2.reuseBinaryFile();
+    oclmap3.saveBinaryFile(); oclmap3.reuseBinaryFile();    
+#else
+    ff_mapOCL_1D<Task>       oclmap1(map1f, nullptr, NACC);             
+    ff_mapReduceOCL_1D<Task> oclmap2(map2f,reducef,0.0,nullptr,NACC);   
+    ff_mapOCL_1D<Task>       oclmap3(map3f, nullptr, NACC);             
+#endif
+
+    SET_DEVICE_TYPE(oclmap1);
+    SET_DEVICE_TYPE(oclmap2);
+    SET_DEVICE_TYPE(oclmap3);
     
     Kernel k1(1,command, NVECTORS,arraySize, C, R);
     Kernel k2(2,command, NVECTORS,arraySize, C, R);
