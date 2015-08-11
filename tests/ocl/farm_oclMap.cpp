@@ -40,9 +40,9 @@
 #define CHECK 1
 #ifdef CHECK
 #include "ctest.h"
+#else
+#define NACC 1
 #endif
-
-const int NDEV = 1;
 
 using namespace ff;
 
@@ -115,8 +115,8 @@ struct Collector: ff_node_t<myTask> {
 };
 
 struct Worker: ff_mapOCL_1D<myTask, oclTask> {
-	Worker(std::string mapf, const size_t NACCELERATORS) :
-			ff_mapOCL_1D<myTask, oclTask>(mapf, nullptr, NACCELERATORS) {
+	Worker(std::string mapf, const size_t nacc) :
+			ff_mapOCL_1D<myTask, oclTask>(mapf, nullptr, nacc) {
 		SET_DEVICE_TYPE((*this));
 	}
 };
@@ -140,7 +140,7 @@ int main(int argc, char * argv[]) {
     }
     
     std::vector<std::unique_ptr<ff_node> > W;
-    for(int i=0;i<nworkers;++i)  W.push_back(make_unique<Worker>(mapf,NDEV));
+    for(int i=0;i<nworkers;++i)  W.push_back(make_unique<Worker>(mapf,NACC));
     Emitter   E(streamlen,inputsize);
     Collector C;
     ff_Farm<> farm(std::move(W), E, C);

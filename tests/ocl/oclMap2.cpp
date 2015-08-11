@@ -73,7 +73,7 @@ int main(int argc, char * argv[]) {
 #endif
 
     oclTask oclt(M, size);
-    ff_mapOCL_1D<oclTask> oclMap(oclt, "cl_code/oclMap.cl","mapf");
+    ff_mapOCL_1D<oclTask> oclMap(oclt, "cl_code/oclMap.cl","mapf",nullptr,NACC);
     SET_DEVICE_TYPE(oclMap);
 
     oclMap.saveBinaryFile(); // save the compiled version in cl_code/oclMap.cl.bin

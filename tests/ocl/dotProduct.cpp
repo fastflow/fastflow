@@ -38,6 +38,8 @@
 
 #ifdef CHECK
 #include "ctest.h"
+#else
+#define NACC 1
 #endif
 
 #include <ff/stencilReduceOCL.hpp>
@@ -91,7 +93,7 @@ int main(int argc, char * argv[]) {
     }
 #endif
     oclTask oclt(M, size);
-    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0.0);
+    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0, nullptr, NACC);
     SET_DEVICE_TYPE(oclMR);
     oclMR.run_and_wait_end();
 
