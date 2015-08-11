@@ -41,6 +41,8 @@ using namespace ff;
 #define CHECK 1
 #ifdef CHECK
 #include "ctest.h"
+#else
+#define NACC 1
 #endif
 
 FF_OCL_MAP_ELEMFUNC(mapf, float, elem,
@@ -119,7 +121,7 @@ public:
 };
 
 struct oclMap: ff_mapOCL_1D<myTask, oclTask> {
-    oclMap(const std::string &mapf):ff_mapOCL_1D<myTask, oclTask>(mapf) {
+    oclMap(const std::string &mapf):ff_mapOCL_1D<myTask, oclTask>(mapf, nullptr, NACC) {
         SET_DEVICE_TYPE((*this));
     }
 };

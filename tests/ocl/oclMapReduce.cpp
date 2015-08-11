@@ -38,9 +38,9 @@ using namespace ff;
 #define CHECK 1
 #ifdef CHECK
 #include "ctest.h"
+#else
+#define NACC 1
 #endif
-
-const int NDEV=1;
 
 FF_OCL_MAP_ELEMFUNC(mapf, float, elem, 
           return (elem+1.0);
@@ -81,7 +81,7 @@ int main(int argc, char * argv[]) {
 #endif
 
     oclTask oclt(M, size);
-    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0, nullptr, NDEV);
+    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0, nullptr, NACC);
     SET_DEVICE_TYPE(oclMR);
     oclMR.run_and_wait_end();
 

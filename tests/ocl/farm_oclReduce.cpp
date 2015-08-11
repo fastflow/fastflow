@@ -39,6 +39,8 @@
 #define CHECK 1
 #ifdef CHECK
 #include "ctest.h"
+#else
+#define NACC 1
 #endif
 
 using namespace ff;
@@ -114,7 +116,7 @@ struct Collector: public ff_node_t<myTask> {
 
 struct Worker: ff_reduceOCL_1D<myTask, oclTask> {
 	Worker(std::string reducef) :
-			ff_reduceOCL_1D<myTask, oclTask>(reducef) {
+			ff_reduceOCL_1D<myTask, oclTask>(reducef, 0.0, nullptr, NACC) {
 		SET_DEVICE_TYPE((*this));
 	}
 };

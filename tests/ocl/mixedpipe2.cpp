@@ -54,6 +54,8 @@ using namespace ff;
 #define CHECK 1
 #ifdef CHECK
 #include "ctest.h"
+#else
+#define NACC 1
 #endif
 
 #define DEFAULT_ARRAYSIZE 1024
@@ -278,9 +280,9 @@ int main(int argc, char * argv[]) {
     ff_oclallocator allocator;
 
     // GPU map and map-reduce
-    ff_mapOCL_1D<Task>       oclmap1(map1f,&allocator);             SET_DEVICE_TYPE(oclmap1);
-    ff_mapReduceOCL_1D<Task> oclmap2(map2f,reducef,0.0,&allocator); SET_DEVICE_TYPE(oclmap2);
-    ff_mapOCL_1D<Task>       oclmap3(map3f,&allocator);             SET_DEVICE_TYPE(oclmap3);
+    ff_mapOCL_1D<Task>       oclmap1(map1f,&allocator,NACC);             SET_DEVICE_TYPE(oclmap1);
+    ff_mapReduceOCL_1D<Task> oclmap2(map2f,reducef,0.0,&allocator,NACC); SET_DEVICE_TYPE(oclmap2);
+    ff_mapOCL_1D<Task>       oclmap3(map3f,&allocator,NACC);             SET_DEVICE_TYPE(oclmap3);
     
     Kernel k1(1,command, NVECTORS,arraySize, C, R);
     Kernel k2(2,command, NVECTORS,arraySize, C, R);
