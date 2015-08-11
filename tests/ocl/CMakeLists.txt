@@ -10,9 +10,7 @@ include_directories( ${OPENCL_INCLUDE_DIRS} )
 
 
 set( TESTS                               
-dotProduct dotProd_cpugpu farm_oclMap farm_oclReduce oclMap oclMap2 oclMapReduce oclReduce
-oclStencilReduceLoop pipeFarmMap device_selection device_selection2
-mixedpipe mixedpipe2
+oclStencilReduceLoop oclMap oclMap2 oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct device_selection dotProd_cpugpu device_selection2 mixedpipe mixedpipe2
 )
 
 
@@ -53,6 +51,8 @@ foreach( t ${TESTS} )
     add_test( ${t} ${CMAKE_CURRENT_BINARY_DIR}/${t} )
 endforeach( t )
 
+
+add_subdirectory( gameoflife )
 
 
 
