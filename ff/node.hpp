@@ -69,11 +69,14 @@ enum fftype {
      * It initializes thread affinity i.e. which cpu the thread should be
      * assigned.
      *
+     * \note Linux-specific code
+     *
      * \param attr is the pthread attribute
      * \param cpuID is the identifier the core
      * \return -2  if error, the cpu identifier if successful
      */
 static inline int init_thread_affinity(pthread_attr_t*attr, int cpuId) {
+    // This is linux-specific code
     cpu_set_t cpuset;    
     CPU_ZERO(&cpuset);
 
@@ -103,7 +106,7 @@ static inline int init_thread_affinity(pthread_attr_t*attr, int cpuId) {
  * \return always return -1 because no thread mapping is done
  */
 static inline int init_thread_affinity(pthread_attr_t*,int) {
-    // Just ensure that the threadMapper constructor is called.
+    // Ensure that the threadMapper constructor is called
     threadMapper::instance();
     return -1;
 }
@@ -117,7 +120,7 @@ static inline int init_thread_affinity(pthread_attr_t*,int) {
  * \return always return -1 because no thread mapping is done
  */
 static inline int init_thread_affinity(pthread_attr_t*,int) {
-    // do nothing
+    // Do nothing
     return -1;
 }
 #endif /* HAVE_PTHREAD_SETAFFINITY_NP */
@@ -1115,7 +1118,7 @@ private:
         
         int svc_init() {
 #if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
-            int cpuId = filter->getCPUId();  
+            int cpuId = filter->getCPUId();
             if (ff_mapThreadToCpu((cpuId<0) ? (cpuId=threadMapper::instance()->getCoreId(tid)) : cpuId)!=0)
                 error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());            
             filter->setCPUId(cpuId);

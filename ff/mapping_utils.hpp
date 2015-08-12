@@ -141,9 +141,11 @@ static inline ssize_t ff_numCores() {
     if (fscanf(f, "%ld", &n) == EOF) { pclose(f); return n;}
     pclose(f);
 #elif defined(__APPLE__) // BSD
-    size_t len = 4;
-    if (sysctlbyname("hw.ncpu", &n, &len, NULL, 0) == -1)
+    int nn;
+    size_t len = sizeof(nn);
+    if (sysctlbyname("hw.logicalcpu", &nn, &len, NULL, 0) == -1)
         perror("sysctl");
+    n = nn;
 #elif defined(_WIN32)
     SYSTEM_INFO sysinfo;
     GetSystemInfo( &sysinfo );
@@ -382,7 +384,6 @@ static inline ssize_t ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
       // }
       }
    }
-
     return(ff_setPriority(priority_level));
 #elif defined(_WIN32)
     if (-1==SetThreadIdealProcessor(GetCurrentThread(),cpu_id)) {
