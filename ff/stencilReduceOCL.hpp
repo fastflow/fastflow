@@ -204,7 +204,7 @@ public:
 
 	ff_oclAccelerator(ff_oclallocator *alloc, const size_t width_, const Tout &identityVal, const bool from_source=false) :
         from_source(from_source), my_own_allocator(false), allocator(alloc), width(width_), identityVal(identityVal), events_h2d(16), deviceId(NULL) {
-		workgroup_size_map = workgroup_size_reduce = 0;
+		wgsize_map_static = wgsize_reduce_static = 0;
 		inputBuffer = outputBuffer = reduceBuffer = NULL;
 
 		sizeInput = sizeInput_padded = 0;
@@ -215,8 +215,8 @@ public:
 
 		nevents_h2d = nevents_map = 0;
 		event_d2h = event_map = event_reduce1 = event_reduce2 = NULL;
-		localThreadsMap = globalThreadsMap = 0;
-		localThreadsReduce = globalThreadsReduce = numBlocksReduce = blockMemSize = 0;
+		wgsize_map = nthreads_map = 0;
+		wgsize_reduce = nthreads_reduce = nwg_reduce = wg_red_mem = 0;
 		reduceVar = identityVal;
 		kernel_map = kernel_reduce = kernel_init = NULL;
 		context = NULL;
@@ -284,9 +284,6 @@ public:
 	void relocateInputBuffer(const Tin *inPtr, const bool reuseIn, const Tout *reducePtr) {
 		cl_int status;
 
-        // MA patch - map not defined => workgroup_size_map
-        size_t workgroup_size = workgroup_size_map==0?workgroup_size_reduce:workgroup_size_map;
-                
         if (reuseIn) {
             inputBuffer = allocator->createBufferUnique(inPtr, context,
                                                        CL_MEM_READ_WRITE, sizeInput_padded, &status);
@@ -299,34 +296,42 @@ public:
             checkResult(status, "CreateBuffer input");
         }
 
+        // MA patch - map not defined => workgroup_size_map
+        size_t wgsize = wgsize_map_static==0?wgsize_reduce_static:wgsize_map_static;
 
-		if (lenInput < workgroup_size) {
-			localThreadsMap = lenInput;
-			globalThreadsMap = lenInput;
+		if (lenInput < wgsize) { //input fits into a single workgroup
+			wgsize_map = nthreads_map = lenInput;
 		} else {
-			localThreadsMap = workgroup_size;
-			globalThreadsMap = nextMultipleOfIf(lenInput, workgroup_size);
+			wgsize_map = wgsize;
+			//nthreads_map = nextMultipleOfIf(lenInput, wgsize);
+			nthreads_map = wgsize_map * ((lenInput + wgsize_map - 1) / wgsize_map); //round up
 		}
 
         if (reducePtr) {
             // 64 and 256 are the max number of blocks and threads we want to use
-            //std::cerr << "Reduce inlen " << lenInput;
-            getBlocksAndThreads(lenInput, 64, 256, numBlocksReduce, localThreadsReduce);
-            globalThreadsReduce = numBlocksReduce * localThreadsReduce;
-            //std::cerr << "numBlocksReduce " << numBlocksReduce << " localThreadsReduce " << localThreadsReduce << "\n";
+            getBlocksAndThreads(lenInput, 64, 256, nwg_reduce, wgsize_reduce);
+            nthreads_reduce = nwg_reduce * wgsize_reduce;
             
-            blockMemSize =
-				(localThreadsReduce <= 32) ?
-                (2 * localThreadsReduce * sizeof(Tin)) :
-                (localThreadsReduce * sizeof(Tin));
+            //compute size of per-workgroup working memory
+            wg_red_mem = (wgsize_reduce * sizeof(Tin))
+					+ (wgsize_reduce <= 32) * (wgsize_reduce * sizeof(Tin));
 
-            //std::cerr << "blockMemSize " << blockMemSize << "\n";
-            
+            //compute size of global reduce working memory
+            size_t global_red_mem = nwg_reduce * sizeof(Tin);
+
+            //allocate global memory for storing intermediate per-workgroup reduce results
             if (reduceBuffer) allocator->releaseBuffer(reducePtr, context, reduceBuffer);            
             reduceBuffer = allocator->createBuffer(reducePtr, context, 
-                                                   CL_MEM_READ_WRITE, numBlocksReduce * sizeof(Tin), &status);
+                                                   CL_MEM_READ_WRITE, global_red_mem, &status);
             checkResult(status, "CreateBuffer reduce");
         }
+		std::cerr <<  "+ computed kernel sizing parameters:\n";
+		std::cerr <<  "- MAP workgroup-size = " <<wgsize_map<< "\n";
+		std::cerr <<  "- MAP n. threads     = " <<nthreads_map<< " \n";
+		std::cerr <<  "- RED workgroup-size = " <<wgsize_reduce<< " \n";
+		std::cerr <<  "- RED n. threads     = " <<nthreads_reduce<< " \n";
+		std::cerr <<  "- RED n. workgroups  = " <<nwg_reduce<< " \n";
+		std::cerr <<  "- RED per-wg memory  = " <<wg_red_mem<< " \n";
 	}
 
     void adjustOutputBufferOffset(const Tout *newPtr, const Tout *oldPtr, std::pair<size_t, size_t> &P, size_t len_global) {
@@ -485,7 +490,7 @@ public:
 		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(uint), &pad1_in);
 		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_mem), &reduceBuffer);
 		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_uint),	(void *) &lenInput);
-		status        |= clSetKernelArg(kernel_reduce, idx++, blockMemSize, NULL);
+		status        |= clSetKernelArg(kernel_reduce, idx++, wg_red_mem, NULL);
         status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(Tout), (void *) &identityVal);  
 		checkResult(status, "setKernelArg reduce-1");
 	}
@@ -493,7 +498,7 @@ public:
 	void asyncExecMapKernel() {
 		//execute MAP kernel
 		cl_int status = clEnqueueNDRangeKernel(cmd_queue, kernel_map, 1, NULL,
-                                               &globalThreadsMap, &localThreadsMap, 0, NULL, &event_map);
+                                               &nthreads_map, &wgsize_map, 0, NULL, &event_map);
 		checkResult(status, "executing map kernel");
         //std::cerr << "Exec map WI " << globalThreadsMap << " localThreadsMap " << localThreadsMap << "\n";
 		++nevents_map;
@@ -502,7 +507,7 @@ public:
 	void asyncExecReduceKernel1() {
         //std::cerr << "Exec reduce1 WI " << globalThreadsReduce << " localThreadsReduce " << localThreadsReduce <<  "\n";
 		cl_int status = clEnqueueNDRangeKernel(cmd_queue, kernel_reduce, 1, NULL,
-                                               &globalThreadsReduce, &localThreadsReduce, nevents_map,
+                                               &nthreads_reduce, &wgsize_reduce, nevents_map,
                                                (nevents_map==0)?NULL:&event_map,
                                                &event_reduce1);
 		checkResult(status, "exec kernel reduce-1");
@@ -515,13 +520,13 @@ public:
 		cl_int status  = clSetKernelArg(kernel_reduce, idx++, sizeof(cl_mem), &reduceBuffer);
 		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(uint), &zeropad);
 		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_mem), &reduceBuffer);
-		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_uint),(void*) &numBlocksReduce);
-		status        |= clSetKernelArg(kernel_reduce, idx++, blockMemSize, NULL);
+		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_uint),(void*) &nwg_reduce);
+		status        |= clSetKernelArg(kernel_reduce, idx++, wg_red_mem, NULL);
 		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(Tout), (void *) &identityVal);
 		checkResult(status, "setKernelArg reduce-2");
         //std::cerr << "Exec reduce2 WI " << globalThreadsReduce << " localThreadsReduce " << localThreadsReduce <<  "\n";
 		status = clEnqueueNDRangeKernel(cmd_queue, kernel_reduce, 1, NULL,
-                                        &localThreadsReduce, &localThreadsReduce, 1, &event_reduce1,
+                                        &wgsize_reduce, &wgsize_reduce, 1, &event_reduce1,
                                         &event_reduce2);
 		checkResult(status, "exec kernel reduce-2");
 	}
@@ -684,22 +689,24 @@ private:
 		if (kernel_name1 != "") {
 			kernel_map = clCreateKernel(program, kernel_name1.c_str(), &status);
 			checkResult(status, "CreateKernel (map)");
-			status = clGetKernelWorkGroupInfo(kernel_map, dId,
-                                              CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_map, 0);
-			checkResult(status, "GetKernelWorkGroupInfo (map)");
-            //std::cerr << "GetKernelWorkGroupInfo (map) " << workgroup_size_map << "\n";
 		}
-
 		if (kernel_name2 != "") {
 			kernel_reduce = clCreateKernel(program, kernel_name2.c_str(), &status);
 			checkResult(status, "CreateKernel (reduce)");
-			status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
-			CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_reduce, 0);
-			checkResult(status, "GetKernelWorkGroupInfo (reduce)");
-            //std::cerr << "GetKernelWorkGroupInfo (reduce) " << workgroup_size_reduce << "\n";
 		}
 
-        return 0;
+		//use CL-runtime static estimation of best workgroup size
+		status = clGetKernelWorkGroupInfo(kernel_map, dId,
+		CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &wgsize_map_static, 0);
+		checkResult(status, "GetKernelWorkGroupInfo (map)");
+		std::cerr << "GetKernelWorkGroupInfo (map) " << wgsize_map_static
+				<< "\n";
+		status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
+		CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &wgsize_reduce_static, 0);
+		checkResult(status, "GetKernelWorkGroupInfo (reduce)");
+		std::cerr << "GetKernelWorkGroupInfo (reduce) " << wgsize_reduce_static
+				<< "\n";
+		return 0;
 	}
 
 	void svc_releaseOclObjects() {
@@ -764,16 +771,24 @@ private:
 	size_t sizeOutput, sizeOutput_padded;
 	size_t lenOutput, offset1_out, pad1_out, pad2_out, lenOutput_global;
 
+	//static input-independent estimation of workgroup sizing
+	size_t wgsize_map_static, wgsize_reduce_static;
+	//input-dependent workgroup sizing
+	size_t wgsize_map, wgsize_reduce;
+	//input-dependent number of threads
+	size_t nthreads_map, nthreads_reduce;
+	//number of workgroups executing first on-device reduce
+	size_t nwg_reduce;
+	//reduce workgroup-local memory
+	size_t wg_red_mem;
 
-	size_t workgroup_size_map, workgroup_size_reduce;
+	//OCL events
+	std::vector<cl_event> events_h2d;
 	size_t nevents_h2d, nevents_map;
-	size_t localThreadsMap, globalThreadsMap;
-	size_t localThreadsReduce, globalThreadsReduce, numBlocksReduce, blockMemSize;
 	cl_event event_d2h, event_map, event_reduce1, event_reduce2;
 
-    std::vector<cl_event> events_h2d;
-
-    cl_device_id deviceId; 
+	//the OCL Id the accelerator is mapped to
+	cl_device_id deviceId;
 };
 
 
