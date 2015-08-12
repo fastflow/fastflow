@@ -308,9 +308,6 @@ public:
 			nthreads_map = wgsize_map * ((lenInput + wgsize_map - 1) / wgsize_map); //round up
 		}
         
-        //std::cerr << "globalThreadsMap " << globalThreadsMap << " localThreadsMap " << localThreadsMap << "\n";
-        
-
         if (reducePtr) {
             // 64 and 256 are the max number of blocks and threads we want to use
             getBlocksAndThreads(lenInput, 64, 256, nwg_reduce, wgsize_reduce);
@@ -329,6 +326,7 @@ public:
                                                    CL_MEM_READ_WRITE, global_red_mem, &status);
             checkResult(status, "CreateBuffer reduce");
         }
+#if 0
 		std::cerr <<  "+ computed kernel sizing parameters:\n";
 		std::cerr <<  "- MAP workgroup-size = " <<wgsize_map<< "\n";
 		std::cerr <<  "- MAP n. threads     = " <<nthreads_map<< " \n";
@@ -336,6 +334,7 @@ public:
 		std::cerr <<  "- RED n. threads     = " <<nthreads_reduce<< " \n";
 		std::cerr <<  "- RED n. workgroups  = " <<nwg_reduce<< " \n";
 		std::cerr <<  "- RED per-wg memory  = " <<wg_red_mem<< " \n";
+#endif
 	}
 
     void adjustOutputBufferOffset(const Tout *newPtr, const Tout *oldPtr, std::pair<size_t, size_t> &P, size_t len_global) {
@@ -606,8 +605,9 @@ private:
     // create the program with the binary file or from the source code
 	int createProgram(const std::string &filepath, cl_device_id dId, const bool save_binary, const bool reuse_binary) {
         cl_int status, binaryStatus;
+        bool binary = false;
         const std::string binpath = filepath + ".bin";
-
+        
         std::ifstream ifs;
         if (reuse_binary) {
             ifs.open(binpath, std::ios::binary );
@@ -617,7 +617,7 @@ private:
                     error("createProgram: cannot open %s (nor %s)\n", filepath.c_str(), binpath.c_str());
                     return -1;
                 }
-            }
+            } else binary = true;
         } else {
             ifs.open(filepath, std::ios::binary);
             if (!ifs.is_open()) {
@@ -630,10 +630,13 @@ private:
         ifs.close();
         size_t bufsize      = buf.size();
         const char *bufptr  = buf.data();
-        program = clCreateProgramWithBinary(context, 1, &dId, &bufsize,
-                                            reinterpret_cast<const unsigned char **>(&bufptr),
-                                            &binaryStatus, &status);
-        
+
+        status = CL_INVALID_BINARY;
+        if (binary) {
+            program = clCreateProgramWithBinary(context, 1, &dId, &bufsize,
+                                                reinterpret_cast<const unsigned char **>(&bufptr),
+                                                &binaryStatus, &status);
+        }        
         if (status != CL_SUCCESS) { // maybe is not a binary file
             program = clCreateProgramWithSource(context, 1,&bufptr, &bufsize, &status);
             if (!program) {
@@ -1165,15 +1168,18 @@ protected:
 		if (oldBytesizeIn != Task.getBytesizeIn()) {
 			compute_accmem(Task.getSizeIn(),  acc_in);
 
+            const bool memorychange = (oldBytesizeIn < Task.getBytesizeIn());
+
             for (size_t i = 0; i < accelerators.size(); ++i) {
-                accelerators[i]->adjustInputBufferOffset(inPtr, old_inPtr, acc_in[i], Task.getSizeIn());
+                accelerators[i]->adjustInputBufferOffset(inPtr, (memorychange?old_inPtr:NULL), acc_in[i], Task.getSizeIn());
             }
 
-            if (oldBytesizeIn < Task.getBytesizeIn()) {
+            if (memorychange) {
                 for (size_t i = 0; i < accelerators.size(); ++i) {
                     accelerators[i]->relocateInputBuffer(inPtr, Task.getReuseIn(), reducePtr);
                 }
                 oldBytesizeIn = Task.getBytesizeIn();
+                old_inPtr = inPtr;
             }            
 		}
 
@@ -1187,15 +1193,18 @@ protected:
             } else {
                 compute_accmem(Task.getSizeOut(), acc_out);
 
+                const bool memorychange = (oldSizeOut < Task.getBytesizeOut());
+
                 for (size_t i = 0; i < accelerators.size(); ++i) {
-                    accelerators[i]->adjustOutputBufferOffset(outPtr, old_outPtr, acc_out[i], Task.getSizeOut());
+                    accelerators[i]->adjustOutputBufferOffset(outPtr, (memorychange?old_outPtr:NULL), acc_out[i], Task.getSizeOut());
                 }
                 
-                if (oldSizeOut < Task.getBytesizeOut()) {
+                if (memorychange) {
                     for (size_t i = 0; i < accelerators.size(); ++i) {
                         accelerators[i]->relocateOutputBuffer(outPtr); 
                     }
                     oldSizeOut = Task.getBytesizeOut();
+                    old_outPtr = outPtr;
                 }
             }
         }
@@ -1339,14 +1348,13 @@ protected:
                 accelerators[i]->releaseInput(inPtr);
             oldBytesizeIn = 0;
             old_inPtr = NULL;
-        } else old_inPtr = inPtr;
-
+        }
         if (Task.getReleaseOut()) {
             for (size_t i = 0; i < accelerators.size(); ++i) 
                 accelerators[i]->releaseOutput(outPtr);
             oldSizeOut = 0;
             old_outPtr = NULL;
-        } else old_outPtr = outPtr;
+        }
 
         for(size_t k=0; k < envSize; ++k) {
             if (Task.getReleaseEnv(k)) {
@@ -1358,6 +1366,7 @@ protected:
             }
 
             // TODO: management of oldEnvPtr !!
+            // currently the size of the envbuffer should be always the same !
         }
 
 		return (oneshot ? NULL : task);
