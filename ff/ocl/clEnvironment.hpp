@@ -215,7 +215,7 @@ public:
         size_t dev = (preferred_dev>=0)? (preferred_dev%clDevices.size()): lastAssigned;
         //perform multiple passes over the device list,
         //stop if no allocation happens in one pass
-        ssize_t count_pre = count;
+        size_t count_pre = count;
         while (true) {
 			count_pre = count;
 			for (size_t i = 0; i < clDevices.size(); i++) {
