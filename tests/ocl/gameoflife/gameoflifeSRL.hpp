@@ -25,16 +25,16 @@
  * 'env2' is (a pointer to) the constant environment value
  * 'code' is the OpenCL code of the elemental function
  */
-FF_OCL_STENCIL_ELEMFUNC1(mapf,unsigned char,length,idx,in,idx_,unsigned long,env1,
-		unsigned long w = *env1;
-		unsigned long r = idx / w;
-		unsigned long c = idx % w;
+FF_OCL_STENCIL_ELEMFUNC1(mapf,unsigned char,length,idx,in,idx_,unsigned int,env1,
+		unsigned int w = *env1;
+		unsigned int r = idx / w;
+		unsigned int c = idx % w;
 		unsigned char alive_in = in[idx_];
 		unsigned char naliven = 0;
-        unsigned long rr = (r>0)?1:0;
-        unsigned long cc = (c>0)?1:0;
-        unsigned long cw = (c < w-1)?1:0;
-        unsigned long rw = (r < w-1)?1:0;
+        unsigned int rr = (r>0)?1:0;
+        unsigned int cc = (c>0)?1:0;
+        unsigned int cw = (c < w-1)?1:0;
+        unsigned int rw = (r < w-1)?1:0;
 		naliven += rr*cc*in[idx_ - w - 1];
 		naliven += rr*in[idx_ - w]; //top-center
 		naliven += r>0 && c < w-1 ? in[idx_ - w + 1] : 0; //top-right
@@ -52,10 +52,10 @@ FF_OCL_STENCIL_COMBINATOR(reducef, unsigned char, x, y,
 
 struct oclTask: public ff::baseOCLTask<oclTask, unsigned char> {
 	oclTask() :
-			M_in(NULL), M_out(NULL), size(0), niters(0), someone(0), nrows_ptr(new unsigned long(0)) {
+			M_in(NULL), M_out(NULL), size(0), niters(0), someone(0), nrows_ptr(new unsigned int(0)) {
 	}
-	oclTask(unsigned char *M_in_, unsigned char *M_out_, unsigned long size_, unsigned int niters_, unsigned long nrows) :
-			M_in(M_in_), M_out(M_out_), size(size_), niters(niters_), someone(0), nrows_ptr(new unsigned long(nrows)) {
+	oclTask(unsigned char *M_in_, unsigned char *M_out_, unsigned long size_, unsigned int niters_, unsigned int nrows) :
+			M_in(M_in_), M_out(M_out_), size(size_), niters(niters_), someone(0), nrows_ptr(new unsigned int(nrows)) {
 	}
 	~oclTask() {delete nrows_ptr;}
 
@@ -72,10 +72,10 @@ struct oclTask: public ff::baseOCLTask<oclTask, unsigned char> {
 	}
 
 	unsigned char *M_in, *M_out;
-	const unsigned long size;
+	const unsigned int size;
 	unsigned long niters;
 	unsigned char someone;
-	unsigned long *nrows_ptr;
+	unsigned int *nrows_ptr;
 };
 
 
