@@ -39,7 +39,7 @@ FF_ROOT  = ../../../
 
 CXX      = g++ 
 CXXFLAGS = -Wall -std=c++11 -DFF_OPENCL -DNO_CMAKE_CONFIG -DVERIFY #-DPRINT
-OPTFLAGS = -O3 #-g
+OPTFLAGS = -O3
 LDFLAGS  = -L$(OCL_ROOT)/lib/x86_64   #-L$(OCL_ROOT)/lib64
 LIBS     = $(OPENCL) -lpthread 
 INCS     += -I$(FF_ROOT) 
