@@ -31,14 +31,18 @@ FF_OCL_STENCIL_ELEMFUNC1(mapf,unsigned char,length,idx,in,idx_,unsigned long,env
 		unsigned long c = idx % w;
 		unsigned char alive_in = in[idx_];
 		unsigned char naliven = 0;
-		naliven += r>0 && c>0 ? in[idx_ - w - 1] : 0;
-		naliven += r>0 ? in[idx_ - w] : 0; //top-center
+        unsigned long rr = (r>0)?1:0;
+        unsigned long cc = (c>0)?1:0;
+        unsigned long cw = (c < w-1)?1:0;
+        unsigned long rw = (r < w-1)?1:0;
+		naliven += rr*cc*in[idx_ - w - 1];
+		naliven += rr*in[idx_ - w]; //top-center
 		naliven += r>0 && c < w-1 ? in[idx_ - w + 1] : 0; //top-right
-		naliven += c < w-1 ? in[idx_ + 1] : 0; //middle-right
-		naliven += r < w-1 && c < w-1 ? in[idx_ + w + 1] : 0; //bottom-right
-		naliven += r < w-1 ? in[idx_ + w] : 0; //bottom-center
-		naliven += r < w-1 && c>0 ? in[idx_ + w - 1] : 0; //bottom-left
-		naliven += c>0 ? in[idx_ - 1] : 0; //middle-left
+		naliven += cw*in[idx_ + 1]; //middle-right
+		naliven += rw*cw*in[idx_ + w + 1]; //bottom-right
+		naliven += rw*in[idx_ + w]; //bottom-center
+		naliven += rw*cc*in[idx_ + w - 1]; //bottom-left
+		naliven += cc*in[idx_ - 1]; //middle-left
 		return (naliven == 3 || (alive_in && naliven == 2));
 		);
 
