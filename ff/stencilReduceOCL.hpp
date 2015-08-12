@@ -42,6 +42,7 @@
 #include <string>
 #include <fstream>
 #include <tuple>
+#include <algorithm>
 #include <ff/oclnode.hpp>
 #include <ff/node.hpp>
 #include <ff/oclallocator.hpp>
@@ -306,6 +307,9 @@ public:
 			//nthreads_map = nextMultipleOfIf(lenInput, wgsize);
 			nthreads_map = wgsize_map * ((lenInput + wgsize_map - 1) / wgsize_map); //round up
 		}
+        
+        //std::cerr << "globalThreadsMap " << globalThreadsMap << " localThreadsMap " << localThreadsMap << "\n";
+        
 
         if (reducePtr) {
             // 64 and 256 are the max number of blocks and threads we want to use
@@ -676,26 +680,62 @@ private:
             if (createProgram(kernel_code, dId, save_binary, reuse_binary)<0) return -1;
         }
         
-        char buf[128];
-        size_t s, ss[3];
+        //char buf[128];
+        //size_t s, ss[3];
         
-        clGetDeviceInfo(dId, CL_DEVICE_NAME, 128, buf, NULL);
-        clGetDeviceInfo(dId, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &s, NULL);
-        clGetDeviceInfo(dId, CL_DEVICE_MAX_WORK_ITEM_SIZES, 3*sizeof(size_t), &ss, NULL);
+        //clGetDeviceInfo(dId, CL_DEVICE_NAME, 128, buf, NULL);
+        //clGetDeviceInfo(dId, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &s, NULL);
+        //clGetDeviceInfo(dId, CL_DEVICE_MAX_WORK_ITEM_SIZES, 3*sizeof(size_t), &ss, NULL);
         //std::cerr << "svc_SetUpOclObjects dev " << dId << " " << buf << " MAX_WORK_GROUP_SIZE " << s << " MAX_WORK_ITEM_SIZES " << ss[0] << " " << ss[1] << " " << ss[2] << "\n";
         
         
 		//create kernel objects
+        size_t max_kernel_workgroup_size;
+        size_t wg_multiple;
+        size_t max_device_workgroup_size;
 		if (kernel_name1 != "") {
 			kernel_map = clCreateKernel(program, kernel_name1.c_str(), &status);
 			checkResult(status, "CreateKernel (map)");
+			status = clGetKernelWorkGroupInfo(kernel_map, dId,
+                                              CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &max_kernel_workgroup_size, 0);
+			checkResult(status, "GetKernelWorkGroupInfo (map)");
+            status = clGetKernelWorkGroupInfo(kernel_map, dId,
+                                              CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &wg_multiple, 0);
+            status = clGetDeviceInfo(dId,CL_DEVICE_MAX_WORK_GROUP_SIZE,sizeof(max_device_workgroup_size),&max_device_workgroup_size, NULL);
+            checkResult(status, "clGetDeviceInfo (map)");
+            // MA: Heuristic code
+            
+            wgsize_map_static = std::max<size_t>(64, wg_multiple * 4);
+            wgsize_map_static = std::min<size_t>(wgsize_map_static,max_kernel_workgroup_size);
+            wgsize_map_static = std::min<size_t>(wgsize_map_static,max_device_workgroup_size);
+            
+            //std::cerr << " workgroup_size_map " << workgroup_size_map;
+            std::cerr << "GetKernelWorkGroupInfo (map) " << wgsize_map_static << "\n";
 		}
 		if (kernel_name2 != "") {
 			kernel_reduce = clCreateKernel(program, kernel_name2.c_str(), &status);
 			checkResult(status, "CreateKernel (reduce)");
+            status = clGetKernelWorkGroupInfo(kernel_map, dId,
+                                              CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &max_kernel_workgroup_size, 0);
+            checkResult(status, "GetKernelWorkGroupInfo (reduce)");
+            status = clGetKernelWorkGroupInfo(kernel_map, dId,
+                                              CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &wg_multiple, 0);
+            status = clGetDeviceInfo(dId,CL_DEVICE_MAX_WORK_GROUP_SIZE,sizeof(max_device_workgroup_size),&max_device_workgroup_size, NULL);
+            checkResult(status, "clGetDeviceInfo (reduce)");
+            // MA: Heuristic code
+            wgsize_reduce_static = std::max<size_t>(64, wg_multiple * 4);
+            wgsize_reduce_static = std::min<size_t>(wgsize_reduce_static,max_kernel_workgroup_size);
+            wgsize_reduce_static = std::min<size_t>(wgsize_reduce_static,max_device_workgroup_size);
+
+            
+			//status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
+			//CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_reduce, 0);
+			//checkResult(status, "GetKernelWorkGroupInfo (reduce)");
+            std::cerr << "GetKernelWorkGroupInfo (reduce) " << wgsize_reduce_static << "\n";
 		}
 
 		//use CL-runtime static estimation of best workgroup size
+        /*
 		status = clGetKernelWorkGroupInfo(kernel_map, dId,
 		CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &wgsize_map_static, 0);
 		checkResult(status, "GetKernelWorkGroupInfo (map)");
@@ -706,6 +746,7 @@ private:
 		checkResult(status, "GetKernelWorkGroupInfo (reduce)");
 		std::cerr << "GetKernelWorkGroupInfo (reduce) " << wgsize_reduce_static
 				<< "\n";
+        */
 		return 0;
 	}
 
