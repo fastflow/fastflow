@@ -195,13 +195,14 @@ public:
 
     /**
      * allocate multiple GPU devices.
-     * Return a list of GPU devices, picked round-robin from the environment GPU list
+     * Return a list of allocated GPU devices,
+     * picked from round-robin scan of the device list
      *
      * @param n is the number of GPU devices to be allocated
-     * @param preferred_dev TODO
-     * @param exclusive TODO
+     * @param preferred_dev is the logical-indexed starting device of the round-robin scan (ignored if <0)
+     * @param exclusive if true, do not consider devices already allocated
      * @param identical TODO
-     * @return the vector of allocated GPU devices.
+     * @return the vector of the logical-indexed allocated GPU devices.
      * If allocation request cannot be fulfilled,
      * an empty vector is returned
      */
@@ -210,33 +211,39 @@ public:
         size_t count = n;
         std::vector<ssize_t> ret;
         pthread_mutex_lock(&instanceMutex);
-        size_t dev = (preferred_dev>0)? (preferred_dev%clDevices.size()): lastAssigned;
-        for(size_t i=0; i<clDevices.size(); i++) {
-            clGetDeviceInfo(clDevices[dev], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
-            if ((!clDeviceInUse[dev] | !exclusive) && ((dt) & CL_DEVICE_TYPE_GPU)) {
-                //clDeviceInUse[lastAssigned]=true;
-                ret.push_back(dev);
-                --count;
-//                char buf[128];
-//                clGetDeviceInfo(clDevices[dev], CL_DEVICE_NAME, 128, buf, NULL);
-//                std::cerr << "clEnvironment: assigned GPU "<< dev << " " << buf << "\n";
-                ++dev;
-                dev%=clDevices.size();
-                if (count==0) break;
-            } else {
-                ++dev;
-                dev%=clDevices.size();
-            }
-        }
-        if (count>0) { // roll back
-            //std::cerr << "Not enough GPUs: aborting\n";
-            ret.clear();
-        } else { // commit
-            // check if identical, TO BE DONE
-            for (size_t i=0; i<ret.size();++i)
-                clDeviceInUse[ret[i]]=true;
-            lastAssigned=dev;
-        }
+        //start from either the user-defined preferred_dev or the last RR-allocated device
+        size_t dev = (preferred_dev>=0)? (preferred_dev%clDevices.size()): lastAssigned;
+        //perform multiple passes over the device list,
+        //stop if no allocation happens in one pass
+        ssize_t count_pre = count;
+        while (true) {
+			count_pre = count;
+			for (size_t i = 0; i < clDevices.size(); i++) {
+				clGetDeviceInfo(clDevices[dev], CL_DEVICE_TYPE,
+						sizeof(cl_device_type), &(dt), NULL);
+				if ((!clDeviceInUse[dev] | !exclusive) //dev is free or not exclusive mode
+						&& ((dt) & CL_DEVICE_TYPE_GPU)) { //dev is a GPU
+					ret.push_back(dev);
+					if (--count == 0)
+						break;
+				}
+				++dev;
+				dev %= clDevices.size();
+			} //end pass
+			if(!count) { // commit
+				// TODO check if identical
+				for (size_t i=0; i<ret.size();++i)
+					clDeviceInUse[ret[i]]=true;
+				lastAssigned=dev;
+				break;
+			}
+			if(count_pre == count) { // roll back
+				//std::cerr << "Not enough GPUs: aborting\n";
+				ret.clear();
+				break;
+			}
+			//continue to next pass
+		}
         pthread_mutex_unlock(&instanceMutex);
         return ret;
     }
