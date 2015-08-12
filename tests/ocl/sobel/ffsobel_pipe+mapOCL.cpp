@@ -162,13 +162,14 @@ struct oclTask: public baseOCLTask<Task, uchar, uchar> {
 //  0 for this test is the C++ Map (based on the parallel_for pattern)
 //  1 for this test is the OpenCL Map
 struct Kernel: ff_nodeSelector<Task> {
-    Kernel(int selectedDevice = 0):selectedDevice(selectedDevice) {}
+    Kernel(const int selectedDevice = 0):selectedDevice(selectedDevice) {}
 
     Task *svc(Task *in) {
-        int selectedDevice = getDeviceId();  // select the device id from the command string        
         in = reinterpret_cast<Task*>(getNode(selectedDevice)->svc(in));
         return in;            
     }
+private:
+    const int selectedDevice;
 };
 
 struct cpuMap: ff_Map<Task,Task> {    
@@ -179,8 +180,9 @@ struct cpuMap: ff_Map<Task,Task> {
     
     Task *svc(Task *task) {
         uchar * src = task->src, * dst = task->dst;
-        long cols   =  task->cols;
-        ff_Map<Task,Task>::parallel_for(1,task->rows-1,[src,cols,&dst](const long y) {
+        const long cols   =  task->env.cols;
+        const long rows   =  task->env.rows;
+        ff_Map<Task,Task>::parallel_for(1,rows-1,[src,cols,&dst](const long y) {
                 for(long x = 1; x < cols - 1; x++){
                     const long gx = xGradient(src, cols, x, y);
                     const long gy = yGradient(src, cols, x, y);
@@ -200,18 +202,23 @@ struct cpuMap: ff_Map<Task,Task> {
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         std::cerr << "use: " << argv[0] 
-		  << " [-r num_repeat] <image-file> [image-file]\n";
+		  << " [-r num_repeat] [-g cpu-or-gpu (0|1)] <image-file> [image-file]\n";
         return -1;
     }    
 
-    int start = 1;
+    int cpuorgpu = 0;  // by default runs on the CPU
+    int start    = 1;
     long num_images = argc-1;
 
     const char *r = getOption(argv, argv+argc, "-r");
     if (r) { repeatTime = atol(r); start+=2; num_images -= 2; }
     assert(num_images >= 1);
+    const char *g = getOption(argv, argv+argc, "-g");
+    if (g) { cpuorgpu = atoi(g); start+=2; num_images -= 2; }
+    assert(cpuorgpu == 0 || cpuorgpu == 1);
 
     printf("num_images= %ld\n", num_images);
+    printf("executing %s\n", cpuorgpu?"CPU Map":"OpenCL Map");
 
     auto reader= [&](Task*, ff_node*const stage) -> Task* {
         
@@ -267,7 +274,7 @@ int main(int argc, char *argv[]) {
 
     ff_node_F<Task> Reader(reader);
     Kernel kern(cpuorgpu);
-    kern.addNode(cpubobel);
+    kern.addNode(cpusobel);
     kern.addNode(sobel);
     ff_node_F<Task> Writer(writer);
 

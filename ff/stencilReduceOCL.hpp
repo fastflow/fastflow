@@ -713,7 +713,7 @@ private:
             wgsize_map_static = std::min<size_t>(wgsize_map_static,max_device_workgroup_size);
             
             //std::cerr << " workgroup_size_map " << workgroup_size_map;
-            std::cerr << "GetKernelWorkGroupInfo (map) " << wgsize_map_static << "\n";
+            //std::cerr << "GetKernelWorkGroupInfo (map) " << wgsize_map_static << "\n";
 		}
 		if (kernel_name2 != "") {
 			kernel_reduce = clCreateKernel(program, kernel_name2.c_str(), &status);
@@ -950,13 +950,11 @@ public:
 
     // force execution on the CPU
     void pickCPU () {
-        std::cerr << "STATUS: Execution on CPU requested\n";
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_CPU);
     }
     
     // force execution on the GPU - as many as requested by the co-allocation strategy
     void pickGPU (size_t offset=0 /* referred to global list of devices */) {
-        std::cerr << "STATUS: Execution on GPU requested\n";
         offset_dev=offset; //TODO check numbering
         ff_oclNode_t<T>::setDeviceType(CL_DEVICE_TYPE_GPU);
     }
@@ -1023,9 +1021,8 @@ public:
 				case CL_DEVICE_TYPE_GPU: {
 					// Retrive multiple logical GPU devices (non-exclusive mode)
 					std::vector<ssize_t> logdev =
-							clEnvironment::instance()->coAllocateGPUDeviceRR(
-									accelerators.size(),
-									(offset_dev == 0) ? -1 : offset_dev);
+							clEnvironment::instance()->coAllocateGPUDeviceRR(accelerators.size(),
+                                                                             (offset_dev == 0) ? -1 : offset_dev);
 					if (logdev.size() == 0) {
 						//could not fulfill allocation request
 						if(ff_oclNode_t<T>::getDeviceType() == CL_DEVICE_TYPE_GPU) {
@@ -1037,9 +1034,7 @@ public:
 						//convert retrieved logical devices into opencl Ids
 						devices.clear();
 						for (size_t i = 0; i < logdev.size(); ++i)
-							devices.push_back(
-									clEnvironment::instance()->getDevice(
-											logdev[i]));
+							devices.push_back(clEnvironment::instance()->getDevice(logdev[i]));
 						for (size_t i = 0; i < devices.size(); ++i)
 							if (accelerators[i]->init(devices[i], kernel_code,
                                                       kernel_name1, kernel_name2, saveBinary, reuseBinary) < 0)
