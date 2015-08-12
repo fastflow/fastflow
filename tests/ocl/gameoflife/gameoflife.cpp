@@ -107,6 +107,7 @@ int main(int argc, char * argv[]) {
 	oclTask oclt(bitmap_seed, bitmap_out, length, niters, nrows);
 	ff::ff_stencilReduceLoopOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf,
 			reducef, 0, NULL, NACC, nrows + 1);
+    oclStencilReduceOneShot.pickGPU(1);
 	gettimeofday(&tv1, NULL);
 	oclStencilReduceOneShot.run_and_wait_end();
 	gettimeofday(&tv2, NULL);
@@ -131,6 +132,8 @@ int main(int argc, char * argv[]) {
 	print(bitmap_in_seq, nrows, "SEED");
 #endif
 
+    //std::cerr << "N of cores " << ff_numCores() << "\n";
+    
 	ParallelFor pf(FF_AUTO, true);
 
 	gettimeofday(&tv1, NULL);
