@@ -31,6 +31,16 @@ FF_OCL_STENCIL_ELEMFUNC1(mapf,unsigned char,length,idx,in,idx_,unsigned int,env1
 		unsigned int c = idx % w;
 		unsigned char alive_in = in[idx_];
 		unsigned char naliven = 0;
+        
+                         naliven += r>0 && c>0 ? in[idx_ - w - 1] : 0;
+                         naliven += r>0 ? in[idx_ - w] : 0; //top-center
+                         naliven += r>0 && c < w-1 ? in[idx_ - w + 1] : 0; //top-right
+                         naliven += c < w-1 ? in[idx_ + 1] : 0; //middle-right
+                         naliven += r < w-1 && c < w-1 ? in[idx_ + w + 1] : 0; //bottom-right
+                         naliven += r < w-1 ? in[idx_ + w] : 0; //bottom-center
+                         naliven += r < w-1 && c>0 ? in[idx_ + w - 1] : 0; //bottom-left
+                         naliven += c>0 ? in[idx_ - 1] : 0; //middle-left
+        /*
         unsigned int rr = (r>0)?1:0;
         unsigned int cc = (c>0)?1:0;
         unsigned int cw = (c < w-1)?1:0;
@@ -43,6 +53,7 @@ FF_OCL_STENCIL_ELEMFUNC1(mapf,unsigned char,length,idx,in,idx_,unsigned int,env1
 		naliven += rw*in[idx_ + w]; //bottom-center
 		naliven += rw*cc*in[idx_ + w - 1]; //bottom-left
 		naliven += cc*in[idx_ - 1]; //middle-left
+         */
 		return (naliven == 3 || (alive_in && naliven == 2));
 		);
 
@@ -73,7 +84,7 @@ struct oclTask: public ff::baseOCLTask<oclTask, unsigned char> {
 
 	unsigned char *M_in, *M_out;
 	const unsigned int size;
-	unsigned long niters;
+	unsigned int niters;
 	unsigned char someone;
 	unsigned int *nrows_ptr;
 };
