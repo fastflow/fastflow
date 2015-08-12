@@ -65,7 +65,7 @@ namespace ff{
  *
  */
     
-class ff_oclNode : public ff_node, public clEnvironment {
+class ff_oclNode : public ff_node {
 public:
 /* cl_device_type - bitfield 
    #define CL_DEVICE_TYPE_DEFAULT                      (1 << 0)

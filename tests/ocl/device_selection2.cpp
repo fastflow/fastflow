@@ -97,7 +97,7 @@ int main(int argc, char * argv[]) {
     ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0.0, nullptr, NACC);
     SET_DEVICE_TYPE(oclMR);
    
-    std::vector<std::string> res = oclMR.getDevicesInfo();
+    std::vector<std::string> res = clEnvironment::instance()->getDevicesInfo();
     
     for (size_t i=0; i<res.size(); ++i)
         std::cout << i << " - " << res[i] << std::endl;
