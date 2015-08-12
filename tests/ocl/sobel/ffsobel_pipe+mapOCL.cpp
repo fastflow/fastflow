@@ -32,7 +32,7 @@
  *  
  *  command: 
  *
- *    ffsobel_pipe+mapOCL  file1 file2 file3 ....
+ *    ffsobel_pipe+mapOCL [-r repeatTime]  file1 file2 file3 ....
  *
  *  the output is produced in the directory ./out
  *
@@ -40,6 +40,7 @@
 /* 
  * Author: Massimo Torquati <torquati@di.unipi.it> 
  * Date:   October 2014
+ *         August  2015 (run-time selection between CPU and GPU computation)
  */
 
 #if !defined(FF_OPENCL)
@@ -56,9 +57,15 @@
 #endif
 #include <ff/pipeline.hpp>
 #include <ff/stencilReduceOCL.hpp>
+#include <ff/map.hpp>
+#include <ff/selector.hpp>
 
 using namespace cv;
 using namespace ff;
+
+long repeatTime = 1;  // allows to repeat the same set of images a numer of times
+
+
 
 /* --------------- OpenCL code ------------------- */
 FF_OCL_STENCIL_ELEMFUNC1(mapf, uchar, useless, k, usrc, k_, env_t, env,
@@ -78,6 +85,13 @@ FF_OCL_STENCIL_ELEMFUNC1(mapf, uchar, useless, k, usrc, k_, env_t, env,
 );
 
 /* ----- utility function ------- */
+// helping functions: it parses the command line options
+const char* getOption(char **begin, char **end, const std::string &option) {
+    char **itr = std::find(begin, end, option);
+    if (itr != end && ++itr != end) return *itr;
+    return nullptr;
+}
+
 template<typename T>
 T *Mat2uchar(cv::Mat &in) {
     T *out = new T[in.rows * in.cols];
@@ -86,13 +100,10 @@ T *Mat2uchar(cv::Mat &in) {
             out[i * (in.cols) + j] = in.at<T>(i, j);
     return out;
 }
-char* getOption(char **begin, char **end, const std::string &option) {
-    char **itr = std::find(begin, end, option);
-    if (itr != end && ++itr != end) return *itr;
-    return nullptr;
-}
 #define XY2I(Y,X,COLS) (((Y) * (COLS)) + (X))
 /* ------------------------------ */
+
+
 
 // returns the gradient in the x direction
 static inline long xGradient(uchar * image, long cols, long x, long y) {
@@ -114,6 +125,7 @@ static inline long yGradient(uchar * image, long cols, long x, long y) {
         image[XY2I(y+1, x+1, cols)];
 }
 
+
 // the corresponding OpenCL type is in the (local) file 'ff_opencl_datatypes.cl'
 struct env_t {
     env_t() {}
@@ -130,6 +142,7 @@ struct Task {
     env_t              env; // contains 'rows' and 'cols'
     const std::string  name;
 };
+
 /* this is the task used in the OpenCL map 
  * 
  */
@@ -145,45 +158,91 @@ struct oclTask: public baseOCLTask<Task, uchar, uchar> {
     }
 };
 
+// it dynamically selects the logical device where the kernel has to be executed.
+//  0 for this test is the C++ Map (based on the parallel_for pattern)
+//  1 for this test is the OpenCL Map
+struct Kernel: ff_nodeSelector<Task> {
+    Kernel(int selectedDevice = 0):selectedDevice(selectedDevice) {}
+
+    Task *svc(Task *in) {
+        int selectedDevice = getDeviceId();  // select the device id from the command string        
+        in = reinterpret_cast<Task*>(getNode(selectedDevice)->svc(in));
+        return in;            
+    }
+};
+
+struct cpuMap: ff_Map<Task,Task> {    
+    // sets the maximum n. of worker for the Map
+    // spinWait is set to true
+    // the scheduler is disabled by default
+    cpuMap(const long mapworkers=FF_AUTO):ff_Map<Task,Task>(mapworkers,true) {}
+    
+    Task *svc(Task *task) {
+        uchar * src = task->src, * dst = task->dst;
+        long cols   =  task->cols;
+        ff_Map<Task,Task>::parallel_for(1,task->rows-1,[src,cols,&dst](const long y) {
+                for(long x = 1; x < cols - 1; x++){
+                    const long gx = xGradient(src, cols, x, y);
+                    const long gy = yGradient(src, cols, x, y);
+                    // approximation of sqrt(gx*gx+gy*gy)
+                    long sum = abs(gx) + abs(gy); 
+                    if (sum > 255) sum = 255;
+                    else if (sum < 0) sum = 0;
+                    dst[y*cols+x] = sum;
+                }
+            });        
+        return task;
+    }
+};
+
+
+
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         std::cerr << "use: " << argv[0] 
-		  << " <image-file> [image-file]\n";
+		  << " [-r num_repeat] <image-file> [image-file]\n";
         return -1;
     }    
 
     int start = 1;
     long num_images = argc-1;
+
+    const char *r = getOption(argv, argv+argc, "-r");
+    if (r) { repeatTime = atol(r); start+=2; num_images -= 2; }
     assert(num_images >= 1);
 
+    printf("num_images= %ld\n", num_images);
+
     auto reader= [&](Task*, ff_node*const stage) -> Task* {
-
-        for(long i=0; i<num_images; ++i) {
-            const std::string &filepath(argv[i+start]);
-            std::string filename;
-            
-            // get only the filename
-            int n=filepath.find_last_of("/");
-            if (n>0) filename = filepath.substr(n+1);
-            else     filename = filepath;
         
-            Mat * src = new Mat;
-            *src = imread(filepath, CV_LOAD_IMAGE_GRAYSCALE);
-            if ( !src->data ) {
-                std::cerr << "ERROR reading image file " << filepath << " going on....\n";
-                continue;
+        for(long k=0;k<repeatTime;++k) {    // repeating a number of times the same set of images
+            for(long i=0; i<num_images; ++i) {
+                const std::string &filepath(argv[i+start]);
+                std::string filename;
+                
+                // get only the filename
+                int n=filepath.find_last_of("/");
+                if (n>0) filename = filepath.substr(n+1);
+                else     filename = filepath;
+                
+                Mat * src = new Mat;
+                *src = imread(filepath, CV_LOAD_IMAGE_GRAYSCALE);
+                if ( !src->data ) {
+                    std::cerr << "ERROR reading image file " << filepath << " going on....\n";
+                    continue;
+                }
+                const long cols = src->cols;
+                const long rows = src->rows;
+                uchar * dst = new uchar[rows * cols]; 
+                for(long y = 0; y < rows; y++)
+                    for(long x = 0; x < cols; x++) {
+                        dst[y * cols + x] = 0;
+                    }        
+                
+                Task *t = new Task(Mat2uchar<uchar>(*src), dst, rows, cols, filename);
+                stage->ff_send_out(t); // sends the task t to the next stage
+                delete src;
             }
-            const long cols = src->cols;
-            const long rows = src->rows;
-            uchar * dst = new uchar[rows * cols]; 
-            for(long y = 0; y < rows; y++)
-                for(long x = 0; x < cols; x++) {
-                    dst[y * cols + x] = 0;
-                }        
-
-            Task *t = new Task(Mat2uchar<uchar>(*src), dst, rows, cols, filename);
-            stage->ff_send_out(t); // sends the task t to the next stage
-            delete src;
         }
         return static_cast<Task*>(EOS);
     };
@@ -201,13 +260,26 @@ int main(int argc, char *argv[]) {
         return static_cast<Task*>(GO_ON);
     };
 
-    ff_node_F<Task> Reader(reader);
+    // OpenCL map
     ff_mapOCL_1D<Task, oclTask> sobel(mapf);
+    // CPU map
+    cpuMap cpusobel;
+
+    ff_node_F<Task> Reader(reader);
+    Kernel kern(cpuorgpu);
+    kern.addNode(cpubobel);
+    kern.addNode(sobel);
     ff_node_F<Task> Writer(writer);
-    ff_Pipe<> pipe(Reader, sobel, Writer);
+
+    ff_Pipe<> pipe(Reader, kern, Writer);
+
+    ffTime(START_TIME);
     if (pipe.run_and_wait_end()<0) {
         error("running pipeline\n");
         return -1;
     }        
+    ffTime(STOP_TIME);
+    printf("Time= %g (ms)\n", ffTime(GET_TIME));
+
     return 0;  
 }
