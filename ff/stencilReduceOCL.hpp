@@ -718,10 +718,10 @@ private:
 		if (kernel_name2 != "") {
 			kernel_reduce = clCreateKernel(program, kernel_name2.c_str(), &status);
 			checkResult(status, "CreateKernel (reduce)");
-            status = clGetKernelWorkGroupInfo(kernel_map, dId,
+            status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
                                               CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &max_kernel_workgroup_size, 0);
             checkResult(status, "GetKernelWorkGroupInfo (reduce)");
-            status = clGetKernelWorkGroupInfo(kernel_map, dId,
+            status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
                                               CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &wg_multiple, 0);
             status = clGetDeviceInfo(dId,CL_DEVICE_MAX_WORK_GROUP_SIZE,sizeof(max_device_workgroup_size),&max_device_workgroup_size, NULL);
             checkResult(status, "clGetDeviceInfo (reduce)");
