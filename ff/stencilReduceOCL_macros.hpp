@@ -150,12 +150,12 @@ namespace ff {
  * http://www.ida.liu.se/~chrke/skepu/
  */
 
-//  x=f(param)   'x' and 'param' have the same type
-#define FF_OCL_MAP_ELEMFUNC(name, basictype, param, code)                                  \
+//  x=f(param,idx)   'x' and 'param' have the same type
+#define FF_OCL_MAP_ELEMFUNC(name, basictype, param, idx, code)		                   \
     static char name[] =                                                                   \
         "kern_" #name "|"                                                                  \
         #basictype "|"                                                                     \
-#basictype " f" #name "(" #basictype " " #param ") {\n" #code ";\n}\n"                     \
+#basictype " f" #name "(" #basictype " " #param ",const int " #idx ") {\n" #code ";\n}\n"  \
 "__kernel void kern_" #name "(\n"                                                	   \
 "\t__global " #basictype  "* input,\n"                                                 	   \
 "\t__global " #basictype "* output,\n"                                                	   \
@@ -166,18 +166,18 @@ namespace ff {
 "\t    int i = get_global_id(0);\n"                                              	   \
 "\t    uint gridSize = get_local_size(0)*get_num_groups(0);\n"                   	   \
 "\t    while(i < maxItems)  {\n"                                                 	   \
-"\t        output[i] = f" #name "(input[i]);\n"          			           \
+"\t        output[i] = f" #name "(input[i],i);\n"          			           \
 "\t        i += gridSize;\n"                                                     	   \
 "\t    }\n"                                                                      	   \
 "}\n"
 
 
-//  x=f(param)   'x' and 'param' have different types
-#define FF_OCL_MAP_ELEMFUNC2(name, outT, inT, param, code)	                           \
+//  x=f(param,idx)   'x' and 'param' have different types
+#define FF_OCL_MAP_ELEMFUNC2(name, outT, inT, param, idx, code)		                   \
     static char name[] =                                                                   \
         "kern_" #name "|"                                                                  \
         #outT "|"                                                                          \
-#outT " f" #name "(" #inT " " #param ") {\n" #code ";\n}\n"                                \
+#outT " f" #name "(" #inT " " #param ", const int " #idx ") {\n" #code ";\n}\n"            \
 "__kernel void kern_" #name "(\n"                                                	   \
 "\t__global " #inT  "* input,\n"                                                 	   \
 "\t__global " #outT "* output,\n"                                                	   \
@@ -188,7 +188,7 @@ namespace ff {
 "\t    int i = get_global_id(0);\n"                                              	   \
 "\t    uint gridSize = get_local_size(0)*get_num_groups(0);\n"                   	   \
 "\t    while(i < maxItems)  {\n"                                                 	   \
-"\t        output[i] = f" #name "(input[i]);\n"          			           \
+"\t        output[i] = f" #name "(input[i],i);\n"          			           \
 "\t        i += gridSize;\n"                                                     	   \
 "\t    }\n"                                                                      	   \
 "}\n"

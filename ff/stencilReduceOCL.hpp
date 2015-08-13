@@ -1344,7 +1344,7 @@ protected:
             oldBytesizeIn = 0;
             old_inPtr = NULL;
         }
-        if (Task.getReleaseOut()) {
+        if ( Task.getReleaseOut() && (outPtr != inPtr || !Task.getReleaseIn()) ) {
             for (size_t i = 0; i < accelerators.size(); ++i) 
                 accelerators[i]->releaseOutput(outPtr);
             oldSizeOut = 0;
