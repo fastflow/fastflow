@@ -42,9 +42,10 @@ using namespace ff;
 #define NACC 1
 #endif
 
-FF_OCL_MAP_ELEMFUNC(mapf, float, elem, 
-          return (elem+1.0);
-          );
+FF_OCL_MAP_ELEMFUNC(mapf, float, elem, useless,
+                    (void)useless;
+                    return (elem+1.0);
+                    );
 
 FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
              return (x+y); 

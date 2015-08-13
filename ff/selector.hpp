@@ -49,24 +49,17 @@ protected:
         return reinterpret_cast<ff_node*>(obj)->ff_send_out(task, retry, ticks);
     }
 
-
 public:
 
-    ff_nodeSelector():oneshot(false),selected(0) {}
-    ff_nodeSelector(const IN &task):oneshot(true), selected(0), inTask(const_cast<IN*>(&task)) {}
+    ff_nodeSelector():selected(0) {}
+    ff_nodeSelector(const IN &task):selected(0), inTask(const_cast<IN*>(&task)) {}
     
-    // used to set tasks when in onshot mode 
-    void setTask(const IN &task) { 
-        assert(oneshot);
-        inTask = &task;
-    }
+    // used to set tasks when running in a passive mode
+    void setTask(const IN &task) { inTask = const_cast<IN*>(&task);  }
+
     void selectNode(size_t id) { selected = id; }
 
-    int svc_init() {
-        for(size_t i=0;i<devices.size(); ++i)
-            if (devices[i]->svc_init() != 0) return -1;
-        return 0;
-    }
+    int svc_init() { return nodeInit(); }
 
     OUT* svc(IN *in) {
         if (in == nullptr) {
@@ -77,10 +70,7 @@ public:
         return out;
     }
 
-    void svc_end() {
-        for(size_t i=0;i<devices.size(); ++i)
-            devices[i]->svc_end();
-    }
+    void svc_end() { nodeEnd(); }
 
     ff_node *getNode(size_t id) { 
         if (id >= devices.size()) return nullptr;
@@ -110,21 +100,17 @@ public:
         return WORKER;
     }
 
-    int run(bool = false) {
-        if (nodeInit()<0) return -1;
-        return ff_node::run(true);
-    }
+    int run(bool = false) { return ff_node::run();  }
 
     int wait() { return ff_node::wait(); }
     
     int run_and_wait_end() {
-	if (run() < 0)	return -1;
-	if (wait() < 0) return -1;
-	return 0;
+        if (run() < 0)	return -1;
+        if (wait() < 0) return -1;
+        return 0;
     }
             
 protected:
-    const bool  oneshot;
     size_t      selected;
     IN         *inTask;
     std::vector<ff_node*> devices;    
