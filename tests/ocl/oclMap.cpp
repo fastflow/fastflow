@@ -44,7 +44,8 @@ using namespace ff;
 #endif
 
 
-FF_OCL_MAP_ELEMFUNC(mapf, float, elem, 
+FF_OCL_MAP_ELEMFUNC(mapf, float, elem, useless,
+                    (void)useless;
                     return (elem+1.0);
                     );
 

@@ -45,7 +45,8 @@ using namespace ff;
 #define NACC 1
 #endif
 
-FF_OCL_MAP_ELEMFUNC(mapf, float, elem,
+FF_OCL_MAP_ELEMFUNC(mapf, float, elem, useless,
+        (void)useless;
 		return (elem+1.0););
 
 // stream task

@@ -1,9 +1,5 @@
-typedef struct _mypair { 
-    float a; 
-    float b; 
-} mypair;
-
-float fmapf(float elem) {
+float fmapf(float elem, const int useless) {
+    (void)useless;
     return (elem+1.0);
 }
 __kernel void kern_mapf(__global float* input,
@@ -15,7 +11,7 @@ __kernel void kern_mapf(__global float* input,
     int i = get_global_id(0);
     uint gridSize = get_local_size(0)*get_num_groups(0);
     while(i < maxItems)  {
-	output[i] = fmapf(input[i]);
+	output[i] = fmapf(input[i], i);
 	i += gridSize;
     }
 }

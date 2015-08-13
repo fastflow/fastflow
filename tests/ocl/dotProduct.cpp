@@ -50,8 +50,9 @@ using namespace ff;
 struct mypair { float a; float b; };
 
 
-FF_OCL_MAP_ELEMFUNC2(mapf, float, mypair, elem, 
-                    return (elem.a * elem.b);
+FF_OCL_MAP_ELEMFUNC2(mapf, float, mypair, elem, useless,
+                     (void)useless;
+                     return (elem.a * elem.b);
 );
 
 FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
