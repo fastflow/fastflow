@@ -29,9 +29,12 @@
  *  
  */
 
+#if !defined(FF_OPENCL)
+#define FF_OPENCL
+#endif
+
 #include <vector>
 #include <iostream>
-
 #include <ff/map.hpp>
 #include <ff/stencilReduceOCL.hpp>
 #include <ff/selector.hpp>

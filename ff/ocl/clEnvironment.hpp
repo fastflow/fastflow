@@ -119,9 +119,11 @@ protected:
         assert(platforms);
         clGetPlatformIDs(numPlatforms, platforms, NULL);
         
+#ifdef FF_OPENCL_LOG
         if (numPlatforms>1) {
             printf("Multiple OpenCL platforms detected. Experimental code\n");
         }
+#endif
 
         for (unsigned int i = 0; i< numPlatforms; ++i) {
             clGetDeviceIDs(platforms[i],CL_DEVICE_TYPE_ALL,0,NULL,&(numDevices));
