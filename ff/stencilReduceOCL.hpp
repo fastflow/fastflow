@@ -241,7 +241,11 @@ public:
 
 	int init(cl_device_id dId, const std::string &kernel_code, const std::string &kernel_name1,
              const std::string &kernel_name2, const bool save_binary, const bool reuse_binary) {
-        deviceId = dId;
+#if 1
+		fprintf(stderr, "initializing virtual accelerator mapped to device:\n");
+		std::cerr << ff::clEnvironment::instance()->getDeviceInfo(dId) << std::endl;
+#endif
+		deviceId = dId;
 		return svc_SetUpOclObjects(deviceId, kernel_code, kernel_name1,kernel_name2, 
                                    from_source, save_binary, reuse_binary);
 	}
@@ -734,7 +738,7 @@ private:
 			//status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
 			//CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_reduce, 0);
 			//checkResult(status, "GetKernelWorkGroupInfo (reduce)");
-            std::cerr << "GetKernelWorkGroupInfo (reduce) " << wgsize_reduce_static << "\n";
+            //std::cerr << "GetKernelWorkGroupInfo (reduce) " << wgsize_reduce_static << "\n";
 		}
 
 		//use CL-runtime static estimation of best workgroup size
@@ -1079,8 +1083,8 @@ public:
 			}
 		}
         
-        for (size_t i = 0; i < devices.size(); ++i)
-            std::cerr << "Using " << clEnvironment::instance()->getDeviceInfo(devices[i]) << std::endl;
+//        for (size_t i = 0; i < devices.size(); ++i)
+//            std::cerr << "Using " << clEnvironment::instance()->getDeviceInfo(devices[i]) << std::endl;
 
 		return 0;
 	}
@@ -1344,7 +1348,7 @@ protected:
             oldBytesizeIn = 0;
             old_inPtr = NULL;
         }
-        if ( Task.getReleaseOut() && (outPtr != inPtr || !Task.getReleaseIn()) ) {
+        if ( Task.getReleaseOut() && ((void *)outPtr != (void *)inPtr || !Task.getReleaseIn()) ) {
             for (size_t i = 0; i < accelerators.size(); ++i) 
                 accelerators[i]->releaseOutput(outPtr);
             oldSizeOut = 0;
