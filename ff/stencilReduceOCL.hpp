@@ -206,6 +206,7 @@ public:
 	ff_oclAccelerator(ff_oclallocator *alloc, const size_t width_, const Tout &identityVal, const bool from_source=false) :
         from_source(from_source), my_own_allocator(false), allocator(alloc), width(width_), identityVal(identityVal), events_h2d(16), deviceId(NULL) {
 		wgsize_map_static = wgsize_reduce_static = 0;
+		wgsize_map_max = wgsize_reduce_max = 0;
 		inputBuffer = outputBuffer = reduceBuffer = NULL;
 
 		sizeInput = sizeInput_padded = 0;
@@ -224,6 +225,8 @@ public:
 		program = NULL;
 		cmd_queue = NULL;
 
+		reduce_mode = REDUCE_OUTPUT;
+
         if (!allocator) {
             my_own_allocator = true;
             allocator = new ff_oclallocator;
@@ -239,15 +242,25 @@ public:
         }
     }
 
-	int init(cl_device_id dId, const std::string &kernel_code, const std::string &kernel_name1,
+	int init(cl_device_id dId, reduceMode m, const std::string &kernel_code, const std::string &kernel_name1,
              const std::string &kernel_name2, const bool save_binary, const bool reuse_binary) {
-#if 1
-		fprintf(stderr, "initializing virtual accelerator mapped to device:\n");
+#ifdef FF_OPENCL_LOG
+		fprintf(stderr, "initializing virtual accelerator @%p mapped to device:\n", this);
 		std::cerr << ff::clEnvironment::instance()->getDeviceInfo(dId) << std::endl;
 #endif
+		reduce_mode = m;
+		//set OCL objects
 		deviceId = dId;
-		return svc_SetUpOclObjects(deviceId, kernel_code, kernel_name1,kernel_name2, 
-                                   from_source, save_binary, reuse_binary);
+		const oclParameter *param = clEnvironment::instance()->getParameter(deviceId);
+		assert(param);
+		context    = param->context;
+		cmd_queue  = param->commandQueue;
+		//build OCL kernels
+		cl_int status = buildKernels(kernel_code, kernel_name1,kernel_name2, from_source, save_binary, reuse_binary);
+		checkResult(status, "build kernels");
+		//compute static heuristics for kernel sizing
+		setSizingHeuristics();
+		return status == CL_SUCCESS;
 	}
 
 	void releaseAll() { if (deviceId) { svc_releaseOclObjects(); deviceId = NULL; }}
@@ -271,6 +284,48 @@ public:
 		cl_mem tmp = inputBuffer;
 		inputBuffer = outputBuffer;
 		outputBuffer = tmp;
+	}
+
+	void setSizingHeuristics() {
+		cl_int status;
+		//get device-dependent max wg size
+		size_t max_device_wgsize;
+		status = clGetDeviceInfo(deviceId,CL_DEVICE_MAX_WORK_GROUP_SIZE,sizeof(max_device_wgsize),&max_device_wgsize, NULL);
+		checkResult(status, "clGetDeviceInfo (map)");
+		if(kernel_map) { //map kernel
+			//get kernel-dependent max wg size
+			size_t max_kernel_wgsize;
+			status = clGetKernelWorkGroupInfo(kernel_map, deviceId, CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &max_kernel_wgsize, 0);
+			checkResult(status, "GetKernelWorkGroupInfo (map)");
+			wgsize_map_max = std::min<size_t>(max_device_wgsize,max_kernel_wgsize);
+			//get size of the atomic scheduling unit (analogous to CUDA wrap size)
+			//typical values are 16 or 32
+			size_t wg_multiple;
+			status = clGetKernelWorkGroupInfo(kernel_map, deviceId, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &wg_multiple, 0);
+			wgsize_map_static = std::max<size_t>(64, wg_multiple * 4); //64 or 128
+			wgsize_map_static = std::min<size_t>(wgsize_map_static,wgsize_map_max);
+		}
+		if(kernel_reduce) { //reduce kernel
+			//get kernel-dependent max wg size
+			size_t max_kernel_wgsize;
+			status = clGetKernelWorkGroupInfo(kernel_reduce, deviceId, CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &max_kernel_wgsize, 0);
+			checkResult(status, "GetKernelWorkGroupInfo (reduce)");
+			wgsize_reduce_max = std::min<size_t>(max_device_wgsize,max_kernel_wgsize);
+			//get size of the atomic scheduling unit (analogous to CUDA wrap size)
+			//typical values are 16 or 32
+			size_t wg_multiple;
+			status = clGetKernelWorkGroupInfo(kernel_reduce, deviceId, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &wg_multiple, 0);
+			wgsize_reduce_static = std::max<size_t>(64, wg_multiple * 4); //64 or 128
+			wgsize_reduce_static = std::min<size_t>(wgsize_reduce_static,wgsize_reduce_max);
+		}
+#ifdef FF_OPENCL_LOG
+		std::cerr <<  "[virtual accelerator @"<<this<<"]\n";
+		std::cerr <<  "+ static heuristics for kernel sizing parameters:\n";
+		std::cerr <<  "- MAP workgroup-size = " <<wgsize_map_static<< "\n";
+		std::cerr <<  "- MAP max workgroup-size = " <<wgsize_map_max<< "\n";
+		std::cerr <<  "- RED workgroup-size = " <<wgsize_reduce_static<< " \n";
+		std::cerr <<  "- RED max workgroup-size = " <<wgsize_reduce_max<< " \n";
+#endif
 	}
 
 	//see comments for members
@@ -301,44 +356,23 @@ public:
             checkResult(status, "CreateBuffer input");
         }
 
+        //set workgroup size and nthreads for map
         // MA patch - map not defined => workgroup_size_map
-        size_t wgsize = wgsize_map_static==0?wgsize_reduce_static:wgsize_map_static;
-
-		if (lenInput < wgsize) { //input fits into a single workgroup
-			wgsize_map = nthreads_map = lenInput;
-		} else {
-			wgsize_map = wgsize;
-			//nthreads_map = nextMultipleOfIf(lenInput, wgsize);
+        //size_t wgsize = wgsize_map_static==0?wgsize_reduce_static:wgsize_map_static;
+		if(kernel_map) {
+			wgsize_map = std::min<size_t>(lenInput, wgsize_map_static);
 			nthreads_map = wgsize_map * ((lenInput + wgsize_map - 1) / wgsize_map); //round up
-		}
-        
-        if (reducePtr) {
-            // 64 and 256 are the max number of blocks and threads we want to use
-            getBlocksAndThreads(lenInput, 64, 256, nwg_reduce, wgsize_reduce);
-            nthreads_reduce = nwg_reduce * wgsize_reduce;
-            
-            //compute size of per-workgroup working memory
-            wg_red_mem = (wgsize_reduce * sizeof(Tin))
-					+ (wgsize_reduce <= 32) * (wgsize_reduce * sizeof(Tin));
-
-            //compute size of global reduce working memory
-            size_t global_red_mem = nwg_reduce * sizeof(Tin);
-
-            //allocate global memory for storing intermediate per-workgroup reduce results
-            if (reduceBuffer) allocator->releaseBuffer(reducePtr, context, reduceBuffer);            
-            reduceBuffer = allocator->createBuffer(reducePtr, context, 
-                                                   CL_MEM_READ_WRITE, global_red_mem, &status);
-            checkResult(status, "CreateBuffer reduce");
-        }
-#if 0
-		std::cerr <<  "+ computed kernel sizing parameters:\n";
-		std::cerr <<  "- MAP workgroup-size = " <<wgsize_map<< "\n";
-		std::cerr <<  "- MAP n. threads     = " <<nthreads_map<< " \n";
-		std::cerr <<  "- RED workgroup-size = " <<wgsize_reduce<< " \n";
-		std::cerr <<  "- RED n. threads     = " <<nthreads_reduce<< " \n";
-		std::cerr <<  "- RED n. workgroups  = " <<nwg_reduce<< " \n";
-		std::cerr <<  "- RED per-wg memory  = " <<wg_red_mem<< " \n";
+#ifdef FF_OPENCL_LOG
+			std::cerr <<  "[virtual accelerator @"<<this<<"]\n";
+			std::cerr << "+ computed MAP kernel sizing parameters:\n";
+			std::cerr << "- MAP workgroup-size = " << wgsize_map << "\n";
+			std::cerr << "- MAP n. threads     = " << nthreads_map << " \n";
 #endif
+		}
+		//set workgroup size and nthreads for reduce
+        if (kernel_reduce && reduce_mode == REDUCE_INPUT) {
+            resetReduce(lenInput, sizeof(Tin), (void *)reducePtr);
+        }
 	}
 
     void adjustOutputBufferOffset(const Tout *newPtr, const Tout *oldPtr, std::pair<size_t, size_t> &P, size_t len_global) {
@@ -353,12 +387,17 @@ public:
         if (oldPtr != NULL) allocator->updateKey(oldPtr, newPtr, context);
     }
 
-	void relocateOutputBuffer(const Tout  *outPtr) {
+	void relocateOutputBuffer(const Tout  *outPtr, const Tout *reducePtr) {
 		cl_int status;
 		if (outputBuffer) allocator->releaseBuffer(outPtr, context, outputBuffer);
 		outputBuffer = allocator->createBuffer(outPtr, context,
                                                CL_MEM_READ_WRITE, sizeOutput_padded,&status);
 		checkResult(status, "CreateBuffer output");
+
+		//set workgroup size and nthreads for reduce
+		if (kernel_reduce && reduce_mode == REDUCE_OUTPUT) {
+			resetReduce(lenOutput, sizeof(Tout), (void *)reducePtr);
+		}
 	}
 
 	void relocateEnvBuffer(const void *envptr, const bool reuseEnv, const size_t idx, const size_t envbytesize) {
@@ -393,7 +432,7 @@ public:
         }
     }
     
-	void setInPlace() { 
+	void setInPlace(Tout *reducePtr) {
         outputBuffer      = inputBuffer;          
         lenOutput         = lenInput;
 		lenOutput_global  = lenInput_global;
@@ -402,6 +441,11 @@ public:
 		offset1_out       = offset1_in;
 		sizeOutput        = sizeInput;
 		sizeOutput_padded = sizeInput_padded;
+
+		//set workgroup size and nthreads for reduce
+		if (kernel_reduce && reduce_mode == REDUCE_OUTPUT) {
+			resetReduce(lenOutput, sizeof(Tout), reducePtr);
+		}
     }
 
 	void swap() {
@@ -489,16 +533,17 @@ public:
 	}
 
 	//void initReduce(const Tout &initReduceVal, reduceMode m = REDUCE_OUTPUT) {
-    void initReduce(reduceMode m = REDUCE_OUTPUT) {
+    void initReduce() {
 		//set kernel args for reduce1
 		int idx = 0;
-		cl_mem tmp = (m == REDUCE_OUTPUT) ? outputBuffer : inputBuffer;
+		cl_mem tmp = (reduce_mode == REDUCE_OUTPUT) ? outputBuffer : inputBuffer;
+		cl_uint len = (reduce_mode == REDUCE_OUTPUT) ? lenOutput : lenInput;
 		cl_int status  = clSetKernelArg(kernel_reduce, idx++, sizeof(cl_mem), &tmp);
 		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(uint), &pad1_in);
 		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_mem), &reduceBuffer);
-		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_uint),	(void *) &lenInput);
+		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_uint),	(void *) &len);
 		status        |= clSetKernelArg(kernel_reduce, idx++, wg_red_mem, NULL);
-        status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(Tout), (void *) &identityVal);  
+		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(Tout), (void *) &identityVal);
 		checkResult(status, "setKernelArg reduce-1");
 	}
 
@@ -671,90 +716,33 @@ private:
     }
 
 
-	int svc_SetUpOclObjects(cl_device_id dId, const std::string &kernel_code,
+	cl_int buildKernels(const std::string &kernel_code,
                             const std::string &kernel_name1, const std::string &kernel_name2,
                             const bool from_source, const bool save_binary, const bool reuse_binary) {
 
-		cl_int status;
-        const oclParameter *param = clEnvironment::instance()->getParameter(dId);
-        assert(param);
-        context    = param->context;
-        cmd_queue  = param->commandQueue;
+		cl_int status_ = CL_SUCCESS;
 
-        if (!from_source) { 		//compile kernel on device
-            if (buildKernelCode(kernel_code, dId)<0) return -1;
+        if (!from_source) { //compile kernel on device
+            if (buildKernelCode(kernel_code, deviceId)<0) return -1;
         } else {  // kernel_code is the path to the (binary?) source
-            if (createProgram(kernel_code, dId, save_binary, reuse_binary)<0) return -1;
+            if (createProgram(kernel_code, deviceId, save_binary, reuse_binary)<0) return -1;
         }
         
-        //char buf[128];
-        //size_t s, ss[3];
-        
-        //clGetDeviceInfo(dId, CL_DEVICE_NAME, 128, buf, NULL);
-        //clGetDeviceInfo(dId, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &s, NULL);
-        //clGetDeviceInfo(dId, CL_DEVICE_MAX_WORK_ITEM_SIZES, 3*sizeof(size_t), &ss, NULL);
-        //std::cerr << "svc_SetUpOclObjects dev " << dId << " " << buf << " MAX_WORK_GROUP_SIZE " << s << " MAX_WORK_ITEM_SIZES " << ss[0] << " " << ss[1] << " " << ss[2] << "\n";
-        
-        
-		//create kernel objects
-        size_t max_kernel_workgroup_size;
-        size_t wg_multiple;
-        size_t max_device_workgroup_size;
-		if (kernel_name1 != "") {
+        //create kernel objects
+        if (kernel_name1 != "") { //map kernel
+        	cl_int status;
 			kernel_map = clCreateKernel(program, kernel_name1.c_str(), &status);
 			checkResult(status, "CreateKernel (map)");
-			status = clGetKernelWorkGroupInfo(kernel_map, dId,
-                                              CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &max_kernel_workgroup_size, 0);
-			checkResult(status, "GetKernelWorkGroupInfo (map)");
-            status = clGetKernelWorkGroupInfo(kernel_map, dId,
-                                              CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &wg_multiple, 0);
-            status = clGetDeviceInfo(dId,CL_DEVICE_MAX_WORK_GROUP_SIZE,sizeof(max_device_workgroup_size),&max_device_workgroup_size, NULL);
-            checkResult(status, "clGetDeviceInfo (map)");
-            // MA: Heuristic code
-            
-            wgsize_map_static = std::max<size_t>(64, wg_multiple * 4);
-            wgsize_map_static = std::min<size_t>(wgsize_map_static,max_kernel_workgroup_size);
-            wgsize_map_static = std::min<size_t>(wgsize_map_static,max_device_workgroup_size);
-            
-            //std::cerr << " workgroup_size_map " << workgroup_size_map;
-            //std::cerr << "GetKernelWorkGroupInfo (map) " << wgsize_map_static << "\n";
+			status_ |= status;
 		}
-		if (kernel_name2 != "") {
+		if (kernel_name2 != "") { //reduce kernel
+			cl_int status;
 			kernel_reduce = clCreateKernel(program, kernel_name2.c_str(), &status);
 			checkResult(status, "CreateKernel (reduce)");
-            status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
-                                              CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &max_kernel_workgroup_size, 0);
-            checkResult(status, "GetKernelWorkGroupInfo (reduce)");
-            status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
-                                              CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &wg_multiple, 0);
-            status = clGetDeviceInfo(dId,CL_DEVICE_MAX_WORK_GROUP_SIZE,sizeof(max_device_workgroup_size),&max_device_workgroup_size, NULL);
-            checkResult(status, "clGetDeviceInfo (reduce)");
-            // MA: Heuristic code
-            wgsize_reduce_static = std::max<size_t>(64, wg_multiple * 4);
-            wgsize_reduce_static = std::min<size_t>(wgsize_reduce_static,max_kernel_workgroup_size);
-            wgsize_reduce_static = std::min<size_t>(wgsize_reduce_static,max_device_workgroup_size);
+			status_ |= status;
+       }
 
-            
-			//status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
-			//CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size_reduce, 0);
-			//checkResult(status, "GetKernelWorkGroupInfo (reduce)");
-            //std::cerr << "GetKernelWorkGroupInfo (reduce) " << wgsize_reduce_static << "\n";
-		}
-
-		//use CL-runtime static estimation of best workgroup size
-        /*
-		status = clGetKernelWorkGroupInfo(kernel_map, dId,
-		CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &wgsize_map_static, 0);
-		checkResult(status, "GetKernelWorkGroupInfo (map)");
-		std::cerr << "GetKernelWorkGroupInfo (map) " << wgsize_map_static
-				<< "\n";
-		status = clGetKernelWorkGroupInfo(kernel_reduce, dId,
-		CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &wgsize_reduce_static, 0);
-		checkResult(status, "GetKernelWorkGroupInfo (reduce)");
-		std::cerr << "GetKernelWorkGroupInfo (reduce) " << wgsize_reduce_static
-				<< "\n";
-        */
-		return 0;
+		return status_;
 	}
 
 	void svc_releaseOclObjects() {
@@ -770,6 +758,40 @@ private:
 		// if (reduceBuffer)
 		// 	clReleaseMemObject(reduceBuffer);
         allocator->releaseAllBuffers(context);
+	}
+
+	void resetReduce(size_t lenReduceInput, size_t elem_size, const void *reducePtr) {
+		// 64 and 256 are the max number of blocks and threads we want to use
+		//getBlocksAndThreads(lenInput, 64, 256, nwg_reduce, wgsize_reduce);
+		//nthreads_reduce = nwg_reduce * wgsize_reduce;
+		wgsize_reduce = std::min<size_t>(lenReduceInput, wgsize_reduce_static);
+		nthreads_reduce = wgsize_reduce
+				* ((lenReduceInput + wgsize_reduce - 1) / wgsize_reduce); //round up
+		nwg_reduce = nthreads_reduce / wgsize_reduce;
+
+		//compute size of per-workgroup working memory
+		wg_red_mem = (wgsize_reduce * elem_size)
+				+ (wgsize_reduce <= 32) * (wgsize_reduce * elem_size);
+
+		//compute size of global reduce working memory
+		size_t global_red_mem = nwg_reduce * elem_size;
+
+		//allocate global memory for storing intermediate per-workgroup reduce results
+		cl_int status;
+		if (reduceBuffer)
+			allocator->releaseBuffer(reducePtr, context, reduceBuffer);
+		reduceBuffer = allocator->createBuffer(reducePtr, context,
+		CL_MEM_READ_WRITE, global_red_mem, &status);
+		checkResult(status, "CreateBuffer reduce");
+
+#ifdef FF_OPENCL_LOG
+		std::cerr << "[virtual accelerator @"<<this<<"]\n";
+		std::cerr << "+ computed REDUCE kernel sizing parameters:\n";
+		std::cerr << "- REDUCE workgroup-size = " <<wgsize_reduce<< " \n";
+		std::cerr << "- REDUCE n. threads     = " <<nthreads_reduce<< " \n";
+		std::cerr << "- REDUCE n. workgroups  = " <<nwg_reduce<< " \n";
+		std::cerr << "- REDUCE per-wg memory  = " <<wg_red_mem<< " \n";
+#endif
 	}
 
 	/*!
@@ -821,6 +843,8 @@ private:
 
 	//static input-independent estimation of workgroup sizing
 	size_t wgsize_map_static, wgsize_reduce_static;
+	//static input-independent upper bounds for workgroup sizing
+	size_t wgsize_map_max, wgsize_reduce_max;
 	//input-dependent workgroup sizing
 	size_t wgsize_map, wgsize_reduce;
 	//input-dependent number of threads
@@ -834,6 +858,9 @@ private:
 	std::vector<cl_event> events_h2d;
 	size_t nevents_h2d, nevents_map;
 	cl_event event_d2h, event_map, event_reduce1, event_reduce2;
+
+	//switch for the input of the reduce
+	reduceMode reduce_mode;
 
 	//the OCL Id the accelerator is mapped to
 	cl_device_id deviceId;
@@ -1040,7 +1067,7 @@ public:
 						for (size_t i = 0; i < logdev.size(); ++i)
 							devices.push_back(clEnvironment::instance()->getDevice(logdev[i]));
 						for (size_t i = 0; i < devices.size(); ++i)
-							if (accelerators[i]->init(devices[i], kernel_code,
+							if (accelerators[i]->init(devices[i], getReduceMode(), kernel_code,
                                                       kernel_name1, kernel_name2, saveBinary, reuseBinary) < 0)
 								return -1;
 						break;
@@ -1056,7 +1083,7 @@ public:
 						devices.clear();
 						devices.push_back(clEnvironment::instance()->getDevice( //convert to OpenCL Id
 								clEnvironment::instance()->getCPUDevice())); //retrieve logical device
-						if (accelerators[0]->init(devices[0], kernel_code,
+						if (accelerators[0]->init(devices[0], getReduceMode(), kernel_code,
                                                   kernel_name1, kernel_name2, saveBinary, reuseBinary) < 0)
 							return -1;
 					}
@@ -1078,7 +1105,7 @@ public:
 				// NOTE: the number of devices requested can be lower than the number of accelerators.
 				// TODO must be managed
 				for (size_t i = 0; i < devices.size(); ++i)
-					accelerators[i]->init(devices[i], kernel_code, kernel_name1,
+					accelerators[i]->init(devices[i], getReduceMode(), kernel_code, kernel_name1,
                                           kernel_name2, saveBinary, reuseBinary);
 			}
 		}
@@ -1100,6 +1127,9 @@ protected:
 
 	virtual bool isPureMap() const    { return false; }
 	virtual bool isPureReduce() const { return false; }
+	reduceMode getReduceMode() {
+		return isPureReduce() ? REDUCE_INPUT : REDUCE_OUTPUT;
+	}
 
     virtual int svc_init() { return nodeInit(); }
 
@@ -1187,7 +1217,7 @@ protected:
 
             if ((void*)inPtr == (void*)outPtr) {
                 for (size_t i = 0; i < accelerators.size(); ++i) {
-                    accelerators[i]->setInPlace();
+                    accelerators[i]->setInPlace(reducePtr);
                 }
             } else {
                 compute_accmem(Task.getSizeOut(), acc_out);
@@ -1200,7 +1230,7 @@ protected:
                 
                 if (memorychange) {
                     for (size_t i = 0; i < accelerators.size(); ++i) {
-                        accelerators[i]->relocateOutputBuffer(outPtr); 
+                        accelerators[i]->relocateOutputBuffer(outPtr, reducePtr);
                     }
                     oldSizeOut = Task.getBytesizeOut();
                     old_outPtr = outPtr;
@@ -1242,7 +1272,7 @@ protected:
 		if (isPureReduce()) {
 			//init reduce
 			for (size_t i = 0; i < accelerators.size(); ++i)
-                accelerators[i]->initReduce(REDUCE_INPUT);
+                accelerators[i]->initReduce();
 
 			//wait for cross-accelerator h2d
 			waitforh2d();

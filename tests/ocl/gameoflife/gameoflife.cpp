@@ -5,7 +5,7 @@
  *      Author: droccom
  */
 
-#define NROWS 10240
+#define NROWS 1024
 #define NITERS 100
 #define SEEDALIVE 30 //%
 
@@ -107,7 +107,7 @@ int main(int argc, char * argv[]) {
 	oclTask oclt(bitmap_seed, bitmap_out, length, niters, nrows);
 	ff::ff_stencilReduceLoopOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf,
 			reducef, 0, NULL, NACC, nrows + 1);
-    //oclStencilReduceOneShot.pickGPU(2);
+	SET_DEVICE_TYPE(oclStencilReduceOneShot);
 	gettimeofday(&tv1, NULL);
 	oclStencilReduceOneShot.run_and_wait_end();
 	gettimeofday(&tv2, NULL);

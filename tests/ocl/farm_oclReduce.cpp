@@ -32,7 +32,10 @@
  * NOTE: the farm is not an ordered farm (in case use ff_ofarm).
  */
 
-#define FF_OCL
+#if !defined(FF_OPENCL)
+#define FF_OPENCL
+#endif
+
 #include <ff/stencilReduceOCL.hpp>
 #include <ff/farm.hpp>
 
