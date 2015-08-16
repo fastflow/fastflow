@@ -53,6 +53,9 @@ namespace ff {
 enum reduceMode { REDUCE_INPUT, REDUCE_OUTPUT };
 
 
+/**
+ * a task to be executed by a 1D stencilReduceLoop node.
+ */
 template<typename TaskT_, typename Tin_, typename Tout_ = Tin_>
 class baseOCLTask {
 public:
@@ -70,6 +73,7 @@ public:
     // - setInPtr for setting the host-pointer to the input array
     // - setOutPtr for setting the host-pointer to the output array
     // - setEnvPtr for adding to env-list the host-pointer to a read-only env
+    // - other methods from classes derived from baseOCLTask
     // NOTE: order of setEnvPtr calls matters! TODO refine interface?
     virtual void setTask(const TaskT *t) = 0;
     
@@ -197,6 +201,48 @@ protected:
 };
 
 
+
+/**
+ * a task to be executed by a 2D stencilReduceLoop node.
+ * This class represent a computation to be performed on a
+ * logical 2D matrix, stored in host memory as 1D row-major array.
+ */
+template<typename TaskT_, typename Tin_, typename Tout_ = Tin_>
+class baseOCLTask_2D: public baseOCLTask<TaskT_, Tin_, Tout_> {
+public:
+	/**
+	 * set the number of rows of the logical 2D input.
+	 * To be called from setTask.
+	 *
+	 * @param h is the number of rows
+	 */
+	void setHeight(size_t h) {
+		height = h;
+	}
+
+	/**
+	 * set the number of columns of the logical 2D input.
+	 * To be called from setTask.
+	 *
+	 * @param h is the number of columns
+	 */
+	void setWidth(size_t w) {
+		width = w;
+	}
+
+	//runtime getter functions
+	size_t getHeight() const { return height;}
+	size_t getWidth() const {return width;}
+
+protected:
+	size_t height, width;
+};
+
+
+
+/**
+ * a virtual OpenCL accelerator.for 1D kernels
+ */
 template<typename T, typename TOCL = T>
 class ff_oclAccelerator {
 public:
@@ -210,10 +256,10 @@ public:
 		inputBuffer = outputBuffer = reduceBuffer = NULL;
 
 		sizeInput = sizeInput_padded = 0;
-		lenInput = offset1_in = pad1_in = pad2_in = lenInput_global = 0;
+		lenInput = offset1_in = halo_in_left = halo_in_right = lenInput_global = 0;
 
 		sizeOutput = sizeOutput_padded = 0;
-		lenOutput = offset1_out = pad1_out = pad2_out = lenOutput_global = 0;
+		lenOutput = offset1_out = halo_out_left = halo_out_right = lenOutput_global = 0;
 
 		nevents_h2d = nevents_map = 0;
 		event_d2h = event_map = event_reduce1 = event_reduce2 = NULL;
@@ -234,7 +280,7 @@ public:
         }
 	}
 
-    ~ff_oclAccelerator() {
+    virtual ~ff_oclAccelerator() {
         if (my_own_allocator) {
             delete allocator;
             allocator = NULL;
@@ -333,10 +379,10 @@ public:
         offset1_in = P.first;
         lenInput   = P.second;
         lenInput_global = len_global;
-        pad1_in = (std::min)(width, offset1_in);
-        pad2_in = (std::min)(width, lenInput_global - lenInput - offset1_in);
+        halo_in_left = (std::min)(width, offset1_in);
+        halo_in_right = (std::min)(width, lenInput_global - lenInput - offset1_in);
 		sizeInput = lenInput * sizeof(Tin);
-		sizeInput_padded = sizeInput + (pad1_in + pad2_in) * sizeof(Tin);
+		sizeInput_padded = sizeInput + (halo_in_left + halo_in_right) * sizeof(Tin);
 
         if (oldPtr != NULL) allocator->updateKey(oldPtr, newPtr, context);
     }
@@ -379,10 +425,10 @@ public:
         offset1_out = P.first;
 		lenOutput   = P.second;
 		lenOutput_global = len_global;
-		pad1_out = (std::min)(width, offset1_out);
-		pad2_out = (std::min)(width, lenOutput_global - lenOutput - offset1_out);
+		halo_out_left = (std::min)(width, offset1_out);
+		halo_out_right = (std::min)(width, lenOutput_global - lenOutput - offset1_out);
 		sizeOutput = lenOutput * sizeof(Tout);
-		sizeOutput_padded = sizeOutput + (pad1_out + pad2_out) * sizeof(Tout);
+		sizeOutput_padded = sizeOutput + (halo_out_left + halo_out_right) * sizeof(Tout);
 
         if (oldPtr != NULL) allocator->updateKey(oldPtr, newPtr, context);
     }
@@ -436,8 +482,8 @@ public:
         outputBuffer      = inputBuffer;          
         lenOutput         = lenInput;
 		lenOutput_global  = lenInput_global;
-		pad1_out          = pad1_in;
-		pad2_out          = pad2_in;
+		halo_out_left          = halo_in_left;
+		halo_out_right          = halo_in_right;
 		offset1_out       = offset1_in;
 		sizeOutput        = sizeInput;
 		sizeOutput_padded = sizeInput_padded;
@@ -459,7 +505,7 @@ public:
 		checkResult(status, "setKernelArg output");
 	}
 
-	void setMapKernelArgs(const size_t envSize) {
+	virtual void setMapKernelArgs(const size_t envSize) {
 		cl_uint idx = 0;
 		//set iteration-dynamic MAP kernel args (init)
 		cl_int status = clSetKernelArg(kernel_map, idx++, sizeof(cl_mem), &inputBuffer);
@@ -475,7 +521,7 @@ public:
 		checkResult(status, "setKernelArg local input length");
 		status = clSetKernelArg(kernel_map, idx++, sizeof(cl_uint), (void *) &offset1_in);
 		checkResult(status, "setKernelArg offset");
-		status = clSetKernelArg(kernel_map, idx++, sizeof(cl_uint), (void *) &pad1_out); // CHECK !!!
+		status = clSetKernelArg(kernel_map, idx++, sizeof(cl_uint), (void *) &halo_out_left); // CHECK !!!
 		checkResult(status, "setKernelArg pad");
 
         for(size_t k=0; k < envSize; ++k) {
@@ -486,7 +532,7 @@ public:
 
 	void asyncH2Dinput(Tin *p) {
         if (nevents_h2d >= events_h2d.size()) events_h2d.reserve(nevents_h2d);
-		p += offset1_in - pad1_in;
+		p += offset1_in - halo_in_left;
 		cl_int status = clEnqueueWriteBuffer(cmd_queue, inputBuffer, CL_FALSE, 0,
                                              sizeInput_padded, p, 0, NULL, &events_h2d[nevents_h2d++]);
 		checkResult(status, "copying Task to device input-buffer");
@@ -501,32 +547,32 @@ public:
 
 	void asyncD2Houtput(Tout *p) {
 		cl_int status = clEnqueueReadBuffer(cmd_queue, outputBuffer, CL_FALSE,
-                                            pad1_out * sizeof(Tout), sizeOutput, p + offset1_out, 0, NULL, &event_d2h);
+                                            halo_out_left * sizeof(Tout), sizeOutput, p + offset1_out, 0, NULL, &event_d2h);
 		checkResult(status, "copying output back from device");
 	}
 
 	void asyncD2Hborders(Tout *p) {
 		cl_int status = clEnqueueReadBuffer(cmd_queue, outputBuffer, CL_FALSE,
-                                            pad1_out * sizeof(Tout), width * sizeof(Tout), p + offset1_out, 0, NULL,
+                                            halo_out_left * sizeof(Tout), width * sizeof(Tout), p + offset1_out, 0, NULL,
                                             &events_h2d[0]);
 		checkResult(status, "copying border1 back from device");
 		++nevents_h2d;
 		status = clEnqueueReadBuffer(cmd_queue, outputBuffer, CL_FALSE,
-                                     (pad1_out + lenOutput - width) * sizeof(Tout), width * sizeof(Tout),
+                                     (halo_out_left + lenOutput - width) * sizeof(Tout), width * sizeof(Tout),
                                      p + offset1_out + lenOutput - width, 0, NULL, &event_d2h);
 		checkResult(status, "copying border2 back from device");
 	}
 
 	void asyncH2Dborders(Tout *p) {
-		if (pad1_out) {
+		if (halo_out_left) {
 			cl_int status = clEnqueueWriteBuffer(cmd_queue, outputBuffer, CL_FALSE, 0,
-                                                 pad1_out * sizeof(Tout), p + offset1_out - pad1_out, 0, NULL,
+                                                 halo_out_left * sizeof(Tout), p + offset1_out - halo_out_left, 0, NULL,
                                                  &events_h2d[nevents_h2d++]);
 			checkResult(status, "copying left border to device");
 		}
-		if (pad2_out) {
+		if (halo_out_right) {
 			cl_int status = clEnqueueWriteBuffer(cmd_queue, outputBuffer, CL_FALSE,
-                                                 (pad1_out + lenOutput) * sizeof(Tout), pad2_out * sizeof(Tout),  // NOTE: in a loop Tin == Tout !!
+                                                 (halo_out_left + lenOutput) * sizeof(Tout), halo_out_right * sizeof(Tout),  // NOTE: in a loop Tin == Tout !!
                                                  p + offset1_out + lenOutput, 0, NULL, &events_h2d[nevents_h2d++]);
 			checkResult(status, "copying right border to device");
 		}
@@ -539,7 +585,7 @@ public:
 		cl_mem tmp = (reduce_mode == REDUCE_OUTPUT) ? outputBuffer : inputBuffer;
 		cl_uint len = (reduce_mode == REDUCE_OUTPUT) ? lenOutput : lenInput;
 		cl_int status  = clSetKernelArg(kernel_reduce, idx++, sizeof(cl_mem), &tmp);
-		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(uint), &pad1_in);
+		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(uint), &halo_in_left);
 		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_mem), &reduceBuffer);
 		status        |= clSetKernelArg(kernel_reduce, idx++, sizeof(cl_uint),	(void *) &len);
 		status        |= clSetKernelArg(kernel_reduce, idx++, wg_red_mem, NULL);
@@ -814,7 +860,8 @@ protected:
 	cl_command_queue cmd_queue;
 	cl_mem reduceBuffer;
 	cl_kernel kernel_map, kernel_reduce, kernel_init;
-private:
+
+protected:
     const bool from_source;
     bool my_own_allocator; 
     ff_oclallocator *allocator;
@@ -834,12 +881,12 @@ private:
     size_t sizeInput_padded; //byte-size of the input-portion plus left and right borders
 	size_t lenInput; //n. elements in the input-portion
 	size_t offset1_in; //left-offset (begin input-portion wrt to begin input)
-	size_t pad1_in; //n. elements in the left-border
-	size_t pad2_in; //n. elements in the right-border
+	size_t halo_in_left; //n. elements in the left-halo
+	size_t halo_in_right; //n. elements in the right-halo
 	size_t lenInput_global; //n. elements in the input
 
 	size_t sizeOutput, sizeOutput_padded;
-	size_t lenOutput, offset1_out, pad1_out, pad2_out, lenOutput_global;
+	size_t lenOutput, offset1_out, halo_out_left, halo_out_right, lenOutput_global;
 
 	//static input-independent estimation of workgroup sizing
 	size_t wgsize_map_static, wgsize_reduce_static;
@@ -867,6 +914,7 @@ private:
 };
 
 
+
 /*!
  * \class ff_stencilReduceLoopOCL_1D
  * \ingroup high_level_patterns
@@ -876,12 +924,11 @@ private:
  * This class is defined in \ref stencilReduceOCL.hpp
  */
     
-template<typename T, typename TOCL = T>
+template<typename T, typename TOCL = T, typename accelerator_t = ff_oclAccelerator<T, TOCL> >
 class ff_stencilReduceLoopOCL_1D: public ff_oclNode_t<T> {
 public:
 	typedef typename TOCL::Tin         Tin;
 	typedef typename TOCL::Tout        Tout;
-	typedef ff_oclAccelerator<T, TOCL> accelerator_t;
 
     // build the program from the mapf and reducef functions
 	ff_stencilReduceLoopOCL_1D(const std::string &mapf,			              //OpenCL elemental function 
@@ -1196,13 +1243,8 @@ protected:
 		// adjust allocator input-portions and relocate input device memory if needed
 		if (oldBytesizeIn != Task.getBytesizeIn()) {
 			compute_accmem(Task.getSizeIn(),  acc_in);
-
-            const bool memorychange = (oldBytesizeIn < Task.getBytesizeIn());
-
-            for (size_t i = 0; i < accelerators.size(); ++i) {
-                accelerators[i]->adjustInputBufferOffset(inPtr, (memorychange?old_inPtr:NULL), acc_in[i], Task.getSizeIn());
-            }
-
+			const bool memorychange = (oldBytesizeIn < Task.getBytesizeIn());
+			adjustInputBufferOffset(memorychange);
             if (memorychange) {
                 for (size_t i = 0; i < accelerators.size(); ++i) {
                     accelerators[i]->relocateInputBuffer(inPtr, Task.getReuseIn(), reducePtr);
@@ -1401,7 +1443,14 @@ protected:
 		return (oneshot ? NULL : task);
 	}
 
-private:
+protected:
+	virtual void adjustInputBufferOffset(const bool memorychange) {
+		for (size_t i = 0; i < accelerators.size(); ++i)
+			accelerators[i]->adjustInputBufferOffset(Task.getInPtr(),
+					(memorychange ? old_inPtr : NULL), acc_in[i],
+					Task.getSizeIn());
+	}
+
 	void setcode(const std::string &codestr1, const std::string &codestr2) {
 		int n = 0;
 		if (codestr1 != "") {
@@ -1483,7 +1532,6 @@ private:
 			accelerators[i]->waitformap();
 	}
 
-private:
 	TOCL Task;
 	const bool oneshot;
     bool saveBinary, reuseBinary;    
@@ -1507,6 +1555,7 @@ private:
     Tout  *old_outPtr;
 	size_t oldBytesizeIn, oldSizeOut, oldSizeReduce;
 };
+
 
 
 /*!
@@ -1632,6 +1681,90 @@ public:
 	}
 
 };
+
+
+
+/*** 2D ***/
+
+/**
+ * a virtual OpenCL accelerator for 2D map kernels working on
+ * logical 2D matrices stored as row-major arrays.
+ */
+template<typename T, typename TOCL = T>
+class ff_oclAccelerator_2D : public ff_oclAccelerator<T, TOCL> {
+public:
+	typedef typename TOCL::Tin  Tin;
+	typedef typename TOCL::Tout Tout;
+
+	ff_oclAccelerator_2D(ff_oclallocator *alloc, const size_t halo_width_, const Tout &identityVal, const bool from_source=false) :
+		ff_oclAccelerator<T,TOCL>(alloc, halo_width_, identityVal, from_source) {
+		heightInput_global = 0;
+		widthInput_global = 0;
+	}
+
+	void setMapKernelArgs(const size_t envSize) {
+		cl_uint idx = 0;
+		//set iteration-dynamic MAP kernel args (init)
+		cl_int status = clSetKernelArg(this->kernel_map, idx++, sizeof(cl_mem), &this->inputBuffer);
+		checkResult(status, "setKernelArg input");
+		status = clSetKernelArg(this->kernel_map, idx++, sizeof(cl_mem), &this->outputBuffer);
+		checkResult(status, "setKernelArg output");
+
+		//set iteration-invariant MAP kernel args
+		status = clSetKernelArg(this->kernel_map, idx++, sizeof(cl_uint), (void *) &heightInput_global);
+		checkResult(status, "setKernelArg global input height");
+		status = clSetKernelArg(this->kernel_map, idx++, sizeof(cl_uint), (void *) &widthInput_global);
+				checkResult(status, "setKernelArg global input width");
+
+		status = clSetKernelArg(this->kernel_map, idx++, sizeof(cl_uint), (void *) &this->lenOutput);
+		checkResult(status, "setKernelArg local input length");
+		status = clSetKernelArg(this->kernel_map, idx++, sizeof(cl_uint), (void *) &this->offset1_in);
+		checkResult(status, "setKernelArg offset");
+		status = clSetKernelArg(this->kernel_map, idx++, sizeof(cl_uint), (void *) &this->halo_out_left);
+		checkResult(status, "setKernelArg halo");
+
+	    for(size_t k=0; k < envSize; ++k) {
+	    	status = clSetKernelArg(this->kernel_map, idx++, sizeof(cl_mem), &(this->envBuffer[k].first));
+	    	checkResult(status, "setKernelArg env");
+	    }
+	}
+
+	/**
+	 * set the global number of rows of the logical 2D input.
+	 */
+	void setHeight(unsigned int h) {
+		heightInput_global = h;
+	}
+
+	void setWidth(unsigned int w) {
+		widthInput_global = w;
+	}
+
+private:
+	unsigned int heightInput_global, widthInput_global;
+};
+
+
+
+/**
+ * a stencilReduceLoop for executing 2D OCL tasks.
+ */
+template<typename T, typename TOCL = T>
+class ff_stencilReduceLoopOCL_2D: public ff_stencilReduceLoopOCL_1D<T,TOCL,ff_oclAccelerator_2D<T,TOCL> > {
+public:
+	using ff_stencilReduceLoopOCL_1D<T,TOCL,ff_oclAccelerator_2D<T,TOCL> >::ff_stencilReduceLoopOCL_1D;
+
+protected:
+	void adjustInputBufferOffset(const bool memorychange) {
+		for (size_t i = 0; i < this->accelerators.size(); ++i) {
+			this->accelerators[i]->setWidth(this->Task.getWidth());
+			this->accelerators[i]->setHeight(this->Task.getHeight());
+		}
+		ff_stencilReduceLoopOCL_1D<T,TOCL,ff_oclAccelerator_2D<T,TOCL> >::adjustInputBufferOffset(memorychange);
+	}
+};
+
+
 
 }
 // namespace ff

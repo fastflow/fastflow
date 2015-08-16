@@ -13,7 +13,6 @@
 
 namespace ff {
 
-
 /*
  * An instance of the elemental function is executed
  * for each value in [0, local_size-1] where local_size
@@ -58,6 +57,108 @@ namespace ff {
 "\t        i += gridSize;\n"                                                         \
 "\t    }\n"                                                                          \
 "}\n"
+
+
+
+/*
+ * An instance of the elemental function is executed
+ * for each value in [0, local_size-1] where local_size
+ * is the device-local size of 'input' and 'env1' arrays.
+ *
+ * API:
+ * 'name' is the name of the string variable in which the code is stored
+ * 'inT' is the element type of the input
+ * 'size' is the global size of the input array
+ * 'idx' is the global index
+ * 'env1T' is the element type of the constant environment array
+ * 'code' is the OpenCL code of the elemental function
+ */
+#define FF_OCL_STENCIL_ELEMFUNC1_1D(name,inT,size,idx,env1T,code)         \
+    static char name[] =						             \
+        "kern_" #name "|"	 					             \
+        #inT "|"                                                                     \
+"\n\n"\
+"#define GET_IN(i) (in[i-offset])\n"\
+"#define GET_ENV1(i) (env1[i-offset])\n"\
+#inT " f" #name "(\n"\
+"\t__global " #inT "* in,\n"\
+"\tconst uint " #size ",\n"\
+"\tconst int " #idx ",\n"\
+"\tconst int offset,\n"\
+"\t__global const " #env1T "* env1) {\n"\
+"\t   " #code ";\n"\
+"}\n\n"\
+"__kernel void kern_" #name "(\n"\
+"\t__global " #inT  "* input,\n"\
+"\t__global " #inT "* output,\n"\
+"\tconst uint inSize,\n"\
+"\tconst uint maxItems,\n"\
+"\tconst uint offset,\n"\
+"\tconst uint pad,\n"\
+"\t__global const " #env1T "* env1) {\n"\
+"\t    size_t i = get_global_id(0);\n"\
+"\t    size_t ig = i + offset;\n"\
+"\t    size_t gridSize = get_local_size(0)*get_num_groups(0);\n"\
+"\t    while(i < maxItems)  {\n"\
+"\t        output[i+pad] = f" #name "(input+pad,inSize,ig,offset,env1);\n"\
+"\t        i += gridSize;\n"\
+"\t    }\n"\
+"}\n"
+
+
+
+/*
+ * An instance of the elemental function is executed
+ * for each value in [0, local_size-1] where local_size
+ * is the device-local size of 'input' and 'env1' arrays.
+ *
+ * API:
+ * 'name' is the name of the string variable in which the code is stored
+ * 'inT' is the element type of the input
+ * 'height' is the global number of rows in the input array
+ * 'width' is the global number of columns in the input array
+ * 'row' is the global row-index
+ * 'col' is the global column-index
+ * 'env1T' is the element type of the constant environment array
+ * 'code' is the OpenCL code of the elemental function
+ */
+#define FF_OCL_STENCIL_ELEMFUNC1_2D(name,inT,height,width,row,col,env1T,code)         \
+    static char name[] =						             \
+        "kern_" #name "|"	 					             \
+        #inT "|"                                                                     \
+"\n\n"\
+"#define GET_IN(i,j) (in[((i)*"#width"+(j))-offset])\n"\
+"#define GET_ENV1(i,j) (env1[((i)*"#width"+(j))-offset])\n"\
+#inT " f" #name "(\n"\
+"\t__global " #inT "* in,\n"\
+"\tconst uint " #height ",\n"\
+"\tconst uint " #width ",\n"\
+"\tconst int " #row ",\n"\
+"\tconst int " #col ",\n"\
+"\tconst int offset,\n"\
+"\t__global const " #env1T "* env1) {\n"\
+"\t   " #code ";\n"\
+"}\n\n"\
+"__kernel void kern_" #name "(\n"\
+"\t__global " #inT  "* input,\n"\
+"\t__global " #inT "* output,\n"\
+"\tconst uint inHeight,\n"\
+"\tconst uint inWidth,\n"\
+"\tconst uint maxItems,\n"\
+"\tconst uint offset,\n"\
+"\tconst uint halo,\n"\
+"\t__global const " #env1T "* env1) {\n"\
+"\t    size_t i = get_global_id(0);\n"\
+"\t    size_t ig = i + offset;\n"\
+"\t    size_t r = ig / inWidth;\n"\
+"\t    size_t c = ig % inWidth;\n"\
+"\t    size_t gridSize = get_local_size(0)*get_num_groups(0);\n"\
+"\t    while(i < maxItems)  {\n"\
+"\t        output[i+halo] = f" #name "(input+halo,inHeight,inWidth,r,c,offset,env1);\n"\
+"\t        i += gridSize;\n"\
+"\t    }\n"\
+"}\n"
+
 
 
 /*

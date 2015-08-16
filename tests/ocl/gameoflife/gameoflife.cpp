@@ -21,6 +21,7 @@ using namespace ff;
 
 #define CHECK 1
 #ifdef CHECK
+#define VERIFY
 #include "../ctest.h"
 #else
 #define NACC 1
@@ -37,28 +38,29 @@ inline char pixel2char(unsigned char x) {
 	return x ? '*' : ' ';
 }
 
-void print(unsigned char *bmp, unsigned long w, const char *label) {
+void print(unsigned char *bmp, unsigned int w, const char *label) {
 	printf("+++ %s\n", label);
 	//std::cout << "* " << label << std::endl;
-	for (unsigned long r = 0; r < w; ++r) {
+	for (unsigned int r = 0; r < w; ++r) {
 		printf("* ");
-		for (unsigned long c = 0; c < w; ++c)
+		for (unsigned int c = 0; c < w; ++c)
 			printf("%c ", pixel2char(bmp[at(r, c, w)]));
 		printf("\n");
 	}
 }
 
-void print_diff(unsigned char *a, unsigned char *b, unsigned long w) {
-	unsigned long ndiff = 0;
-	for (unsigned long r = 0; r < w; ++r)
-		for (unsigned long c = 0; c < w; ++c)
+unsigned int get_and_print_diff(unsigned char *a, unsigned char *b, unsigned int w) {
+	unsigned int ndiff = 0;
+	for (unsigned int r = 0; r < w; ++r)
+		for (unsigned int c = 0; c < w; ++c)
 			if (a[at(r, c, w)] != b[at(r, c, w)]) {
-				printf("a(%lu,%lu) = %c, b(%lu,%lu) = %c\n", r, c,
+				printf("a(%u,%u) = %c, b(%u,%u) = %c\n", r, c,
 						pixel2char(a[at(r, c, w)]), r, c,
 						pixel2char(b[at(r, c, w)]));
 				++ndiff;
 			}
-	printf("+ %lu diff found\n", ndiff);
+	printf("+ %u diff found\n", ndiff);
+	return ndiff;
 }
 
 int main(int argc, char * argv[]) {
@@ -66,46 +68,49 @@ int main(int argc, char * argv[]) {
 	printf("syntax: %s nrows niter rngseed\n", argv[0]);
 
 	//set parameters
-	unsigned long nrows = (argc > 1) ? atoi(argv[1]) : NROWS;
+	unsigned int nrows = (argc > 1) ? atoi(argv[1]) : NROWS;
 	unsigned int niters = (argc > 2) ? atoi(argv[2]) : NITERS;
 	unsigned int rngseed = (argc > 3) ? atoi(argv[3]) : 0;
-	printf("using parameters: nrows = %lu, niter = %u, rngseed = %u\n", nrows,
+	printf("using parameters: nrows = %u, niter = %u, rngseed = %u\n", nrows,
 			niters, rngseed);
 
 	struct timeval tv1, tv2;
 
 	//seed
-	unsigned long length = nrows * nrows;
+	unsigned int length = nrows * nrows;
 	unsigned char *bitmap_seed = (unsigned char *) malloc(
 			length * sizeof(unsigned char));
 
-//  //random
-//	srand(rngseed);
-//	for (unsigned long i = 0; i < length; ++i)
-//		bitmap_seed[i] = (rand() % 100 < SEEDALIVE);
+  //random
+	srand(rngseed);
+	for (unsigned int i = 0; i < length; ++i)
+		bitmap_seed[i] = (rand() % 100 < SEEDALIVE);
 
-	//custom: ALIANTE
-	for (unsigned long i = 0; i < length; ++i)
-		bitmap_seed[i] = 0;
-	bitmap_seed[at(5, 1, nrows)] = 1;
-	bitmap_seed[at(5, 2, nrows)] = 1;
-	bitmap_seed[at(5, 3, nrows)] = 1;
-	bitmap_seed[at(4, 3, nrows)] = 1;
-	bitmap_seed[at(3, 2, nrows)] = 1;
+//	//custom: ALIANTE
+//	for (unsigned int i = 0; i < length; ++i)
+//		bitmap_seed[i] = 0;
+//	bitmap_seed[at(3, 2, nrows)] = 1;
+//	bitmap_seed[at(4, 3, nrows)] = 1;
+//	bitmap_seed[at(5, 1, nrows)] = 1;
+//	bitmap_seed[at(5, 2, nrows)] = 1;
+//	bitmap_seed[at(5, 3, nrows)] = 1;
 #ifdef VERIFY
 	double sum = 0;
-	for (unsigned long i = 0; i < length; ++i)
+	for (unsigned int i = 0; i < length; ++i)
 	sum += (double) bitmap_seed[i];
 	sum /= length;
 	printf("+ seed alive-%% = %f\n", sum * 100);
 #endif
+#ifdef PRINT
+	print(bitmap_seed, nrows, "SEED");
+#endif
 
-	//PAR run
+	//OpenCL run
 	unsigned char *bitmap_out = (unsigned char *) malloc(
 			length * sizeof(unsigned char));
 	memcpy(bitmap_out, bitmap_seed, length * sizeof(unsigned char));
-	oclTask oclt(bitmap_seed, bitmap_out, length, niters, nrows);
-	ff::ff_stencilReduceLoopOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf,
+	oclTaskGol oclt(bitmap_seed, bitmap_out, length, niters, nrows);
+	ff::ff_stencilReduceLoopOCL_2D<oclTaskGol> oclStencilReduceOneShot(oclt, mapf,
 			reducef, 0, NULL, NACC, nrows + 1);
 	SET_DEVICE_TYPE(oclStencilReduceOneShot);
 	gettimeofday(&tv1, NULL);
@@ -113,13 +118,13 @@ int main(int argc, char * argv[]) {
 	gettimeofday(&tv2, NULL);
 	double extime_par = ((double) tv2.tv_sec - (double) tv1.tv_sec) * 1000
 			+ ((double) tv2.tv_usec - (double) tv1.tv_usec) / 1000;
-	printf("par ex. time = %f ms\n", extime_par);
+	printf("OCL ex. time = %f ms\n", extime_par);
 #ifdef PRINT
-	print(bitmap_out, nrows, "SLR OUTPUT");
+	print(bitmap_out, nrows, "OCL OUTPUT");
 #endif
 
 #ifdef VERIFY
-	//SEQ run
+	//multicore run
 #define swap(a,b) unsigned char *tmp = a; a = b; b = tmp;
 	unsigned char *bitmap_in_seq = (unsigned char *) malloc(
 			length * sizeof(unsigned char));
@@ -128,9 +133,6 @@ int main(int argc, char * argv[]) {
 			length * sizeof(unsigned char));
 	memcpy(bitmap_out_seq, bitmap_in_seq, length * sizeof(unsigned char));
 	unsigned int w = nrows;
-#ifdef PRINT
-	print(bitmap_in_seq, nrows, "SEED");
-#endif
 
     //std::cerr << "N of cores " << ff_numCores() << "\n";
     
@@ -141,13 +143,13 @@ int main(int argc, char * argv[]) {
 	for (unsigned int iter = 0; iter < niters; ++iter) {
 		swap(bitmap_in_seq, bitmap_out_seq);
 
-		//for (unsigned long r = 0; r < nrows; ++r) {
+		//for (unsigned int r = 0; r < nrows; ++r) {
 		pf.parallel_for(0, nrows, [&](const long r) {
-		  for (unsigned long c = 0; c < nrows; ++c) {
+		  for (unsigned int c = 0; c < nrows; ++c) {
 		    unsigned char alive_in = bitmap_in_seq[at(r, c, w)];
 		    unsigned char naliven = 0;
 		    naliven +=
-		      has_top(r) && has_left(c) ? bitmap_in_seq[at(r - 1, c-1, w)] : 0;
+		      has_top(r) && has_left(c) ? bitmap_in_seq[at(r-1, c-1, w)] : 0;
 		    naliven += has_top(r) ? bitmap_in_seq[at(r - 1, c, w)] : 0;
 		    naliven +=
 		      has_top(r) && has_right(c, w) ? bitmap_in_seq[at(r - 1, c+1, w)] : 0;
@@ -168,8 +170,9 @@ int main(int argc, char * argv[]) {
 #ifdef PRINT
 	print(bitmap_out_seq, nrows, "SEQ OUTPUT");
 #endif
-	print_diff(bitmap_out, bitmap_out_seq, nrows);
+	int ndiff = get_and_print_diff(bitmap_out, bitmap_out_seq, nrows);
 	free(bitmap_out_seq);
+	free(bitmap_in_seq);
 	//printf("seq ex. time = %f ms\n", extime_seq);
 	//printf("par vs seq speedup = %f\n", extime_seq / extime_par);
 	printf("parfor ex. time = %f ms\n", extime_seq);
@@ -179,5 +182,13 @@ int main(int argc, char * argv[]) {
 
 	free(bitmap_out);
 	free(bitmap_seed);
+
+#ifdef CHECK
+	if (ndiff) {
+			printf("Error\n");
+			exit(1); //ctest
+		}
+#endif
+
 	return 0;
 }
