@@ -307,7 +307,7 @@ static char name[] =\
 #T "|"\
 "\n\n"\
 "#define GET_IN(i) (in[(i)-offset])\n"\
-"#define GET_ENV(i) (env[i])\n"\
+"#define GET_ENV(i) (env[(i)])\n"\
 #T " f" #name "(\n"\
 "\t__global " #T "* in,\n"\
 "\tconst uint " #size ",\n"\

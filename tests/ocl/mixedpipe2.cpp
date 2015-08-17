@@ -88,15 +88,14 @@ FF_OCL_STENCIL_ELEMFUNC_1D_ENV(map2f, float, N, i, float,
 );
 
 FF_OCL_STENCIL_ELEMFUNC_1D_2ENV(map3f, float, N, i, float, float,
-	return GET_IN(i) + (float)1 / (GET_ENV1(i) + GET_ENV2(0));
+	return GET_IN(i) + 1 / (GET_ENV1(i) + GET_ENV2(0));
 );
 
-FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
+FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y, return (x+y));
 
-                          return (x+y); 
-                          );
+struct Task: public baseOCLTask<Task, float> {
+	float combinator(float const &x, float const &y) {return x+y;}
 
-struct Task: public baseOCLTask<Task, float, float> {
     Task():sum(0.0),arraySize(0),k(0),kernelId(0),C(nullptr),R(nullptr) {}
     Task(const size_t size, size_t k):
     	A(size),sum(0.0),arraySize(size),k(k),kernelId(0),C(nullptr),R(nullptr) {}
