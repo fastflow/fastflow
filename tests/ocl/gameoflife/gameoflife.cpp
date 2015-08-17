@@ -110,8 +110,9 @@ int main(int argc, char * argv[]) {
 			length * sizeof(unsigned char));
 	memcpy(bitmap_out, bitmap_seed, length * sizeof(unsigned char));
 	oclTaskGol oclt(bitmap_seed, bitmap_out, niters, nrows);
+	//create a 3-by-3 2D stencilReduceLoop node
 	ff::ff_stencilReduceLoopOCL_2D<oclTaskGol> oclStencilReduceOneShot(oclt, mapf,
-			reducef, 0, NULL, NACC, nrows + 1);
+			reducef, 0, NULL, NACC, 1, 1);
 	SET_DEVICE_TYPE(oclStencilReduceOneShot);
 	gettimeofday(&tv1, NULL);
 	oclStencilReduceOneShot.run_and_wait_end();
