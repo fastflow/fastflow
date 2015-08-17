@@ -204,8 +204,9 @@ int main(int argc, char * argv[]) {
 	basictype *M_in = new basictype[size], *M_out = new basictype[size];
 	init(M_in, M_out, size);
 	oclTask oclt(M_in, M_out, size);
+	//create 3-by-3 2D stencilReduceLoop node
 	ff_stencilReduceLoopOCL_2D<oclTask> oclStencilReduceOneShot(oclt, mapf,
-			reducef, 0, nullptr, nacc, WINWIDTH);
+			reducef, 0, nullptr, nacc, 1, 1);
 	SET_DEVICE_TYPE(oclStencilReduceOneShot);
 	oclStencilReduceOneShot.run_and_wait_end();
 
