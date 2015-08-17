@@ -103,10 +103,10 @@ struct oclTask: baseOCLTask<myTask, float, float> {
 	std::tuple<bool,bool,bool> in   = parseCmd(0, IN, cmd);  // expected: false, false, true 
 	std::tuple<bool,bool,bool> out  = parseCmd(0, OUT, cmd); // expected: true, false, true
 	
-	// not-copied in input (false), not re-used (false), deleted at the end (true) 
+	// A is not copied in input (false), nor the address is re-used (false), it will be deleted at the end (true) 
 	setInPtr(Aptr, Asize, std::get<0>(in),std::get<1>(in), std::get<2>(in));
 	
-	// copied back at the end (true), not re-used (false), deleted at the end (true)
+	// A is copied back at the end (true), the address is not re-used (false), it will be deleted at the end (true)
 	setOutPtr(Aptr, Asize, std::get<0>(out), std::get<1>(out), std::get<2>(out));
     }
 };

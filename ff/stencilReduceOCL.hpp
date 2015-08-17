@@ -79,8 +79,16 @@ public:
     
     /* --- the user may overrider these methods --- */ 
 
+    // called at the end of the stencil-reduce loop. It may be used to 
+    // perform per-task host memory cleanup (i.e. releasing the host memory 
+    // previously allocated in the setTask function) or to execute a 
+    // post-elaboration phase
+    virtual void   releaseTask(TaskT *t) {}
+    // computes the loop iteration condition
 	virtual bool   iterCondition(const Tout&, size_t) { return false; } 
+    // host reduce function
 	virtual Tout   combinator(const Tout&, const Tout&)  { return Tout(); }
+    // step functions
     virtual void   incIter()                     { ++iter; }
 	virtual size_t getIter() const               { return iter; }
 	virtual void   resetIter(const size_t val=0) { iter = val; } 
@@ -657,7 +665,11 @@ private:
 		size_t sourceSize = kc.length();
 		const char* code = kc.c_str();
 
-		//printf("code=\n%s\n", code);
+#ifdef FF_OPENCL_LOG
+		printf("/* ------------------------------------------------------- */\n");
+		printf("buildKernelCode:\n%s\n", code);
+		printf("/* ------------------------------------------------------- */\n");
+#endif
 		program = clCreateProgramWithSource(context, 1, &code, &sourceSize, &status);
         if (!program) {
             checkResult(status, "creating program with source");
@@ -1393,6 +1405,8 @@ protected:
             }
 		}
 
+        // device memory cleanup phase
+
         if (Task.getReleaseIn()) {
             for (size_t i = 0; i < accelerators.size(); ++i) 
                 accelerators[i]->releaseInput(inPtr);
@@ -1418,6 +1432,9 @@ protected:
             // TODO: management of oldEnvPtr !!
             // currently the size of the envbuffer should be always the same !
         }
+
+        // per task memory cleanup phase
+        Task.releaseTask(task);
 
 		return (oneshot ? NULL : task);
 	}
