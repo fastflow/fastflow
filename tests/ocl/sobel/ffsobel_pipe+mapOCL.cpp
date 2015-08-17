@@ -63,7 +63,10 @@
 using namespace cv;
 using namespace ff;
 
-long repeatTime = 1;  // allows to repeat the same set of images a numer of times
+const int NUM_WRITERS     = 8; // number of threads writing data into the disk
+const int NUM_CPU_WORKERS = 4; // parallelism degree for the CPU map (they computes in parallel small images)
+const long SMALL_SIZE     = 250000; // we consider an image small if #cols*rows <= SMALL_SIZE
+long repeatTime           = 1; // to repeat the same set of images a numer of times
 
 
 
@@ -162,21 +165,35 @@ struct oclTask: public baseOCLTask<Task, uchar, uchar> {
 //  0 for this test is the C++ Map (based on the parallel_for pattern)
 //  1 for this test is the OpenCL Map
 struct Kernel: ff_nodeSelector<Task> {
-    Kernel(const int selectedDevice = 0):selectedDevice(selectedDevice) {}
+    Kernel(const int preferredDevice = -1):preferredDevice(preferredDevice) {}
 
     Task *svc(Task *in) {
+       
+        const long cols = in->env.cols;
+        const long rows = in->env.rows;
+
+        int selectedDevice = preferredDevice;
+        if (selectedDevice < 0) {
+            if (cols*rows > SMALL_SIZE) selectedDevice = 1;
+            else selectedDevice = 0;
+        }             
+        unsigned long x = getusec();
         in = reinterpret_cast<Task*>(getNode(selectedDevice)->svc(in));
+        unsigned long y = getusec();
+        printf("(%ld,%ld) %ld (us) selected=%s\n", 
+               in->env.rows, in->env.cols, y-x, selectedDevice?"GPU":"CPU");
+
         return in;            
     }
 private:
-    const int selectedDevice;
+    int preferredDevice;
 };
 
 struct cpuMap: ff_Map<Task,Task> {    
     // sets the maximum n. of worker for the Map
     // spinWait is set to true
     // the scheduler is disabled by default
-    cpuMap(const long mapworkers=FF_AUTO):ff_Map<Task,Task>(mapworkers,true) {}
+    cpuMap(const long mapworkers=ff_realNumCores()):ff_Map<Task,Task>(mapworkers) {} //,true) {}
     
     Task *svc(Task *task) {
         uchar * src = task->src, * dst = task->dst;
@@ -192,7 +209,7 @@ struct cpuMap: ff_Map<Task,Task> {
                     else if (sum < 0) sum = 0;
                     dst[y*cols+x] = sum;
                 }
-            });        
+            }, (cols*rows>SMALL_SIZE)?ff_realNumCores():NUM_CPU_WORKERS); 
         return task;
     }
 };
@@ -202,12 +219,12 @@ struct cpuMap: ff_Map<Task,Task> {
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         std::cerr << "use: " << argv[0] 
-		  << " [-r num_repeat] [-g cpu-or-gpu (0|1)] <image-file> [image-file]\n";
+		  << " [-r num_repeat] [-g cpu-or-gpu (-1|0|1)] <image-file> [image-file]\n";
         return -1;
     }    
 
-    int cpuorgpu = 0;  // by default runs on the CPU
-    int start    = 1;
+    int cpuorgpu = -1;  // by default selects the device on the base of the image size
+    int start    =  1;
     long num_images = argc-1;
 
     const char *r = getOption(argv, argv+argc, "-r");
@@ -215,10 +232,10 @@ int main(int argc, char *argv[]) {
     assert(num_images >= 1);
     const char *g = getOption(argv, argv+argc, "-g");
     if (g) { cpuorgpu = atoi(g); start+=2; num_images -= 2; }
-    assert(cpuorgpu == 0 || cpuorgpu == 1);
 
     printf("num_images= %ld\n", num_images);
-    printf("executing %s\n", cpuorgpu?"CPU Map":"OpenCL Map");
+    if  (cpuorgpu<0) printf("selecting the device dynamically\n");
+    else             printf("executing %s\n", cpuorgpu?"OpenCL Map":"CPU Map");
 
     auto reader= [&](Task*, ff_node*const stage) -> Task* {
         
@@ -260,7 +277,7 @@ int main(int argc, char *argv[]) {
     
         const std::string &outfile = "./out/" + task->name;
         imwrite(outfile,  cv::Mat(rows, cols, CV_8U, dst, cv::Mat::AUTO_STEP));
-        std::cout << "File " << task->name << " has been written into the out dir\n";
+        //std::cout << "File " << task->name << " has been written into the out dir\n";
         delete [] dst;
         delete [] usrc; 
         delete    task;
@@ -276,9 +293,11 @@ int main(int argc, char *argv[]) {
     Kernel kern(cpuorgpu);
     kern.addNode(cpusobel);
     kern.addNode(sobel);
-    ff_node_F<Task> Writer(writer);
 
-    ff_Pipe<> pipe(Reader, kern, Writer);
+    // here we use a farm to write in parallel
+    ff_Farm<Task> farm(writer, NUM_WRITERS); 
+    farm.remove_collector();
+    ff_Pipe<> pipe(Reader, kern, farm);
 
     ffTime(START_TIME);
     if (pipe.run_and_wait_end()<0) {
