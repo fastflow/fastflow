@@ -109,7 +109,7 @@ int main(int argc, char * argv[]) {
 	unsigned char *bitmap_out = (unsigned char *) malloc(
 			length * sizeof(unsigned char));
 	memcpy(bitmap_out, bitmap_seed, length * sizeof(unsigned char));
-	oclTaskGol oclt(bitmap_seed, bitmap_out, length, niters, nrows);
+	oclTaskGol oclt(bitmap_seed, bitmap_out, niters, nrows);
 	ff::ff_stencilReduceLoopOCL_2D<oclTaskGol> oclStencilReduceOneShot(oclt, mapf,
 			reducef, 0, NULL, NACC, nrows + 1);
 	SET_DEVICE_TYPE(oclStencilReduceOneShot);

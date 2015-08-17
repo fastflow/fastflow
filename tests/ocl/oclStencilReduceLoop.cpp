@@ -55,19 +55,19 @@ typedef int basictype;
 
 FF_OCL_STENCIL_COMBINATOR(reducef, int, x, y, return (x+y));
 
-FF_OCL_STENCIL_ELEMFUNC1(mapf, int, N, i, in, i_, int, env, int res = in[i_];
-//if(i>0) res += in[i_-1]; if(i<(N-1)) res += in[i_+1];
-		++res; return res;);
+FF_OCL_STENCIL_ELEMFUNC_1D(mapf, int, N, i,
+		(void)N;
+		return GET_IN(i) + 1;
+);
 
-void init(basictype *M_in, basictype *out, int *env, int size) {
+void init(basictype *M_in, basictype *out, int size) {
 	for (int j = 0; j < size; ++j) {
 		M_in[j] = j;
-		env[j] = j * 10;
 		out[j] = 0;
 	}
 }
 
-basictype mapf_(basictype *in, int i, int *env, char *env2) {
+basictype mapf_(basictype *in, int i) {
 	basictype res = in[i];
 	++res;
 	return res;
@@ -86,8 +86,7 @@ void print_res(const char label[], basictype *M, basictype r, int size) {
 unsigned int check(basictype *M, basictype r, int size) {
 	unsigned int ndiff = 0;
 	basictype *in = new basictype[size], *M_out = new basictype[size];
-	int *env = new int[size];
-	init(in, M_out, env, size);
+	init(in, M_out, size);
 	basictype *tmp = in;
 	in = M_out;
 	M_out = tmp;
@@ -97,7 +96,7 @@ unsigned int check(basictype *M, basictype r, int size) {
 		in = M_out;
 		M_out = tmp;
 		for (int i = 0; i < size; ++i)
-			M_out[i] = mapf_(in, i, env, NULL);
+			M_out[i] = mapf_(in, i);
 		//reduce
 		red = 0;
 		for (int i = 0; i < size; ++i)
@@ -116,21 +115,22 @@ unsigned int check(basictype *M, basictype r, int size) {
 	}
 	std::cout << "check summary: " << ndiff << " diffs\n";
 	//std::cout <<"expected REDUCE = " << red << " (max " << std::numeric_limits<basictype>::max() << ")\n";
+	delete[] in;
+	delete[] M_out;
 	return ndiff;
 }
 
-struct oclTask: public baseOCLTask<oclTask, basictype, int> {
+struct oclTask: public baseOCLTask<oclTask, basictype> {
 	oclTask() :
-			M_in(NULL), M_out(NULL), result(0), size(0), env(NULL) {
+			M_in(NULL), M_out(NULL), result(0), size(0) {
 	}
-	oclTask(basictype *M_in_, basictype *M_out_, int *env_, int size_) :
-			M_in(M_in_), M_out(M_out_), result(0), size(size_), env(env_) {
+	oclTask(basictype *M_in_, basictype *M_out_, int size_) :
+			M_in(M_in_), M_out(M_out_), result(0), size(size_) {
 	}
 	void setTask(const oclTask *t) {
 		assert(t);
 		setInPtr(t->M_in, t->size);
 		setOutPtr(t->M_out);
-		setEnvPtr(t->env, t->size);
 		setReduceVar(&(t->result));
 	}
 	bool iterCondition(const Tin &x, size_t iter) {
@@ -143,7 +143,6 @@ struct oclTask: public baseOCLTask<oclTask, basictype, int> {
 
 	basictype *M_in, *M_out, result;
 	const int size;
-	int *env;
 };
 
 int main(int argc, char * argv[]) {
@@ -169,9 +168,8 @@ int main(int argc, char * argv[]) {
 			niters = atol(argv[3]);
 	}
 	basictype *M_in = new basictype[size], *M_out = new basictype[size];
-	int *env = new int[size];
-	init(M_in, M_out, env, size);
-	oclTask oclt(M_in, M_out, env, size);
+	init(M_in, M_out, size);
+	oclTask oclt(M_in, M_out, size);
 	ff_stencilReduceLoopOCL_1D<oclTask> oclStencilReduceOneShot(oclt, mapf,
 			reducef, 0, nullptr, nacc, WINWIDTH);
 	SET_DEVICE_TYPE(oclStencilReduceOneShot);
@@ -186,6 +184,5 @@ int main(int argc, char * argv[]) {
 #endif
 	delete[] M_in;
 	delete[] M_out;
-	delete[] env;
 	return 0;
 }

@@ -22,7 +22,7 @@
  * 'env1T' is the element type of the constant environment array
  * 'code' is the OpenCL code of the elemental function
  */
-FF_OCL_STENCIL_ELEMFUNC1_2D(mapf,unsigned char,h,w,r,c,unsigned int,
+FF_OCL_STENCIL_ELEMFUNC_2D(mapf,unsigned char,h,w,r,c,
 		unsigned char alive_in = GET_IN(r,c);
 		unsigned char naliven = 0;
         naliven += r>0 && c>0 ? GET_IN(r-1,c-1) : 0; //top-left
@@ -42,21 +42,19 @@ FF_OCL_STENCIL_COMBINATOR(reducef, unsigned char, x, y,
 
 struct oclTaskGol: public ff::baseOCLTask_2D<oclTaskGol, unsigned char> {
 	oclTaskGol() :
-			M_in(NULL), M_out(NULL), size(0), niters(0), someone(0), nrows_ptr(new unsigned int(0)) {
+			M_in(NULL), M_out(NULL), niters(0), someone(0), nrows(0) {
 	}
-	oclTaskGol(unsigned char *M_in_, unsigned char *M_out_, unsigned long size_, unsigned int niters_, unsigned int nrows) :
-			M_in(M_in_), M_out(M_out_), size(size_), niters(niters_), someone(0), nrows_ptr(new unsigned int(nrows)) {
+	oclTaskGol(unsigned char *M_in_, unsigned char *M_out_, unsigned int niters_, unsigned int nrows_) :
+			M_in(M_in_), M_out(M_out_), niters(niters_), someone(0), nrows(nrows_) {
 	}
-	~oclTaskGol() {delete nrows_ptr;}
 
 	void setTask(const oclTaskGol *t) {
 		assert(t);
-		setInPtr(t->M_in, t->size);
-		setOutPtr(t->M_out, t->size);
-		setEnvPtr(t->nrows_ptr, 1, true);
+		setInPtr(t->M_in, t->nrows * t->nrows);
+		setOutPtr(t->M_out, t->nrows * t->nrows);
 		setReduceVar(&(t->someone));
-		setHeight(*t->nrows_ptr);
-		setWidth(*t->nrows_ptr);
+		setHeight(t->nrows);
+		setWidth(t->nrows);
 		niters = t->niters;
 	}
 	bool iterCondition(const unsigned char &x, unsigned long iter) {
@@ -64,10 +62,9 @@ struct oclTaskGol: public ff::baseOCLTask_2D<oclTaskGol, unsigned char> {
 	}
 
 	unsigned char *M_in, *M_out;
-	const unsigned int size;
 	unsigned int niters;
 	unsigned char someone;
-	unsigned int *nrows_ptr;
+	unsigned int nrows;
 };
 
 

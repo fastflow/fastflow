@@ -943,6 +943,11 @@ public:
 		setcode(mapf, reducef);
         for(size_t i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width,identityVal);
+#ifdef FF_OPENCL_LOG
+        fprintf(stderr,"[ff_stencilReduceLoopOCL_1D node @%p]\n",this);
+        fprintf(stderr,"map-kernel code:\n%s\n", mapf.c_str());
+        //fprintf(stderr,"reduce-kernel code:\n%s\n", reducef.c_str());
+#endif
 	}
     
     // build the program from source code file, 
@@ -979,6 +984,11 @@ public:
 		Task.setTask(const_cast<T*>(&task));
         for(size_t i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width,identityVal);
+#ifdef FF_OPENCL_LOG
+        fprintf(stderr,"[ff_stencilReduceLoopOCL_1D node @%p]\n",this);
+        fprintf(stderr,"map-kernel code:\n%s\n", mapf.c_str());
+        //fprintf(stderr,"reduce-kernel code:\n%s\n", reducef.c_str());
+#endif
 	}
 
     // the task is provided in the constructor -- one shot computation

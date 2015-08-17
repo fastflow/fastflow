@@ -4,7 +4,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}
     )
 
-#ADD_DEFINITIONS(-DFF_OPENCL_LOG)
+ADD_DEFINITIONS() #-DFF_OPENCL_LOG
 
 include_directories( ${OPENCL_INCLUDE_DIRS} )
 
