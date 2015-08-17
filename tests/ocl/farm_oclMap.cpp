@@ -49,10 +49,13 @@
 
 using namespace ff;
 
-FF_OCL_MAP_ELEMFUNC(mapf, float, elem, useless,
-                    (void)useless;
-                    return (elem+1.0);
-                    );
+//obsolete
+//FF_OCL_MAP_ELEMFUNC(mapf, float, elem, useless,
+//                    (void)useless;
+//                    return (elem+1.0);
+//                    );
+
+FF_OCL_MAP_ELEMFUNC_1D(mapf, float, elem, return (elem+1.0));
 
 // stream task
 struct myTask {

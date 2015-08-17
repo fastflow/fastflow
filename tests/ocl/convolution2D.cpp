@@ -54,7 +54,18 @@ typedef int basictype;
 
 FF_OCL_STENCIL_COMBINATOR(reducef, int, x, y, return (x+y));
 
-FF_OCL_STENCIL_ELEMFUNC1_2D(mapf, int, h, w, r, c, int,
+/*
+ * API:
+ * 'name' is the name of the string variable in which the code is stored
+ * 'inT' is the element type of the input
+ * 'height' is the number of rows in the input array
+ * 'width' is the number of columns in the input array
+ * 'row' is the row-index
+ * 'col' is the column-index
+ * 'env1T' is the element type of the constant environment array
+ * 'code' is the OpenCL code of the elemental function
+ */
+FF_OCL_STENCIL_ELEMFUNC_2D(mapf, int, h, w, r, c,
 	int res = GET_IN(r,c);
 	res += (c>0) ? GET_IN(r,c-1) : 0; //middle-left
 	res += (c < w-1) ? GET_IN(r,c+1) : 0; //middle-right
@@ -143,16 +154,15 @@ unsigned int check(basictype *M, basictype r, int size) {
 
 struct oclTask: public baseOCLTask_2D<oclTask, basictype> {
 	oclTask() :
-			M_in(NULL), M_out(NULL), result(0), size(0), env(0) {
+			M_in(NULL), M_out(NULL), result(0), size(0) {
 	}
 	oclTask(basictype *M_in_, basictype *M_out_, int size_) :
-			M_in(M_in_), M_out(M_out_), result(0), size(size_), env(0) {
+			M_in(M_in_), M_out(M_out_), result(0), size(size_) {
 	}
 	void setTask(const oclTask *t) {
 		assert(t);
 		setInPtr(t->M_in, t->size);
 		setOutPtr(t->M_out);
-		setEnvPtr<int>(&t->env, 1);
 		setReduceVar(&(t->result));
 		setWidth(COLS);
 		setHeight(ROWS);
@@ -167,7 +177,6 @@ struct oclTask: public baseOCLTask_2D<oclTask, basictype> {
 
 	basictype *M_in, *M_out, result;
 	const int size;
-	int env;
 };
 
 int main(int argc, char * argv[]) {

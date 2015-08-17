@@ -44,32 +44,42 @@ using namespace ff;
 
 #define CHECK 1
 
-FF_OCL_STENCIL_ELEMFUNC1(mapf, float, size, i, A, i_, float, B, (void)size; return A[i_] * B[i_];);
+//obsolete
+//FF_OCL_STENCIL_ELEMFUNC1(mapf, float, size, i, A, i_, float, B, (void)size; return A[i_] * B[i_];);
+
+/*
+ * API:
+ * 'name' is the name of the string variable in which the code is stored
+ * 'T' is the element type
+ * 'val' is the value of the input element
+ * 'envT' is the element type of the constant environment
+ * 'envval' is the value of the environment element
+ * 'code' is the OpenCL code of the elemental function
+ */
+FF_OCL_MAP_ELEMFUNC_1D_ENV(mapf, float, v, float, ev,
+		return v * ev;
+);
 
 FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y, return (x+y););
 
 struct Task: public baseOCLTask<Task, float, float> {
 	Task() :
-			/*initVal(0.0), */result(0.0), copy(true) {
+			result(0.0), copy(true) {
 	}
 	Task(const std::vector<float> &A, const std::vector<float> &B) :
 			A(A), B(B), M(A.size()), result(0.0), copy(true) {
 	}
-	~Task() {
-	}
 	void setTask(const Task *t) {
 		assert(t);
-
 		setInPtr(const_cast<float*>(t->A.data()), t->A.size());
 		setEnvPtr(const_cast<float*>(t->B.data()), t->B.size(), t->copy);
 		setOutPtr(const_cast<float*>(t->M.data()));
-
 		setReduceVar(&(t->result));
 	}
 
-	void setResult(const float r) {
-		result = r;
-	}
+	void setResult(const float r) {result = r;}
+
+	float combinator(float const &x, float const &y) {return x+y;}
 
 	std::vector<float> A, B;
 	std::vector<float> M;
