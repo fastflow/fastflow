@@ -53,9 +53,22 @@ using namespace ff;
 struct mypair { float a; float b; };
 
 
-FF_OCL_MAP_ELEMFUNC2(mapf, float, mypair, elem, useless,
-                     (void)useless;
-                     return (elem.a * elem.b);
+//obsolete
+//FF_OCL_MAP_ELEMFUNC2(mapf, float, mypair, elem, useless,
+//                     (void)useless;
+//                     return (elem.a * elem.b);
+//);
+
+/*
+ * API:
+ * 'name' is the name of the string variable in which the code is stored
+ * 'T' is the input element type
+ * 'outT' is the output element type
+ * 'val' is the value of the input element
+ * 'code' is the OpenCL code of the elemental function
+ */
+FF_OCL_MAP_ELEMFUNC_1D_IO(mapf, mypair, float, elem,
+		return (elem.a * elem.b);
 );
 
 FF_OCL_STENCIL_COMBINATOR(reducef, float, (x), (y), return (x+y) );
@@ -73,7 +86,8 @@ struct oclTask: public baseOCLTask<oclTask, mypair, float> {
        setInPtr(t->M, t->size);
        setOutPtr(t->Mout);
        setReduceVar(&(t->result));
-     }
+    }
+    float combinator(float const &x, float const &y) {return x+y;}
 
     mypair *M;
     float  *Mout, result;
@@ -108,7 +122,10 @@ int main(int argc, char * argv[]) {
     delete [] M;
     printf("res=%.2f\n", oclt.result);
 #if defined(CHECK)
-    if (r != oclt.result) printf("Wrong result, should be %.2f\n", r);
+    if (r != oclt.result) {
+    	printf("Wrong result, should be %.2f\n", r);
+    	exit(1); //ctest
+    }
     else printf("OK\n");
 #endif
     return 0;
