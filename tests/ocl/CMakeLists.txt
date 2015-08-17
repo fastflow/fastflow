@@ -10,7 +10,7 @@ include_directories( ${OPENCL_INCLUDE_DIRS} )
 
 
 set( TESTS                               
-convolution2D oclStencilReduceLoop oclMap oclMap2 oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct device_selection dotProd_cpugpu device_selection2 mixedpipe mixedpipe2
+helloKernel testRelease convolution2D oclStencilReduceLoop oclMap oclMap2 oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct device_selection dotProd_cpugpu device_selection2 mixedpipe mixedpipe2
 )
 
 
