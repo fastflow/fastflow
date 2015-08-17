@@ -203,44 +203,6 @@ protected:
 
 
 /**
- * a task to be executed by a 2D stencilReduceLoop node.
- * This class represent a computation to be performed on a
- * logical 2D matrix, stored in host memory as 1D row-major array.
- */
-template<typename TaskT_, typename Tin_, typename Tout_ = Tin_>
-class baseOCLTask_2D: public baseOCLTask<TaskT_, Tin_, Tout_> {
-public:
-	/**
-	 * set the number of rows of the logical 2D input.
-	 * To be called from setTask.
-	 *
-	 * @param h is the number of rows
-	 */
-	void setHeight(size_t h) {
-		height = h;
-	}
-
-	/**
-	 * set the number of columns of the logical 2D input.
-	 * To be called from setTask.
-	 *
-	 * @param h is the number of columns
-	 */
-	void setWidth(size_t w) {
-		width = w;
-	}
-
-	//runtime getter functions
-	size_t getHeight() const { return height;}
-	size_t getWidth() const {return width;}
-
-protected:
-	size_t height, width;
-};
-
-
-
-/**
  * a virtual OpenCL accelerator.for 1D kernels
  */
 template<typename T, typename TOCL = T>
@@ -250,7 +212,7 @@ public:
 	typedef typename TOCL::Tout Tout;
 
 	ff_oclAccelerator(ff_oclallocator *alloc, const size_t width_, const Tout &identityVal, const bool from_source=false) :
-        from_source(from_source), my_own_allocator(false), allocator(alloc), width(width_), identityVal(identityVal), events_h2d(16), deviceId(NULL) {
+        from_source(from_source), my_own_allocator(false), allocator(alloc), halo_half(width_), identityVal(identityVal), events_h2d(16), deviceId(NULL) {
 		wgsize_map_static = wgsize_reduce_static = 0;
 		wgsize_map_max = wgsize_reduce_max = 0;
 		inputBuffer = outputBuffer = reduceBuffer = NULL;
@@ -379,8 +341,8 @@ public:
         offset1_in = P.first;
         lenInput   = P.second;
         lenInput_global = len_global;
-        halo_in_left = (std::min)(width, offset1_in);
-        halo_in_right = (std::min)(width, lenInput_global - lenInput - offset1_in);
+        halo_in_left = (std::min)(halo_half, offset1_in);
+        halo_in_right = (std::min)(halo_half, lenInput_global - lenInput - offset1_in);
 		sizeInput = lenInput * sizeof(Tin);
 		sizeInput_padded = sizeInput + (halo_in_left + halo_in_right) * sizeof(Tin);
 
@@ -425,8 +387,8 @@ public:
         offset1_out = P.first;
 		lenOutput   = P.second;
 		lenOutput_global = len_global;
-		halo_out_left = (std::min)(width, offset1_out);
-		halo_out_right = (std::min)(width, lenOutput_global - lenOutput - offset1_out);
+		halo_out_left = (std::min)(halo_half, offset1_out);
+		halo_out_right = (std::min)(halo_half, lenOutput_global - lenOutput - offset1_out);
 		sizeOutput = lenOutput * sizeof(Tout);
 		sizeOutput_padded = sizeOutput + (halo_out_left + halo_out_right) * sizeof(Tout);
 
@@ -553,13 +515,13 @@ public:
 
 	void asyncD2Hborders(Tout *p) {
 		cl_int status = clEnqueueReadBuffer(cmd_queue, outputBuffer, CL_FALSE,
-                                            halo_out_left * sizeof(Tout), width * sizeof(Tout), p + offset1_out, 0, NULL,
+                                            halo_out_left * sizeof(Tout), halo_half * sizeof(Tout), p + offset1_out, 0, NULL,
                                             &events_h2d[0]);
 		checkResult(status, "copying border1 back from device");
 		++nevents_h2d;
 		status = clEnqueueReadBuffer(cmd_queue, outputBuffer, CL_FALSE,
-                                     (halo_out_left + lenOutput - width) * sizeof(Tout), width * sizeof(Tout),
-                                     p + offset1_out + lenOutput - width, 0, NULL, &event_d2h);
+                                     (halo_out_left + lenOutput - halo_half) * sizeof(Tout), halo_half * sizeof(Tout),
+                                     p + offset1_out + lenOutput - halo_half, 0, NULL, &event_d2h);
 		checkResult(status, "copying border2 back from device");
 	}
 
@@ -658,6 +620,13 @@ public:
 		cl_int status = clWaitForEvents(nevents_map, &event_map);
 		nevents_map = 0;
         checkResult(status, "wait for map");
+	}
+
+	/**
+	 * dynamically sets half-size of the 1D halo
+	 */
+	void setHaloHalf(const size_t h) {
+		halo_half = h;
 	}
 
 private:
@@ -865,7 +834,7 @@ protected:
     const bool from_source;
     bool my_own_allocator; 
     ff_oclallocator *allocator;
-	const size_t width;
+	size_t halo_half; //half-size of the 1D halo
 	const Tout identityVal;
 	Tout reduceVar;
 
@@ -938,7 +907,7 @@ public:
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(false), saveBinary(false), reuseBinary(false), 
         accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-        stencil_width(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL), 
+        stencil_width_half(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL),
         oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setcode(mapf, reducef);
         for(size_t i = 0; i< NACCELERATORS; ++i)
@@ -962,7 +931,7 @@ public:
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(false), saveBinary(false), reuseBinary(false), 
         accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-        stencil_width(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
+        stencil_width_half(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setsourcecode(kernels_source, mapf_name, reducef_name);
         for(size_t i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width, identityVal, true);
@@ -977,7 +946,7 @@ public:
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(true), saveBinary(false), reuseBinary(false), 
         accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-        stencil_width(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL), 
+        stencil_width_half(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL),
         oldBytesizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
 		ff_node::skipfirstpop(true);
 		setcode(mapf, reducef);
@@ -1001,7 +970,7 @@ public:
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(true), saveBinary(false), reuseBinary(false), 
         accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-        stencil_width(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL), 
+        stencil_width_half(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL),
         oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setsourcecode(kernels_source, mapf_name, reducef_name);
         Task.setTask(const_cast<T*>(&task));
@@ -1549,7 +1518,7 @@ protected:
     std::vector<std::pair<size_t, size_t> > acc_in;
     std::vector<std::pair<size_t, size_t> > acc_out;
     std::vector<cl_device_id> devices;
-	int stencil_width;
+	int stencil_width_half;
     //size_t preferred_dev;
     size_t offset_dev;
 
@@ -1697,6 +1666,44 @@ public:
 /*** 2D ***/
 
 /**
+ * a task to be executed by a 2D stencilReduceLoop node.
+ * This class represent a computation to be performed on a
+ * logical 2D matrix, stored in host memory as 1D row-major array.
+ */
+template<typename TaskT_, typename Tin_, typename Tout_ = Tin_>
+class baseOCLTask_2D: public baseOCLTask<TaskT_, Tin_, Tout_> {
+public:
+	/**
+	 * set the number of rows of the logical 2D input.
+	 * To be called from setTask.
+	 *
+	 * @param h is the number of rows
+	 */
+	void setHeight(size_t h) {
+		height = h;
+	}
+
+	/**
+	 * set the number of columns of the logical 2D input.
+	 * To be called from setTask.
+	 *
+	 * @param h is the number of columns
+	 */
+	void setWidth(size_t w) {
+		width = w;
+	}
+
+	//runtime getter functions
+	size_t getHeight() const { return height;}
+	size_t getWidth() const {return width;}
+
+protected:
+	size_t height, width;
+};
+
+
+
+/**
  * a virtual OpenCL accelerator for 2D map kernels working on
  * logical 2D matrices stored as row-major arrays.
  */
@@ -1742,16 +1749,16 @@ public:
 	/**
 	 * set the global number of rows of the logical 2D input.
 	 */
-	void setHeight(unsigned int h) {
+	void setHeight(size_t h) {
 		heightInput_global = h;
 	}
 
-	void setWidth(unsigned int w) {
+	void setWidth(size_t w) {
 		widthInput_global = w;
 	}
 
 private:
-	unsigned int heightInput_global, widthInput_global;
+	size_t heightInput_global, widthInput_global;
 };
 
 
@@ -1761,23 +1768,96 @@ private:
  */
 template<typename T, typename TOCL = T>
 class ff_stencilReduceLoopOCL_2D: public ff_stencilReduceLoopOCL_1D<T,TOCL,ff_oclAccelerator_2D<T,TOCL> > {
+private:
+	typedef typename TOCL::Tin Tin;
+	typedef typename TOCL::Tout Tout;
+	typedef ff_oclAccelerator_2D<T,TOCL> accelerator_t;
+	typedef ff::ff_stencilReduceLoopOCL_1D<T,TOCL,accelerator_t> base_srl_t;
+
 public:
-	using ff_stencilReduceLoopOCL_1D<T,TOCL,ff_oclAccelerator_2D<T,TOCL> >::ff_stencilReduceLoopOCL_1D;
+	// build the program from the mapf and reducef functions
+		ff_stencilReduceLoopOCL_2D(const std::string &mapf,			              //OpenCL elemental function
+	                               const std::string &reducef = std::string(""),  //OpenCL combinator function
+	                               const Tout &identityVal = Tout(),
+	                               ff_oclallocator *allocator = nullptr,
+	                               const int NACCELERATORS = 1,
+								   const int stencil_width_half_ = 1,
+								   const int stencil_height_half_ = 1) :
+									   //init srl 1D with no halo (1D halo depends on 2D width)
+								   base_srl_t(mapf, reducef, identityVal, allocator, NACCELERATORS, 0),
+								   stencil_width_half(stencil_width_half_), stencil_height_half(stencil_height_half_) {}
+
+	    // build the program from source code file,
+	    // first attempts to load a cached binary file (kernels_source in this case is the path to the binary file)
+	    // ff that file is not available, then it creates the program from source and store the binary for future use
+	    // with the extention ".bin"
+	    ff_stencilReduceLoopOCL_2D(const std::string &kernels_source,            // OpenCL source code path
+	                               const std::string &mapf_name,                 // name of the map function
+	                               const std::string &reducef_name,              // name of the reduce function
+	                               const Tout &identityVal = Tout(),
+	                               ff_oclallocator *allocator = nullptr,
+	                               const int NACCELERATORS = 1,
+								   const int stencil_width_half_ = 1,
+								   const int stencil_height_half_ = 1) :
+									   //init srl 1D with no halo (1D halo depends on 2D width)
+	                            	   base_srl_t(kernels_source, mapf_name, reducef_name, identityVal, allocator, NACCELERATORS, 0),
+									   stencil_width_half(stencil_width_half_), stencil_height_half(stencil_height_half_) {}
+
+	    // the task is provided in the constructor -- one shot computation
+		ff_stencilReduceLoopOCL_2D(const T &task,
+	                               const std::string &mapf,
+	                               const std::string &reducef = std::string(""),
+	                               const Tout &identityVal = Tout(),
+	                               ff_oclallocator *allocator = nullptr,
+	                               const int NACCELERATORS = 1,
+								   const int stencil_width_half_ = 1,
+								   const int stencil_height_half_ = 1) :
+	                            	   //init srl 1D with no halo (1D halo depends on 2D width)
+	                            	   base_srl_t(task, mapf, reducef, identityVal, allocator, NACCELERATORS, 0),
+	                            	   stencil_width_half(stencil_width_half_), stencil_height_half(stencil_height_half_) {}
+
+	    // the task is provided in the constructor -- one shot computation
+	    ff_stencilReduceLoopOCL_2D(const T &task,
+	                               const std::string &kernels_source,            // OpenCL source code path
+	                               const std::string &mapf_name,           // name of the map kernel function
+	                               const std::string &reducef_name,        // name of the reduce kernel function
+	                               const Tout &identityVal = Tout(),
+	                               ff_oclallocator *allocator = nullptr,
+	                               const int NACCELERATORS = 1,
+								   const int stencil_width_half_ = 1,
+								   const int stencil_height_half_ = 1) :
+	                            	   //init srl 1D with no halo (1D halo depends on 2D width)
+	                            	   base_srl_t(task, kernels_source, mapf_name, reducef_name, identityVal, allocator, NACCELERATORS, 0),
+	                            	   stencil_width_half(stencil_width_half_), stencil_height_half(stencil_height_half_) {}
 
 protected:
 	void adjustInputBufferOffset(const bool memorychange) {
 		for (size_t i = 0; i < this->accelerators.size(); ++i) {
 			this->accelerators[i]->setWidth(this->Task.getWidth());
 			this->accelerators[i]->setHeight(this->Task.getHeight());
+			this->accelerators[i]->setHaloHalf(halo_half(this->Task.getWidth()));
 		}
-		ff_stencilReduceLoopOCL_1D<T,TOCL,ff_oclAccelerator_2D<T,TOCL> >::adjustInputBufferOffset(memorychange);
+		//accelerator uses above values to compute actual sizing
+		base_srl_t::adjustInputBufferOffset(memorychange);
 	}
+private:
+
+	const size_t halo_half(const size_t width) {
+		return stencil_height_half * width + stencil_width_half;
+	}
+
+	/*
+	 * 2D stencil can access elements in H x W rectangle around each element, where:
+	 * H = 2 * stencil_height_half + 1
+	 * W = 2 * stencil_width_half + 1
+	 */
+	const int stencil_height_half;
+	const int stencil_width_half;
 };
 
 
 
-}
-// namespace ff
+}// namespace ff
 
 #endif // FF_OCL
 #endif /* FF_MAP_OCL_HPP */
