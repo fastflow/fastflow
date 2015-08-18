@@ -71,12 +71,12 @@ long repeatTime           = 1; // to repeat the same set of images a numer of ti
 
 
 /* --------------- OpenCL code ------------------- */
-FF_OCL_STENCIL_ELEMFUNC1(mapf, uchar, useless, k, usrc, k_, env_t, env,
+FF_OCL_STENCIL_ELEMFUNC_ENV(mapf, uchar, useless, k, usrc, env_t, env,
                (void)useless;
                long cols = env->cols;
                long rows = env->rows;                  
-               long y    = k_ / cols; if (y==0 || y==(cols-1)) return 0;
-               long x    = k_ % cols; if (x==0 || x==(cols-1)) return 0;
+               long y    = k / cols; if (y==0 || y==(cols-1)) return 0;
+               long x    = k % cols; if (x==0 || x==(cols-1)) return 0;
                
                long gx = xGradient(usrc, cols, x, y);
                long gy = yGradient(usrc, cols, x, y);
@@ -131,7 +131,7 @@ static inline long yGradient(uchar * image, long cols, long x, long y) {
 
 // the corresponding OpenCL type is in the (local) file 'ff_opencl_datatypes.cl'
 struct env_t {
-    env_t() {}
+    env_t() : cols(0), rows(0) {}
     env_t(long cols, long rows):cols(cols),rows(rows) {}
     long   cols;
     long   rows;

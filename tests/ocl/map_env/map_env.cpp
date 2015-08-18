@@ -6,15 +6,15 @@
 using namespace ff;
 
 // in place
-FF_OCL_STENCIL_ELEMFUNC1(mapfenv, float, size, k, M, k_, env_t, env,
+FF_OCL_STENCIL_ELEMFUNC_ENV(mapfenv, float, size, k, M, env_t, env,
 			 (void)size;
-			 return env->coeff * M[k_];
+			 return env->coeff * M[k];
 );
 
 
 
 struct env_t {
-    env_t() {}
+    env_t() : coeff(0), n_elems(0) {}
     env_t(long n_elems, long coeff):n_elems(n_elems),coeff(coeff) {}
     long   n_elems;
     long   coeff;
