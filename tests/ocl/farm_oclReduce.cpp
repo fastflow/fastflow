@@ -48,7 +48,7 @@
 
 using namespace ff;
 
-FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
+FF_OCL_REDUCE_COMBINATOR(reducef, float, x, y,
              return (x+y);
              );
 

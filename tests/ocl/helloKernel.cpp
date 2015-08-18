@@ -214,6 +214,7 @@ int main(int argc, char *argv[]) {
 	    wrong = true;
 	}
     if (!wrong) std::cerr << "The result is OK\n";
+    else exit(1); //ctest
 #endif
     return 0;
 }

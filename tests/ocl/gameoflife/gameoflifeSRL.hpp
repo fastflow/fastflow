@@ -36,7 +36,7 @@ FF_OCL_STENCIL_ELEMFUNC_2D(mapf,unsigned char,h,w,r,c,
         return (naliven == 3 || (alive_in && naliven == 2));
 		);
 
-FF_OCL_STENCIL_COMBINATOR(reducef, unsigned char, x, y,
+FF_OCL_REDUCE_COMBINATOR(reducef, unsigned char, x, y,
 		return x||y;
 		);
 
