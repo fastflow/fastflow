@@ -53,12 +53,18 @@ using namespace ff;
 size_t niters;
 typedef int basictype;
 
-FF_OCL_STENCIL_COMBINATOR(reducef, int, x, y, return (x+y));
+FF_OCL_REDUCE_COMBINATOR(reducef, int, x, y, return (x+y));
 
-FF_OCL_STENCIL_ELEMFUNC_1D(mapf, int, N, i,
-		(void)N;
-		return GET_IN(i) + 1;
+FF_OCL_STENCIL_ELEMFUNC(mapf, int, useless, i, in,
+		(void)useless;
+		return in[i] + 1;
 );
+
+//implicit input
+//FF_OCL_STENCIL_ELEMFUNC_1D(mapf, int, N, i,
+//		(void)N;
+//		return GET_IN(i) + 1;
+//);
 
 void init(basictype *M_in, basictype *out, int size) {
 	for (int j = 0; j < size; ++j) {

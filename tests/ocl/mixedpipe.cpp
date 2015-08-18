@@ -65,36 +65,33 @@ const std::string path_k3("cl_code/mixedpipe_k3.cl");
 
 #else 
 
-//obsolete
-//FF_OCL_STENCIL_ELEMFUNC1(map1f, float, useless, i, in, i_, int, k_,
-//                         (void)useless; const int k = *k_;
+FF_OCL_STENCIL_ELEMFUNC_ENV(map1f, float, useless, i, in, int, k_,
+                         (void)useless; const int k = *k_;
+                         return (float)((k+1) + i);
+                         );
+FF_OCL_STENCIL_ELEMFUNC_ENV(map2f, float, useless, i, A, float, B,
+                         (void)useless;
+                         return A[i] * B[i];
+                         );
+FF_OCL_STENCIL_ELEMFUNC_2ENV(map3f, float, useless, i, R, float, A, float, sum_,
+                         (void)useless; const float sum = *sum_;
+                         return R[i] + 1 / (A[i] + sum);
+                         );
+
+//implicit input
+//FF_OCL_STENCIL_ELEMFUNC_1D_ENV(map1f, float, N, i, int,
+//	return (float)(GET_ENV(0) + i + 1);
+//);
 //
-//                         return (float)((k+1) + i_);
-//                         );
-//FF_OCL_STENCIL_ELEMFUNC1(map2f, float, useless, i, A, i_, float, B,
-//                         (void)useless;
+//FF_OCL_STENCIL_ELEMFUNC_1D_ENV(map2f, float, N, i, float,
+//	return GET_IN(i) * GET_ENV(i);
+//);
 //
-//                         return A[i_] * B[i_];
-//                         );
-//FF_OCL_STENCIL_ELEMFUNC2(map3f, float, useless, i, R, i_, float, A, float, sum_,
-//                         (void)useless; const float sum = *sum_;
-//
-//                         return R[i_] + 1 / (A[i_] + sum);
-//                         );
+//FF_OCL_STENCIL_ELEMFUNC_1D_2ENV(map3f, float, N, i, float, float,
+//	return GET_IN(i) + (float)1 / (GET_ENV1(i) + GET_ENV2(0));
+//);
 
-FF_OCL_STENCIL_ELEMFUNC_1D_ENV(map1f, float, N, i, int,
-	return (float)(GET_ENV(0) + i + 1);
-);
-
-FF_OCL_STENCIL_ELEMFUNC_1D_ENV(map2f, float, N, i, float,
-	return GET_IN(i) * GET_ENV(i);
-);
-
-FF_OCL_STENCIL_ELEMFUNC_1D_2ENV(map3f, float, N, i, float, float,
-	return GET_IN(i) + (float)1 / (GET_ENV1(i) + GET_ENV2(0));
-);
-
-FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y,
+FF_OCL_REDUCE_COMBINATOR(reducef, float, x, y,
                           return (x+y); 
                           );
 #endif

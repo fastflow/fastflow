@@ -147,6 +147,7 @@ struct Last: ff_node_t<myTask> {
                 }
         }
         if (!wrong) std::cerr << "OK!\n";
+        else exit(1); //ctest
         ++counter;
 #endif
         return GO_ON;

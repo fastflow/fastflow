@@ -44,23 +44,14 @@ using namespace ff;
 
 #define CHECK 1
 
-//obsolete
-//FF_OCL_STENCIL_ELEMFUNC1(mapf, float, size, i, A, i_, float, B, (void)size; return A[i_] * B[i_];);
+FF_OCL_STENCIL_ELEMFUNC_ENV(mapf, float, size, i, A, float, B, (void)size; return A[i] * B[i];);
 
-/*
- * API:
- * 'name' is the name of the string variable in which the code is stored
- * 'T' is the element type
- * 'val' is the value of the input element
- * 'envT' is the element type of the constant environment
- * 'envval' is the value of the environment element
- * 'code' is the OpenCL code of the elemental function
- */
-FF_OCL_MAP_ELEMFUNC_1D_ENV(mapf, float, v, float, ev,
-		return v * ev;
-);
+//implicit input
+//FF_OCL_MAP_ELEMFUNC_1D_ENV(mapf, float, v, float, ev,
+//		return v * ev;
+//);
 
-FF_OCL_STENCIL_COMBINATOR(reducef, float, x, y, return (x+y););
+FF_OCL_REDUCE_COMBINATOR(reducef, float, x, y, return (x+y););
 
 struct Task: public baseOCLTask<Task, float, float> {
 	Task() :

@@ -53,25 +53,17 @@ using namespace ff;
 struct mypair { float a; float b; };
 
 
-//obsolete
-//FF_OCL_MAP_ELEMFUNC2(mapf, float, mypair, elem, useless,
-//                     (void)useless;
-//                     return (elem.a * elem.b);
-//);
-
-/*
- * API:
- * 'name' is the name of the string variable in which the code is stored
- * 'T' is the input element type
- * 'outT' is the output element type
- * 'val' is the value of the input element
- * 'code' is the OpenCL code of the elemental function
- */
-FF_OCL_MAP_ELEMFUNC_1D_IO(mapf, mypair, float, elem,
-		return (elem.a * elem.b);
+FF_OCL_MAP_ELEMFUNC_IO(mapf, float, mypair, elem, useless,
+                     (void)useless;
+                     return (elem.a * elem.b);
 );
 
-FF_OCL_STENCIL_COMBINATOR(reducef, float, (x), (y), return (x+y) );
+//implicit input
+//FF_OCL_MAP_ELEMFUNC_1D_IO(mapf, mypair, float, elem,
+//		return (elem.a * elem.b);
+//);
+
+FF_OCL_REDUCE_COMBINATOR(reducef, float, (x), (y), return (x+y) );
 
 
 struct oclTask: public baseOCLTask<oclTask, mypair, float> {

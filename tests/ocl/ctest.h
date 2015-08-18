@@ -10,7 +10,7 @@
 
 
 #define SET_DEVICE_TYPE(obj) obj.pickGPU();
-#define NACC 2
+#define NACC 1
 
 //#define SET_DEVICE_TYPE(obj) obj.pickCPU();
 //#define NACC 1

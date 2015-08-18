@@ -44,15 +44,15 @@ using namespace ff;
 #endif
 
 
-//obsolete
-//FF_OCL_MAP_ELEMFUNC(mapf, float, elem, useless,
-//                    (void)useless;
-//                    return (elem+1.0);
-//                    );
+FF_OCL_MAP_ELEMFUNC(mapf, float, elem, useless,
+                    (void)useless;
+                    return (elem+1.0);
+                    );
 
-FF_OCL_MAP_ELEMFUNC_1D(mapf, float, elem,
-		return elem+1.0;
-);
+//implicit input
+//FF_OCL_MAP_ELEMFUNC_1D(mapf, float, elem,
+//		return elem+1.0;
+//);
 
 
 struct oclTask: public baseOCLTask<oclTask, float> {
@@ -92,7 +92,7 @@ int main(int argc, char * argv[]) {
 	for (size_t i = 0; i < size; ++i) {
 		if ((M_[i]+1) != M[i]) {
             printf("Error\n");
-            exit(1);
+            exit(1); //ctest
         }
 	}
     printf("Result correct\n");

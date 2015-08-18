@@ -52,7 +52,7 @@ using namespace ff;
 size_t niters;
 typedef int basictype;
 
-FF_OCL_STENCIL_COMBINATOR(reducef, int, x, y, return (x+y));
+FF_OCL_REDUCE_COMBINATOR(reducef, int, x, y, return (x+y));
 
 /*
  * API:
