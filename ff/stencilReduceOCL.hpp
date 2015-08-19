@@ -927,7 +927,7 @@ public:
 #ifdef FF_OPENCL_LOG
         fprintf(stderr,"[ff_stencilReduceLoopOCL_1D node @%p]\n",this);
         fprintf(stderr,"map-kernel code:\n%s\n", mapf.c_str());
-        //fprintf(stderr,"reduce-kernel code:\n%s\n", reducef.c_str());
+        fprintf(stderr,"reduce-kernel code:\n%s\n", reducef.c_str());
 #endif
 	}
     
@@ -943,7 +943,8 @@ public:
                                const int NACCELERATORS = 1, const int width = 1) :
         oneshot(false), saveBinary(false), reuseBinary(false), 
         accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
-        stencil_width_half(width), offset_dev(0), oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
+        stencil_width_half(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL),
+        oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setsourcecode(kernels_source, mapf_name, reducef_name);
         for(size_t i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width, identityVal, true);
@@ -968,7 +969,7 @@ public:
 #ifdef FF_OPENCL_LOG
         fprintf(stderr,"[ff_stencilReduceLoopOCL_1D node @%p]\n",this);
         fprintf(stderr,"map-kernel code:\n%s\n", mapf.c_str());
-        //fprintf(stderr,"reduce-kernel code:\n%s\n", reducef.c_str());
+        fprintf(stderr,"reduce-kernel code:\n%s\n", reducef.c_str());
 #endif
 	}
 

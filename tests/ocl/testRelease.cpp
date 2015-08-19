@@ -71,6 +71,8 @@ struct myTask {
     const size_t N;
     const size_t M;
     std::vector<std::vector<float> > A;  // non-contigous memory layout
+
+    // std::string command;
 };
 
 
@@ -160,7 +162,7 @@ int main(int argc, char * argv[]) {
     First first(N,M, streamLength);
     ff_mapOCL_1D<myTask, oclTask> mapocl(mapf);
     Last last;
-    ff_Pipe<> pipe(first,mapocl,last);
+    ff_Pipe<> pipe(first, mapocl, last);
     if (pipe.run_and_wait_end()<0) {
         error("pipeline");
         return -1;
