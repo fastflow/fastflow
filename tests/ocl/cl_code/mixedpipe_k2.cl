@@ -2,10 +2,9 @@ float fmap2f(
 	     __global float* A,
 	     const uint useless,
 	     const int i,
-	     const int i_,
 	     __global const float* B) {
     (void)useless; 
-    return A[i_] * B[i_];
+    return A[i] * B[i];
 }
 
 __kernel void kern_map2f(
@@ -14,28 +13,26 @@ __kernel void kern_map2f(
 			 const uint inSize,
 			 const uint maxItems,
 			 const uint offset,
-			 const uint pad,
+			 const uint halo,
 			 __global const float* env1) {
     int i = get_global_id(0);
     int ig = i + offset;
     uint gridSize = get_local_size(0)*get_num_groups(0);
     while(i < maxItems)  {
-	output[i+pad] = fmap2f(input+pad,inSize,ig,i,env1);
+	output[i+halo] = fmap2f(input+halo,inSize,ig,env1);
 	i += gridSize;
     }
 }
-
 float freducef(float x, float y) {
     return (x+y);
 }
 
-__kernel void kern_reducef(__global float* input, const uint pad, __global float* output, 
-			   const uint n, __local float* sdata, float idElem) {
+__kernel void kern_reducef(__global float* input, const uint halo, __global float* output, const uint n, __local float* sdata, float idElem) {
     uint blockSize = get_local_size(0);
     uint tid = get_local_id(0);
     uint i = get_group_id(0)*blockSize + get_local_id(0);
     uint gridSize = blockSize*get_num_groups(0);
-    float result = idElem; input += pad;
+    float result = idElem; input += halo;
     if(i < n) { result = input[i]; i += gridSize; }
     while(i < n) {
 	result = freducef(result, input[i]);

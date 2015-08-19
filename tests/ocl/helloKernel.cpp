@@ -136,11 +136,11 @@ struct rprKernel: ff_nodeSelector<myTask> {
 
     myTask *svc(myTask *in) {
 	
-	// make the decision 
+        // make the decision 
         int selectedDevice = parseCmd(kernelId, in->command);
-
-	in = reinterpret_cast<myTask*>(getNode(selectedDevice)->svc(in));
-	return in;
+        
+        in = reinterpret_cast<myTask*>(getNode(selectedDevice)->svc(in));
+        return in;
     }
 
     int kernelId;

@@ -280,8 +280,10 @@ public:
         int CPUId = init_thread_affinity(attr, cpuId);
         if (CPUId==-2) return -2;
         if (barrier) tid= barrier->getCounter();
-        if (pthread_create(&th_handle, attr,
-                           proxy_thread_routine, this) != 0) {
+        int r=0;
+        if ((r=pthread_create(&th_handle, attr,
+                              proxy_thread_routine, this)) != 0) {
+            errno=r;
             perror("pthread_create: pthread creation failed.");
             return -2;
         }
