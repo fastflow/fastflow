@@ -131,6 +131,10 @@ public:
     enum {DEFAULT_CACHE_SIZE=1024};
 
     staticlinkedlist(int cachesize=DEFAULT_CACHE_SIZE, bool fillcache=false){
+        // avoid unused field warning for padding
+        if (longxCacheLine>1)
+            padding1[0]=padding2[0];
+        // end
         cache_mem =::malloc((sizeof(Node))*(cachesize+5));
         unsigned int CPU_cachesize = longxCacheLine*sizeof(void*);
         if(CAST_TO_UL(cache_mem)%CPU_cachesize){

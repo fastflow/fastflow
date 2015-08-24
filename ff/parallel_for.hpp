@@ -680,6 +680,10 @@ public:
 #if defined(HAS_CXX11_VARIADIC_TEMPLATES)
 
 //! ParallelForPipeReduce class
+/**
+ * \brief Parallel pipelined for-reduce
+ *
+ */
 template<typename task_t>
 class ParallelForPipeReduce: public ff_pipeline {
 protected:
@@ -744,7 +748,10 @@ public:
         return pfr.stopSpinning();
     }
 
-
+/**
+ * \brief map only call
+ *
+ */ 
     template <typename Function>
     inline void parallel_for_idx(long first, long last, long step, long grain, 
                                  const Function& Map, const long nw=FF_AUTO) {
@@ -760,6 +767,10 @@ public:
         if (r<0) error("ParallelForPipeReduce: parallel_for_idx, starting pipe\n");      
     }
 
+/**
+ * \brief pipe(map,reduce)
+ *
+ */    
     template <typename Function, typename FReduction>
     inline void parallel_reduce_idx(long first, long last, long step, long grain, 
                                     const Function& Map, const FReduction& Reduce,

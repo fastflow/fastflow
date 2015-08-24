@@ -1832,7 +1832,7 @@ public:
 								   const int stencil_height_half_ = 1) :
 	                            	   //init srl 1D with no halo (1D halo depends on 2D width)
 	                            	   base_srl_t(task, mapf, reducef, identityVal, allocator, NACCELERATORS, 0),
-	                            	   stencil_width_half(stencil_width_half_), stencil_height_half(stencil_height_half_) {}
+	                            	   stencil_height_half(stencil_height_half_), stencil_width_half(stencil_width_half_) {}
 
 	    // the task is provided in the constructor -- one shot computation
 	    ff_stencilReduceLoopOCL_2D(const T &task,
