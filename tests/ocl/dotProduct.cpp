@@ -54,11 +54,6 @@ FF_OCL_MAP_ELEMFUNC_IO(mapf, float, mypair, elem, useless,
                      return (elem.a * elem.b);
 );
 
-//implicit input
-//FF_OCL_MAP_ELEMFUNC_1D_IO(mapf, mypair, float, elem,
-//		return (elem.a * elem.b);
-//);
-
 FF_OCL_REDUCE_COMBINATOR(reducef, float, x, y,
         return (x+y);
 );
