@@ -26,6 +26,17 @@
  */
 /* Author: Massimo Torquati
  *         torquati@di.unipi.it  massimotor@gmail.com
+ *
+ *
+ * Annotated code with REPARA attributes:
+ *
+ *  const size_t N = size;
+ *  std::vector<float> A(N);
+ *
+ *  [[rpr::kernel, rpr::in(A), rpr::out(A), rpr::target(GPU)]]
+ *  for (int i=0;<N;++i)
+ *     A[i] = A[i] + 1.0;
+ *
  */
 
 #if !defined(FF_OPENCL)
@@ -33,9 +44,10 @@
 #endif
 
 #include <ff/stencilReduceOCL.hpp>
-
 using namespace ff;
 
+
+// to check the result
 #define CHECK 1
 #ifdef CHECK
 #include "ctest.h"
@@ -43,23 +55,16 @@ using namespace ff;
 #define NACC 1
 #endif
 
-
 FF_OCL_MAP_ELEMFUNC(mapf, float, elem, useless,
                     (void)useless;
                     return (elem+1.0);
                     );
 
-//implicit input
-//FF_OCL_MAP_ELEMFUNC_1D(mapf, float, elem,
-//		return elem+1.0;
-//);
-
-
+// the OpenCL interface type
 struct oclTask: public baseOCLTask<oclTask, float> {
     oclTask():M(NULL),size(0) {}
     oclTask(float *M, size_t size):M(M),size(size) {}
     void setTask(const oclTask *t) { 
-        assert(t);
         setInPtr(t->M, t->size);
         setOutPtr(t->M);
     }
@@ -85,8 +90,10 @@ int main(int argc, char * argv[]) {
     ff_mapOCL_1D<oclTask> oclMap(oclt, mapf, nullptr, NACC);
     SET_DEVICE_TYPE(oclMap);
     
-    oclMap.run_and_wait_end();
-
+    if (oclMap.run_and_wait_end()<0) {
+        error("running oclMap\n");
+        return -1;
+    }
 
 #if defined(CHECK)
 	for (size_t i = 0; i < size; ++i) {
