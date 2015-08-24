@@ -263,7 +263,7 @@ public:
 
     virtual void set_barrier(BARRIER_T * const b) { barrier=b;}
 
-    virtual int run() { return spawn(); }
+    virtual int run(bool=false) { return spawn(); }
     
     virtual int spawn(int cpuId=-1) {
         if (spawned) return -1;
@@ -329,7 +329,7 @@ public:
         freezing = 1;
     }
     
-    virtual void thaw(bool _freeze=false) {
+    virtual void thaw(bool _freeze=false, ssize_t=-1) {
         pthread_mutex_lock(&mutex);
         // if this function is called even if the thread is not 
         // in frozen state, then freezing has to be set to 1 and not 2
@@ -1134,7 +1134,7 @@ private:
             gettimeofday(&filter->tstop,NULL);
         }
         
-        int run() { 
+        int run(bool=false) { 
             int CPUId = ff_thread::spawn(filter->getCPUId());             
             filter->setCPUId(CPUId);
             return (CPUId==-2)?-1:0;
