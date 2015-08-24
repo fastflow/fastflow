@@ -60,14 +60,14 @@ using namespace ff;
 struct Worker: ff_node {
     Worker(int id):id(id) {}
     void * svc(void * task) {
-        printf("FARM(%d) W(%d): got %ld, now sleeping for a while....\n", id,get_my_id(), *(long*)task);
+        printf("FARM(%d) W(%ld): got %ld, now sleeping for a while....\n", id,get_my_id(), *(long*)task);
         usleep(10000);
         return task;
     }
     int id;
 
     void svc_end() {
-        printf("FARM(%d) W(%d) EXITING\n",id,get_my_id());
+        printf("FARM(%d) W(%ld) EXITING\n",id,get_my_id());
     }
 };
 
