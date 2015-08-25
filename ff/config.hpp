@@ -48,7 +48,6 @@
  */
 //#define SPIN_USE_PAUSE 1
 
-
 /* To enable OPENCL support
  *
  */
