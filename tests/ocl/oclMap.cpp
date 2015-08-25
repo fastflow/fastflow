@@ -25,13 +25,17 @@
  ****************************************************************************
  */
 /* Author: Massimo Torquati
- *         torquati@di.unipi.it  massimotor@gmail.com
+ *         torquati@di.unipi.it
  *
  *
- * Annotated code with REPARA attributes:
+ * Equivalent annotated code with REPARA attributes:
  *
  *  const size_t N = size;
- *  std::vector<float> A(N);
+ *  std::vector<float> M(N);
+ *
+ *  [[rpr::kernel, rpr::in(A), rpr::out(A), rpr::target(GPU)]]
+ *  for (int i=0;<N;++i)
+ *     A[i] = i;
  *
  *  [[rpr::kernel, rpr::in(A), rpr::out(A), rpr::target(GPU)]]
  *  for (int i=0;<N;++i)
@@ -40,6 +44,7 @@
  */
 
 #if !defined(FF_OPENCL)
+// needed to enable the OpenCL FastFlow run-time
 #define FF_OPENCL
 #endif
 
@@ -55,7 +60,13 @@ using namespace ff;
 #define NACC 1
 #endif
 
-FF_OCL_MAP_ELEMFUNC(mapf, float, elem, useless,
+// kernel 1
+FF_OCL_MAP_ELEMFUNC(mapf1, float, elem, i,
+                    return i;
+                    );
+
+// kernel 2
+FF_OCL_MAP_ELEMFUNC(mapf2, float, elem, useless,
                     (void)useless;
                     return (elem+1.0);
                     );
@@ -65,8 +76,8 @@ struct oclTask: public baseOCLTask<oclTask, float> {
     oclTask():M(NULL),size(0) {}
     oclTask(float *M, size_t size):M(M),size(size) {}
     void setTask(const oclTask *t) { 
-        setInPtr(t->M, t->size);
-        setOutPtr(t->M);
+        setInPtr(t->M, t->size);  // set host input pointer
+        setOutPtr(t->M);          // set host output pointer
     }
 
     float *M;
@@ -78,20 +89,29 @@ int main(int argc, char * argv[]) {
     if(argc>1) size     =atol(argv[1]);
     printf("arraysize = %ld\n", size);
 
-    float *M        = new float[size];
-    for(size_t j=0;j<size;++j) M[j]=j;
-
 #ifdef CHECK
-    float *M_        = new float[size];
-    memcpy(M_, M, size * sizeof(float));
+    std::vector<float> M_(size);
+    for(size_t j=0;j<size;++j) M_[j]=j;
 #endif
 
-    oclTask oclt(M, size);
-    ff_mapOCL_1D<oclTask> oclMap(oclt, mapf, nullptr, NACC);
-    SET_DEVICE_TYPE(oclMap);
-    
-    if (oclMap.run_and_wait_end()<0) {
-        error("running oclMap\n");
+    std::vector<float> M(size);
+
+    oclTask oclt(const_cast<float*>(M.data()), size);
+    ff_mapOCL_1D<oclTask> oclMap1(oclt, mapf1, nullptr, NACC);
+    // just selects whether the execution is on the CPU or GPU on the base of what
+    // is written in the ctest.h file
+    SET_DEVICE_TYPE(oclMap1); 
+    if (oclMap1.run_and_wait_end()<0) {
+        error("running oclMap1\n");
+        return -1;
+    }
+
+    ff_mapOCL_1D<oclTask> oclMap2(oclt, mapf2, nullptr, NACC);
+    // just selects whether the execution is on the CPU or GPU on the base of what
+    // is written in the ctest.h file
+    SET_DEVICE_TYPE(oclMap2); 
+    if (oclMap2.run_and_wait_end()<0) {
+        error("running oclMap2\n");
         return -1;
     }
 
@@ -103,9 +123,6 @@ int main(int argc, char * argv[]) {
         }
 	}
     printf("Result correct\n");
-    delete [] M_;
 #endif
-
-    delete [] M;
     return 0;
 }
