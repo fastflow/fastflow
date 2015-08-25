@@ -748,40 +748,44 @@ public:
         return pfr.stopSpinning();
     }
 
-/**
- * \brief map only call
- *
- */ 
+    /**
+     * \brief map only call
+     *
+     */ 
     template <typename Function>
     inline void parallel_for_idx(long first, long last, long step, long grain, 
                                  const Function& Map, const long nw=FF_AUTO) {
         
-        pfr.setloop(first,last,step,grain,nw);
+        // the setloop decides the real number of worker threads that will be started
+        // the n. maybe different from nw !
+        pfr.setloop(first,last,step,grain,nw); 
         pfr.setF(Map);
         auto donothing=[](task_t) { };
         reduce.setF(donothing);
         auto r=-1;
-        if (pfr.run_then_freeze(nw) != -1)
-            if (reduce.run_then_freeze(nw) != -1)
+        if (pfr.run_then_freeze(pfr.getnw()) != -1)
+            if (reduce.run_then_freeze(pfr.getnw()) != -1)
                 r = ff_pipeline::wait_freezing();                               
         if (r<0) error("ParallelForPipeReduce: parallel_for_idx, starting pipe\n");      
     }
 
-/**
- * \brief pipe(map,reduce)
- *
- */    
+    /**
+     * \brief pipe(map,reduce)
+     *
+     */    
     template <typename Function, typename FReduction>
     inline void parallel_reduce_idx(long first, long last, long step, long grain, 
                                     const Function& Map, const FReduction& Reduce,
                                     const long nw=FF_AUTO) {
         
-        pfr.setloop(first,last,step,grain,nw);
+        // the setloop decides the real number of worker threads that will be started
+        // the n. maybe different from nw !
+        pfr.setloop(first,last,step,grain,nw); 
         pfr.setF(Map);
         reduce.setF(Reduce);
         auto r=-1;
-        if (pfr.run_then_freeze(nw) != -1)
-            if (reduce.run_then_freeze(nw) != -1)
+        if (pfr.run_then_freeze(pfr.getnw()) != -1)
+            if (reduce.run_then_freeze(pfr.getnw()) != -1)
                 r = ff_pipeline::wait_freezing();            
         if (r<0) error("ParallelForPipeReduce: parallel_reduce_idx, starting pipe\n");
     }
