@@ -475,11 +475,11 @@ protected:
             else { --tt, _chunk*=2; }
             data[_nw-1].task.end = stop;
         } 
-         // printf("init_data\n");
-         // for(size_t i=0;i<_nw;++i) {
-         //      printf("W=%d %ld <%ld,%ld>\n", i, data[i].ntask, data[i].task.start, data[i].task.end);
-         // }
-         // printf("totaltasks=%ld\n", tt);
+        // printf("init_data\n");
+        // for(size_t i=0;i<_nw;++i) {
+        //     printf("W=%ld %ld <%ld,%ld>\n", i, data[i].ntask.load(), data[i].task.start.load(), data[i].task.end);
+        // }
+        // printf("totaltasks=%ld\n", tt);
         return tt;
     }    
     // initialize the data vector
@@ -524,7 +524,7 @@ protected:
         // for(size_t i=0;i<_nw;++i) {
         //     long start=data[i].task.start;
         //     long ntask=data[i].ntask;
-        //     printf("W=%d %ld <%ld,%ld>\n", i, ntask, start, data[i].task.end);
+        //     printf("W=%ld %ld <%ld,%ld>\n", i, ntask.load(), start.load(), data[i].task.end);
         // }
         // printf("total task=%ld\n", ntxw);
 
