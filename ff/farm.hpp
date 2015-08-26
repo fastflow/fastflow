@@ -768,7 +768,7 @@ public:
      */
     inline void stop() {
         lb->stop();
-        if (collector) gt->stop();
+        if (collector && !collector_removed) gt->stop();
     }
 
     /** 
@@ -779,7 +779,7 @@ public:
      */
     inline void freeze() {
         lb->freeze();
-        if (collector) gt->freeze();
+        if (collector && !collector_removed) gt->freeze();
     }
 
     /**
@@ -790,7 +790,7 @@ public:
      */
     inline void thaw(bool _freeze=false, ssize_t nw=-1) {
         lb->thaw(_freeze, nw);
-        if (collector) gt->thaw(_freeze, nw);
+        if (collector && !collector_removed) gt->thaw(_freeze, nw);
     }
 
     /**
