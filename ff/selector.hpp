@@ -49,10 +49,38 @@ protected:
         return reinterpret_cast<ff_node*>(obj)->ff_send_out(task, retry, ticks);
     }
 
+
+    inline void add2selector(ff_node &node) { ff_nodeSelector<IN,OUT>::addNode(node); }
+    inline void add2selector(ff_node *node) { 
+        cleanup_devices.push_back(node);
+        ff_nodeSelector<IN,OUT>::addNode(*node);
+    }
+
+    void add2selectorall(){} 
+    template<typename FIRST,typename ...ARGS>
+    void add2selectorall(FIRST &stage,ARGS&...args){
+        add2selector(stage);
+        add2selectorall(args...);
+    }
+    template<typename FIRST,typename ...ARGS>
+    void add2selectorall(std::unique_ptr<FIRST> & stage,ARGS&...args){            
+        add2selector(stage.release());
+        add2selectorall(args...);
+    }
+    
+
 public:
+
+    typedef IN  in_type;
+    typedef OUT out_type;
 
     ff_nodeSelector():selected(0) {}
     ff_nodeSelector(const IN &task):selected(0), inTask(const_cast<IN*>(&task)) {}
+
+    template<typename... NODES>
+    ff_nodeSelector(NODES &&...nodes):selected(0) {
+        this->add2selectorall(nodes...);
+    }
     
     // used to set tasks when running in a passive mode
     void setTask(const IN &task) { inTask = const_cast<IN*>(&task);  }
@@ -113,7 +141,8 @@ public:
 protected:
     size_t      selected;
     IN         *inTask;
-    std::vector<ff_node*> devices;    
+    std::vector<ff_node*> devices; 
+    std::vector<ff_node*> cleanup_devices;
 };
 
 
