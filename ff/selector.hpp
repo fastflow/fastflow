@@ -55,6 +55,12 @@ protected:
         cleanup_devices.push_back(node);
         ff_nodeSelector<IN,OUT>::addNode(*node);
     }
+    void add2selectorall(const IN &task){
+        setTask(task);
+    }
+    void add2selectorall(IN &task){
+        setTask(task);
+    }
 
     void add2selectorall(){} 
     template<typename FIRST,typename ...ARGS>
@@ -68,15 +74,13 @@ protected:
         add2selectorall(args...);
     }
     
-
 public:
 
     typedef IN  in_type;
     typedef OUT out_type;
 
     ff_nodeSelector():selected(0) {}
-    ff_nodeSelector(const IN &task):selected(0), inTask(const_cast<IN*>(&task)) {}
-
+    //ff_nodeSelector(const IN &task):selected(0), inTask(const_cast<IN*>(&task)) {}
     template<typename... NODES>
     ff_nodeSelector(NODES &&...nodes):selected(0) {
         this->add2selectorall(nodes...);
