@@ -1,0 +1,7 @@
+To compile this simple video app, you need the OpenCV library.
+
+In case OpenCV is installed in a non-standard directory, (for example in /opt/OpenCV), please
+make sure that the 'pkg-config' command is able to find the proper OpenCV installation dir. 
+
+Under Linux bash you can simply use:
+export PKG_CONFIG_PATH="/opt/OpenCV/lib/pkgconfig:$PKG_CONFIG_PATH"
