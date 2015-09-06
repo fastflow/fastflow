@@ -203,8 +203,8 @@ protected:
             barrier->barrierSetup(nthreads);
         }
         if (!prepared) if (prepare()<0) return -1;
-        int startid = (get_my_id()>0)?get_my_id():0;
-        for(int i=0;i<nstages;++i) {
+        ssize_t startid = (get_my_id()>0)?get_my_id():0;
+        for(ssize_t i=0;i<nstages;++i) {
             nodes_list[i]->set_id(i+startid);
             if (nodes_list[i]->freeze_and_run(true)<0) {
                 error("ERROR: PIPE, (freezing and) running stage %d\n", i);
@@ -404,7 +404,7 @@ public:
         }
         if (!prepared) if (prepare()<0) return -1;
 
-        int startid = (get_my_id()>0)?get_my_id():0;
+        ssize_t startid = (get_my_id()>0)?get_my_id():0;
         for(int i=0;i<nstages;++i) {
             nodes_list[i]->set_id(i+startid);
             if (nodes_list[i]->run(true)<0) {
