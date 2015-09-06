@@ -961,6 +961,21 @@ private:
         bool load_result(void ** task,
                          unsigned long retry=((unsigned long)-1),
                          unsigned long ticks=ff_node::TICKS2WAIT) = delete;
+
+        /*
+         *  using the following two add_stage method, no static check on the input/output 
+         *  types is executed 
+         */
+        int add_stage(ff_node &s) { 
+            add2pipe(s); 
+            return 0; 
+        }
+        int add_stage(std::unique_ptr<ff_node> &&s) { 
+            add2pipe(s.release()); 
+            return 0; 
+        }
+
+        // deleted functions
         int add_stage(ff_node * s) = delete;
         void cleanup_nodes() = delete;       
     };
