@@ -41,14 +41,14 @@ struct ff_task {};
 
 // just a function
 ff_task *F(ff_task *t, ff_node*const node) {
-    printf("hello I've got one task my id is=%d\n", node->get_my_id());
+    printf("hello I've got one task my id is=%ld\n", node->get_my_id());
     return t;
 }
 
 // just an ff_node
 struct seq: ff_node_t<ff_task> {
     ff_task *svc(ff_task *t) {
-        printf("seq %d got one task\n", get_my_id());
+        printf("seq %ld got one task\n", get_my_id());
         return t;
     }
 };
@@ -107,7 +107,7 @@ int main() {
         return new long(k);
     };
     auto myF=[](long *t,ff_node*const node)->long*{ 
-        printf("hello I've got one task my id is=%d\n", node->get_my_id());
+        printf("hello I've got one task my id is=%ld\n", node->get_my_id());
         delete t;
         return t;
     };
@@ -132,7 +132,7 @@ int main() {
     // just an ff_node
     struct MyNode: ff_node_t<ff_task> {
         ff_task *svc(ff_task *t) {
-            printf("worker %d got one task\n", get_my_id());
+            printf("worker %ld got one task\n", get_my_id());
             delete t;
             return t;
         }
