@@ -1697,7 +1697,7 @@ protected:
 
 #include <ff/make_unique.hpp>
 
-template<typename IN=char, typename OUT=IN>
+template<typename IN_t=char, typename OUT_t=IN_t>
 class ff_Farm: public ff_farm<> {
 protected:
     // unique_ptr based data
@@ -1705,8 +1705,8 @@ protected:
     std::unique_ptr<ff_node>               Emitter;
     std::unique_ptr<ff_node>               Collector;
 public:    
-    typedef IN  in_type;
-    typedef OUT out_type;
+    typedef IN_t  in_type;
+    typedef OUT_t out_type;
 
     // NOTE: the ownership of the ff_node (unique) pointers is transfered to the farm !!!!
     //       All workers, the Emitter and the Collector will be deleted in the ff_Farm destructor !
@@ -1774,7 +1774,7 @@ public:
                   true, nw) {
 
         std::vector<ff_node*> w(nw);        
-        for(int i=0;i<nw;++i) w[i]=new ff_node_F<IN,OUT>(F);
+        for(int i=0;i<nw;++i) w[i]=new ff_node_F<IN_t,OUT_t>(F);
         ff_farm<>::add_workers(w);
         ff_farm<>::add_collector(NULL);
 
@@ -1796,12 +1796,12 @@ public:
         return r;
     }
 
-    bool load_result(OUT *&task,
+    bool load_result(OUT_t *&task,
                      unsigned long retry=((unsigned long)-1),
                      unsigned long ticks=ff_gatherer::TICKS2WAIT) {
         return ff_farm<>::load_result((void**)&task, retry,ticks);
     }
-    bool load_result_nb(OUT *&r) {
+    bool load_result_nb(OUT_t *&r) {
         return ff_farm<>::load_result_nb((void**)&r);
     }    
 
@@ -1820,14 +1820,14 @@ public:
     // ************************************
     // TO COMPLETE  !!!!!!!!!!!!!!!!!!!!!!!
     // ************************************
-template<typename IN=char, typename OUT=IN>
+template<typename IN_t=char, typename OUT_t=IN_t>
 class ff_OFarm: public ff_ofarm {
 protected:
     // unique_ptr based data
     std::vector<std::unique_ptr<ff_node> > Workers;
 public:    
-    typedef IN  in_type;
-    typedef OUT out_type;
+    typedef IN_t  in_type;
+    typedef OUT_t out_type;
 
     // NOTE: the ownership of the ff_node (unique) pointers is transfered to the farm !!!!
     //       All workers, the Emitter and the Collector will be deleted in the ff_Farm destructor !
@@ -1853,7 +1853,7 @@ public:
     bool load_result(void ** task,
                      unsigned long retry=((unsigned long)-1),
                      unsigned long ticks=ff_gatherer::TICKS2WAIT) = delete;
-    bool load_result(OUT *&task,
+    bool load_result(OUT_t *&task,
                      unsigned long retry=((unsigned long)-1),
                      unsigned long ticks=ff_gatherer::TICKS2WAIT) {
         return ff_ofarm::load_result((void**)&task, retry,ticks);
@@ -1861,7 +1861,7 @@ public:
 
 
     bool load_result_nb(void ** task) = delete;
-    bool load_result_nb(OUT *&r) {
+    bool load_result_nb(OUT_t *&r) {
         return ff_ofarm::load_result_nb((void**)&r);
     }
 

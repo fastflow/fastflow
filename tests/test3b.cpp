@@ -97,7 +97,7 @@ public:
         double * t = (double *)task;
         
         if (t) {
-            *t=f3(*t)*f1(2*(*t)); 
+            *t=f3(*t)*f1(2.0*(*t)); 
             somma += *t;
         }
         return GO_ON;

@@ -426,20 +426,20 @@ protected:
  *  This class is defined in \ref node.hpp
  */
 
-template<typename IN, typename OUT = IN>
+template<typename IN_t, typename OUT_t = IN_t>
 struct ff_minode_t: ff_minode {
-    typedef IN  in_type;
-    typedef OUT out_type;
+    typedef IN_t  in_type;
+    typedef OUT_t out_type;
     ff_minode_t():
-        GO_ON((OUT*)FF_GO_ON),
-        EOS((OUT*)FF_EOS),
-        GO_OUT((OUT*)FF_GO_OUT),
-        EOS_NOFREEZE((OUT*) FF_EOS_NOFREEZE) {
+        GO_ON((OUT_t*)FF_GO_ON),
+        EOS((OUT_t*)FF_EOS),
+        GO_OUT((OUT_t*)FF_GO_OUT),
+        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
 	}
-    OUT * const GO_ON,  *const EOS, *const GO_OUT, *const EOS_NOFREEZE;
+    OUT_t * const GO_ON,  *const EOS, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_minode_t()  {}
-    virtual OUT* svc(IN*)=0;
-    inline  void *svc(void *task) { return svc(reinterpret_cast<IN*>(task)); };
+    virtual OUT_t* svc(IN_t*)=0;
+    inline  void *svc(void *task) { return svc(reinterpret_cast<IN_t*>(task)); };
 };
 
 /*!
@@ -453,20 +453,20 @@ struct ff_minode_t: ff_minode {
  *  This class is defined in \ref node.hpp
  */
 
-template<typename IN, typename OUT = IN>
+template<typename IN_t, typename OUT_t = IN_t>
 struct ff_monode_t: ff_monode {
-    typedef IN  in_type;
-    typedef OUT out_type;
+    typedef IN_t  in_type;
+    typedef OUT_t out_type;
     ff_monode_t():
-        GO_ON((OUT*)FF_GO_ON),
-        EOS((OUT*)FF_EOS),
-        GO_OUT((OUT*)FF_GO_OUT),
-        EOS_NOFREEZE((OUT*) FF_EOS_NOFREEZE) {
+        GO_ON((OUT_t*)FF_GO_ON),
+        EOS((OUT_t*)FF_EOS),
+        GO_OUT((OUT_t*)FF_GO_OUT),
+        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
 	}
-    OUT * const GO_ON,  *const EOS, *const GO_OUT, *const EOS_NOFREEZE;
+    OUT_t * const GO_ON,  *const EOS, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_monode_t()  {}
-    virtual OUT* svc(IN*)=0;
-    inline  void *svc(void *task) { return svc(reinterpret_cast<IN*>(task)); };
+    virtual OUT_t* svc(IN_t*)=0;
+    inline  void *svc(void *task) { return svc(reinterpret_cast<IN_t*>(task)); };
 };
 
     // TODO: implement ff_minode_F<> and ff_monode_F<>

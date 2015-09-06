@@ -256,8 +256,8 @@ static inline ssize_t ff_setPriority(ssize_t priority_level=0) {
             ret = EINVAL;
     }
 #elif defined(_WIN32)
-    int pri = (priority_level + 20)/10;
-    int subpri = ((priority_level + 20)%10)/2;
+    ssize_t pri = (priority_level + 20)/10;
+    ssize_t subpri = ((priority_level + 20)%10)/2;
     switch (pri) {
         case 0: ret = !(SetPriorityClass(GetCurrentThread(),HIGH_PRIORITY_CLASS));
             break;

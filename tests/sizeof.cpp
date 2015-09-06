@@ -32,6 +32,12 @@
 */
 #include <vector>
 #include <iostream>
+#include <stdint.h>
+
+#if defined(_MSC_VER)
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
 
 int main(int argc, char * argv[]) {
 
@@ -43,5 +49,8 @@ int main(int argc, char * argv[]) {
 	std::cout << "float " << sizeof(float) << "\n";
 	std::cout << "double " << sizeof(double) << "\n";
 	std::cout << "void * " << sizeof(void *) << "\n";
+	std::cout << "size_t " << sizeof(size_t) << "\n";
+	std::cout << "ssize_t " << sizeof(ssize_t) << "\n";
+    
     return 0;
 }

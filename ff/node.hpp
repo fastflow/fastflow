@@ -435,7 +435,7 @@ private:
 
 protected:
     
-    void set_id(int id) { myid = id;}
+    void set_id(ssize_t id) { myid = id;}
     
     virtual inline bool push(void * ptr) { return out->push(ptr); }
     virtual inline bool pop(void ** ptr) { 
@@ -1290,7 +1290,7 @@ struct ff_buffernode: ff_node {
 
 /* *************************** Typed node ************************* */
 
-#ifndef WIN32 //VS12
+//#ifndef WIN32 //VS12
 /*!
  *  \class ff_node_base_t
  *  \ingroup building_blocks
@@ -1302,21 +1302,21 @@ struct ff_buffernode: ff_node {
  *  This class is defined in \ref node.hpp
  */
 
-template<typename IN, typename OUT = IN>
+template<typename IN_t, typename OUT_t = IN_t>
 struct ff_node_t: ff_node {
-    typedef IN  in_type;
-    typedef OUT out_type;
+    typedef IN_t  in_type;
+    typedef OUT_t out_type;
     ff_node_t():
-        GO_ON((OUT*)FF_GO_ON),
-        EOS((OUT*)FF_EOS),
-        EOSW((OUT*)FF_EOSW),
-        GO_OUT((OUT*)FF_GO_OUT),
-        EOS_NOFREEZE((OUT*) FF_EOS_NOFREEZE) {
+        GO_ON((OUT_t*)FF_GO_ON),
+        EOS((OUT_t*)FF_EOS),
+        EOSW((OUT_t*)FF_EOSW),
+        GO_OUT((OUT_t*)FF_GO_OUT),
+        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
 	}
-    OUT * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
+    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_node_t()  {}
-    virtual OUT* svc(IN*)=0;
-    inline  void *svc(void *task) { return svc(reinterpret_cast<IN*>(task)); };
+    virtual OUT_t* svc(IN_t*)=0;
+    inline  void *svc(void *task) { return svc(reinterpret_cast<IN_t*>(task)); };
 };
 
 #if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
@@ -1340,7 +1340,7 @@ struct ff_node_F: public ff_node_t<TIN,TOUT> {
 };
 
 #endif
-#endif
+//#endif
 
 } // namespace ff
 

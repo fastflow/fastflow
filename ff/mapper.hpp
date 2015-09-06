@@ -241,8 +241,8 @@ public:
 	 *
 	 * \return The identifier of the core.
 	 */
-	int getCoreId(unsigned int tid) {
-		int id = CList[tid & mask];
+	ssize_t getCoreId(unsigned int tid) {
+		ssize_t id = CList[tid & mask];
 		//std::cerr << "Mask is " << mask << "\n";
 		//int id = CList[tid % (mask+1)];
 		return id;

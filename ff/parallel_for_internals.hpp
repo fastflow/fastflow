@@ -443,7 +443,7 @@ protected:
     std::atomic_long       maxid;
 protected:
     // initialize the data vector
-    virtual inline size_t init_data(long start, long stop) {
+    virtual inline size_t init_data(ssize_t start, ssize_t stop) {
         static_scheduling = false;  // enable work stealing in the nextTaskConcurrent
         const long numtasks  = std::lrint(std::ceil((stop-start)/(double)_step));
         long totalnumtasks   = std::lrint(std::ceil(numtasks/(double)_chunk));
@@ -458,7 +458,7 @@ protected:
         taskv.resize(8*_nw); // 8 is the maximum n. of jumps, see the heuristic below
         skip1=false,jump=0,maxid=-1;
 
-        long end, t=0, e;
+        ssize_t end, t=0, e;
         for(size_t i=0;i<_nw && totalnumtasks>0;++i, totalnumtasks-=t) {
             t       = ntxw + ( (r>1 && (i<r)) ? 1 : 0 );
             e       = start + (t*_chunk - 1)*_step + 1;

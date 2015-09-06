@@ -87,7 +87,7 @@ add_subdirectory( layer2-tests-HAL )
 
 #OpenCL
 
-find_package(OpenCL REQUIRED)
+find_package(OpenCL)
 if ( NOT OPENCL_FOUND )
 	message ( WARNING "OpenCL not found" )	
 else  ( NOT OPENCL_FOUND )
