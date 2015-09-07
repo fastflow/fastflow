@@ -73,8 +73,7 @@ int main(int argc, char * argv[]) {
 #else
     long i=0;
     fftask_t *r = NULL;
-    ff_node_F<fftask_t> wrapper(Wrapper);
-    ff_Farm<fftask_t> farm(wrapper, nworkers, true);
+    ff_Farm<fftask_t> farm(Wrapper, nworkers, true);
     farm.run();
 
     do {

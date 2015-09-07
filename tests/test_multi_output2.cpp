@@ -63,9 +63,9 @@
 #include <ff/pipeline.hpp>
 #include <ff/node.hpp>
 
-#if !defined(HAS_CXX11_VARIADIC_TEMPLATES)
-#error "this test requires the -DHAS_CXX11_VARIADIC_TEMPLATES compile flag"
-#endif
+//#if !defined(HAS_CXX11_VARIADIC_TEMPLATES)
+//#error "this test requires the -DHAS_CXX11_VARIADIC_TEMPLATES compile flag"
+//#endif
   
 using namespace ff;
 

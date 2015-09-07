@@ -47,15 +47,13 @@
 #include <iostream>
 #include <ff/farm.hpp>
 #include <ff/pipeline.hpp>
-#include <ff/node.hpp>
-  
 
 using namespace ff;
 
-class Start: public ff_node {
+class Start: public ff_node_t<long> {
 public:
     Start(int streamlen):streamlen(streamlen) {}
-    void* svc(void*) {    
+    long* svc(long*) {    
         for (int j=0;j<streamlen;j++) {
             ff_send_out(new long(j));
         }
@@ -66,24 +64,21 @@ private:
 };
 
 
-class Worker1: public ff_node {
-public:
-    void * svc(void * task) {
+// worker function
+long *Fworker(long *task, ff_node*const) {
         usleep(random() % 20000);
         return task;
-    }
-};
+}
 
 
-class Stop: public ff_node {
+class Stop: public ff_node_t<long> {
 public:
     Stop():expected(0) {}
 
-    void* svc(void* task) {    
-        long t = *(long*)task;
-        
-        if (t != expected) 
-            printf("ERROR: task received out of order, received %ld expected %ld\n", t, expected);
+    long* svc(long* t) {    
+        long &task = *t;
+        if (task != expected) 
+            printf("ERROR: task received out of order, received %ld expected %ld\n", task, expected);
         
         expected++;
         return GO_ON;
@@ -114,22 +109,21 @@ int main(int argc, char * argv[]) {
     }
     srandom(131071);
         
-    ff_pipeline pipe;
-    
-    Start start(streamlen);
-    pipe.add_stage(&start);
+#if 0
+    // creates the pipeline adding the first stage and then adding all other stages
+    ff_Pipe<> pipe(make_unique<Start>(streamlen));
+    pipe.add_stage(make_unique<ff_OFarm<long>>(Fworker, nworkers));
+    pipe.add_stage(make_unique<Stop>());
+#else  // one-line command
+    ff_Pipe<> pipe(make_unique<Start>(streamlen),
+                   make_unique<ff_OFarm<long>>(Fworker, nworkers),
+                   make_unique<Stop>());
+#endif
 
-    ff_ofarm ofarm;
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker1);
-    ofarm.add_workers(w);
-
-    pipe.add_stage(&ofarm);
-
-    Stop stop;
-    pipe.add_stage(&stop);
-
-    pipe.run_and_wait_end();
+    if (pipe.run_and_wait_end()<0) {
+        error("running pipe\n");
+        return -1;
+    }
 
     std::cerr << "DONE\n";
     return 0;

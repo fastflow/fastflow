@@ -677,7 +677,6 @@ public:
 
 
 #ifndef WIN32 //VS12
-#if defined(HAS_CXX11_VARIADIC_TEMPLATES)
 
 //! ParallelForPipeReduce class
 /**
@@ -790,7 +789,6 @@ public:
         if (r<0) error("ParallelForPipeReduce: parallel_reduce_idx, starting pipe\n");
     }
 };
-#endif 
 #endif //VS12
 
 //
