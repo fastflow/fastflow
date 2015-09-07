@@ -1843,6 +1843,16 @@ public:
         ff_ofarm::add_workers(w);
     }
 
+    template <typename FUNC_t>
+    explicit ff_OFarm(FUNC_t F, ssize_t nw, bool input_ch=false): 
+        ff_ofarm(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false,nw) {
+        assert(nw>0);
+        std::vector<ff_node*> w(nw);        
+        for(ssize_t i=0;i<nw;++i) w[i]=new ff_node_F<IN_t,OUT_t>(F);
+        ff_ofarm::add_workers(w);
+        ff_ofarm::cleanup_workers();  
+    }
+
     virtual ~ff_OFarm() { }
 
     int add_workers(std::vector<ff_node *> & w) = delete;

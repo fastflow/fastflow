@@ -44,7 +44,7 @@ endif
 #
 ###############################à#########################################
 CC                   = gcc
-CXX 		     = g++
+CXX 		     = g++ -std=c++0x
 #CC		     = icc  -mmic
 #CXX 		     = icpc -mmic 
 #CXX		     = clang++
@@ -126,8 +126,7 @@ test4:test4.o
 test5:test5.o
 test6:test6.o
 test7:test7.o
-test8:test8.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+test8:test8.o
 perf_test1:perf_test1.o
 test_accelerator:test_accelerator.o
 
@@ -152,12 +151,9 @@ test_scheduling:test_scheduling.o
 test_scheduling2:test_scheduling2.cpp
 	$(CXX) -DLB_CALLBACK $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_sendq:test_sendq.o
-test_parfor_unbalanced:test_parfor_unbalanced.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_parfor_multireduce:test_parfor_multireduce.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_parfor_multireduce2:test_parfor_multireduce2.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+test_parfor_unbalanced:test_parfor_unbalanced.o
+test_parfor_multireduce:test_parfor_multireduce.o
+test_parfor_multireduce2:test_parfor_multireduce2.o
 latency_MPMC:latency_MPMC.o
 test_spinBarrier:test_spinBarrier.o
 test_multi_input:test_multi_input.o
@@ -169,8 +165,7 @@ test_multi_input6:test_multi_input6.o
 test_multi_input7:test_multi_input7.o
 test_multi_input8:test_multi_input8.o
 test_multi_output:test_multi_output.o
-test_multi_output2:test_multi_output2.cpp
-	$(CXX) -std=c++0x -DHAS_CXX11_VARIADIC_TEMPLATES -DHAS_CXX11_LAMBDA $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+test_multi_output2:test_multi_output2.o
 test_dataflow:test_dataflow.o
 test_dataflow2:test_dataflow2.o
 test_noinput_pipe:test_noinput_pipe.o
@@ -179,69 +174,41 @@ test_stopstartthreads2:test_stopstartthreads2.o
 test_stopstartall:test_stopstartall.o
 test_MISD:test_MISD.o
 test_lb_affinity:test_lb_affinity.o
-test_farm:test_farm.cpp
-	$(CXX) -std=c++0x -DHAS_CXX11_VARIADIC_TEMPLATES $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_pipe:test_pipe.cpp
-	$(CXX) -std=c++0x -DHAS_CXX11_VARIADIC_TEMPLATES $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_parfor:test_parfor.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_parfor2:test_parfor2.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_parforpipereduce:test_parforpipereduce.cpp
-	$(CXX) -std=c++0x -DHAS_CXX11_VARIADIC_TEMPLATES $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_graphsearch:test_graphsearch.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_dotprod_parfor:test_dotprod_parfor.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_uBuffer:test_uBuffer.cpp
-	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_torus:test_torus.cpp
-	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_torus2:test_torus2.cpp
-	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+test_farm:test_farm.o
+test_pipe:test_pipe.o
+test_parfor:test_parfor.o
+test_parfor2:test_parfor2.o
+test_parforpipereduce:test_parforpipereduce.o
+test_graphsearch:test_graphsearch.o
+test_dotprod_parfor:test_dotprod_parfor.o
+test_uBuffer:test_uBuffer.o
+test_torus:test_torus.o
+test_torus2:test_torus2.o
 test_mpmc:test_mpmc.cpp
 	$(CXX) -DUNBOUNDED_MPMC -Wno-strict-aliasing $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_mpmc2:test_mpmc2.cpp
-	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+test_mpmc2:test_mpmc2.o
 test_bmpmc:test_bmpmc.cpp
 	$(CXX) -Wno-strict-aliasing $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-perf_test_alloc1:perf_test_alloc1.cpp
-	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-perf_test_alloc2:perf_test_alloc2.cpp
-	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-perf_test_alloc3:perf_test_alloc3.cpp
-	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-perf_test_noalloc:perf_test_noalloc.cpp
-	$(CXX) $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-perf_parfor:perf_parfor.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-perf_parfor2:perf_parfor2.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-latptr11:latptr11.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_map:test_map.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+perf_test_alloc1:perf_test_alloc1.o
+perf_test_alloc2:perf_test_alloc2.o
+perf_test_alloc3:perf_test_alloc3.o
+perf_test_noalloc:perf_test_noalloc.o
+perf_parfor:perf_parfor.o
+perf_parfor2:perf_parfor2.o
+latptr11:latptr11.o
+test_map:test_map.o
+test_pool1:test_pool1.o
+test_pool2:test_pool2.o
+test_pool3:test_pool3.o
 
-test_pool1:test_pool1.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_pool2:test_pool2.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_pool3:test_pool3.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-
-test_mdf:test_mdf.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-test_taskf:test_taskf.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+test_mdf:test_mdf.o
+test_taskf:test_taskf.o
 
 test_taskcallbacks:test_taskcallbacks.cpp
 	$(CXX) -DFF_TASK_CALLBACK -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
-test_eosw:test_eosw.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
-
-test_nodeselector:test_nodeselector.cpp
-	$(CXX) -std=c++0x $(INCLUDES) $(CXXFLAGS) $(ALLOC) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+test_eosw:test_eosw.o
+test_nodeselector:test_nodeselector.o
 
 
 # test_taskf2:test_taskf2.cpp
