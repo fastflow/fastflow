@@ -1843,23 +1843,21 @@ public:
         ff_ofarm::add_workers(w);
     }
 
-    template <typename FUNC_t>
-    explicit ff_OFarm(FUNC_t F, ssize_t nw, bool input_ch=false): 
-        ff_ofarm(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false,nw) {
-        assert(nw>0);
-        std::vector<ff_node*> w(nw);        
-        for(ssize_t i=0;i<nw;++i) w[i]=new ff_node_F<IN_t,OUT_t>(F);
-        ff_ofarm::add_workers(w);
-        ff_ofarm::cleanup_workers();  
-    }
-
     virtual ~ff_OFarm() { }
+
+
+    void setEmitterF(ff_node &f)   { ff_ofarm::setEmitterF(&f); }
+    void setCollectorF(ff_node &f) { ff_ofarm::setCollectorF(&f); }
 
     int add_workers(std::vector<ff_node *> & w) = delete;
     int add_emitter(ff_node * e) = delete;
     int add_collector(ff_node * c) = delete;
     int remove_collector() = delete;
+    void setEmitterF  (ff_node* f) = delete;
+    void setCollectorF(ff_node* f) = delete;
     
+
+
     bool load_result(void ** task,
                      unsigned long retry=((unsigned long)-1),
                      unsigned long ticks=ff_gatherer::TICKS2WAIT) = delete;
