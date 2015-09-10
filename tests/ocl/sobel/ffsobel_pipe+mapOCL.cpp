@@ -63,8 +63,8 @@
 using namespace cv;
 using namespace ff;
 
-const int NUM_WRITERS     = 8; // number of threads writing data into the disk
-const int NUM_CPU_WORKERS = 4; // parallelism degree for the CPU map (they computes in parallel small images)
+const long NUM_WRITERS     = 8; // number of threads writing data into the disk
+const long NUM_CPU_WORKERS = 4; // parallelism degree for the CPU map (they computes in parallel small images)
 const long SMALL_SIZE     = 250000; // we consider an image small if #cols*rows <= SMALL_SIZE
 long repeatTime           = 1; // to repeat the same set of images a numer of times
 
@@ -193,7 +193,7 @@ struct cpuMap: ff_Map<Task,Task> {
     // sets the maximum n. of worker for the Map
     // spinWait is set to true
     // the scheduler is disabled by default
-    cpuMap(const long mapworkers=ff_realNumCores()):ff_Map<Task,Task>(mapworkers) {} //,true) {}
+    cpuMap(const long mapworkers=std::max(ff_realNumCores(),NUM_CPU_WORKERS)):ff_Map<Task,Task>(mapworkers) {} //,true) {}
     
     Task *svc(Task *task) {
         uchar * src = task->src, * dst = task->dst;
@@ -294,7 +294,7 @@ int main(int argc, char *argv[]) {
     kern.addNode(cpusobel);
     kern.addNode(sobel);
 
-    // here we use a farm to write in parallel
+    // here we use a farm to write in parallel multiple images
     ff_Farm<Task> farm(writer, NUM_WRITERS); 
     farm.remove_collector();
     ff_Pipe<> pipe(Reader, kern, farm);

@@ -45,12 +45,6 @@ using namespace ff;
 #define CHECK 1
 
 FF_OCL_STENCIL_ELEMFUNC_ENV(mapf, float, size, i, A, float, B, (void)size; return A[i] * B[i];);
-
-//implicit input
-//FF_OCL_MAP_ELEMFUNC_1D_ENV(mapf, float, v, float, ev,
-//		return v * ev;
-//);
-
 FF_OCL_REDUCE_COMBINATOR(reducef, float, x, y, return (x+y););
 
 struct Task: public baseOCLTask<Task, float, float> {
