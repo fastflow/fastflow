@@ -828,7 +828,7 @@ private:
 };
 
 
-#ifndef WIN32 //VS12
+//#ifndef WIN32 //VS12
     // ------------------------ high-level (simpler) pipeline ------------------
 #if ((__cplusplus >= 201103L) && (defined __GXX_EXPERIMENTAL_CXX0X__)) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
 
@@ -850,7 +850,7 @@ private:
      * \example pipe_basic.cpp
      */
     
-    template<typename IN=char,typename OUT=IN>
+    template<typename IN_t=char,typename OUT_t=IN_t>
     class ff_Pipe: public ff_pipeline {
     private:
 #ifndef __CUDACC__
@@ -903,8 +903,8 @@ private:
         // NOTE: The ff_Pipe accepts as stages either l-value references or std::unique_ptr l-value references.
         //       The ownership of the (unique) pointer stage is transfered to the pipeline !!!!
 
-        typedef IN  in_type;
-        typedef OUT out_type;
+        typedef IN_t  in_type;
+        typedef OUT_t out_type;
 
         /**
          * \brief Create a stand-alone pipeline (no input/output streams). Run with \p run_and_wait_end or \p run_the_freeze.
@@ -951,7 +951,7 @@ private:
 
         operator ff_node* () { return this;}
 
-        bool load_result(OUT *&task,
+        bool load_result(OUT_t *&task,
                          unsigned long retry=((unsigned long)-1),
                          unsigned long ticks=ff_node::TICKS2WAIT) {
             return ff_pipeline::load_result((void**)&task, retry,ticks);
@@ -980,7 +980,7 @@ private:
         void cleanup_nodes() = delete;       
     };
 #endif /* HAS_CXX11_VARIADIC_TEMPLATES */
-#endif //VS12
+//#endif //VS12
 
 } // namespace ff
 

@@ -44,7 +44,8 @@ struct Source : ff_node_t<cv::Mat> {
     Source(const std::string filename):filename(filename) {}
   
     cv::Mat * svc(cv::Mat *) {
-	VideoCapture cap(filename.c_str()); 
+        //VideoCapture cap(filename.c_str()); 
+        VideoCapture cap(1); 
 	if(!cap.isOpened())  {  
 	    std::cout << "Error opening input file" << std::endl;
 	    return EOS;

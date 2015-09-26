@@ -55,7 +55,7 @@
 #include <cstdlib>
 #include <cstring>
 //#include <atomic>
-#include <ff/atomic/abstraction_dcas.h>
+//#include <ff/atomic/abstraction_dcas.h>
 
 #include <ff/sysdep.h>
 #include <ff/config.hpp>
