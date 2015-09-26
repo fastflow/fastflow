@@ -95,53 +95,35 @@ typedef unsigned long int     atom_t;
 #define _InterlockedCompareExchangePointer(destination, exchange, compare) _InterlockedCompareExchange((volatile long *) destination, (long) exchange, (long) compare)
 #endif
 
-#if (defined __unix__ && defined __x86_64__ && __GNUC__)
-// TRD : any UNIX with GCC on x64
+
+#if (defined __unix__ && (defined __GNUC__ || defined __llvm__) ) 
 #if !defined(_XOPEN_SOURCE)
-#define _XOPEN_SOURCE 600
-#endif
+#define _XOPEN_SOURCE 700 // or 600
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-typedef unsigned long long int  atom_t;
 #define INLINE                  inline
 #define ALIGN_TO_PRE(alignment)
 #define ALIGN_TO_POST(alignment)        __attribute__( (aligned(alignment)) )
 #define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
+#endif
+
+#if ((defined __GNUC__ || defined __llvm__) && defined __unix__ && defined __x86_64__)
 #define ALIGN_SINGLE_POINTER    8
 #define ALIGN_DOUBLE_POINTER    16
-//#endif
-#elif (defined __unix__ && (defined __i686__ || defined __i386__) && __GNUC__)
-// TRD : any UNIX with GCC on x86
-#if !defined(_XOPEN_SOURCE)
-#define _XOPEN_SOURCE 600
-#endif
-#include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
+typedef unsigned long long int  atom_t;
+#elif ((defined __GNUC__ || defined __llvm__) && defined __unix__ && defined __i686__) 
 typedef unsigned long int     atom_t;
-#define INLINE                inline
-#define ALIGN_TO_PRE(alignment)
-#define ALIGN_TO_POST(alignment)      __attribute__( (aligned(alignment)) )
-#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
 #define ALIGN_SINGLE_POINTER  4
 #define ALIGN_DOUBLE_POINTER  8
-//#endif
-#elif (defined __unix__ && defined __arm__ && __GNUC__)
-// TRD : any UNIX with GCC on ARM
-#if !defined(_XOPEN_SOURCE)
-#define _XOPEN_SOURCE 600
-#endif
-#include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
+#elif ((defined __GNUC__ || defined __llvm__) && defined __unix__ && defined __arm__) // need to distinghuish 32 and 64 bit
 typedef unsigned long int     atom_t;
-#define INLINE                inline
-#define ALIGN_TO_PRE(alignment)
-#define ALIGN_TO_POST(alignment)      __attribute__( (aligned(alignment)) )
-#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
 #define ALIGN_SINGLE_POINTER  4
 #define ALIGN_DOUBLE_POINTER  8
+#elif ((defined __GNUC__ || defined __llvm__) && defined __unix__ && defined __powerpc64__)
+#define ALIGN_SINGLE_POINTER    8
+#define ALIGN_DOUBLE_POINTER    16
+typedef unsigned long long int  atom_t;
 #endif
 
 
