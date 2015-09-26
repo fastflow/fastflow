@@ -51,8 +51,8 @@ int main(int argc, char *argv[]) {
     }
         
     // input file
-    //VideoCapture cap(0); // open the default camera
-    VideoCapture cap(argv[1]); 
+    VideoCapture cap(1); // open the default camera
+    //VideoCapture cap(argv[1]); 
     
     if(!cap.isOpened())  {  // check if we succeeded
 	std::cerr << "Error opening input file" << std::endl;

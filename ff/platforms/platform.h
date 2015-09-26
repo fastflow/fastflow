@@ -20,6 +20,7 @@
 #ifndef FF_PLATFORM_HPP
 #define FF_PLATFORM_HPP
 
+#include <ff/platforms/liblfds.h>
 
 // APPLE specific backward compatibility 
 

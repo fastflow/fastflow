@@ -40,8 +40,8 @@
 namespace ff {
 
 
-template<typename IN, typename OUT=IN>
-class ff_nodeSelector: public ff_node_t<IN,OUT> {
+template<typename IN_t, typename OUT_t=IN_t>
+class ff_nodeSelector: public ff_node_t<IN_t,OUT_t> {
 protected:
     static bool ff_send_out_selector(void * task,
                                      unsigned long retry,
@@ -50,15 +50,15 @@ protected:
     }
 
 
-    inline void add2selector(ff_node &node) { ff_nodeSelector<IN,OUT>::addNode(node); }
+    inline void add2selector(ff_node &node) { ff_nodeSelector<IN_t,OUT_t>::addNode(node); }
     inline void add2selector(ff_node *node) { 
         cleanup_devices.push_back(node);
-        ff_nodeSelector<IN,OUT>::addNode(*node);
+        ff_nodeSelector<IN_t,OUT_t>::addNode(*node);
     }
-    void add2selectorall(const IN &task){
+    void add2selectorall(const IN_t &task){
         setTask(task);
     }
-    void add2selectorall(IN &task){
+    void add2selectorall(IN_t &task){
         setTask(task);
     }
 
@@ -76,29 +76,29 @@ protected:
     
 public:
 
-    typedef IN  in_type;
-    typedef OUT out_type;
+    typedef IN_t  in_type;
+    typedef OUT_t out_type;
 
     ff_nodeSelector():selected(0) {}
-    //ff_nodeSelector(const IN &task):selected(0), inTask(const_cast<IN*>(&task)) {}
+    //ff_nodeSelector(const IN_t &task):selected(0), inTask(const_cast<IN_t*>(&task)) {}
     template<typename... NODES>
     ff_nodeSelector(NODES &&...nodes):selected(0) {
         this->add2selectorall(nodes...);
     }
     
     // used to set tasks when running in a passive mode
-    void setTask(const IN &task) { inTask = const_cast<IN*>(&task);  }
+    void setTask(const IN_t &task) { inTask = const_cast<IN_t*>(&task);  }
 
     void selectNode(size_t id) { selected = id; }
 
     int svc_init() { return nodeInit(); }
 
-    OUT* svc(IN *in) {
+    OUT_t* svc(IN_t *in) {
         if (in == nullptr) {
             devices[selected]->svc(inTask);
-            return ff_node_t<IN,OUT>::EOS;
+            return ff_node_t<IN_t,OUT_t>::EOS;
         }
-        OUT* out = (OUT*)(devices[selected]->svc(in));
+        OUT_t* out = (OUT_t*)(devices[selected]->svc(in));
         return out;
     }
 
@@ -144,7 +144,7 @@ public:
             
 protected:
     size_t      selected;
-    IN         *inTask;
+    IN_t         *inTask;
     std::vector<ff_node*> devices; 
     std::vector<ff_node*> cleanup_devices;
 };

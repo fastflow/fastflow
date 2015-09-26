@@ -25,11 +25,11 @@
 
 
 CXX	= g++ -std=c++11 
-FFHOME 	= $(HOME)/fastflow
+FFHOME 	= ../..
 CFLAGS 	= -Wall `pkg-config --cflags opencv` #-DTRACE_FASTFLOW  -pg
 OPT     = -O3 -DNDEBUG  # -g
-
 LIBS 	= `pkg-config --libs opencv` -pthread
+
 TARGETS	= video ffvideo 
 
 all: $(TARGETS)
