@@ -54,6 +54,14 @@
 #include <unistd.h>
 #define gettid() syscall(__NR_gettid)
 #elif defined(__APPLE__)
+//#define _DARWIN_C_SOURCE
+
+// They are needed - why?
+typedef unsigned long u_long;
+typedef unsigned int u_int;
+typedef unsigned char u_char;
+typedef unsigned short u_short;
+
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #include <sys/syscall.h>
@@ -83,9 +91,9 @@ static inline size_t ff_getThreadID() {
 #if (defined(__GNUC__) && defined(__linux))
     return  gettid();
 #elif defined(__APPLE__) && MAC_OS_X_HAS_AFFINITY
-    uint64_t tid;
-    pthread_threadid_np(NULL, &tid);
-    return (long) tid; // > 10.6 only
+    //uint64_t tid;
+    // pthread_getthreadid_np(NULL, &tid); // MA: for some reasons does nto works (it was working)
+    //return (long) tid; // > 10.6 only
 #elif defined(_WIN32)
     return GetCurrentThreadId();
 #endif
@@ -245,13 +253,13 @@ static inline ssize_t ff_setPriority(ssize_t priority_level=0) {
     ssize_t ret=0;
 #if (defined(__GNUC__) && defined(__linux))
     //if (priority_level) {
-        if (setpriority(PRIO_PROCESS, gettid(),priority_level) != 0) {
+        if (setpriority(PRIO_PROCESS, gettid(), priority_level) != 0) {
             perror("setpriority:");
             ret = EINVAL;
         }
     //}
 #elif defined(__APPLE__) 
-    if (setpriority(PRIO_DARWIN_THREAD, 0 /*myself */ ,priority_level) != 0) {
+    if (setpriority(PRIO_PROCESS, 0 /*myself */ ,priority_level) != 0) {
             perror("setpriority:");
             ret = EINVAL;
     }

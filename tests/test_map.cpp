@@ -63,6 +63,7 @@ struct mapWorker: ff_Map<ff_task_t> {
     }
 };
 
+
 struct mapStage: ff_Map<ff_task_t> {
     ff_task_t *svc(ff_task_t *inA) {
         ff_task_t &A = *inA;

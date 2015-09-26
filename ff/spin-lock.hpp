@@ -40,7 +40,58 @@
  
 #ifndef FF_SPINLOCK_HPP
 #define FF_SPINLOCK_HPP
- 
+
+// This code requires a c++11 compiler 
+#include <ff/sysdep.h>
+#include <ff/platforms/platform.h>
+#include <ff/config.hpp>
+
+
+#if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
+#include <atomic>
+namespace ff {
+#define _INLINE static inline
+
+ALIGN_TO_PRE(CACHE_LINE_SIZE) struct AtomicFlagWrapper {
+/* MA: MSVS 2013 does not allow initialisation of lock-free atomic_flag in the constructor. 
+	Before removing the conditional compilation we should double-check that initialisation with .clear() really works in 
+    all platforms.  
+*/
+#ifndef _MSC_VER
+    AtomicFlagWrapper():F(ATOMIC_FLAG_INIT) {}
+#else
+	AtomicFlagWrapper() {
+		F.clear();
+		}
+#endif
+    // std::atomic_flag isn't copy-constructible, nor copy-assignable
+    
+    bool test_and_set(std::memory_order mo) {
+        return F.test_and_set(mo);
+    }
+    void clear(std::memory_order mo) {
+        F.clear(mo);
+    }	
+
+	std::atomic_flag F;
+}ALIGN_TO_POST(CACHE_LINE_SIZE);
+
+typedef AtomicFlagWrapper lock_t[1];
+
+_INLINE void init_unlocked(lock_t l) { }
+_INLINE void init_locked(lock_t l)   { abort(); }
+_INLINE void spin_lock(lock_t l) { 
+    while(l->test_and_set(std::memory_order_acquire)) ;
+}
+_INLINE void spin_unlock(lock_t l) { l->clear(std::memory_order_release);}
+}
+#else
+#pragma message ("FastFlow requires a c++11 compiler")
+#endif
+
+
+
+#if 0 // This is the old implementation
 // REW -- documentation
 #include <ff/sysdep.h>
 #include <ff/platforms/platform.h>
@@ -290,6 +341,6 @@ _INLINE void spin_unlock(lock_t l) {
 } // namespace ff
 #endif
 
-
+#endif
 
 #endif /* FF_SPINLOCK_HPP */

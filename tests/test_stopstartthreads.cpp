@@ -34,11 +34,11 @@
 //#include <pthread.h>
 #include <ff/platforms/platform.h>
 #include <vector>
-#include <iostream>
 #include <ff/farm.hpp>
 #include <ff/pipeline.hpp>
 #include <ff/node.hpp>
 #include <ff/allocator.hpp>
+#include <iostream>
 
 using namespace ff;
 

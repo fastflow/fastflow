@@ -73,11 +73,11 @@
 #include <ff/dynqueue.hpp>
 #include <ff/buffer.hpp>
 #include <ff/spin-lock.hpp>
-#if defined(HAVE_ATOMIC_H)
-#include <asm/atomic.h>
-#else
-#include <ff/atomic/atomic.h>
-#endif
+// #if defined(HAVE_ATOMIC_H)
+// #include <asm/atomic.h>
+// #else
+// #include <ff/atomic/atomic.h>
+// #endif
 namespace ff {
 
 /* Do not change the following define unless you know what you're doing */
@@ -232,7 +232,8 @@ private:
         buf_w->multipush(multipush_buf,MULTIPUSH_BUFFER_SIZE);
         mcnt=0;
 #if defined(UBUFFER_STATS)
-        atomic_long_inc(&numBuffers);
+        ++numBuffers
+        //atomic_long_inc(&numBuffers);
 #endif
         return true;
     }
@@ -248,7 +249,8 @@ public:
         pool(CACHE_SIZE,fillcache,size) {
         init_unlocked(P_lock); init_unlocked(C_lock);
 #if defined(UBUFFER_STATS)
-        atomic_long_set(&numBuffers,0);
+        numBuffers = 0;
+        //atomic_long_set(&numBuffers,0);
 #endif
         // Avoid unused private field warning on padding fields
         //(void)padding1; (void)padding2; (void)padding3; (void)padding4;
@@ -333,7 +335,8 @@ public:
             buf_w = t;
             in_use_buffers++;
 #if defined(UBUFFER_STATS)
-            atomic_long_inc(&numBuffers);
+            ++numBuffers;
+            //atomic_long_inc(&numBuffers);
 #endif
         }
         //DBG(assert(buf_w->push(data)); return true;);
@@ -397,7 +400,8 @@ public:
                     buf_r = tmp;                    
 
 #if defined(UBUFFER_STATS)
-                    atomic_long_dec(&numBuffers);
+                    --numBuffers;
+                    //atomic_long_dec(&numBuffers);
 #endif
                 }
             }
@@ -409,7 +413,8 @@ public:
 
 #if defined(UBUFFER_STATS)
     inline unsigned long queue_status() {
-        return (unsigned long)atomic_long_read(&numBuffers);
+        return (unsigned long) numBuffers;
+            //atomic_long_read(&numBuffers);
     }
     
 
@@ -484,7 +489,8 @@ private:
     ALIGN_TO_POST(CACHE_LINE_SIZE)
     /* -------------------------------------------------------------- */
 #if defined(UBUFFER_STATS)
-    atomic_long_t numBuffers;
+    std::atomic<unsigned long> numBuffers;
+    //atomic_long_t numBuffers;
 #endif
 
 #if defined(uSWSR_MULTIPUSH)

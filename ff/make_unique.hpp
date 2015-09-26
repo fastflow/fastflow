@@ -12,7 +12,7 @@
 #if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
 template <typename T, typename... Args>
 std::unique_ptr<T> make_unique_helper(std::false_type, Args&&... args) {
-  return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
 template <typename T, typename... Args>
