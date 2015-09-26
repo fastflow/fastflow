@@ -99,6 +99,7 @@ typedef unsigned long int     atom_t;
 #if (defined __unix__ && (defined __GNUC__ || defined __llvm__) ) 
 #if !defined(_XOPEN_SOURCE)
 #define _XOPEN_SOURCE 700 // or 600
+#endif
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
