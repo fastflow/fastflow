@@ -69,8 +69,8 @@
 #include <sstream>
 #include <map>
 #include <vector>
-#include <ff/atomic/atomic.h>
-
+//#include <ff/atomic/atomic.h>
+#include <atomic>
 
 namespace ff {
 
@@ -105,7 +105,7 @@ private:
     
 protected:
     clEnvironment(): platforms(NULL), numPlatforms(0),lastAssigned(0) {
-        atomic_long_set(&oclId, 0);
+        oclId=0;
         
         // FIX: what is this ???
 #if defined(FF_GPUCOMPONETS)
@@ -193,7 +193,7 @@ public:
          return m_clEnvironment; 
     }
 
-    unsigned long getOCLID() {  return atomic_long_inc_return(&oclId); }
+    unsigned long getOCLID() {  return ++oclId; }
 
     /**
      * allocate multiple GPU devices.
@@ -352,7 +352,7 @@ private:
     clEnvironment& operator=(clEnvironment const&){ return *this;};
 private:    
     static clEnvironment * m_clEnvironment;
-    atomic_long_t oclId;
+    std::atomic_long oclId;
 
     std::map<cl_device_id, oclParameter*> dynamicParameters;
 	std::vector<cl_device_id> clDevices;
