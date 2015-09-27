@@ -98,9 +98,21 @@ else  ( NOT OPENCL_FOUND )
       if (  ( CMAKE_SYSTEM_NAME MATCHES "Darwin" ) AND ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU") )
         message ( WARNING "***** SKIPPING OPENCL tests -> GCC+opencl on OS/Yosemite require to patch system headers - See: http://hamelot.co.uk/programming/osx-gcc-dispatch_block_t-has-not-been-declared-invalid-typedef/" )
       else ( )
+        MESSAGE(STATUS "Configuring >>tests/ocl<< directory")
         add_subdirectory( ocl )
       endif (  )	
 endif ( NOT OPENCL_FOUND )
+
+# CUDA
+
+find_package(CUDA)
+if (NOT CUDA_FOUND)
+   message (WARING "CUDA not found")
+else (NOT CUDA_FOUND)
+   message (STATUS "CUDA supported, version" ${CUDA_VERSION_STRING})
+   MESSAGE(STATUS "Configuring >>tests/cuda<< directory")
+   add_subdirectory( cuda )
+endif (NOT CUDA_FOUND)   
 
 # Distributed
 
