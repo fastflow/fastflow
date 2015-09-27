@@ -12,7 +12,7 @@ set( TESTS
 perf_parfor                               test_masterworker
 perf_parfor2                              test_mdf
 perf_test1                                
-perf_test_alloc1                          test_mpmc
+perf_test_alloc1                          
 perf_test_alloc2                          test_multi_input
 perf_test_alloc3                          test_multi_input2
 perf_test_noalloc                         test_multi_input3
@@ -39,7 +39,7 @@ test_accelerator_ofarm                    test_pipe
 test_accelerator_ofarm_multiple_freezing  test_pool1
 test_accelerator_pipe+farm                test_pool2
 test_accelerator_pipe                     test_pool3
-test_bmpmc                                test_scheduling
+test_scheduling
 test_dataflow                             
 test_dataflow2                            test_sendq
 test_devicequery                          test_spinBarrier
