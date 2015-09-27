@@ -144,21 +144,15 @@ typedef unsigned long int     atom_t;
 #include <stdio.h>
 #include <stdlib.h>
 #if (defined __x86_64__)
-typedef unsigned long long int  atom_t;
 #define INLINE                  inline
 #define ALIGN_TO_PRE(alignment)
 #define ALIGN_TO_POST(alignment)        __attribute__( (aligned(alignment)) )
 #define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
-#define ALIGN_SINGLE_POINTER    8
-#define ALIGN_DOUBLE_POINTER    16
 #else
-typedef unsigned long int        atom_t;
 #define INLINE                  inline
 #define ALIGN_TO_PRE(alignment)
 #define ALIGN_TO_POST(alignment)        __attribute__( (aligned(alignment)) )
 #define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
-#define ALIGN_SINGLE_POINTER    4 
-#define ALIGN_DOUBLE_POINTER    8
 #endif
 #endif
 
