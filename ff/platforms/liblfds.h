@@ -122,7 +122,6 @@ typedef unsigned long int     atom_t;
 #define ALIGN_SINGLE_POINTER  4
 #define ALIGN_DOUBLE_POINTER  8
 #elif ((defined __GNUC__ || defined __llvm__) && defined __unix__ && defined __powerpc64__)
-#pragma message("Mem align 8 - 16, check liblfds.h");
 #define ALIGN_SINGLE_POINTER    8
 #define ALIGN_DOUBLE_POINTER    16
 typedef unsigned long long int  atom_t;
