@@ -199,8 +199,6 @@ public:
         if (init == _barrier) return -1;
         for(size_t i=0; i<init; ++i) barArray[i]=false;
         B[0]=0; B[1]=0;
-        //atomic_long_set(&B[0],0);
-        //atomic_long_set(&B[1],0);
         _barrier = init; 
         return 0;
     }
@@ -208,17 +206,14 @@ public:
     inline void doBarrier(size_t tid) {
         assert(tid<maxNThreads);
         const int whichBar = (barArray[tid] ^= true); // computes % 2
-        long c = B[whichBar]++;
-        //long c = atomic_long_inc_return(&B[whichBar]);
+        long c = ++B[whichBar];
         if ((size_t)c == _barrier) {
             B[whichBar]=0;
-            //atomic_long_set(&B[whichBar], 0);
             return;
         }
         // spin-wait
         while(c) {
             c = B[whichBar];
-            //c= atomic_long_read(&B[whichBar]);
             PAUSE();  // TODO: define a spin policy !
         }
     }
@@ -234,7 +229,6 @@ private:
     size_t threadCounter;
     bool* barArray;
     std::atomic<long> B[2];
-    //atomic_long_t B[2];
 };
 
 
