@@ -101,13 +101,12 @@
 
 #include <ff/platforms/platform.h>
 
-#include <atomic>
 // #if defined(HAVE_ATOMIC_H)
 // #include <asm/atomic.h>
 // #else 
 // #include <ff/atomic/atomic.h>
 // #endif
-
+#include <atomic>
 
 //#include <pthread.h>
 #include <ff/ubuffer.hpp>
@@ -122,7 +121,6 @@
 #else
 #define DBG(X)
 #endif
-
 
 namespace ff {
 
@@ -147,6 +145,8 @@ namespace ff {
         { 512,512,512,512,128,  64,  32,  16,   8 };
 
 #if defined(ALLOCATOR_STATS)
+#include <iostream>
+    
     struct all_stats {
         std::atomic_long      nmalloc;
         std::atomic_long      nfree;
@@ -165,21 +165,21 @@ namespace ff {
         std::atomic_long      deleteallocator;
 
         all_stats() {
-            nmalloc = 0;
-            nfree = 0;
-            nrealloc = 0;
-            sysmalloc = 0;
-            sysfree = 0;
-            sysrealloc = 0);
-            hit = 0;
-            miss = 0;
-            leakremoved = 0;
-            memallocated = 0;
-            memfreed = 0;
-            segmalloc = 0;
-            segfree = 0;
-            newallocator = 0;
-            deleteallocator = 0;
+            nmalloc.store(0);
+            nfree.store(0);
+            nrealloc.store(0);
+            sysmalloc.store(0);
+            sysfree.store(0);
+            sysrealloc.store(0);
+            hit.store(0);
+            miss.store(0);
+            leakremoved.store(0);
+            memallocated.store(0);
+            memfreed.store(0);
+            segmalloc.store(0);
+            segfree.store(0);
+            newallocator.store(0);
+            deleteallocator.store(0);
         }
     
         static all_stats *instance() {
@@ -258,8 +258,8 @@ namespace ff {
 
             memory_allocated += segment_size; // updt quantity of allocated memory
 
-            ALLSTATS(all_stats::instance()->segmalloc++;
-                     all_stats::instance()->memallocated+=segment_size);
+            ALLSTATS(all_stats::instance()->segmalloc.fetch_add(1);
+                     all_stats::instance()->memallocated.fetch_add(segment_size));
 
 #if defined(MAKE_VALGRIND_HAPPY)
             memset(ptr,0,segment_size);
@@ -283,8 +283,8 @@ namespace ff {
             freeAlignedMemory(ptr);
 
             memory_allocated -= segment_size;
-            ALLSTATS( all_stats::instance()->segfree++;
-                      all_stats::instance()->memfreed+=segment_size);
+            ALLSTATS( all_stats::instance()->segfree.fetch_add(1);
+                      all_stats::instance()->memfreed.fetch_add(segment_size) );
         }
     
         /*
@@ -333,7 +333,7 @@ namespace ff {
         ff_allocator * allocator;
     
         // number of items in the buffer freelist (i.e. Buffers available)
-        //std::atomic_long        availbuffers;
+        //atomic_long_t        availbuffers;
         size_t  availbuffers;
     };
 
@@ -554,7 +554,7 @@ namespace ff {
             }
 
             fb[1]->leak->pop(&b.ptr);
-            ALLSTATS(all_stats::instance()->leakremoved++);
+            ALLSTATS(all_stats::instance()->leakremoved.fetch_add(1));
             return b.ptr;
         }
 
@@ -563,7 +563,7 @@ namespace ff {
             for(unsigned i=0;i<fb_size;++i) {
                 unsigned k=(lastqueue+i)%fb_size;
                 if (fb[k]->leak->pop((void **)&buf)) {
-                    ALLSTATS(all_stats::instance()->leakremoved++);
+                    ALLSTATS(all_stats::instance()->leakremoved.fetch_add(1));
                     lastqueue=k;
                     return buf;
                 }
@@ -640,7 +640,7 @@ namespace ff {
         int init(bool prealloc=true) {
             if (!nslabs) return 0;
 
-            nomoremalloc = 0;   // atomic variable set to 0
+            nomoremalloc.store(0);   // atomic variable set to 0
 
             init_unlocked(lock);
 
@@ -709,7 +709,7 @@ namespace ff {
 
             // atomic variable set to 1: allocator has been deregistered
             // and prevented from allocating
-            nomoremalloc = 1;
+            nomoremalloc.store(1);
 
             // try to reclaim some memory
             for(unsigned i=0;i<fb_size;++i) {
@@ -760,12 +760,12 @@ namespace ff {
             item = delayedReclaim ? getfrom_fb_delayed() : getfrom_fb();
 
             if (item) {
-                ALLSTATS(all_stats::instance()->hit++);
+                ALLSTATS(all_stats::instance()->hit.fetch_add(1));
                 DBG(if ((getsegctl((Buf_ctl *)item))->allocator == NULL) abort());
                 return ((char *)item + BUFFER_OVERHEAD);
             }
 
-            ALLSTATS(all_stats::instance()->miss++);
+            ALLSTATS(all_stats::instance()->miss.fetch_add(1));
 
             /* if there are not available items try to allocate a new slab */
             if (newslab()<0) return NULL;
@@ -787,7 +787,7 @@ namespace ff {
              * deregistered and the memory in segment 'seg' could have been
              * reclaimed.
              */
-            if (nomoremalloc) {
+            if (nomoremalloc.load()) {
                 // NOTE: if delayedReclaim is set, freeing threads cannot pass here
                 DBG(assert(delayedReclaim==0));
 
@@ -924,7 +924,7 @@ namespace ff {
         virtual inline bool   free(Buf_ctl * buf) {
             SlabCache * const entry = getslabs(buf);
             DBG( if (!entry) abort() );
-            ALLSTATS(all_stats::instance()->nfree++);
+            ALLSTATS(all_stats::instance()->nfree.fetch_add(1));
             return entry->putitem(buf);
         }
 
@@ -1124,7 +1124,7 @@ namespace ff {
              */
             if ( size>MAX_SLABBUFFER_SIZE ||
                  (slabcache[getslabs(size)]->getnslabs()==0) ) {
-                ALLSTATS(all_stats::instance()->sysmalloc++);
+                ALLSTATS(all_stats::instance()->sysmalloc.fetch_add(1));
                 void * ptr = ::malloc(size+sizeof(Buf_ctl));
                 if (!ptr) return 0;
                 ((Buf_ctl *)ptr)->ptr = 0;
@@ -1134,7 +1134,7 @@ namespace ff {
             // otherwise
             int entry = getslabs(size);
             DBG(if (entry<0) abort());
-            ALLSTATS(all_stats::instance()->nmalloc++);
+            ALLSTATS(all_stats::instance()->nmalloc.fetch_add(1));
             void * buf = slabcache[entry]->getitem();
             return buf;
         }
@@ -1165,7 +1165,7 @@ namespace ff {
              */
             if (realsize > MAX_SLABBUFFER_SIZE ||
                 (slabcache[getslabs(realsize)]->getnslabs()==0)) {
-                ALLSTATS(all_stats::instance()->sysmalloc++);
+                ALLSTATS(all_stats::instance()->sysmalloc.fetch_add(1));
                 void * ptr = ::malloc(realsize+sizeof(Buf_ctl));
                 if (!ptr) return -1;
                 ((Buf_ctl *)ptr)->ptr = 0;
@@ -1179,7 +1179,7 @@ namespace ff {
             // else use
             int entry = getslabs(realsize);
             DBG(if (entry<0) abort());
-            ALLSTATS(all_stats::instance()->nmalloc++);
+            ALLSTATS(all_stats::instance()->nmalloc.fetch_add(1));
             void * buf = slabcache[entry]->getitem();
 
             Buf_ctl * backptr = (Buf_ctl *)((char *)buf - sizeof(Buf_ctl));
@@ -1220,7 +1220,7 @@ namespace ff {
             Buf_ctl  * buf = (Buf_ctl *)((char *)ptr - sizeof(Buf_ctl));
 
             if (!buf->ptr) {
-                ALLSTATS(all_stats::instance()->sysfree++);
+                ALLSTATS(all_stats::instance()->sysfree.fetch_add(1));
                 ::free(buf);
                 return;
             }
@@ -1263,13 +1263,13 @@ namespace ff {
                 Buf_ctl  * buf = (Buf_ctl *)((char *)ptr - sizeof(Buf_ctl));
 
                 if (!buf->ptr) {
-                    ALLSTATS(all_stats::instance()->sysrealloc++);
+                    ALLSTATS(all_stats::instance()->sysrealloc.fetch_add(1));
                     void * newptr= ::realloc(buf, newsize+sizeof(Buf_ctl));
                     if (!ptr) return 0;
                     ((Buf_ctl *)newptr)->ptr = 0;
                     return (char *)newptr + sizeof(Buf_ctl);
                 }
-                ALLSTATS(all_stats::instance()->nrealloc++);
+                ALLSTATS(all_stats::instance()->nrealloc.fetch_add(1));
                 SlabCache * const entry = getslabs(buf);
 
                 if (!entry) return 0;
@@ -1291,7 +1291,7 @@ namespace ff {
                 Buf_ctl  * buf = (Buf_ctl *)((char *)ptr - sizeof(Buf_ctl));
 
                 if (!buf->ptr) { /* WARNING: this is probably an error !!! */
-                    ALLSTATS(all_stats::instance()->sysrealloc++);
+                    ALLSTATS(all_stats::instance()->sysrealloc.fetch_add(1));
                     void * newptr= ::realloc(buf, newsize+sizeof(Buf_ctl));
                     if (!ptr) return 0;
                     ((Buf_ctl *)newptr)->ptr = 0;
@@ -1342,7 +1342,7 @@ namespace ff {
             bool reclaimed = ff_allocator::free(buf);
 
             // Do I have to kill myself?
-            if (reclaimed && nomorealloc && (allocatedsize()==0)) {
+            if (reclaimed && nomorealloc.load() && (allocatedsize()==0)) {
                 killMyself(this);
             }
             return reclaimed;
@@ -1354,7 +1354,7 @@ namespace ff {
 
         ffa_wrapper(size_t max_size=0,const int delayedReclaim=0) :
             ff_allocator(max_size,delayedReclaim) {
-            nomorealloc = 0;
+            nomorealloc.store(0);
         }
 
 
@@ -1383,7 +1383,7 @@ namespace ff {
         }
     private:
         inline void nomoremalloc() {
-            nomorealloc = 1;
+            nomorealloc.store(1);
         }
 
     private:
@@ -1465,7 +1465,7 @@ namespace ff {
             A[A_size++] = ffaxtd;
             spin_unlock(lock);
 
-            ALLSTATS(all_stats::instance()->newallocator++);
+            ALLSTATS(all_stats::instance()->newallocator.fetch_add(1));
 
             return ffaxtd;
         }
@@ -1569,7 +1569,7 @@ namespace ff {
                 }
             }
             spin_unlock(lock);
-            ALLSTATS(all_stats::instance()->deleteallocator++);
+            ALLSTATS(all_stats::instance()->deleteallocator.fetch_add(1));
         }
 
         /*
@@ -1595,7 +1595,7 @@ namespace ff {
         inline void * malloc(size_t size) {
             /* use standard allocator if the size is too big */
             if (size>MAX_SLABBUFFER_SIZE) {
-                ALLSTATS(all_stats::instance()->sysmalloc++);
+                ALLSTATS(all_stats::instance()->sysmalloc.fetch_add(1));
                 void * ptr = ::malloc(size+sizeof(Buf_ctl));
                 if (!ptr) return 0;
                 ((Buf_ctl *)ptr)->ptr = 0;
@@ -1645,7 +1645,7 @@ namespace ff {
             size_t realsize = size+alignment;
 
             if (realsize > MAX_SLABBUFFER_SIZE) {
-                ALLSTATS(all_stats::instance()->sysmalloc++);
+                ALLSTATS(all_stats::instance()->sysmalloc.fetch_add(1));
                 void * ptr = ::malloc(realsize+sizeof(Buf_ctl));
                 if (!ptr) return -1;
                 ((Buf_ctl *)ptr)->ptr = 0;
@@ -1690,7 +1690,7 @@ namespace ff {
 
             Buf_ctl  * buf = (Buf_ctl *)((char *)ptr - sizeof(Buf_ctl));
             if (!buf->ptr) {
-                ALLSTATS(all_stats::instance()->sysfree++);
+                ALLSTATS(all_stats::instance()->sysfree.fetch_add(1));
                 ::free(buf);
                 return;
             }
@@ -1717,7 +1717,7 @@ namespace ff {
             if (ptr) {
                 Buf_ctl  * buf = (Buf_ctl *)((char *)ptr - sizeof(Buf_ctl));
                 if (!buf->ptr) { /* use standard allocator */
-                    ALLSTATS(all_stats::instance()->sysrealloc++);
+                    ALLSTATS(all_stats::instance()->sysrealloc.fetch_add(1));
                     void * newptr= ::realloc(buf, newsize+sizeof(Buf_ctl));
                     if (!ptr) return 0;
                     ((Buf_ctl *)newptr)->ptr = 0;
@@ -1735,7 +1735,7 @@ namespace ff {
             if (ptr) {
                 Buf_ctl  * buf = (Buf_ctl *)((char *)ptr - sizeof(Buf_ctl));
                 if (!buf->ptr) { /* use standard allocator */
-                    ALLSTATS(all_stats::instance()->sysrealloc++);
+                    ALLSTATS(all_stats::instance()->sysrealloc.fetch_add(1));
                     void * newptr= ::realloc(buf, newsize+sizeof(Buf_ctl));
                     if (!ptr) return 0;
                     ((Buf_ctl *)newptr)->ptr = 0;
