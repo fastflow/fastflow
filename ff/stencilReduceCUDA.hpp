@@ -38,6 +38,7 @@
 #include <ff/mapper.hpp>
 #include <ff/node.hpp>
 #include <cmath>
+#include <iostream>
 
 namespace ff {
 
