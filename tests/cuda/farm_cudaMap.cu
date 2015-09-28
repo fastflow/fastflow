@@ -40,12 +40,16 @@ using namespace ff;
 #include <iostream>
 using namespace std;
 
+#ifdef CHECK
+int globalerr = 0;
+#endif
+
 FFMAPFUNC(mapF, unsigned int, in,
 		return in + 1;
 );
 
 // this is global just to keep things simple
-size_t inputsize=0;
+size_t inputsize;
 
 class cudaTask: public baseCUDATask<unsigned int, unsigned int, unsigned char, unsigned char, int, char, char> {
 public:
@@ -72,7 +76,7 @@ public:
             task->in = new unsigned int[size];
             //task->out = new unsigned int[size];
             for(size_t j=0;j<size;++j)
-            	task->in[j]=j+i;
+            	task->in[j]=j;
             ff_send_out(task);
         }
         return NULL;
@@ -90,9 +94,14 @@ public:
     void* svc(void* t) {
         cudaTask* task = (cudaTask*)t;
 #if defined(CHECK)
-        for(long i=0;i<size;++i)  printf("%d ", task->in[i]);
-        printf("\n");
+//        for(long i=0;i<size;++i)  printf("%d ", task->in[i]);
+//        printf("\n");
+        unsigned int sum = 0;
+        for(size_t i=0; i<size; ++i)
+        	sum += task->in[i];
+        globalerr |= (sum != (size * (size + 1)) / 2);
 #endif
+        delete task;
         return GO_ON;
     }
 private:
@@ -101,14 +110,15 @@ private:
 
 
 int main(int argc, char * argv[]) {
-    if (argc<4) {
-        printf("use %s arraysize streamlen nworkers\n", argv[0]);
-        return -1;
-    }
+	inputsize = 2048;
+	int streamlen = 128;
+	int nworkers = 2;
 
-    inputsize       =atoi(argv[1]);
-    int    streamlen=atoi(argv[2]);
-    int    nworkers =atoi(argv[3]);
+    if(argc>1)inputsize=atoi(argv[1]);
+    if(argc>2)streamlen=atoi(argv[2]);
+    if(argc>3)nworkers =atoi(argv[3]);
+
+    printf("using arraysize=%lu streamlen=%lu nworkers=%lu\n", inputsize, streamlen, nworkers);
 
     ff_farm<> farm;
     Emitter   E(streamlen,inputsize);
@@ -122,6 +132,12 @@ int main(int argc, char * argv[]) {
     farm.add_workers(w);
     farm.run_and_wait_end();
 
+#ifdef CHECK
+    if(globalerr) {
+    	printf("ERROR\n");
+    	return 1;
+    }
+#endif
     printf("DONE\n");
     return 0;
 }
