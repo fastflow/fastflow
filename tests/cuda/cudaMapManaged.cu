@@ -35,6 +35,11 @@
 
 #include <ff/mapCUDAManaged.hpp>
 
+#ifdef CHECK
+#include <iostream>
+int globalok = 1;
+#endif
+
 using namespace ff;
 
 template<typename Tenv, typename Tinout>
@@ -64,10 +69,9 @@ public:
 FFMAPFUNCMANAGED(mapf, unsigned char, ExampleEnv*, env, unsigned char, in, return (unsigned char) (env->beta * in));
 
 int main(int argc, char * argv[]) {
-	if (argc<2) {
-		printf("use %s arraysize\n", argv[0]);
-		return -1;
-	}
+	size_t size     =2048;
+	if (argc > 1) size = atoi(argv[1]);
+	printf("using arraysize = %lu\n", size);
 
 #if defined(__APPLE__) || defined(MACOSX)
     fprintf(stderr, "Unified Memory not currently supported on OS X\n");
@@ -75,7 +79,6 @@ int main(int argc, char * argv[]) {
     exit(EXIT_SUCCESS);
 #endif
 
-	size_t size     =atoi(argv[1]);
 	ExampleEnv * env = new ExampleEnv(2.1 , 3.4 , size);
 	unsigned char * in;
 	unsigned char * out;
@@ -89,19 +92,26 @@ int main(int argc, char * argv[]) {
 	ff_mapCUDAManaged<cudaTask<ExampleEnv, unsigned char>, mapf> *cudamap =
 			new ff_mapCUDAManaged<cudaTask<ExampleEnv, unsigned char>, mapf>(new mapf, env, in, out, size) ;
 
-	printf("INPUT\n");
-	for(long i=0;i<size;++i)  printf("%d ", in[i]);
-
-	printf("\nEnv ( alfa = %f / beta = %f / size = %d )  \n", env->alfa, env->beta, env->n_elems);
-
 	cudamap->run_and_wait_end();
 
-	for(long i=0;i<size;++i)  printf("%d ", out[i]);
-	printf(" = OUTPUT\n");
+#ifdef CHECK
+	for(long i=0;i<size;++i)
+		if(out[i] != 3.4 * in[i]) {
+			std::cerr << "ERROR: computed="<<(unsigned int)out[i]<<", expected="<<(unsigned int)(3.4 * in[i])<<"\n";
+			globalok = 0;
+		}
+#endif
 
 	if(env) cudaFree(env);
 	if (out) cudaFree(out);
 	if (in) cudaFree(in);
+
+#ifdef CHECK
+    if(!globalok) {
+    	printf("ERROR\n");
+    	return 1;
+    }
+#endif
 
 	printf("DONE\n");
 
