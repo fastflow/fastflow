@@ -24,13 +24,13 @@ namespace ff {
  * 'basictype' is the element type
  * 'param' is the value of the input element
  * 'idx' is the index of the input element
- * 'code' is the OpenCL code of the elemental function
+ * '...' is the OpenCL code of the elemental function
  */
-#define FF_OCL_MAP_ELEMFUNC(name, basictype, param, idx, code)\
+#define FF_OCL_MAP_ELEMFUNC(name, basictype, param, idx, ...)	\
 static char name[] =\
 "kern_" #name "|"\
 #basictype "|"\
-#basictype " f" #name "(" #basictype " " #param ",const int " #idx ") {\n" #code ";\n}\n"\
+#basictype " f" #name "(" #basictype " " #param ",const int " #idx ") {\n" #__VA_ARGS__";\n}\n"\
 "__kernel void kern_" #name "(\n"\
 "\t__global " #basictype  "* input,\n"\
 "\t__global " #basictype "* output,\n"\
@@ -59,13 +59,13 @@ static char name[] =\
  * 'T' is the input element type
  * 'param' is the value of the input element
  * 'idx' is the index of the input element
- * 'code' is the OpenCL code of the elemental function
+ * '...' is the OpenCL code of the elemental function
  */
-#define FF_OCL_MAP_ELEMFUNC_IO(name, outT, T, param, idx, code)\
+#define FF_OCL_MAP_ELEMFUNC_IO(name, outT, T, param, idx, ...)\
 static char name[] =\
 "kern_" #name "|"\
 #outT "|"\
-#outT " f" #name "(" #T " " #param ", const int " #idx ") {\n" #code ";\n}\n"\
+#outT " f" #name "(" #T " " #param ", const int " #idx ") {\n" #__VA_ARGS__";\n}\n"\
 "__kernel void kern_" #name "(\n"\
 "\t__global " #T  "* input,\n"\
 "\t__global " #outT "* output,\n"\
@@ -92,9 +92,9 @@ static char name[] =\
  * 'size' is the size of the input array
  * 'idx' is the index of the element
  * 'in' is the input array
- * 'code' is the OpenCL code of the elemental function
+ * '...' is the OpenCL code of the elemental function
  */
-#define FF_OCL_STENCIL_ELEMFUNC(name,T,size,idx,in,code)\
+#define FF_OCL_STENCIL_ELEMFUNC(name,T,size,idx,in, ...)\
 static char name[] =\
 "kern_" #name "|"\
 #T "|"\
@@ -102,7 +102,7 @@ static char name[] =\
 "\t__global " #T "* " #in ",\n"\
 "\tconst uint " #size ",\n"\
 "\tconst int " #idx ") {\n"\
-"\t   " #code ";\n"\
+"\t   " #__VA_ARGS__";\n"\
 "}\n\n"\
 "__kernel void kern_" #name "(\n"\
 "\t__global " #T  "* input,\n"\
@@ -134,9 +134,9 @@ static char name[] =\
  * 'in' is the input array
  * 'env1T' is the element type of the constant environment array
  * 'env1' is the constant environment array
- * 'code' is the OpenCL code of the elemental function
+ * '...' is the OpenCL code of the elemental function
  */
-#define FF_OCL_STENCIL_ELEMFUNC_ENV(name,T,size,idx,in,env1T,env1,code)\
+#define FF_OCL_STENCIL_ELEMFUNC_ENV(name,T,size,idx,in,env1T,env1, ...)\
 static char name[] =\
 "kern_" #name "|"\
 #T "|"\
@@ -145,7 +145,7 @@ static char name[] =\
 "\tconst uint " #size ",\n"\
 "\tconst int " #idx ",\n"\
 "\t__global const " #env1T "* " #env1 ") {\n"\
-"\t   " #code ";\n"\
+"\t   " #__VA_ARGS__";\n"\
 "}\n\n"\
 "__kernel void kern_" #name "(\n"\
 "\t__global " #T  "* input,\n"\
@@ -180,9 +180,9 @@ static char name[] =\
  * 'env1' is the constant environment array
  * 'env2T' is the element type of the constant environment value
  * 'env2' is (a pointer to) the constant environment value
- * 'code' is the OpenCL code of the elemental function
+ * '...' is the OpenCL code of the elemental function
  */
-#define FF_OCL_STENCIL_ELEMFUNC_2ENV(name,T,size,idx,in,env1T,env1,env2T,env2,code)\
+#define FF_OCL_STENCIL_ELEMFUNC_2ENV(name,T,size,idx,in,env1T,env1,env2T,env2, ...)\
 static char name[] =\
 "kern_" #name "|"\
 #T "|"\
@@ -192,7 +192,7 @@ static char name[] =\
 "\tconst int " #idx ",\n"\
 "\t__global const " #env1T "* " #env1 ",\n"\
 "\t__global const " #env2T "* " #env2 ") {\n"\
-"\t   " #code ";\n"\
+"\t   " #__VA_ARGS__";\n"\
 "}\n\n"\
 "__kernel void kern_" #name "(\n"\
 "\t__global " #T  "* input,\n"\
@@ -248,13 +248,13 @@ static char name[] =\
  * 'name' is the name of the string variable in which the code is stored
  * 'T' is the element type
  * 'val' is the value of the input element
- * 'code' is the OpenCL code of the elemental function
+ * '...' is the OpenCL code of the elemental function
  */
-#define FF_OCL_MAP_ELEMFUNC_1D(name, T, val, code)\
+#define FF_OCL_MAP_ELEMFUNC_1D(name, T, val, ...)\
 static char name[] =\
 "kern_" #name "|"\
 #T "|"\
-#T " f" #name "(" #T " " #val ") {\n" #code ";\n}\n"\
+#T " f" #name "(" #T " " #val ") {\n" #__VA_ARGS__";\n}\n"\
 "__kernel void kern_" #name "(\n"\
 "\t__global " #T  "* input,\n"\
 "\t__global " #T "* output,\n"\
@@ -282,13 +282,13 @@ static char name[] =\
  * 'val' is the value of the input element
  * 'envT' is the element type of the constant environment
  * 'envval' is the value of the environment element
- * 'code' is the OpenCL code of the elemental function
+ * '...' is the OpenCL code of the elemental function
  */
-#define FF_OCL_MAP_ELEMFUNC_1D_ENV(name, T, val, envT, envval, code)\
+#define FF_OCL_MAP_ELEMFUNC_1D_ENV(name, T, val, envT, envval, ...)\
 static char name[] =\
 "kern_" #name "|"\
 #T "|\n"\
-#T " f" #name "(" #T " " #val ", " #envT " " #envval ") {\n" #code ";\n}\n"\
+#T " f" #name "(" #T " " #val ", " #envT " " #envval ") {\n" #__VA_ARGS__";\n}\n"\
 "__kernel void kern_" #name "(\n"\
 "\t__global " #T  "* input,\n"\
 "\t__global " #T "* output,\n"\
@@ -316,14 +316,14 @@ static char name[] =\
  * 'T' is the input element type
  * 'outT' is the output element type
  * 'val' is the value of the input element
- * 'code' is the OpenCL code of the elemental function
+ * '...' is the OpenCL code of the elemental function
  */
-#define FF_OCL_MAP_ELEMFUNC_1D_IO(name, T, outT, val, code)\
+#define FF_OCL_MAP_ELEMFUNC_1D_IO(name, T, outT, val, ...)\
 static char name[] =\
 "kern_" #name "|"\
 #outT "|\n\n"\
 #outT " f" #name "("#T" "#val "\n"\
-") {\n" #code ";\n}\n"\
+") {\n" #__VA_ARGS__";\n}\n"\
 "__kernel void kern_" #name "(\n"\
 "\t__global " #T  "* input,\n"\
 "\t__global " #outT "* output,\n"\
@@ -349,9 +349,9 @@ static char name[] =\
  * 'T' is the element type of the input
  * 'size' is the size of the input array (for bound checking)
  * 'idx' is the index of the element
- * 'code' is the OpenCL code of the elemental function
+ * '...' is the OpenCL code of the elemental function
  */
-#define FF_OCL_STENCIL_ELEMFUNC_1D(name,T,size,idx,code)\
+#define FF_OCL_STENCIL_ELEMFUNC_1D(name,T,size,idx, ...)\
 static char name[] =\
 "kern_" #name "|"\
 #T "|"\
@@ -363,7 +363,7 @@ static char name[] =\
 "\tconst uint " #size ",\n"\
 "\tconst int " #idx ",\n"\
 "\tconst int offset\n) {\n"\
-"\t   " #code ";\n"\
+"\t   " #__VA_ARGS__";\n"\
 "}\n\n"\
 "__kernel void kern_" #name "(\n"\
 "\t__global " #T  "* input,\n"\
@@ -392,9 +392,9 @@ static char name[] =\
  * 'size' is the size of the input array (for bound checking)
  * 'idx' is the index of the element
  * 'env1T' is the element type of the constant environment array
- * 'code' is the OpenCL code of the elemental function
+ * '...' is the OpenCL code of the elemental function
  */
-#define FF_OCL_STENCIL_ELEMFUNC_1D_ENV(name,T,size,idx,env1T,code)\
+#define FF_OCL_STENCIL_ELEMFUNC_1D_ENV(name,T,size,idx,env1T, ...)\
 static char name[] =\
 "kern_" #name "|"\
 #T "|"\
@@ -407,7 +407,7 @@ static char name[] =\
 "\tconst int " #idx ",\n"\
 "\tconst int offset,\n"\
 "\t__global const " #env1T "* env) {\n"\
-"\t   " #code ";\n"\
+"\t   " #__VA_ARGS__";\n"\
 "}\n\n"\
 "__kernel void kern_" #name "(\n"\
 "\t__global " #T  "* input,\n"\
@@ -439,9 +439,9 @@ static char name[] =\
  * 'idx' is the index of the element
  * 'env1T' is the element type of the first constant environment array
  * 'env2T' is the element type of the second constant environment array
- * 'code' is the OpenCL code of the elemental function
+ * '...' is the OpenCL code of the elemental function
  */
-#define FF_OCL_STENCIL_ELEMFUNC_1D_2ENV(name,T,size,idx,env1T,env2T, code)\
+#define FF_OCL_STENCIL_ELEMFUNC_1D_2ENV(name,T,size,idx,env1T,env2T, ...)\
 static char name[] =\
 "kern_" #name "|"\
 #T "|"\
@@ -456,7 +456,7 @@ static char name[] =\
 "\tconst int offset,\n"\
 "\t__global const " #env1T "* env1,\n"\
 "\t__global const " #env2T "* env2) {\n"\
-"\t   " #code ";\n"\
+"\t   " #__VA_ARGS__";\n"\
 "}\n\n"\
 "__kernel void kern_" #name "(\n"\
 "\t__global " #T  "* input,\n"\
@@ -489,9 +489,9 @@ static char name[] =\
  * 'width' is the number of columns in the input array  (for bound checking)
  * 'row' is the row-index of the element
  * 'col' is the column-index of the element
- * 'code' is the OpenCL code of the elemental function
+ * '...' is the OpenCL code of the elemental function
  */
-#define FF_OCL_STENCIL_ELEMFUNC_2D(name,T,height,width,row,col,code)\
+#define FF_OCL_STENCIL_ELEMFUNC_2D(name,T,height,width,row,col, ...)\
 static char name[] =\
 "kern_" #name "|"\
 #T "|"\
@@ -505,7 +505,7 @@ static char name[] =\
 "\tconst int " #row ",\n"\
 "\tconst int " #col ",\n"\
 "\tconst int offset) {\n"\
-"\t   " #code ";\n"\
+"\t   " #__VA_ARGS__";\n"\
 "}\n\n"\
 "__kernel void kern_" #name "(\n"\
 "\t__global " #T  "* input,\n"\
@@ -530,12 +530,12 @@ static char name[] =\
 
 
 //  x=f(param1,param2)   'x', 'param1', 'param2' have the same type
-#define FF_OCL_REDUCE_COMBINATOR(name, basictype, param1, param2, code)\
+#define FF_OCL_REDUCE_COMBINATOR(name, basictype, param1, param2, ...)\
 static char name[] =\
 "kern_" #name "|"\
 #basictype "|"\
 #basictype " f" #name "(" #basictype " " #param1 ",\n"\
-                          #basictype " " #param2 ") {\n" #code ";\n}\n"\
+                          #basictype " " #param2 ") {\n" #__VA_ARGS__";\n}\n"\
 "__kernel void kern_" #name "(__global " #basictype "* input, const uint halo, __global " #basictype "* output, const uint n, __local " #basictype "* sdata, "#basictype" idElem) {\n"\
 "        uint blockSize = get_local_size(0);\n"\
 "        uint tid = get_local_id(0);\n"\
@@ -563,11 +563,11 @@ static char name[] =\
 
 
 
-#define FFGENERICFUNC(name, basictype, code)\
+#define FFGENERICFUNC(name, basictype, ...)\
     static char name[] =\
         "kern_" #name "|"\
         #basictype "|"\
-        #code ";\n\n"
+        #__VA_ARGS__";\n\n"
 
 
 /* ------------------------------------------------------------------------------------- */
