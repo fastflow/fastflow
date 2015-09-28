@@ -45,16 +45,23 @@ using namespace ff;
 #include <iostream>
 using namespace std;
 
+#ifdef CHECK
+int globalerr = 0;
+#endif
+
 FFREDUCEFUNC(reduceF, unsigned int, x, y,
 		return x + y;
 );
 
 struct myTask {
 	unsigned int *in, out;
+#ifdef CHECK
+	unsigned int expected=0;
+#endif
 };
 
 // this is gobal just to keep things simple
-size_t inputsize=0;
+size_t inputsize;
 
 class cudaTask: public baseCUDATask<unsigned int/*, unsigned int*/> {
 public:
@@ -74,14 +81,18 @@ public:
 
 class Emitter: public ff_node {
 public:
-    Emitter(int streamlen, size_t size):streamlen(streamlen),size(size) {}
+    Emitter(int streamlen_, size_t size_):streamlen(streamlen_),size(size_) {}
 
     void* svc(void*) {
         for(int i=0;i<streamlen;++i) {
         	myTask *task = new myTask();
             task->in = new unsigned int[size];
-            for(size_t j=0;j<size;++j)
+            for(size_t j=0;j<size;++j) {
             	task->in[j]=j+i;
+#ifdef CHECK
+            	task->expected += task->in[j];
+#endif
+            }
             ff_send_out(task);
         }
         return NULL;
@@ -99,10 +110,11 @@ public:
     void* svc(void* t) {
         myTask* task = (myTask*)t;
 #if defined(CHECK)
-        for(long i=0;i<size;++i)  printf("%d ", task->in[i]);
-                printf("\n");
-        cout << "reduce result = " << task->out << endl;
+        globalerr |= (task->out != task->expected);
+        if(globalerr)
+        	printf("task %p: %lu, should be %lu\n", task, task->out, task->expected);
 #endif
+        delete task;
         return GO_ON;
     }
 private:
@@ -111,14 +123,15 @@ private:
 
 
 int main(int argc, char * argv[]) {
-    if (argc<4) {
-        printf("use %s arraysize streamlen nworkers\n", argv[0]);
-        return -1;
-    }
+	inputsize = 2048;
+	int streamlen = 128;
+	int nworkers = 2;
 
-    inputsize       =atoi(argv[1]);
-    int    streamlen=atoi(argv[2]);
-    int    nworkers =atoi(argv[3]);
+	if(argc>1)inputsize=atoi(argv[1]);
+	if(argc>2)streamlen=atoi(argv[2]);
+	if(argc>3)nworkers =atoi(argv[3]);
+
+	printf("using arraysize=%lu streamlen=%lu nworkers=%lu\n", inputsize, streamlen, nworkers);
 
     ff_farm<> farm;
     Emitter   E(streamlen,inputsize);
@@ -132,6 +145,12 @@ int main(int argc, char * argv[]) {
     farm.add_workers(w);
     farm.run_and_wait_end();
 
+#ifdef CHECK
+    if(globalerr) {
+    	printf("ERROR\n");
+    	return 1;
+    }
+#endif
     printf("DONE\n");
     return 0;
 }

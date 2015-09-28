@@ -74,12 +74,8 @@ struct cudaTask: public baseCUDATask<mypair,double> {
 int main(int argc, char * argv[]) {
   size_t inputsize = 1024;
 
-  if (argc<2) {
-    printf("use %s arraysize\n", argv[0]);
-    return -1;
-  }
-
-  inputsize       =atoi(argv[1]);
+  if (argc > 1) inputsize = atoi(argv[1]);
+  	printf("using arraysize = %lu\n", inputsize);
 
   mypair *AB = new mypair[inputsize];
   for(long j=0;j<inputsize;++j) {
@@ -91,6 +87,17 @@ int main(int argc, char * argv[]) {
   cudaTask ct(inputsize, AB, C);
   FFSTENCILREDUCECUDA(cudaTask, mapF, reduceF) dotprod(ct);
   dotprod.run_and_wait_end();
+
+#ifdef CHECK
+  double expected = 0;
+  for(long j=0;j<inputsize;++j)
+	  expected += (AB[j].a * AB[j].b);
+  if(expected != ct.result) {
+	  std::cerr << "computed="<<ct.result<<" expected="<<expected<<"\n";
+	  printf("ERROR\n");
+      return 1;
+  }
+#endif
 
   printf("Result = %g\n", ct.result);
   return 0;

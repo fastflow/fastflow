@@ -53,13 +53,14 @@ struct cudaTask: public baseCUDATask<unsigned int> {
     size_t        size;
 };
 
+int inputsize = 2048;
+int ntasks = 128;
+
 int main(int argc, char * argv[]) {
-	if (argc < 3) {
-		printf("use %s arraysize ntasks\n", argv[0]);
-		return -1;
-	}
-	int inputsize = atoi(argv[1]);
-    int ntasks    = atoi(argv[2]);
+
+	if(argc > 1) inputsize = atoi(argv[1]);
+	if(argc > 2) ntasks = atoi(argv[2]);
+	printf("using arraysize=%lu ntasks=%lu\n", inputsize, ntasks);
 
     ff_pipeline pipe(true);
     pipe.add_stage(new FFMAPCUDA(cudaTask, mapF));
@@ -84,9 +85,9 @@ int main(int argc, char * argv[]) {
         pipe.offload((void*)ptmp);
         pipe.load_result((void**)&ptmp);
 
-        for (size_t j = 0; j < inputsize; ++j)
-            printf("%d ", V[j]);
-        printf("\n");
+//        for (size_t j = 0; j < inputsize; ++j)
+//            printf("%d ", V[j]);
+//        printf("\n");
     }
     pipe.offload(GO_OUT);
     pipe.wait_freezing();

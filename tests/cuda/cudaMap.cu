@@ -42,7 +42,7 @@ using namespace std;
 FFMAPFUNC(mapF, unsigned int, in, return in + 1;);
 
 // this is global just to keep things simple
-size_t inputsize = 0;
+size_t inputsize = 2048;
 
 class cudaTask: public baseCUDATask<unsigned int, unsigned int, unsigned char,
 		unsigned char, int, char, char> {
@@ -61,11 +61,8 @@ public:
 };
 
 int main(int argc, char * argv[]) {
-	if (argc < 2) {
-		printf("use %s arraysize\n", argv[0]);
-		return -1;
-	}
-	inputsize = atoi(argv[1]);
+	if (argc > 1) inputsize = atoi(argv[1]);
+	printf("using arraysize = %lu\n", inputsize);
 
 	cudaTask *task = new cudaTask();
 	task->in = new unsigned int[inputsize];
@@ -75,9 +72,9 @@ int main(int argc, char * argv[]) {
 	FFMAPCUDA(cudaTask, mapF) *myMap = new FFMAPCUDA(cudaTask, mapF)(*task);
 	myMap->run_and_wait_end();
 
-	for (long i = 0; i < inputsize; ++i)
-		printf("%d ", task->in[i]);
-	printf("\n");
+//	for (long i = 0; i < inputsize; ++i)
+//		printf("%d ", task->in[i]);
+//	printf("\n");
 
 	printf("DONE\n");
 	return 0;
