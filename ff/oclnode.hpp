@@ -58,10 +58,9 @@ namespace ff{
  *
  *  \brief OpenCL specialisation of the ff_node class
  *
- *  Implements the node that is serving a OpenCL device. In general there is one  ff_oclNode
- *  per OpenCL device, even if some expection are under evalutation. Anyway, there is a command
- *  queue per device. Concurrency for accessing the command queue from different  ff_oclNode is
- *  managed by FF.
+ *  Implements the node that is serving as OpenCL device. In general there is one  ff_oclNode
+ *  per OpenCL device. Anyway, there is a command queue per device. Concurrency for accessing 
+ *  the command queue from different  ff_oclNode is managed by FF.
  *
  */
     
@@ -100,25 +99,24 @@ protected:
   
     ~ff_oclNode() { }
    
-    // To be rewritten
-   int svc_init() {
-       
-       if (oclId < 0) oclId = clEnvironment::instance()->getOCLID();
-
-       // the user set a specific device
-       if (deviceId != NULL) return 0;
-       
-       switch (dtype) {
-       case CL_DEVICE_TYPE_ALL: {
-           // no user choice, a static greedy algorithm is used to allocate openCL components
-           ssize_t GPUdevId =clEnvironment::instance()->getGPUDeviceRR();
-           if( (GPUdevId !=-1) && ( oclId < clEnvironment::instance()->getNumGPU())) { 
-               printf("%d: Allocated a GPU device, the id is %ld\n", oclId, GPUdevId);
-               deviceId=clEnvironment::instance()->getDevice(GPUdevId);
-               return 0;
-           }
-           // fall back to CPU either GPU has reached its max or there is no GPU available
-           ssize_t CPUdevId =clEnvironment::instance()->getCPUDevice();
+    int svc_init() {
+        
+        if (oclId < 0) oclId = clEnvironment::instance()->getOCLID();
+        
+        // the user has set a specific device
+        if (deviceId != NULL) return 0;
+        
+        switch (dtype) {
+        case CL_DEVICE_TYPE_ALL: {
+            // no user choice, a static greedy algorithm is used to allocate openCL components
+            ssize_t GPUdevId =clEnvironment::instance()->getGPUDeviceRR();
+            if( (GPUdevId !=-1) && ( oclId < clEnvironment::instance()->getNumGPU())) { 
+                printf("%d: Allocated a GPU device, the id is %ld\n", oclId, GPUdevId);
+                deviceId=clEnvironment::instance()->getDevice(GPUdevId);
+                return 0;
+            }
+            // fall back to CPU either GPU has reached its max or there is no GPU available
+            ssize_t CPUdevId =clEnvironment::instance()->getCPUDevice();
             if (CPUdevId != -1) {
                 printf("%d: Allocated a CPU device as either no GPU device is available or no GPU slot is available (cpuId=%ld)\n",oclId, CPUdevId);
                 deviceId=clEnvironment::instance()->getDevice(CPUdevId);
@@ -126,32 +124,32 @@ protected:
             }
             printf("%d: cannot allocate neither a GPU nor a CPU device\n", oclId);            
             return -1;
-       } break;
-       case CL_DEVICE_TYPE_GPU: {
-           ssize_t GPUdevId =clEnvironment::instance()->getGPUDeviceRR();
-           if( (GPUdevId !=-1) && ( oclId < clEnvironment::instance()->getNumGPU())) { 
-               printf("%d: Allocated a GPU device, the id is %ld\n", oclId, GPUdevId);
-               deviceId=clEnvironment::instance()->getDevice(GPUdevId);
-               return 0;
-           }
-           printf("%d: cannot allocate a GPU device\n", oclId);            
-           return -1;
-       } break;
-       case CL_DEVICE_TYPE_CPU: {
-           ssize_t CPUdevId =clEnvironment::instance()->getCPUDevice();
-           if (CPUdevId != -1) {
-               printf("%d: Allocated a CPU device (cpuId=%ld)\n",oclId, CPUdevId);
-               deviceId=clEnvironment::instance()->getDevice(CPUdevId);        
-               return 0;
-           }
-           printf("%d: cannot allocate a CPU device\n", oclId);
-           return -1;
-       } break;
-       default : std::cerr << "Unknown/not supported device type\n";
-           return -1;
-       }
-       return 0;
-   } 
+        } break;
+        case CL_DEVICE_TYPE_GPU: {
+            ssize_t GPUdevId =clEnvironment::instance()->getGPUDeviceRR();
+            if( (GPUdevId !=-1) && ( oclId < clEnvironment::instance()->getNumGPU())) { 
+                printf("%d: Allocated a GPU device, the id is %ld\n", oclId, GPUdevId);
+                deviceId=clEnvironment::instance()->getDevice(GPUdevId);
+                return 0;
+            }
+            printf("%d: cannot allocate a GPU device\n", oclId);            
+            return -1;
+        } break;
+        case CL_DEVICE_TYPE_CPU: {
+            ssize_t CPUdevId =clEnvironment::instance()->getCPUDevice();
+            if (CPUdevId != -1) {
+                printf("%d: Allocated a CPU device (cpuId=%ld)\n",oclId, CPUdevId);
+                deviceId=clEnvironment::instance()->getDevice(CPUdevId);        
+                return 0;
+            }
+            printf("%d: cannot allocate a CPU device\n", oclId);
+            return -1;
+        } break;
+        default : std::cerr << "Unknown/not supported device type\n";
+            return -1;
+        }
+        return 0;
+    } 
     
     void svc_end() {}
     
