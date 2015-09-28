@@ -61,17 +61,18 @@ struct threadcount_t {
 };
 
 struct fftree {
-	bool isroot, do_comp, hasocl;
+	bool isroot, do_comp, hasocl, hastpc;
 	fftype nodetype;
 	std::vector<std::pair<fftree *, bool> > children;
 	ffnode_ptr ffnode;
 
 	fftree(ff_node *ffnode_, fftype nodetype_) :
 			nodetype(nodetype_) {
-		do_comp = (nodetype == WORKER || nodetype == OCL_WORKER);
+		do_comp = (nodetype == WORKER || nodetype == OCL_WORKER || nodetype == TPC_WORKER);
 		ffnode.ffnode = ffnode_;
 		isroot = ispattern();
         hasocl = (nodetype == OCL_WORKER);
+        hastpc = (nodetype == TPC_WORKER);
 		if (isroot){
 			treeLock.lock();
 			//pthread_mutex_lock(&treeLock);
@@ -93,6 +94,7 @@ struct fftree {
         ffnode.ffthread = ffnode_;
 		isroot = ispattern();
         hasocl = (nodetype == OCL_WORKER);
+        hastpc = (nodetype == TPC_WORKER);
 		if (isroot) {
 			treeLock.lock();
             //pthread_mutex_lock(&treeLock);
@@ -163,6 +165,8 @@ struct fftree {
 			return "WORKER";
         case OCL_WORKER:
             return "OPENCL WORKER";
+        case TPC_WORKER:
+            return "TPC WORKER";
 		case COLLECTOR:
 			return "COLLECTOR";
 		}
@@ -179,6 +183,14 @@ struct fftree {
             if (children[i].first && children[i].first->hasOpenCLNode()) return true;
         return false;
     }
+
+    bool hasTPCNode() const { 
+        if (hastpc) return true;
+        for (size_t i = 0; i < children.size(); ++i)
+            if (children[i].first && children[i].first->hasTPCNode()) return true;
+        return false;
+    }
+
 
 	void print(std::ostream &os) {
 		os << (ispattern() ? "[" : "(") << fftype_tostr(nodetype);

@@ -56,7 +56,7 @@ namespace ff {
 // fftree stuff
 struct fftree;   // forward declaration
 enum fftype {
-	FARM, PIPE, EMITTER, WORKER, OCL_WORKER, COLLECTOR
+	FARM, PIPE, EMITTER, WORKER, OCL_WORKER, TPC_WORKER, COLLECTOR
 };
     
     

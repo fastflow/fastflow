@@ -1094,8 +1094,6 @@ public:
         if (collector && !collector_removed)
             return diffmsec(gt->getstoptime(), lb->getstarttime());
 
-        printf("getstoptime=%ld, lb->getstarttime=%ld, lb->getstoptime=%ld\n", getusec(getstoptime()), getusec(lb->getstarttime()), getusec(lb->getstoptime()));
-
         return diffmsec(getstoptime(),lb->getstarttime());
     }
 

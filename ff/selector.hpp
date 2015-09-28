@@ -37,6 +37,10 @@
 #ifndef FF_NODE_SELECTOR_HPP
 #define FF_NODE_SELECTOR_HPP
 
+#include <memory>
+#include <vector>
+#include <ff/node.hpp>
+
 namespace ff {
 
 
@@ -144,7 +148,7 @@ public:
             
 protected:
     size_t      selected;
-    IN_t         *inTask;
+    IN_t       *inTask;
     std::vector<ff_node*> devices; 
     std::vector<ff_node*> cleanup_devices;
 };

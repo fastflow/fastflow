@@ -395,6 +395,7 @@ public:
             }
             barrier->barrierSetup(nthreads);
 
+            // REMOVE THIS ?
             // check if we have to setup the OpenCL environment !
             if (fftree_ptr->hasOpenCLNode()) {
                 // setup openCL environment
