@@ -41,27 +41,32 @@
 #include <ff/mpmc/asm/abstraction_dcas.h>
 
 /*
- * NOTE: You should define USE_STD_C0X if you want to use 
- *       the new C++0x standard (-std=c++0x)
+ * NOTE: You should define NO_STD_C0X if you want to avoid c++0x and c++11
  *
  */
-#if defined(USE_STD_C0X)
- // Check for g++ version >= 4.5
- #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5)
-  #include <atomic>
- #else
-  // Check for g++ version >= 4.4
-  #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4)
-   #include <cstdatomic>
-  #else
-   #define USE_STD_0X
-  #endif
- #endif
-#endif // USE_STD_C0X
 
-namespace ff {
+#if ( (!defined(NO_STD_C0X))  &&  !(__cplusplus >= 201103L))
+#pragma message ("Define -DNO_STD_C0X to use a non c++0x/c++11 compiler")
+#endif
+
+
+// // Check for g++ version >= 4.5
+// #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5)
+//  #include <atomic>
+// #else
+//  // Check for g++ version >= 4.4
+//  #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4)
+//   #include <cstdatomic>
+//  #else
+//   #define USE_STD_0X
+//  #endif
+// #endif
+//#endif // USE_STD_C0X
+
 
 #define CAS abstraction_cas
+
+namespace ff {
 
 /* 
  *  In the following we implement two kinds of queues: 
@@ -90,7 +95,9 @@ namespace ff {
  *
  *
  */
-#if defined(USE_STD_C0X)
+#if !defined(NO_STD_C0X)
+#include <atomic>
+    
 class MPMC_Ptr_Queue {
 private:
     struct element_t {
@@ -236,6 +243,9 @@ private:
 
 
 #else  // using internal atomic operations
+    
+#if 0
+    
 class MPMC_Ptr_Queue {
 protected:
 
@@ -516,7 +526,8 @@ protected:
 
 };
 
-
+#endif // disabled
+    
 #endif // USE_STD_C0X
 
 
@@ -847,16 +858,16 @@ public:
     enum {DEFAULT_POOL_SIZE=4};
 
     scalableMPMCqueue() {
-        atomic_long_set(&enqueue,0);
-        atomic_long_set(&count, 0);
+        enqueue.store(0);
+        count.store(0);
 
 #if !defined(MULTI_MPMC_RELAX_FIFO_ORDERING)
         // NOTE: dequeue must start from 1 because enqueue is incremented
         //       using atomic_long_inc_return which first increments and than
         //       return the value.
-        atomic_long_set(&dequeue,1); 
+        dequeue.store(1);
 #else
-        atomic_long_set(&dequeue,0);
+        dequeue.store(0);
 #endif
     }
     
@@ -920,12 +931,12 @@ public:
         return true;
     }
 private:
-    atomic_long_t enqueue;
-    long padding1[longxCacheLine-sizeof(atomic_long_t)];
-    atomic_long_t dequeue;
-    long padding2[longxCacheLine-sizeof(atomic_long_t)];
-    atomic_long_t count;
-    long padding3[longxCacheLine-sizeof(atomic_long_t)];
+    std::atomic<long> enqueue;
+    long padding1[longxCacheLine-sizeof(std::atomic<long>)];
+    std::atomic<long> dequeue;
+    long padding2[longxCacheLine-sizeof(std::atomic<long>)];
+    std::atomic<long> count;
+    long padding3[longxCacheLine-sizeof(std::atomic<long>)];
 protected:
     std::vector<Q> pool;
 };
