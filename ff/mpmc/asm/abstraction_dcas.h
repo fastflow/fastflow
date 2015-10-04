@@ -2,11 +2,7 @@
 #define FF_ABSTRACT_DCAS_H
 
 /* 
- * This file is taken from liblfds.6 a portable, license-free, 
- * lock-free data structure library written in C.
- *
- * Please visit:   http://www.liblfds.org
- * 
+ *  Marco Aldinucci, Oct 2015: Housekeeping for C++11 FF port
  *
  */
 

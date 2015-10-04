@@ -29,6 +29,7 @@
  *  
  *  - History
  *    10 Jul 2012: M. Aldinucci: Minor fixes 
+ *     4 Oct 2015: M. Aldinucci: c++11 compliance  (complete for c++11 compilers)
  */
 
 
