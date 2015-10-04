@@ -36,7 +36,7 @@
 #include <iostream>
 #include <ff/node.hpp>   // for Barrier
 #include <ff/cycle.h>
-//#include <ff/atomic/atomic.h>
+#include <atomic>
 #include <ff/platforms/platform.h>
 //#include <ff/mapping_utils.hpp>
 
@@ -84,7 +84,7 @@ cds::container::MSQueue< cds::gc::HP, void*> * msq;  // which allocator ?
 int nqueues=4;
 #endif
 int ntasks=0;                   // total number of tasks
-atomic_long_t counter;           
+std::atomic<long> counter;
 std::vector<long> results;
 Barrier *bar = NULL;
 
@@ -121,7 +121,7 @@ static inline void backoff_pause( unsigned int nLoop = 0x000003FF ) {
 #endif
 
 static inline bool PUSH(int myid) {
-    long * p = (long *)(atomic_long_inc_return(&counter));
+    long * p = (long *)(1+counter.fetch_add(1)); //  atomic_long_inc_return(&counter));
 
     if ((long)p > ntasks) return false;
 
@@ -263,7 +263,7 @@ int main(int argc, char * argv[]) {
  #endif
 #endif
 
-    atomic_long_set(&counter,0);
+    counter.store(0);
 
     pthread_t * P_handle, * C_handle;
 

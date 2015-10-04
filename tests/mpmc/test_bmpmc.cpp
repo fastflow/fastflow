@@ -38,15 +38,15 @@
 #include <algorithm>
 //#include <pthread.h>
 #include <ff/platforms/platform.h>
-#include <ff/atomic/atomic.h>
-#include <ff/atomic/abstraction_dcas.h>
-#include <ff/MPMCqueues.hpp>
+#include <atomic>
+//#include <ff/mpmc/abstraction_dcas.h>
+#include <ff/mpmc/MPMCqueues.hpp>
 #include <ff/node.hpp>
 
 
 int    NTHREADS;
 size_t MYSIZE;
-atomic_long_t counter;           
+std::atomic<long> counter;
 ff::MPMC_Ptr_Queue* q=NULL;
 ff::Barrier *bar = NULL;
 
@@ -60,9 +60,9 @@ void * consumer(void * arg) {
     while(1) {
 	if (q->pop((void**)&data)) {
 	    printf("(%d %ld) ", myid, (long)data);
-	    atomic_long_inc(&counter);
+        counter.fetch_add(1);
 	}
-	if ((size_t)(atomic_long_read(&counter))>= MYSIZE) break;
+	if ((size_t)(counter.load())>= MYSIZE) break;
     }
     pthread_exit(NULL);
     return NULL;
@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
     for(size_t i=1;i<=MYSIZE;++i) 
         q->push((void*)i);
 
-    atomic_long_set(&counter,0);
+    counter.store(0);
 
     pthread_t * C_handle;
 

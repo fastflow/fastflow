@@ -54,12 +54,11 @@ test_graphsearch                          test_uBuffer
 test_lb_affinity
 )
 
-#if (NOT ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC"))
-#set(TESTS ${TESTS} test_taskf test_multi_output2 test_parforpipereduce test_pipe test_map test_mdf)
-#endif ()
-
-#set( TESTS_W_OMP test_parfor_basic)
-#  
+# tests MPMC for x86 only
+if ( (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64") OR (
+CMAKE_SYSTEM_PROCESSOR MATCHES "i386") )
+  add_subdirectory( mpmc )
+endif ( )
 
 #if  ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 #set (TESTS ${TESTS} ${TESTS_W_OMP})
