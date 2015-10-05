@@ -29,7 +29,7 @@
  *  
  *  - History
  *    10 Jul 2012: M. Aldinucci: Minor fixes 
- *     4 Oct 2015: M. Aldinucci: c++11 compliance  (complete for c++11 compilers)
+ *     4 Oct 2015: M. Aldinucci: cleaning related to better c++11 compliance
  */
 
 
@@ -49,6 +49,8 @@
 #if ( (!defined(NO_STD_C0X))  &&  !(__cplusplus >= 201103L))
 #pragma message ("Define -DNO_STD_C0X to use a non c++0x/c++11 compiler")
 #endif
+
+#define NO_STD_C0X
 
 
 // // Check for g++ version >= 4.5
@@ -244,8 +246,7 @@ private:
 
 
 #else  // using internal atomic operations
-    
-#if 0
+#include <ff/mpmc/asm/atomic.h>
     
 class MPMC_Ptr_Queue {
 protected:
@@ -526,8 +527,6 @@ protected:
     unsigned long     mask;
 
 };
-
-#endif // disabled
     
 #endif // USE_STD_C0X
 
