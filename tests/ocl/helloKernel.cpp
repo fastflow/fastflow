@@ -178,10 +178,10 @@ int main(int argc, char *argv[]) {
 
 #if 1
     if (kernel.nodeInit()<0) {
-	error("cannot initialize kernel\n");
-	return -1;
+        error("cannot initialize kernel\n");
+        return -1;
     }
-
+    
     // this way to run the kernel asynchronously is convinient if we have multiple kernels
     // and a single sincronization point (a barrier)
     auto F = [&]() { kernel.svc(&task); };

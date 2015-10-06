@@ -24,12 +24,14 @@ LIBS =  $(OPENCL) -lpthread
 INCLUDES = -I$(FF_ROOT) -I$(OCL_ROOT)/include
 
 
-TARGETS = helloKernel testRelease oclStencilReduceLoop oclMap oclMap2 oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct device_selection dotProd_cpugpu device_selection2 mixedpipe mixedpipe2
+TARGETS = helloKernel helloKernel2 testRelease oclStencilReduceLoop oclMap oclMap2 oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct dotProduct2 device_selection dotProd_cpugpu device_selection2 mixedpipe mixedpipe2
 
 
 all: $(TARGETS)
 
 helloKernel: helloKernel.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+helloKernel2: helloKernel2.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 testRelease: testRelease.cpp
@@ -60,6 +62,8 @@ pipeFarmMap: pipeFarmMap.cpp
 	$(CXX) -DCHECK $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 dotProduct: dotProduct.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+dotProduct2: dotProduct2.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 dotProd_cpugpu: dotProd_cpugpu.cpp
