@@ -125,9 +125,10 @@ public:
             devices[i]->nodeEnd();
     }
 
-    void addNode(ff_node &node) { 
+    size_t addNode(ff_node &node) { 
         devices.push_back(&node); 
-        node.registerCallback(ff_send_out_selector, this);                    
+        node.registerCallback(ff_send_out_selector, this);
+        return devices.size()-1;
     }
 
     fftype getFFType() const   { 
