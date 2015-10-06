@@ -67,7 +67,6 @@ struct oclTask: public baseOCLTask<oclTask, mypair, float> {
     }
     ~oclTask() { if (Mout) delete [] Mout; }
     void setTask(const oclTask *t) { 
-       assert(t);
        setInPtr(t->M, t->size);
        setOutPtr(t->Mout);
        setReduceVar(&(t->result));
