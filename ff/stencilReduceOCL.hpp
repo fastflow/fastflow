@@ -63,6 +63,17 @@ public:
     typedef Tin_    Tin;
     typedef Tout_   Tout;
 
+    enum class BitFlags {
+        COPYTO, 
+        DONTCOPYTO, 
+        REUSE, 
+        DONTREUSE, 
+        RELEASE, 
+        DONTRELEASE, 
+        COPYBACK,
+        DONTCOPYBACK
+    };
+
     baseOCLTask(): inPtr(NULL),outPtr(NULL),reduceVar(NULL),
                    size_in(0),size_out(0),iter(0),
                    tuple_in(std::make_tuple(true,false,false)),
@@ -109,9 +120,14 @@ public:
      * @param reuse TODO
      * @param release TODO
      */
-    void setInPtr(Tin* _inPtr, size_t sizeIn=1, bool copy=true, bool reuse=false, bool release=false)  { 
+    void setInPtr(Tin* _inPtr, size_t sizeIn=1, 
+                  const BitFlags copy   =BitFlags::COPYTO, 
+                  const BitFlags reuse  =BitFlags::DONTREUSE, 
+                  const BitFlags release=BitFlags::DONTRELEASE)  { 
         inPtr  = _inPtr; size_in = sizeIn; 
-        tuple_in = std::make_tuple(copy,reuse,release);
+        tuple_in = std::make_tuple(copy==BitFlags::COPYTO,
+                                   reuse==BitFlags::REUSE,
+                                   release==BitFlags::RELEASE);
     }
 
     /**
@@ -120,9 +136,14 @@ public:
      * @see setInPtr()
      * @param copyback TODO
      */
-    void setOutPtr(Tout* _outPtr, size_t sizeOut=0, bool copyback=true, bool reuse=false, bool release=false)  { 
+    void setOutPtr(Tout* _outPtr, size_t sizeOut=0, 
+                   const BitFlags copyback =BitFlags::COPYBACK, 
+                   const BitFlags reuse    =BitFlags::DONTREUSE, 
+                   const BitFlags release  =BitFlags::DONTRELEASE)  { 
         outPtr = _outPtr; size_out = sizeOut; 
-        tuple_out = std::make_tuple(copyback,reuse,release);
+        tuple_out = std::make_tuple(copyback==BitFlags::COPYBACK,
+                                    reuse==BitFlags::REUSE,
+                                    release==BitFlags::RELEASE);
     }
 
     /**
@@ -131,10 +152,17 @@ public:
      * @see setInPtr()
      */
     template<typename ptrT>
-    void setEnvPtr(const ptrT* _envPtr, size_t size, bool copy=true, bool reuse=false, bool release=false)  { 
+    void setEnvPtr(const ptrT* _envPtr, size_t size, 
+                  const BitFlags copy   =BitFlags::COPYTO, 
+                  const BitFlags reuse  =BitFlags::DONTREUSE, 
+                  const BitFlags release=BitFlags::DONTRELEASE)  { 
         assert(envPtr.size() == copyEnv.size());
         envPtr.push_back(std::make_pair((void*)_envPtr,size*sizeof(ptrT)));
-        copyEnv.push_back(std::make_tuple(sizeof(ptrT), copy,reuse,release));
+        copyEnv.push_back(std::make_tuple(sizeof(ptrT), 
+                                          copy==BitFlags::COPYTO,
+                                          reuse==BitFlags::REUSE,
+                                          release==BitFlags::RELEASE));
+                                          
     }
     
     Tin *   getInPtr()    const { return inPtr;  }
