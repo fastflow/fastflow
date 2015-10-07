@@ -38,6 +38,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <algorithm>
 #include <ff/utils.hpp>
 #if !defined(USE_OPENMP) && !defined(USE_TBB)
 #include <ff/parallel_for.hpp>

@@ -21,7 +21,9 @@ using namespace ff;
 
 #define CHECK 1
 #ifdef CHECK
+#if !defined(VERIFY)
 #define VERIFY
+#endif
 #include "../ctest.h"
 #else
 #define NACC 1
