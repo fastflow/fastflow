@@ -324,14 +324,14 @@ namespace ff {
      */
     struct Seg_ctl {
         // number of buffers in use
-        DBG(size_t refcount);
-
+        DBG(size_t refcount;)
+        
         // reference to the SlabCache that owns the segment
         SlabCache * cacheentry;
-    
+        
         // reference to the allocator
         ff_allocator * allocator;
-    
+        
         // number of items in the buffer freelist (i.e. Buffers available)
         //atomic_long_t        availbuffers;
         size_t  availbuffers;
