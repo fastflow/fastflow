@@ -366,13 +366,13 @@ static inline ssize_t ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
     // tag for the set. Cores under the same L2 cache are not distinguished. 
     // Should be called before running the thread.
 #define CACHE_LEVELS 3
-    #define CACHE_L2 2
+#define CACHE_L2     2
     size_t len;
 
     if (sysctlbyname("hw.cacheconfig",NULL, &len, NULL, 0) != 0) {
         perror("sysctl");
     } else {
-      int64_t cacheconfig[len];
+        std::vector<int64_t> cacheconfig(len);
       if (sysctlbyname("hw.cacheconfig", &cacheconfig[0], &len, NULL, 0) != 0)
         perror("sysctl: unable to get hw.cacheconfig");
       else {

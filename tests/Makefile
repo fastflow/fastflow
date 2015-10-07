@@ -51,7 +51,7 @@ CXX 		     = g++ -std=c++11 # -std=c++0x for most of the code
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O3 #-DBLOCKING_MODE -DTRACE_FASTFLOW 
-CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall -DALLOCATOR_STATS
+CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall
 CFLAGS               =
 LDFLAGS              = 
 INCS                 = -I..
