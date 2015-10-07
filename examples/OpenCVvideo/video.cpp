@@ -45,14 +45,14 @@ int main(int argc, char *argv[]) {
     
     if(argc == 1) {
 	std::cout << "Usage is: " << argv[0] 
-		  << " input_filename filterno videooutput [nw1 nw2]" 
+		  << " input_filename filterno videooutput" 
 		  << std::endl; 
 	return(0); 
     }
         
     // input file
-    VideoCapture cap(1); // open the default camera
-    //VideoCapture cap(argv[1]); 
+    //VideoCapture cap(1); // open the default camera
+    VideoCapture cap(argv[1]); 
     
     if(!cap.isOpened())  {  // check if we succeeded
 	std::cerr << "Error opening input file" << std::endl;
@@ -63,16 +63,16 @@ int main(int argc, char *argv[]) {
     // filter parameters
     bool filter1, filter2;
     if(atoi(argv[2]) == 1) { 
-	filter1 = true;  filter2 = false; 
-	std::cout << "Applying enhnace filter only" << std::endl;
+        filter1 = true;  filter2 = false; 
+        std::cout << "Applying enhnace filter only" << std::endl;
     }
     if(atoi(argv[2]) == 2) { 
-	filter1 = false; filter2 = true;     
-	std::cout << "Applying emboss filter only" << std::endl;
+        filter1 = false; filter2 = true;     
+        std::cout << "Applying emboss filter only" << std::endl;
     }
     if(atoi(argv[2]) == 3) { 
-	filter1 = true;  filter2 = true;     
-	std::cout << "Applying both filters" << std::endl;
+        filter1 = true;  filter2 = true;     
+        std::cout << "Applying both filters" << std::endl;
     }
     
     
