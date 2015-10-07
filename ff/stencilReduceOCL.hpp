@@ -950,7 +950,7 @@ public:
         stencil_width_half(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL),
         oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setcode(mapf, reducef);
-        for(size_t i = 0; i< NACCELERATORS; ++i)
+        for(int i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width,identityVal);
 #ifdef FF_OPENCL_LOG
         fprintf(stderr,"[ff_stencilReduceLoopOCL_1D node @%p]\n",this);
@@ -1529,7 +1529,7 @@ protected:
 	//         - size is the number of elements assigned to accelerator i
 	void compute_accmem(const size_t len, std::vector<std::pair<size_t,size_t> > &acc) {
 		size_t start = 0, step = (len + accelerators.size() - 1) / accelerators.size();
-		int i = 0;
+		size_t i = 0;
 		for (; i < accelerators.size() - 1; ++i) {
             acc[i]=std::make_pair(start, step);
 			start += step;
