@@ -46,34 +46,34 @@
 
 using namespace ff;
 
-// the corresponding OpenCL type is in the (local) file 'ff_opencl_datatypes.cl'
-struct mypair { float a; float b; };
+#define BUILD_WITH_SOURCE 1
+#if !defined(BUILD_WITH_SOURCE)
 
-FF_OCL_MAP_ELEMFUNC_IO(mapf, float, mypair, elem, useless,
-                     (void)useless;
-                     return (elem.a * elem.b);
+FF_OCL_MAP_ELEMFUNC_1D_ENV(mapf, float, a, float, b,
+                     return (a * b);
 );
 
 FF_OCL_REDUCE_COMBINATOR(reducef, float, x, y,
         return (x+y);
 );
+#endif
 
-
-struct oclTask: public baseOCLTask<oclTask, mypair, float> {
-    oclTask():M(NULL),Mout(NULL),result(0.0), size(0) {}
-    oclTask(mypair *M, size_t size):M(M),Mout(NULL),result(0.0),size(size) {
+struct oclTask: public baseOCLTask<oclTask, float, float> {
+    oclTask():M(NULL),M2(NULL), Mout(NULL),result(0.0), size(0) {}
+    oclTask(float *M, float *M2, size_t size):M(M),M2(M2),Mout(NULL),result(0.0),size(size) {
         Mout = new float[size];
         assert(Mout);
     }
     ~oclTask() { if (Mout) delete [] Mout; }
     void setTask(const oclTask *t) { 
        setInPtr(t->M, t->size);
+       setEnvPtr(t->M2, t->size);
        setOutPtr(t->Mout);
        setReduceVar(&(t->result));
      }
     float combinator(float const &x, float const &y) {return x+y;}
 
-    mypair *M;
+    float *M, *M2;
     float  *Mout, result;
     const size_t  size;
 };
@@ -82,20 +82,38 @@ int main(int argc, char * argv[]) {
     size_t size = 1024;
     if (argc>1) size     =atol(argv[1]);
     printf("arraysize = %ld\n", size);
+    
+    float *M = new float[size];
+    float *M2 = new float[size];
 
-    mypair *M        = new mypair[size];
-    for(size_t j=0;j<size;++j) {M[j].a=j*1.0; M[j].b=1; /*j*2.0;*/}
+    for(size_t i=0;i<size;++i) {
+        M[i] = 2.0f;
+        M2[i] = 5.0f;
+    }    
 
 #if defined(CHECK)
     float r = 0.0;
     for(size_t j=0;j<size;++j) {
-        r += M[j].a * M[j].b;
+        r += M[j] * M2[j];
     }
 #endif
-    oclTask oclt(M, size);
+    oclTask oclt(M, M2, size);
+#if defined(BUILD_WITH_SOURCE)
+    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, "cl_code/dotProduct.cl", "mapf", "reducef", 0, nullptr, NACC);
+#else
     ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0, nullptr, NACC);
+#endif
+    oclMR.saveBinaryFile(); oclMR.reuseBinaryFile();
     SET_DEVICE_TYPE(oclMR);
-    oclMR.run_and_wait_end();
+
+    ffTime(START_TIME);
+    if (oclMR.run_and_wait_end()<0) {
+        error("running map-reduce\n");
+        return -1;
+    }
+    ffTime(STOP_TIME);
+
+    printf("Time = %.2f (ms)\n", ffTime(GET_TIME));
 
     delete [] M;
     printf("res=%.2f\n", oclt.result);

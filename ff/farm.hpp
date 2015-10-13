@@ -1408,7 +1408,7 @@ private:
      * \brief Ordered farm
      */
     class ofarmE: public ff_node {
-        static bool ff_send_out_ofarmE(void * task,unsigned long retry,unsigned long ticks, void *obj) {
+        static inline bool ff_send_out_ofarmE(void * task,unsigned long retry,unsigned long ticks, void *obj) {
             return ((ofarmE *)obj)->ff_send_out(task, retry, ticks);
         }
     public:
@@ -1491,7 +1491,7 @@ private:
      * \brief Ordered farm default Emitter
      */
     class ofarmC: public ff_node {
-        static bool ff_send_out_ofarmC(void * task,unsigned long retry,unsigned long ticks, void *obj) {
+        static inline bool ff_send_out_ofarmC(void * task,unsigned long retry,unsigned long ticks, void *obj) {
             return ((ofarmC *)obj)->ff_send_out(task, retry, ticks);
         }
     public:
@@ -1706,7 +1706,7 @@ public:
     typedef IN_t  in_type;
     typedef OUT_t out_type;
 
-    // NOTE: the ownership of the ff_node (unique) pointers is transfered to the farm !!!!
+    // NOTE: the ownership of the ff_node (unique) pointers is transferred to the farm !!!!
     //       All workers, the Emitter and the Collector will be deleted in the ff_Farm destructor !
 
     ff_Farm(std::vector<std::unique_ptr<ff_node> > &&W,
@@ -1827,7 +1827,7 @@ public:
     typedef IN_t  in_type;
     typedef OUT_t out_type;
 
-    // NOTE: the ownership of the ff_node (unique) pointers is transfered to the farm !!!!
+    // NOTE: the ownership of the ff_node (unique) pointers is transferred to the farm !!!!
     //       All workers, the Emitter and the Collector will be deleted in the ff_Farm destructor !
 
     ff_OFarm(std::vector<std::unique_ptr<ff_node> > &&W,  bool input_ch=false): 

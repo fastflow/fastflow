@@ -112,19 +112,20 @@ struct Task: public baseOCLTask<Task, float, float> {
 
        switch (t->kernelId) {
        case 1: {
-           setInPtr(const_cast<float*>(t->A.data()), t->A.size(), false);// A not copied 
+           setInPtr(const_cast<float*>(t->A.data()), t->A.size(), 
+                    BitFlags::DONTCOPYTO);                               // A not copied 
            setEnvPtr(&(t->k), 1);                                        // k always copied
            setOutPtr(const_cast<float*>(t->A.data()));                   // A received back
        } break;                                                          // A kept (by default)
        case 2: {
            setInPtr(const_cast<float*>(t->A.data()),  t->A.size());      // A copied
            setEnvPtr(const_cast<float*>(t->C->data()), t->C->size(), 
-                     (t->k==0)?true:false);                              // C copied only the 1st time
+                     (t->k==0)?BitFlags::COPYTO:BitFlags::DONTCOPYTO);   // C copied only the 1st time
            setReduceVar(&(t->sum));                                      // sum 
        } break;                                                          // A,C kept (by default)
        case 3: {
            setInPtr(const_cast<float*>(t->R->data()),  t->R->size(),     // R copied only the 1st time
-                     (t->k==0)?true:false);                              // 
+                    (t->k==0)?BitFlags::COPYTO:BitFlags::DONTCOPYTO);    // 
            setEnvPtr(const_cast<float*>(t->A.data()),  t->A.size());     // A copied
            setEnvPtr(&(t->sum), 1);                                      // sum
            setOutPtr(const_cast<float*>(t->R->data()),  t->R->size());   // R get back result

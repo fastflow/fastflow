@@ -62,6 +62,6 @@ gameoflife: $(OBJ)
 
 #clean
 clean: 
-	-rm -fr *.o *~
+	-rm -fr *.o *~ ./code_cl/*~
 cleanall: clean
-	-rm -fr $(TARGET) *.d
+	-rm -fr $(TARGET) *.d ./code_cl/*.bin

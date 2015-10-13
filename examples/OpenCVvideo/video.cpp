@@ -127,6 +127,7 @@ int main(int argc, char *argv[]) {
 #endif
 	    imshow("edges", *frame);
 	    if(waitKey(30) >= 0) break;
+
 #ifdef SHOWTIMES
 	    std::cout << "Show " << TIME(t0) << std::endl; 
 #endif
