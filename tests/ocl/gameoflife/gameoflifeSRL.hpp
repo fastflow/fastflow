@@ -12,6 +12,8 @@
 #include <ff/stencilReduceOCL.hpp>
 #include <ff/stencilReduceOCL_macros.hpp>
 
+
+#if !defined(BUILD_WITH_SOURCE)
 /* API:
  * 'name' is the name of the string variable in which the code is stored
  * 'inT' is the element type of the input
@@ -25,6 +27,7 @@
 FF_OCL_STENCIL_ELEMFUNC_2D(mapf,unsigned char,h,w,r,c,
 		unsigned char alive_in = GET_IN(r,c);
 		unsigned char naliven = 0;
+
         naliven += r>0 && c>0 ? GET_IN(r-1,c-1) : 0; //top-left
         naliven += r>0 ? GET_IN(r-1,c) : 0; //top-center
         naliven += r>0 && c < w-1 ? GET_IN(r-1,c+1) : 0; //top-right
@@ -39,6 +42,9 @@ FF_OCL_STENCIL_ELEMFUNC_2D(mapf,unsigned char,h,w,r,c,
 FF_OCL_REDUCE_COMBINATOR(reducef, unsigned char, x, y,
 		return x||y;
 		);
+
+#endif // BUILD_WITH_SOURCE
+
 
 struct oclTaskGol: public ff::baseOCLTask_2D<oclTaskGol, unsigned char> {
 	oclTaskGol() :

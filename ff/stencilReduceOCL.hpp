@@ -404,8 +404,17 @@ public:
         // MA patch - map not defined => workgroup_size_map
         //size_t wgsize = wgsize_map_static==0?wgsize_reduce_static:wgsize_map_static;
 		if(kernel_map) {
-			wgsize_map = std::min<size_t>(lenInput, wgsize_map_static);
-			nthreads_map = wgsize_map * ((lenInput + wgsize_map - 1) / wgsize_map); //round up
+
+            // if the output buffer is bigger than input buffer then we use the size of the
+            // output buffer to compute the number of threads
+            if (lenInput < lenOutput) {
+                wgsize_map = std::min<size_t>(lenOutput, wgsize_map_static);
+                nthreads_map = wgsize_map * ((lenOutput + wgsize_map - 1) / wgsize_map); //round up
+            }
+            else {
+                wgsize_map = std::min<size_t>(lenInput, wgsize_map_static);
+                nthreads_map = wgsize_map * ((lenInput + wgsize_map - 1) / wgsize_map); //round up
+            }
 #ifdef FF_OPENCL_LOG
 			std::cerr <<  "[virtual accelerator @"<<this<<"]\n";
 			std::cerr << "+ computed MAP kernel sizing parameters:\n";
@@ -944,13 +953,13 @@ public:
                                const std::string &reducef = std::string(""),  //OpenCL combinator function
                                const Tout &identityVal = Tout(),               
                                ff_oclallocator *allocator = nullptr,
-                               const int NACCELERATORS = 1, const int width = 1) :
+                               const size_t NACCELERATORS = 1, const int width = 1) :
         oneshot(false), saveBinary(false), reuseBinary(false), 
         accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
         stencil_width_half(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL),
         oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setcode(mapf, reducef);
-        for(int i = 0; i< NACCELERATORS; ++i)
+        for(size_t i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width,identityVal);
 #ifdef FF_OPENCL_LOG
         fprintf(stderr,"[ff_stencilReduceLoopOCL_1D node @%p]\n",this);
@@ -968,7 +977,7 @@ public:
                                const std::string &reducef_name,              // name of the reduce function
                                const Tout &identityVal = Tout(),
                                ff_oclallocator *allocator = nullptr,
-                               const int NACCELERATORS = 1, const int width = 1) :
+                               const size_t NACCELERATORS = 1, const int width = 1) :
         oneshot(false), saveBinary(false), reuseBinary(false), 
         accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
         stencil_width_half(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL),
@@ -984,7 +993,7 @@ public:
                                const std::string &reducef = std::string(""),	
                                const Tout &identityVal = Tout(),
                                ff_oclallocator *allocator = nullptr,
-                               const int NACCELERATORS = 1, const int width = 1) :
+                               const size_t NACCELERATORS = 1, const int width = 1) :
         oneshot(true), saveBinary(false), reuseBinary(false), 
         accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
         stencil_width_half(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL),
@@ -1008,7 +1017,7 @@ public:
                                const std::string &reducef_name,        // name of the reduce kernel function
                                const Tout &identityVal = Tout(),
                                ff_oclallocator *allocator = nullptr,
-                               const int NACCELERATORS = 1, const int width = 1) :
+                               const size_t NACCELERATORS = 1, const int width = 1) :
         oneshot(true), saveBinary(false), reuseBinary(false), 
         accelerators(NACCELERATORS), acc_in(NACCELERATORS), acc_out(NACCELERATORS), 
         stencil_width_half(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL),
@@ -1260,32 +1269,15 @@ protected:
         Tout  *reducePtr = Task.getReduceVar();
         const size_t envSize = Task.getEnvNum(); //n. added environments
         
-		// adjust allocator input-portions and relocate input device memory if needed
-		if (oldBytesizeIn != Task.getBytesizeIn()) {
-			compute_accmem(Task.getSizeIn(),  acc_in);
-			const bool memorychange = (oldBytesizeIn < Task.getBytesizeIn());
-			adjustInputBufferOffset(memorychange);
-            if (memorychange) {
-                for (size_t i = 0; i < accelerators.size(); ++i) {
-                    accelerators[i]->relocateInputBuffer(inPtr, Task.getReuseIn(), reducePtr);
-                }
-                oldBytesizeIn = Task.getBytesizeIn();
-                old_inPtr = inPtr;
-            }            
-		}
+        // if the computation is not in-place then we start from the output 
+        if ((void*)inPtr != (void*)outPtr) {
 
-		// adjust allocator output-portions and relocate output device memory if needed
-        if (oldSizeOut != Task.getBytesizeOut()) {
-
-            if ((void*)inPtr == (void*)outPtr) {
-                for (size_t i = 0; i < accelerators.size(); ++i) {
-                    accelerators[i]->setInPlace(reducePtr);
-                }
-            } else {
+            // adjust allocator output-portions and relocate output device memory if needed
+            if (oldSizeOut != Task.getBytesizeOut()) {
                 compute_accmem(Task.getSizeOut(), acc_out);
-
+                
                 const bool memorychange = (oldSizeOut < Task.getBytesizeOut());
-
+                
                 for (size_t i = 0; i < accelerators.size(); ++i) {
                     accelerators[i]->adjustOutputBufferOffset(outPtr, (memorychange?old_outPtr:NULL), acc_out[i], Task.getSizeOut());
                 }
@@ -1297,8 +1289,29 @@ protected:
                     oldSizeOut = Task.getBytesizeOut();
                     old_outPtr = outPtr;
                 }
-            }
+            }                                    
+        } 
+        // adjust allocator input-portions and relocate input device memory if needed
+        if (oldBytesizeIn != Task.getBytesizeIn()) {
+            compute_accmem(Task.getSizeIn(),  acc_in);
+            const bool memorychange = (oldBytesizeIn < Task.getBytesizeIn());
+            adjustInputBufferOffset(memorychange);
+            if (memorychange) {
+                for (size_t i = 0; i < accelerators.size(); ++i) {
+                    accelerators[i]->relocateInputBuffer(inPtr, Task.getReuseIn(), reducePtr);
+                }
+                oldBytesizeIn = Task.getBytesizeIn();
+                old_inPtr = inPtr;
+            }            
         }
+            
+        // in-place computation 
+        // adjust allocator output-portions and relocate output device memory if needed
+        if (((void*)inPtr == (void*)outPtr) && ( oldSizeOut != Task.getBytesizeOut())) {
+            for (size_t i = 0; i < accelerators.size(); ++i) {
+                accelerators[i]->setInPlace(reducePtr);
+            }
+        }                        
 
         //relocate env device memory
         //TODO on-demand relocate, as for input/output memory
@@ -1826,7 +1839,7 @@ public:
 	                               const std::string &reducef = std::string(""),  //OpenCL combinator function
 	                               const Tout &identityVal = Tout(),
 	                               ff_oclallocator *allocator = nullptr,
-	                               const int NACCELERATORS = 1,
+	                               const size_t NACCELERATORS = 1,
 								   const int stencil_width_half_ = 1,
 								   const int stencil_height_half_ = 1) :
 									   //init srl 1D with no halo (1D halo depends on 2D width)
@@ -1842,7 +1855,7 @@ public:
 	                               const std::string &reducef_name,              // name of the reduce function
 	                               const Tout &identityVal = Tout(),
 	                               ff_oclallocator *allocator = nullptr,
-	                               const int NACCELERATORS = 1,
+	                               const size_t NACCELERATORS = 1,
 								   const int stencil_width_half_ = 1,
 								   const int stencil_height_half_ = 1) :
 									   //init srl 1D with no halo (1D halo depends on 2D width)
@@ -1855,12 +1868,12 @@ public:
 	                               const std::string &reducef = std::string(""),
 	                               const Tout &identityVal = Tout(),
 	                               ff_oclallocator *allocator = nullptr,
-	                               const int NACCELERATORS = 1,
+	                               const size_t NACCELERATORS = 1,
 								   const int stencil_width_half_ = 1,
 								   const int stencil_height_half_ = 1) :
 	                            	   //init srl 1D with no halo (1D halo depends on 2D width)
 	                            	   base_srl_t(task, mapf, reducef, identityVal, allocator, NACCELERATORS, 0),
-	                            	   stencil_height_half(stencil_height_half_), stencil_width_half(stencil_width_half_) {}
+                                       stencil_width_half(stencil_width_half_),stencil_height_half(stencil_height_half_) {}
 
 	    // the task is provided in the constructor -- one shot computation
 	    ff_stencilReduceLoopOCL_2D(const T &task,
@@ -1869,7 +1882,7 @@ public:
 	                               const std::string &reducef_name,        // name of the reduce kernel function
 	                               const Tout &identityVal = Tout(),
 	                               ff_oclallocator *allocator = nullptr,
-	                               const int NACCELERATORS = 1,
+	                               const size_t NACCELERATORS = 1,
 								   const int stencil_width_half_ = 1,
 								   const int stencil_height_half_ = 1) :
 	                            	   //init srl 1D with no halo (1D halo depends on 2D width)
@@ -1897,9 +1910,49 @@ private:
 	 * H = 2 * stencil_height_half + 1
 	 * W = 2 * stencil_width_half + 1
 	 */
-	const int stencil_height_half;
 	const int stencil_width_half;
+	const int stencil_height_half;
 };
+
+
+/*!
+ * \class ff_mapOCL_1D
+ *  \ingroup high_level_patterns
+ *
+ * \brief The OpenCL-based Map pattern in 1 dimension
+ *
+ * This class is defined in \ref stencilReduceOCL.hpp
+ *
+ */
+template<typename T, typename TOCL = T>
+class ff_mapOCL_2D: public ff_stencilReduceLoopOCL_2D<T, TOCL> {
+public:
+	ff_mapOCL_2D(std::string mapf, ff_oclallocator *alloc=nullptr,
+                 const size_t NACCELERATORS = 1) :
+        ff_stencilReduceLoopOCL_2D<T, TOCL>(mapf, "", 0, alloc, NACCELERATORS) {
+	}
+
+    ff_mapOCL_2D(const std::string &kernels_source, const std::string &mapf_name, 
+                 ff_oclallocator *alloc=nullptr, const size_t NACCELERATORS = 1) :
+        ff_stencilReduceLoopOCL_2D<T, TOCL>(kernels_source, mapf_name, "", 0, alloc, NACCELERATORS) {
+	}
+    
+
+	ff_mapOCL_2D(const T &task, std::string mapf, 
+                 ff_oclallocator *alloc=nullptr,
+                 const size_t NACCELERATORS = 1) :
+        ff_stencilReduceLoopOCL_2D<T, TOCL>(task, mapf, "", 0, alloc, NACCELERATORS) {
+	}
+    ff_mapOCL_2D(const T &task, const std::string &kernels_source, const std::string &mapf_name, 
+                 ff_oclallocator *alloc=nullptr,
+                 const size_t NACCELERATORS = 1) :
+        ff_stencilReduceLoopOCL_2D<T, TOCL>(task, kernels_source, mapf_name, "", 0, alloc, NACCELERATORS) {
+	}
+
+	bool isPureMap() const { return true; }
+};    
+
+
 
 
 

@@ -431,9 +431,9 @@ protected:
      * \return The status of scheduled task, which can be either \p true or \p
      * false.
      */
-    static bool ff_send_out_emitter(void * task,
-                                    unsigned long retry,
-                                    unsigned long ticks, void *obj) {
+    static inline bool ff_send_out_emitter(void * task,
+                                           unsigned long retry,
+                                           unsigned long ticks, void *obj) {
         return ((ff_loadbalancer *)obj)->schedule_task(task, retry, ticks);
     }
 
