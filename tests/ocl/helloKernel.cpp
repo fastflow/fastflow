@@ -66,21 +66,6 @@ FF_OCL_MAP_ELEMFUNC(mapf, float, useless, i,
 #endif // BUILD_WITH_SOURCE
 
 
-/* ---------------- helping function (naive implementation ------------------ */
-
-typedef enum { IN, OUT } enum_t;
-static std::tuple<bool,bool,bool> parseCmd(int kernelid, enum_t direction, const std::string &cmd) {
-    // here on the base of the command string, kernelid and direction we have to generate the proper tuple
-
-    if (direction==IN) return std::make_tuple(false,false,true);
-    return std::make_tuple(true,false,true);
-}
-static int parseCmd(int kernelId, const std::string &cmd) {
-    return 1; // this is the oclMap
-}
-/* -------------------------------------------------------------------------- */
-
-
 // this is the task
 struct myTask {
     myTask(std::vector<float> A, const std::string &command):A(A),command(command) {}
@@ -88,6 +73,29 @@ struct myTask {
     std::vector<float> A;
     const std::string command;
 };
+
+
+/* ---------------- helping function (naive implementation ------------------ */
+
+using BitFlags = baseOCLTask<myTask, float, float>::BitFlags;
+
+typedef enum { IN, OUT } enum_t;
+static std::tuple<BitFlags, BitFlags, BitFlags> 
+parseCmd(int kernelid, enum_t direction, const std::string &cmd) {
+    // here on the base of the command string, kernelid and direction we have to generate the proper tuple
+
+    if (direction==IN) return std::make_tuple(BitFlags::DONTCOPYTO,
+                                              BitFlags::DONTREUSE,
+                                              BitFlags::RELEASE);
+    return std::make_tuple(BitFlags::COPYTO,
+                           BitFlags::DONTREUSE,
+                           BitFlags::RELEASE);
+}
+static int parseCmd(int kernelId, const std::string &cmd) {
+    return 1; // this is the oclMap
+}
+/* -------------------------------------------------------------------------- */
+
 
 // oclTask is used to transfer the input task to/from the OpenCL device
 // - myTask is the type of the input task
@@ -100,8 +108,8 @@ struct oclTask: baseOCLTask<myTask, float, float> {
 	const std::string &cmd(task->command);
 
 	// define the parameter policy
-	std::tuple<bool,bool,bool> in   = parseCmd(0, IN, cmd);  // expected: false, false, true 
-	std::tuple<bool,bool,bool> out  = parseCmd(0, OUT, cmd); // expected: true, false, true
+	std::tuple<BitFlags,BitFlags,BitFlags> in   = parseCmd(0, IN, cmd); 
+	std::tuple<BitFlags,BitFlags,BitFlags> out  = parseCmd(0, OUT, cmd);
 	
 	// A is not copied in input (false), nor the address is re-used (false), it will be deleted at the end (true) 
 	setInPtr(Aptr, Asize, std::get<0>(in),std::get<1>(in), std::get<2>(in));

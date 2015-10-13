@@ -49,15 +49,15 @@ FF_OCL_REDUCE_COMBINATOR(reducef, float, x, y, return (x+y););
 
 struct Task: public baseOCLTask<Task, float, float> {
 	Task() :
-			result(0.0), copy(true) {
+			result(0.0) {
 	}
 	Task(const std::vector<float> &A, const std::vector<float> &B) :
-			A(A), B(B), M(A.size()), result(0.0), copy(true) {
+			A(A), B(B), M(A.size()), result(0.0) {
 	}
 	void setTask(const Task *t) {
 		assert(t);
 		setInPtr(const_cast<float*>(t->A.data()), t->A.size());
-		setEnvPtr(const_cast<float*>(t->B.data()), t->B.size(), t->copy);
+		setEnvPtr(const_cast<float*>(t->B.data()), t->B.size());
 		setOutPtr(const_cast<float*>(t->M.data()));
 		setReduceVar(&(t->result));
 	}
@@ -69,7 +69,7 @@ struct Task: public baseOCLTask<Task, float, float> {
 	std::vector<float> A, B;
 	std::vector<float> M;
 	//float initVal;
-	float result;bool copy;
+	float result;
 };
 
 struct Map: ff_Map<Task, Task, float> {

@@ -102,18 +102,22 @@ struct Task: public baseOCLTask<Task, float> {
         
         switch (t->kernelId) {
         case 1: {
-            setInPtr(const_cast<float*>(t->A.data()), t->A.size(), false);                   // A not copied 
+            setInPtr(const_cast<float*>(t->A.data()), t->A.size(),BitFlags::DONTCOPYTO);     // A not copied 
             setEnvPtr(&(t->k), 1);                                                           // k always copied
-            setOutPtr(const_cast<float*>(t->A.data()), t->A.size(),false);                   // A not received back
+            setOutPtr(const_cast<float*>(t->A.data()), t->A.size(),BitFlags::DONTCOPYBACK);  // A not received back
         } break;                                                                             // A kept
         case 2: {
-            setInPtr(const_cast<float*>(t->A.data()),  t->A.size(), false, true);            // A not copied, reusing the previous buffer
-            setEnvPtr(const_cast<float*>(t->C->data()), t->C->size(), true, false, true);    // C copied and then released
+            setInPtr(const_cast<float*>(t->A.data()),  t->A.size(), 
+                     BitFlags::DONTCOPYTO, BitFlags::REUSE);                                 // A not copied, reusing the previous buffer
+            setEnvPtr(const_cast<float*>(t->C->data()), t->C->size(), 
+                      BitFlags::COPYTO,BitFlags::DONTREUSE,BitFlags::RELEASE);               // C copied and then released
             setReduceVar(&(t->sum));                                                         // sum 
         } break;                                                                             // A kept (by default)
         case 3: {
-            setInPtr(const_cast<float*>(t->R->data()), t->R->size(), (t->k==0)?true:false);  // R copied only the 1st time
-            setEnvPtr(const_cast<float*>(t->A.data()),  t->A.size(), false, true);           // A not copied, reusing the previous buffer (*)
+            setInPtr(const_cast<float*>(t->R->data()), t->R->size(), 
+                     (t->k==0)?BitFlags::COPYTO:BitFlags::DONTCOPYTO);                       // R copied only the 1st time
+            setEnvPtr(const_cast<float*>(t->A.data()),  t->A.size(), 
+                      BitFlags::DONTCOPYTO, BitFlags::REUSE);                                // A not copied, reusing the previous buffer (*)
             setEnvPtr(&(t->sum), 1);                                                         // sum
             setOutPtr(const_cast<float*>(t->R->data()),  t->R->size());                      // R get back result
         } break;                                                                             // R kept (by default)

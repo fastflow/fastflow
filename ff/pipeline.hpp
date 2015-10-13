@@ -902,7 +902,7 @@ private:
     public:
 
         // NOTE: The ff_Pipe accepts as stages either l-value references or std::unique_ptr l-value references.
-        //       The ownership of the (unique) pointer stage is transfered to the pipeline !!!!
+        //       The ownership of the (unique) pointer stage is transferred to the pipeline !!!!
 
         typedef IN_t  in_type;
         typedef OUT_t out_type;

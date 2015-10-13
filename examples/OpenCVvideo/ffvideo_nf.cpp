@@ -42,18 +42,18 @@ using namespace cv;
 struct Source : ff_node_t<cv::Mat> {
     const std::string filename;
     Source(const std::string filename):filename(filename) {}
-  
+    
     cv::Mat * svc(cv::Mat *) {
-	VideoCapture cap(filename.c_str()); 
-	if(!cap.isOpened())  {  
-	    std::cout << "Error opening input file" << std::endl;
-	    return EOS;
-	} 
-	for(;;) {
-	    Mat * frame = new Mat();
+        VideoCapture cap(filename.c_str()); 
+        if(!cap.isOpened())  {  
+            std::cout << "Error opening input file" << std::endl;
+            return EOS;
+        } 
+        for(;;) {
+            Mat * frame = new Mat();
 	    if(cap.read(*frame))  ff_send_out(frame);
 	    else {
-		std::cout << "End of stream in input" << std::endl; 
+            std::cout << "End of stream in input" << std::endl; 
 		break;
 	    }
 	}
@@ -64,50 +64,52 @@ struct Source : ff_node_t<cv::Mat> {
 // this stage applys all the filters:  the GaussianBlur filter and the Sobel one, 
 // and it then sends the result to the next stage
 struct Stage1 : ff_node_t<cv::Mat> {
+    Stage1(int filterno):filterno(filterno) {}
     cv::Mat * svc(cv::Mat *frame) {
-	Mat frame1;
-	cv::GaussianBlur(*frame, frame1, cv::Size(0, 0), 3);
-	cv::addWeighted(*frame, 1.5, frame1, -0.5, 0, *frame);
-	cv::Sobel(*frame,*frame,-1,1,0,3);
-	return frame;
-  }
+        if (filterno == 0) return frame;
+
+        Mat frame1;
+        if (filterno >=1)
+            cv::GaussianBlur(*frame, frame1, cv::Size(0, 0), 3);
+        if (filterno >=2)
+            cv::addWeighted(*frame, 1.5, frame1, -0.5, 0, *frame);
+        if (filterno >=3)
+            cv::Sobel(*frame,*frame,-1,1,0,3);
+        return frame;
+    }
+    int filterno=0;
 }; 
 
 // this stage shows the output
 struct Drain: ff_node_t<cv::Mat> {
     Drain(bool ovf):outvideo(ovf) {}
 
-    int svc_init() {
-	if(outvideo) namedWindow("edges",1);
-	return 0; 
-    }
-
     cv::Mat *svc (cv::Mat * frame) {
-	if(outvideo) {
-	    imshow("edges", *frame);
-	    waitKey(30);    // why 30ms here ?
-	} 
-	delete frame;
-	return GO_ON;
+        if(outvideo) {
+            imshow("Parallel", *frame);
+            waitKey(30);    // why 30ms here ?
+        } 
+        delete frame;
+        return GO_ON;
     }
 protected:
     const bool outvideo; 
 }; 
 
 int main(int argc, char *argv[]) {
-    //ffvideo input.mp4 filterno output nw1
     Mat edges;
 
-    if(argc == 1) {
+    if(argc != 5) {
       std::cout << "Usage is: " << argv[0] 
-		<< " input_filename videooutput nw1" 
+		<< " input_filename filterno videooutput nw1" 
 		<< std::endl; 
       return(0); 
     }
     
     // output 
     bool outvideo = false; 
-    if(atoi(argv[2]) == 1) outvideo = true; 
+    int  filterno = atoi(argv[2]);    
+    if (atoi(argv[3]) == 1) outvideo = true; 
     
     // pardegree 
     size_t nw1 = 1;
@@ -121,15 +123,15 @@ int main(int argc, char *argv[]) {
     // adds the second stage (sequential or ordered farm)
     if (nw1 == 1) {
         // the second stage is sequential
-        pipe.add_stage(make_unique<Stage1>());
+        pipe.add_stage(make_unique<Stage1>(filterno));
     } else {
         // the second stage is an ordered task-farm 
         // by default the ordered farm has the collector
-        pipe.add_stage(make_unique<ff_OFarm<cv::Mat> >([nw1]() {
+        pipe.add_stage(make_unique<ff_OFarm<cv::Mat> >([nw1, filterno]() {
 
                     std::vector<std::unique_ptr<ff_node> > W; 
                     for(size_t i=0; i<nw1; i++) 
-                        W.push_back(make_unique<Stage1>());
+                        W.push_back(make_unique<Stage1>(filterno));
                     return W;
                     
                 } ()

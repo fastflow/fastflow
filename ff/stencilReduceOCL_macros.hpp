@@ -525,6 +525,46 @@ static char name[] =\
 "\t        i += gridSize;\n"\
 "\t    }\n"\
 "}\n"
+
+
+
+#define FF_OCL_STENCIL_ELEMFUNC_2D_IO(name,T, outT, height,width,row,col, ...) \
+static char name[] =\
+"kern_" #name "|"\
+#T "|"\
+"\n\n"\
+"#define GET_IN(i,j) (in[((i)*"#width"+(j))-offset])\n"\
+"#define GET_ENV1(i,j) (env1[((i)*"#width"+(j))])\n"\
+#outT " f" #name "(\n"\
+"\t__global " #T "* in,\n"\
+"\tconst uint " #height ",\n"\
+"\tconst uint " #width ",\n"\
+"\tconst int " #row ",\n"\
+"\tconst int " #col ",\n"\
+"\tconst int offset) {\n"\
+"\t   " #__VA_ARGS__";\n"\
+"}\n\n"\
+"__kernel void kern_" #name "(\n"\
+"\t__global " #T  "* input,\n"\
+"\t__global " #outT "* output,\n"\
+"\tconst uint inHeight,\n"\
+"\tconst uint inWidth,\n"\
+"\tconst uint maxItems,\n"\
+"\tconst uint offset,\n"\
+"\tconst uint halo) {\n"\
+"\t    size_t i = get_global_id(0);\n"\
+"\t    size_t ig = i + offset;\n"\
+"\t    size_t r = ig / inWidth;\n"\
+"\t    size_t c = ig % inWidth;\n"\
+"\t    size_t gridSize = get_local_size(0)*get_num_groups(0);\n"\
+"\t    while(i < maxItems)  {\n"\
+"\t        output[i+halo] = f" #name "(input+halo,inHeight,inWidth,r,c,offset);\n"\
+"\t        i += gridSize;\n"\
+"\t    }\n"\
+"}\n"
+
+
+
 #endif
 
 
