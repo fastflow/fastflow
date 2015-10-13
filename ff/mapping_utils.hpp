@@ -76,6 +76,9 @@ typedef unsigned short u_short;
 //#include <Powrprof.h>
 //}
 #endif
+#if defined(__APPLE__) && MAC_OS_X_HAS_AFFINITY
+#include<vector> 
+#endif
 
 /** 
  *  \brief Returns the ID of the calling thread
@@ -364,7 +367,7 @@ static inline ssize_t ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
     // Mac OS does not implement direct pinning of threads onto cores.
     // Threads can be organised in affinity set. Using requested CPU
     // tag for the set. Cores under the same L2 cache are not distinguished. 
-    // Should be called before running the thread.
+    // Should be called before running the thread.   
 #define CACHE_LEVELS 3
 #define CACHE_L2     2
     size_t len;
