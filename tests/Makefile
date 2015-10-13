@@ -50,7 +50,7 @@ CXX 		     = g++ -std=c++11 # -std=c++0x for most of the code
 #CXX		     = clang++
 LINK_OPT             = 
 VERSION              = 
-OPTIMIZE_FLAGS       = -O3 #-DBLOCKING_MODE -DTRACE_FASTFLOW 
+OPTIMIZE_FLAGS       = -O3 #-DBLOCKING_MODE #-DTRACE_FASTFLOW 
 CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall
 CFLAGS               =
 LDFLAGS              = 
