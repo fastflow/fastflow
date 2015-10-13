@@ -5,8 +5,8 @@ include_directories(
 
 
 
-file(MAKE_DIRECTORY "UNBOUNDED_MPMC")
-file(MAKE_DIRECTORY "BOUNDED_MPMC")
+#file(MAKE_DIRECTORY "UNBOUNDED_MPMC")
+#file(MAKE_DIRECTORY "BOUNDED_MPMC")
 
 
 #add_executable( test_mpmc test_mpmc.cpp )
@@ -32,4 +32,5 @@ endforeach( t )
 
 foreach( t ${TESTS} )
     add_test( ${t} ${CMAKE_CURRENT_BINARY_DIR}/${t} )
+    add_test( ${t}_UNBOUND ${CMAKE_CURRENT_BINARY_DIR}/${t}_UNBOUND )
 endforeach( t )
