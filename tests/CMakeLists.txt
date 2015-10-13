@@ -55,10 +55,10 @@ test_lb_affinity
 )
 
 # # tests MPMC for x86 only
-# if ( (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64") OR (
-# CMAKE_SYSTEM_PROCESSOR MATCHES "i386") )
-#   add_subdirectory( mpmc )
-# endif ( )
+if ( (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64") OR (
+ CMAKE_SYSTEM_PROCESSOR MATCHES "i386") )
+   add_subdirectory( mpmc )
+endif ( )
 
 #if  ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 #set (TESTS ${TESTS} ${TESTS_W_OMP})
