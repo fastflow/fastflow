@@ -117,9 +117,9 @@ protected:
 
 #if defined(BLOCKING_MODE)
         for(size_t i=0;i<nworkers;++i) {
-            pthread_mutex_t *m        = NULL;
-            pthread_cond_t  *c        = NULL;
-            atomic_long_t   *counter  = NULL;
+            pthread_mutex_t   *m        = NULL;
+            pthread_cond_t    *c        = NULL;
+            std::atomic_ulong *counter  = NULL;
             if (!workers[i]->init_input_blocking(m,c,counter)) {
                 error("FARM, init input blocking mode for worker %d\n", i);
                 return -1;
@@ -129,9 +129,9 @@ protected:
                 return -1;
             }
         }
-        pthread_mutex_t *m        = NULL;
-        pthread_cond_t  *c        = NULL;
-        atomic_long_t   *counter  = NULL;
+        pthread_mutex_t   *m        = NULL;
+        pthread_cond_t    *c        = NULL;
+        std::atomic_ulong *counter  = NULL;
         if (lb->init_output_blocking(m,c,counter)<0) {
             error("FARM, init output blocking mode for LB\n");
             return -1;
@@ -149,9 +149,9 @@ protected:
         }    
 
         if (lb->masterworker()) {
-            pthread_mutex_t *m        = NULL;
-            pthread_cond_t  *c        = NULL;
-            atomic_long_t   *counter  = NULL;
+            pthread_mutex_t   *m        = NULL;
+            pthread_cond_t    *c        = NULL;
+            std::atomic_ulong *counter  = NULL;
             if (!init_input_blocking(m,c,counter)) {
                 error("FARM, init input blocking mode for master-worker\n");
                 return -1;
@@ -178,26 +178,26 @@ protected:
 
 #if defined(BLOCKING_MODE)
     // consumer
-    virtual inline bool init_input_blocking(pthread_mutex_t *&m,
-                                            pthread_cond_t  *&c,
-                                            atomic_long_t   *&counter) {
+    virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
+                                            pthread_cond_t    *&c,
+                                            std::atomic_ulong *&counter) {
         return lb->init_input_blocking(m,c,counter);
     }
-    virtual inline void set_input_blocking(pthread_mutex_t *&m,
-                                           pthread_cond_t  *&c,
-                                           atomic_long_t   *&counter) {
+    virtual inline void set_input_blocking(pthread_mutex_t   *&m,
+                                           pthread_cond_t    *&c,
+                                           std::atomic_ulong *&counter) {
         lb->set_input_blocking(m,c,counter);
     }    
 
     // producer
-    virtual inline bool init_output_blocking(pthread_mutex_t *&m,
-                                             pthread_cond_t  *&c,
-                                             atomic_long_t   *&counter) {
+    virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
+                                             pthread_cond_t    *&c,
+                                             std::atomic_ulong *&counter) {
         return gt->init_output_blocking(m,c,counter);
     }
-    virtual inline void set_output_blocking(pthread_mutex_t *&m,
-                                            pthread_cond_t  *&c,
-                                            atomic_long_t   *&counter) {
+    virtual inline void set_output_blocking(pthread_mutex_t   *&m,
+                                            pthread_cond_t    *&c,
+                                            std::atomic_ulong *&counter) {
         if (collector && !collector_removed)
             gt->set_output_blocking(m,c,counter);
         else {
@@ -206,13 +206,13 @@ protected:
         }
     }
 
-    virtual inline pthread_mutex_t &get_cons_m()        { return lb->cons_m;}
-    virtual inline pthread_cond_t  &get_cons_c()        { return lb->cons_c;}
-    virtual inline atomic_long_t   &get_cons_counter()  { return lb->cons_counter;}
+    virtual inline pthread_mutex_t   &get_cons_m()        { return lb->cons_m;}
+    virtual inline pthread_cond_t    &get_cons_c()        { return lb->cons_c;}
+    virtual inline std::atomic_ulong &get_cons_counter()  { return lb->cons_counter;}
 
-    virtual inline pthread_mutex_t &get_prod_m()        { return gt->prod_m; }
-    virtual inline pthread_cond_t  &get_prod_c()        { return gt->prod_c; }
-    virtual inline atomic_long_t   &get_prod_counter()  { return gt->prod_counter;}
+    virtual inline pthread_mutex_t   &get_prod_m()        { return gt->prod_m; }
+    virtual inline pthread_cond_t    &get_prod_c()        { return gt->prod_c; }
+    virtual inline std::atomic_ulong &get_prod_counter()  { return gt->prod_counter;}
 #endif /* BLOCKING_MODE */
 
 
@@ -277,9 +277,9 @@ public:
             if (!init_input_blocking(p_cons_m,p_cons_c,p_cons_counter)) {
                 error("FARM, init input blocking mode for accelerator\n");
             }
-            pthread_mutex_t   *m        = NULL;
-            pthread_cond_t    *c        = NULL;
-            atomic_long_t     *counter  = NULL;
+            pthread_mutex_t    *m        = NULL;
+            pthread_cond_t     *c        = NULL;
+            std::atomic_ulong  *counter  = NULL;
             if (!ff_node::init_output_blocking(m,c,counter)) {
                 error("FARM, init output blocking mode for accelerator\n");
             }
@@ -339,7 +339,7 @@ public:
             }
             pthread_mutex_t   *m       = NULL;
             pthread_cond_t    *c       = NULL;
-            atomic_long_t     *counter = NULL;;
+            std::atomic_ulong *counter = NULL;;
             if (!ff_node::init_output_blocking(m,c,counter)) {
                 error("FARM, init output blocking mode for accelerator\n");
             }           
@@ -506,7 +506,7 @@ public:
 #if defined(BLOCKING_MODE)
             pthread_mutex_t   *mtx      = NULL;
             pthread_cond_t    *cond     = NULL;
-            atomic_long_t     *counter  = NULL;           
+            std::atomic_ulong *counter  = NULL;           
             if (!ff_node::init_input_blocking(mtx,cond,counter)) {
                 error("FARM, add_collector, init output blocking mode for accelerator\n");
             }
@@ -549,9 +549,9 @@ public:
         }
 
 #if defined(BLOCKING_MODE)
-        pthread_mutex_t *m        = NULL;
-        pthread_cond_t  *c        = NULL;
-        atomic_long_t   *counter  = NULL;
+        pthread_mutex_t   *m        = NULL;
+        pthread_cond_t    *c        = NULL;
+        std::atomic_ulong *counter  = NULL;
         if (!init_input_blocking(m,c,counter)) {
             error("FARM, wrap_around, init input blocking mode for emitter\n");
             return -1;
@@ -824,11 +824,11 @@ public:
                 if (inbuffer->push(task)) {
 #if defined(BLOCKING_MODE)
                     pthread_mutex_lock(p_cons_m);
-                    if (atomic_long_read(p_cons_counter) == 0)
+                    if ((*p_cons_counter).load() == 0)
                         pthread_cond_signal(p_cons_c);
-                    atomic_long_inc(p_cons_counter);
+                    ++(*p_cons_counter);
                     pthread_mutex_unlock(p_cons_m);
-                    atomic_long_inc(&prod_counter);
+                    ++prod_counter;
 #endif
                     return true;
                 }
@@ -836,7 +836,7 @@ public:
                 losetime_out(ticks);
 #else
                 pthread_mutex_lock(&prod_m);
-                while(atomic_long_read(&prod_counter) >= (inbuffer->buffersize())) {
+                while(prod_counter.load() >= (inbuffer->buffersize())) {
                     pthread_cond_wait(&prod_c, &prod_m);
                 }
                 pthread_mutex_unlock(&prod_m);
@@ -886,14 +886,14 @@ public:
         if (gt->pop_nb(task)) {
             // NOTE: the queue between collector and the main thread is forced to be unbounded
             // therefore the collector cannot be blocked for the condition buffer full ! 
-            atomic_long_dec(&gt->prod_counter);
-            atomic_long_dec(&cons_counter);
+            --(gt->prod_counter);
+            --cons_counter;
 
             if ((*task != (void *)FF_EOS)) return true;
             else return false;
         } else {
             pthread_mutex_lock(&cons_m);
-            while(atomic_long_read(&cons_counter) == 0) {
+            while(cons_counter.load() == 0) {
                 pthread_cond_wait(&cons_c, &cons_m);
             }
             pthread_mutex_unlock(&cons_m);
@@ -1583,38 +1583,38 @@ private:
 
 #if defined(BLOCKING_MODE)
     // consumer
-    virtual inline bool init_input_blocking(pthread_mutex_t *&m,
-                                            pthread_cond_t  *&c,
-                                            atomic_long_t   *&counter) {
+    virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
+                                            pthread_cond_t    *&c,
+                                            std::atomic_ulong *&counter) {
         return (this->getlb())->init_input_blocking(m,c,counter);
     }
-    virtual inline void set_input_blocking(pthread_mutex_t *&m,
-                                           pthread_cond_t  *&c,
-                                           atomic_long_t   *&counter) {
+    virtual inline void set_input_blocking(pthread_mutex_t   *&m,
+                                           pthread_cond_t    *&c,
+                                           std::atomic_ulong *&counter) {
         (this->getlb())->set_input_blocking(m,c,counter);
         E->set_input_blocking(m,c,counter);
     }    
 
     // producer
-    virtual inline bool init_output_blocking(pthread_mutex_t *&m,
-                                             pthread_cond_t  *&c,
-                                             atomic_long_t   *&counter) {
+    virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
+                                             pthread_cond_t    *&c,
+                                             std::atomic_ulong *&counter) {
         return (this->getgt())->init_output_blocking(m,c,counter);
     }
-    virtual inline void set_output_blocking(pthread_mutex_t *&m,
-                                            pthread_cond_t  *&c,
-                                            atomic_long_t   *&counter) {
+    virtual inline void set_output_blocking(pthread_mutex_t   *&m,
+                                            pthread_cond_t    *&c,
+                                            std::atomic_ulong *&counter) {
         (this->getgt())->set_output_blocking(m,c,counter);
         C->set_output_blocking(m,c,counter);
     }
 
-    virtual inline pthread_mutex_t &get_cons_m()        { return (this->getlb())->cons_m;}
-    virtual inline pthread_cond_t  &get_cons_c()        { return (this->getlb())->cons_c;}
-    virtual inline atomic_long_t   &get_cons_counter()  { return (this->getlb())->cons_counter;}
+    virtual inline pthread_mutex_t   &get_cons_m()        { return (this->getlb())->cons_m;}
+    virtual inline pthread_cond_t    &get_cons_c()        { return (this->getlb())->cons_c;}
+    virtual inline std::atomic_ulong &get_cons_counter()  { return (this->getlb())->cons_counter;}
 
-    virtual inline pthread_mutex_t &get_prod_m()        { return (this->getgt())->prod_m; }
-    virtual inline pthread_cond_t  &get_prod_c()        { return (this->getgt())->prod_c; }
-    virtual inline atomic_long_t   &get_prod_counter()  { return (this->getgt())->prod_counter;}
+    virtual inline pthread_mutex_t   &get_prod_m()        { return (this->getgt())->prod_m; }
+    virtual inline pthread_cond_t    &get_prod_c()        { return (this->getgt())->prod_c; }
+    virtual inline std::atomic_ulong &get_prod_counter()  { return (this->getgt())->prod_counter;}
 #endif /* BLOCKING_MODE */
 
     
