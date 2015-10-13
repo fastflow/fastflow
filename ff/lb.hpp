@@ -82,80 +82,80 @@ protected:
 #if defined(BLOCKING_MODE)
     inline void put_done(int id) {
         pthread_mutex_lock(&workers[id]->get_cons_m());
-        if (atomic_long_read(&workers[id]->get_cons_counter()) == 0) {
+        if ((workers[id]->get_cons_counter()).load() == 0) {
             pthread_cond_signal(&workers[id]->get_cons_c());
         }
-        atomic_long_inc(&(workers[id]->get_cons_counter()));
+        ++((workers[id]->get_cons_counter()));
         pthread_mutex_unlock(&workers[id]->get_cons_m());       
-        atomic_long_inc(&prod_counter);
+        ++prod_counter;
     }
 
     inline void pop_done(ff_node *node) {
         if (!node) {
             pthread_mutex_lock(p_prod_m);
-            if (atomic_long_read(p_prod_counter) >= buffer->buffersize()) {
+            if ((*p_prod_counter).load() >= buffer->buffersize()) {
                 pthread_cond_signal(p_prod_c);
             }
-            atomic_long_dec(p_prod_counter);
+            --(*p_prod_counter);
             pthread_mutex_unlock(p_prod_m);
         } else {
             pthread_mutex_lock(&node->get_prod_m());
-            if (atomic_long_read(&(node->get_prod_counter())) >= node->get_out_buffer()->buffersize()) {
+            if ((node->get_prod_counter()).load() >= node->get_out_buffer()->buffersize()) {
                 pthread_cond_signal(&node->get_prod_c());
             }
-            atomic_long_dec(&(node->get_prod_counter()));
+            --(node->get_prod_counter());
             pthread_mutex_unlock(&node->get_prod_m());
         }
-        atomic_long_dec(&cons_counter);                         
+        --cons_counter;                         
     }
-
-    inline bool init_input_blocking(pthread_mutex_t *&m,
-                                            pthread_cond_t  *&c,
-                                            atomic_long_t   *&counter) {
-        if (atomic_long_read(&cons_counter) == (unsigned long)-1) {
+    
+    inline bool init_input_blocking(pthread_mutex_t   *&m,
+                                    pthread_cond_t    *&c,
+                                    std::atomic_ulong *&counter) {
+        if (cons_counter.load() == (unsigned long)-1) {
             if (pthread_mutex_init(&cons_m, NULL) != 0) return false;
             if (pthread_cond_init(&cons_c, NULL) != 0) {
                 pthread_mutex_destroy(&cons_m);
                 return false;
             }
-            atomic_long_set(&cons_counter,0);
+            cons_counter.store(0);
         } 
         m = &cons_m,  c = &cons_c, counter = &cons_counter;
         return true;
     }
-    inline void set_input_blocking(pthread_mutex_t *&m,
-                                           pthread_cond_t  *&c,
-                                           atomic_long_t   *&counter) {
+    inline void set_input_blocking(pthread_mutex_t   *&m,
+                                   pthread_cond_t    *&c,
+                                   std::atomic_ulong *&counter) {
         p_prod_m = m,  p_prod_c = c,  p_prod_counter = counter;
     }    
-
+    
     // producer
-    inline bool init_output_blocking(pthread_mutex_t *&m,
-                                             pthread_cond_t  *&c,
-                                             atomic_long_t   *&counter) {
-        if (atomic_long_read(&prod_counter) == (unsigned long)-1) {
+    inline bool init_output_blocking(pthread_mutex_t   *&m,
+                                     pthread_cond_t    *&c,
+                                     std::atomic_ulong *&counter) {
+        if (prod_counter.load() == (unsigned long)-1) {
             if (pthread_mutex_init(&prod_m, NULL) != 0) return false;
             if (pthread_cond_init(&prod_c, NULL) != 0) {
                 pthread_mutex_destroy(&prod_m);
                 return false;
             }
-            atomic_long_set(&prod_counter,0);
+            prod_counter.store(0);
         } 
         m = &prod_m, c = &prod_c, counter = &prod_counter;
         return true;
     }
-    inline void set_output_blocking(pthread_mutex_t *&m,
-                                    pthread_cond_t  *&c,
-                                    atomic_long_t   *&counter) {
+    inline void set_output_blocking(pthread_mutex_t   *&m,
+                                    pthread_cond_t    *&c,
+                                    std::atomic_ulong *&counter) {
         assert(1==0);
     }
-
-    virtual inline pthread_mutex_t &get_cons_m()       { return cons_m;}
-    virtual inline pthread_cond_t  &get_cons_c()       { return cons_c;}
-    virtual inline atomic_long_t   &get_cons_counter() { return cons_counter;}
-
+    
+    virtual inline pthread_mutex_t   &get_cons_m()       { return cons_m;}
+    virtual inline pthread_cond_t    &get_cons_c()       { return cons_c;}
+    virtual inline std::atomic_ulong &get_cons_counter() { return cons_counter;}
+    
 #endif
-
+    
     /**
      * \brief Pushes EOS to the worker
      *
@@ -193,7 +193,7 @@ protected:
      * \parm n TODO
      */
     virtual inline void callback(int n) { }
-
+    
     /**
      * \brief Defines callback
      *
@@ -312,7 +312,7 @@ protected:
                 }
             } while(1);
             pthread_mutex_lock(&prod_m);
-            while(atomic_long_read(&prod_counter) >= (running*workers[0]->get_in_buffer()->buffersize())) {
+            while(prod_counter.load() >= (running*workers[0]->get_in_buffer()->buffersize())) {
                 pthread_cond_wait(&prod_c, &prod_m);
             }
             pthread_mutex_unlock(&prod_m);
@@ -370,7 +370,7 @@ protected:
             losetime_in();
 #else
             pthread_mutex_lock(&cons_m);
-            while (atomic_long_read(&cons_counter) == 0) {
+            while (cons_counter.load() == 0) {
                 pthread_cond_wait(&cons_c, &cons_m);
             }
             pthread_mutex_unlock(&cons_m);
@@ -396,8 +396,8 @@ protected:
                 losetime_in();
             }
 #else
-                pthread_mutex_lock(&cons_m);
-                while (atomic_long_read(&cons_counter) == 0) {
+            pthread_mutex_lock(&cons_m);
+            while (cons_counter.load() == 0) {
                     pthread_cond_wait(&cons_c, &cons_m);
                 }
                 pthread_mutex_unlock(&cons_m);
@@ -412,7 +412,7 @@ protected:
         } 
 #else
             pthread_mutex_lock(&cons_m);
-            while (atomic_long_read(&cons_counter) == 0) {
+            while (cons_counter.load() == 0) {
                 pthread_cond_wait(&cons_c, &cons_m);
             }
             pthread_mutex_unlock(&cons_m);
@@ -478,8 +478,8 @@ public:
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
 #if defined(BLOCKING_MODE)
-        atomic_long_set(&cons_counter, -1);
-        atomic_long_set(&prod_counter, -1);
+        cons_counter.store(-1);
+        prod_counter.store(-1);
         p_prod_m = NULL, p_prod_c = NULL, p_prod_counter = NULL;
 #endif
 
@@ -657,16 +657,16 @@ public:
             FFTRACE(++taskcnt);
 
             pthread_mutex_lock(&workers[id]->get_cons_m());
-            if (atomic_long_read(&workers[id]->get_cons_counter()) == 0)
+            if ((workers[id]->get_cons_counter()).load() == 0)
                 pthread_cond_signal(&workers[id]->get_cons_c());
-            atomic_long_inc(&(workers[id]->get_cons_counter()));
+            ++(workers[id]->get_cons_counter());
             pthread_mutex_unlock(&workers[id]->get_cons_m());            
-            atomic_long_inc(&prod_counter);
+            ++prod_counter;
         } else {
             pthread_mutex_lock(&prod_m);
             // here we do not use while
             // the thread can be woken up more frequently
-            if (atomic_long_read(&prod_counter) >= workers[id]->get_in_buffer()->buffersize())
+            if (prod_counter.load() >= workers[id]->get_in_buffer()->buffersize())
                 pthread_cond_wait(&prod_c, &prod_m);
             pthread_mutex_unlock(&prod_m);     
             goto _retry;
@@ -708,7 +708,7 @@ public:
                 retry.pop_back();
             } else {
                 pthread_mutex_lock(&prod_m);
-                while(atomic_long_read(&prod_counter) >= (retry.size()*workers[0]->get_in_buffer()->buffersize()))
+                while(prod_counter.load() >= (retry.size()*workers[0]->get_in_buffer()->buffersize()))
                     pthread_cond_wait(&prod_c, &prod_m);
                 pthread_mutex_unlock(&prod_m); 
             }
@@ -1283,19 +1283,19 @@ private:
  protected:
 #if defined(BLOCKING_MODE)
     // for the input queue
-    pthread_mutex_t cons_m;
-    pthread_cond_t  cons_c;
-    atomic_long_t   cons_counter;
+    pthread_mutex_t    cons_m;
+    pthread_cond_t     cons_c;
+    std::atomic_ulong  cons_counter;
 
     // for synchronizing with the previous multi-output stage
-    pthread_mutex_t *p_prod_m;
-    pthread_cond_t  *p_prod_c;
-    atomic_long_t   *p_prod_counter;
+    pthread_mutex_t   *p_prod_m;
+    pthread_cond_t    *p_prod_c;
+    std::atomic_ulong *p_prod_counter;
 
     // for the output queue
-    pthread_mutex_t prod_m;
-    pthread_cond_t  prod_c;
-    atomic_long_t   prod_counter;
+    pthread_mutex_t    prod_m;
+    pthread_cond_t     prod_c;
+    std::atomic_ulong  prod_counter;
 #endif    
 
 #if defined(TRACE_FASTFLOW)
