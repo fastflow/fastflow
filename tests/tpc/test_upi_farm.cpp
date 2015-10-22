@@ -85,7 +85,7 @@ struct Task: public baseTPCTask<Task> {
 
         // the input array is copied only the first task
         setInPtr(t->in, t->sizein, 
-                 first_time_flag?BitFlags::COPYTO:BitFlags::DONTCOPY, 
+                 first_time_flag?BitFlags::COPYTO:BitFlags::DONTCOPYTO, 
                  !first_time_flag?BitFlags::REUSE:BitFlags::DONTREUSE, 
                  BitFlags::DONTRELEASE);
 

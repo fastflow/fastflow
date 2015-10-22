@@ -31,7 +31,6 @@
  *
  */
 #include<iostream>
-#include<ff/farm.hpp>
 
 #if !defined(FF_TPC)
 // needed to enable the TPC FastFlow run-time
@@ -91,7 +90,7 @@ struct TaskCopy: public baseTPCTask<TaskCopy> {
         setInPtr(&t->sizein, 1, 
                  BitFlags::COPYTO, BitFlags::DONTREUSE, BitFlags::RELEASE);
         setInPtr(t->in, t->sizein, 
-                 BitFlags::COPYTO, BitFlags::DONTREUSE, BitFlags::DONTRELEASE);
+                 BitFlags::COPYTO, BitFlags::DONTREUSE, BitFlags::RELEASE);
         setInPtr(&t->sizeout, 1, 
                  BitFlags::COPYTO, BitFlags::DONTREUSE, BitFlags::RELEASE);
         // neither copied back nor released
@@ -105,15 +104,15 @@ struct TaskCopy: public baseTPCTask<TaskCopy> {
 
 
 struct Task: public baseTPCTask<Task> {
-    Task():in(nullptr),sizein(0),start(0),stop(0),result(0) {}
+    Task():in(nullptr),sizein(0),start(0),stop(0),result(nullptr) {}
               
-    Task(uint32_t *in, uint32_t sizein, uint32_t start, uint32_t stop):
-        in(in),sizein(sizein),start(start),stop(stop),result(0) {}
+    Task(uint32_t *in, uint32_t sizein, uint32_t start, uint32_t stop, uint32_t *result):
+        in(in),sizein(sizein),start(start),stop(stop),result(result) {}
 
     void setTask(const Task *t) { 
 
         setKernelId(KERNEL2_ID);
-        
+
         setInPtr(&t->start, 1, 
                  BitFlags::COPYTO, BitFlags::DONTREUSE, BitFlags::DONTRELEASE);
         setInPtr(&t->stop,  1, 
@@ -125,7 +124,7 @@ struct Task: public baseTPCTask<Task> {
         setInPtr(t->in, t->sizein, 
                  BitFlags::DONTCOPYTO, BitFlags::REUSE, BitFlags::DONTRELEASE);
 
-        setOutPtr(&t->result, 1, 
+        setOutPtr(t->result, 1, 
                   BitFlags::COPYBACK, BitFlags::DONTREUSE, BitFlags::DONTRELEASE);
 
     }
@@ -133,7 +132,7 @@ struct Task: public baseTPCTask<Task> {
     uint32_t *in;
     uint32_t  sizein;
     uint32_t  start, stop; 
-    uint32_t  result;
+    uint32_t *result;
 };
 
 
@@ -162,28 +161,50 @@ void check(uint32_t to, uint32_t from, uint32_t result) {
 /* ----------------------------- */
 
 // RePaRa code:
-//   
+//   const size_t size = 256;
+//   uint32_t waits[size];
+//   uint32_t waits2[size] {0};
+//   std::vector<uint32_t> results(4,0);
+//
 //   [[rpr::kernel, rpr::in(waits,size) rpr::out(waits2),
 //     rpr::target(FPGA), rpr::keep(waits2) ]]
 //   kernel2(size, waits, size, waits2);
 //
-//   [[rpr::pipeline, rpr::stream(waits2) ]]
-//   for(int i=10; i<200; ++i) {
+//   [[rpr::kernel, rpr::async, 
+//     rpr::in(waits2), rpr::out(results),
+//     rpr::target(FPGA) ]]
+//   kernel1(0, 64, waits2, &results[0]);
 //
-//     [[rpr::kernel, rpr::in(waits2, i), rpr::out(result),
-//       rpr::farm, rpr::target(FPGA) ]]
-//     kernel1(i, i+50, waits2, result);
+//   [[rpr::kernel, rpr::async, 
+//     rpr::in(waits2), rpr::out(results),
+//     rpr::target(FPGA) ]]
+//   kernel1(64, 128, waits2, &results[1]);
 //
-//     [[rpr::kernel, in(result), rpr::target(CPU) ]]
-//     check(i, i+50, result);
+//   [[rpr::kernel, rpr::async, 
+//     rpr::in(waits2), rpr::out(results),
+//     rpr::target(FPGA) ]]
+//   kernel1(128, 192, waits2, &results[2]);
 //
-//   }
+//   [[rpr::kernel, rpr::async,
+//     rpr::in(waits2), rpr::out(results),
+//     rpr::target(FPGA) ]]
+//   kernel1(192, 255, waits2, &results[3]);
+//
+//   [[rpr::kernel, rpr::sync]];
+//
+//   check(0,   64, results[0]);
+//   check(64, 128, results[1]);
+//   check(128,192, results[2]);
+//   check(192,255, results[3]);   
+//      
 //
 int main() {
     const size_t size = 256;
     uint32_t waits[size];
     uint32_t waits2[size] {0};
-    for (int j = 0; j < size; ++j)
+    std::vector<uint32_t> results(4,0);
+
+    for (size_t j = 0; j < size; ++j)
         waits[j] = j + 1;
 
     // device memory allocator shared between the two kernels
@@ -194,52 +215,43 @@ int main() {
     ff_tpcNode_t<TaskCopy> copy(k1, &alloc);
     /* ------------------------------ */
 
-    /* ---   pipeline and farm    --- */
-    // task-farm scheduler (Emitter)
-    struct Scheduler: ff_node_t<Task> {        
-        Scheduler(uint32_t *waits, size_t size):waits(waits),size(size) {}
-        Task *svc(Task *) {
-            for(int i=10;i<120;++i)
-                ff_send_out(new Task(waits, size, i, i+50));
-            return EOS;                
-        }
-        uint32_t *waits;
-        size_t    size;
-    } sched(waits2, size);
+    std::vector<Task>                tasks;
+    std::vector<ff_tpcNode_t<Task> > nodes;
 
-    // task-farm Collector
-    struct Checker: ff_node_t<Task> {
-        Task *svc(Task *in) {
-            check(in->start, in->stop, in->result);
-            return GO_ON;
-        }
-    } checker;
+    for(size_t i=0; i<4; ++i) 
+        tasks.push_back(Task(waits,size, i*64, i*64+64, &results[i]));
+    for(size_t i=0;i<4; ++i)
+        nodes.push_back(ff_tpcNode_t<Task>(tasks[i], &alloc));
 
-
-    // this is the farm instance having 4 replicas of the tpcnode
-    // the emitter of the farm is the scheduler (producing the stream)
-    // the collector receives and check the results
-    ff_Farm<> farm([&]() {
-            const size_t nworkers = 4;
-            std::vector<std::unique_ptr<ff_node> > W;
-            for(size_t i=0;i<nworkers;++i)
-                W.push_back(make_unique<ff_tpcNode_t<Task> >(&alloc));
-            return W;
-        } (), sched, checker);
     /* ------------------------------ */
-
 
     // running first kernel
     if (copy.run_and_wait_end()<0) {
         error("running first kernel\n");
         return -1;        
     }
-    // running pipeline
-    if (farm.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
+
+    // running the four tpcnode instances asynchronously
+    for(size_t i=0; i<4; ++i) {
+        if (nodes[i].run()) {
+            error("running nodes %d\n", i);
+            return -1;
+        }
     }
 
+    for(size_t i=3; i>0; --i) {
+        if (nodes[i].wait()<0) {
+            error("waiting nodes %d\n", i);
+            return -1;
+        }
+    }
+
+    // checking the results
+    check(0,   64, results[0]);
+    check(64, 128, results[1]);
+    check(128,192, results[2]);
+    check(192,255, results[3]);
+        
     return 0;
 }
     

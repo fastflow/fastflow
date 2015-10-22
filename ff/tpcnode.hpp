@@ -38,7 +38,7 @@
  */
 
 /*  Author: Massimo Torquati torquati@di.unipi.it
- *  - Selptember 2015 first version
+ *  - September 2015 first version
  *
  */
 
@@ -63,27 +63,45 @@ namespace internal {
      *  iovector-like data structure plus memory flags
      */
     struct Arg_t {
-        Arg_t():ptr(NULL),size(0),copy(false),reuse(false),release(false) {}
+        Arg_t():
+            ptr(NULL),size(0),
+            byvalue(false),
+            copy(false),reuse(false),release(false) {}
+        Arg_t(void *ptr, size_t size):
+            ptr(ptr),size(size),
+            byvalue(true),
+            copy(true),reuse(false),release(false) {}
         Arg_t(void *ptr, size_t size, bool copy, bool reuse, bool release):
-            ptr(ptr),size(size),copy(copy),reuse(reuse),release(release) {}
-        
-        void     *ptr;
-        size_t    size;
-        bool      copy,reuse,release;
+            ptr(ptr),size(size),
+            byvalue(false),
+            copy(copy),reuse(reuse),release(release) {}
+
+        void        *ptr;
+        size_t       size;
+         const bool   byvalue;
+        const bool   copy,reuse,release;
     };
 } // namespace internal
 
 
 /**
- * a task to be executed by a TPC based node.
+ * Interface of the task to be executed by a TPC-based node.
  */
 template<typename TaskT_in, typename TaskT_out=TaskT_in>
 class baseTPCTask {
+    template <typename IN_t, typename TPC_t, typename OUT_t> 
+    friend class ff_tpcNode_t;
 public:
-
+    
+    /**
+     * Flags used in the  \ref setInPtr and \ref setOutPtr methods for 
+     * providing commands to the run-time concerning H2D and D2H data transfers 
+     * and device memory allocation.
+     *
+     */
     enum class BitFlags {
-        COPYTO, 
-        DONTCOPYTO, 
+        COPYTO,              
+        DONTCOPYTO,          
         REUSE, 
         DONTREUSE, 
         RELEASE, 
@@ -92,42 +110,55 @@ public:
         DONTCOPYBACK
     };
 
-    baseTPCTask():kernel_id(0) {}
+    /** 
+     *  Default constructor.
+     */
+    baseTPCTask():kernel_id(-1), retvar{nullptr,0} {}
+
+    /** 
+     *  Destructor.
+     */
     virtual ~baseTPCTask() { }
     
-    /* -------------------------------------------- */ 	
-
-    // the user must override this method using:
-    // - setInPtr for setting the host-pointer to input data
-    // - setOutPtr for setting the host-pointer to output data
-    // - other methods from classes derived from baseTPCTask
-    // NOTE: order of set*Ptr calls matters! TODO refine interface?
+    /**
+     * Provides to the run-time the task to be computed. 
+     * This method must be overridden.
+     *
+     * @param t input task
+     * 
+     */ 
     virtual void setTask(const TaskT_in *t) = 0;
     
-    // the user may overrider this method
-    // called at the end of the svc. It may be used to 
-    // perform per-task host memory cleanup (i.e. releasing the host memory 
-    // previously allocated in the setTask function) or to execute a 
-    // post-elaboration phase
+    /**
+     * Releases the input task just computed.
+     * This method is called at the of the task computation.
+     * It may be used to  perform per-task host memory cleanup 
+     * (i.e. releasing the host memory previously allocated in the setTask 
+     * function) or to execute a  post-elaboration phase
+     *
+     * @param t input task
+     * @return the output task
+     */
     virtual TaskT_out *releaseTask(TaskT_in *t) { return t; }
 
-    /* -------------------------------------------- */ 	
-
     /**
-     * set the host-pointer to the input parameter.
-     *
-     * @param _inPtr the host-pointer
-     * @param sizeIn the number of elements in the input array (bytesize=size*sizeof(ptrT))
-     * @param copy TODO
-     * @param reuse TODO
-     * @param release TODO
+     * Sets the host-pointer to the input parameter.
+     * The order of calls determin the order of parametes.
+     * 
+     * @param inPtr the host-pointer
+     * @param size the number of elements in the input array (bytesize=size*sizeof(ptrT))
+     * @param copy if BitFlags::COPYTO is set the data will be copied into the device
+     * @param reuse if BitFlags::REUSE is set then the run-time looks for a previously 
+     * allocated device handle associated with the inPtr host pointer
+     * @param release if BitFlags::RELEASE is set the device memory will be released 
+     * at the end of the kernel execution
      */
     template <typename ptrT>
-    void setInPtr(const ptrT* _inPtr, size_t size, 
+    void setInPtr(const ptrT* inPtr, size_t size, 
                   const BitFlags copy   =BitFlags::COPYTO, 
                   const BitFlags reuse  =BitFlags::DONTREUSE, 
                   const BitFlags release=BitFlags::DONTRELEASE)  { 
-        internal::Arg_t arg(const_cast<ptrT*>(_inPtr),size*sizeof(ptrT),
+        internal::Arg_t arg(const_cast<ptrT*>(inPtr),size*sizeof(ptrT),
                             copy==BitFlags::COPYTO,
                             reuse==BitFlags::REUSE,
                             release==BitFlags::RELEASE);
@@ -135,10 +166,20 @@ public:
     }
 
     /**
-     * set the host-pointer to the output parameter
+     * Sets the host-pointer to the input parameter that is passed by-value.
+     *
+     * @param inPtr the host-pointer
+     */
+    template <typename ptrT>
+    void setInVal(const ptrT* inPtr) {
+        internal::Arg_t arg(const_cast<ptrT*>(inPtr), sizeof(ptrT));
+        tpcInput.push_back(arg);
+    }
+
+    /**
+     * Sets the host-pointer to the output parameter
      *
      * @see setInPtr()
-     * @param copyback TODO
      */
     template <typename ptrT>
     void setOutPtr(const ptrT* _outPtr, size_t size, 
@@ -152,25 +193,47 @@ public:
         tpcOutput.push_back(arg);
     }
 
+    /**
+     * Sets the kernel id
+     * 
+     * @param id function id
+     */
     void setKernelId(const tpc_func_id_t id) { kernel_id = id; }
 
-    /* -------------------------------------------- */ 	
+    /** 
+     * Should be used only if the kernel executed on the
+     * device is a function. It allows to get back the return value.
+     *
+     * @param r host variable where the return value is copied
+     */
+    template<typename TresT>
+    void setReturnVar(TresT *const r) { 
+        retvar.first = r; 
+        retvar.second= sizeof(TresT); 
+    }
+
+protected:
 
     const std::vector<internal::Arg_t> &getInputArgs()  const { return tpcInput; }
     const std::vector<internal::Arg_t> &getOutputArgs() const { return tpcOutput;}
-    const tpc_func_id_t       getKernelId()   const { return kernel_id;}
+    void * getReturnVar(size_t &size)     const { 
+        size=retvar.second;
+        return retvar.first; 
+    }
+    const tpc_func_id_t  getKernelId()    const { return kernel_id;}
 
-    /* -------------------------------------------- */ 	
     void resetTask() {
         tpcInput.resize(0);
         tpcOutput.resize(0);
+        retvar.first = nullptr;
+        retvar.second= 0;
     }
-
 
 protected:
     tpc_func_id_t                kernel_id;
     std::vector<internal::Arg_t> tpcInput;
     std::vector<internal::Arg_t> tpcOutput;
+    std::pair<void*,size_t>      retvar;
 };
 
 
@@ -182,10 +245,6 @@ protected:
  *  \brief TPC specialisation of the ff_node class
  *
  *  Implements the node that is serving as TPC device.
- *
- * TODO: reuse memory flag management !  ( priorirty very high )
- * TODO: async data transfer to from the device  ( priority medium )
- * TODO : in-place data structures, i.e. outPtr is equal to inPtr !!!! ( priority very high )
  *
  *
  */
@@ -201,10 +260,14 @@ public:
     typedef IN_t  in_type;
     typedef OUT_t out_type;
 
+
     /**
-     * \brief Constructor
-     *
+     * Constructor used for stream-based computation.
      * It builds the TPC node for the device.
+     * 
+     * @param alloc the allocator to use for allocating 
+     * device memory. By default it is used an internal
+     * private allocator.
      *
      */
     ff_tpcNode_t(ff_tpcallocator *alloc = nullptr):
@@ -218,6 +281,14 @@ public:
 
         // TODO: management of multiple TPC devices
     };  
+
+    /**
+     * Constructor used for the "oneshot" mode, i.e. non 
+     * stream-based computations.
+     *
+     * It builds the TPC node for the device.
+     *
+     */
     ff_tpcNode_t(const TPC_t &task, ff_tpcallocator *alloc = nullptr):
         tpcId(-1),deviceId(-1), my_own_allocator(false), oneshot(true),oneshotTask(&task),allocator(alloc) {
         ff_node::skipfirstpop(true);
@@ -231,30 +302,50 @@ public:
 
         // TODO: management of multiple TPC devices
     };  
+    /**
+     * Destructor
+     *
+     */
     virtual ~ff_tpcNode_t()  {
-        allocator->releaseAllBuffers(dev_ctx);
         if (my_own_allocator && allocator != nullptr) {
+            allocator->releaseAllBuffers(dev_ctx);
             delete allocator;
             allocator = nullptr;
         }
     }
-
+    /**
+     * Starts the execution of the device node. 
+     * A thread executing the object instance is spawned.
+     *
+     * @return 0 success, -1 otherwise
+     */ 
     virtual int run(bool = false) {
         return ff_node::run();
     }
-    
+    /**
+     * Waits for termination of the thread associated 
+     * to the object.
+     *
+     * @return 0 success, -1 otherwise
+     */    
     virtual int wait() {
         return ff_node::wait();
     }
 
     virtual int run_and_wait_end() {
-        if (run() < 0)
-            return -1;
-        if (wait() < 0)
-            return -1;
+        if (nodeInit()<0) return -1;   
+        svc(nullptr);                  
         return 0;
     }
-    
+    /**
+     * Starts the execution of the device node. 
+     * A thread executing the object instance is spawned if 
+     * no previous thread was associated to the object.
+     * The thread will be put to sleep at the end of 
+     * the kernel execution.
+     * 
+     * @return 0 success, -1 otherwise
+     */
     virtual int run_then_freeze() {
         if (ff_node::isfrozen()) {
             ff_node::thaw(true);
@@ -262,20 +353,33 @@ public:
         }
         return ff_node::freeze_and_run();
     }
+
+    /**
+     * Waits for the termination of the kernel
+     * execution. The associated thread is put
+     * to sleep and not destroyed.
+     *
+     * @return 0 success, -1 otherwise
+     */
     virtual int wait_freezing() {
         return ff_node::wait_freezing();
     }
     
-    const TPC_t* getTask() const {
-        return &Task;
-    }
-    
-    // used to set tasks when in onshot mode
+    /**
+     *  Allows to set a new task when in "oneshot" mode.
+     *
+     * @param task  task to be computed
+     */
     void setTask(const IN_t &task) {
         Task.resetTask();
         Task.setTask(&task);
     }
 
+    // returns the internal task
+    const TPC_t* getTask() const {
+        return &Task;
+    }
+    
     // returns the kind of node
     virtual fftype getFFType() const   { return TPC_WORKER; }
 
@@ -290,7 +394,7 @@ protected:
         if (tpcId<0) {
             tpcId   = tpcEnvironment::instance()->getTPCID();
 
-            if (deviceId == -1) { // the user didn't set any specific device
+            if (deviceId == (tpc_dev_id_t)-1) { // the user didn't set any specific device
                 dev_ctx = tpcEnvironment::instance()->getTPCDevice();
             } else 
                 abort(); // TODO;
@@ -316,11 +420,13 @@ protected:
             return GO_ON;
         }
         tpc_res_t res;
-        tpc_job_id_t j_id = tpc_device_acquire_job_id(dev_ctx, f_id, TPC_ACQUIRE_JOB_ID_BLOCKING);
+        tpc_job_id_t j_id = tpc_device_acquire_job_id(dev_ctx, f_id, TPC_DEVICE_ACQUIRE_JOB_ID_BLOCKING);
         
         const std::vector<internal::Arg_t> &inV  = Task.getInputArgs();
         const std::vector<internal::Arg_t> &outV = Task.getOutputArgs();
-        
+        size_t ret_val_size=0;
+        void *ret_val = Task.getReturnVar(ret_val_size);
+
         if (inHandles.size() == 0)  inHandles.resize(inV.size());
         if (outHandles.size() == 0) outHandles.resize(outV.size());
 
@@ -329,43 +435,47 @@ protected:
 
         for(size_t i=0;i<inV.size();++i) {
 
-            tpc_handle_t handle = inHandles[i].handle;  // previous handle
-            if (inHandles[i].size < inV[i].size) {
+            if ( ! inV[i].byvalue ) {
+                tpc_handle_t handle = inHandles[i].handle;  // previous handle
+                if (inHandles[i].size < inV[i].size) {
+                    
+                    if (inHandles[i].handle) { // not first time
+                        assert(!inV[i].reuse);
+                        allocator->releaseBuffer(inHandles[i].ptr, dev_ctx, inHandles[i].handle);
+                    }
+                    if (inV[i].reuse) {
+                        handle = allocator->createBufferUnique(inV[i].ptr, dev_ctx, TPC_DEVICE_ALLOC_FLAGS_NONE, inV[i].size);
+                    } else {
+                        handle = allocator->createBuffer(inV[i].ptr, dev_ctx, TPC_DEVICE_ALLOC_FLAGS_NONE, inV[i].size);
+                    }
+                    
+                    if (!handle) {
+                        error("ff_tpcNode::svc unable to allocate memory on the TPC device (IN)");
+                        inHandles[i].size = 0, inHandles[i].ptr = nullptr, inHandles[i].handle = 0;
+                        return (oneshot?NULL:GO_ON);
+                    }
+                    inHandles[i].size = inV[i].size, inHandles[i].ptr = inV[i].ptr, inHandles[i].handle = handle;
+                }
+                
+                if (inV[i].copy) {
+                    res = tpc_device_copy_to(dev_ctx, inV[i].ptr, handle, inV[i].size, TPC_DEVICE_COPY_BLOCKING);
+                    if (res != TPC_SUCCESS) {
+                        error("ff_tpcNode::svc unable to copy data into the device\n");
+                        return (oneshot?NULL:GO_ON);
+                    }
+                } 
+                
+                res = tpc_device_job_set_arg(dev_ctx, j_id, arg_idx, sizeof(handle), &handle);
 
-                if (inHandles[i].handle) { // not first time
-                    assert(!inV[i].reuse);
-                    allocator->releaseBuffer(inHandles[i].ptr, dev_ctx, inHandles[i].handle);
-                }
-                if (inV[i].reuse) {
-                    handle = allocator->createBufferUnique(inV[i].ptr, dev_ctx, 0, inV[i].size);
-                } else {
-                    handle = allocator->createBuffer(inV[i].ptr, dev_ctx, 0, inV[i].size);
-                }
-
-                if (!handle) {
-                    error("ff_tpcNode::svc unable to allocate memory on the TPC device (IN)");
-                    inHandles[i].size = 0, inHandles[i].ptr = nullptr, inHandles[i].handle = 0;
-                    return (oneshot?NULL:GO_ON);
-                }
-                inHandles[i].size = inV[i].size, inHandles[i].ptr = inV[i].ptr, inHandles[i].handle = handle;
+            } else { // argument passed by-value
+                res = tpc_device_job_set_arg(dev_ctx, j_id, arg_idx, inV[i].size, inV[i].ptr);
             }
             
-            if (inV[i].copy) {
-                res = tpc_device_copy_to(dev_ctx, inV[i].ptr, handle, inV[i].size, TPC_COPY_BLOCKING);
-                if (res != TPC_SUCCESS) {
-                    error("ff_tpcNode::svc unable to copy data into the device\n");
-                    return (oneshot?NULL:GO_ON);
-                }
-            } 
-
-            res = tpc_device_job_set_arg(dev_ctx, j_id, arg_idx, sizeof(handle), &handle);
             if (res != TPC_SUCCESS) {
                 error("ff_tpcNode::svc unable to set argument for the device (IN)\n");
                 return (oneshot?NULL:GO_ON);
             }
-
             ++arg_idx;
-
         }
 
         for(size_t i=0;i<outV.size();++i) {
@@ -386,9 +496,9 @@ protected:
                     }
 
                     if (outV[i].reuse) {
-                        handle = allocator->createBufferUnique(ptr, dev_ctx, 0, outV[i].size);
+                        handle = allocator->createBufferUnique(ptr, dev_ctx, TPC_DEVICE_ALLOC_FLAGS_NONE, outV[i].size);
                     } else {
-                        handle = allocator->createBuffer(ptr, dev_ctx, 0, outV[i].size);
+                        handle = allocator->createBuffer(ptr, dev_ctx, TPC_DEVICE_ALLOC_FLAGS_NONE, outV[i].size);
                     }
                     
                     if (!handle) {
@@ -407,13 +517,14 @@ protected:
             }
             ++arg_idx;
         }
-        res = tpc_device_job_launch(dev_ctx, j_id, TPC_JOB_LAUNCH_BLOCKING);
+        res = tpc_device_job_launch(dev_ctx, j_id, TPC_DEVICE_JOB_LAUNCH_BLOCKING);
         if (res != TPC_SUCCESS) {
             error("ff_tpcNode::svc error launching kernel on TPC device\n");
             return (oneshot?NULL:GO_ON);
         }
-        arg_idx=inV.size();
 
+        // reset the arg_idx to the initial value for the out parameters
+        arg_idx=inV.size();
         
         // TODO: async data transfer
         for(size_t i=0;i<outV.size();++i) {
@@ -424,7 +535,7 @@ protected:
                 return (oneshot?NULL:GO_ON);
             }
             if (outV[i].copy) {
-                res = tpc_device_copy_from(dev_ctx, handle, outV[i].ptr, outV[i].size, TPC_COPY_BLOCKING);
+                res = tpc_device_copy_from(dev_ctx, handle, outV[i].ptr, outV[i].size, TPC_DEVICE_COPY_BLOCKING);
                 if (res != TPC_SUCCESS) {
                     error("ff_tpcNode::svc unable to copy data back from the device\n");
                     return (oneshot?NULL:GO_ON);
@@ -441,6 +552,15 @@ protected:
             ++arg_idx;
         }
 
+        // now check if we have to get back the return value (if the kernel is a function)
+        if (ret_val && ret_val_size>0) {
+            res = tpc_device_job_get_return(dev_ctx, j_id, ret_val_size, ret_val);
+            if (res != TPC_SUCCESS) {
+                error("ff_tpcNode::svc error getting back the return value of the kernel function\n");
+                return (oneshot?NULL:GO_ON);
+            }
+        }
+            
         // By default the buffers are not released !
         for(size_t i=0;i<inV.size();++i) {
             if (inV[i].release) {
