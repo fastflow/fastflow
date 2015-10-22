@@ -52,7 +52,8 @@ public:
     tpc_handle_t createBuffer(const void *key, 
                               tpc_dev_ctx_t *dev_ctx, tpc_device_alloc_flag_t flags, size_t size) {
 
-        tpc_handle_t handle = tpc_device_alloc(dev_ctx, size, flags);
+        tpc_handle_t handle = 0;
+        tpc_device_alloc(dev_ctx, &handle, size, flags);
         if (handle) allocated[dev_ctx][key] = handle;
         return handle;
     }
@@ -82,7 +83,7 @@ public:
     void releaseBuffer(const void *key, tpc_dev_ctx_t *dev_ctx, tpc_handle_t handle) {
         assert(allocated.find(dev_ctx) != allocated.end());
         assert(allocated[dev_ctx].find(key) != allocated[dev_ctx].end());
-        tpc_device_free(dev_ctx, handle);
+        tpc_device_free(dev_ctx, handle, TPC_DEVICE_ALLOC_FLAGS_NONE);
         allocated[dev_ctx].erase(key);
     }
 
@@ -93,7 +94,7 @@ public:
         inner_map_t::iterator b=it->second.begin();
         inner_map_t::iterator e=it->second.end();
         while(b != e) {
-            tpc_device_free(dev_ctx, b->second);
+            tpc_device_free(dev_ctx, b->second, TPC_DEVICE_ALLOC_FLAGS_NONE);
             ++b;
         }
         it->second.clear();
