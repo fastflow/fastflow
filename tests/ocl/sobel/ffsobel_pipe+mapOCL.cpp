@@ -174,11 +174,10 @@ struct Kernel: ff_nodeSelector<Task> {
             if (cols*rows > SMALL_SIZE) selectedDevice = 1;
             else selectedDevice = 0;
         }             
-        // selectNode(selectedDevice);
-        // return ff_nodeSelector<Task>::svc(in);
+        selectNode(selectedDevice);
 
         unsigned long x = getusec();
-        in = reinterpret_cast<Task*>(getNode(selectedDevice)->svc(in));
+        in = ff_nodeSelector<Task>::svc(in);
         unsigned long y = getusec();
         printf("(%ld,%ld) %ld (us) selected=%s\n", 
                in->env.rows, in->env.cols, y-x, selectedDevice?"GPU":"CPU");

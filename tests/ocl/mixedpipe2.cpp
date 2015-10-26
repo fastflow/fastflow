@@ -144,7 +144,7 @@ struct Task: public baseOCLTask<Task, float> {
  *
  */
 struct Kernel: ff_nodeSelector<Task> {
-
+    using selector = ff_nodeSelector<Task>;
     // simple function to select the device id from the command string
     int getDeviceId() {
         std::string cmd(command);
@@ -163,23 +163,27 @@ struct Kernel: ff_nodeSelector<Task> {
         kernelId(kernelId),command(command),NVECTORS(NVECTORS),arraySize(arraySize),C(&C),R(&R) {}
 
     Task *svc(Task *in) {
-        int selectedDevice = getDeviceId();  // select the device id from the command string        
+        int selectedDevice = getDeviceId();  // select the device id from the command string
+        
+        // set the selected device
+        selectNode(selectedDevice);
+
         switch (kernelId) {
         case 1: {
             in->kernelId = 1;
-            in = reinterpret_cast<Task*>(getNode(selectedDevice)->svc(in));
+            in = selector::svc(in);
             return in;                
         } break;
         case 2: {
             in->C = C;                
             in->kernelId = 2;
-            in = reinterpret_cast<Task*>(getNode(selectedDevice)->svc(in));
+            in = selector::svc(in);
             return in;            
         } break;
         case 3: {
             in->R = R;                
             in->kernelId = 3;
-            in = reinterpret_cast<Task*>(getNode(selectedDevice)->svc(in));
+            in = selector::svc(in);
 
             // no delete here
 
