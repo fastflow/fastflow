@@ -137,13 +137,16 @@ public:
         return WORKER;
     }
 
+    const size_t numNodes() const { return devices.size(); }
+
     int run(bool = false) { return ff_node::run();  }
 
     int wait() { return ff_node::wait(); }
     
     int run_and_wait_end() {
-        if (run() < 0)	return -1;
-        if (wait() < 0) return -1;
+        if (nodeInit() < 0)	return -1;
+        svc(nullptr);
+        nodeEnd();
         return 0;
     }
             

@@ -992,6 +992,38 @@ public:
         if (out) out->reset();
     }
 
+#if defined(FF_REPARA)
+
+    struct rpr_measure_t {
+        size_t time_before, time_after;
+        size_t energy;
+        size_t bytesIn, bytesOut;
+    };
+    
+    typedef typename std::vector<std::vector<std::pair<int, std::vector<rpr_measure_t> > > > RPR_measures_vector;
+
+    /** 
+     *  Returns input data size
+     */
+    virtual size_t rpr_get_sizeIn()  const { return 0; }
+
+    /** 
+     *  Returns output data size
+     */
+    virtual size_t rpr_get_sizeOut() const { return 0; }
+
+    /**
+     *  Returns all measures collected by the node.
+     *  The structure is:
+     *    - the outermost vector is greater that 1 if the node is a pipeline or a farm
+     *    - the second level vectors contains info for each device. The device is identified
+     *      by the first entry of the std::pair. 
+     *    - the innermost vector contains the measurments
+     */
+    virtual RPR_measures_vector rpr_get_measures() { return RPR_measures_vector(); }
+
+#endif
+
 protected:
 
     ff_node():in(0),out(0),myid(-1),CPUId(-1),
