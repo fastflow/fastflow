@@ -375,6 +375,10 @@ public:
             w.push_back(nodes_list[last]);
     }
 
+    /**
+     * returns the stages added to the pipeline
+     */
+    const svector<ff_node*>& getStages() const { return nodes_list; }
 
     /**
      * \brief Run the pipeline skeleton asynchronously
