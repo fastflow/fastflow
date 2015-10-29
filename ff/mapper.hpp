@@ -167,6 +167,8 @@ public:
 	 *
 	 * \return TODO
 	 */
+
+    
 	void setMappingList(const char* str) {
 		rrcnt = 0;        // reset rrcnt
 
@@ -204,6 +206,35 @@ public:
 		CList = List;
 	}
 
+    void setMappingList(const std::vector<size_t> &mapping) {
+		rrcnt = 0;        // reset rrcnt
+
+		if ((mapping.size() > (mask+1)) || (mapping.size()==0)) {
+            error("Invalid pinng vector: ignoring it\n");
+			return; // use the previous mapping list
+        }
+		svector<int> List(mask + 1);
+        for (size_t i=0; i<mapping.size(); ++i) {
+			auto cpuid = mapping[i];
+            if (cpuid > (num_cores - 1)) {
+				error("setMapping, invalid cpu id in the mapping string\n");
+				return;
+            }
+            List.push_back(cpuid);
+        }  
+        
+		unsigned int size = (unsigned int) List.size();
+		if (!isPowerOf2(size)) {
+			size = nextPowerOf2(size);
+			List.reserve(size);
+		}
+		mask = size - 1;
+		for (size_t i = List.size(), j = 0; i < size; ++i, j++)
+			List.push_back(List[j]);
+		CList = List;
+	}
+
+    
 	/**
 	 *  Returns the next CPU id using a round-robin mapping access on the
 	 *  mapping list. This is clearly a raound robind scheduling!
