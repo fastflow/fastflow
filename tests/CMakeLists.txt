@@ -116,10 +116,10 @@ endif (NOT CUDA_FOUND)
 # Distributed
 
 find_package(ZeroMQ)
-if(NOT ZeroMQ_FOUND)
+if(NOT (ZMQ_FOUND))
   message (WARNING " 0mq not found: cannot configure distributed mode")
-else(NOT ZeroMQ_FOUND)
+else(NOT (ZMQ_FOUND))
   add_subdirectory( d )
-endif(NOT ZeroMQ_FOUND)
+endif(NOT (ZMQ_FOUND))
 
 
