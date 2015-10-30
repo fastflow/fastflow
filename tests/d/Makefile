@@ -34,11 +34,11 @@ CXX 		     = g++
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O3 -finline-functions #-DBLOCKING_MODE
-CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall
+CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall -std=c++11
 CFLAGS               =
 LDFLAGS              = -L ${ZMQ_PATH}/lib
 INCS                 = -I../.. -I${ZMQ_PATH}/include
-LIBS                 = -lzmq -lpthread -lrt
+LIBS                 = -lzmq -lpthread #-lrt
 ARCH                 = -march=$(shell uname -m)
 OS   		     = $(shell uname)
 ifeq ($(ARCH),-march=x86_64)
