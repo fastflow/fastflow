@@ -4,7 +4,7 @@ CXXFLAGS = -w  # disable warnings
 FF_ROOT  = ../../
 CUDAFLAGS= #-arch=compute_30 -code=sm_30  -ccbin /usr/bin/clang++ -Xcompiler -stdlib=libstdc++
 LDFLAGS  = -L ${CUDA_ROOT}/lib64  
-OPTFLAGS = -DCHECK -g -G -std=c++11#-O3
+OPTFLAGS = -DCHECK -g -std=c++11#-O3
 LIBS     = -lcudart -lpthread #-lcuda
 INCLUDES = -I$(FF_ROOT)
 
