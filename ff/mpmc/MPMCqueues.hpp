@@ -40,12 +40,14 @@
 #include <ff/allocator.hpp>
 #include <ff/platforms/platform.h>
 #include <ff/mpmc/asm/abstraction_dcas.h>
+#include <ff/spin-lock.hpp>
 
+ 
 /*
  * NOTE: You should define NO_STD_C0X if you want to avoid c++0x and c++11
  *
  */
-
+ 
 #if ( (!defined(NO_STD_C0X))  &&  !(__cplusplus >= 201103L))
 #pragma message ("Define -DNO_STD_C0X to use a non c++0x/c++11 compiler")
 #endif
