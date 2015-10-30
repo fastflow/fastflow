@@ -90,13 +90,89 @@ _INLINE void spin_unlock(lock_t l) { l->clear(std::memory_order_release);}
 #endif
 
 
+#if defined(__GNUC__) || defined(_MSC_VER) || defined(__APPLE__)
+/*
+ * CLH spin-lock is a FIFO lock implementation which uses only the 
+ * atomic swap operation. More info can be found in:  
+ *
+ * "Building FIFO and Priority-Queuing Spin Locks from Atomic Swap"
+ * by Travis S. Craig in Techical Report 93-02-02 University of Washington
+ * 
+ * The following code is based on the implementation presented
+ * in the synch1.0.1 (http://code.google.com/p/sim-universal-construction/) 
+ * by Nikolaos D. Kallimanis (released under the New BSD licence).
+ *
+ */
 
-#if 0 // This is the old implementation
+ALIGN_TO_PRE(CACHE_LINE_SIZE) struct CLHSpinLock {
+    typedef union CLHLockNode {
+        bool locked;
+        char align[CACHE_LINE_SIZE];
+    } CLHLockNode;
+    
+    volatile ALIGN_TO_PRE(CACHE_LINE_SIZE) CLHLockNode *Tail                    ALIGN_TO_POST(CACHE_LINE_SIZE);
+    volatile ALIGN_TO_PRE(CACHE_LINE_SIZE) CLHLockNode *MyNode[MAX_NUM_THREADS] ALIGN_TO_POST(CACHE_LINE_SIZE);
+    volatile ALIGN_TO_PRE(CACHE_LINE_SIZE) CLHLockNode *MyPred[MAX_NUM_THREADS] ALIGN_TO_POST(CACHE_LINE_SIZE);
+
+    CLHSpinLock():Tail(NULL) {
+        for (int j = 0; j < MAX_NUM_THREADS; j++) {
+            MyNode[j] = NULL;
+            MyPred[j] = NULL;
+        }
+    }
+    ~CLHSpinLock() {
+        if (Tail) freeAlignedMemory((void*)Tail);
+        for (int j = 0; j < MAX_NUM_THREADS; j++) 
+            if (MyNode[j]) freeAlignedMemory((void*)(MyNode[j]));
+    }
+    int init() {
+        if (Tail != NULL) return -1;
+        Tail = (CLHLockNode*)getAlignedMemory(CACHE_LINE_SIZE, sizeof(CLHLockNode));
+        Tail->locked = false;
+        for (int j = 0; j < MAX_NUM_THREADS; j++) 
+            MyNode[j] = (CLHLockNode*)getAlignedMemory(CACHE_LINE_SIZE, sizeof(CLHLockNode));
+        
+        return 0;
+    }
+
+    // FIX
+    inline void spin_lock(const int pid) {
+        MyNode[pid]->locked = true;
+#if defined(_MSC_VER) // To be tested
+    MyPred[pid] = (CLHLockNode *) __sync_lock_test_and_set((void *volatile *)&Tail, (void *)MyNode[pid]);
+#else //defined(__GNUC__)
+    MyPred[pid] = (CLHLockNode *) __sync_lock_test_and_set((long *)&Tail, (long)MyNode[pid]);
+#endif
+    while (MyPred[pid]->locked == true) ;
+    }
+    
+    inline void spin_unlock(const int pid) {
+        MyNode[pid]->locked = false;
+        MyNode[pid]= MyPred[pid];
+    }
+    
+} ALIGN_TO_POST(CACHE_LINE_SIZE);
+    
+typedef CLHSpinLock clh_lock_t[1];
+
+_INLINE void init_unlocked(clh_lock_t l) { l->init();}
+_INLINE void init_locked(clh_lock_t l) { abort(); }
+_INLINE void spin_lock(clh_lock_t l, const int pid) { l->spin_lock(pid); }
+_INLINE void spin_unlock(clh_lock_t l, const int pid) { l->spin_unlock(pid); }
+
+#endif 
+
+#if 0
+
+// -------------------------------------
+// OLD IMPLEMENTATION -- TO BE DELETED
+// -------------------------------------
+
 // REW -- documentation
-#include <ff/sysdep.h>
-#include <ff/platforms/platform.h>
-#include <ff/config.hpp>
-#include <ff/atomic/abstraction_dcas.h>
+//#include <ff/sysdep.h>
+//#include <ff/platforms/platform.h>
+//#include <ff/config.hpp>
+#include <ff/mpmc/asm/abstraction_dcas.h>
 
 // NOTE: A better check would be needed !
 // both GNU g++ and Intel icpc define __GXX_EXPERIMENTAL_CXX0X__ if -std=c++0x or -std=c++11 is used 
@@ -172,77 +248,7 @@ static __always_inline void spin_unlock(lock_t lock)
 
 
 
-#if defined(__GNUC__) || defined(_MSC_VER) || defined(__APPLE__)
-/*
- * CLH spin-lock is a FIFO lock implementation which uses only the 
- * atomic swap operation. More info can be found in:  
- *
- * "Building FIFO and Priority-Queuing Spin Locks from Atomic Swap"
- * by Travis S. Craig in Techical Report 93-02-02 University of Washington
- * 
- * The following code is based on the implementation presented
- * in the synch1.0.1 (http://code.google.com/p/sim-universal-construction/) 
- * by Nikolaos D. Kallimanis (released under the New BSD licence).
- *
- */
 
-ALIGN_TO_PRE(CACHE_LINE_SIZE) struct CLHSpinLock {
-    typedef union CLHLockNode {
-        bool locked;
-        char align[CACHE_LINE_SIZE];
-    } CLHLockNode;
-    
-    volatile ALIGN_TO_PRE(CACHE_LINE_SIZE) CLHLockNode *Tail                    ALIGN_TO_POST(CACHE_LINE_SIZE);
-    volatile ALIGN_TO_PRE(CACHE_LINE_SIZE) CLHLockNode *MyNode[MAX_NUM_THREADS] ALIGN_TO_POST(CACHE_LINE_SIZE);
-    volatile ALIGN_TO_PRE(CACHE_LINE_SIZE) CLHLockNode *MyPred[MAX_NUM_THREADS] ALIGN_TO_POST(CACHE_LINE_SIZE);
-
-    CLHSpinLock():Tail(NULL) {
-        for (int j = 0; j < MAX_NUM_THREADS; j++) {
-            MyNode[j] = NULL;
-            MyPred[j] = NULL;
-        }
-    }
-    ~CLHSpinLock() {
-        if (Tail) freeAlignedMemory((void*)Tail);
-        for (int j = 0; j < MAX_NUM_THREADS; j++) 
-            if (MyNode[j]) freeAlignedMemory((void*)(MyNode[j]));
-    }
-    int init() {
-        if (Tail != NULL) return -1;
-        Tail = (CLHLockNode*)getAlignedMemory(CACHE_LINE_SIZE, sizeof(CLHLockNode));
-        Tail->locked = false;
-        for (int j = 0; j < MAX_NUM_THREADS; j++) 
-            MyNode[j] = (CLHLockNode*)getAlignedMemory(CACHE_LINE_SIZE, sizeof(CLHLockNode));
-        
-        return 0;
-    }
-
-    // FIX
-    inline void spin_lock(const int pid) {
-        MyNode[pid]->locked = true;
-#if defined(_MSC_VER) // To be tested
-    MyPred[pid] = (CLHLockNode *) __sync_lock_test_and_set((void *volatile *)&Tail, (void *)MyNode[pid]);
-#else //defined(__GNUC__)
-    MyPred[pid] = (CLHLockNode *) __sync_lock_test_and_set((long *)&Tail, (long)MyNode[pid]);
-#endif
-    while (MyPred[pid]->locked == true) ;
-    }
-    
-    inline void spin_unlock(const int pid) {
-        MyNode[pid]->locked = false;
-        MyNode[pid]= MyPred[pid];
-    }
-    
-} ALIGN_TO_POST(CACHE_LINE_SIZE);
-    
-typedef CLHSpinLock clh_lock_t[1];
-
-_INLINE void init_unlocked(clh_lock_t l) { l->init();}
-_INLINE void init_locked(clh_lock_t l) { abort(); }
-_INLINE void spin_lock(clh_lock_t l, const int pid) { l->spin_lock(pid); }
-_INLINE void spin_unlock(clh_lock_t l, const int pid) { l->spin_unlock(pid); }
-
-#endif 
 
 // NOTE: A better check would be needed !
 // both GNU g++ and Intel icpc define __GXX_EXPERIMENTAL_CXX0X__ if -std=c++0x or -std=c++11 is used 
@@ -341,6 +347,6 @@ _INLINE void spin_unlock(lock_t l) {
 } // namespace ff
 #endif
 
-#endif
+#endif // 0
 
 #endif /* FF_SPINLOCK_HPP */
