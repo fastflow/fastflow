@@ -65,15 +65,19 @@ endif ( )
 #endif ( )
 
 foreach( t ${TESTS} )
-    add_executable( ${t} ${t}.cpp)
+    add_executable( ${t}_NONBLOCKING ${t}.cpp)
+    add_executable(${t}_BLOCKING ${t}.cpp)
+    set_target_properties (${t}_BLOCKING PROPERTIES COMPILE_DEFINITIONS "BLOCKING_MODE")
 endforeach( t )
 
 foreach( t ${TESTS} )
-    target_link_libraries( ${t} ${CMAKE_THREAD_LIBS_INIT} )
+    target_link_libraries( ${t}_NONBLOCKING ${CMAKE_THREAD_LIBS_INIT} )
+    target_link_libraries( ${t}_BLOCKING ${CMAKE_THREAD_LIBS_INIT} )
 endforeach( t )
 
 foreach( t ${TESTS} )
-    add_test( ${t} ${CMAKE_CURRENT_BINARY_DIR}/${t} )
+    add_test( ${t}_NONBLOCKING ${CMAKE_CURRENT_BINARY_DIR}/${t} )
+    add_test( ${t}_BLOCKING ${CMAKE_CURRENT_BINARY_DIR}/${t} )
 endforeach( t )
 
 #test with special compilation parameters
