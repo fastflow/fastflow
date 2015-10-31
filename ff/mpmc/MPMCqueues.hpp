@@ -530,7 +530,7 @@ protected:
 
 };
     
-#endif // USE_STD_C0X
+
 
 
 /*! 
@@ -885,15 +885,18 @@ public:
 
     // insert method, it never fails if data is not NULL
     inline bool push(void * const data) {
+        //long q = (1 + enqueue.fetch_add(1)) % pool.size();
         long q = atomic_long_inc_return(&enqueue) % pool.size();
         bool r = pool[q].push(data);
         if (r) atomic_long_inc(&count);
+        //if (r) count.fetch_add(1);
         return r;
     }
 
     // extract method, it returns false if the queue is empty
     inline bool  pop(void ** data) {      
         if (!atomic_long_read(&count))  return false; // empty
+        //if (!count.load()) return false;
 #if !defined(MULTI_MPMC_RELAX_FIFO_ORDERING)
         unsigned long bk = BACKOFF_MIN;
         //
@@ -901,10 +904,11 @@ public:
         //
         long q, q1;
         do {
-            q  = atomic_long_read(&dequeue), q1 = atomic_long_read(&enqueue);            
+            q  = atomic_long_read(&dequeue), q1 = atomic_long_read(&enqueue);
+            //q = dequeue.load(); q1 = enqueue.load();
             if (q > q1) return false;
             if (CAS((volatile atom_t *)&dequeue, (atom_t)(q+1), (atom_t)q) == (atom_t)q) break;
-
+            //if(dequeue.compare_exchange_strong(<#long &__e#>, <#long __d#>)
             // exponential delay with max value
             for(volatile unsigned i=0;i<bk;++i) ;
             bk <<= 1;
@@ -914,6 +918,7 @@ public:
         q %= pool.size(); 
         if (pool[q].pop(data)) {
             atomic_long_dec(&count);
+            //count.fetch_sub(1);
             return true;
         }
         return false;
@@ -966,7 +971,7 @@ protected:
 
 
 
-
+#endif // USE_STD_C0X
 
 
 
