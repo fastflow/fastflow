@@ -751,10 +751,6 @@ public:
 /* ---------------------- experimental code -------------------------- */
 
 
-#if 1 //!defined(__APPLE__)
-/*
- *
- */
 
 class multiSWSR {
 protected:
@@ -837,7 +833,6 @@ protected:
     CLHSpinLock *CLock;    
     size_t   mask;
 };
-#endif //__APPLE__
 
 
 /*
@@ -860,16 +855,20 @@ public:
     enum {DEFAULT_POOL_SIZE=4};
 
     scalableMPMCqueue() {
-        enqueue.store(0);
-        count.store(0);
+        //enqueue.store(0);
+        //count.store(0);
+        atomic_long_set(&enqueue,0);
+        atomic_long_set(&count,0);
 
 #if !defined(MULTI_MPMC_RELAX_FIFO_ORDERING)
         // NOTE: dequeue must start from 1 because enqueue is incremented
         //       using atomic_long_inc_return which first increments and than
         //       return the value.
-        dequeue.store(1);
+        //dequeue.store(1);
+        atomic_long_set(&dequeue,1);
 #else
-        dequeue.store(0);
+        //dequeue.store(0);
+        atomic_long_set(&dequeue,0);
 #endif
     }
     
@@ -938,11 +937,14 @@ public:
         return true;
     }
 private:
-    std::atomic<long> enqueue;
+    // std::atomic<long> enqueue;
+    ff::atomic_long_t enqueue;
     long padding1[longxCacheLine-sizeof(std::atomic<long>)];
-    std::atomic<long> dequeue;
+    //std::atomic<long> dequeue;
+    ff::atomic_long_t dequeue;
     long padding2[longxCacheLine-sizeof(std::atomic<long>)];
-    std::atomic<long> count;
+    //std::atomic<long> count;
+    ff::atomic_long_t count;
     long padding3[longxCacheLine-sizeof(std::atomic<long>)];
 protected:
     std::vector<Q> pool;
