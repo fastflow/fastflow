@@ -132,8 +132,8 @@ int main(int argc,  char * argv[]) {
         farm.run_then_freeze();  
         std::cout << "[Main] Farm accelerator started\n";
     
-        for (int j=0;j<streamlen;j++) {
-            int * ii = new int(j);
+        for (ssize_t j=0;j<streamlen;j++) {
+            ssize_t * ii = new ssize_t(j);
             // Here offloading computation onto the farm
             farm.offload(ii); 
         }
