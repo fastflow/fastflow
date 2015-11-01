@@ -206,7 +206,7 @@ set(FFHEADERS_D
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "ppc")
 message(WARNING "Pinning on Power8 currently is not default" )
-
+ADD_DEFINITIONS(-DNO_DEFAULT_MAPPING)
 endif (CMAKE_SYSTEM_PROCESSOR MATCHES "ppc")
 
 # Examples currently not tested on arm
