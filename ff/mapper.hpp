@@ -33,6 +33,7 @@
 #include <ff/svector.hpp>
 #include <ff/utils.hpp>
 #include <ff/mapping_utils.hpp>
+#include <vector>
 
 #if defined(FF_CUDA) 
 #include <cuda.h>

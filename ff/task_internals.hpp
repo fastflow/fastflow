@@ -392,7 +392,7 @@ public:
         }
 #endif            
         
-        LOWER_TH = std::max(1024, TASK_PER_WORKER*maxnw); //FIX: check for deadlock problems !!!
+        LOWER_TH = (std::max)(1024, TASK_PER_WORKER*maxnw); //FIX: check for deadlock problems !!!
         UPPER_TH = LOWER_TH+TASK_PER_WORKER;
     }
     virtual ~TaskFScheduler() {

@@ -57,7 +57,7 @@ int main(int argc, char * argv[]) {
     int arraySize= 10000000;
     int nworkers = 3;
     int NTIMES   = 5;
-    int CHUNKSIZE= std::min(10000, arraySize/nworkers);
+    int CHUNKSIZE= (std::min)(10000, arraySize/nworkers);
     if (argc>1) {
         if (argc<3) {
             printf("use: %s arraysize nworkers [ntimes] [CHUNKSIZE]\n", argv[0]);

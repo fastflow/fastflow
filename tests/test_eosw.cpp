@@ -113,12 +113,12 @@ int main() {
     First first;
     Last  last;
     Emitter E;
-    Collector C(2);;
-    ff_Farm<long,long> farm([]() { 
+    Collector C(2);
+    ff_Farm<long,long> farm(  [nworkers]() { 
 	    std::vector<std::unique_ptr<ff_node> > W;
 	    for(size_t i=0;i<nworkers;++i)  W.push_back(make_unique<Worker>());
 	    return W;
-	}(), E, C);
+	} () , E, C);
     ff_Pipe<> pipe(first,farm,last);
     pipe.run_then_freeze();
     pipe.wait();

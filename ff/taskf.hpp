@@ -102,11 +102,11 @@ public:
              const size_t maxTasks=DEFAULT_OUTSTANDING_TASKS, 
              const int ondemand_buffer=0):
         ff_farm<>(true, 
-                  std::max(maxTasks, (size_t)(MAX_NUM_THREADS*8)),
-                  std::max(maxTasks, (size_t)(MAX_NUM_THREADS*8)),
+                  (std::max)(maxTasks, (size_t)(MAX_NUM_THREADS*8)),
+                  (std::max)(maxTasks, (size_t)(MAX_NUM_THREADS*8)),
                   true, maxnw, true),
         farmworkers(maxnw),ntasks(0),
-        outstandingTasks(std::max(maxTasks, (size_t)(MAX_NUM_THREADS*8))),taskscounter(0) {
+        outstandingTasks((std::max)(maxTasks, (size_t)(MAX_NUM_THREADS*8))),taskscounter(0) {
         
         TASKS.resize(outstandingTasks); 
         std::vector<ff_node *> w;

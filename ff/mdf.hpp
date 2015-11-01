@@ -42,7 +42,7 @@
  */
 
 //VS12
-#ifndef WIN32
+//#ifndef WIN32
 
 #include <functional>
 #include <tuple>
@@ -234,7 +234,7 @@ public:
         if (nw > ff_numCores())
             error("ff_mdf: setNumWorkers: too much workers, setting num worker to %d\n", 
                   ff_numCores());         
-        farmworkers=std::min(ff_numCores(),nw); 
+        farmworkers=(std::min)(ff_numCores(),nw); 
     }	
     void setThreshold(size_t th=0) {} // FIX: 
 	
@@ -269,5 +269,5 @@ protected:
 
 } // namespace
 
-#endif //VS12
+//#endif //VS12
 #endif /* FF_MDF_HPP */

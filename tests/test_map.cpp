@@ -36,6 +36,7 @@
  *
  */
 
+#include <vector>
 #include <ff/config.hpp>
 #if !defined(HAS_CXX11_VARIADIC_TEMPLATES)
 #define HAS_CXX11_VARIADIC_TEMPLATES 1
@@ -45,19 +46,20 @@
 #include <ff/farm.hpp>
 #include <ff/map.hpp>
 
+
 using namespace ff;
 const long MYSIZE = 100;
 
-typedef std::vector<long> ff_task_t;
+typedef  std::vector<long> ff_task_t;
 
-struct mapWorker: ff_Map<ff_task_t> {
-    ff_task_t *svc(ff_task_t*) {
+class mapWorker : ff_Map<ff_task_t> {
+    ff_task_t *svc(ff_task_t *in) {
         ff_task_t *A = new ff_task_t(MYSIZE);
        
         // this is the parallel_for provided by the ff_Map class
         parallel_for(0,A->size(),[&A](const long i) { 
                 A->operator[](i)=i;
-            },std::min(3,(int)ff_realNumCores()));
+		}, std::min(3, (int)ff_realNumCores()));
         ff_send_out(A);
         return EOS;
     }
