@@ -78,6 +78,8 @@ endforeach( t )
 foreach( t ${TESTS} )
     add_test( ${t}_NONBLOCKING ${CMAKE_CURRENT_BINARY_DIR}/${t}_NONBLOCKING )
     add_test( ${t}_BLOCKING ${CMAKE_CURRENT_BINARY_DIR}/${t}_BLOCKING )
+    set_tests_properties ( ${t}_NONBLOCKING PROPERTIES TIMEOUT 180)
+    set_tests_properties ( ${t}_BLOCKING PROPERTIES TIMEOUT 180)
 endforeach( t )
 
 #test with special compilation parameters
