@@ -76,8 +76,8 @@ foreach( t ${TESTS} )
 endforeach( t )
 
 foreach( t ${TESTS} )
-    add_test( ${t}_NONBLOCKING ${CMAKE_CURRENT_BINARY_DIR}/${t} )
-    add_test( ${t}_BLOCKING ${CMAKE_CURRENT_BINARY_DIR}/${t} )
+    add_test( ${t}_NONBLOCKING ${CMAKE_CURRENT_BINARY_DIR}/${t}_NONBLOCKING )
+    add_test( ${t}_BLOCKING ${CMAKE_CURRENT_BINARY_DIR}/${t}_BLOCKING )
 endforeach( t )
 
 #test with special compilation parameters
