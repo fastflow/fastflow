@@ -36,7 +36,6 @@
 
 #include <ff/farm.hpp>
 #include <ff/selector.hpp>  
-#include "test_nodeselector.h"
 using namespace ff;
 
 // first kernel 
@@ -72,7 +71,7 @@ int main() {
     ff_Farm<> farm([farmworkers]() {
 	    std::vector<std::unique_ptr<ff_node> > W;
 	    for(size_t i=0;i<farmworkers;++i)
-		W.push_back(make_unique<ff_nodeSelector<long> >(make_unique<kernel1>(), make_unique<kernel2>()));
+		W.push_back(make_unique<ff_nodeSelector<long>>(make_unique<kernel1>(), make_unique<kernel2>()));
 	    return W;
 	} (), E);
     farm.remove_collector();
