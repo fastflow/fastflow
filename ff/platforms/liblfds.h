@@ -95,10 +95,9 @@ typedef unsigned long int     atom_t;
 #define _InterlockedCompareExchangePointer(destination, exchange, compare) _InterlockedCompareExchange((volatile long *) destination, (long) exchange, (long) compare)
 #endif
 
-
-#if (defined __unix__ && (defined __GNUC__ || defined __llvm__) ) 
+#if (defined __unix__ )
 #if !defined(_XOPEN_SOURCE)
-#define _XOPEN_SOURCE 700 // or 600
+#define _XOPEN_SOURCE 600 // or 600
 #endif
 #include <assert.h>
 #include <stdio.h>
@@ -106,7 +105,7 @@ typedef unsigned long int     atom_t;
 #define INLINE                  inline
 #define ALIGN_TO_PRE(alignment)
 #define ALIGN_TO_POST(alignment)        __attribute__( (aligned(alignment)) )
-#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
+#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)))
 #endif
 
 #if ((defined __GNUC__ || defined __llvm__) && defined __unix__ && defined __x86_64__)
