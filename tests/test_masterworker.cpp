@@ -56,7 +56,7 @@ using namespace ff;
 
 struct W: ff_node {
     void *svc(void *task){
-        printf("W(%ld) got task %ld\n", get_my_id(), *(long*)task);
+        std::cout << "W(" << get_my_id() << ") got task " << (*(ssize_t*) task) << "\n";
         return task;
     }
 };
@@ -135,6 +135,7 @@ int main(int argc,  char * argv[]) {
         for (ssize_t j=0;j<streamlen;j++) {
             ssize_t * ii = new ssize_t(j);
             // Here offloading computation onto the farm
+			std::cout << "[Main] Offloading " << *ii << "\n";
             farm.offload(ii); 
         }
         farm.offload(EOS);    

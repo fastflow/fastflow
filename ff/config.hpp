@@ -63,7 +63,7 @@
 //#define FF_TASK_CALLBACK 1
 
 namespace ff {
-static const size_t FF_EOS           = (ULONG_MAX);  /// automatically propagated
+static const size_t FF_EOS           = (ULLONG_MAX);  /// automatically propagated
 static const size_t FF_EOS_NOFREEZE  = (FF_EOS-0x1); /// non automatically propagated
 static const size_t FF_EOSW          = (FF_EOS-0x2); /// propagated only by farm's stages
 static const size_t FF_GO_ON         = (FF_EOS-0x3); /// non automatically propagated
