@@ -62,17 +62,17 @@ elseif (${CMAKE_CXX_COMPILER_ID} STREQUAL "MSVC")
 endif()
 
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
+  ADD_DEFINITIONS(-DNO_DEFAULT_MAPPING)
+  message(WARNING "Pinning on Win platforn currently is not default" )
   if(CMAKE_CL_64)
     message(STATUS "64-bit microsoft compiler found")
     ADD_DEFINITIONS(-D_WIN64)
-	ADD_DEFINITIONS(-D_AMD64_)
+    ADD_DEFINITIONS(-D_AMD64_)
     ADD_DEFINITIONS(-DNOMINMAX)
 #	ADD_DEFINITIONS(-D_WIN32_WINNT=0x0403)
-#	ADD_DEFINITIONS(-DNO_DEFAULT_MAPPING)
   else(CMAKE_CL_64)
     message(STATUS "32-bit microsoft compiler found") 
 #	ADD_DEFINITIONS(-D_WIN32_WINNT=0x0403)
-	ADD_DEFINITIONS(-DNO_DEFAULT_MAPPING)
   endif(CMAKE_CL_64)
 endif (CMAKE_SYSTEM_NAME MATCHES "Windows")  
 #if (NOT(CMAKE_SYSTEM_NAME MATCHES "Windows"))
@@ -140,44 +140,74 @@ endif (NOT(HAVE_STDINT_H))
 #endif (STDINT_INCLUDE_DIR MATCHES STDINT_INCLUDE_DIR-NOTFOUND)
 
 set(FFHEADERS
-    ${FF}/allocator.hpp
-    ${FF}/buffer.hpp
-    ${FF}/cycle.h
-    ${FF}/farm.hpp
-    ${FF}/gt.hpp
-    ${FF}/lb.hpp
-    ${FF}/node.hpp
-    ${FF}/pipeline.hpp
-    ${FF}/spin-lock.hpp
-    ${FF}/squeue.hpp
-    ${FF}/svector.hpp
-    ${FF}/sysdep.h
-    ${FF}/ubuffer.hpp
-    ${FF}/utils.hpp
-    ${FF}/version.h
-    ${FF}/dynqueue.hpp
-    ${FF}/mapping_utils.hpp
-    ${FF}/config.hpp
-    ${FF}/mapper.hpp
-    ${FF}/MPMCqueues.hpp
-   ) 
+ ${FF}/allocator.hpp
+ ${FF}/barrier.hpp
+ ${FF}/buffer.hpp
+ ${FF}/config.hpp
+ ${FF}/cycle.h
+ ${FF}/dinout.hpp
+ ${FF}/dnode.hpp
+ ${FF}/dynlinkedlist.hpp
+ ${FF}/dynqueue.hpp
+ ${FF}/farm.hpp
+ ${FF}/ff_queue.hpp
+ ${FF}/fftree.hpp
+ ${FF}/gsearch.hpp
+ ${FF}/gt.hpp
+ ${FF}/icl_hash.h
+ ${FF}/lb.hpp
+ ${FF}/make_unique.hpp
+ ${FF}/map.hpp
+ ${FF}/mapCUDAManaged.hpp
+ ${FF}/mapper.hpp
+ ${FF}/mapping_utils.hpp
+ ${FF}/mdf.hpp
+ ${FF}/multinode.hpp
+ ${FF}/node.hpp
+ ${FF}/oclallocator.hpp
+ ${FF}/oclnode.hpp
+ ${FF}/parallel_for.hpp
+ ${FF}/parallel_for_internals.hpp
+ ${FF}/pipeline.hpp
+ ${FF}/poolEvolution.hpp
+ ${FF}/poolEvolutionCUDA.hpp
+ ${FF}/selector.hpp
+ ${FF}/spin-lock.hpp
+ ${FF}/squeue.hpp
+ ${FF}/staticlinkedlist.hpp
+ ${FF}/stencilReduce.hpp
+ ${FF}/stencilReduceCUDA.hpp
+ ${FF}/stencilReduceOCL.hpp
+ ${FF}/stencilReduceOCL_macros.hpp
+ ${FF}/svector.hpp
+ ${FF}/sysdep.h
+ ${FF}/task_internals.hpp
+ ${FF}/taskf.hpp
+ ${FF}/tpcallocator.hpp
+ ${FF}/tpcnode.hpp
+ ${FF}/ubuffer.hpp
+ ${FF}/utils.hpp
+ ${FF}/version.h
+)
 
-set(FFHEADERS_AT
-    ${FF}/atomic/atomic.h
-    ${FF}/atomic/atomic-i386.h
-    ${FF}/atomic/atomic-ppc.h
-    ${FF}/atomic/atomic-x86_64.h
-    ${FF}/atomic/abstraction_dcas.h
-  )
+set(FFHEADER_PLAT 
+ ${FF}/platforms/getopt.h
+ ${FF}/platforms/getopt.hpp
+ ${FF}/platforms/liblfds.h
+ ${FF}/platforms/platform.h
+)
+
+
 set(FFHEADERS_D
     ${FF}/d/inter.hpp
 	${FF}/d/zmqImpl.hpp
 	${FF}/d/zmqTransport.hpp
   )
 
-set(FFHEADERS_PLAT
-    ${FF}/platforms/platform.h
-  )
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "ppc")
+message(WARNING "Pinning on Power8 currently is not default" )
+
+endif (CMAKE_SYSTEM_PROCESSOR MATCHES "ppc")
 
 # Examples currently not tested on arm
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
@@ -211,7 +241,6 @@ add_custom_target( uninstall
     "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake" )
 
 install( FILES ${FFHEADERS} DESTINATION /include/ff/ )
-install( FILES ${FFHEADERS_AT} DESTINATION /include/ff/atomic )
 install( FILES ${FFHEADERS_PLAT} DESTINATION /include/ff/platforms )
 install( FILES ${FFHEADERS_D} DESTINATION /include/ff/d )
 
