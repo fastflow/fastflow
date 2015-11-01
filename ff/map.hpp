@@ -3,7 +3,7 @@
 /*! 
 
  *  \file map.hpp
- *  \ingroup high_level_patterns
+ *  \in group high_level_patterns
  *
  *  \brief map pattern
  * 
@@ -15,7 +15,7 @@
  *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
  *
- *  This program is distributed in the hope that it will be useful, but WITHOUT
+ *  This program is distributed in the hope that it will be useful, but WITHOUT_t
  *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
  *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
  *  License for more details.
@@ -32,7 +32,7 @@
 #define FF_MAP_HPP
 
 //VS12
-#ifndef WIN32
+//#ifndef WIN32
 
 // NOTE: A better check would be needed !
 // both GNU g++ and Intel icpc define __GXX_EXPERIMENTAL_CXX0X__ if -std=c++0x or -std=c++11 is used 
@@ -56,8 +56,8 @@ namespace ff {
  *
  * \todo Map to be documented and exemplified
  */
-template<typename IN, typename OUT=IN, typename reduceT=int>
-class ff_Map: public ff_node_t<IN, OUT> {
+template<typename IN_t , typename OUT_t=IN_t , typename reduceT=int>
+class ff_Map: public ff_node_t<IN_t, OUT_t> {
 protected:
     ParallelForReduce<reduceT> pfr;
 protected:
@@ -91,8 +91,8 @@ protected:
     
 public:
     
-    typedef IN  in_type;
-    typedef OUT out_type;
+    typedef IN_t  in_type;
+    typedef OUT_t out_type;
 
 
     ff_Map(size_t maxp=-1, bool spinWait=false, bool spinBarrier=false):
@@ -195,6 +195,6 @@ protected:
     
 } // namespace ff
 
-#endif //VS12
+//#endif //VS12
 #endif /* FF_MAP_HPP */
 

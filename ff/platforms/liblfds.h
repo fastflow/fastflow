@@ -125,10 +125,12 @@ typedef unsigned long int     atom_t;
 #define ALIGN_SINGLE_POINTER    8
 #define ALIGN_DOUBLE_POINTER    16
 typedef unsigned long long int  atom_t;
-#else // default to generic 32 bit archiecture
+#elif (defined _MSC_VER)
+// defined above
+#else // default to generic 64 bit archiecture
 typedef unsigned long int     atom_t;
-#define ALIGN_SINGLE_POINTER  4
-#define ALIGN_DOUBLE_POINTER  8
+#define ALIGN_SINGLE_POINTER  8
+#define ALIGN_DOUBLE_POINTER  16
 #endif
 
 

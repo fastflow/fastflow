@@ -858,11 +858,12 @@ private:
     template<typename IN_t=char,typename OUT_t=IN_t>
     class ff_Pipe: public ff_pipeline {
     private:
-#ifndef __CUDACC__
+#if (!defined(__CUDACC__) && !defined(WIN32)) 
         // 
         // Thanks to Suter Toni (HSR) for suggesting the following code for checking
         // correct input-output types ordering.
         //
+		
         template<class A, class...>
         struct valid_stage_types : std::true_type {};
         
@@ -875,7 +876,11 @@ private:
         template<class A, class B, class... Bs>
         struct valid_stage_types<std::unique_ptr<A>&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {}; 
         template<class A, class B, class... Bs>
-        struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {}; 
+        struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};   
+
+        //struct valid_stage_types<A, B, Bs ...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};        
+
+
 #endif
 
         // 
@@ -924,7 +929,7 @@ private:
          */
         template<typename... STAGES>
         ff_Pipe(STAGES &&...stages) {    // forwarding reference (aka universal reference)
-#ifndef __CUDACC__
+#if ( !defined(__CUDACC__) && !defined(WIN32) )
         	static_assert(valid_stage_types<STAGES...>{}, "Input & output types of the pipe's stages don't match");
 #endif
         	this->add2pipeall(stages...); //this->add2pipeall(std::forward<STAGES>(stages)...);
@@ -943,7 +948,7 @@ private:
          */
         template<typename... STAGES>
         explicit ff_Pipe(bool input_ch, STAGES &&...stages):ff_pipeline(input_ch) {
-#ifndef __CUDACC__
+#if (!defined(__CUDACC__) && !defined(WIN32))
         	static_assert(valid_stage_types<STAGES...>{},
                           "Input & output types of the pipe's stages don't match");
 #endif

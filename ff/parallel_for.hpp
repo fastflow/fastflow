@@ -676,7 +676,7 @@ public:
 };
 
 
-#ifndef WIN32 //VS12
+//#ifndef WIN32 //VS12
 
 //! ParallelForPipeReduce class
 /**
@@ -789,7 +789,7 @@ public:
         if (r<0) error("ParallelForPipeReduce: parallel_reduce_idx, starting pipe\n");
     }
 };
-#endif //VS12
+//#endif //VS12
 
 //
 //---- static functions, useful for one-shot parallel for execution or when no extra settings are needed
