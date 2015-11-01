@@ -139,7 +139,7 @@ int main(int argc, char* argv[]) {
 
     Env_t env(1000000,0);
 
-    poolEvolution<long, Env_t> pool(std::max(nwF, std::max(nwS,nwE)), P, selection,evolution,filter,termination, env);
+    poolEvolution<long, Env_t> pool((std::max)(nwF, (std::max)(nwS,nwE)), P, selection,evolution,filter,termination, env);
     pool.run_and_wait_end();
 
     

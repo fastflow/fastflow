@@ -30,6 +30,7 @@ March 2011 - Ver 0: Basic functional port, tested on Win 7 x64 - Performance not
 //#define WIN32_LEAN_AND_MEAN
 #pragma once
 //#include <WinSock2.h>
+#define NOMINMAX
 #include <Windows.h>
 #include <WinBase.h>
 #include <process.h>

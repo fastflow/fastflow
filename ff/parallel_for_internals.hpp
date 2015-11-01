@@ -514,7 +514,7 @@ protected:
         _chunk = stop; // needed because sendTask has to send the range (begin, stop(
         const long numtasks      = std::lrint(std::ceil((stop-start)/(double)_step));
         const long totalnumtasks = std::lrint(std::ceil(numtasks/(double)chunk));
-        const size_t ntxw = std::min(_nw, (size_t)totalnumtasks);
+        const size_t ntxw = (std::min)(_nw, (size_t)totalnumtasks);
 
         for(size_t i=0;i<ntxw;++i) {
             data[i].ntask = 1;
@@ -555,7 +555,7 @@ public:
         for(size_t wid=0;wid<_nw;++wid) {
             if (data[wid].ntask >0) {
                 long start = data[wid].task.start;
-                long end   = std::min(start+endchunk, data[wid].task.end);
+                long end   = (std::min)(start+endchunk, data[wid].task.end);
                 taskv[wid+jump].set(start, end);
                 lb->ff_send_out_to(&taskv[wid+jump], (int) wid);
                 --remaining, --data[wid].ntask;
@@ -590,7 +590,7 @@ public:
     L1:
         if (data[id].ntask.load(std::memory_order_acquire)>0) {
             auto oldstart = data[id].task.start.load(std::memory_order_relaxed);
-            auto end      = std::min(oldstart+endchunk, data[id].task.end);
+            auto end      = (std::min)(oldstart+endchunk, data[id].task.end);
             auto newstart = (end-1)+_step;
             
             if (!data[id].task.start.compare_exchange_weak(oldstart, newstart,
@@ -671,7 +671,7 @@ public:
         if (data[id].ntask) {
         L1:
             long start = data[id].task.start;
-            long end = std::min(start+endchunk, data[id].task.end);
+            long end = (std::min)(start+endchunk, data[id].task.end);
             --data[id].ntask, (data[id].task).start = (end-1)+_step;
             task->set(start, end);
             return true;

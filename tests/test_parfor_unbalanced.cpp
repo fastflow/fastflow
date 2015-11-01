@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
 
     for(int k=0; k<seqIter; ++k) { // external sequential loop
         unsigned long iter=0;
-        long _N = std::max((long)(Random()*N),(long)MAX_PARALLELISM);
+        long _N = (std::max)((long)(Random()*N),(long)MAX_PARALLELISM);
         
         //printf("n=%ld\n", _N);
         

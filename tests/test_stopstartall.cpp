@@ -139,9 +139,9 @@ int main(int argc, char *argv[]) {
         reconfGo = true;
         farm.wait_freezing();
         if (up && n<maxworkers)
-            n = std::min(2*n, maxworkers);
+            n = (std::min)(2*n, maxworkers);
         else {
-            n = std::max(1, n/2);
+            n = (std::max)(1, n/2);
             up=false; // starting to go down
         }
 

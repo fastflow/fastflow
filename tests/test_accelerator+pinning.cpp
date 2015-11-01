@@ -1,3 +1,4 @@
+
 #include <iostream>
 #include <cmath>
 using namespace std;
@@ -208,7 +209,7 @@ public:
     if(!push_counter) {
       long unsigned int n_pop = (long unsigned int)n_samples;
       for (unsigned int i=0; i< n_simulations; ++i)
-	n_pop = (std::min)(n_pop, sizes->at(i));
+	n_pop = (std::min)(n_pop, (sizes->at(i)));
       while(n_pop--) {
 	//send out window-task
 	sample_t **instant_samples = (sample_t **)malloc(n_simulations * sizeof(sample_t *)); //to be deallocated
@@ -453,8 +454,8 @@ public:
 };
 
 class Acc2_Collector : public ff_node {
-  void *svc(void *task) {
-    res_task_t *t = (res_task_t *)task;
+  void *svc(void *fftask) {
+    res_task_t *t = (res_task_t *)fftask;
     cout << "[" << t->time << "] ";
     switch(t->opcode) {
     case 0:

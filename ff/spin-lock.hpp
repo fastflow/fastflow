@@ -90,6 +90,13 @@ _INLINE void spin_unlock(lock_t l) { l->clear(std::memory_order_release);}
 #endif
 
 
+#if !defined(__GNUC__) && defined(_MSC_VER)
+// An acquire-barrier exchange, despite the name
+
+#define __sync_lock_test_and_set(_PTR,_VAL)  InterlockedExchangePointer( ( _PTR ), ( _VAL ))
+#endif
+
+
 #if defined(__GNUC__) || defined(_MSC_VER) || defined(__APPLE__)
 /*
  * CLH spin-lock is a FIFO lock implementation which uses only the 
@@ -161,7 +168,13 @@ _INLINE void spin_lock(clh_lock_t l, const int pid) { l->spin_lock(pid); }
 _INLINE void spin_unlock(clh_lock_t l, const int pid) { l->spin_unlock(pid); }
 
 #endif 
+/*
+#if !defined(__GNUC__) && defined(_MSC_VER)
+// An acquire-barrier exchange, despite the name
 
+#define __sync_lock_test_and_set(_PTR,_VAL)  InterlockedExchangePointer( ( _PTR ), ( _VAL ))
+#endif
+*/
 #if 0
 
 // -------------------------------------
