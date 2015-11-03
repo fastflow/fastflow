@@ -1,35 +1,3 @@
-/* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
-/* ***************************************************************************
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as 
- *  published by the Free Software Foundation.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  As a special exception, you may use this file as part of a free software
- *  library without restriction.  Specifically, if other files instantiate
- *  templates or use macros or inline functions from this file, or you compile
- *  this file and link it with other files to produce an executable, this
- *  file does not by itself cause the resulting executable to be covered by
- *  the GNU General Public License.  This exception does not however
- *  invalidate any other reasons why the executable file might be covered by
- *  the GNU General Public License.
- *
- ****************************************************************************
- */
-/* Author: Massimo Torquati
- *         torquati@di.unipi.it
- *
- * Date:   October 2015
- *
- */
 #include<iostream>
 
 #if !defined(FF_TPC)
@@ -41,17 +9,17 @@
 using namespace ff;
 
 // kernel id inside the FPGA
-#define KERNEL_ID	  1
+#define KERNEL_ID     1
 #define MAX_LEN    1000 	// max array length
 typedef int32_t elem_t;
 
-struct Task: public baseTPCTask<Task,Task> {
-    Task():a(nullptr),b(nullptr),c(nullptr),len(0),r(nullptr) {}
+struct VectorAddDotTask: public baseTPCTask<VectorAddDotTask,VectorAddDotTask> {
+    VectorAddDotTask():a(nullptr),b(nullptr),c(nullptr),len(0),r(nullptr) {}
               
-    Task(int32_t *r, uint32_t len, elem_t const *a, elem_t const *b, elem_t *c):
+    VectorAddDotTask(int32_t *r, uint32_t len, elem_t const *a, elem_t const *b, elem_t *c):
         a(a),b(b),c(c),len(len),r(r) {}
 
-    void setTask(const Task *t) { 
+    void setTask(const VectorAddDotTask *t) { 
         // sets the kernel id to launch
         setKernelId(KERNEL_ID);
 
@@ -103,49 +71,26 @@ static void check4(uint32_t r, std::vector<elem_t> &H) {
 }
 /* ----------------------------------- */
 
-//  RePaRa code:
-//
-//  elem_t a = 2, b = -3, c = 0, r = 0;
-//  [[ rpr::kernel, rpr::in(a,b), rpr::out(c,r), rpr::target(FPGA) ]]
-//  vectoradddot(&r, 1, &a, &b, &c);
-//  check1(r, c); 
-// 
-//  elem_t A[3] = { 1, 2, 3 }, B[3] = { 4, 5, 6 }, C[3] = { 0, 0, 0 };
-//  [[ rpr::kernel, rpr::in(A,B), rpr::out(C,r), rpr::target(FPGA) ]]
-//  vectoradddot(&r, 3, A, B, C);
-//  check2(r, C);
-//
-//  elem_t E[20] = { 0 }, F[20] = { 0 };
-//  [[ rpr::kernel, rpr::in(E), rpr::out(F,r), rpr::target(FPGA) ]]
-//  vectoradddot(&r, 20, E, E, F);
-//  check3(r, F);
-//
-//  std::vector<elem_t> G(MAX_LEN, 0), H(MAX_LEN, 0);
-//  init_consec(MAX_LEN, &G[0]);
-//  [[ rpr::kernel, rpr::in(G), rpr::out(H,r), rpr::target(FPGA) ]]
-//  vectoradddot(&r, MAX_LEN, &G[0],&G[0],&H[0]);
-//  check4(r, H);
-//
 int main() {
     auto task1 = []() {
         elem_t a = 2, b = -3, c = 0, r = 0;
-        Task t(&r, 1, &a, &b, &c);        
-        ff_tpcNode_t<Task> tpcf(t);
+        VectorAddDotTask t(&r, 1, &a, &b, &c);        
+        ff_tpcNode_t<VectorAddDotTask> tpcf(t);
         tpcf.run_and_wait_end();
         check1(r,c);
     };
     auto task2 = []() {
         elem_t A[3] = { 1, 2, 3 }, B[3] = { 4, 5, 6 }, C[3] = { 0, 0, 0 }, r = 0; 
-        Task t(&r, 3, A, B, C);
-        ff_tpcNode_t<Task> tpcf(t);
+        VectorAddDotTask t(&r, 3, A, B, C);
+        ff_tpcNode_t<VectorAddDotTask> tpcf(t);
         tpcf.run_and_wait_end();
         check2(r,C);
     };
     auto task3 = [&]() {
         elem_t E[20] = { 0 }, F[20] = { 0 }, r = 0;
         init_consec(20, E); 
-        Task t(&r, 20, E, E, F);
-        ff_tpcNode_t<Task> tpcf(t);
+        VectorAddDotTask t(&r, 20, E, E, F);
+        ff_tpcNode_t<VectorAddDotTask> tpcf(t);
         tpcf.run_and_wait_end();
         check3(r,F);
     };
@@ -154,8 +99,8 @@ int main() {
         std::vector<elem_t> H(MAX_LEN, 0);
         elem_t r;
         init_consec(MAX_LEN, &G[0]);
-        Task t(&r, MAX_LEN, &G[0], &G[0], &H[0]);
-        ff_tpcNode_t<Task> tpcf(t);
+        VectorAddDotTask t(&r, MAX_LEN, &G[0], &G[0], &H[0]);
+        ff_tpcNode_t<VectorAddDotTask> tpcf(t);
         tpcf.run_and_wait_end();
         check4(r,H);
     };
@@ -164,7 +109,7 @@ int main() {
     if (taskf.run()<0) {
         error("running taskf\n");
         return -1;
-    }
+    }   
     taskf.AddTask(task1);
     taskf.AddTask(task2);
     taskf.AddTask(task3);
@@ -172,5 +117,4 @@ int main() {
     taskf.wait();
     return 0;
 }
-    
 

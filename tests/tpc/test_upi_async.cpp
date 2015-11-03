@@ -1,89 +1,27 @@
-/* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
-/* ***************************************************************************
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as 
- *  published by the Free Software Foundation.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *
- *  As a special exception, you may use this file as part of a free software
- *  library without restriction.  Specifically, if other files instantiate
- *  templates or use macros or inline functions from this file, or you compile
- *  this file and link it with other files to produce an executable, this
- *  file does not by itself cause the resulting executable to be covered by
- *  the GNU General Public License.  This exception does not however
- *  invalidate any other reasons why the executable file might be covered by
- *  the GNU General Public License.
- *
- ****************************************************************************
- */
-/* Author: Massimo Torquati
- *         torquati@di.unipi.it
- *
- * Date:   September 2015
- *
+/* 
+ * This file is also contained in the FastFlow directory  
+ * <fastflow-dir>/tests/tpc.
  */
 #include<iostream>
-
 #if !defined(FF_TPC)
 // needed to enable the TPC FastFlow run-time
 #define FF_TPC
 #endif
-
 #include <ff/tpcnode.hpp>
 using namespace ff;
 
-// kernel id inside the FPGA
-#define KERNEL1_ID	  2
+// kernel id inside the device
+#define KERNEL1_ID    2
 #define KERNEL2_ID    1
-#define MAX_SIZE 	512
+#define MAX_SIZE    512
 
-// the kernel code is:
-// void kernel1(uint32_t const *const idx_start, uint32_t const *const idx_stop,
-//     uint32_t const cycles[MAX_SIZE], uint32_t *retval)
-// {
-//   uint32_t const w_start = *idx_start;
-//   uint32_t const w_stop = *idx_stop;
-//   uint32_t r = 0;
-//   for (uint32_t i = w_start; i <= w_stop; ++i) {
-//     #ifdef __SYNTHESIS__
-//     {
-//       #pragma HLS PROTOCOL fixed
-//       uint32_t x = cycles[i];
-//       wait(x);
-//     }
-//     #else
-//     usleep(cycles[i]);
-//     #endif
-//     r += cycles[i];
-//   }
-//   *retval = r;
-// }
-//
-// void kernel2(uint32_t const *const d1sz, uint32_t const d1[MAX_SIZE],
-//     uint32_t const *const d2sz, uint32_t d2[MAX_SIZE])
-// {
-//   uint32_t const s1 = *d1sz;
-//   uint32_t const s2 = *d2sz;
-//   for(uint32_t i = 0; i < s2; ++i)
-//     #pragma HLS pipeline
-//     d2[i] = (i < s1 ? d1[i] : 1);
-// }
-
-struct TaskCopy: public baseTPCTask<TaskCopy> {
-    TaskCopy():in(nullptr),out(nullptr), sizein(0), sizeout(0) {}
+struct ExampleTaskCopy: public baseTPCTask<ExampleTaskCopy> {
+    ExampleTaskCopy():in(nullptr),out(nullptr), sizein(0), sizeout(0) {}
               
-    TaskCopy(uint32_t *in, uint32_t sizein, uint32_t *out, uint32_t sizeout):
+    ExampleTaskCopy(uint32_t *in, uint32_t sizein, uint32_t *out, uint32_t sizeout):
         in(in),out(out),sizein(sizein),sizeout(sizeout) {}
 
-    void setTask(const TaskCopy *t) { 
+    void setTask(const ExampleTaskCopy *t) { 
 
         setKernelId(KERNEL1_ID);
 
@@ -103,13 +41,13 @@ struct TaskCopy: public baseTPCTask<TaskCopy> {
 };
 
 
-struct Task: public baseTPCTask<Task> {
-    Task():in(nullptr),sizein(0),start(0),stop(0),result(nullptr) {}
+struct ExampleTask: public baseTPCTask<ExampleTask> {
+    ExampleTask():in(nullptr),sizein(0),start(0),stop(0),result(nullptr) {}
               
-    Task(uint32_t *in, uint32_t sizein, uint32_t start, uint32_t stop, uint32_t *result):
+    ExampleTask(uint32_t *in, uint32_t sizein, uint32_t start, uint32_t stop, uint32_t *result):
         in(in),sizein(sizein),start(start),stop(stop),result(result) {}
 
-    void setTask(const Task *t) { 
+    void setTask(const ExampleTask *t) { 
 
         setKernelId(KERNEL2_ID);
 
@@ -124,9 +62,9 @@ struct Task: public baseTPCTask<Task> {
         setInPtr(t->in, t->sizein, 
                  BitFlags::DONTCOPYTO, BitFlags::REUSE, BitFlags::DONTRELEASE);
 
+        // copy back the result
         setOutPtr(t->result, 1, 
                   BitFlags::COPYBACK, BitFlags::DONTREUSE, BitFlags::DONTRELEASE);
-
     }
 
     uint32_t *in;
@@ -135,10 +73,9 @@ struct Task: public baseTPCTask<Task> {
     uint32_t *result;
 };
 
-
-
-/* ----------------------------- */
-// functions used for checking the result
+/* ----------------------------- 
+ * functions used for checking the result
+ */
 static inline
 uint32_t gauss(uint32_t const to) {
   return (to * to + to) / 2;
@@ -157,75 +94,39 @@ void check(uint32_t to, uint32_t from, uint32_t result) {
     else
         std::cout << "RESULT OK " << result << "\n";    
 }
-
 /* ----------------------------- */
 
-// RePaRa code:
-//   const size_t size = 256;
-//   uint32_t waits[size];
-//   uint32_t waits2[size] {0};
-//   std::vector<uint32_t> results(4,0);
-//
-//   [[rpr::kernel, rpr::in(waits,size) rpr::out(waits2),
-//     rpr::target(FPGA), rpr::keep(waits2) ]]
-//   kernel2(size, waits, size, waits2);
-//
-//   [[rpr::kernel, rpr::async, 
-//     rpr::in(waits2), rpr::out(results),
-//     rpr::target(FPGA) ]]
-//   kernel1(0, 64, waits2, &results[0]);
-//
-//   [[rpr::kernel, rpr::async, 
-//     rpr::in(waits2), rpr::out(results),
-//     rpr::target(FPGA) ]]
-//   kernel1(64, 128, waits2, &results[1]);
-//
-//   [[rpr::kernel, rpr::async, 
-//     rpr::in(waits2), rpr::out(results),
-//     rpr::target(FPGA) ]]
-//   kernel1(128, 192, waits2, &results[2]);
-//
-//   [[rpr::kernel, rpr::async,
-//     rpr::in(waits2), rpr::out(results),
-//     rpr::target(FPGA) ]]
-//   kernel1(192, 255, waits2, &results[3]);
-//
-//   [[rpr::kernel, rpr::sync]];
-//
-//   check(0,   64, results[0]);
-//   check(64, 128, results[1]);
-//   check(128,192, results[2]);
-//   check(192,255, results[3]);   
-//      
-//
 int main() {
     const size_t size = 256;
-    uint32_t waits[size];
-    uint32_t waits2[size] {0};
+
+    // Each entry of the 'delays' vector contains the number of clock cycles 
+    // to wait. This emulates a synthetic computation on each single element.
+    uint32_t delays[size];
+    uint32_t delays2[size] {0};
     std::vector<uint32_t> results(4,0);
 
     for (size_t j = 0; j < size; ++j)
-        waits[j] = j + 1;
+        delays[j] = j + 1;
 
     // device memory allocator shared between the two kernels
     ff_tpcallocator alloc;
 
-    /* --- first kernel (kernel2) --- */
-    TaskCopy k1(waits, size, waits2, size);
-    ff_tpcNode_t<TaskCopy> copy(k1, &alloc);
-    /* ------------------------------ */
+    /* ---. preparing the first kernel ---- */
+    ExampleTaskCopy k1(delays, size, delays2, size);
+    ff_tpcNode_t<ExampleTaskCopy> copy(k1, &alloc);
+    /* ------------------------------------ */
 
-    std::vector<Task>                tasks;
-    std::vector<ff_tpcNode_t<Task> > nodes;
+    /* --- preparing the second kernel --- */
+    std::vector<ExampleTask>                tasks(4);
+    std::vector<ff_tpcNode_t<ExampleTask> > nodes(4);
 
     for(size_t i=0; i<4; ++i) 
-        tasks.push_back(Task(waits,size, i*64, i*64+64, &results[i]));
+        tasks.push_back(ExampleTask(delays,size, i*64, i*64+64, &results[i]));
     for(size_t i=0;i<4; ++i)
-        nodes.push_back(ff_tpcNode_t<Task>(tasks[i], &alloc));
+        nodes.push_back(ff_tpcNode_t<ExampleTask>(tasks[i], &alloc));
+    /* ------------------------------------ */
 
-    /* ------------------------------ */
-
-    // running first kernel
+    // running first kernel synchronously
     if (copy.run_and_wait_end()<0) {
         error("running first kernel\n");
         return -1;        
@@ -238,7 +139,8 @@ int main() {
             return -1;
         }
     }
-
+    
+    // waiting for the results
     for(size_t i=3; i>0; --i) {
         if (nodes[i].wait()<0) {
             error("waiting nodes %d\n", i);
