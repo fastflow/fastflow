@@ -53,7 +53,7 @@ static inline bool check(uint32_t len, elem_t *p) {
   for (uint32_t n = 0; n < len; ++n) ret = ret && p[n] == (elem_t)(n+1) * 2;
   return ret;
 }
-static void check1(uint32_t r, elem_t& c) {
+static void check1(int32_t r, elem_t& c) {
     bool const res1 = r == -6 && c == -1;
     fprintf(res1 ? stdout : stderr, "TEST 1 %s\n", res1 ? " PASSED" : " FAILED");
 }
