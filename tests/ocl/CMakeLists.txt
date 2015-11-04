@@ -9,21 +9,32 @@ ADD_DEFINITIONS() #-DFF_OPENCL_LOG
 include_directories( ${OPENCL_INCLUDE_DIRS} )
 
 
-set( TESTS                               
-helloKernel testRelease convolution2D oclStencilReduceLoop oclMap oclMap2 oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct device_selection dotProd_cpugpu device_selection2 mixedpipe mixedpipe2
+#set( TESTS                               
+#helloKernel testRelease convolution2D oclStencilReduceLoop oclMap oclMap2 oclReduce oclMapReduce farm_oclMap farm_#oclReduce pipeFarmMap dotProduct device_selection dotProd_cpugpu device_selection2 mixedpipe mixedpipe2
+#)
+
+set(TESTS
+	convolution2D
+	device_selection
+	device_selection2
+	dotProd_cpugpu
+	dotProduct
+	dotProduct2
+	farm_oclMap
+	farm_oclReduce
+	helloKernel
+	helloKernel2
+	mixedpipe
+	mixedpipe2
+	oclMap
+	oclMap2
+	oclMapReduce
+	oclReduce
+	oclStencilReduceLoop
+	pipeFarmMap
+	testRelease
 )
 
-
-#if (NOT ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC"))
-#set(TESTS ${TESTS} test_taskf test_multi_output2 test_parforpipereduce test_pipe test_map test_mdf)
-#endif ()
-
-#set( TESTS_W_OMP test_parfor_basic)
-#  
-
-#if  ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-#set (TESTS ${TESTS} ${TESTS_W_OMP})
-#endif ( )
 
 foreach( t ${TESTS} )
     add_executable( ${t} ${t}.cpp)
@@ -33,13 +44,14 @@ foreach( t ${TESTS} )
     target_link_libraries( ${t} ${CMAKE_THREAD_LIBS_INIT} ${OPENCL_LIBRARIES} )
 endforeach( t )
 
-#foreach( t ${TESTS} )
 add_custom_command(TARGET dotProduct POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
                        ${CMAKE_CURRENT_SOURCE_DIR}/ff_opencl_datatypes.cl
                        $<TARGET_FILE_DIR:dotProduct>
+		       COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                       ${CMAKE_CURRENT_SOURCE_DIR}/cl_code/dotProduct.cl
+                       ${CMAKE_CURRENT_BINARY_DIR}/cl_code/dotProduct.cl
                  )
-#endforeach( t )
 
 add_custom_command(TARGET oclMap2 POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_if_different

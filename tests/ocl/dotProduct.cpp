@@ -41,11 +41,11 @@
 #else
 #define NACC 1
 #endif
+//#define FF_OPENCL_LOG
 
 #include <ff/stencilReduceOCL.hpp>
 
 using namespace ff;
-
 #define BUILD_WITH_SOURCE 1
 #if !defined(BUILD_WITH_SOURCE)
 
