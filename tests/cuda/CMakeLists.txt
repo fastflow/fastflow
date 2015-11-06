@@ -12,6 +12,7 @@ set(CUDA_NVCC_FLAGS -DCHECK -std=c++11) #-std=c++11 -gencode arch=compute_30,cod
 
 foreach( t ${TESTS} )
     CUDA_ADD_EXECUTABLE( ${t} ${t}.cu)
+    target_link_libraries( ${t} ${CMAKE_THREAD_LIBS_INIT} )
 endforeach( t )
 
 foreach( t ${TESTS} )
