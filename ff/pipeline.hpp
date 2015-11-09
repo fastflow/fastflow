@@ -835,7 +835,7 @@ private:
 
 //#ifndef WIN32 //VS12
     // ------------------------ high-level (simpler) pipeline ------------------
-#if ((__cplusplus >= 201103L) && (defined __GXX_EXPERIMENTAL_CXX0X__)) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
+#if ((__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__)) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
 
 #include <ff/make_unique.hpp>
 
@@ -858,7 +858,7 @@ private:
     template<typename IN_t=char,typename OUT_t=IN_t>
     class ff_Pipe: public ff_pipeline {
     private:
-#if (!defined(__CUDACC__) && !defined(WIN32)) 
+#if (!defined(__CUDACC__) && !defined(WIN32) && !defined(__ICC)) 
         // 
         // Thanks to Suter Toni (HSR) for suggesting the following code for checking
         // correct input-output types ordering.
@@ -879,7 +879,6 @@ private:
         struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};   
 
         //struct valid_stage_types<A, B, Bs ...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};        
-
 
 #endif
 
@@ -929,7 +928,7 @@ private:
          */
         template<typename... STAGES>
         ff_Pipe(STAGES &&...stages) {    // forwarding reference (aka universal reference)
-#if ( !defined(__CUDACC__) && !defined(WIN32) )
+#if ( !defined(__CUDACC__) && !defined(WIN32) && !defined(__ICC) )
         	static_assert(valid_stage_types<STAGES...>{}, "Input & output types of the pipe's stages don't match");
 #endif
         	this->add2pipeall(stages...); //this->add2pipeall(std::forward<STAGES>(stages)...);

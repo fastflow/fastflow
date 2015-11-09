@@ -459,7 +459,7 @@ public:
         return len+(in_use_buffers-2)*size+buf_w->length();
     }
 
-    inline const bool isFixedSize() const { return fixedsize; }
+    inline bool isFixedSize() const { return fixedsize; }
 
     inline void reset() {
         if (buf_r) buf_r->reset();
