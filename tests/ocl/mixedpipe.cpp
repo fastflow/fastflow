@@ -231,10 +231,10 @@ struct Map_kernel1: ff_Map<Task,Task,float> {
         const size_t &k        = task->k;
         std::vector<float> &A  = task->A;
 
-        /* ------------ use code ------------- */
+        /* ------------ user code ------------- */
         for(size_t i=0;i<arraySize;++i) 
             A[i] = (k+1)+i; 
-        /* ----------------------------------- */
+        /* ------------------------------------ */
         
         return task;
     }
@@ -246,11 +246,11 @@ struct Map_kernel2: ff_Map<Task,Task,float> {
         std::vector<float> &C  = *(task->C); 
         float &sum             = task->sum;
 
-        /* ------------ use code ------------- */
+        /* ------------ user code ------------- */
         sum = 0;
         for(size_t i=0;i<arraySize;++i)
             sum += A[i] * C[i];
-        /* ----------------------------------- */
+        /* ------------------------------------ */
 
         return task;
     }
@@ -262,10 +262,10 @@ struct Map_kernel3: ff_Map<Task,Task,float> {
         float &sum             = task->sum;
         std::vector<float> &R  = *(task->R); 
 
-        /* ------------ use code ------------- */
+        /* ------------ user code ------------- */
         for(size_t i=0;i<arraySize;++i)
             R[i] += 1 / (A[i] + sum);
-        /* ----------------------------------- */
+        /* ------------------------------------ */
 
         return task;
     }

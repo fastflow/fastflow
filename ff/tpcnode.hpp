@@ -113,7 +113,7 @@ public:
     /** 
      *  Default constructor.
      */
-    baseTPCTask():kernel_id(-1), retvar{nullptr,0} {}
+    baseTPCTask():tpc_kernel_id(-1), retvar{nullptr,0} {}
 
     /** 
      *  Destructor.
@@ -198,7 +198,7 @@ public:
      * 
      * @param id function id
      */
-    void setKernelId(const tpc_func_id_t id) { kernel_id = id; }
+    void setKernelId(const tpc_func_id_t id) { tpc_kernel_id = id; }
 
     /** 
      * Should be used only if the kernel executed on the
@@ -220,7 +220,7 @@ protected:
         size=retvar.second;
         return retvar.first; 
     }
-    const tpc_func_id_t  getKernelId()    const { return kernel_id;}
+    const tpc_func_id_t  getKernelId()    const { return tpc_kernel_id;}
 
     void resetTask() {
         tpcInput.resize(0);
@@ -230,7 +230,7 @@ protected:
     }
 
 protected:
-    tpc_func_id_t                kernel_id;
+    tpc_func_id_t                tpc_kernel_id;
     std::vector<internal::Arg_t> tpcInput;
     std::vector<internal::Arg_t> tpcOutput;
     std::pair<void*,size_t>      retvar;

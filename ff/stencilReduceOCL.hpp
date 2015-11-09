@@ -224,6 +224,7 @@ public:
 	bool  iterCondition_aux() { 
         return iterCondition(*reduceVar, iter);   
     }           
+
 protected:
     Tin     *inPtr;
     Tout    *outPtr;
@@ -1000,7 +1001,7 @@ public:
         oldBytesizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
 		ff_node::skipfirstpop(true);
 		setcode(mapf, reducef);
-		Task.setTask(const_cast<T*>(&task));
+		setTask(task);
         for(size_t i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width,identityVal);
 #ifdef FF_OPENCL_LOG
@@ -1023,7 +1024,7 @@ public:
         stencil_width_half(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL),
         oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setsourcecode(kernels_source, mapf_name, reducef_name);
-        Task.setTask(const_cast<T*>(&task));
+        setTask(task);
         for(size_t i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width, identityVal, true);
 	}
@@ -1036,7 +1037,6 @@ public:
 
     // used to set tasks when in onshot mode
     void setTask(const T &task) {
-        assert(oneshot);
         Task.resetTask();
         Task.setTask(&task);
     }
@@ -1260,10 +1260,7 @@ protected:
 	}
 
 	T *svc(T *task) {
-		if (task) {
-            Task.resetTask();
-            Task.setTask(task);
-        }
+		if (task) setTask(*task);
 		Tin   *inPtr     = Task.getInPtr();
 		Tout  *outPtr    = Task.getOutPtr();
         Tout  *reducePtr = Task.getReduceVar();
