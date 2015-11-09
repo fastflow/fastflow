@@ -2,12 +2,12 @@ CXX      = arm-xilinx-linux-gnueabi-g++
 CXXFLAGS = -std=c++11 -DCHECK -DFF_TPC -Wall
 FF_ROOT  = ../..
 
-TPC_ROOT = $(HOME)/Zedboard/libs
+TPC_LIB_DIR = $(HOME)/Zedboard/libs
 
 # 
 OCLFLAGS =
 OPTFLAGS =  -g $(EXTRA_FLAGS) 
-LIBS =  $(TPC_ROOT)/libtpc.so $(TPC_ROOT)/libplatform.so -lpthread  	
+LIBS =  $(TPC_LIB_DIR)/libtpc.so $(TPC_LIB_DIR)/libplatform.so -lpthread  	
 INCLUDES = -I$(FF_ROOT) 
 
 TARGETS = test_upi test_upi_farm test_upi_farm2 test_upi_async test_demo1
