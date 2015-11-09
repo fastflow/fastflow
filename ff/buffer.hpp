@@ -366,7 +366,7 @@ public:
         return size;  
     }
 
-    inline const bool isFixedSize() const { return true; }
+    inline bool isFixedSize() const { return true; }
 };
 
 /*!
