@@ -78,10 +78,28 @@ namespace internal {
 
         void        *ptr;
         size_t       size;
-         const bool   byvalue;
+        const bool   byvalue;
         const bool   copy,reuse,release;
     };
 } // namespace internal
+
+
+/**
+ * Flags used in the  \ref setInPtr and \ref setOutPtr methods for 
+ * providing commands to the run-time concerning H2D and D2H data transfers 
+ * and device memory allocation.
+ *
+ */
+enum class BitFlags {
+        COPYTO,              
+        DONTCOPYTO,          
+        REUSE, 
+        DONTREUSE, 
+        RELEASE, 
+        DONTRELEASE, 
+        COPYBACK,
+        DONTCOPYBACK
+};
 
 
 /**
@@ -93,23 +111,6 @@ class baseTPCTask {
     friend class ff_tpcNode_t;
 public:
     
-    /**
-     * Flags used in the  \ref setInPtr and \ref setOutPtr methods for 
-     * providing commands to the run-time concerning H2D and D2H data transfers 
-     * and device memory allocation.
-     *
-     */
-    enum class BitFlags {
-        COPYTO,              
-        DONTCOPYTO,          
-        REUSE, 
-        DONTREUSE, 
-        RELEASE, 
-        DONTRELEASE, 
-        COPYBACK,
-        DONTCOPYBACK
-    };
-
     /** 
      *  Default constructor.
      */
@@ -289,7 +290,7 @@ public:
      * It builds the TPC node for the device.
      *
      */
-    ff_tpcNode_t(const TPC_t &task, ff_tpcallocator *alloc = nullptr):
+    ff_tpcNode_t(const IN_t &task, ff_tpcallocator *alloc = nullptr):
         tpcId(-1),deviceId(-1), my_own_allocator(false), oneshot(true),oneshotTask(&task),allocator(alloc) {
         ff_node::skipfirstpop(true);
         Task.setTask(const_cast<TPC_t*>(oneshotTask));
@@ -589,7 +590,7 @@ protected:
 
     bool                my_own_allocator;
     const bool          oneshot; 
-    const TPC_t *const  oneshotTask;
+    const IN_t *const   oneshotTask;
     ff_tpcallocator    *allocator;
 
     std::vector<handle_t> inHandles;
