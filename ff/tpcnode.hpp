@@ -48,6 +48,7 @@
 #include <vector>
 #include <algorithm>
 #include <ff/node.hpp>
+#include <ff/bitflags.hpp>
 
 #include <ff/tpc/tpcEnvironment.hpp>
 #include <ff/tpcallocator.hpp>
@@ -83,23 +84,6 @@ namespace internal {
     };
 } // namespace internal
 
-
-/**
- * Flags used in the  \ref setInPtr and \ref setOutPtr methods for 
- * providing commands to the run-time concerning H2D and D2H data transfers 
- * and device memory allocation.
- *
- */
-enum class BitFlags {
-        COPYTO,              
-        DONTCOPYTO,          
-        REUSE, 
-        DONTREUSE, 
-        RELEASE, 
-        DONTRELEASE, 
-        COPYBACK,
-        DONTCOPYBACK
-};
 
 
 /**
@@ -199,7 +183,7 @@ public:
      * 
      * @param id function id
      */
-    void setKernelId(const tpc_func_id_t id) { tpc_kernel_id = id; }
+    void setFunctionId(const tpc_func_id_t id) { tpc_kernel_id = id; }
 
     /** 
      * Should be used only if the kernel executed on the
