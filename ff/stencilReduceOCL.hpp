@@ -43,6 +43,7 @@
 #include <fstream>
 #include <tuple>
 #include <algorithm>
+#include <ff/bitflags.hpp>
 #include <ff/oclnode.hpp>
 #include <ff/node.hpp>
 #include <ff/oclallocator.hpp>
@@ -62,17 +63,6 @@ public:
     typedef TaskT_  TaskT;
     typedef Tin_    Tin;
     typedef Tout_   Tout;
-
-    enum class BitFlags {
-        COPYTO, 
-        DONTCOPYTO, 
-        REUSE, 
-        DONTREUSE, 
-        RELEASE, 
-        DONTRELEASE, 
-        COPYBACK,
-        DONTCOPYBACK
-    };
 
     baseOCLTask(): inPtr(NULL),outPtr(NULL),reduceVar(NULL),
                    size_in(0),size_out(0),iter(0),
