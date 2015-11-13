@@ -51,9 +51,11 @@ enum class BitFlags {
 
 using bitflagsVector = std::vector<std::tuple<BitFlags,BitFlags,BitFlags> > ;
 
-
+// TO BE IMPLEMENTED: the current version is just a test case
 static inline const bitflagsVector extractFlags(const std::string &str, const int kernel_id) {
-    bitflagsVector V;
+    bitflagsVector V(10);
+    for(size_t i=0;i<V.size();++i)
+        V[i] = std::make_tuple<BitFlags,BitFlags,BitFlags>(BitFlags::COPYTO, BitFlags::DONTREUSE, BitFlags::DONTRELEASE);
     return V;
 }
     
