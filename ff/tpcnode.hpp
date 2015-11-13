@@ -144,7 +144,7 @@ public:
                   const BitFlags reuse  =BitFlags::DONTREUSE, 
                   const BitFlags release=BitFlags::DONTRELEASE)  { 
         internal::Arg_t arg(const_cast<ptrT*>(inPtr),size*sizeof(ptrT),
-                            copy==BitFlags::COPYTO,
+                            (copy==BitFlags::COPYTO || copy==BitFlags::COPYBACK),
                             reuse==BitFlags::REUSE,
                             release==BitFlags::RELEASE);
         tpcInput.push_back(arg);
@@ -172,7 +172,7 @@ public:
                    const BitFlags reuse    =BitFlags::DONTREUSE, 
                    const BitFlags release  =BitFlags::DONTRELEASE)  { 
         internal::Arg_t arg(const_cast<ptrT*>(_outPtr),size*sizeof(ptrT),
-                            copyback==BitFlags::COPYBACK,
+                            (copyback==BitFlags::COPYBACK || copyback==BitFlags::COPYTO),
                             reuse==BitFlags::REUSE,
                             release==BitFlags::RELEASE);
         tpcOutput.push_back(arg);
