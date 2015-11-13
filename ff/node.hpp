@@ -436,6 +436,30 @@ private:
     friend class ff_gatherer;
     friend class ff_ofarm;
 
+private:
+    FFBUFFER        * in;           ///< Input buffer, built upon SWSR lock-free (wait-free) 
+                                    ///< (un)bounded FIFO queue                                 
+    FFBUFFER        * out;          ///< Output buffer, built upon SWSR lock-free (wait-free) 
+                                    ///< (un)bounded FIFO queue 
+    ssize_t           myid;         ///< This is the node id, it is valid only for farm's workers
+    ssize_t           CPUId;    
+    bool              myoutbuffer;
+    bool              myinbuffer;
+    bool              skip1pop;
+    bool              in_active;    // allows to disable/enable input tasks receiving   
+    bool              multiInput;   // if the node is a multi input node this is true
+    bool              multiOutput;  // if the node is a multi output node this is true
+    bool              my_own_thread;
+    ff_thread       * thread;       /// A \p thWorker object, which extends the \p ff_thread class 
+    bool (*callback)(void *,unsigned long,unsigned long, void *);
+    void            * callback_arg;
+    BARRIER_T       * barrier;      /// A \p Barrier object
+    struct timeval tstart;
+    struct timeval tstop;
+    struct timeval wtstart;
+    struct timeval wtstop;
+    double wttime;
+
 protected:
     
     void set_id(ssize_t id) { myid = id;}
@@ -992,8 +1016,8 @@ public:
         if (out) out->reset();
     }
 
-#if defined(FF_REPARA)
 
+#if defined(FF_REPARA)
     struct rpr_measure_t {
         size_t time_before, time_after;
         size_t energy;
@@ -1005,12 +1029,12 @@ public:
     /** 
      *  Returns input data size
      */
-    virtual size_t rpr_get_sizeIn()  const { return 0; }
+    virtual size_t rpr_get_sizeIn()  const { return rpr_sizeIn; }
 
     /** 
      *  Returns output data size
      */
-    virtual size_t rpr_get_sizeOut() const { return 0; }
+    virtual size_t rpr_get_sizeOut() const { return rpr_sizeOut; }
 
     /**
      *  Returns all measures collected by the node.
@@ -1022,7 +1046,10 @@ public:
      */
     virtual RPR_measures_vector rpr_get_measures() { return RPR_measures_vector(); }
 
-#endif
+protected:  
+    size_t rpr_sizeIn  = {0};
+    size_t rpr_sizeOut = {0};
+#endif  /* FF_REPARA */
 
 protected:
 
@@ -1195,29 +1222,6 @@ private:
     inline void   setThread(ff_thread *const th) { my_own_thread = false; thread = th; }        
     inline size_t getTid() const { return thread->getTid();} 
 
-private:
-    FFBUFFER        * in;           ///< Input buffer, built upon SWSR lock-free (wait-free) 
-                                    ///< (un)bounded FIFO queue                                 
-    FFBUFFER        * out;          ///< Output buffer, built upon SWSR lock-free (wait-free) 
-                                    ///< (un)bounded FIFO queue 
-    ssize_t           myid;         ///< This is the node id, it is valid only for farm's workers
-    ssize_t           CPUId;    
-    bool              myoutbuffer;
-    bool              myinbuffer;
-    bool              skip1pop;
-    bool              in_active;    // allows to disable/enable input tasks receiving   
-    bool              multiInput;   // if the node is a multi input node this is true
-    bool              multiOutput;  // if the node is a multi output node this is true
-    bool              my_own_thread;
-    ff_thread       * thread;       /// A \p thWorker object, which extends the \p ff_thread class 
-    bool (*callback)(void *,unsigned long,unsigned long, void *);
-    void            * callback_arg;
-    BARRIER_T       * barrier;      /// A \p Barrier object
-    struct timeval tstart;
-    struct timeval tstop;
-    struct timeval wtstart;
-    struct timeval wtstop;
-    double wttime;
 
 protected:
 
