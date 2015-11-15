@@ -7,17 +7,17 @@ include_directories( ${ZMQ_INCLUDE_DIRS} )
 
 #link_directories(${ZMQ_LIBRARIES})
 
-add_executable( allgather allgather.cpp )  
-add_executable( broadcast broadcast.cpp ) 
-add_executable( dmap dmap.cpp ) 
-add_executable( fromany fromany.cpp )    
-add_executable( farm farm.cpp ) 
     
-
-set( DTESTS allgather broadcast dmap fromany farm)
+set( DTESTS
+allgather  dmap2      lat11      pipe_farm2    test_dinout
+broadcast  farm       lat11_v2   scatter       test_gw
+bw11       farm_farm  ondemand   test11_pipe   test_marshal
+dmap       fromany    pipe_farm  test11_torus  unicast
+)
 
 foreach( t ${DTESTS} )
-    target_link_libraries( ${t} ${CMAKE_THREAD_LIBS_INIT}  ${ZMQ_LIBRARIES})
+	 add_executable( ${t} ${t}.cpp )
+    	 target_link_libraries( ${t} ${CMAKE_THREAD_LIBS_INIT}  ${ZMQ_LIBRARIES})
 endforeach( t )
 
 #add_test( allgather01 ${CMAKE_CURRENT_BINARY_DIR}/allgather ciccio 1 0 localhost:10002 & )
