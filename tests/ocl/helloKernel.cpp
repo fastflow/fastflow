@@ -77,8 +77,6 @@ struct myTask {
 
 /* ---------------- helping function (naive implementation ------------------ */
 
-using BitFlags = baseOCLTask<myTask, float, float>::BitFlags;
-
 typedef enum { IN, OUT } enum_t;
 static std::tuple<BitFlags, BitFlags, BitFlags> 
 parseCmd(int kernelid, enum_t direction, const std::string &cmd) {
