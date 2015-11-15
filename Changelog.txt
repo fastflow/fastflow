@@ -1,4 +1,5 @@
 * v.2.1.0
+   - improved cmake compilation
    - ff_tpcnode and ff_tpcallocator added
    - added FPGA and DSP support through the ThreadPoolComposer (TPC) framework
      developed by Andreas Koch's group at Technical University of Darmstadt (TUD). 
