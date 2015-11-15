@@ -33,8 +33,8 @@ CXX 		     = g++
 #CXX 		     = icpc 
 LINK_OPT             = 
 VERSION              = 
-OPTIMIZE_FLAGS       = -O3 -finline-functions #-DBLOCKING_MODE
-CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall -std=c++11
+OPTIMIZE_FLAGS       = -O3 -finline-functions -DEBUG #-DBLOCKING_MODE
+CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall -std=c++11 -DEBUG
 CFLAGS               =
 LDFLAGS              = -L ${ZMQ_PATH}/lib
 INCS                 = -I../.. -I${ZMQ_PATH}/include
