@@ -30,7 +30,7 @@
  * Author: Massimo Torquati
  *  December 2010  first version
  *  April    2011  (major rework for the MSqueue)
- *  April    2012  added the bounded/unboun/ded MPMC queues 
+ *  April    2012  added the bounded/unbounded MPMC queues 
  *
  */
 #include <iostream>
