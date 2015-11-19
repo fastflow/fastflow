@@ -108,6 +108,11 @@
 // #endif
 #include <atomic>
 
+#if defined(ALLOCATOR_STATS)
+#include <iostream>
+#endif
+
+
 //#include <pthread.h>
 #include <ff/ubuffer.hpp>
 #include <ff/spin-lock.hpp>
@@ -145,7 +150,6 @@ namespace ff {
         { 512,512,512,512,128,  64,  32,  16,   8 };
 
 #if defined(ALLOCATOR_STATS)
-#include <iostream>
     
     struct all_stats {
         std::atomic_long      nmalloc;
@@ -351,7 +355,7 @@ namespace ff {
      *
      */
     struct xThreadData {
-        enum { MIN_BUFFER_ITEMS=8192, LEAK_CHUNK=1023}; //4096 };
+        enum { LEAK_CHUNK=4096 };
     
         xThreadData(const bool allocator, size_t nslabs, const pthread_t key)
             : leak(0), key(key) {

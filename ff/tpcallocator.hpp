@@ -41,6 +41,10 @@
 #include <cassert>
 #include <map>
 #include <ff/tpc/tpcEnvironment.hpp>
+#include <ff/tpc/tpc_api.h>
+
+using namespace rpr;
+using namespace tpc;
 
 namespace ff {
 
