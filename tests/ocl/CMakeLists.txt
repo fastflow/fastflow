@@ -65,6 +65,7 @@ endforeach( t )
 
 
 add_subdirectory( gameoflife )
+add_subdirectory( helmholtz )
 
 
 
