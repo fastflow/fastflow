@@ -1138,6 +1138,7 @@ public:
 								return -1;
 						break;
 					}
+					break;
 				}
 				case CL_DEVICE_TYPE_CPU: {
 					if (accelerators.size() > 1) {

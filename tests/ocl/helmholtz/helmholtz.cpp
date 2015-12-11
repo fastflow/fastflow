@@ -5,6 +5,15 @@
  *      Author: mdrocco
  */
 
+#include "../ctest.h"
+
+#include <ff/stencilReduceOCL.hpp>
+#include <ff/utils.hpp>
+
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+
 struct const_t {
 	const_t(int n, int m, float ax, float ay, float b, float omega) :
 			n(n), m(m), ax(ax), ay(ay), b(b), omega(omega) {
@@ -13,13 +22,6 @@ struct const_t {
 	int n, m;
 	float ax, ay, b, omega;
 };
-
-#include <ff/stencilReduceOCL.hpp>
-#include <ff/utils.hpp>
-
-#include <cmath>
-#include <cstdio>
-#include <cstdlib>
 
 #define ITERS 10
 
@@ -163,11 +165,12 @@ FF_OCL_STENCIL_ELEMFUNC_2D_2ENV(stencilf, float, h, w, r, c, const_t, float,
 int main(int argc, char **argv) {
 	float *u, *f, dx, dy;
 	float dt, mflops;
+	double st;
 	int n, m, mits, iters;
 	float tol, relax, alpha;
 
 	if (argc < 8) {
-		printf("use:%s n m alpha relax tot mits iters\n", argv[0]);
+		printf("use: %s n m alpha relax tot mits iters\n", argv[0]);
 		printf(" example %s 5000 5000 0.8 1.0 1e-7 1000 10\n", argv[0]);
 		return -1;
 	}
@@ -197,6 +200,7 @@ int main(int argc, char **argv) {
 
 	//one-shot srl
 	ff::ff_stencilReduceLoopOCL_2D<HelmholtzTask> helmholtz(jt, stencilf, reducef, 0.0);
+	SET_DEVICE_TYPE(helmholtz);
 
 	/* Solve Helmholtz equation */
 	printf("Jacobi started\n");
@@ -204,10 +208,12 @@ int main(int argc, char **argv) {
 	helmholtz.run_and_wait_end();
 	ff::ffTime(ff::STOP_TIME);
 	dt = ff::ffTime(ff::GET_TIME);
+	st = ff::diffmsec(helmholtz.getwstoptime(),helmholtz.getwstartime());
 
 	printf("Total Number of Iterations %d\n", (int)jt.iters);
 
 	printf("elapsed time : %12.6f  (ms)\n", dt);
+	printf("svc time : %12.6g  (ms)\n", st);
 
 	mflops = (0.000001 * mits * (m - 2) * (n - 2) * 13) / (dt / 1000.0);
 	printf(" MFlops       : %12.6g (%d, %d, %d, %g)\n", mflops, mits, m, n, (dt / 1000.0));
