@@ -169,19 +169,24 @@ int main(int argc, char **argv) {
 	int n, m, mits, iters;
 	float tol, relax, alpha;
 
-	if (argc < 8) {
-		printf("use: %s n m alpha relax tot mits iters\n", argv[0]);
-		printf(" example %s 5000 5000 0.8 1.0 1e-7 1000 10\n", argv[0]);
-		return -1;
-	}
+	printf("use: %s n m alpha relax tot mits iters\n", argv[0]);
+	printf(" example %s 5000 5000 0.8 1.0 1e-7 1000 10\n", argv[0]);
 
-	n = atoi(argv[1]);
-	m = atoi(argv[2]);
-	alpha = atof(argv[3]);
-	relax = atof(argv[4]);
-	tol = atof(argv[5]);
-	mits = atoi(argv[6]);
-	iters = atoi(argv[7]);
+	n = 5000;
+	m = 5000;
+	alpha = 0.8;
+	relax = 1.0;
+	tol = 1e-7;
+	mits = 1000;
+	iters = 10;
+
+	if(argc>1) n = atoi(argv[1]);
+	if(argc>2) m = atoi(argv[2]);
+	if(argc>3) alpha = atof(argv[3]);
+	if(argc>4) relax = atof(argv[4]);
+	if(argc>5) tol = atof(argv[5]);
+	if(argc>6) mits = atoi(argv[6]);
+	if(argc>7) iters = atoi(argv[7]);
 
 	//allocate
 	u = (float *) malloc(n * m * sizeof(float));
