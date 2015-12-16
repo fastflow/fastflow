@@ -25,11 +25,10 @@
 
 # 
 # Author: Massimo Torquati <torquati@di.unipi.it> 
-# Date:   October 2014
+# Date:   December 2015
 #
 #
 # You have to set at least the following 2 variables:
-# OPENCV_ROOT pointing to the OpenCV root directory
 # FF_ROOT     pointing to the FastFlow root directory (i.e.
 #             the one containing the ff directory).
 # OCL_ROOT    pointing to the OpenCL root directory
@@ -39,12 +38,12 @@ OCL_ROOT    = /usr/local/cuda
 
 CXX		= g++ -std=c++11 #-DNO_DEFAULT_MAPPING
 INCLUDES	= -I $(FF_ROOT)  -I $(OCL_ROOT)/include
-CXXFLAGS  	= -Wall -DFF_OPENCL `pkg-config --cflags opencv`
+CXXFLAGS  	= -Wall -DFF_OPENCL
 
-LDFLAGS 	= `pkg-config --libs opencv` -L$(OCL_ROOT)/lib/x86_64 -lOpenCL -pthread
-OPTFLAGS	=  -O3 -finline-functions -DNDEBUG
+LDFLAGS 	= -L$(OCL_ROOT)/lib/x86_64 -lOpenCL -pthread
+OPTFLAGS	=  -O3 -DNDEBUG
 
-TARGETS		= ffsobel_pipe+mapOCL
+TARGETS		= helmholtz
 
 .PHONY: all clean cleanall
 .SUFFIXES: .cpp 
