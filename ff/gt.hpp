@@ -324,7 +324,11 @@ protected:
     static bool ff_send_out_collector(void * task,
                                       unsigned long retry, 
                                       unsigned long ticks, void *obj) {
-        return ((ff_gatherer *)obj)->push(task, retry, ticks);
+        bool r = ((ff_gatherer *)obj)->push(task, retry, ticks);
+#if defined(FF_TASK_CALLBACK)
+        if (r) ((ff_gatherer *)obj)->callbackOut(obj);
+#endif   
+        return r;
     }
 
 #if defined(FF_TASK_CALLBACK)
@@ -523,12 +527,13 @@ public:
 #endif    
                 }
 
-#if defined(FF_TASK_CALLBACK)
-                if (filter) callbackOut(this);
-#endif
-
                 // if the filter returns NULL we exit immediatly
-                if (task == GO_ON) continue;
+                if (task == GO_ON) { 
+#if defined(FF_TASK_CALLBACK)
+                    if (filter) callbackOut(this);
+#endif
+                    continue;
+                }
                 if ((task == GO_OUT) || (task == EOS_NOFREEZE) || (task == EOSW) ) {
                     ret = task;
                     break;   // exiting from the loop without sending the task
@@ -538,6 +543,9 @@ public:
                     break;
                 }                
                 if (outpresent) push(task);
+#if defined(FF_TASK_CALLBACK)
+                if (filter) callbackOut(this);
+#endif
             }
         } while((neos<(size_t)running) && (neosnofreeze<(size_t)running));
 
@@ -548,7 +556,10 @@ public:
             push(task);
         }
         if (ret == EOSW) ret = EOS; // EOSW is like an EOS but it is not propagated
-
+#if defined(FF_TASK_CALLBACK)
+        if (filter) callbackOut(this);
+#endif
+        
         gettimeofday(&wtstop,NULL);
         wttime+=diffmsec(wtstop,wtstart);
         if (neos>=(size_t)running) neos=0;

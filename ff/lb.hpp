@@ -434,7 +434,13 @@ protected:
     static inline bool ff_send_out_emitter(void * task,
                                            unsigned long retry,
                                            unsigned long ticks, void *obj) {
-        return ((ff_loadbalancer *)obj)->schedule_task(task, retry, ticks);
+        
+
+        bool r= ((ff_loadbalancer *)obj)->schedule_task(task, retry, ticks);
+#if defined(FF_TASK_CALLBACK)
+        if (r) ((ff_loadbalancer *)obj)->callbackOut(obj);
+#endif
+        return r;
     }
 
     int set_internal_multi_input(svector<ff_node*> &mi) {
@@ -642,6 +648,9 @@ public:
         for(unsigned long i=0;i<retry;++i) {
             if (workers[id]->put(task)) {
                 FFTRACE(++taskcnt);
+#if defined(FF_TASK_CALLBACK)
+                callbackOut(this);
+#endif
                 return true;
             }
             losetime_out(ticks);
@@ -671,6 +680,9 @@ public:
             pthread_mutex_unlock(&prod_m);     
             goto _retry;
         }
+#if defined(FF_TASK_CALLBACK)
+        callbackOut(this);
+#endif
         return true;
     }
 #endif
@@ -692,6 +704,9 @@ public:
                 retry.pop_back();
             else losetime_out();
         }
+#if defined(FF_TASK_CALLBACK)
+        callbackOut(this);
+#endif
     }
 #else
     inline void broadcast_task(void * task) {
@@ -713,6 +728,9 @@ public:
                 pthread_mutex_unlock(&prod_m); 
             }
         }
+#if defined(FF_TASK_CALLBACK)
+        callbackOut(this);
+#endif
     }
 #endif
 
@@ -812,25 +830,43 @@ public:
                     ticksmax=(std::max)(ticksmax,diff);
 #endif  
 
+                    if (task == GO_ON) { 
 #if defined(FF_TASK_CALLBACK)
-                    callbackOut(this);
+                        callbackOut(this);
 #endif
-                    if (task == GO_ON) continue; // going to get another task
+                        continue; // going to get another task
+                    }
                     if ((task == GO_OUT) || (task == EOS_NOFREEZE)) {
                         ret = task;
+#if defined(FF_TASK_CALLBACK)
+                        callbackOut(this);
+#endif                        
                         break; // exiting from the loop without sending out the task
                     }
                     // if the filter returns NULL/EOS we exit immediatly
                     if (!task || (task==EOS) || (task==EOSW)) {  // EOSW is propagated to workers
                         push_eos(task);
                         ret = EOS;
+#if defined(FF_TASK_CALLBACK)
+                        callbackOut(this);
+#endif
                         break;
                     }
                 } else 
-                    if (!inpresent) { push_goon(); push_eos(); ret = EOS; break;}
+                    if (!inpresent) { 
+                        push_goon(); push_eos(); ret = EOS; 
+#if defined(FF_TASK_CALLBACK)
+                        callbackOut(this);
+#endif                        
+                        break;
+                    }
                 
                 const bool r = schedule_task(task);
                 assert(r); (void)r;
+#if defined(FF_TASK_CALLBACK)
+                callbackOut(this);
+#endif
+
             } while(true);
         } else {
             size_t nw=0;            
@@ -919,14 +955,19 @@ public:
                         ticksmax=(std::max)(ticksmax,diff);
 #endif  
 
+   
+                        if (task == GO_ON) {
 #if defined(FF_TASK_CALLBACK)
-                        callbackOut(this);
-#endif      
-
-                        if (task == GO_ON) continue;
+                            callbackOut(this);
+#endif   
+                            continue;
+                        }
                         if ((task == GO_OUT) || (task == EOS_NOFREEZE)){
-                           ret = task;
-                           break; // exiting from the loop without sending out the task
+                            ret = task;
+#if defined(FF_TASK_CALLBACK)
+                            callbackOut(this);
+#endif   
+                            break; // exiting from the loop without sending out the task
                         }
                         // if the filter returns NULL we exit immediatly
                         if (!task || (task == EOS) || (task == EOSW) ) {
@@ -938,10 +979,16 @@ public:
                                 if (int_multi_input.size()>0) absorb_eos(int_multi_input);
                             }
                             ret = EOS;
+#if defined(FF_TASK_CALLBACK)
+                            callbackOut(this);
+#endif   
                             break;
                         }
                     }
                     schedule_task(task);
+#if defined(FF_TASK_CALLBACK)
+                    callbackOut(this);
+#endif   
                 }
             } while(1);
         }
