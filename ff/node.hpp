@@ -1007,7 +1007,11 @@ public:
                              unsigned long retry=((unsigned long)-1),
                              unsigned long ticks=(TICKS2WAIT)) { 
         if (callback) return  callback(task,retry,ticks,callback_arg);
-        return Push(task,retry,ticks);
+        bool r =Push(task,retry,ticks);
+#if defined(FF_TASK_CALLBACK)
+        if (r) callbackOut();
+#endif
+        return r;
     }
 
     // Warning resetting queues while the node is running may produce unexpected results.
@@ -1136,13 +1140,13 @@ private:
                         if (outpresent && ( (task == EOS) || (task == EOSW)) )  push(task); 
                         
 #if defined(FF_TASK_CALLBACK)
-                        if (filter) callbackOut(this);
+                        if (filter) callbackOut();
 #endif
                         break;
                     }
                     if (task == GO_OUT) { 
 #if defined(FF_TASK_CALLBACK)
-                        if (filter) callbackOut(this);
+                        if (filter) callbackOut();
 #endif
                         break;
                     }
@@ -1159,11 +1163,13 @@ private:
                 filter->ticksmax=(std::max)(filter->ticksmax,diff);
 #endif           
 
-#if defined(FF_TASK_CALLBACK)
-                if (filter) callbackOut();
-#endif
 
-                if (ret == GO_OUT) break;     
+                if (ret == GO_OUT) {
+#if defined(FF_TASK_CALLBACK)
+                    if (filter) callbackOut();
+#endif
+                    break;     
+                }
                 if (!ret || (ret >= EOSW)) { // EOS or EOS_NOFREEZE or EOSW
                     // NOTE: The EOS is gonna be produced in the output queue
                     // and the thread exits even if there might be some tasks
@@ -1171,7 +1177,15 @@ private:
                     if (!ret) ret = EOS;
                     exit=true;
                 }
-                if ( outpresent && ((ret != GO_ON) && (ret != EOS_NOFREEZE)) ) push(ret);
+                if ( outpresent && ((ret != GO_ON) && (ret != EOS_NOFREEZE)) ) { 
+                    push(ret);
+#if defined(FF_TASK_CALLBACK)
+                    if (filter) callbackOut();
+#endif
+                }
+#if defined(FF_TASK_CALLBACK)
+               if (ret == GO_ON && filter) callbackOut();
+#endif
             } while(!exit);
             
             gettimeofday(&filter->wtstop,NULL);
