@@ -52,6 +52,8 @@ test_ffthread                             test_torus
 test_freeze                               test_torus2
 test_graphsearch                          test_uBuffer
 test_lb_affinity
+test_blk                                  test_blk2
+test_blk3                                 test_blk4
 )
 
 # # tests MPMC for x86 only

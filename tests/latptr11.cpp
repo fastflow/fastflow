@@ -25,7 +25,7 @@ struct firstStage: public ff_node_t<unsigned long> {
         if (task==NULL) {
 	  for(unsigned long i=0;i<nmsgs;++i)
 	    if (!ff_send_out((void*)(i+1))) abort();	    
-	  return EOS;
+	  ff_send_out(EOS);
 	}
 	return GO_ON;
 #else  

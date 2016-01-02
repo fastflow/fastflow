@@ -64,21 +64,31 @@
 
 namespace ff {
 static const size_t FF_EOS           = (ULLONG_MAX);  /// automatically propagated
-static const size_t FF_EOS_NOFREEZE  = (FF_EOS-0x1); /// non automatically propagated
-static const size_t FF_EOSW          = (FF_EOS-0x2); /// propagated only by farm's stages
-static const size_t FF_GO_ON         = (FF_EOS-0x3); /// non automatically propagated
-static const size_t FF_GO_OUT        = (FF_EOS-0x4); /// non automatically propagated
+static const size_t FF_EOS_NOFREEZE  = (FF_EOS-0x1);  /// non automatically propagated
+static const size_t FF_EOSW          = (FF_EOS-0x2);  /// propagated only by farm's stages
+static const size_t FF_GO_ON         = (FF_EOS-0x3);  /// non automatically propagated
+static const size_t FF_GO_OUT        = (FF_EOS-0x4);  /// non automatically propagated
+static const size_t FF_BLK           = (FF_EOS-0x5);  /// automatically propagated
+static const size_t FF_NBLK          = (FF_EOS-0x6);  /// automatically propagated
 // The FF_GO_OUT is quite similar to the FF_EOS_NOFREEZE, both are not propagated automatically but while 
 // the first one is used to exit the main computation loop and in case being freezed, the second one is used 
 // to exit the computation loop and keep spinning on the input queue for a new task without being freezed.
 // EOSW is like EOS but it is not propagated outside a farm pattern. If an emitter receives EOSW in input,
 // than it will be discarded.
+// FF_BLK enables blocking mode, FF_NBLK disable blocking mode (aka nonblocking). 
+//
 }
 
 #if defined(TRACE_FASTFLOW)
 #define FFTRACE(x) x
 #else
 #define FFTRACE(x)
+#endif
+
+#if defined(BLOCKING_MODE)
+#define RUNTIME_MODE true
+#else
+#define RUNTIME_MODE false   // by default the run-time is in nonblocking mode
 #endif
 
 // the barrier implementation to use

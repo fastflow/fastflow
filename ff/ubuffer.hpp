@@ -504,7 +504,7 @@ private:
 
     unsigned long       in_use_buffers; // used to estimate queue length
     const unsigned long	size;
-    const bool			fixedsize;
+    bool			    fixedsize;
     BufferPool			pool;
 };
 

@@ -59,7 +59,7 @@ struct Last: ff_node_t<long> {
 };
 
 struct Emitter: ff_node_t<long> {
-    int svc_ini() {
+    int svc_init() {
         printf("Emitter started\n");
         return 0;
     }
@@ -113,7 +113,7 @@ int main() {
     First first;
     Last  last;
     Emitter E;
-    Collector C(2);
+    Collector C(nworkers);
     ff_Farm<long,long> farm(  [nworkers]() { 
 	    std::vector<std::unique_ptr<ff_node> > W;
 	    for(size_t i=0;i<nworkers;++i)  W.push_back(make_unique<Worker>());

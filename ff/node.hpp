@@ -44,15 +44,15 @@
 #include <ff/config.hpp>
 #include <ff/svector.hpp>
 #include <ff/barrier.hpp>
-#if defined(BLOCKING_MODE)
 #include <atomic>
-#endif
 
 static void *GO_ON        = (void*)ff::FF_GO_ON;
 static void *GO_OUT       = (void*)ff::FF_GO_OUT;
 static void *EOS_NOFREEZE = (void*)ff::FF_EOS_NOFREEZE;
 static void *EOS          = (void*)ff::FF_EOS;
 static void *EOSW         = (void*)ff::FF_EOSW;
+static void *BLK          = (void*)ff::FF_BLK;
+static void *NBLK         = (void*)ff::FF_NBLK;
 
 namespace ff {
 
@@ -450,6 +450,7 @@ private:
     bool              multiInput;   // if the node is a multi input node this is true
     bool              multiOutput;  // if the node is a multi output node this is true
     bool              my_own_thread;
+
     ff_thread       * thread;       /// A \p thWorker object, which extends the \p ff_thread class 
     bool (*callback)(void *,unsigned long,unsigned long, void *);
     void            * callback_arg;
@@ -460,6 +461,9 @@ private:
     struct timeval wtstop;
     double wttime;
 
+protected:    
+    bool               blocking_in; 
+    bool               blocking_out;
 protected:
     
     void set_id(ssize_t id) { myid = id;}
@@ -469,8 +473,29 @@ protected:
         if (!in_active) return false; // it does not want to receive data
         return in->pop(ptr);
     }
-#if !defined(BLOCKING_MODE)
     virtual inline bool Push(void *ptr, unsigned long retry=((unsigned long)-1), unsigned long ticks=(TICKS2WAIT)) {
+        if (blocking_out) {
+        retry:
+            bool r = push(ptr);
+            if (r) { // OK
+                pthread_mutex_lock(p_cons_m);
+                if ((*p_cons_counter).load() == 0) {
+                    pthread_cond_signal(p_cons_c);
+                }
+                ++(*p_cons_counter);
+                pthread_mutex_unlock(p_cons_m);
+                ++prod_counter;
+            } else { // FULL
+                //assert(fixedsize);
+                pthread_mutex_lock(&prod_m);
+                while(prod_counter.load() >= out->buffersize()) {
+                    pthread_cond_wait(&prod_c,&prod_m);
+                }
+                pthread_mutex_unlock(&prod_m);
+                goto retry;
+            }
+            return true;
+        }
         for(unsigned long i=0;i<retry;++i) {
             if (push(ptr)) return true;
             losetime_out(ticks);
@@ -478,7 +503,32 @@ protected:
         return false;
     }
     
-    virtual inline bool Pop(void **ptr, unsigned long retry=((unsigned long)-1), unsigned long ticks=(TICKS2WAIT)) {        
+    virtual inline bool Pop(void **ptr, unsigned long retry=((unsigned long)-1), unsigned long ticks=(TICKS2WAIT)) {    
+        if (blocking_in) {
+            if (!in_active) { *ptr=NULL; return false; }
+        retry:
+            bool r = in->pop(ptr);
+            if (r) { // OK
+                // TODO: possible optimization, p_prod_m is NULL if the queue is unbounded
+                //if (p_prod_m) { // this is true only if fixedsize==true
+                pthread_mutex_lock(p_prod_m);
+                if ((*p_prod_counter).load() >= in->buffersize()) {
+                    pthread_cond_signal(p_prod_c);
+                }
+                --(*p_prod_counter);
+                pthread_mutex_unlock(p_prod_m);
+                //}
+                --cons_counter;
+            } else { // EMPTY
+                pthread_mutex_lock(&cons_m);
+                while (cons_counter.load() == 0) {
+                    pthread_cond_wait(&cons_c, &cons_m);
+                }
+                pthread_mutex_unlock(&cons_m);
+                goto retry;
+            }
+            return true;
+        }
         for(unsigned long i=0;i<retry;++i) {
             if (!in_active) { *ptr=NULL; return false; }
             if (pop(ptr)) return true;
@@ -486,55 +536,7 @@ protected:
         } 
         return true;
     }
-#else
-    virtual inline bool Push(void *ptr, unsigned long=0, unsigned long=0) {
-    retry:
-        bool r = push(ptr);
-        if (r) { // OK
-            pthread_mutex_lock(p_cons_m);
-            if ((*p_cons_counter).load() == 0) {
-                pthread_cond_signal(p_cons_c);
-            }
-            ++(*p_cons_counter);
-            pthread_mutex_unlock(p_cons_m);
-            ++prod_counter;
-        } else { // FULL
-            //assert(fixedsize);
-            pthread_mutex_lock(&prod_m);
-            while(prod_counter.load() >= out->buffersize()) {
-                pthread_cond_wait(&prod_c,&prod_m);
-            }
-            pthread_mutex_unlock(&prod_m);
-            goto retry;
-        }
-        return true;
-    }
-    
-    virtual inline bool Pop(void **ptr, unsigned long=0, unsigned long=0) {
-        if (!in_active) { *ptr=NULL; return false; }
-    retry:
-        bool r = in->pop(ptr);
-        if (r) { // OK
-            // TODO: possible optimization, p_prod_m is NULL if the queue is unbounded
-            //if (p_prod_m) { // this is true only if fixedsize==true
-            pthread_mutex_lock(p_prod_m);
-            if ((*p_prod_counter).load() >= in->buffersize()) {
-                pthread_cond_signal(p_prod_c);
-            }
-            --(*p_prod_counter);
-            pthread_mutex_unlock(p_prod_m);
-            //}
-            --cons_counter;
-        } else { // EMPTY
-            pthread_mutex_lock(&cons_m);
-            while (cons_counter.load() == 0) {
-                pthread_cond_wait(&cons_c, &cons_m);
-            }
-            pthread_mutex_unlock(&cons_m);
-            goto retry;
-        }
-        return true;
-    }
+
 
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
@@ -585,8 +587,6 @@ protected:
     virtual inline pthread_mutex_t   &get_prod_m()       { return prod_m;}
     virtual inline pthread_cond_t    &get_prod_c()       { return prod_c;}
     virtual inline std::atomic_ulong &get_prod_counter() { return prod_counter;}
-
-#endif /* BLOCKING_MODE */
 
     /**
      * \brief Set the ff_node to start with no input task
@@ -1008,6 +1008,9 @@ public:
                              unsigned long ticks=(TICKS2WAIT)) { 
         if (callback) return  callback(task,retry,ticks,callback_arg);
         bool r =Push(task,retry,ticks);
+        if (task == BLK || task == NBLK) {
+            blocking_out = (task == BLK);
+        }
 #if defined(FF_TASK_CALLBACK)
         if (r) callbackOut();
 #endif
@@ -1069,12 +1072,12 @@ protected:
         
         fftree_ptr = NULL;
 
-#if defined(BLOCKING_MODE)
         cons_counter.store(-1);
         prod_counter.store(-1);
         p_prod_m = NULL, p_prod_c = NULL, p_prod_counter = NULL;
         p_cons_m = NULL, p_cons_c = NULL, p_cons_counter = NULL;
-#endif
+
+        blocking_in = blocking_out = RUNTIME_MODE;
     };
         
     virtual inline void input_active(const bool onoff) {
@@ -1151,6 +1154,15 @@ private:
                         break;
                     }
                 }
+                if (task == BLK || task == NBLK) {
+                    if (outpresent) push(task);
+                    filter->blocking_in = (task == BLK);
+                    filter->blocking_out = filter->blocking_in;
+#if defined(FF_TASK_CALLBACK)
+                    if (filter) callbackOut();
+#endif                    
+                    continue;
+                }
                 FFTRACE(++filter->taskcnt);
                 FFTRACE(ticks t0 = getticks());
 
@@ -1162,7 +1174,6 @@ private:
                 filter->ticksmin=(std::min)(filter->ticksmin,diff); // (std::min) for win portability)
                 filter->ticksmax=(std::max)(filter->ticksmax,diff);
 #endif           
-
 
                 if (ret == GO_OUT) {
 #if defined(FF_TASK_CALLBACK)
@@ -1182,6 +1193,10 @@ private:
 #if defined(FF_TASK_CALLBACK)
                     if (filter) callbackOut();
 #endif
+                    if (task == BLK || task == NBLK) {
+                        push(ret);
+                        filter->blocking_out = (task == BLK);
+                    }
                 }
 #if defined(FF_TASK_CALLBACK)
                if (ret == GO_ON && filter) callbackOut();
@@ -1252,7 +1267,6 @@ protected:
 
     fftree *fftree_ptr;       //fftree stuff
 
-#if defined(BLOCKING_MODE)
     // for the input queue
     pthread_mutex_t     cons_m;
     pthread_cond_t      cons_c;
@@ -1273,7 +1287,6 @@ protected:
     pthread_mutex_t    *p_cons_m;
     pthread_cond_t     *p_cons_c;
     std::atomic_ulong  *p_cons_counter;
-#endif    
 };
 
 /* just a node interface for the input and output buffers */
@@ -1299,46 +1312,44 @@ struct ff_buffernode: ff_node {
 
     template<typename T>
     inline bool  put(T *ptr) {  
-#if !defined(BLOCKING_MODE)
-        return ff_node::put(ptr);  
-#else        
-        if (ff_node::get_in_buffer()->isFixedSize()) {
-            do {
-                if (ff_node::put(ptr)) {
-                    pthread_mutex_lock(p_cons_m);
-                    if ((*p_cons_counter).load() == 0) {
-                        pthread_cond_signal(p_cons_c);
+        if (blocking_out) {
+            if (ff_node::get_in_buffer()->isFixedSize()) {
+                do {
+                    if (ff_node::put(ptr)) {
+                        pthread_mutex_lock(p_cons_m);
+                        if ((*p_cons_counter).load() == 0) {
+                            pthread_cond_signal(p_cons_c);
+                        }
+                        ++(*p_cons_counter);
+                        pthread_mutex_unlock(p_cons_m);       
+                        ++prod_counter;
+                        return true;
                     }
-                    ++(*p_cons_counter);
-                    pthread_mutex_unlock(p_cons_m);       
-                    ++prod_counter;
-                    return true;
+                    pthread_mutex_lock(&prod_m);
+                    while(prod_counter.load() >= (ff_node::get_in_buffer()->buffersize())) {
+                        pthread_cond_wait(&prod_c, &prod_m);
+                    }
+                    pthread_mutex_unlock(&prod_m);
+                    
+                } while(1);
+            } else {
+                ff_node::put(ptr);
+                pthread_mutex_lock(p_cons_m);
+                if ((*p_cons_counter).load() == 0) {
+                    pthread_cond_signal(p_cons_c);
                 }
-                pthread_mutex_lock(&prod_m);
-                while(prod_counter.load() >= (ff_node::get_in_buffer()->buffersize())) {
-                    pthread_cond_wait(&prod_c, &prod_m);
-                }
-                pthread_mutex_unlock(&prod_m);
-
-            } while(1);
-        } else {
-            ff_node::put(ptr);
-            pthread_mutex_lock(p_cons_m);
-            if ((*p_cons_counter).load() == 0) {
-                pthread_cond_signal(p_cons_c);
+                ++(*p_cons_counter);
+                pthread_mutex_unlock(p_cons_m);       
+                ++prod_counter;            
             }
-            ++(*p_cons_counter);
-            pthread_mutex_unlock(p_cons_m);       
-            ++prod_counter;            
+            return true;
         }
-        return true;
-#endif
+        return ff_node::put(ptr);
     }
-#if defined(BLOCKING_MODE)
+
     virtual inline pthread_mutex_t   &get_prod_m()       { return prod_m;}
     virtual inline pthread_cond_t    &get_prod_c()       { return prod_c;}
     virtual inline std::atomic_ulong &get_prod_counter() { return prod_counter;}
-#endif
 };
 
 /* *************************** Typed node ************************* */
@@ -1364,9 +1375,10 @@ struct ff_node_t: ff_node {
         EOS((OUT_t*)FF_EOS),
         EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
-        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
+        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE),
+        BLK((OUT_t*)FF_BLK), NBLK((OUT_t*)FF_NBLK) {
 	}
-    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
+    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE, *const BLK, *const NBLK;
     virtual ~ff_node_t()  {}
     virtual OUT_t* svc(IN_t*)=0;
     inline  void *svc(void *task) { return svc(reinterpret_cast<IN_t*>(task)); };
