@@ -52,7 +52,6 @@ protected:
         // create input FFBUFFER
         const int nstages=static_cast<int>(nodes_list.size());
         for(int i=1;i<nstages;++i) {
-#if defined(BLOCKING_MODE)
             pthread_mutex_t   *m        = NULL;
             pthread_cond_t    *c        = NULL;
             std::atomic_ulong *counter  = NULL;
@@ -61,7 +60,6 @@ protected:
                 return -1;
             }
             nodes_list[i-1]->set_output_blocking(m,c,counter);
-#endif
             if (nodes_list[i]->isMultiInput()) {
                 if (nodes_list[i-1]->create_output_buffer(out_buffer_entries, 
                                                           fixedsize)<0)
@@ -70,16 +68,13 @@ protected:
                 nodes_list[i-1]->get_out_nodes(w);
                 if (w.size() == 0) {
                     nodes_list[i]->set_input(nodes_list[i-1]);
-#if defined(BLOCKING_MODE)
                     if (!nodes_list[i-1]->init_output_blocking(m,c,counter)) {
                         error("PIPE, buffernode condition, init output blocking mode for node %d\n", i);
                         return -1;
                     }
-#endif
                 }
                 else {
                     nodes_list[i]->set_input(w);
-#if defined(BLOCKING_MODE)
                     for(size_t i=0;i<w.size();++i) {
                         w[i]->set_output_blocking(m,c,counter);
 
@@ -92,7 +87,6 @@ protected:
                             return -1;
                         }
                     }
-#endif
                 }
             } else {
                 if (nodes_list[i]->create_input_buffer(in_buffer_entries, fixedsize)<0) {
@@ -105,7 +99,6 @@ protected:
         // set output buffer
         for(int i=0;i<(nstages-1);++i) {
             if (nodes_list[i+1]->isMultiInput()) continue;
-#if defined(BLOCKING_MODE)
             pthread_mutex_t   *m        = NULL;
             pthread_cond_t    *c        = NULL;
             std::atomic_ulong *counter  = NULL;
@@ -114,7 +107,6 @@ protected:
                 return -1;
             }
             nodes_list[i+1]->set_input_blocking(m,c,counter);
-#endif
             if (nodes_list[i]->isMultiOutput()) {
                 nodes_list[i]->set_output(nodes_list[i+1]);
             } else {
@@ -144,7 +136,6 @@ protected:
                 }
             }
 
-#if defined(BLOCKING_MODE)
             pthread_mutex_t   *m        = NULL;
             pthread_cond_t    *c        = NULL;
             std::atomic_ulong *counter  = NULL;
@@ -182,7 +173,6 @@ protected:
             }
             // give pointers to my blocking input to the last pipeline stage (p_cons_m,...)
             set_output_blocking(m,c,counter);
-#endif      
         }
 
         prepared=true; 
@@ -310,7 +300,6 @@ public:
         fixedsize=false; // NOTE: forces unbounded size for the queues!
         const int last = static_cast<int>(nodes_list.size())-1;
 
-#if defined(BLOCKING_MODE)
         pthread_mutex_t   *mi        = NULL;
         pthread_cond_t    *ci        = NULL;
         std::atomic_ulong *counteri  = NULL;
@@ -327,17 +316,14 @@ public:
             return -1;
         }
         set_input_blocking(mo,co,countero);
-#endif
 
         if (nodes_list[0]->isMultiInput()) {
             if (nodes_list[last]->isMultiOutput()) {
                 ff_node *t = new ff_buffernode(out_buffer_entries,fixedsize);
                 if (!t) return -1;
                 t->set_id(last); // NOTE: that's not the real node id !
-#if defined(BLOCKING_MODE)
                 t->set_input_blocking(mo,co,countero);
                 t->set_output_blocking(mi,ci,counteri);
-#endif
                 internalSupportNodes.push_back(t);
                 nodes_list[0]->set_input(t);
                 nodes_list[last]->set_output(t);
@@ -530,47 +516,37 @@ public:
      *
      * \note to be used in accelerator mode only
      */
-#if !defined(BLOCKING_MODE)
     inline bool offload(void * task,
                         unsigned long retry=((unsigned long)-1),
                         unsigned long ticks=ff_node::TICKS2WAIT) { 
-        FFBUFFER * inbuffer = get_in_buffer();
-        assert(inbuffer != NULL);
-        // if (!has_input_channel) 
-        //     error("PIPE: accelerator is not set, offload not available\n");
-        // else
-        //     error("PIPE: input buffer creation failed\n");
-        for(unsigned long i=0;i<retry;++i) {
+         FFBUFFER * inbuffer = get_in_buffer();
+         assert(inbuffer != NULL);
+
+         if (ff_node::blocking_out) {
+         _retry:
+             if (inbuffer->push(task)) {
+                 pthread_mutex_lock(p_cons_m);
+                 if ((*p_cons_counter).load() == 0)
+                     pthread_cond_signal(p_cons_c);
+                 ++(*p_cons_counter);
+                 pthread_mutex_unlock(p_cons_m);
+                 ++prod_counter;
+                 return true;
+             } 
+             pthread_mutex_lock(&prod_m);
+             while(prod_counter.load() >= (inbuffer->buffersize())) {
+                 pthread_cond_wait(&prod_c, &prod_m);
+             }
+             pthread_mutex_unlock(&prod_m);
+             goto _retry;
+         }
+         for(unsigned long i=0;i<retry;++i) {
             if (inbuffer->push(task)) return true;
             losetime_out(ticks);
         }     
         return false;
-    }    
-#else
-    inline bool offload(void * task,
-                        unsigned long retry=((unsigned long)-1),
-                        unsigned long ticks=ff_node::TICKS2WAIT) { 
-        FFBUFFER * inbuffer = get_in_buffer();
-    _retry:
-        if (inbuffer->push(task)) {
-            pthread_mutex_lock(p_cons_m);
-            if ((*p_cons_counter).load() == 0)
-                pthread_cond_signal(p_cons_c);
-            ++(*p_cons_counter);
-            pthread_mutex_unlock(p_cons_m);
-            ++prod_counter;
-            return true;
-        } else {
-            pthread_mutex_lock(&prod_m);
-            while(prod_counter.load() >= (inbuffer->buffersize())) {
-                pthread_cond_wait(&prod_c, &prod_m);
-            }
-            pthread_mutex_unlock(&prod_m);
-            goto _retry;
-        }
-        return false;
-    }    
-#endif
+    }
+
     /** 
      * \brief gets a result from a task to the pipeline from the main thread 
      * (accelator mode)
@@ -584,34 +560,20 @@ public:
      * (related to nonblocking get from channel - expert use only)
      * \return \p true is a task is returned, \p false if End-Of-Stream (EOS)
      */
-#if !defined(BLOCKING_MODE)
     inline bool load_result(void ** task, 
                             unsigned long retry=((unsigned long)-1),
                             unsigned long ticks=ff_node::TICKS2WAIT) {
         FFBUFFER * outbuffer = get_out_buffer();
-        if (outbuffer) {
-            for(unsigned long i=0;i<retry;++i) {
-                if (outbuffer->pop(task)) {
-                    if ((*task != (void *)FF_EOS)) return true;
-                    else return false;
-                }
-                losetime_in(ticks);
-            }     
-            return false;
+
+        if (!outbuffer) {
+            if (!has_input_channel) 
+                error("PIPE: accelerator is not set, offload not available");
+            else
+                error("PIPE: output buffer not created");
+            return false;            
         }
-        
-        if (!has_input_channel) 
-            error("PIPE: accelerator is not set, offload not available");
-        else
-            error("PIPE: output buffer not created");
-        return false;
-    }
-#else
-    inline bool load_result(void ** task, 
-                            unsigned long retry=((unsigned long)-1),
-                            unsigned long ticks=ff_node::TICKS2WAIT) {
-        FFBUFFER * outbuffer = get_out_buffer();
-        if (outbuffer) {
+
+        if (ff_node::blocking_in) {
         _retry:
             if (outbuffer->pop(task)) {
                 pthread_mutex_lock(p_prod_m);
@@ -621,7 +583,7 @@ public:
                 --(*p_prod_counter);
                 pthread_mutex_unlock(p_prod_m);
                 --cons_counter;
-
+                
                 if ((*task != (void *)FF_EOS)) return true;
                 else return false;
             }
@@ -632,16 +594,16 @@ public:
             pthread_mutex_unlock(&cons_m);
             goto _retry;
         }
-        
-        if (!has_input_channel) 
-            error("PIPE: accelerator is not set, offload not available");
-        else
-            error("PIPE: output buffer not created");
+        for(unsigned long i=0;i<retry;++i) {
+            if (outbuffer->pop(task)) {
+                if ((*task != (void *)FF_EOS)) return true;
+                else return false;
+            }
+            losetime_in(ticks);
+        }     
         return false;
     }
-#endif
-
-/** 
+    /** 
      * \brief try to get a result from a task to the pipeline from the main thread 
      * (accelator mode)
      * 
@@ -718,7 +680,6 @@ protected:
     
     int   getCPUId() const { return -1;}
 
-#if defined(BLOCKING_MODE)
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
@@ -763,8 +724,6 @@ protected:
         const int last = static_cast<int>(nodes_list.size())-1;
         return nodes_list[last]->get_prod_counter();
     }
-
-#endif /* BLOCKING_MODE */
 
     int create_input_buffer(int nentries, bool fixedsize) { 
         if (in) return -1;  

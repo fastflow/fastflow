@@ -48,7 +48,7 @@
  *                   iterations per thread)
  *      - chunk >  0 means dynamic scheduling with grain equal to chunk, that is,
  *                   no more than chunk iterations at a time is computed by one thread, the 
- *                   chunk is assigned to workers thread dynamically
+ *                   chunk is assigned to worker threads dynamically
  *      - chunk <  0 means static scheduling with grain equal to chunk, that is,
  *                   the iteration space is divided into chunks each one of no more 
  *                   than chunk iterations. Then chunks are assigned to the workers threads 

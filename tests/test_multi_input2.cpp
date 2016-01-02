@@ -124,6 +124,7 @@ int main(int argc, char* argv[]) {
         w.push_back(new Worker2);
     
     farm2.add_emitter(new Emitter2(farm2.getlb(),nworkers));
+    farm2.remove_collector();
     farm2.add_workers(w);
     farm2.wrap_around();
 

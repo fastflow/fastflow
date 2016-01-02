@@ -94,9 +94,8 @@ public:
     typedef IN_t  in_type;
     typedef OUT_t out_type;
 
-
     ff_Map(size_t maxp=-1, bool spinWait=false, bool spinBarrier=false):
-        pfr(maxp,false,true,false),// skip loop warmup and disable spinwait
+        pfr(maxp,false,true,spinBarrier),// skip loop warmup and disable spinwait
         spinWait(spinWait),prepared(false)  {
         pfr.disableScheduler(true);
     }
