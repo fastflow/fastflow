@@ -9,7 +9,7 @@
 #
 #
 
-execfiles="$(find . -maxdepth 1 -type f -executable| grep -v runtests.sh)"
+execfiles="$(find . -maxdepth 1 -type f -executable| grep -v runtests.sh| grep -v mytime.h)"
 
 for file in $execfiles
 do    

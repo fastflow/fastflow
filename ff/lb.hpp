@@ -43,7 +43,6 @@
 namespace ff {
 
 
-
 /*!
  *  \class ff_loadbalancer
  *  \ingroup building_blocks
@@ -79,7 +78,6 @@ public:
     enum {TICKS2WAIT=1000};
 protected:
 
-#if defined(BLOCKING_MODE)
     inline void put_done(int id) {
         pthread_mutex_lock(&workers[id]->get_cons_m());
         if ((workers[id]->get_cons_counter()).load() == 0) {
@@ -153,8 +151,6 @@ protected:
     virtual inline pthread_mutex_t   &get_cons_m()       { return cons_m;}
     virtual inline pthread_cond_t    &get_cons_c()       { return cons_c;}
     virtual inline std::atomic_ulong &get_cons_counter() { return cons_counter;}
-    
-#endif
     
     /**
      * \brief Pushes EOS to the worker
@@ -260,13 +256,37 @@ protected:
      * \return \p true, if successful, or \p false if not successful.
      *
      */
-#if !defined(BLOCKING_MODE)
     virtual bool schedule_task(void * task, 
                                unsigned long retry=((unsigned long)-1), 
                                unsigned long ticks=0) {
-        unsigned long cnt; //,cnt2;
+        unsigned long cnt;
+        if (blocking_out) {
+            do {
+                cnt=0;
+                do {
+                    nextw = selectworker();
+                    assert(nextw>=0);                    
+#if defined(LB_CALLBACK)
+                    task = callback(nextw, task);
+#endif
+                    if(workers[nextw]->put(task)) {
+                        FFTRACE(++taskcnt);
+                        put_done(nextw);
+                        return true;
+                    }
+                    ++cnt;
+                    if (cnt == ntentative()) break; 
+                } while(1);
+                pthread_mutex_lock(&prod_m);
+                while(prod_counter.load() >= (running*workers[0]->get_in_buffer()->buffersize())) {
+                    pthread_cond_wait(&prod_c, &prod_m);
+                }
+                pthread_mutex_unlock(&prod_m);
+            } while(1);
+            return true;
+        } // blocking 
         do {
-            cnt=0;//,cnt2=0;
+            cnt=0;
             do {
                 nextw = selectworker();
                 if (nextw<0) return false;
@@ -277,49 +297,14 @@ protected:
                     FFTRACE(++taskcnt);
                     return true;
                 }
-                else {
-                    ++cnt;
-                    if (cnt>=retry) { nextw=-1; return false; }
-                    if (cnt == ntentative()) break; 
-                }
+                ++cnt;
+                if (cnt>=retry) { nextw=-1; return false; }
+                if (cnt == ntentative()) break; 
             } while(1);
             losetime_out();
         } while(1);
         return false;
     }
-#else
-    virtual bool schedule_task(void * task, 
-                               unsigned long retry=((unsigned long)-1), 
-                               unsigned long ticks=0) {
-        unsigned long cnt;
-        do {
-            cnt=0;
-            do {
-                nextw = selectworker();
-                assert(nextw>=0);
-
-#if defined(LB_CALLBACK)
-                task = callback(nextw, task);
-#endif
-                if(workers[nextw]->put(task)) {
-                    FFTRACE(++taskcnt);
-                    put_done(nextw);
-                    return true;
-                }
-                else {
-                    ++cnt;
-                    if (cnt == ntentative()) break; 
-                }
-            } while(1);
-            pthread_mutex_lock(&prod_m);
-            while(prod_counter.load() >= (running*workers[0]->get_in_buffer()->buffersize())) {
-                pthread_cond_wait(&prod_c, &prod_m);
-            }
-            pthread_mutex_unlock(&prod_m);
-        } while(1);
-        return true;
-    }
-#endif /* BLOCKING_MODE */
 
     /**
      * \brief Collects tasks
@@ -341,14 +326,11 @@ protected:
             cnt=0;
             do {
                 if (++start == ite) start=availworkers.begin();
-                //if (start == ite) start=availworkers.begin();  // read again next time from the same, needs (**)
+                //if (start == ite) start=availworkers.begin();  // read again next time from the same, this needs (**)
                 if((*start)->get(task)) {
-                    channelid = 
-                        ((start-availworkers.begin()) >= (ssize_t)multi_input_start) ? -1:(*start)->get_my_id();
-
-#if defined(BLOCKING_MODE)
-                    pop_done(*start);
-#endif
+                    const size_t idx = (start-availworkers.begin());
+                    channelid = (idx >= multi_input_start) ? -1: (*start)->get_my_id();
+                    if (blkvector[idx]) pop_done(*start);
                     return start;
                 }
                 else { 
@@ -356,9 +338,7 @@ protected:
                     if (++cnt == nw) {
                         if (filter && !filter->in_active) { *task=NULL; channelid=-2; return ite;}
                         if (buffer && buffer->pop(task)) {
-#if defined(BLOCKING_MODE)
-                            pop_done(NULL);
-#endif
+                            if (blkvector[availworkers.size()]) pop_done(NULL);
                             channelid = -1;
                             return ite;
                         }
@@ -366,15 +346,13 @@ protected:
                     }
                 }
             } while(1);
-#if !defined(BLOCKING_MODE)
-            losetime_in();
-#else
-            pthread_mutex_lock(&cons_m);
-            while (cons_counter.load() == 0) {
-                pthread_cond_wait(&cons_c, &cons_m);
-            }
-            pthread_mutex_unlock(&cons_m);
-#endif
+            if (blocking_in) {
+                pthread_mutex_lock(&cons_m);
+                while (cons_counter.load() == 0) {
+                    pthread_cond_wait(&cons_c, &cons_m);
+                }
+                pthread_mutex_unlock(&cons_m);
+            } else losetime_in();
         } while(1);
         return ite;
     }
@@ -390,35 +368,31 @@ protected:
      */
     bool pop(void ** task) {
         //register int cnt = 0;       
-        if (!filter) {
-            while (! buffer->pop(task)) {
-#if !defined(BLOCKING_MODE)
-                losetime_in();
-            }
-#else
-            pthread_mutex_lock(&cons_m);
-            while (cons_counter.load() == 0) {
-                    pthread_cond_wait(&cons_c, &cons_m);
-                }
-                pthread_mutex_unlock(&cons_m);
-            } // while
+        if (blocking_in) {
+            if (!filter) {
+                while (! buffer->pop(task)) {
+                    pthread_mutex_lock(&cons_m);
+                    while (cons_counter.load() == 0) {
+                        pthread_cond_wait(&cons_c, &cons_m);
+                    }
+                    pthread_mutex_unlock(&cons_m);
+                } // while
+            } else 
+                while (! filter->pop(task)) {
+                    pthread_mutex_lock(&cons_m);
+                    while (cons_counter.load() == 0) {
+                        pthread_cond_wait(&cons_c, &cons_m);
+                    }
+                    pthread_mutex_unlock(&cons_m);
+                } //while 
+            
             pop_done(NULL);
-#endif
             return true;
-       }
-        while (! filter->pop(task)) {
-#if !defined(BLOCKING_MODE)
-            losetime_in();
-        } 
-#else
-            pthread_mutex_lock(&cons_m);
-            while (cons_counter.load() == 0) {
-                pthread_cond_wait(&cons_c, &cons_m);
-            }
-            pthread_mutex_unlock(&cons_m);
-        } //while 
-        pop_done(NULL);
-#endif
+        }
+        if (!filter) 
+            while (! buffer->pop(task)) losetime_in();
+        else 
+            while (! filter->pop(task)) losetime_in();
         return true;
     }
     
@@ -437,6 +411,9 @@ protected:
         
 
         bool r= ((ff_loadbalancer *)obj)->schedule_task(task, retry, ticks);
+        if (task == BLK || task == NBLK) { 
+            ((ff_loadbalancer *)obj)->blocking_out = (task==BLK); 
+        }
 #if defined(FF_TASK_CALLBACK)
         if (r) ((ff_loadbalancer *)obj)->callbackOut(obj);
 #endif
@@ -455,8 +432,8 @@ protected:
     void absorb_eos(svector<ff_node*>& W) {
         void *task;
         for(size_t i=0;i<W.size();++i) {
-            do ; while(!W[i]->get(&task));
-            assert((task == (void*)FF_EOS) || (task == EOS_NOFREEZE));
+            do ; while(!W[i]->get(&task) || (task == BLK) || (task==NBLK));
+            assert((task == EOS) || (task == EOS_NOFREEZE) || (task == BLK) || (task == NBLK));            
         }
     }
     
@@ -483,11 +460,10 @@ public:
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
-#if defined(BLOCKING_MODE)
         cons_counter.store(-1);
         prod_counter.store(-1);
         p_prod_m = NULL, p_prod_c = NULL, p_prod_counter = NULL;
-#endif
+        blocking_in = blocking_out = RUNTIME_MODE;
 
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
     }
@@ -641,98 +617,101 @@ public:
         return 0;
     }
 
-#if !defined(BLOCKING_MODE)
     inline bool ff_send_out_to(void *task, int id,  
                                unsigned long retry=((unsigned long)-1),
                                unsigned long ticks=(TICKS2WAIT)) {        
+        if (blocking_out) {
+        _retry:
+            if (workers[id]->put(task)) {
+                FFTRACE(++taskcnt);
+                
+                pthread_mutex_lock(&workers[id]->get_cons_m());
+                if ((workers[id]->get_cons_counter()).load() == 0)
+                    pthread_cond_signal(&workers[id]->get_cons_c());
+                ++(workers[id]->get_cons_counter());
+                pthread_mutex_unlock(&workers[id]->get_cons_m());            
+                ++prod_counter;
+            } else {
+                pthread_mutex_lock(&prod_m);
+                // here we do not use while
+                // the thread can be woken up more frequently
+                if (prod_counter.load() >= workers[id]->get_in_buffer()->buffersize())
+                    pthread_cond_wait(&prod_c, &prod_m);
+                pthread_mutex_unlock(&prod_m);     
+                goto _retry;
+            }
+#if defined(FF_TASK_CALLBACK)
+            callbackOut(this);
+#endif
+            if (task == BLK || task == NBLK) { 
+                blocking_out = (task==BLK); 
+            }
+            return true;
+        }
         for(unsigned long i=0;i<retry;++i) {
             if (workers[id]->put(task)) {
                 FFTRACE(++taskcnt);
 #if defined(FF_TASK_CALLBACK)
                 callbackOut(this);
 #endif
-                return true;
+                if (task == BLK || task == NBLK) { 
+                    blocking_out = (task==BLK); 
+                }                
+               return true;
             }
             losetime_out(ticks);
         }    
         return false;
     }
-#else
-    inline bool ff_send_out_to(void *task, int id,  
-                               unsigned long retry=((unsigned long)-1),
-                               unsigned long ticks=(TICKS2WAIT)) {        
-    _retry:
-        if (workers[id]->put(task)) {
-            FFTRACE(++taskcnt);
 
-            pthread_mutex_lock(&workers[id]->get_cons_m());
-            if ((workers[id]->get_cons_counter()).load() == 0)
-                pthread_cond_signal(&workers[id]->get_cons_c());
-            ++(workers[id]->get_cons_counter());
-            pthread_mutex_unlock(&workers[id]->get_cons_m());            
-            ++prod_counter;
-        } else {
-            pthread_mutex_lock(&prod_m);
-            // here we do not use while
-            // the thread can be woken up more frequently
-            if (prod_counter.load() >= workers[id]->get_in_buffer()->buffersize())
-                pthread_cond_wait(&prod_c, &prod_m);
-            pthread_mutex_unlock(&prod_m);     
-            goto _retry;
-        }
-#if defined(FF_TASK_CALLBACK)
-        callbackOut(this);
-#endif
-        return true;
-    }
-#endif
     /** 
      * \brief Send the same task to all workers 
      *
      * It sends the same task to all workers.   
      */
-#if !defined(BLOCKING_MODE)
-    inline void broadcast_task(void * task) {
-        std::vector<size_t> retry;
-
-        for(ssize_t i=0;i<running;++i) {
-            if(!workers[i]->put(task))
-                retry.push_back(i);
-        }
-        while(retry.size()) {
-            if(workers[retry.back()]->put(task))
-                retry.pop_back();
-            else losetime_out();
-        }
+   inline void broadcast_task(void * task) {
+       std::vector<size_t> retry;
+       if (blocking_out) {
+           for(ssize_t i=0;i<running;++i) {
+               if(!workers[i]->put(task))
+                   retry.push_back(i);
+               else put_done(i);
+           }
+           while(retry.size()) {
+               if(workers[retry.back()]->put(task)) {
+                   put_done(retry.back());
+                   retry.pop_back();
+               } else {
+                   pthread_mutex_lock(&prod_m);
+                   while(prod_counter.load() >= (retry.size()*workers[0]->get_in_buffer()->buffersize()))
+                       pthread_cond_wait(&prod_c, &prod_m);
+                   pthread_mutex_unlock(&prod_m); 
+               }
+           }           
 #if defined(FF_TASK_CALLBACK)
-        callbackOut(this);
+           callbackOut(this);
 #endif
-    }
-#else
-    inline void broadcast_task(void * task) {
-        std::vector<size_t> retry;
-
-        for(ssize_t i=0;i<running;++i) {
-            if(!workers[i]->put(task))
-                retry.push_back(i);
-            else put_done(i);
-        }
-        while(retry.size()) {
-            if(workers[retry.back()]->put(task)) {
-                put_done(retry.back());
-                retry.pop_back();
-            } else {
-                pthread_mutex_lock(&prod_m);
-                while(prod_counter.load() >= (retry.size()*workers[0]->get_in_buffer()->buffersize()))
-                    pthread_cond_wait(&prod_c, &prod_m);
-                pthread_mutex_unlock(&prod_m); 
-            }
-        }
+           if (task == BLK || task == NBLK) { 
+               blocking_out = (task==BLK); 
+           }    
+           return;
+       }
+       for(ssize_t i=0;i<running;++i) {
+           if(!workers[i]->put(task))
+               retry.push_back(i);
+       }
+       while(retry.size()) {
+           if(workers[retry.back()]->put(task))
+               retry.pop_back();
+           else losetime_out();
+       }       
 #if defined(FF_TASK_CALLBACK)
-        callbackOut(this);
+       callbackOut(this);
 #endif
+       if (task == BLK || task == NBLK) { 
+           blocking_out = (task==BLK); 
+       }    
     }
-#endif
 
     /**
      * \brief Gets the masterworker flags
@@ -815,7 +794,14 @@ public:
                         }
                         ret = task;
                         break;
-                    }
+                    } else if (task == BLK || task == NBLK) {
+                        push_eos(task); // *BLK are propagated
+                        blocking_in = blocking_out = (task == BLK);
+#if defined(FF_TASK_CALLBACK)
+                        if (filter) callbackOut(this);
+#endif
+                        continue;
+                    }                       
                 }
 
                 if (filter) {
@@ -834,8 +820,18 @@ public:
 #if defined(FF_TASK_CALLBACK)
                         callbackOut(this);
 #endif
-                        continue; // going to get another task
+                        continue;
                     }
+                    if (task == BLK || task == NBLK) { 
+                        push_eos(task);
+                        blocking_out = (task==BLK); 
+
+#if defined(FF_TASK_CALLBACK)
+                        callbackOut(this);
+#endif
+                        continue;
+                    }
+
                     if ((task == GO_OUT) || (task == EOS_NOFREEZE)) {
                         ret = task;
 #if defined(FF_TASK_CALLBACK)
@@ -866,35 +862,44 @@ public:
 #if defined(FF_TASK_CALLBACK)
                 callbackOut(this);
 #endif
-
             } while(true);
         } else {
-            size_t nw=0;            
+            bool local_blocking_in = blocking_in;
+            size_t nw=0, nw_blk=0, nblk=0;                        
             // contains current worker
             std::deque<ff_node *> availworkers; 
 
             //assert( master_worker ^ ( multi_input != NULL) );
 
             if (master_worker) {
-                for(int i=0;i<running;++i)
+                for(int i=0;i<running;++i) {
                     availworkers.push_back(workers[i]);
+                    blkvector.push_back(local_blocking_in);
+                }
                 nw = running;
             }
             if (int_multi_input.size()>0) {
                 assert(!master_worker);
-                for(size_t i=0;i<int_multi_input.size();++i)
+                for(size_t i=0;i<int_multi_input.size();++i) {
                     availworkers.push_back(int_multi_input[i]);
+                    blkvector.push_back(local_blocking_in);
+                }
                 nw += int_multi_input.size();
             }
             if (multi_input.size()>0) {
                 multi_input_start = availworkers.size();
-                for(size_t i=0;i<multi_input.size();++i)
+                for(size_t i=0;i<multi_input.size();++i) {
                     availworkers.push_back(multi_input[i]);
+                    blkvector.push_back(local_blocking_in);
+                }
                 nw += multi_input.size();
+                nw_blk += multi_input.size();
             } 
             if ((master_worker || int_multi_input.size()>0) && inpresent) {
                 assert(multi_input.size() == 0);
                 nw += 1;
+                nw_blk += 1;
+                blkvector.push_back(local_blocking_in);
             }
             std::deque<ff_node *>::iterator start(availworkers.begin());
             std::deque<ff_node *>::iterator victim(availworkers.begin());
@@ -912,7 +917,44 @@ public:
 #endif
                     ret = task; 
                     break; 
-                }
+                } 
+                if (task == BLK || task == NBLK) {
+                    if (channelid == -1) { // msg coming from input channels (not feedback ones) !
+                        if (inpresent) {
+                            assert(multi_input.size() == 0);
+                            push_eos(task); // *BLK are propagated
+                            local_blocking_in = blocking_in = blocking_out = (task == BLK);
+                            blkvector[availworkers.size()] = local_blocking_in;
+                        } else {
+                            const bool taskblocking = (task == BLK);
+                            const size_t idx = (victim-availworkers.begin());                        
+                            assert(idx>=0);
+                            blkvector[idx] = taskblocking;
+
+                            if (local_blocking_in ^ taskblocking) { // reset
+                                nblk = 1;
+                                if (nblk == nw_blk) {
+                                    push_eos(task);
+                                    blocking_out = blocking_in = taskblocking;                    
+                                }                                 
+                                local_blocking_in = !local_blocking_in;
+                            } else {
+                                if (++nblk == nw_blk) {
+                                    assert(taskblocking == local_blocking_in);
+                                    push_eos(task);
+                                    blocking_out = blocking_in = taskblocking; 
+                                    nblk=0;
+                                }                                 
+                            }                                                                        
+                        }
+                    } // NOTE: BLK and NBLK tasks that are coming from internal channels 
+                      //       are not propagated ! 
+
+#if defined(FF_TASK_CALLBACK)
+                    if (filter) callbackOut(this);
+#endif
+                    continue;
+                }      
 
                 if ((task == EOS) || 
                     (task == EOS_NOFREEZE)) {
@@ -955,8 +997,15 @@ public:
                         ticksmax=(std::max)(ticksmax,diff);
 #endif  
 
-   
                         if (task == GO_ON) {
+#if defined(FF_TASK_CALLBACK)
+                            callbackOut(this);
+#endif   
+                            continue;
+                        }
+                        if (task == BLK || task == NBLK) {
+                            push_eos(task);
+                            blocking_out = (task == BLK);
 #if defined(FF_TASK_CALLBACK)
                             callbackOut(this);
 #endif   
@@ -1328,7 +1377,7 @@ private:
     double wttime;
 
  protected:
-#if defined(BLOCKING_MODE)
+
     // for the input queue
     pthread_mutex_t    cons_m;
     pthread_cond_t     cons_c;
@@ -1343,7 +1392,10 @@ private:
     pthread_mutex_t    prod_m;
     pthread_cond_t     prod_c;
     std::atomic_ulong  prod_counter;
-#endif    
+
+    bool               blocking_in;
+    bool               blocking_out;
+    svector<bool>      blkvector;
 
 #if defined(TRACE_FASTFLOW)
     unsigned long taskcnt;

@@ -88,7 +88,6 @@ protected:
         return 0;
     }
 
-#if defined(BLOCKING_MODE)
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
@@ -117,7 +116,6 @@ protected:
     virtual inline pthread_mutex_t   &get_prod_m()        { return gt->get_prod_m(); }
     virtual inline pthread_cond_t    &get_prod_c()        { return gt->get_prod_c(); }
     virtual inline std::atomic_ulong &get_prod_counter()  { return gt->get_prod_counter();}
-#endif /* BLOCKING_MODE */
 
 public:
     /**
@@ -266,7 +264,6 @@ protected:
         return 0;
     }
 
-#if defined(BLOCKING_MODE)
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
@@ -295,7 +292,6 @@ protected:
     virtual inline pthread_mutex_t   &get_cons_m()        { return lb->get_cons_m();}
     virtual inline pthread_cond_t    &get_cons_c()        { return lb->get_cons_c();}
     virtual inline std::atomic_ulong &get_cons_counter()  { return lb->get_cons_counter();}
-#endif /* BLOCKING_MODE */
 
 public:
     /**
@@ -359,6 +355,10 @@ public:
         return lb->ff_send_out_to(task,id);
     }
     
+    inline void broadcast_task(void *task) {
+        lb->broadcast_task(task);
+    }
+
     /**
      * \brief run
      *
@@ -432,11 +432,12 @@ struct ff_minode_t: ff_minode {
     typedef OUT_t out_type;
     ff_minode_t():
         GO_ON((OUT_t*)FF_GO_ON),
-        EOS((OUT_t*)FF_EOS),
+        EOS((OUT_t*)FF_EOS),EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
-        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
+        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE),
+        BLK((OUT_t*)FF_BLK), NBLK((OUT_t*)FF_NBLK) {
 	}
-    OUT_t * const GO_ON,  *const EOS, *const GO_OUT, *const EOS_NOFREEZE;
+    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE, *const BLK, *const NBLK;
     virtual ~ff_minode_t()  {}
     virtual OUT_t* svc(IN_t*)=0;
     inline  void *svc(void *task) { return svc(reinterpret_cast<IN_t*>(task)); };
@@ -459,11 +460,12 @@ struct ff_monode_t: ff_monode {
     typedef OUT_t out_type;
     ff_monode_t():
         GO_ON((OUT_t*)FF_GO_ON),
-        EOS((OUT_t*)FF_EOS),
+        EOS((OUT_t*)FF_EOS),EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
-        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
+        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE),
+        BLK((OUT_t*)FF_BLK), NBLK((OUT_t*)FF_NBLK) {
 	}
-    OUT_t * const GO_ON,  *const EOS, *const GO_OUT, *const EOS_NOFREEZE;
+    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE, *const BLK, *const NBLK;
     virtual ~ff_monode_t()  {}
     virtual OUT_t* svc(IN_t*)=0;
     inline  void *svc(void *task) { return svc(reinterpret_cast<IN_t*>(task)); };

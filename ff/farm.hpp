@@ -114,8 +114,6 @@ protected:
             lb->register_worker(workers[i]);
             if (collector && !collector_removed) gt->register_worker(workers[i]);
         }
-
-#if defined(BLOCKING_MODE)
         for(size_t i=0;i<nworkers;++i) {
             pthread_mutex_t   *m        = NULL;
             pthread_cond_t    *c        = NULL;
@@ -159,7 +157,6 @@ protected:
             for(size_t i=0;i<nworkers;++i)
                 workers[i]->set_output_blocking(m,c,counter);
         }    
-#endif
         prepared=true;
         return 0;
     }
@@ -176,7 +173,6 @@ protected:
     }
 
 
-#if defined(BLOCKING_MODE)
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
@@ -213,8 +209,6 @@ protected:
     virtual inline pthread_mutex_t   &get_prod_m()        { return gt->prod_m; }
     virtual inline pthread_cond_t    &get_prod_c()        { return gt->prod_c; }
     virtual inline std::atomic_ulong &get_prod_counter()  { return gt->prod_counter;}
-#endif /* BLOCKING_MODE */
-
 
 public:
     /*
@@ -273,7 +267,6 @@ public:
             if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
                 error("FARM, creating input buffer\n");
             }
-#if defined(BLOCKING_MODE)
             if (!init_input_blocking(p_cons_m,p_cons_c,p_cons_counter)) {
                 error("FARM, init input blocking mode for accelerator\n");
             }
@@ -284,7 +277,6 @@ public:
                 error("FARM, init output blocking mode for accelerator\n");
             }
             set_input_blocking(m,c,counter);
-#endif
         }
     }
 
@@ -333,7 +325,6 @@ public:
             if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
                 error("FARM, creating input buffer\n");
             }
-#if defined(BLOCKING_MODE)
             if (!init_input_blocking(p_cons_m,p_cons_c,p_cons_counter)) {
                 error("FARM, init input blocking mode for accelerator\n");
             }
@@ -344,7 +335,6 @@ public:
                 error("FARM, init output blocking mode for accelerator\n");
             }           
             set_input_blocking(m,c,counter);
-#endif
         }
     }
     
@@ -503,7 +493,6 @@ public:
             // NOTE: the queue is forced to be unbounded
             if (create_output_buffer(out_buffer_entries, false)<0) return -1;
 
-#if defined(BLOCKING_MODE)
             pthread_mutex_t   *mtx      = NULL;
             pthread_cond_t    *cond     = NULL;
             std::atomic_ulong *counter  = NULL;           
@@ -514,7 +503,6 @@ public:
             if (!init_output_blocking(p_prod_m,p_prod_c,p_prod_counter)) {
                 error("FARM, add_collector, init input blocking mode for accelerator\n");
             }
-#endif
         }
         
         fftree *treeptr = new fftree(gt, COLLECTOR);
@@ -548,7 +536,6 @@ public:
             return 0;
         }
 
-#if defined(BLOCKING_MODE)
         pthread_mutex_t   *m        = NULL;
         pthread_cond_t    *c        = NULL;
         std::atomic_ulong *counter  = NULL;
@@ -563,7 +550,6 @@ public:
             return -1;
         }
         set_input_blocking(m,c,counter);             
-#endif
 
         if (!multi_input) {
             if (create_input_buffer(in_buffer_entries, false)<0) {
@@ -582,9 +568,7 @@ public:
             }
             ff_buffernode *tmpbuffer = new ff_buffernode(0, NULL,get_out_buffer());
             if (!tmpbuffer) return -1;
-#if defined(BLOCKING_MODE)
             tmpbuffer->set_input_blocking(m,c,counter);
-#endif
             internalSupportNodes.push_back(tmpbuffer);
             if (set_output_buffer(get_out_buffer())<0) {
                 error("FARM, setting output buffer for multi-input configuration\n");
@@ -820,37 +804,37 @@ public:
         FFBUFFER * inbuffer = get_in_buffer();
 
         if (inbuffer) {
-            for(unsigned long i=0;i<retry;++i) {
+            if (blocking_out) {
+            _retry:
                 if (inbuffer->push(task)) {
-#if defined(BLOCKING_MODE)
                     pthread_mutex_lock(p_cons_m);
                     if ((*p_cons_counter).load() == 0)
                         pthread_cond_signal(p_cons_c);
                     ++(*p_cons_counter);
                     pthread_mutex_unlock(p_cons_m);
                     ++prod_counter;
-#endif
                     return true;
                 }
-#if !defined(BLOCKING_MODE)
-                losetime_out(ticks);
-#else
                 pthread_mutex_lock(&prod_m);
                 while(prod_counter.load() >= (inbuffer->buffersize())) {
                     pthread_cond_wait(&prod_c, &prod_m);
                 }
                 pthread_mutex_unlock(&prod_m);
-#endif
-            }     
+                goto _retry;
+            }
+            for(unsigned long i=0;i<retry;++i) {
+                if (inbuffer->push(task)) return true;
+                losetime_out(ticks);
+            } 
             return false;
-        }
-        
+        }        
         if (!has_input_channel) 
             error("FARM: accelerator is not set, offload not available");
         else
             error("FARM: input buffer creation failed");
         return false;
     }
+
 
     /**
      * \brief Loads results into gatherer
@@ -863,11 +847,29 @@ public:
      *
      * \return \p false if EOS arrived or too many retries, \p true if  there is a new value
      */
-#if !defined(BLOCKING_MODE)
     inline bool load_result(void ** task,
                             unsigned long retry=((unsigned long)-1),
                             unsigned long ticks=ff_gatherer::TICKS2WAIT) {
         if (!collector) return false;
+
+        if (blocking_in) {
+        _retry:
+            if (gt->pop_nb(task)) {
+                // NOTE: the queue between collector and the main thread is forced to be unbounded
+                // therefore the collector cannot be blocked for the condition buffer full ! 
+                --(gt->prod_counter);
+                --cons_counter;
+                
+                if ((*task != (void *)FF_EOS)) return true;
+                else return false;
+            }
+            pthread_mutex_lock(&cons_m);
+            while(cons_counter.load() == 0) {
+                pthread_cond_wait(&cons_c, &cons_m);
+            }
+            pthread_mutex_unlock(&cons_m);
+            goto _retry;
+        }
         for(unsigned long i=0;i<retry;++i) {
             if (gt->pop_nb(task)) {
                 if ((*task != (void *)FF_EOS)) return true;
@@ -877,32 +879,6 @@ public:
         }
         return false;
     }
-#else
-    inline bool load_result(void ** task,
-                            unsigned long retry=((unsigned long)-1),
-                            unsigned long ticks=ff_gatherer::TICKS2WAIT) {
-        if (!collector) return false;
-    _retry:
-        if (gt->pop_nb(task)) {
-            // NOTE: the queue between collector and the main thread is forced to be unbounded
-            // therefore the collector cannot be blocked for the condition buffer full ! 
-            --(gt->prod_counter);
-            --cons_counter;
-
-            if ((*task != (void *)FF_EOS)) return true;
-            else return false;
-        } else {
-            pthread_mutex_lock(&cons_m);
-            while(cons_counter.load() == 0) {
-                pthread_cond_wait(&cons_c, &cons_m);
-            }
-            pthread_mutex_unlock(&cons_m);
-            goto _retry;
-        }   
-        return true;
-    }
-#endif
-
     /**
      * \brief Loads result with non-blocking
      *
@@ -1012,6 +988,17 @@ public:
             workers[i]->get_out_nodes(w);
         if (w.size()==0) w = workers;
     }
+
+
+    /*  WARNING: if these methods are called after prepare (i.e. after having called
+     *  run_and_wait_end/run_then_freeze/run/....) they have no effect.     
+     *
+     */
+    void setFixedSize(bool fs)        { fixedsize = fs;         }
+    void setInputQueueLength(int sz)  { in_buffer_entries = sz; }
+    void setOutputQueueLength(int sz) { out_buffer_entries = sz;}
+
+
 
     /**
      * \internal
@@ -1580,8 +1567,6 @@ private:
         ff_node*   C_f;
     };
 
-
-#if defined(BLOCKING_MODE)
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
@@ -1615,8 +1600,6 @@ private:
     virtual inline pthread_mutex_t   &get_prod_m()        { return (this->getgt())->prod_m; }
     virtual inline pthread_cond_t    &get_prod_c()        { return (this->getgt())->prod_c; }
     virtual inline std::atomic_ulong &get_prod_counter()  { return (this->getgt())->prod_counter;}
-#endif /* BLOCKING_MODE */
-
     
 public:
     /**
