@@ -37,13 +37,14 @@
 using namespace ff;
 
 struct Scheduler: ff_node_t<long> {   
+    Scheduler(ff_loadbalancer *lb):lb(lb) {}
     long *svc(long *in) {
         static size_t rounds = 0;
         
         if (in == nullptr) {
             // enforces nonblocking mode since the beginning
             // regardless the compilation setting
-            ff_send_out(NBLK); 
+            lb->broadcast_task(NBLK);
 
             for(size_t i=0;i<1000;++i) 
                 ff_send_out((long*)(i+1));
@@ -61,6 +62,7 @@ struct Scheduler: ff_node_t<long> {
         };
         return EOS;
     }
+    ff_loadbalancer *const lb;
 };
 
 struct Worker: ff_node_t<long> {
@@ -78,7 +80,7 @@ int main() {
 	    for(size_t i=0;i<nworkers;++i)  W.push_back(make_unique<Worker>());
 	    return W;
 	} () );
-    Scheduler sched;
+    Scheduler sched(farm.getlb());
     farm.add_emitter(sched);
     farm.remove_collector();
     farm.setFixedSize(true);
