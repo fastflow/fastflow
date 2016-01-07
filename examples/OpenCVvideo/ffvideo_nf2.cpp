@@ -38,7 +38,7 @@
 using namespace ff; 
 using namespace cv;
 
-// reads freame and sends them to the next stage
+// reads frame and sends them to the next stage
 struct Source : ff_node_t<cv::Mat> {
     const std::string filename;
     Source(const std::string filename):filename(filename) {}
@@ -52,11 +52,10 @@ struct Source : ff_node_t<cv::Mat> {
 	for(;;) {
 	    Mat * frame = new Mat();
 	    if(cap.read(*frame))  ff_send_out(frame);
-	    else {
-		std::cout << "End of stream in input" << std::endl; 
-		break;
-	    }
+	    else break;
 	}
+
+    std::cout << "End of stream in input" << std::endl; 
 	return EOS;
     }
 }; 

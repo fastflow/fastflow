@@ -77,19 +77,25 @@ public:
 
 class Stop: public ff_node {
 public:
-    Stop(int streamlen):expected(streamlen) {}
+    Stop(int streamlen):expected(streamlen),error(false) {}
 
     void* svc(void* task) {    
         long t = *(long*)task;
         printf("received %ld\n", t);
         
-        if (t != --expected) 
+        if (t != --expected) {
             printf("ERROR: task received out of order, received %ld expected %ld\n", t, expected);
+            error = true;
+        }
         
         return GO_ON;
     }
+    void svc_end() {
+        if (error) abort();
+    }
 private:
     long expected;
+    bool error;
 };
 
 

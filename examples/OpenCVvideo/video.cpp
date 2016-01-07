@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
     std::cout << "Input file " << argv[1] << " opened" << std::endl;
     
     // filter parameters
-    bool filter1, filter2;
+    bool filter1=false, filter2=false;
     if(atoi(argv[2]) == 1) { 
         filter1 = true;  filter2 = false; 
         std::cout << "Applying enhnace filter only" << std::endl;
@@ -87,51 +87,52 @@ int main(int argc, char *argv[]) {
     ff::ffTime(ff::START_TIME);
     int frames = 0; 
     for(;;)  {
-	Mat frame1;
-	Mat * frame = new Mat();
-	
+        Mat frame1;
+        Mat frame;
+        
 #ifdef SHOWTIMES
-	unsigned long t0 = ff::getusec();
+        unsigned long t0 = ff::getusec();
 #endif
-	if(cap.read(*frame) == false) 
-	    break; 
+        if(cap.read(frame) == false) 
+            break; 
 #ifdef SHOWTIMES
-	std::cout << "Read " << TIME(t0) << std::endl;
+        std::cout << "Read " << TIME(t0) << std::endl;
 #endif
-	
-	frames++; 
-	if(filter1) {
+        
+        frames++; 
+        if(filter1) {
 #ifdef SHOWTIMES
-	    t0 = ff::getusec();
+            t0 = ff::getusec();
 #endif
-	    cv::GaussianBlur(*frame, frame1, cv::Size(0, 0), 3);
-	    cv::addWeighted(*frame, 1.5, frame1, -0.5, 0, *frame);
+            cv::GaussianBlur(frame, frame1, cv::Size(0, 0), 3);
+            cv::addWeighted(frame, 1.5, frame1, -0.5, 0, frame);
 #ifdef SHOWTIMES
-	    std::cout << "Filter1 " << TIME(t0) << std::endl;;
+            std::cout << "Filter1 " << TIME(t0) << std::endl;;
 #endif
-	}
-	if(filter2) {
+        }
+        if(filter2) {
 #ifdef SHOWTIMES
-	    t0 = ff::getusec();
+            t0 = ff::getusec();
 #endif
-	    // Sobel
-	    Sobel(*frame,*frame,-1,1,0,3);
+            // Sobel
+            Sobel(frame,frame,-1,1,0,3);
 #ifdef SHOWTIMES
-	    std::cout << "Filter2 " << TIME(t0) << std::endl; 
+            std::cout << "Filter2 " << TIME(t0) << std::endl; 
 #endif
-	}
-	
-	if(outvideo) {
+        }
+        
+        if(outvideo) {
 #ifdef SHOWTIMES
-	    t0 = ff::getusec();
+            t0 = ff::getusec();
 #endif
-	    imshow("edges", *frame);
-	    if(waitKey(30) >= 0) break;
+            imshow("edges", frame);
+            if(waitKey(30) >= 0) break;
+            
+#ifdef SHOWTIMES
+            std::cout << "Show " << TIME(t0) << std::endl; 
+#endif
+        }
 
-#ifdef SHOWTIMES
-	    std::cout << "Show " << TIME(t0) << std::endl; 
-#endif
-	}
     }
     ff::ffTime(ff::STOP_TIME);
     std::cout << "Elapsed time is " << ff::ffTime(ff::GET_TIME) << " ms\n";

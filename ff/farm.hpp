@@ -1396,7 +1396,10 @@ private:
      */
     class ofarmE: public ff_node {
         static inline bool ff_send_out_ofarmE(void * task,unsigned long retry,unsigned long ticks, void *obj) {
-            return ((ofarmE *)obj)->ff_send_out(task, retry, ticks);
+            ff_loadbalancer *lb = ((ofarmE*)obj)->getlb();
+            if (!lb->ff_send_out_emitter(task, retry, ticks, lb)) return false;
+            ((ofarmE*)obj)->updatenextone();
+            return true;           
         }
     public:
         
@@ -1421,6 +1424,13 @@ private:
             E_f = f;
             if (f) f->registerCallback(ff_send_out_ofarmE, this);
         }
+
+        void updatenextone() {
+            nextone = (nextone+1) % lb->getnworkers();
+            lb->set_victim(nextone);
+        }
+
+        ofarm_lb *getlb() { return lb; }
 
         /**
          * \brief \p svc_init method
@@ -1451,10 +1461,9 @@ private:
          */
         void * svc(void * task) {
             if (E_f) task = E_f->svc(task);
-            if (task == (void*)FF_EOS) return task;
+            if (task == EOS || task == GO_ON) return task;
             ff_send_out(task);
-            nextone = (nextone+1) % lb->getnworkers();
-            lb->set_victim(nextone);
+            updatenextone();
             return GO_ON;
         }
 

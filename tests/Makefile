@@ -43,7 +43,7 @@ endif
 #
 #
 ###############################à#########################################
-CC                   = gcc
+CC                   = gcc 
 CXX 		     = g++ -std=c++11 # -std=c++0x for most of the code
 #CC		     = icc  -mmic
 #CXX 		     = icpc -mmic 
