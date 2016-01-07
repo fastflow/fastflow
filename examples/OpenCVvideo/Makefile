@@ -30,7 +30,7 @@ CFLAGS 	= -Wall `pkg-config --cflags opencv` #-DTRACE_FASTFLOW  -pg
 OPT     = -O3 -DNDEBUG  # -g
 LIBS 	= `pkg-config --libs opencv` -pthread
 
-TARGETS	= video ffvideo ffvideo_nf ffvideo_nf2
+TARGETS	= video ffvideo ffvideo_nf ffvideo_nf2 ffvideo_nf3
 
 all: $(TARGETS)
 
@@ -44,6 +44,8 @@ ffvideo_nf: ffvideo_nf.cpp
 	$(CXX) -DNO_DEFAULT_MAPPING $(OPT) -I$(FFHOME) $(CFLAGS) -o $@ $< $(LIBS)  
 
 ffvideo_nf2: ffvideo_nf2.cpp
+	$(CXX) -DNO_DEFAULT_MAPPING $(OPT) -I$(FFHOME) $(CFLAGS) -o $@ $< $(LIBS)  
+ffvideo_nf3: ffvideo_nf3.cpp
 	$(CXX) -DNO_DEFAULT_MAPPING $(OPT) -I$(FFHOME) $(CFLAGS) -o $@ $< $(LIBS)  
 
 clean: 

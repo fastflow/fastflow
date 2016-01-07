@@ -38,7 +38,7 @@
 using namespace ff; 
 using namespace cv;
 
-// reads freame and sends them to the next stage
+// reads frame and sends them to the next stage
 struct Source : ff_node_t<cv::Mat> {
     const std::string filename;
     Source(const std::string filename):filename(filename) {}
@@ -113,8 +113,8 @@ int main(int argc, char *argv[]) {
     
     // pardegree 
     size_t nw1 = 1;
-    if(argc == 4) {
-      nw1 = atol(argv[3]); 
+    if(argc == 5) {
+      nw1 = atol(argv[4]); 
     }
     
     // creates the pipe and adds the first stage
