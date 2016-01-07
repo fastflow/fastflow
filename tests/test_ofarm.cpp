@@ -73,18 +73,26 @@ long *Fworker(long *task, ff_node*const) {
 
 class Stop: public ff_node_t<long> {
 public:
-    Stop():expected(0) {}
+    Stop():expected(0),error(false) {}
 
     long* svc(long* t) {    
         long &task = *t;
-        if (task != expected) 
+        if (task != expected) {
             printf("ERROR: task received out of order, received %ld expected %ld\n", task, expected);
+            error = true;
+        }
         
         expected++;
         return GO_ON;
     }
+    
+    void svc_end() {
+        if (error) abort();
+    }
+
 private:
     long expected;
+    bool error;
 };
 
 
