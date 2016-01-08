@@ -190,7 +190,7 @@ set(FFHEADERS
  ${FF}/version.h
 )
 
-set(FFHEADER_PLAT 
+set(FFHEADERS_PLAT 
  ${FF}/platforms/getopt.h
  ${FF}/platforms/getopt.hpp
  ${FF}/platforms/liblfds.h
