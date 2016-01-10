@@ -63,6 +63,8 @@ protected:
         Scheduler(ff_loadbalancer*const lb, const int):
             eosreceived(false),numtasks(0), lb(lb) {}
         
+        ~Scheduler() { wait(); }
+
         int svc_init() { numtasks = 0; eosreceived = false;  return 0;}
 
         inline task_f_t *svc(task_f_t *task) { 

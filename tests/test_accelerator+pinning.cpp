@@ -496,6 +496,7 @@ public:
       delete stat_windows->at(i);
     }
     delete stat_windows;
+    St->wait();
     delete St;
     delete C;
   }
