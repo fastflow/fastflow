@@ -113,7 +113,7 @@ int main(int argc, char * argv[]) {
         farm.wait_freezing();  
         std::cout << "Iteration " << k << " terminated." << std::endl;
     }
-
+    farm.wait();
     ffTime(STOP_TIME);
     std::cerr << "[Main] DONE, farm time= " << farm.ffTime() << " (ms)\n";
     std::cerr << "[Main] DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
