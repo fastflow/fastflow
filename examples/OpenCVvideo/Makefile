@@ -48,6 +48,9 @@ ffvideo_nf2: ffvideo_nf2.cpp
 ffvideo_nf3: ffvideo_nf3.cpp
 	$(CXX) -DNO_DEFAULT_MAPPING $(OPT) -I$(FFHOME) $(CFLAGS) -o $@ $< $(LIBS)  
 
+ffvideo_nf3: ffvideo_nf3.cpp
+	$(CXX) -DNO_DEFAULT_MAPPING $(OPT) -I$(FFHOME) $(CFLAGS) -o $@ $< $(LIBS)  
+
 clean: 
 	rm -f $(TARGETS)
 
