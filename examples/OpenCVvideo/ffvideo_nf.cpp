@@ -64,20 +64,20 @@ struct Source : ff_node_t<cv::Mat> {
 // this stage applys all the filters:  the GaussianBlur filter and the Sobel one, 
 // and it then sends the result to the next stage
 struct Stage1 : ff_node_t<cv::Mat> {
-    Stage1(int filterno):filterno(filterno) {}
+    Stage1(bool filter1, bool filter2):filter1(filter1), filter2(filter2) {}
     cv::Mat * svc(cv::Mat *frame) {
-        if (filterno == 0) return frame;
+        if (!filter1 && !filter2) return frame;
 
         Mat frame1;
-        if (filterno >=1)
+        if (filter1) {
             cv::GaussianBlur(*frame, frame1, cv::Size(0, 0), 3);
-        if (filterno >=2)
             cv::addWeighted(*frame, 1.5, frame1, -0.5, 0, *frame);
-        if (filterno >=3)
+        }
+        if (filter2)
             cv::Sobel(*frame,*frame,-1,1,0,3);
         return frame;
     }
-    int filterno=0;
+    bool filter1, filter2;
 }; 
 
 // this stage shows the output
@@ -103,12 +103,35 @@ int main(int argc, char *argv[]) {
       std::cout << "Usage is: " << argv[0] 
 		<< " input_filename filterno videooutput nw1" 
 		<< std::endl; 
+
+      std::cout << "  filterno: \n";
+      std::cout << "   0      : no filtering\n" 
+                << "   1      : GaussianBlur filter only\n"
+                << "   2      : Sobel filter only\n"
+                << "   3      : both 1 and 2\n\n";
+      std::cout << "  videooutput:  \n"
+                << "   0      : no output\n"
+                << "   1      : video output\n\n";
+
+      std:: cout << "  nw1 : \n"
+                 << "   number of workers of the farm \n\n";
+
       return(0); 
     }
     
     // output 
     bool outvideo = false; 
-    int  filterno = atoi(argv[2]);    
+    bool filter1, filter2;
+    if(atoi(argv[2]) == 1) { 
+        filter1 = true;  filter2 = false; 
+    }
+    if(atoi(argv[2]) == 2) { 
+        filter1 = false; filter2 = true;     
+    }
+    if(atoi(argv[2]) == 3) { 
+        filter1 = true;  filter2 = true;     
+    }
+    
     if (atoi(argv[3]) == 1) outvideo = true; 
     
     // pardegree 
@@ -123,15 +146,15 @@ int main(int argc, char *argv[]) {
     // adds the second stage (sequential or ordered farm)
     if (nw1 == 1) {
         // the second stage is sequential
-        pipe.add_stage(make_unique<Stage1>(filterno));
+        pipe.add_stage(make_unique<Stage1>(filter1,filter2));
     } else {
         // the second stage is an ordered task-farm 
         // by default the ordered farm has the collector
-        pipe.add_stage(make_unique<ff_OFarm<cv::Mat> >([nw1, filterno]() {
+        pipe.add_stage(make_unique<ff_OFarm<cv::Mat> >([nw1, filter1, filter2]() {
 
                     std::vector<std::unique_ptr<ff_node> > W; 
                     for(size_t i=0; i<nw1; i++) 
-                        W.push_back(make_unique<Stage1>(filterno));
+                        W.push_back(make_unique<Stage1>(filter1, filter2));
                     return W;
                     
                 } ()

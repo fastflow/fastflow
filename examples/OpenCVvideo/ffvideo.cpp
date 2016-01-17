@@ -30,6 +30,9 @@
  * Date:   September 2015
  * 
  */
+//  different pipeline versions:
+//    pipe(Source, Stage1, Stage2, Drain)
+//    pipe(Source, ofarm(Stage1), ofarm(Stage2), Drain)
 
 #include <opencv2/opencv.hpp>
 #include <ff/pipeline.hpp>
@@ -94,7 +97,7 @@ struct Drain: ff_node_t<cv::Mat> {
     cv::Mat *svc (cv::Mat * frame) {
         if(outvideo) {
             imshow("edges", *frame);
-            waitKey(30);    // why 30ms here ?
+            waitKey(30);   
         } 
         delete frame;
         return GO_ON;
@@ -110,7 +113,21 @@ int main(int argc, char *argv[]) {
     if(argc == 1) {
       std::cout << "Usage is: " << argv[0] 
 		<< " input_filename filterno videooutput [nw1 nw2]" 
-		<< std::endl; 
+		<< std::endl;
+      std::cout << "  filterno: \n";
+      std::cout << "   0      : no filtering\n" 
+                << "   1      : GaussianBlur filter only\n"
+                << "   2      : Sobel filter only\n"
+                << "   3      : both 1 and 2\n\n";
+      std::cout << "  videooutput:  \n"
+                << "   0      : no output\n"
+                << "   1      : video output\n\n";
+
+      std:: cout << "  nw1 : \n"
+                 << "   number of workers of the first farm (sequential execution if 0)\n\n";
+      std:: cout << "  nw2 : \n" 
+                 << "   number of workers of the second farm (sequential execution if 0)\n\n";
+
       return(0); 
     }
     
@@ -202,7 +219,7 @@ int main(int argc, char *argv[]) {
     else    	  std::cout << "farm(" << nw1 << "),";
     if(nw2 == 1)  std::cout << "seq,"; 
     else    	  std::cout << "farm(" << nw2 << "),";
-    if (1)        std::cout << "seq) : elapsed time =" ;     
+    if (1)        std::cout << "seq) : elapsed time = " ;     
     std::cout << ffTime(GET_TIME) << " ms\n";
 
     return 0;
