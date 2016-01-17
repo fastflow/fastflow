@@ -30,8 +30,8 @@
  * Date:   September 2015
  * 
  */
-//  pipe(Source, ofarm(Stage1+Stage2), Drain)
-
+//  Version using only the ordered farm:
+//    ofarm(Stage1+Stage2)
 
 #include <opencv2/opencv.hpp>
 #include <ff/pipeline.hpp>
@@ -66,12 +66,13 @@ struct Source : ff_node_t<cv::Mat> {
 // and it then sends the result to the next stage
 struct Stage1 : ff_node_t<cv::Mat> {
     cv::Mat * svc(cv::Mat *frame) {
-	Mat frame1;
-	cv::GaussianBlur(*frame, frame1, cv::Size(0, 0), 3);
-	cv::addWeighted(*frame, 1.5, frame1, -0.5, 0, *frame);
-	cv::Sobel(*frame,*frame,-1,1,0,3);
-	return frame;
-  }
+        Mat frame1;
+        cv::GaussianBlur(*frame, frame1, cv::Size(0, 0), 3);
+        cv::addWeighted(*frame, 1.5, frame1, -0.5, 0, *frame);
+        cv::Sobel(*frame,*frame,-1,1,0,3);
+        return frame;
+    }
+    long nframe=0;
 }; 
 
 // this stage shows the output
@@ -116,9 +117,7 @@ int main(int argc, char *argv[]) {
       nw1 = atol(argv[3]); 
     }
 
-    // creates the pipe and adds the first stage
-    ff_Pipe<> pipe(make_unique<Source>(argv[1]));
-    // creates an ordered farm whose collector executes the drainer
+    // creates an ordered farm
     ff_OFarm<cv::Mat> ofarm( [nw1]() {
             
             std::vector<std::unique_ptr<ff_node> > W; 
@@ -127,21 +126,21 @@ int main(int argc, char *argv[]) {
             return W;
             
         } ());
-
+    
+    Source source(argv[1]);
+    ofarm.setEmitterF(source);
     Drain  drain(outvideo);
     ofarm.setCollectorF(drain);
     
-    pipe.add_stage(ofarm);
-
     ffTime(START_TIME);
     // starts the pipe and waits for termination
-    if (pipe.run_and_wait_end()<0) {
+    if (ofarm.run_and_wait_end()<0) {
         error("running pipe");
         return -1;
     }
     ffTime(STOP_TIME);
 
-    std::cout << "Elapsed (farm(" << nw1 << "): elapsed time = " ;     
+    std::cout << "Elapsed (farm(" << nw1 << "): elapsed time =" ;     
     std::cout << ffTime(GET_TIME) << " ms\n";    
     return 0;
 }
