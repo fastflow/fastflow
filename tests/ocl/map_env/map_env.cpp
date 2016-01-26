@@ -29,7 +29,7 @@ struct Task {
 
 struct oclTaskEnv: public baseOCLTask<Task, float, float> {
 	oclTaskEnv() {}
-    void setTask(const Task *t) {
+    void setTask(Task *t) {
         assert(t);
 	setInPtr(t->M, t->env.n_elems);
         setOutPtr(t->M);                  // in place !!

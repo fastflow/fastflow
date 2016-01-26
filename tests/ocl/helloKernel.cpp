@@ -78,16 +78,16 @@ struct myTask {
 /* ---------------- helping function (naive implementation ------------------ */
 
 typedef enum { IN, OUT } enum_t;
-static std::tuple<BitFlags, BitFlags, BitFlags> 
+static std::tuple<CopyFlags, ReuseFlags, ReleaseFlags> 
 parseCmd(int kernelid, enum_t direction, const std::string &cmd) {
     // here on the base of the command string, kernelid and direction we have to generate the proper tuple
 
-    if (direction==IN) return std::make_tuple(BitFlags::DONTCOPYTO,
-                                              BitFlags::DONTREUSE,
-                                              BitFlags::RELEASE);
-    return std::make_tuple(BitFlags::COPYTO,
-                           BitFlags::DONTREUSE,
-                           BitFlags::RELEASE);
+    if (direction==IN) return std::make_tuple(CopyFlags::DONTCOPY,
+                                              ReuseFlags::DONTREUSE,
+                                              ReleaseFlags::RELEASE);
+    return std::make_tuple(CopyFlags::COPYTO,
+                           ReuseFlags::DONTREUSE,
+                           ReleaseFlags::RELEASE);
 }
 static int parseCmd(int kernelId, const std::string &cmd) {
     return 1; // this is the oclMap
@@ -100,20 +100,20 @@ static int parseCmd(int kernelId, const std::string &cmd) {
 // - float* is the type of OpenCL input array
 // - float* is the type of OpenCL output array
 struct oclTask: baseOCLTask<myTask, float, float> {
-    void setTask(const myTask *task) { 
-	float *Aptr         = const_cast<float*>(task->A.data());
-	const size_t Asize  = task->A.size();
-	const std::string &cmd(task->command);
-
-	// define the parameter policy
-	std::tuple<BitFlags,BitFlags,BitFlags> in   = parseCmd(0, IN, cmd); 
-	std::tuple<BitFlags,BitFlags,BitFlags> out  = parseCmd(0, OUT, cmd);
-	
-	// A is not copied in input (false), nor the address is re-used (false), it will be deleted at the end (true) 
-	setInPtr(Aptr, Asize, std::get<0>(in),std::get<1>(in), std::get<2>(in));
-	
-	// A is copied back at the end (true), the address is not re-used (false), it will be deleted at the end (true)
-	setOutPtr(Aptr, Asize, std::get<0>(out), std::get<1>(out), std::get<2>(out));
+    void setTask(myTask *task) { 
+        float *Aptr         = const_cast<float*>(task->A.data());
+        const size_t Asize  = task->A.size();
+        const std::string &cmd(task->command);
+        
+        // define the parameter policy
+        std::tuple<CopyFlags,ReuseFlags,ReleaseFlags> in   = parseCmd(0, IN, cmd); 
+        std::tuple<CopyFlags,ReuseFlags,ReleaseFlags> out  = parseCmd(0, OUT, cmd);
+        
+        // A is not copied in input (false), nor the address is re-used (false), it will be deleted at the end (true) 
+        setInPtr(Aptr, Asize, std::get<0>(in),std::get<1>(in), std::get<2>(in));
+        
+        // A is copied back at the end (true), the address is not re-used (false), it will be deleted at the end (true)
+        setOutPtr(Aptr, Asize, std::get<0>(out), std::get<1>(out), std::get<2>(out));
     }
 };
 

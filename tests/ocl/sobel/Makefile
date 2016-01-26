@@ -35,7 +35,6 @@
 # OCL_ROOT    pointing to the OpenCL root directory
 #
 FF_ROOT		= ../../..
-OCL_ROOT    = /usr/local/cuda
 
 CXX		= g++ -std=c++11 #-DNO_DEFAULT_MAPPING
 INCLUDES	= -I $(FF_ROOT)  -I $(OCL_ROOT)/include

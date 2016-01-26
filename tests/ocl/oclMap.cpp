@@ -75,7 +75,7 @@ FF_OCL_MAP_ELEMFUNC(mapf2, float, elem, useless,
 struct oclTask: public baseOCLTask<oclTask, float> {
     oclTask():M(NULL),size(0) {}
     oclTask(float *M, size_t size):M(M),size(size) {}
-    void setTask(const oclTask *t) { 
+    void setTask(oclTask *t) { 
         setInPtr(t->M, t->size);  // set host input pointer
         setOutPtr(t->M);          // set host output pointer
     }

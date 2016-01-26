@@ -879,7 +879,7 @@ public:
      * The returned id is valid (>0) only if the node is an active node (i.e. the thread has been created).
      *
      */
-    inline size_t getOSThreadId() const { return thread->getOSThreadId(); }
+    inline size_t getOSThreadId() const { if (thread) return thread->getOSThreadId(); return 0; }
 
 
 #if defined(FF_TASK_CALLBACK)

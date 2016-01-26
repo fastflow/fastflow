@@ -70,7 +70,7 @@ struct myTask {
 // - float* is the type of OpenCL input array
 // - float* is the type of OpenCL output array
 struct oclTask: baseOCLTask<myTask, float, float> {
-    void setTask(const myTask *task) { 
+    void setTask(myTask *task) { 
 
         std::cout << "running on GPU\n";
 
@@ -79,15 +79,15 @@ struct oclTask: baseOCLTask<myTask, float, float> {
 
         // A is not copied in input (only allocated), it will be deleted at the end
         setInPtr(Aptr, Asize, 
-                 BitFlags::DONTCOPYTO,
-                 BitFlags::DONTREUSE,
-                 BitFlags::RELEASE);
+                 CopyFlags::DONTCOPY,
+                 ReuseFlags::DONTREUSE,
+                 ReleaseFlags::RELEASE);
         
         // A is copied back at the end, it will be deleted at the end
         setOutPtr(Aptr, Asize, 
-                  BitFlags::COPYBACK,
-                  BitFlags::DONTREUSE,
-                  BitFlags::RELEASE);
+                  CopyFlags::COPYFROM,
+                  ReuseFlags::DONTREUSE,
+                  ReleaseFlags::RELEASE);
     }
 };
 
