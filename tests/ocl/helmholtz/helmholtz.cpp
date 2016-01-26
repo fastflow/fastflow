@@ -96,7 +96,7 @@ public:
 			free(uold);
 	}
 
-	void setTask(const HelmholtzTask* t) {
+	void setTask(HelmholtzTask* t) {
 		assert(t);
 		const HelmholtzTask &task = *t;
 

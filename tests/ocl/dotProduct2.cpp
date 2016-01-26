@@ -53,20 +53,20 @@ struct Task: public baseOCLTask<Task, float, float> {
 	Task(const std::vector<float> &A, const std::vector<float> &B) :
 			A(A), B(B), M(A.size()), result(0.0) {}
 
-	void setTask(const Task *t) {
+	void setTask(Task *t) {
 
 		setInPtr(const_cast<float*>(t->A.data()), t->A.size(), 
-                 BitFlags::COPYTO,
-                 BitFlags::DONTREUSE,
-                 BitFlags::RELEASE);
+                 CopyFlags::COPYTO,
+                 ReuseFlags::DONTREUSE,
+                 ReleaseFlags::RELEASE);
 		setEnvPtr(const_cast<float*>(t->B.data()), t->B.size(), 
-                 BitFlags::COPYTO,
-                 BitFlags::DONTREUSE,
-                 BitFlags::RELEASE);
+                 CopyFlags::COPYTO,
+                 ReuseFlags::DONTREUSE,
+                 ReleaseFlags::RELEASE);
 		setOutPtr(const_cast<float*>(t->M.data()), t->M.size(), 
-                  BitFlags::COPYBACK,
-                  BitFlags::DONTREUSE,
-                  BitFlags::RELEASE);
+                  CopyFlags::COPYFROM,
+                  ReuseFlags::DONTREUSE,
+                  ReleaseFlags::RELEASE);
 		setReduceVar(&(t->result));
 	}
 

@@ -148,7 +148,7 @@ struct Task {
  */
 struct oclTask: public baseOCLTask<Task, uchar, uchar> {
     oclTask() {}
-    void setTask(const Task *t) { 
+    void setTask(Task *t) { 
         assert(t);
         size_t N = t->env.rows * t->env.cols;
         setInPtr(t->src, N);

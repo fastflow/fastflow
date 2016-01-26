@@ -54,7 +54,7 @@ struct Task: public baseOCLTask<Task, float, float> {
 	Task(const std::vector<float> &A, const std::vector<float> &B) :
 			A(A), B(B), M(A.size()), result(0.0) {
 	}
-	void setTask(const Task *t) {
+	void setTask(Task *t) {
 		assert(t);
 		setInPtr(const_cast<float*>(t->A.data()), t->A.size());
 		setEnvPtr(const_cast<float*>(t->B.data()), t->B.size());

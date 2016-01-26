@@ -617,7 +617,7 @@ public:
         return 0;
     }
 
-    inline bool ff_send_out_to(void *task, int id,  
+    virtual inline bool ff_send_out_to(void *task, int id,  
                                unsigned long retry=((unsigned long)-1),
                                unsigned long ticks=(TICKS2WAIT)) {        
         if (blocking_out) {
@@ -669,7 +669,7 @@ public:
      *
      * It sends the same task to all workers.   
      */
-   inline void broadcast_task(void * task) {
+    virtual inline void broadcast_task(void * task) {
        std::vector<size_t> retry;
        if (blocking_out) {
            for(ssize_t i=0;i<running;++i) {

@@ -77,7 +77,7 @@ struct myTask {
 
 
 struct oclTask: baseOCLTask<myTask, float> {
-    void setTask(const myTask *task) { 
+    void setTask(myTask *task) { 
         const size_t N = task->N;
         const size_t M = task->M;
         const size_t size = N * M;

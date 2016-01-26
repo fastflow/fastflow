@@ -934,7 +934,7 @@ public:
      *
      * \return A pointer of the FastFlow node which is actually the emitter.
      */
-    ff_node* getEmitter() const   { return emitter;}
+    virtual ff_node* getEmitter() const   { return emitter;}
 
     /**
      * \brief Gets Collector
@@ -943,7 +943,7 @@ public:
      *
      * \return A pointer to collector node if exists, otherwise a \p NULL
      */
-    ff_node* getCollector() const { 
+    virtual ff_node* getCollector() const { 
         if (collector == (ff_node*)gt) return NULL;
         return collector;
     }
@@ -1305,6 +1305,62 @@ public:
      * \param v is the number of the worker.
      */
     void set_victim(size_t v) { victim=v;}
+
+    /**
+     * \brief broadcast the same task to all workers, respecting the scheduling order.
+     *
+     */
+    inline void broadcast_task(void * task) {
+        const svector<ff_node*> &W = getWorkers();
+        if (blocking_out) {
+            for(size_t i=victim;i<getnworkers();++i) {
+                while (!W[i]->put(task)) {
+                    pthread_mutex_lock(&prod_m);
+                    pthread_cond_wait(&prod_c, &prod_m);
+                    pthread_mutex_unlock(&prod_m); 
+                }
+                put_done(i);
+            }
+            for(size_t i=0;i<victim;++i) {
+                while (!W[i]->put(task)) {
+                    pthread_mutex_lock(&prod_m);
+                    pthread_cond_wait(&prod_c, &prod_m);
+                    pthread_mutex_unlock(&prod_m); 
+                }
+                put_done(i);
+            }     
+#if defined(FF_TASK_CALLBACK)
+           callbackOut(this);
+#endif
+           if (task == BLK || task == NBLK) { 
+               blocking_out = (task==BLK); 
+           }    
+           return;
+        }
+        
+        for(size_t i=victim;i<getnworkers();++i) {
+            while (!W[i]->put(task)) losetime_out();
+        }
+        for(size_t i=0;i<victim;++i) {
+            while (!W[i]->put(task)) losetime_out();
+        }
+
+#if defined(FF_TASK_CALLBACK)
+        callbackOut(this);
+#endif
+        if (task == BLK || task == NBLK) { 
+            blocking_out = (task==BLK); 
+        }    
+    }
+private:
+    /* this function cannot be used. (How to delete the function ? ) */
+    bool ff_send_out_to(void *task, int id,  
+                        unsigned long retry=((unsigned long)-1),
+                        unsigned long ticks=(TICKS2WAIT)) { 
+        assert(1==0);
+        return false; 
+    }
+
 private:
     size_t victim;
 };
@@ -1443,7 +1499,7 @@ private:
             assert(lb->getnworkers()>0);
             int ret = 0;
             if (E_f) ret = E_f->svc_init();
-            nextone = 0;
+            // restart from where we stopped before (if not the first time)
             lb->set_victim(nextone);
             return ret;
         }  
@@ -1522,8 +1578,8 @@ private:
             assert(gt->getrunning()>0);
             int ret = 0;
             if (C_f) ret = C_f->svc_init();
-            nextone=0;
             gt->revive();
+            // restart from where we stopped before (if not the first time)
             gt->set_victim(nextone);
             return ret;
         }
@@ -1664,6 +1720,10 @@ public:
      * \param f is the FastFlow node.
      */
     void setCollectorF(ff_node* f) { C_f = f; }
+
+    ff_node* getEmitter() const { return E_f;}
+
+    ff_node* getCollector() const { return C_f; }
     
     /**
      * \brief run

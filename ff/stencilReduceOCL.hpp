@@ -76,7 +76,7 @@ public:
     // - setEnvPtr for adding to env-list the host-pointer to a read-only env
     // - other methods from classes derived from baseOCLTask
     // NOTE: order of setEnvPtr calls matters! TODO refine interface?
-    virtual void setTask(const TaskT *t) = 0;
+    virtual void setTask(TaskT *t) = 0;
     
     /* --- the user may overrider these methods --- */ 
 
@@ -111,13 +111,13 @@ public:
      * @param release TODO
      */
     void setInPtr(Tin* _inPtr, size_t sizeIn=1, 
-                  const BitFlags copy   =BitFlags::COPYTO, 
-                  const BitFlags reuse  =BitFlags::DONTREUSE, 
-                  const BitFlags release=BitFlags::DONTRELEASE)  { 
+                  const CopyFlags    copy   =CopyFlags::COPYTO, 
+                  const ReuseFlags   reuse  =ReuseFlags::DONTREUSE, 
+                  const ReleaseFlags release=ReleaseFlags::DONTRELEASE)  { 
         inPtr  = _inPtr; size_in = sizeIn; 
-        tuple_in = std::make_tuple(copy==BitFlags::COPYTO,
-                                   reuse==BitFlags::REUSE,
-                                   release==BitFlags::RELEASE);
+        tuple_in = std::make_tuple(copy==CopyFlags::COPYTO,
+                                   reuse==ReuseFlags::REUSE,
+                                   release==ReleaseFlags::RELEASE);
     }
 
     /**
@@ -127,13 +127,13 @@ public:
      * @param copyback TODO
      */
     void setOutPtr(Tout* _outPtr, size_t sizeOut=0, 
-                   const BitFlags copyback =BitFlags::COPYBACK, 
-                   const BitFlags reuse    =BitFlags::DONTREUSE, 
-                   const BitFlags release  =BitFlags::DONTRELEASE)  { 
+                   const CopyFlags copyback    =CopyFlags::COPYFROM, 
+                   const ReuseFlags reuse      =ReuseFlags::DONTREUSE, 
+                   const ReleaseFlags release  =ReleaseFlags::DONTRELEASE)  { 
         outPtr = _outPtr; size_out = sizeOut; 
-        tuple_out = std::make_tuple(copyback==BitFlags::COPYBACK,
-                                    reuse==BitFlags::REUSE,
-                                    release==BitFlags::RELEASE);
+        tuple_out = std::make_tuple(copyback==CopyFlags::COPYFROM,
+                                    reuse==ReuseFlags::REUSE,
+                                    release==ReleaseFlags::RELEASE);
     }
 
     /**
@@ -143,15 +143,15 @@ public:
      */
     template<typename ptrT>
     void setEnvPtr(const ptrT* _envPtr, size_t size, 
-                  const BitFlags copy   =BitFlags::COPYTO, 
-                  const BitFlags reuse  =BitFlags::DONTREUSE, 
-                  const BitFlags release=BitFlags::DONTRELEASE)  { 
+                  const CopyFlags copy   =CopyFlags::COPYTO, 
+                  const ReuseFlags reuse  =ReuseFlags::DONTREUSE, 
+                  const ReleaseFlags release=ReleaseFlags::DONTRELEASE)  { 
         assert(envPtr.size() == copyEnv.size());
         envPtr.push_back(std::make_pair((void*)_envPtr,size*sizeof(ptrT)));
         copyEnv.push_back(std::make_tuple(sizeof(ptrT), 
-                                          copy==BitFlags::COPYTO,
-                                          reuse==BitFlags::REUSE,
-                                          release==BitFlags::RELEASE));
+                                          copy==CopyFlags::COPYTO,
+                                          reuse==ReuseFlags::REUSE,
+                                          release==ReleaseFlags::RELEASE));
                                           
     }
     
@@ -991,7 +991,7 @@ public:
         oldBytesizeIn(0), oldSizeOut(0), oldSizeReduce(0) {
 		ff_node::skipfirstpop(true);
 		setcode(mapf, reducef);
-		setTask(task);
+        setTask(const_cast<T&>(task));
         for(size_t i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width,identityVal);
 #ifdef FF_OPENCL_LOG
@@ -1014,7 +1014,7 @@ public:
         stencil_width_half(width), offset_dev(0), old_inPtr(NULL), old_outPtr(NULL),
         oldBytesizeIn(0), oldSizeOut(0),  oldSizeReduce(0)  {
 		setsourcecode(kernels_source, mapf_name, reducef_name);
-        setTask(task);
+        setTask(const_cast<T&>(task));
         for(size_t i = 0; i< NACCELERATORS; ++i)
             accelerators[i]= new accelerator_t(allocator, width, identityVal, true);
 	}
@@ -1026,7 +1026,7 @@ public:
     }
 
     // used to set tasks when in onshot mode
-    void setTask(const T &task) {
+    void setTask(T &task) {
         Task.resetTask();
         Task.setTask(&task);
     }

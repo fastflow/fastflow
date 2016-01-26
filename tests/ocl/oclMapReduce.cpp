@@ -59,7 +59,7 @@ FF_OCL_REDUCE_COMBINATOR(reducef, float, x, y,
 struct oclTask: public baseOCLTask<oclTask, float> {
     oclTask():M(NULL),result(0.0), size(0) {}
     oclTask(float *M, size_t size):M(M),result(0.0),size(size) {}
-    void setTask(const oclTask *t) { 
+    void setTask(oclTask *t) { 
         assert(t);
         setInPtr(t->M, t->size);
         setOutPtr(t->M);

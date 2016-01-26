@@ -51,7 +51,7 @@ using namespace ff;
 struct oclTask: public baseOCLTask<oclTask, float> {
     oclTask():M(NULL),size(0) {}
     oclTask(float *M, size_t size):M(M),size(size) {}
-    void setTask(const oclTask *t) { 
+    void setTask(oclTask *t) { 
         setInPtr(t->M, t->size);
         setOutPtr(t->M);
     }
