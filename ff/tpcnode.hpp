@@ -132,7 +132,7 @@ public:
      * 
      * @param inPtr the host-pointer
      * @param size the number of elements in the input array (bytesize=size*sizeof(ptrT))
-     * @param copy if BitFlags::COPYTO is set the data will be copied into the device
+     * @param copy if CopyFlags::COPYTO is set the data will be copied into the device
      * @param reuse if BitFlags::REUSE is set then the run-time looks for a previously 
      * allocated device handle associated with the inPtr host pointer
      * @param release if BitFlags::RELEASE is set the device memory will be released 
@@ -140,13 +140,13 @@ public:
      */
     template <typename ptrT>
     void setInPtr(const ptrT* inPtr, size_t size, 
-                  const BitFlags copy   =BitFlags::COPYTO, 
-                  const BitFlags reuse  =BitFlags::DONTREUSE, 
-                  const BitFlags release=BitFlags::DONTRELEASE)  { 
+                  const CopyFlags    copy   =CopyFlags::COPYTO, 
+                  const ReuseFlags   reuse  =ReuseFlags::DONTREUSE, 
+                  const ReleaseFlags release=ReleaseFlags::DONTRELEASE)  { 
         internal::Arg_t arg(const_cast<ptrT*>(inPtr),size*sizeof(ptrT),
-                            (copy==BitFlags::COPYTO || copy==BitFlags::COPYBACK),
-                            reuse==BitFlags::REUSE,
-                            release==BitFlags::RELEASE);
+                            (copy==CopyFlags::COPYTO || copy==CopyFlags::COPYFROM),
+                            reuse==ReuseFlags::REUSE,
+                            release==ReleaseFlags::RELEASE);
         tpcInput.push_back(arg);
     }
 
@@ -168,13 +168,13 @@ public:
      */
     template <typename ptrT>
     void setOutPtr(const ptrT* _outPtr, size_t size, 
-                   const BitFlags copyback =BitFlags::COPYBACK, 
-                   const BitFlags reuse    =BitFlags::DONTREUSE, 
-                   const BitFlags release  =BitFlags::DONTRELEASE)  { 
+                   const CopyFlags copyback =CopyFlags::COPYFROM, 
+                   const ReuseFlags reuse    =ReuseFlags::DONTREUSE, 
+                   const ReleaseFlags release  =ReleaseFlags::DONTRELEASE)  { 
         internal::Arg_t arg(const_cast<ptrT*>(_outPtr),size*sizeof(ptrT),
-                            (copyback==BitFlags::COPYBACK || copyback==BitFlags::COPYTO),
-                            reuse==BitFlags::REUSE,
-                            release==BitFlags::RELEASE);
+                            (copyback==CopyFlags::COPYFROM || copyback==CopyFlags::COPYTO),
+                            reuse==ReuseFlags::REUSE,
+                            release==ReleaseFlags::RELEASE);
         tpcOutput.push_back(arg);
     }
 

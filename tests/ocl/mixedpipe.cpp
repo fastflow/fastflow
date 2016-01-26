@@ -107,25 +107,25 @@ struct Task: public baseOCLTask<Task, float, float> {
     Task(const size_t size, size_t k):
     	A(size),sum(0.0),arraySize(size), k(k),kernelId(0),C(nullptr),R(nullptr) {}
 
-    void setTask(const Task *t) { 
+    void setTask(Task *t) { 
        assert(t);
 
        switch (t->kernelId) {
        case 1: {
            setInPtr(const_cast<float*>(t->A.data()), t->A.size(), 
-                    BitFlags::DONTCOPYTO);                               // A not copied 
+                    CopyFlags::DONTCOPY);                               // A not copied 
            setEnvPtr(&(t->k), 1);                                        // k always copied
            setOutPtr(const_cast<float*>(t->A.data()));                   // A received back
        } break;                                                          // A kept (by default)
        case 2: {
            setInPtr(const_cast<float*>(t->A.data()),  t->A.size());      // A copied
            setEnvPtr(const_cast<float*>(t->C->data()), t->C->size(), 
-                     (t->k==0)?BitFlags::COPYTO:BitFlags::DONTCOPYTO);   // C copied only the 1st time
+                     (t->k==0)?CopyFlags::COPYTO:CopyFlags::DONTCOPY);   // C copied only the 1st time
            setReduceVar(&(t->sum));                                      // sum 
        } break;                                                          // A,C kept (by default)
        case 3: {
            setInPtr(const_cast<float*>(t->R->data()),  t->R->size(),     // R copied only the 1st time
-                    (t->k==0)?BitFlags::COPYTO:BitFlags::DONTCOPYTO);    // 
+                    (t->k==0)?CopyFlags::COPYTO:CopyFlags::DONTCOPY);    // 
            setEnvPtr(const_cast<float*>(t->A.data()),  t->A.size());     // A copied
            setEnvPtr(&(t->sum), 1);                                      // sum
            setOutPtr(const_cast<float*>(t->R->data()),  t->R->size());   // R get back result

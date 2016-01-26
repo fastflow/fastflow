@@ -54,7 +54,7 @@ struct oclTaskGol: public ff::baseOCLTask_2D<oclTaskGol, unsigned char> {
 			M_in(M_in_), M_out(M_out_), niters(niters_), someone(0), nrows(nrows_) {
 	}
 
-	void setTask(const oclTaskGol *t) {
+	void setTask(oclTaskGol *t) {
 		assert(t);
 		setInPtr(t->M_in, t->nrows * t->nrows);
 		setOutPtr(t->M_out, t->nrows * t->nrows);

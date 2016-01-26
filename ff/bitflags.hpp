@@ -28,7 +28,7 @@
 #define FF_BITFLAGS_HPP
 
 #include <vector>
-#include <tuple>
+#include <string>
 
 namespace ff {
 
@@ -38,35 +38,35 @@ namespace ff {
  * and device memory allocation.
  *
  */
-enum class BitFlags {
-        COPYTO,              
-        DONTCOPYTO,          
-        REUSE, 
-        DONTREUSE, 
-        RELEASE, 
-        DONTRELEASE, 
-        COPYBACK,
-        DONTCOPYBACK
+
+enum class CopyFlags    { DONTCOPY, COPYTO, COPYFROM };
+enum class ReuseFlags   { DONTREUSE,  REUSE };
+enum class ReleaseFlags { DONTRELEASE, RELEASE };
+
+struct MemoryFlags {  
+    CopyFlags    copy;
+    ReuseFlags   reuse;
+    ReleaseFlags release;
 };
 
-using bitflagsVector = std::vector<std::tuple<BitFlags,BitFlags,BitFlags> > ;
+using memoryflagsVector = std::vector<MemoryFlags>;
 
 // TO BE IMPLEMENTED: the current version is just a test case
-static inline const bitflagsVector extractFlags(const std::string &str, const int kernel_id) {
-    bitflagsVector V(10);
+static inline const memoryflagsVector extractFlags(const std::string &str, const int kernel_id) {
+    memoryflagsVector V(10);
     for(size_t i=0;i<V.size();++i)
-        V[i] = std::make_tuple<BitFlags,BitFlags,BitFlags>(BitFlags::COPYTO, BitFlags::DONTREUSE, BitFlags::DONTRELEASE);
+        V[i].copy = CopyFlags::COPYTO, V[i].reuse = ReuseFlags::DONTREUSE,  V[i].release = ReleaseFlags::DONTRELEASE;
     return V;
 }
     
-static inline BitFlags getCopy(int pos, const bitflagsVector &V) {
-    return std::get<0>(V[pos]);
+static inline CopyFlags getCopy(int pos, const memoryflagsVector &V) {
+    return V[pos].copy;
 }
-static inline BitFlags getReuse(int pos, const bitflagsVector &V) {
-    return std::get<1>(V[pos]);
+static inline ReuseFlags getReuse(int pos, const memoryflagsVector &V) {
+    return V[pos].reuse;
 }
-static inline BitFlags getRelease(int pos, const bitflagsVector &V) {
-    return std::get<2>(V[pos]);
+static inline ReleaseFlags getRelease(int pos, const memoryflagsVector &V) {
+    return V[pos].release;
 }
 
 // *******************************************************************

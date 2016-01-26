@@ -133,7 +133,7 @@ struct oclTask: public baseOCLTask<oclTask, basictype> {
 	oclTask(basictype *M_in_, basictype *M_out_, int size_) :
 			M_in(M_in_), M_out(M_out_), result(0), size(size_) {
 	}
-	void setTask(const oclTask *t) {
+	void setTask(oclTask *t) {
 		assert(t);
 		setInPtr(t->M_in, t->size);
 		setOutPtr(t->M_out);
