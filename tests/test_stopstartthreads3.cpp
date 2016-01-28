@@ -28,7 +28,7 @@
 /**
  *
  * This is a basic test for testing the capability of starting and stopping 
- * OFarm's workers in the load-balancer thread.
+ * OFarm's workers within the load-balancer thread.
  *
  */
 #include <vector>
@@ -39,7 +39,11 @@ using namespace ff;
 
 class Emitter: public ff_node_t<long> {
 protected:
-    void stopAll() {
+    void freezeAll() {
+        lb->freezeWorkers();
+        gt->freeze();
+    }
+    void blockAll() {
         lb->broadcast_task(EOSW); 
         lb->wait_freezingWorkers();
         gt->wait_freezing();
@@ -48,19 +52,19 @@ protected:
         lb->thawWorkers(freeze, -1);  // wake-up all workers
         gt->thaw(freeze, -1);         // wake-up the collector
     }
+    void stopAll() {
+        lb->stop();
+        gt->stop();
+        wakeupAll(false);
+    }
 public:
     Emitter(long streamlen, 
             ff_loadbalancer *const lb, ff_gatherer *const gt):streamlen(streamlen), lb(lb), gt(gt) {}
     
 
-    int svc_init() {
-        // set freezing flag to all workers
-        for(size_t i=0;i<lb->getnworkers();++i)
-            lb->freeze(i);
-        gt->freeze();
-
-        stopAll();
-
+    int svc_init() {     
+        freezeAll();    // set freezing flag to all workers
+        blockAll();     // wait that all workers go to sleep
         return 0;
     }
 
@@ -80,13 +84,13 @@ public:
             }
                             
             // put workers to sleep
-            stopAll();
+            blockAll();
         }
         // restart workers before sending EOS
-        wakeupAll(false);
+        stopAll();
+
         return EOS;
     }
-
 private:
     long                   streamlen;
     ff_loadbalancer *const lb;
@@ -119,8 +123,12 @@ private:
 
 class Worker:public ff_node_t<long> {
 public:
+    int svc_init() {
+        printf("worker%ld (%ld) woken up\n", get_my_id(), getOSThreadId());
+        return 0;
+    }
     long *svc(long *t) {
-        printf("worker %ld received %ld\n", get_my_id(), *t);
+        printf("worker%ld received %ld\n", get_my_id(), *t);
         return t;
     }
     void svc_end() {
@@ -149,7 +157,10 @@ int main(int argc, char *argv[]) {
     ofarm.setEmitterF(E);
     ofarm.setCollectorF(C);
     ofarm.setFixedSize(true);
-    ofarm.run_and_wait_end();
-    
+    ofarm.setInputQueueLength(4); // setting very small queues
+    ofarm.setOutputQueueLength(4);
+
+    ofarm.run();
+    ofarm.getgt()->wait(); // waiting for the termination of the collector
     return 0;
 }

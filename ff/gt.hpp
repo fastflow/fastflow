@@ -487,9 +487,6 @@ public:
         gettimeofday(&wtstart,NULL);
         do {
             task = NULL;
-#if defined(FF_TASK_CALLBACK)
-            if (filter) callbackIn(this);
-#endif
             if (!skipfirstpop) 
                 nextr = gather_task(&task); 
             else skipfirstpop=false;
@@ -529,6 +526,10 @@ public:
                 if (filter)  {
                     channelid = workers[nextr]->get_my_id();
                     FFTRACE(ticks t0 = getticks());
+
+#if defined(FF_TASK_CALLBACK)
+                    if (filter) callbackIn(this);
+#endif
                     task = filter->svc(task);
 
 #if defined(TRACE_FASTFLOW)
@@ -540,12 +541,7 @@ public:
                 }
 
                 // if the filter returns NULL we exit immediatly
-                if (task == GO_ON) { 
-#if defined(FF_TASK_CALLBACK)
-                    if (filter) callbackOut(this);
-#endif
-                    continue;
-                }
+                if (task == GO_ON) continue;                
                 if ((task == GO_OUT) || (task == EOS_NOFREEZE) || (task == EOSW) ) {
                     ret = task;
                     break;   // exiting from the loop without sending the task
@@ -555,23 +551,21 @@ public:
                     break;
                 }                
                 if (outpresent) push(task);
-                if (task == BLK || task == NBLK) blocking_out = (task == BLK);
+                if (task == BLK || task == NBLK) blocking_out = (task == BLK);                
 #if defined(FF_TASK_CALLBACK)
-                if (filter) callbackOut(this);
+                else 
+                    if (filter) callbackOut(this);
 #endif
             }
         } while((neos<(size_t)running) && (neosnofreeze<(size_t)running));
 
         // GO_OUT, EOS_NOFREEZE and EOSW are not propagated !
-        if (outpresent && ((ret != GO_OUT) && (ret != EOS_NOFREEZE) && (ret != EOSW))) {
+        if (outpresent && (ret == EOS)) {
             // push EOS
             task = ret;
             push(task);
         }
         if (ret == EOSW) ret = EOS; // EOSW is like an EOS but it is not propagated
-#if defined(FF_TASK_CALLBACK)
-        if (filter) callbackOut(this);
-#endif
         
         gettimeofday(&wtstop,NULL);
         wttime+=diffmsec(wtstop,wtstart);
