@@ -769,37 +769,23 @@ public:
         if (!master_worker && (multi_input.size()==0) && (int_multi_input.size()==0)) {
 
             do {
-#if defined(FF_TASK_CALLBACK)
-                if (filter) callbackIn(this);
-#endif
                 if (inpresent) {
                     if (!skipfirstpop) pop(&task);
                     else skipfirstpop=false;
                     
                     if (task == EOS) {
-                        if (filter) {
-                            filter->eosnotify();
-#if defined(FF_TASK_CALLBACK)
-                            callbackOut(this);
-#endif
-                        }
                         push_eos(); 
+                        if (filter) filter->eosnotify();
                         break;
                     } else if (task == EOS_NOFREEZE) {
                         if (filter) {
                             filter->eosnotify();
-#if defined(FF_TASK_CALLBACK)
-                            callbackOut(this);
-#endif
                         }
                         ret = task;
                         break;
                     } else if (task == BLK || task == NBLK) {
                         push_eos(task); // *BLK are propagated
                         blocking_in = blocking_out = (task == BLK);
-#if defined(FF_TASK_CALLBACK)
-                        if (filter) callbackOut(this);
-#endif
                         continue;
                     }                       
                 }
@@ -807,6 +793,9 @@ public:
                 if (filter) {
                     FFTRACE(ticks t0 = getticks());
 
+#if defined(FF_TASK_CALLBACK)
+                    callbackIn(this);
+#endif
                     task = filter->svc(task);
 
 #if defined(TRACE_FASTFLOW)
@@ -816,44 +805,27 @@ public:
                     ticksmax=(std::max)(ticksmax,diff);
 #endif  
 
-                    if (task == GO_ON) { 
-#if defined(FF_TASK_CALLBACK)
-                        callbackOut(this);
-#endif
-                        continue;
-                    }
+                    if (task == GO_ON) continue;
                     if (task == BLK || task == NBLK) { 
                         push_eos(task);
                         blocking_out = (task==BLK); 
-
-#if defined(FF_TASK_CALLBACK)
-                        callbackOut(this);
-#endif
                         continue;
                     }
-
                     if ((task == GO_OUT) || (task == EOS_NOFREEZE)) {
                         ret = task;
-#if defined(FF_TASK_CALLBACK)
-                        callbackOut(this);
-#endif                        
                         break; // exiting from the loop without sending out the task
                     }
                     // if the filter returns NULL/EOS we exit immediatly
                     if (!task || (task==EOS) || (task==EOSW)) {  // EOSW is propagated to workers
                         push_eos(task);
                         ret = EOS;
-#if defined(FF_TASK_CALLBACK)
-                        callbackOut(this);
-#endif
                         break;
                     }
                 } else 
                     if (!inpresent) { 
-                        push_goon(); push_eos(); ret = EOS; 
-#if defined(FF_TASK_CALLBACK)
-                        callbackOut(this);
-#endif                        
+                        push_goon(); 
+                        push_eos();
+                        ret = EOS; 
                         break;
                     }
                 
@@ -904,17 +876,11 @@ public:
             std::deque<ff_node *>::iterator start(availworkers.begin());
             std::deque<ff_node *>::iterator victim(availworkers.begin());
             do {
-#if defined(FF_TASK_CALLBACK)
-                if (filter) callbackIn(this);
-#endif
                 if (!skipfirstpop) {  
                     victim=collect_task(&task, availworkers, start);
                 } else skipfirstpop=false;
                 
                 if (task == GO_OUT) { 
-#if defined(FF_TASK_CALLBACK)
-                    if (filter) callbackOut(this);
-#endif
                     ret = task; 
                     break; 
                 } 
@@ -949,10 +915,6 @@ public:
                         }
                     } // NOTE: BLK and NBLK tasks that are coming from internal channels 
                       //       are not propagated ! 
-
-#if defined(FF_TASK_CALLBACK)
-                    if (filter) callbackOut(this);
-#endif
                     continue;
                 }      
 
@@ -978,9 +940,6 @@ public:
                             push_eos();
                         }
                         ret = task;
-#if defined(FF_TASK_CALLBACK)
-                        if (filter) callbackOut(this);
-#endif
                         break; // received all EOS, exit
                     }
                     //}
@@ -988,6 +947,9 @@ public:
                     if (filter) {
                         FFTRACE(ticks t0 = getticks());
 
+#if defined(FF_TASK_CALLBACK)
+                        callbackIn(this);
+#endif   
                         task = filter->svc(task);
 
 #if defined(TRACE_FASTFLOW)
@@ -997,25 +959,14 @@ public:
                         ticksmax=(std::max)(ticksmax,diff);
 #endif  
 
-                        if (task == GO_ON) {
-#if defined(FF_TASK_CALLBACK)
-                            callbackOut(this);
-#endif   
-                            continue;
-                        }
+                        if (task == GO_ON) continue;
                         if (task == BLK || task == NBLK) {
                             push_eos(task);
                             blocking_out = (task == BLK);
-#if defined(FF_TASK_CALLBACK)
-                            callbackOut(this);
-#endif   
                             continue;
                         }
                         if ((task == GO_OUT) || (task == EOS_NOFREEZE)){
                             ret = task;
-#if defined(FF_TASK_CALLBACK)
-                            callbackOut(this);
-#endif   
                             break; // exiting from the loop without sending out the task
                         }
                         // if the filter returns NULL we exit immediatly
@@ -1028,9 +979,6 @@ public:
                                 if (int_multi_input.size()>0) absorb_eos(int_multi_input);
                             }
                             ret = EOS;
-#if defined(FF_TASK_CALLBACK)
-                            callbackOut(this);
-#endif   
                             break;
                         }
                     }
@@ -1109,7 +1057,7 @@ public:
         }
         return 0;
     }
-    int thawWorkers(bool _freeze=false, ssize_t nw=-1) {
+    virtual int thawWorkers(bool _freeze=false, ssize_t nw=-1) {
         if (nw == -1 || (size_t)nw > workers.size()) running = workers.size();
         else running = nw;
         for(ssize_t i=0;i<running;++i)
