@@ -1129,9 +1129,6 @@ private:
 
             gettimeofday(&filter->wtstart,NULL);
             do {
-#if defined(FF_TASK_CALLBACK)
-                if (filter) callbackIn();
-#endif
                 if (inpresent) {
                     if (!skipfirstpop) pop(&task); 
                     else skipfirstpop=false;
@@ -1140,31 +1137,25 @@ private:
                         ret = task;
                         filter->eosnotify();
                         // only EOS and EOSW are propagated
-                        if (outpresent && ( (task == EOS) || (task == EOSW)) )  push(task); 
-                        
-#if defined(FF_TASK_CALLBACK)
-                        if (filter) callbackOut();
-#endif
+                        if (outpresent && ( (task == EOS) || (task == EOSW)) )  {
+                            push(task);                         
+                        }
                         break;
                     }
-                    if (task == GO_OUT) { 
-#if defined(FF_TASK_CALLBACK)
-                        if (filter) callbackOut();
-#endif
-                        break;
-                    }
+                    if (task == GO_OUT) break;
                 }
                 if (task == BLK || task == NBLK) {
                     if (outpresent) push(task);
                     filter->blocking_in = (task == BLK);
                     filter->blocking_out = filter->blocking_in;
-#if defined(FF_TASK_CALLBACK)
-                    if (filter) callbackOut();
-#endif                    
                     continue;
                 }
                 FFTRACE(++filter->taskcnt);
                 FFTRACE(ticks t0 = getticks());
+
+#if defined(FF_TASK_CALLBACK)
+                if (filter) callbackIn();
+#endif                    
 
                 ret = filter->svc(task);
 
@@ -1175,11 +1166,11 @@ private:
                 filter->ticksmax=(std::max)(filter->ticksmax,diff);
 #endif           
 
-                if (ret == GO_OUT) {
-#if defined(FF_TASK_CALLBACK)
-                    if (filter) callbackOut();
-#endif
-                    break;     
+                if (ret == GO_OUT) break;     
+                if (outpresent && (ret == BLK || ret == NBLK)) {
+                    push(ret);
+                    filter->blocking_out = (ret == BLK);
+                    continue;
                 }
                 if (!ret || (ret >= EOSW)) { // EOS or EOS_NOFREEZE or EOSW
                     // NOTE: The EOS is gonna be produced in the output queue
@@ -1193,14 +1184,7 @@ private:
 #if defined(FF_TASK_CALLBACK)
                     if (filter) callbackOut();
 #endif
-                    if (task == BLK || task == NBLK) {
-                        push(ret);
-                        filter->blocking_out = (task == BLK);
-                    }
                 }
-#if defined(FF_TASK_CALLBACK)
-               if (ret == GO_ON && filter) callbackOut();
-#endif
             } while(!exit);
             
             gettimeofday(&filter->wtstop,NULL);

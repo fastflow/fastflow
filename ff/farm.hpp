@@ -1352,6 +1352,16 @@ public:
             blocking_out = (task==BLK); 
         }    
     }
+
+    inline void thaw(bool freeze=false, ssize_t nw=-1) {
+        if ((size_t)nw < victim) victim = 0;
+        ff_loadbalancer::thaw(freeze,nw);
+    }
+    inline int thawWorkers(bool freeze=false, ssize_t nw=-1) {
+        if ((size_t)nw < victim) victim = 0;
+        return ff_loadbalancer::thawWorkers(freeze,nw);
+    }
+
 private:
     /* this function cannot be used. (How to delete the function ? ) */
     bool ff_send_out_to(void *task, int id,  
@@ -1431,6 +1441,12 @@ public:
     inline void revive() {
         for(size_t i=0;i<dead.size();++i) dead[i]=false;
     }
+
+    inline void thaw(bool freeze=false, ssize_t nw=-1) {
+        if ((size_t)nw < victim) victim = 0;
+        ff_gatherer::thaw(freeze,nw);
+    }
+    
 private:
     size_t victim;
     svector<bool> dead;
@@ -1454,6 +1470,9 @@ private:
         static inline bool ff_send_out_ofarmE(void * task,unsigned long retry,unsigned long ticks, void *obj) {
             ff_loadbalancer *lb = ((ofarmE*)obj)->getlb();
             if (!lb->ff_send_out_emitter(task, retry, ticks, lb)) return false;
+#if defined(FF_TASK_CALLBACK)
+            ((ofarmE*)obj)->callbackOut(lb);
+#endif
             ((ofarmE*)obj)->updatenextone();
             return true;           
         }
@@ -1502,7 +1521,16 @@ private:
             // restart from where we stopped before (if not the first time)
             lb->set_victim(nextone);
             return ret;
-        }  
+        } 
+
+#if defined(FF_TASK_CALLBACK)
+        void callbackIn(void  *t=NULL) {  
+            if (E_f) E_f->callbackIn(t);
+        }
+        void callbackOut(void *t=NULL) {  
+            if (E_f) E_f->callbackOut(t);
+        }
+#endif
 
         /**
          * \brief \p svc method
@@ -1583,6 +1611,15 @@ private:
             gt->set_victim(nextone);
             return ret;
         }
+
+#if defined(FF_TASK_CALLBACK)
+        void callbackIn(void  *t=NULL) {  
+            if (C_f) C_f->callbackIn(t);
+        }
+        void callbackOut(void *t=NULL) {  
+            if (C_f) C_f->callbackOut(t);
+        }
+#endif
 
         /**
          * \brief \p svc method
