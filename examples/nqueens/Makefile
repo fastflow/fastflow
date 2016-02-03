@@ -24,7 +24,7 @@
 # ---------------------------------------------------------------------------
 
 FF_HOME              = ../..
-CC                   = g++
+CXX                  = g++ -std=c++11
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O3 -finline-functions
