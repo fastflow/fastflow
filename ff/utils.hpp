@@ -42,7 +42,9 @@
 //#include <sys/time.h>
 //#endif
 
-#include <string.h>
+#include <cstring>
+#include <string>
+#include <fstream>
 
 #include <ff/cycle.h>
 #include <ff/spin-lock.hpp>
@@ -123,6 +125,38 @@ static inline void error(const char * str, ...) {
     free(p);
 }
 
+
+/**
+ *  Reads memory size data from /proc/<pid>/status 
+ *
+ */
+static inline int memory_Stats(const std::string &status, size_t &vm, size_t &vmp) {
+#if defined(__linux__)
+    std::string line;
+    std::ifstream f;
+    f.open(status.c_str());
+    if (!f.is_open()) return -1;
+    vm = vmp = 0;
+    while (!vm || !vmp)	{
+        getline(f, line);
+        if (line.compare(0,7,"VmPeak:") == 0) {
+            /* get rid of " kB" */
+            const std::string &s = line.substr(7);
+            vmp = std::stol(s.substr(0, s.length()-3));
+        } else 
+            if (line.compare(0,7,"VmSize:") == 0) {
+                /* get rid of " kB"*/
+                const std::string &s = line.substr(7);
+                vm = std::stol(s.substr(0, s.length()-3));
+            }
+    }
+    f.close();
+    return 0;
+#else
+    error("memory_Stats, not implemented for this platform\n");
+    return -1;
+#endif
+}
 
 static inline unsigned long getusec() {
     struct timeval tv;

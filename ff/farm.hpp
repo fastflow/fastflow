@@ -768,24 +768,17 @@ public:
 
     /**
      * \internal
-     * \brief Thaws the thread
+     * \brief Checks if the Farm has completed the computation.
      *
-     * If the thread is frozen, then thaw it. 
+     * It checks if the farm has completed the computation.
+     * 
+     *
+     * \return true if the pattern is frozen or has terminated the execution.
      */
-    inline void thaw(bool _freeze=false, ssize_t nw=-1) {
-        lb->thaw(_freeze, nw);
-        if (collector && !collector_removed) gt->thaw(_freeze, nw);
+    inline bool done() const { 
+        if (collector && !collector_removed) return (lb->done() && gt->done());
+        return lb->done();
     }
-
-    /**
-     * \internal
-     * \brief Checks if the Farm is frozen
-     *
-     * It checks if the farm is frozen.
-     *
-     * \return The status of \p isfrozen().
-     */
-    inline bool isfrozen() const { return lb->isfrozen(); }
 
     /**
      * \breif Offloads teh task to farm
@@ -1138,6 +1131,28 @@ protected:
     }
 
     int getCPUId() const { return -1;}
+
+    /**
+     * \internal
+     * \brief Thaws the thread
+     *
+     * If the thread is frozen, then thaw it. 
+     */
+    inline void thaw(bool _freeze=false, ssize_t nw=-1) {
+        lb->thaw(_freeze, nw);
+        if (collector && !collector_removed) gt->thaw(_freeze, nw);
+    }
+
+    /**
+     * \internal
+     * \brief Checks if the Farm is frozen
+     *
+     * It checks if the farm is frozen.
+     *
+     * \return The status of \p isfrozen().
+     */
+    inline bool isfrozen() const { return lb->isfrozen(); }
+
 
     /** 
      *  \brief Creates the input buffer for the emitter node
