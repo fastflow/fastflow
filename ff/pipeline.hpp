@@ -495,18 +495,13 @@ public:
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->freeze();
     }
 
-    
-    inline void thaw(bool _freeze=false, ssize_t nw=-1) {
-        for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->thaw(_freeze, nw);
-    }
-    
-    inline bool isfrozen() const { 
+    inline bool done() const { 
         int nstages=static_cast<int>(nodes_list.size());
         for(int i=0;i<nstages;++i) 
-            if (!nodes_list[i]->isfrozen()) return false;
+            if (!nodes_list[i]->done()) return false;
         return true;
     }
-
+    
     /** 
      * \brief offload a task to the pipeline from the offloading thread (accelerator mode)
      * 
@@ -679,6 +674,17 @@ protected:
     }
     
     int   getCPUId() const { return -1;}
+
+    inline void thaw(bool _freeze=false, ssize_t nw=-1) {
+        for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->thaw(_freeze, nw);
+    }
+    
+    inline bool isfrozen() const { 
+        int nstages=static_cast<int>(nodes_list.size());
+        for(int i=0;i<nstages;++i) 
+            if (!nodes_list[i]->isfrozen()) return false;
+        return true;
+    }
 
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,

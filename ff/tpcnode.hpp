@@ -372,6 +372,18 @@ public:
     void setDeviceId(tpc_dev_id_t id)  { deviceId = id; }
     tpc_dev_id_t  getDeviceId()  const  { return deviceId; }    
     int getTPCID() const { return tpcId; }
+
+#if defined(FF_REPARA)
+    /** 
+     *  Returns input data size
+     */
+    size_t rpr_get_sizeIn()  const { return rpr_sizeIn; }
+
+    /** 
+     *  Returns output data size
+     */
+    size_t rpr_get_sizeOut() const { return rpr_sizeOut; }
+#endif
     
 protected:
 
@@ -398,6 +410,10 @@ protected:
             Task.resetTask();
             Task.setTask((IN_t*)task);
         }
+
+#if defined(FF_REPARA)
+        rpr_sizeIn = rpr_sizeOut = 0;
+#endif
 
         const tpc_func_id_t f_id = Task.getKernelId();
         if (tpc_device_func_instance_count(dev_ctx, f_id) == 0) {
@@ -448,6 +464,9 @@ protected:
                         error("ff_tpcNode::svc unable to copy data into the device\n");
                         return (oneshot?NULL:GO_ON);
                     }
+#if defined(FF_REPARA)
+                    rpr_sizeIn += inV[i].size;
+#endif
                 } 
                 
                 res = tpc_device_job_set_arg(dev_ctx, j_id, arg_idx, sizeof(handle), &handle);
@@ -525,6 +544,9 @@ protected:
                     error("ff_tpcNode::svc unable to copy data back from the device\n");
                     return (oneshot?NULL:GO_ON);
                 }
+#if defined(FF_REPARA)
+                rpr_sizeOut += outV[i].size;
+#endif
             } 
 
             // By default the buffers are not released !
