@@ -159,7 +159,14 @@ public:
         nodeEnd();
         return 0;
     }
-            
+
+#if defined(FF_REPARA)
+    bool rpr_get_measure_energy() const { return false; }
+    void rpr_set_measure_energy(bool v) { 
+        for(size_t i=0;i<devices.size();++i)
+            devices[i]->rpr_set_measure_energy(v);
+    }
+#endif           
 protected:
     size_t      selected;
     IN_t       *inTask;

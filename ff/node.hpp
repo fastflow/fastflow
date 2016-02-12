@@ -157,7 +157,7 @@ protected:
         tid((size_t)-1),threadid(0), barrier(barrier),
         stp(true), // only one shot by default
         spawned(false),
-        freezing(0), frozen(false), //thawed(false),
+        freezing(0), frozen(false),isdone(false),
         init_error(false), attr(NULL) {
         
         /* Attr is NULL, default mutex attributes are used. Upon successful
@@ -230,6 +230,7 @@ protected:
             pthread_cond_signal(&cond_frozen);
             pthread_mutex_unlock(&mutex);
         }
+        isdone = true;
     }
 
     int disable_cancelability() {
@@ -354,6 +355,7 @@ public:
         //pthread_mutex_unlock(&mutex);
     }
     virtual bool isfrozen() const { return freezing>0;} 
+    virtual bool done()     const { return isdone || (frozen && !stp);}
 
     pthread_t get_handle() const { return th_handle;}
 
@@ -369,8 +371,7 @@ private:
     bool            stp;
     bool            spawned;
     int             freezing;   // changed from bool to int
-    bool            frozen;
-    //bool            thawed;
+    bool            frozen,isdone;
     bool            init_error;
     pthread_t       th_handle;
     pthread_attr_t *attr;
@@ -775,6 +776,12 @@ protected:
     }
 
 
+    virtual bool done() const { 
+        if (!thread) return true;
+        return thread->done();
+    }
+
+
     virtual bool isoutbuffermine() const { return myoutbuffer;}
 
     virtual int  cardinality(BARRIER_T * const b) { 
@@ -990,6 +997,12 @@ public:
             << "  n. push lost  : " << pushwait  << " (ticks=" << lostpushticks << ")" << "\n"
             << "  n. pop lost   : " << popwait   << " (ticks=" << lostpopticks  << ")" << "\n";
     }
+
+    virtual double getworktime() const { return wttime; }
+    virtual size_t getnumtask()  const { return taskcnt; }
+    virtual ticks  getsvcticks() const { return tickstot; }
+    virtual size_t getpushlost() const { return pushwait;}
+    virtual size_t getpoplost()  const { return popwait; }
 #endif
 
     /**
@@ -1027,11 +1040,14 @@ public:
 #if defined(FF_REPARA)
     struct rpr_measure_t {
         size_t time_before, time_after;
-        size_t energy;
         size_t bytesIn, bytesOut;
+        size_t vmSize, vmPeak;
+        double energy;
     };
     
-    typedef typename std::vector<std::vector<std::pair<int, std::vector<rpr_measure_t> > > > RPR_measures_vector;
+    typedef typename std::vector<std::pair<int, std::vector<rpr_measure_t> > > RPR_devices_measure;
+
+    typedef typename std::vector<std::vector<RPR_devices_measure> > RPR_measures_vector;
 
     /** 
      *  Returns input data size
@@ -1043,17 +1059,27 @@ public:
      */
     virtual size_t rpr_get_sizeOut() const { return rpr_sizeOut; }
 
+
+
+    virtual bool rpr_get_measure_energy() const { return measureEnergy; }
+
+    virtual void rpr_set_measure_energy(bool v) { measureEnergy = v; }
+
+
     /**
      *  Returns all measures collected by the node.
      *  The structure is:
-     *    - the outermost vector is greater that 1 if the node is a pipeline or a farm
-     *    - the second level vectors contains info for each device. The device is identified
-     *      by the first entry of the std::pair. 
-     *    - the innermost vector contains the measurments
+     *    - the outermost vector is greater than 1 if the node is a pipeline or a farm
+     *    - each stage of a pipeline or a worker of a farm can be a pipeline or a farm as well
+     *      therefore the second level vector is grater than 1 only if the stage is a pipeline or a farm
+     *    - each entry of a stage is a vector containing info for each device associated to the stage.
+     *      The device is identified by the first entry of the std::pair, the second element of the pair 
+     *      is a vector containing the measurments for the period considered.
      */
     virtual RPR_measures_vector rpr_get_measures() { return RPR_measures_vector(); }
 
-protected:  
+protected: 
+    bool   measureEnergy = false;
     size_t rpr_sizeIn  = {0};
     size_t rpr_sizeOut = {0};
 #endif  /* FF_REPARA */
@@ -1219,6 +1245,7 @@ private:
         inline int  wait_freezing() { return ff_thread::wait_freezing();}
         inline void freeze() { ff_thread::freeze();}
         inline bool isfrozen() const { return ff_thread::isfrozen();}
+        inline bool done()     const { return ff_thread::done();}
         inline int  get_my_id() const { return filter->get_my_id(); };
 
     protected:
@@ -1239,11 +1266,11 @@ private:
 protected:
 
 #if defined(TRACE_FASTFLOW)
-    unsigned long taskcnt;
+    size_t        taskcnt;
     ticks         lostpushticks;
-    unsigned long pushwait;
+    size_t        pushwait;
     ticks         lostpopticks;
-    unsigned long popwait;
+    size_t        popwait;
     ticks         ticksmin;
     ticks         ticksmax;
     ticks         tickstot;

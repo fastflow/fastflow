@@ -1189,6 +1189,18 @@ public:
 		for (size_t i = 0; i < accelerators.size(); ++i)
 			accelerators[i]->releaseAll();
     }
+
+#if defined(FF_REPARA)
+    /** 
+     *  Returns input data size
+     */
+    size_t rpr_get_sizeIn()  const { return rpr_sizeIn; }
+
+    /** 
+     *  Returns output data size
+     */
+    size_t rpr_get_sizeOut() const { return rpr_sizeOut; }
+#endif
      
 protected:
 
@@ -1320,8 +1332,9 @@ protected:
 		//(async) copy input and environments (h2d)
 		for (size_t i = 0; i < accelerators.size(); ++i) {
 
-            if (Task.getCopyIn())
+            if (Task.getCopyIn()) {
                 accelerators[i]->asyncH2Dinput(Task.getInPtr());  //in
+            }
 
             for(size_t k=0; k < envSize; ++k) {
                 if (Task.getCopyEnv(k)) {
