@@ -1919,9 +1919,11 @@ public:
     bool load_result_nb(void ** task)                             = delete;
 };
 
-    // ************************************
-    // TO COMPLETE  !!!!!!!!!!!!!!!!!!!!!!!
-    // ************************************
+
+/*
+ * Ordered task-farm pattern.
+ *
+ */
 template<typename IN_t=char, typename OUT_t=IN_t>
 class ff_OFarm: public ff_ofarm {
 protected:
