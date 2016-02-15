@@ -112,7 +112,7 @@ public:
      * @param t input task
      * 
      */ 
-    virtual void setTask(const TaskT_in *t) = 0;
+    virtual void setTask(TaskT_in *t) = 0;
     
     /**
      * Releases the input task just computed.
@@ -151,6 +151,20 @@ public:
     }
 
     /**
+     * Sets the host-pointer to the input parameter.
+     * The order of calls determin the order of parametes.
+     */
+    template <typename ptrT>
+    void setInPtr(const ptrT* inPtr, size_t size, const MemoryFlags &flags) {
+        internal::Arg_t arg(const_cast<ptrT*>(inPtr),size*sizeof(ptrT),
+                            (flags.copy==CopyFlags::COPYTO || flags.copy==CopyFlags::COPYFROM),
+                            flags.reuse==ReuseFlags::REUSE,
+                            flags.release==ReleaseFlags::RELEASE);
+        tpcInput.push_back(arg);
+    }
+
+
+    /**
      * Sets the host-pointer to the input parameter that is passed by-value.
      *
      * @param inPtr the host-pointer
@@ -177,6 +191,21 @@ public:
                             release==ReleaseFlags::RELEASE);
         tpcOutput.push_back(arg);
     }
+
+    /**
+     * Sets the host-pointer to the output parameter
+     *
+     * @see setInPtr()
+     */
+    template <typename ptrT>
+    void setOutPtr(const ptrT* _outPtr, size_t size, const MemoryFlags &flags) {       
+        internal::Arg_t arg(const_cast<ptrT*>(_outPtr),size*sizeof(ptrT),
+                            (flags.copy==CopyFlags::COPYFROM || flags.copy==CopyFlags::COPYTO),
+                            flags.reuse==ReuseFlags::REUSE,
+                            flags.release==ReleaseFlags::RELEASE);
+        tpcOutput.push_back(arg);
+    }
+
 
     /**
      * Sets the kernel id
@@ -355,7 +384,7 @@ public:
      *
      * @param task  task to be computed
      */
-    void setTask(const IN_t &task) {
+    void setTask(IN_t &task) {
         Task.resetTask();
         Task.setTask(&task);
     }

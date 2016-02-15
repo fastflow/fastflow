@@ -121,10 +121,21 @@ public:
     }
 
     /**
+     * set the host-pointer to the input array.
+     *
+     * @see setInPtr()
+     */
+    void setInPtr(Tin* _inPtr, size_t sizeIn=1, const MemoryFlags &flags) { 
+        inPtr  = _inPtr; size_in = sizeIn; 
+        tuple_in = std::make_tuple(flags.copy==CopyFlags::COPYTO,
+                                   flags.reuse==ReuseFlags::REUSE,
+                                   flags.release==ReleaseFlags::RELEASE);
+    }
+
+    /**
      * set the host-pointer to the output array.
      *
      * @see setInPtr()
-     * @param copyback TODO
      */
     void setOutPtr(Tout* _outPtr, size_t sizeOut=0, 
                    const CopyFlags copyback    =CopyFlags::COPYFROM, 
@@ -134,6 +145,18 @@ public:
         tuple_out = std::make_tuple(copyback==CopyFlags::COPYFROM,
                                     reuse==ReuseFlags::REUSE,
                                     release==ReleaseFlags::RELEASE);
+    }
+
+    /**
+     * set the host-pointer to the output array.
+     *
+     * @see setInPtr()
+     */
+    void setOutPtr(Tout* _outPtr, size_t sizeOut=0, const MemoryFlags &flags) { 
+        outPtr = _outPtr; size_out = sizeOut; 
+        tuple_out = std::make_tuple(flags.copy==CopyFlags::COPYFROM,
+                                    flags.reuse==ReuseFlags::REUSE,
+                                    flags.release==ReleaseFlags::RELEASE);
     }
 
     /**
@@ -151,10 +174,24 @@ public:
         copyEnv.push_back(std::make_tuple(sizeof(ptrT), 
                                           copy==CopyFlags::COPYTO,
                                           reuse==ReuseFlags::REUSE,
-                                          release==ReleaseFlags::RELEASE));
-                                          
+                                          release==ReleaseFlags::RELEASE));                   
     }
     
+    /**
+     * add to env-list the host-pointer to a read-only env.
+     *
+     * @see setInPtr()
+     */
+    template<typename ptrT>
+    void setEnvPtr(const ptrT* _envPtr, size_t size, const MemoryFlags &flags) { 
+        assert(envPtr.size() == copyEnv.size());
+        envPtr.push_back(std::make_pair((void*)_envPtr,size*sizeof(ptrT)));
+        copyEnv.push_back(std::make_tuple(sizeof(ptrT), 
+                                          flags.copy==CopyFlags::COPYTO,
+                                          flags.reuse==ReuseFlags::REUSE,
+                                          flags.release==ReleaseFlags::RELEASE));
+    }
+
     Tin *   getInPtr()    const { return inPtr;  }
     Tout *  getOutPtr()   const { return outPtr; }
     template<typename ptrT>

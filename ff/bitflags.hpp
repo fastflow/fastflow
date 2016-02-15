@@ -38,12 +38,14 @@ namespace ff {
  * and device memory allocation.
  *
  */
-
 enum class CopyFlags    { DONTCOPY, COPYTO, COPYFROM };
 enum class ReuseFlags   { DONTREUSE,  REUSE };
 enum class ReleaseFlags { DONTRELEASE, RELEASE };
 
 struct MemoryFlags {  
+    MemoryFlags():copy(CopyFlags::DONTCOPY),
+                  reuse(ReuseFlags::DONTREUSE),
+                  release(ReleaseFlags::DONTRELEASE) {}
     CopyFlags    copy;
     ReuseFlags   reuse;
     ReleaseFlags release;
@@ -51,11 +53,45 @@ struct MemoryFlags {
 
 using memoryflagsVector = std::vector<MemoryFlags>;
 
-// TO BE IMPLEMENTED: the current version is just a test case
-static inline const memoryflagsVector extractFlags(const std::string &str, const int kernel_id) {
-    memoryflagsVector V(10);
-    for(size_t i=0;i<V.size();++i)
-        V[i].copy = CopyFlags::COPYTO, V[i].reuse = ReuseFlags::DONTREUSE,  V[i].release = ReleaseFlags::DONTRELEASE;
+/**
+ * cmd format:
+ *  ...;$kernel_1;GPU:0; URF;SF;...;$kernel_2;CPU:0;.... ;$ .....
+ *
+ * S: send (COPYTO)
+ * U: reUse (REUSE)
+ * R: receive (COPYFROM)
+ * F: free/remove (RELEASE)
+ */
+static inline const memoryflagsVector extractFlags(const std::string &cmd, const int kernel_id) {
+    memoryflagsVector V;
+    if (cmd == "") return V;
+    const std::string kid = "kernel_"+std::to_string(kernel_id);
+    const char *semicolon = ";";
+    size_t n = cmd.rfind(kid);
+    assert(n != std::string::npos);
+    n = cmd.find_first_of(semicolon, n);   // first ';' after kernel_id
+    assert(n != std::string::npos);
+    n = cmd.find_first_of(semicolon, n+1); // first ';' after device_id
+    assert(n != std::string::npos);
+    
+    size_t m = cmd.find_first_of(semicolon, n+1);  
+    assert(m != std::string::npos);
+    V.reserve(10);    
+    do {
+        const std::string &flags = cmd.substr(n+1, m-n-1);
+        
+        struct MemoryFlags mf;
+        if (flags.find('S') != std::string::npos)      mf.copy = CopyFlags::COPYTO;
+        else if (flags.find('R') != std::string::npos) mf.copy = CopyFlags::COPYFROM;
+        else                                           mf.copy = CopyFlags::DONTCOPY;
+        mf.reuse   = (flags.find('U')!=std::string::npos ? ReuseFlags::REUSE     : ReuseFlags::DONTREUSE);
+        mf.release = (flags.find('F')!=std::string::npos ? ReleaseFlags::RELEASE : ReleaseFlags::DONTRELEASE);
+        V.push_back(mf);
+        
+        n = m;
+        m = cmd.find_first_of(semicolon, n+1);  
+    } while(m != std::string::npos);
+    
     return V;
 }
     
