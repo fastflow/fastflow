@@ -74,8 +74,8 @@ struct oclTask1: public baseOCLTask<Task1, float> {
         MemoryFlags mfin(CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
         MemoryFlags mfout(CopyFlags::DONTCOPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
         
-        setInPtr(t->A.data(), t->A.size()); // ,  mfin);  // copied
-        setOutPtr(t->A.data(), t->A.size()); //, mfout); // not copied back 
+        setInPtr(t->A.data(), t->A.size(), mfin);  // copied
+        setOutPtr(t->A.data(), t->A.size(), mfout); // not copied back 
     }
 };
 
