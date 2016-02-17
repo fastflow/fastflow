@@ -111,11 +111,11 @@ public:
      * @param release TODO
      */
     void setInPtr(Tin* _inPtr, size_t sizeIn=1, 
-                  const CopyFlags    copy   =CopyFlags::COPYTO, 
+                  const CopyFlags    copy   =CopyFlags::COPY, 
                   const ReuseFlags   reuse  =ReuseFlags::DONTREUSE, 
                   const ReleaseFlags release=ReleaseFlags::DONTRELEASE)  { 
         inPtr  = _inPtr; size_in = sizeIn; 
-        tuple_in = std::make_tuple(copy==CopyFlags::COPYTO,
+        tuple_in = std::make_tuple(copy==CopyFlags::COPY,
                                    reuse==ReuseFlags::REUSE,
                                    release==ReleaseFlags::RELEASE);
     }
@@ -125,9 +125,9 @@ public:
      *
      * @see setInPtr()
      */
-    void setInPtr(Tin* _inPtr, size_t sizeIn=1, const MemoryFlags &flags) { 
+    void setInPtr(Tin* _inPtr, size_t sizeIn=1, const MemoryFlags &flags = MemoryFlags()) { 
         inPtr  = _inPtr; size_in = sizeIn; 
-        tuple_in = std::make_tuple(flags.copy==CopyFlags::COPYTO,
+        tuple_in = std::make_tuple(flags.copy==CopyFlags::COPY,
                                    flags.reuse==ReuseFlags::REUSE,
                                    flags.release==ReleaseFlags::RELEASE);
     }
@@ -138,11 +138,11 @@ public:
      * @see setInPtr()
      */
     void setOutPtr(Tout* _outPtr, size_t sizeOut=0, 
-                   const CopyFlags copyback    =CopyFlags::COPYFROM, 
+                   const CopyFlags copyback    =CopyFlags::COPY, 
                    const ReuseFlags reuse      =ReuseFlags::DONTREUSE, 
                    const ReleaseFlags release  =ReleaseFlags::DONTRELEASE)  { 
         outPtr = _outPtr; size_out = sizeOut; 
-        tuple_out = std::make_tuple(copyback==CopyFlags::COPYFROM,
+        tuple_out = std::make_tuple(copyback==CopyFlags::COPY,
                                     reuse==ReuseFlags::REUSE,
                                     release==ReleaseFlags::RELEASE);
     }
@@ -152,9 +152,9 @@ public:
      *
      * @see setInPtr()
      */
-    void setOutPtr(Tout* _outPtr, size_t sizeOut=0, const MemoryFlags &flags) { 
+    void setOutPtr(Tout* _outPtr, size_t sizeOut=0, const MemoryFlags &flags = MemoryFlags() ) { 
         outPtr = _outPtr; size_out = sizeOut; 
-        tuple_out = std::make_tuple(flags.copy==CopyFlags::COPYFROM,
+        tuple_out = std::make_tuple(flags.copy==CopyFlags::COPY,
                                     flags.reuse==ReuseFlags::REUSE,
                                     flags.release==ReleaseFlags::RELEASE);
     }
@@ -166,13 +166,13 @@ public:
      */
     template<typename ptrT>
     void setEnvPtr(const ptrT* _envPtr, size_t size, 
-                  const CopyFlags copy   =CopyFlags::COPYTO, 
+                  const CopyFlags copy   =CopyFlags::COPY, 
                   const ReuseFlags reuse  =ReuseFlags::DONTREUSE, 
                   const ReleaseFlags release=ReleaseFlags::DONTRELEASE)  { 
         assert(envPtr.size() == copyEnv.size());
         envPtr.push_back(std::make_pair((void*)_envPtr,size*sizeof(ptrT)));
         copyEnv.push_back(std::make_tuple(sizeof(ptrT), 
-                                          copy==CopyFlags::COPYTO,
+                                          copy==CopyFlags::COPY,
                                           reuse==ReuseFlags::REUSE,
                                           release==ReleaseFlags::RELEASE));                   
     }
@@ -183,11 +183,11 @@ public:
      * @see setInPtr()
      */
     template<typename ptrT>
-    void setEnvPtr(const ptrT* _envPtr, size_t size, const MemoryFlags &flags) { 
+    void setEnvPtr(const ptrT* _envPtr, size_t size, const MemoryFlags &flags = MemoryFlags()) { 
         assert(envPtr.size() == copyEnv.size());
         envPtr.push_back(std::make_pair((void*)_envPtr,size*sizeof(ptrT)));
         copyEnv.push_back(std::make_tuple(sizeof(ptrT), 
-                                          flags.copy==CopyFlags::COPYTO,
+                                          flags.copy==CopyFlags::COPY,
                                           flags.reuse==ReuseFlags::REUSE,
                                           flags.release==ReleaseFlags::RELEASE));
     }
@@ -308,6 +308,7 @@ public:
 
     virtual ~ff_oclAccelerator() {
         if (my_own_allocator) {
+            allocator->releaseAllBuffers(context);
             delete allocator;
             allocator = NULL;
             my_own_allocator = false;
@@ -1220,23 +1221,18 @@ public:
 		return 0;
 	}
     
-    void nodeEnd() {
-    	//TODO check:
-    	// if multi-device, casuses multiple releaseAllBuffers calls to same object
-		for (size_t i = 0; i < accelerators.size(); ++i)
-			accelerators[i]->releaseAll();
-    }
+    void nodeEnd() {}
 
 #if defined(FF_REPARA)
     /** 
      *  Returns input data size
      */
-    size_t rpr_get_sizeIn()  const { return rpr_sizeIn; }
+    size_t rpr_get_sizeIn()  const { return ff_node::rpr_sizeIn; }
 
     /** 
      *  Returns output data size
      */
-    size_t rpr_get_sizeOut() const { return rpr_sizeOut; }
+    size_t rpr_get_sizeOut() const { return ff_node::rpr_sizeOut; }
 #endif
      
 protected:

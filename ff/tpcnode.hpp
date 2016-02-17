@@ -132,7 +132,7 @@ public:
      * 
      * @param inPtr the host-pointer
      * @param size the number of elements in the input array (bytesize=size*sizeof(ptrT))
-     * @param copy if CopyFlags::COPYTO is set the data will be copied into the device
+     * @param copy if CopyFlags::COPY is set the data will be copied into the device
      * @param reuse if BitFlags::REUSE is set then the run-time looks for a previously 
      * allocated device handle associated with the inPtr host pointer
      * @param release if BitFlags::RELEASE is set the device memory will be released 
@@ -140,11 +140,11 @@ public:
      */
     template <typename ptrT>
     void setInPtr(const ptrT* inPtr, size_t size, 
-                  const CopyFlags    copy   =CopyFlags::COPYTO, 
+                  const CopyFlags    copy   =CopyFlags::COPY, 
                   const ReuseFlags   reuse  =ReuseFlags::DONTREUSE, 
                   const ReleaseFlags release=ReleaseFlags::DONTRELEASE)  { 
         internal::Arg_t arg(const_cast<ptrT*>(inPtr),size*sizeof(ptrT),
-                            (copy==CopyFlags::COPYTO || copy==CopyFlags::COPYFROM),
+                            copy==CopyFlags::COPY,
                             reuse==ReuseFlags::REUSE,
                             release==ReleaseFlags::RELEASE);
         tpcInput.push_back(arg);
@@ -157,7 +157,7 @@ public:
     template <typename ptrT>
     void setInPtr(const ptrT* inPtr, size_t size, const MemoryFlags &flags) {
         internal::Arg_t arg(const_cast<ptrT*>(inPtr),size*sizeof(ptrT),
-                            (flags.copy==CopyFlags::COPYTO || flags.copy==CopyFlags::COPYFROM),
+                            flags.copy==CopyFlags::COPY,
                             flags.reuse==ReuseFlags::REUSE,
                             flags.release==ReleaseFlags::RELEASE);
         tpcInput.push_back(arg);
@@ -182,11 +182,11 @@ public:
      */
     template <typename ptrT>
     void setOutPtr(const ptrT* _outPtr, size_t size, 
-                   const CopyFlags copyback =CopyFlags::COPYFROM, 
+                   const CopyFlags copyback =CopyFlags::COPY, 
                    const ReuseFlags reuse    =ReuseFlags::DONTREUSE, 
                    const ReleaseFlags release  =ReleaseFlags::DONTRELEASE)  { 
         internal::Arg_t arg(const_cast<ptrT*>(_outPtr),size*sizeof(ptrT),
-                            (copyback==CopyFlags::COPYFROM || copyback==CopyFlags::COPYTO),
+                            copyback==CopyFlags::COPY,
                             reuse==ReuseFlags::REUSE,
                             release==ReleaseFlags::RELEASE);
         tpcOutput.push_back(arg);
@@ -200,7 +200,7 @@ public:
     template <typename ptrT>
     void setOutPtr(const ptrT* _outPtr, size_t size, const MemoryFlags &flags) {       
         internal::Arg_t arg(const_cast<ptrT*>(_outPtr),size*sizeof(ptrT),
-                            (flags.copy==CopyFlags::COPYFROM || flags.copy==CopyFlags::COPYTO),
+                            flags.copy==CopyFlags::COPY,
                             flags.reuse==ReuseFlags::REUSE,
                             flags.release==ReleaseFlags::RELEASE);
         tpcOutput.push_back(arg);
