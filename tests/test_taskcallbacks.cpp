@@ -37,37 +37,37 @@
 
 using namespace ff;
 
-const int NTASKS = 20;
+const int NTASKS = 2;
 
 struct Worker1: ff_node_t<long> {
 
     void callbackIn(void *) {
-	printf("Worker1 callbackIn\n");
+        printf("Worker%ld callbackIn\n", get_my_id());
     }
-
+    
     void callbackOut(void *p) {
-	printf("Worker1 callbackOut\n");
+        printf("Worker%ld callbackOut\n", get_my_id());
 
     }
     long *svc(long *in) { 
-	printf("Worker1 got %ld\n", *in);
-	if (*in>0) --*in; 
-	return in; 
+        printf("Worker%ld got %ld\n", get_my_id(), *in);
+        if (*in>0) --*in; 
+        return in; 
     }
 };
 
 struct Worker2: ff_node_t<long> {
 
     void callbackIn(void *p) {
-	printf("Worker2 callbackIn\n");
+        printf("Worker%ld callbackIn\n", get_my_id());
     }
 
     void callbackOut(void *p) {
-	printf("Worker2 callbackOut\n");
+        printf("Worker%ld callbackOut\n", get_my_id());
     }
     long *svc(long *in) { 
-	printf("Worker2 got %ld\n", *in);
-	return in; 
+        printf("Worker%ld got %ld\n", get_my_id(), *in);
+        return in; 
     }
 };
 
@@ -77,33 +77,34 @@ struct Emitter: ff_node_t<long> {
     Emitter(ff_loadbalancer *const lb):lb(lb) {}
 
     void callbackIn(void *p) {
-	assert(reinterpret_cast<ff_loadbalancer*>(p) == lb);
-	printf("Emitter callbackIn\n");
+        assert(reinterpret_cast<ff_loadbalancer*>(p) == lb);
+        printf("Emitter callbackIn\n");
     }
-
+    
     void callbackOut(void *p) {
-	assert(reinterpret_cast<ff_loadbalancer*>(p) == lb);
-	printf("Emitter callbackOut\n");
+        assert(reinterpret_cast<ff_loadbalancer*>(p) == lb);
+        printf("Emitter callbackOut\n");
     }
-
+    
     long *svc(long *in) {
-	if (in == nullptr) {
-	    for(size_t i=0;i<NTASKS; ++i)
-		lb->ff_send_out_to(new long(i), i % 2);
-	    return GO_ON;
-	}
-
-	const long &task = *in;
-	if (task == 0) {
-	    ++zeros;
-	    if (zeros == NTASKS) return EOS;
-	} else {
-	    lb->ff_send_out_to(in, next);
-	    next  = (next + 1) % 2;
-	}
-	return GO_ON;
+        if (in == nullptr) {
+            for(size_t i=0;i<NTASKS; ++i)
+                lb->ff_send_out_to(new long(i), i % 2);
+            return GO_ON;
+        }
+        
+        const long &task = *in;
+        if (task == 0) {
+            ++zeros;
+            if (zeros == NTASKS) return EOS;
+        } else {
+            lb->ff_send_out_to(in, next);
+            next  = (next + 1) % 2;
+        }
+        return GO_ON;
     }
 
+    
     int zeros = 0;
     int next  = 0;
     ff_loadbalancer *lb;

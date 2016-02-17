@@ -128,7 +128,7 @@ protected:
                     error("PIPE, output buffer already present for the accelerator\n");
                     ret=-1;
                 } else {
-                    // the last buffer is forced to be unbounded
+                    // NOTE: the last buffer is forced to be unbounded |
                     if (create_output_buffer(out_buffer_entries, false)<0) {
                         error("PIPE, creating output buffer for the accelerator\n");
                         ret = -1;
@@ -297,7 +297,6 @@ public:
             error("PIPE, too few pipeline nodes\n");
             return -1;
         }
-        fixedsize=false; // NOTE: forces unbounded size for the queues!
         const int last = static_cast<int>(nodes_list.size())-1;
 
         pthread_mutex_t   *mi        = NULL;
@@ -319,7 +318,8 @@ public:
 
         if (nodes_list[0]->isMultiInput()) {
             if (nodes_list[last]->isMultiOutput()) {
-                ff_node *t = new ff_buffernode(out_buffer_entries,fixedsize);
+                // NOTE: forces unbounded size for the feedback channel queue!
+                ff_node *t = new ff_buffernode(out_buffer_entries,false); 
                 if (!t) return -1;
                 t->set_id(last); // NOTE: that's not the real node id !
                 t->set_input_blocking(mo,co,countero);
@@ -328,7 +328,8 @@ public:
                 nodes_list[0]->set_input(t);
                 nodes_list[last]->set_output(t);
             } else {
-                if (create_output_buffer(out_buffer_entries, fixedsize)<0)
+                // NOTE: forces unbounded size for the feedback channel queue!
+                if (create_output_buffer(out_buffer_entries, false)<0)
                     return -1;
                 svector<ff_node*> w(MAX_NUM_THREADS);
                 this->get_out_nodes(w);
@@ -336,7 +337,8 @@ public:
             }
             if (!multi_input) nodes_list[0]->skipfirstpop(true);
         } else {
-            if (create_input_buffer(out_buffer_entries, fixedsize)<0)
+            // NOTE: forces unbounded size for the feedback channel queue!
+            if (create_input_buffer(out_buffer_entries, false)<0)
                 return -1;
             
             if (nodes_list[last]->isMultiOutput()) 

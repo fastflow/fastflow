@@ -1302,6 +1302,13 @@ public:
             << "  n. push lost  : " << pushwait  << " (ticks=" << lostpushticks << ")" << "\n"
             << "  n. pop lost   : " << popwait   << " (ticks=" << lostpopticks  << ")" << "\n";
     }
+
+    virtual double getworktime() const { return wttime; }
+    virtual size_t getnumtask()  const { return taskcnt; }
+    virtual ticks  getsvcticks() const { return tickstot; }
+    virtual size_t getpushlost() const { return pushwait;}
+    virtual size_t getpoplost()  const { return popwait; }
+
 #endif
 
 private:

@@ -759,7 +759,7 @@ public:
      * \internal
      * \brief Forces the thread to freeze at next FF_EOS.
      *
-     * It forces a thread to Freeze itself.
+     * It forces to freeze the farm at next EOS.
      */
     inline void freeze() {
         lb->freeze();
@@ -990,7 +990,6 @@ public:
     void setFixedSize(bool fs)        { fixedsize = fs;         }
     void setInputQueueLength(int sz)  { in_buffer_entries = sz; }
     void setOutputQueueLength(int sz) { out_buffer_entries = sz;}
-
 
 
     /**
