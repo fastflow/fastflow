@@ -29,7 +29,7 @@
 
 #include <vector>
 #include <string>
-
+#include <cassert>
 namespace ff {
 
 /**
@@ -38,14 +38,15 @@ namespace ff {
  * and device memory allocation.
  *
  */
-enum class CopyFlags    { DONTCOPY, COPYTO, COPYFROM };
+enum class CopyFlags    { DONTCOPY, COPY };
 enum class ReuseFlags   { DONTREUSE,  REUSE };
 enum class ReleaseFlags { DONTRELEASE, RELEASE };
 
 struct MemoryFlags {  
-    MemoryFlags():copy(CopyFlags::DONTCOPY),
+    MemoryFlags():copy(CopyFlags::COPY),
                   reuse(ReuseFlags::DONTREUSE),
                   release(ReleaseFlags::DONTRELEASE) {}
+    MemoryFlags(CopyFlags c, ReuseFlags r, ReleaseFlags f):copy(c),reuse(r),release(f) {}
     CopyFlags    copy;
     ReuseFlags   reuse;
     ReleaseFlags release;
@@ -81,8 +82,8 @@ static inline const memoryflagsVector extractFlags(const std::string &cmd, const
         const std::string &flags = cmd.substr(n+1, m-n-1);
         
         struct MemoryFlags mf;
-        if (flags.find('S') != std::string::npos)      mf.copy = CopyFlags::COPYTO;
-        else if (flags.find('R') != std::string::npos) mf.copy = CopyFlags::COPYFROM;
+        if (flags.find('S') != std::string::npos)      mf.copy = CopyFlags::COPY;
+        else if (flags.find('R') != std::string::npos) mf.copy = CopyFlags::COPY;
         else                                           mf.copy = CopyFlags::DONTCOPY;
         mf.reuse   = (flags.find('U')!=std::string::npos ? ReuseFlags::REUSE     : ReuseFlags::DONTREUSE);
         mf.release = (flags.find('F')!=std::string::npos ? ReleaseFlags::RELEASE : ReleaseFlags::DONTRELEASE);
