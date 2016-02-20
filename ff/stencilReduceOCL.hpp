@@ -566,28 +566,48 @@ public:
         }
 	}
 
-	void asyncH2Dinput(Tin *p) {
+	size_t asyncH2Dinput(Tin *p) {
         if (nevents_h2d >= events_h2d.size()) events_h2d.reserve(nevents_h2d);
 		p += offset1_in - halo_in_left;
 		cl_int status = clEnqueueWriteBuffer(cmd_queue, inputBuffer, CL_FALSE, 0,
                                              sizeInput_padded, p, 0, NULL, &events_h2d[nevents_h2d++]);
 		checkResult(status, "copying Task to device input-buffer");
+        return sizeInput_padded;
 	}
 
-	void asyncH2Denv(const size_t idx, char *p) {
+	size_t asyncH2Denv(const size_t idx, char *p) {
         if (nevents_h2d >= events_h2d.size()) events_h2d.reserve(nevents_h2d);
 		cl_int status = clEnqueueWriteBuffer(cmd_queue, envBuffer[idx].first, CL_FALSE, 0,
                                              envBuffer[idx].second, p, 0, NULL, &events_h2d[nevents_h2d++]);    
 		checkResult(status, "copying Task to device env-buffer");
+        return envBuffer[idx].second;
 	}
 
-	void asyncD2Houtput(Tout *p) {
+	size_t  asyncH2Dborders(Tout *p) {
+		if (halo_out_left) {
+			cl_int status = clEnqueueWriteBuffer(cmd_queue, outputBuffer, CL_FALSE, 0,
+                                                 halo_out_left * sizeof(Tout), p + offset1_out - halo_out_left, 0, NULL,
+                                                 &events_h2d[nevents_h2d++]);
+			checkResult(status, "copying left border to device");
+            return halo_out_left * sizeof(Tout);
+		}
+		if (halo_out_right) {
+			cl_int status = clEnqueueWriteBuffer(cmd_queue, outputBuffer, CL_FALSE,
+                                                 (halo_out_left + lenOutput) * sizeof(Tout), halo_out_right * sizeof(Tout),  // NOTE: in a loop Tin == Tout !!
+                                                 p + offset1_out + lenOutput, 0, NULL, &events_h2d[nevents_h2d++]);
+			checkResult(status, "copying right border to device");
+		}
+        return halo_out_left * sizeof(Tout);
+	}
+
+	size_t asyncD2Houtput(Tout *p) {
 		cl_int status = clEnqueueReadBuffer(cmd_queue, outputBuffer, CL_FALSE,
                                             halo_out_left * sizeof(Tout), sizeOutput, p + offset1_out, 0, NULL, &event_d2h);
 		checkResult(status, "copying output back from device");
+        return sizeOutput;
 	}
 
-	void asyncD2Hborders(Tout *p) {
+	size_t asyncD2Hborders(Tout *p) {
 		cl_int status = clEnqueueReadBuffer(cmd_queue, outputBuffer, CL_FALSE,
                                             halo_out_left * sizeof(Tout), halo_half * sizeof(Tout), p + offset1_out, 0, NULL,
                                             &events_h2d[0]);
@@ -597,22 +617,10 @@ public:
                                      (halo_out_left + lenOutput - halo_half) * sizeof(Tout), halo_half * sizeof(Tout),
                                      p + offset1_out + lenOutput - halo_half, 0, NULL, &event_d2h);
 		checkResult(status, "copying border2 back from device");
+        return halo_half * sizeof(Tout);
 	}
 
-	void asyncH2Dborders(Tout *p) {
-		if (halo_out_left) {
-			cl_int status = clEnqueueWriteBuffer(cmd_queue, outputBuffer, CL_FALSE, 0,
-                                                 halo_out_left * sizeof(Tout), p + offset1_out - halo_out_left, 0, NULL,
-                                                 &events_h2d[nevents_h2d++]);
-			checkResult(status, "copying left border to device");
-		}
-		if (halo_out_right) {
-			cl_int status = clEnqueueWriteBuffer(cmd_queue, outputBuffer, CL_FALSE,
-                                                 (halo_out_left + lenOutput) * sizeof(Tout), halo_out_right * sizeof(Tout),  // NOTE: in a loop Tin == Tout !!
-                                                 p + offset1_out + lenOutput, 0, NULL, &events_h2d[nevents_h2d++]);
-			checkResult(status, "copying right border to device");
-		}
-	}
+
 
 	//void initReduce(const Tout &initReduceVal, reduceMode m = REDUCE_OUTPUT) {
     void initReduce() {
@@ -1301,6 +1309,10 @@ protected:
 		Tout  *outPtr    = Task.getOutPtr();
         Tout  *reducePtr = Task.getReduceVar();
         const size_t envSize = Task.getEnvNum(); //n. added environments
+
+#if defined(FF_REPARA)
+        ff_node::rpr_sizeIn = ff_node::rpr_sizeOut = 0;
+#endif
         
         // if the computation is not in-place then we start from the output 
         if ((void*)inPtr != (void*)outPtr) {
@@ -1366,14 +1378,22 @@ protected:
 		for (size_t i = 0; i < accelerators.size(); ++i) {
 
             if (Task.getCopyIn()) {
+#if defined(FF_REPARA)
+                ff_node::rpr_sizeIn += accelerators[i]->asyncH2Dinput(Task.getInPtr());  //in
+#else
                 accelerators[i]->asyncH2Dinput(Task.getInPtr());  //in
+#endif
             }
 
             for(size_t k=0; k < envSize; ++k) {
                 if (Task.getCopyEnv(k)) {
                     char *envptr;
-                    Task.getEnvPtr(k, envptr);
+                    Task.getEnvPtr(k, envptr);    
+#if defined(FF_REPARA)
+                    ff_node::rpr_sizeIn += accelerators[i]->asyncH2Denv(k, envptr);
+#else
                     accelerators[i]->asyncH2Denv(k, envptr);
+#endif
                 }
             }
         } 
@@ -1475,8 +1495,13 @@ protected:
             
             //(async)read back output (d2h)
             if (outPtr && Task.getCopyOut()) { // do we have to copy back the output result ?
-                for (size_t i = 0; i < accelerators.size(); ++i)
+                for (size_t i = 0; i < accelerators.size(); ++i) {
+#if defined(FF_REPARA)
+                    ff_node::rpr_sizeOut += accelerators[i]->asyncD2Houtput(outPtr);
+#else
                     accelerators[i]->asyncD2Houtput(outPtr);
+#endif
+                }
                 waitford2h(); //wait for cross-accelerators d2h
             }
 		}
