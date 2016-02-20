@@ -56,7 +56,7 @@ using memoryflagsVector = std::vector<MemoryFlags>;
 
 /**
  * cmd format:
- *  ...;$kernel_1;GPU:0; URF;SF;...;$kernel_2;CPU:0;.... ;$ .....
+ *  ...;$kernel_1;GPU:0; UF;SF;...;$kernel_2;CPU:0;.... ;$ .....
  *
  * S: send (COPYTO)
  * U: reUse (REUSE)
@@ -67,19 +67,27 @@ static inline const memoryflagsVector extractFlags(const std::string &cmd, const
     memoryflagsVector V;
     if (cmd == "") return V;
     const std::string kid = "kernel_"+std::to_string(kernel_id);
-    const char *semicolon = ";";
+    const char semicolon = ';';
     size_t n = cmd.rfind(kid);
     assert(n != std::string::npos);
     n = cmd.find_first_of(semicolon, n);   // first ';' after kernel_id
     assert(n != std::string::npos);
     n = cmd.find_first_of(semicolon, n+1); // first ';' after device_id
     assert(n != std::string::npos);
-    
-    size_t m = cmd.find_first_of(semicolon, n+1);  
+
+    size_t m = cmd.find_first_of('$', n+1);
+    assert(m != std::string::npos);
+    // gets just the sub-string of the command related to the memory flags 
+    // starting and ending with ';' (i.e. ; UF;SF;...;)
+    const std::string &flag_string = cmd.substr(n,m-n);
+    assert(flag_string != "");
+
+    n = 0;
+    m = flag_string.find_first_of(semicolon,n+1);  
     assert(m != std::string::npos);
     V.reserve(10);    
     do {
-        const std::string &flags = cmd.substr(n+1, m-n-1);
+        const std::string &flags = flag_string.substr(n+1, m-n-1);
         
         struct MemoryFlags mf;
         if (flags.find('S') != std::string::npos)      mf.copy = CopyFlags::COPY;
@@ -90,7 +98,7 @@ static inline const memoryflagsVector extractFlags(const std::string &cmd, const
         V.push_back(mf);
         
         n = m;
-        m = cmd.find_first_of(semicolon, n+1);  
+        m = flag_string.find_first_of(semicolon, n+1);  
     } while(m != std::string::npos);
     
     return V;

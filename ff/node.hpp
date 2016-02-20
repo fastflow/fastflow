@@ -1045,9 +1045,8 @@ public:
         double energy;
     };
     
-    typedef typename std::vector<std::pair<int, std::vector<rpr_measure_t> > > RPR_devices_measure;
-
-    typedef typename std::vector<std::vector<RPR_devices_measure> > RPR_measures_vector;
+    using RPR_devices_measure = std::vector<std::pair<int, std::vector<rpr_measure_t> > >;
+    using RPR_measures_vector = std::vector<std::vector<RPR_devices_measure> >;
 
     /** 
      *  Returns input data size
