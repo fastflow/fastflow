@@ -1670,6 +1670,18 @@ public:
 	ff_mapOCL_1D(std::string mapf, ff_oclallocator *alloc=nullptr,
                  const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(mapf, "", 0, alloc, NACCELERATORS, 0) {
+
+
+
+
+
+        ff_stencilReduceLoopOCL_1D<T, TOCL>::pickCPU(); // <-------------- TOGLIERE
+
+
+
+
+
+
 	}
 
     ff_mapOCL_1D(const std::string &kernels_source, const std::string &mapf_name, 
