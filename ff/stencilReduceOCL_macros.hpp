@@ -212,7 +212,51 @@ static char name[] =\
 "\t    }\n"\
 "}\n"
 
-
+/* Same as the previous one, but with different input output types
+ * indexed elemental function for 1D stencil with two read-only environments.
+ * f: N -> T
+ *
+ * API:
+ * 'name' is the name of the string variable in which the code is stored
+ * 'T' is the element type of the input
+ * 'size' is the size of the input array
+ * 'idx' is the index of the input element
+ * 'in' is the input array
+ * 'env1T' is the element type of the constant environment array
+ * 'env1' is the constant environment array
+ * 'env2T' is the element type of the constant environment value
+ * 'env2' is (a pointer to) the constant environment value
+ * '...' is the OpenCL code of the elemental function
+ */
+#define FF_OCL_STENCIL_ELEMFUNC_2ENV_IO(name,T,outT,size,idx,in,env1T,env1,env2T,env2, ...)\
+static char name[] =\
+"kern_" #name "|"\
+#outT "|"\
+"\n\n" #outT " f" #name "(\n"\
+"\t__global " #T "* " #in ",\n"\
+"\tconst uint " #size ",\n"\
+"\tconst int " #idx ",\n"\
+"\t__global const " #env1T "* " #env1 ",\n"\
+"\t__global const " #env2T "* " #env2 ") {\n"\
+"\t   " #__VA_ARGS__";\n"\
+"}\n\n"\
+"__kernel void kern_" #name "(\n"\
+"\t__global " #T  "* input,\n"\
+"\t__global " #outT "* output,\n"\
+"\tconst uint inSize,\n"\
+"\tconst uint maxItems,\n"\
+"\tconst uint offset,\n"\
+"\tconst uint halo,\n"\
+"\t__global const " #env1T "* env1,\n"\
+"\t__global const " #env2T "* env2) {\n"\
+"\t    int i = get_global_id(0);\n"\
+"\t    int ig = i + offset;\n"\
+"\t    uint gridSize = get_local_size(0)*get_num_groups(0);\n"\
+"\t    while(i < maxItems)  {\n"\
+"\t        output[i+halo] = f" #name "(input+halo,inSize,ig,env1,env2);\n"\
+"\t        i += gridSize;\n"\
+"\t    }\n"\
+"}\n"
 
 #endif
 
@@ -316,13 +360,15 @@ static char name[] =\
  * 'T' is the input element type
  * 'outT' is the output element type
  * 'val' is the value of the input element
+ * 'idx' is the index of the input element
  * '...' is the OpenCL code of the elemental function
  */
-#define FF_OCL_MAP_ELEMFUNC_1D_IO(name, T, outT, val, ...)\
+#define FF_OCL_MAP_ELEMFUNC_1D_IO(name, T, outT, val, idx, ...)	\
 static char name[] =\
 "kern_" #name "|"\
 #outT "|\n\n"\
-#outT " f" #name "("#T" "#val "\n"\
+#outT " f" #name "("#T" "#val ",\n"\
+"\tconst int " #idx "\n"\
 ") {\n" #__VA_ARGS__";\n}\n"\
 "__kernel void kern_" #name "(\n"\
 "\t__global " #T  "* input,\n"\
@@ -334,10 +380,45 @@ static char name[] =\
 "\t    int i = get_global_id(0);\n"\
 "\t    uint gridSize = get_local_size(0)*get_num_groups(0);\n"\
 "\t    while(i < maxItems)  {\n"\
-"\t        output[i] = f" #name "(input[i]);\n"\
+"\t        output[i] = f" #name "(input[i], i);\n"\
 "\t        i += gridSize;\n"\
 "\t    }\n"\
 "}\n"
+
+
+/*
+ * direct elemental function for 1D map.
+ * f: T -> T
+ *
+ * API:
+ * 'name' is the name of the string variable in which the code is stored
+ * 'T' is the element type
+ * 'val' is the value of the input element
+ * 'envT' is the element type of the constant environment
+ * 'envval' is the value of the environment element
+ * '...' is the OpenCL code of the elemental function
+ */
+#define FF_OCL_MAP_ELEMFUNC_1D_ENV_IO(name, T, val, envT, envval, idx, ...) \
+static char name[] =\
+"kern_" #name "|"\
+#T "|\n"\
+#T " f" #name "(" #T " " #val ", " #envT " " #envval ") {\n" #__VA_ARGS__";\n}\n"\
+"__kernel void kern_" #name "(\n"\
+"\t__global " #T  "* input,\n"\
+"\t__global " #T "* output,\n"\
+"\tconst uint inSize,\n"\
+"\tconst uint maxItems,\n"\
+"\tconst uint offset,\n"\
+"\tconst uint halo,\n"\
+"\t__global const " #envT "* env) {\n"\
+"\t    int i = get_global_id(0);\n"\
+"\t    uint gridSize = get_local_size(0)*get_num_groups(0);\n"\
+"\t    while(i < maxItems)  {\n"\
+"\t        output[i] = f" #name "(input[i], env[i], i);\n"\
+"\t        i += gridSize;\n"\
+"\t    }\n"\
+"}\n"
+
 
 
 /*
@@ -475,6 +556,8 @@ static char name[] =\
 "\t        i += gridSize;\n"\
 "\t    }\n"\
 "}\n"
+
+
 
 
 
