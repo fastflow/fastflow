@@ -1508,13 +1508,13 @@ protected:
 
         // device memory cleanup phase
 
-        if (Task.getReleaseIn()) {
+        if (Task.getReleaseIn() && (void *)outPtr != (void *)inPtr) {
             for (size_t i = 0; i < accelerators.size(); ++i) 
                 accelerators[i]->releaseInput(inPtr);
             oldBytesizeIn = 0;
             old_inPtr = NULL;
         }
-        if ( Task.getReleaseOut() && ((void *)outPtr != (void *)inPtr || !Task.getReleaseIn()) ) {
+        if ( Task.getReleaseOut() ) {
             for (size_t i = 0; i < accelerators.size(); ++i) 
                 accelerators[i]->releaseOutput(outPtr);
             oldSizeOut = 0;
@@ -1523,10 +1523,12 @@ protected:
 
         for(size_t k=0; k < envSize; ++k) {
             if (Task.getReleaseEnv(k)) {
-                for (size_t i = 0; i < accelerators.size(); ++i) {
-                    char *envptr;
-                    Task.getEnvPtr(k, envptr);
-                    accelerators[i]->releaseEnv(k,envptr);
+                char *envptr;
+                Task.getEnvPtr(k, envptr);
+                if ((void*)envptr != (void*)outPtr) { 
+                    for (size_t i = 0; i < accelerators.size(); ++i) {
+                        accelerators[i]->releaseEnv(k,envptr);
+                    }
                 }
             }
 
@@ -1670,18 +1672,6 @@ public:
 	ff_mapOCL_1D(std::string mapf, ff_oclallocator *alloc=nullptr,
                  const size_t NACCELERATORS = 1) :
         ff_stencilReduceLoopOCL_1D<T, TOCL>(mapf, "", 0, alloc, NACCELERATORS, 0) {
-
-
-
-
-
-        ff_stencilReduceLoopOCL_1D<T, TOCL>::pickCPU(); // <-------------- TOGLIERE
-
-
-
-
-
-
 	}
 
     ff_mapOCL_1D(const std::string &kernels_source, const std::string &mapf_name, 
