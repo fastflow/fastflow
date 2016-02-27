@@ -1,3 +1,10 @@
+* v.2.1.2 
+   - possibility to switch between BLOCKING and NON-BLOCKING mode at run-time
+   - minor improvements for the OpenCL support
+   - minor enhancement of the fastflow statistics
+   - improved REPARA KERNEL LAYER support
+* v.2.1.1  (not released)
+   - minor fixes
 * v.2.1.0
    - improved cmake compilation
    - ff_tpcnode and ff_tpcallocator added
