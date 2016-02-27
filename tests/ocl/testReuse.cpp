@@ -29,20 +29,6 @@
  *  
  */
 
-// REPARA code:    
-//
-//     initInput(A,S);
-//
-//     [[ rpr::kernel, rpr::map, rpr::in(A, k), rpr::out(A), rpr::target(GPU) ]]
-//     for(size_t i=0;i<A.size(); ++i) {
-//         A[i] /= (A[i]*A[i] + A[i] + 1);
-//     }
-//
-//     [[ rpr::kernel, rpr::map, rpr::in(A,S), rpr::out(S), rpr::target(GPU) ]]
-//     for(size_t i=0;i<A.size(); ++i) {
-//       S[i] += A[i];
-//
-
 // to check the result
 #define CHECK 1
 #ifdef CHECK
@@ -54,7 +40,6 @@
 #include <cassert>
 #include <ff/stencilReduceOCL.hpp>
 using namespace ff;
-
 
 struct Task1 {
     Task1(std::vector<float> &A):A(A) {}
@@ -72,9 +57,11 @@ struct oclTask1: public baseOCLTask<Task1, float> {
     void setTask(Task1 *t) { 
         assert(t);
         MemoryFlags mfin(CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
+        MemoryFlags mfenv(CopyFlags::DONTCOPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
         MemoryFlags mfout(CopyFlags::DONTCOPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
         
         setInPtr(t->A.data(), t->A.size(), mfin);  // copied
+        setEnvPtr(t->A.data(), t->A.size(), mfenv); 
         setOutPtr(t->A.data(), t->A.size(), mfout); // not copied back 
     }
 };
@@ -85,7 +72,7 @@ struct oclTask2: public baseOCLTask<Task2, float> {
         assert(t);
         MemoryFlags mfin(CopyFlags::DONTCOPY, ReuseFlags::REUSE, ReleaseFlags::DONTRELEASE);
         MemoryFlags mfout(CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
-        
+
         setInPtr(t->A.data(), t->A.size(),  mfin);  // not copied, reusing data
         setEnvPtr(t->S.data(), t->S.size(), mfout); // copied 
         setOutPtr(t->S.data(), t->S.size(), mfout); // copied back 
@@ -96,13 +83,13 @@ struct oclTask2: public baseOCLTask<Task2, float> {
 // utility function
 static void initInput(std::vector<float> &A, std::vector<float> &S) {
     for(size_t i=0; i<A.size(); ++i) {
-	A[i] = i;
-	S[i] = 0.0f;
+        A[i] = i;
+        S[i] = 0.0f;
     }
 }
 
 int main(int argc, char * argv[]) {
-    const size_t max_size   = 1000;
+    const size_t max_size   = 10;
 
     std::vector<float> S(max_size);
     std::vector<float> A(max_size);
@@ -117,9 +104,8 @@ int main(int argc, char * argv[]) {
     Task2 t2(A,S);
 
 #if !defined(BINARY_OCL_CODE)
-    FF_OCL_MAP_ELEMFUNC_1D(mapf1, float, a, 
-                           return a / (a*a + a + 1);
-                           );    
+    //FF_OCL_MAP_ELEMFUNC_1D(mapf1, float, a, return a / (a*a + a + 1); );    
+    FF_OCL_STENCIL_ELEMFUNC_ENV(mapf1, float, useless1, i, A, float, useless2, return A[i] / (A[i]*A[i] + A[i] + 1);  );
     ff_mapOCL_1D<Task1, oclTask1> oclMap1(t1, mapf1, &alloc); 
 #else
     ff_mapOCL_1D<Task1, oclTask1> oclMap1(t1, "cl_code/reusek1.cl", &alloc); 
@@ -134,9 +120,8 @@ int main(int argc, char * argv[]) {
     }
     
 #if !defined(BINARY_OCL_CODE)
-    FF_OCL_MAP_ELEMFUNC_1D_ENV(mapf2, float, a, float, s,
-                               return s+a;
-                               );
+    //FF_OCL_MAP_ELEMFUNC_1D_ENV(mapf2, float, a, float, s, return s+a; );
+    FF_OCL_STENCIL_ELEMFUNC_ENV(mapf2, float, useless, i, A, float, S, return S[i]+A[i]; );
     ff_mapOCL_1D<Task2, oclTask2> oclMap2(t2, mapf2, &alloc); 
 #else
     ff_mapOCL_1D<Task2, oclTask2> oclMap2(t2, "cl_code/reusek2.cl", &alloc); 
