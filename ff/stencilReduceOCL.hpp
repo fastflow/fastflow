@@ -110,7 +110,7 @@ public:
      * @param reuse TODO
      * @param release TODO
      */
-    void setInPtr(Tin* _inPtr, size_t sizeIn=1, 
+    void setInPtr(Tin* _inPtr, size_t sizeIn, 
                   const CopyFlags    copy   =CopyFlags::COPY, 
                   const ReuseFlags   reuse  =ReuseFlags::DONTREUSE, 
                   const ReleaseFlags release=ReleaseFlags::DONTRELEASE)  { 
@@ -125,7 +125,7 @@ public:
      *
      * @see setInPtr()
      */
-    void setInPtr(Tin* _inPtr, size_t sizeIn=1, const MemoryFlags &flags = MemoryFlags()) { 
+    void setInPtr(Tin* _inPtr, size_t sizeIn, const MemoryFlags &flags) { 
         inPtr  = _inPtr; size_in = sizeIn; 
         tuple_in = std::make_tuple(flags.copy==CopyFlags::COPY,
                                    flags.reuse==ReuseFlags::REUSE,
@@ -137,7 +137,7 @@ public:
      *
      * @see setInPtr()
      */
-    void setOutPtr(Tout* _outPtr, size_t sizeOut=0, 
+    void setOutPtr(Tout* _outPtr, size_t sizeOut, 
                    const CopyFlags copyback    =CopyFlags::COPY, 
                    const ReuseFlags reuse      =ReuseFlags::DONTREUSE, 
                    const ReleaseFlags release  =ReleaseFlags::DONTRELEASE)  { 
@@ -152,7 +152,7 @@ public:
      *
      * @see setInPtr()
      */
-    void setOutPtr(Tout* _outPtr, size_t sizeOut=0, const MemoryFlags &flags = MemoryFlags() ) { 
+    void setOutPtr(Tout* _outPtr, size_t sizeOut, const MemoryFlags &flags ) { 
         outPtr = _outPtr; size_out = sizeOut; 
         tuple_out = std::make_tuple(flags.copy==CopyFlags::COPY,
                                     flags.reuse==ReuseFlags::REUSE,
@@ -183,7 +183,7 @@ public:
      * @see setInPtr()
      */
     template<typename ptrT>
-    void setEnvPtr(const ptrT* _envPtr, size_t size, const MemoryFlags &flags = MemoryFlags()) { 
+    void setEnvPtr(const ptrT* _envPtr, size_t size, const MemoryFlags &flags) { 
         assert(envPtr.size() == copyEnv.size());
         envPtr.push_back(std::make_pair((void*)_envPtr,size*sizeof(ptrT)));
         copyEnv.push_back(std::make_tuple(sizeof(ptrT), 
