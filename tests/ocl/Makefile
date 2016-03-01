@@ -24,7 +24,7 @@ LIBS =  $(OPENCL) -lpthread
 INCLUDES = -I$(FF_ROOT) -I$(OCL_ROOT)/include
 
 
-TARGETS = helloKernel helloKernel2 testRelease oclStencilReduceLoop oclMap oclMap2 oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct dotProduct2 device_selection dotProd_cpugpu device_selection2 mixedpipe mixedpipe2
+TARGETS = helloKernel helloKernel2 testRelease oclStencilReduceLoop oclMap oclMap2 oclReduce oclMapReduce farm_oclMap farm_oclReduce pipeFarmMap dotProduct dotProduct2 device_selection dotProd_cpugpu device_selection2 mixedpipe mixedpipe2 convolution2D
 
 
 all: $(TARGETS)
@@ -79,6 +79,10 @@ device_selection: device_selection.cpp
 
 device_selection2: device_selection2.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+convolution2D: convolution2D.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OCLFLAGS) $(OPTFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
 
 clean:
 	-rm -f $(TARGETS)

@@ -56,15 +56,15 @@ struct Task: public baseOCLTask<Task, float, float> {
 	void setTask(Task *t) {
 
 		setInPtr(const_cast<float*>(t->A.data()), t->A.size(), 
-                 CopyFlags::COPYTO,
+                 CopyFlags::COPY,
                  ReuseFlags::DONTREUSE,
                  ReleaseFlags::RELEASE);
 		setEnvPtr(const_cast<float*>(t->B.data()), t->B.size(), 
-                 CopyFlags::COPYTO,
+                 CopyFlags::COPY,
                  ReuseFlags::DONTREUSE,
                  ReleaseFlags::RELEASE);
 		setOutPtr(const_cast<float*>(t->M.data()), t->M.size(), 
-                  CopyFlags::COPYFROM,
+                  CopyFlags::COPY,
                   ReuseFlags::DONTREUSE,
                   ReleaseFlags::RELEASE);
 		setReduceVar(&(t->result));

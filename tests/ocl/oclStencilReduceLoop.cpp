@@ -136,7 +136,7 @@ struct oclTask: public baseOCLTask<oclTask, basictype> {
 	void setTask(oclTask *t) {
 		assert(t);
 		setInPtr(t->M_in, t->size);
-		setOutPtr(t->M_out);
+		setOutPtr(t->M_out, t->size);
 		setReduceVar(&(t->result));
 	}
 	bool iterCondition(const Tin &x, size_t iter) {

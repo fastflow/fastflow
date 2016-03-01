@@ -68,7 +68,7 @@ struct oclTask: public baseOCLTask<oclTask, float, float> {
     void setTask(oclTask *t) { 
        setInPtr(t->M, t->size);
        setEnvPtr(t->M2, t->size);
-       setOutPtr(t->Mout);
+       setOutPtr(t->Mout, t->size);
        setReduceVar(&(t->result));
      }
     float combinator(float const &x, float const &y) {return x+y;}

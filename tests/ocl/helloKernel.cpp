@@ -85,7 +85,7 @@ parseCmd(int kernelid, enum_t direction, const std::string &cmd) {
     if (direction==IN) return std::make_tuple(CopyFlags::DONTCOPY,
                                               ReuseFlags::DONTREUSE,
                                               ReleaseFlags::RELEASE);
-    return std::make_tuple(CopyFlags::COPYTO,
+    return std::make_tuple(CopyFlags::COPY,
                            ReuseFlags::DONTREUSE,
                            ReleaseFlags::RELEASE);
 }

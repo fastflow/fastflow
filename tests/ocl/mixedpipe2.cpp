@@ -110,12 +110,12 @@ struct Task: public baseOCLTask<Task, float> {
             setInPtr(const_cast<float*>(t->A.data()),  t->A.size(), 
                      CopyFlags::DONTCOPY, ReuseFlags::REUSE);                               // A not copied, reusing the previous buffer
             setEnvPtr(const_cast<float*>(t->C->data()), t->C->size(), 
-                      CopyFlags::COPYTO,ReuseFlags::DONTREUSE,ReleaseFlags::RELEASE);       // C copied and then released
+                      CopyFlags::COPY,ReuseFlags::DONTREUSE,ReleaseFlags::RELEASE);       // C copied and then released
             setReduceVar(&(t->sum));                                                         // sum 
         } break;                                                                             // A kept (by default)
         case 3: {
             setInPtr(const_cast<float*>(t->R->data()), t->R->size(), 
-                     (t->k==0)?CopyFlags::COPYTO:CopyFlags::DONTCOPY);                       // R copied only the 1st time
+                     (t->k==0)?CopyFlags::COPY:CopyFlags::DONTCOPY);                       // R copied only the 1st time
             setEnvPtr(const_cast<float*>(t->A.data()),  t->A.size(), 
                       CopyFlags::DONTCOPY, ReuseFlags::REUSE);                                // A not copied, reusing the previous buffer (*)
             setEnvPtr(&(t->sum), 1);                                                         // sum

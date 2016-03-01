@@ -76,7 +76,7 @@ struct oclTask: public baseOCLTask<oclTask, mypair, float> {
     void setTask(oclTask *t) { 
        assert(t);
        setInPtr(t->M, t->size);
-       setOutPtr(t->Mout);
+       setOutPtr(t->Mout, t->size);
        setReduceVar(&(t->result));
     }
     float combinator(float const &x, float const &y) {return x+y;}
