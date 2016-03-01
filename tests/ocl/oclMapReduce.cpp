@@ -25,7 +25,7 @@
  ****************************************************************************
  */
 /* Author: Massimo Torquati / Guilherme Peretti Pezzi
- *         torquati@di.unipi.it  massimotor@gmail.com / peretti@di.unito.it
+ *         torquati@di.unipi.it  / peretti@di.unito.it
  */
 
 #if !defined(FF_OPENCL)
@@ -62,7 +62,7 @@ struct oclTask: public baseOCLTask<oclTask, float> {
     void setTask(oclTask *t) { 
         assert(t);
         setInPtr(t->M, t->size);
-        setOutPtr(t->M);
+        setOutPtr(t->M, t->size);
         setReduceVar(&(t->result));
      }
 

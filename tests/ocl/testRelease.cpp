@@ -91,7 +91,7 @@ struct oclTask: baseOCLTask<myTask, float> {
      
         // set host input and output pointers to the OpenCL device
         setInPtr(buffer, size);
-        setOutPtr(buffer);
+        setOutPtr(buffer, size);
     }
 
     // this method is called when the device computation is finished

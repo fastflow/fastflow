@@ -53,7 +53,7 @@ struct oclTask: public baseOCLTask<oclTask, float> {
     oclTask(float *M, size_t size):M(M),size(size) {}
     void setTask(oclTask *t) { 
         setInPtr(t->M, t->size);
-        setOutPtr(t->M);
+        setOutPtr(t->M, t->size);
     }
 
     float *M;

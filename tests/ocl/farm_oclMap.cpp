@@ -77,7 +77,7 @@ struct oclTask: baseOCLTask<myTask, float> {
     void setTask(myTask *task) { 
         assert(task);
         setInPtr(task->M, task->size);
-        setOutPtr(task->M);
+        setOutPtr(task->M, task->size);
     }
 };
 
