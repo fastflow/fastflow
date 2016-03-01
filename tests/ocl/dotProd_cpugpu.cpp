@@ -58,7 +58,7 @@ struct Task: public baseOCLTask<Task, float, float> {
 		assert(t);
 		setInPtr(const_cast<float*>(t->A.data()), t->A.size());
 		setEnvPtr(const_cast<float*>(t->B.data()), t->B.size());
-		setOutPtr(const_cast<float*>(t->M.data()));
+		setOutPtr(const_cast<float*>(t->M.data()), t->A.size());
 		setReduceVar(&(t->result));
 	}
 

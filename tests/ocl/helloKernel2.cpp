@@ -85,7 +85,7 @@ struct oclTask: baseOCLTask<myTask, float, float> {
         
         // A is copied back at the end, it will be deleted at the end
         setOutPtr(Aptr, Asize, 
-                  CopyFlags::COPYFROM,
+                  CopyFlags::COPY,
                   ReuseFlags::DONTREUSE,
                   ReleaseFlags::RELEASE);
     }
