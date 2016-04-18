@@ -100,6 +100,8 @@ public:
 		assert(t);
 		const HelmholtzTask &task = *t;
 
+		ff::MemoryFlags mfout(ff::CopyFlags::COPY, ff::ReuseFlags::DONTREUSE, ff::ReleaseFlags::DONTRELEASE);
+
 		w = task.w;
 		h = task.h;
 		iters = task.iters;
@@ -107,7 +109,7 @@ public:
 		setHeight(h);
 		setWidth(w);
 		setInPtr(task.uold, w * h);
-		setOutPtr(task.u);
+		setOutPtr(task.u, w * h);
 		setReduceVar(&(task.Error));
 
 		setEnvPtr(task.Const, 1);

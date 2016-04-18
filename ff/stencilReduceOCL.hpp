@@ -865,9 +865,10 @@ private:
 		// 64 and 256 are the max number of blocks and threads we want to use
 		//getBlocksAndThreads(lenInput, 64, 256, nwg_reduce, wgsize_reduce);
 		//nthreads_reduce = nwg_reduce * wgsize_reduce;
-		wgsize_reduce = std::min<size_t>(lenReduceInput, wgsize_reduce_static);
-		nthreads_reduce = wgsize_reduce
-				* ((lenReduceInput + wgsize_reduce - 1) / wgsize_reduce); //round up
+		nthreads_reduce = lenReduceInput;
+		if(!isPowerOf2(nthreads_reduce))
+			nthreads_reduce = nextPowerOf2(nthreads_reduce);
+		wgsize_reduce = std::min<size_t>(nthreads_reduce, wgsize_reduce_static);
 		nwg_reduce = nthreads_reduce / wgsize_reduce;
 
 		//compute size of per-workgroup working memory
