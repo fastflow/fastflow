@@ -152,7 +152,7 @@ struct oclTask: public baseOCLTask<Task, uchar, uchar> {
         assert(t);
         size_t N = t->env.rows * t->env.cols;
         setInPtr(t->src, N);
-        setOutPtr(t->dst);
+        setOutPtr(t->dst, N);
 
         setEnvPtr(&t->env, 1);
     }
