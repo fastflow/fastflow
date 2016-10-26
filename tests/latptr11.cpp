@@ -10,6 +10,7 @@ static long WITER = 2400;
 static float comptime=0.0;
 
 struct firstStage: public ff_node_t<unsigned long> {
+
   int svc_init() {
     sleep(1);
     printf("starting\n");
@@ -58,8 +59,10 @@ struct firstStage: public ff_node_t<unsigned long> {
 
 struct lastStage: ff_node_t<unsigned long> {
     unsigned long *svc(unsigned long *task) {  
+#if !defined(BEST_CASE)
 	// simulate some works
-	ticks_wait(WITER);
+      ticks_wait(WITER);
+#endif
 	return task; 
     }
 };
@@ -86,7 +89,8 @@ int main(int argc, char *argv[]) {
     
     threadMapper::instance()->setMappingList(worker_mapping.c_str());
 
-    ff_pipeline pipe(false, 512, 512, true);
+    //ff_pipeline pipe(false, 512, 512, true);
+    ff_pipeline pipe(false, 8192, 8192, true);
     pipe.add_stage(new firstStage(nmsgs));
     pipe.add_stage(new lastStage);
     pipe.wrap_around();
