@@ -40,6 +40,16 @@ namespace ff {
 class ff_taskf: public ff_farm<> {
     enum {DEFAULT_OUTSTANDING_TASKS = 2048};
 protected:
+    /// task function
+    template<typename F_t, typename... Param>
+    struct ff_task_f_t: public base_f_t {
+        ff_task_f_t(const F_t F, Param&... a):F(F) { args = std::make_tuple(a...);}	
+        inline void call() { apply(F, args); }
+        F_t F;
+        std::tuple<Param...> args;	
+    };
+
+
     inline task_f_t *alloc_task(std::vector<param_info> &P, base_f_t *wtask) {
         task_f_t *task = &(TASKS[ntasks++ % outstandingTasks]);
         task->P     = P;

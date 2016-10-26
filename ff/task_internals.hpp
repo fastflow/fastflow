@@ -88,20 +88,13 @@ struct param_info {
 /// base class for a generic function call
 struct base_f_t {
     virtual inline void call() {};
+    virtual inline void call(void*) {};
     virtual ~base_f_t() {};
 };    
 /// task function basic type
 struct task_f_t { 
     std::vector<param_info> P;  // FIX: svector should be used here
     base_f_t *wtask;
-};
-/// task function
-template<typename F_t, typename... Param>
-struct ff_task_f_t: public base_f_t {
-    ff_task_f_t(const F_t F, Param&... a):F(F) { args = std::make_tuple(a...);}	
-    inline void call() { apply(F, args); }
-    F_t F;
-    std::tuple<Param...> args;	
 };
   
 
@@ -202,8 +195,8 @@ struct CompareTask_FIFO {
 
 /* --------------------------------------- */
 
-template<typename compare_t = CompareTask_LIFO>
-class TaskFScheduler: public ff_node_t<task_f_t> {
+template<typename TaskT, typename compare_t = CompareTask_LIFO>
+class TaskFScheduler: public ff_node_t<TaskT> {
 private:
     typedef std::priority_queue<hash_task_t*, std::vector<hash_task_t*>, compare_t> priority_queue_t;    
 protected:
@@ -245,12 +238,19 @@ protected:
             auto d    = p.tag;
             auto dir  = p.dir;
             if(dir==INPUT) {
-                hash_task_t * t=(hash_task_t *)icl_hash_find(address_set,(void*)d);			    
+                //hash_task_t * t=(hash_task_t *)icl_hash_find(address_set,(void*)d);		
+                unsigned long t_id=(unsigned long)icl_hash_find(address_set,(void *)d);
+                hash_task_t * t=NULL;
+                if(t_id)    //t_id==0 if the hash table does not contains info for d
+                    t=(hash_task_t *)icl_hash_find(task_set,&t_id);
+
+
+	    
                 if(t==NULL) { // no writer for this tag
                     hash_task_t *dummy=createTask(task_id,DONE,NULL);
                     dummy->is_dummy=true;
                     // the dummy task uses current data
-                    icl_hash_insert(address_set,(void*)d,dummy);
+                    icl_hash_insert(address_set,(void*)d,(void*)(dummy->id));
                     // the dummy task unblocks the current data
                     dummy->unblock_task_ids[dummy->unblock_numb]=act_id;
                     dummy->unblock_numb++;
@@ -268,7 +268,11 @@ protected:
                 }
             } else
                 if (dir==OUTPUT) {
-                    hash_task_t * t=(hash_task_t *)icl_hash_find(address_set,(void*)d);
+                    hash_task_t * t=NULL;
+                    unsigned long t_id = (unsigned long)icl_hash_find(address_set,(void*)d);
+
+                    if (t_id) t=(hash_task_t *)icl_hash_find(task_set,&t_id);
+
                     // the task has been already written 
                     if(t != NULL) {
                         if (t->unblock_numb>0) {
@@ -296,7 +300,8 @@ protected:
                         if (t->status==DONE && t->num_out==0)
                             task_hash_delete(t);
                     }
-                    icl_hash_update_insert(address_set, (void*)d, act_task);
+                    if(t_id) icl_hash_delete(address_set,(void *)d,NULL,NULL);
+                    icl_hash_insert(address_set, (void*)d,(void *)(act_task->id));
                     act_task->num_out++;
                 }
         }
@@ -451,67 +456,6 @@ public:
     }
 };
 
-template <typename T>   
-struct TaskFNode: ff_node_t<T> {
-    TaskFNode():ffalloc(nullptr) {
-#if !defined(DONT_USE_FFALLOC)
-        ffalloc=new ff_allocator;
-        assert(ffalloc);
-        /*                        32, 64, 128, 256,512, ...  */
-        int nslabs[N_SLABBUFFER]={0, 2048,1024,512,512,0,0,0,0 };
-        if (ffalloc->init(nslabs)<0) {
-            error("FATAL ERROR: TaskFWorker allocator init failed\n");
-            abort();
-        }
-#endif            
-    }
-    virtual ~TaskFNode() {
-#if !defined(DONT_USE_FFALLOC)
-        if (ffalloc) delete ffalloc;
-#endif
-    }
-    inline int registerTaskFKey() {
-        if (pthread_setspecific(TaskFKeyOnce::getTaskFKey(), this)) {
-            error("TaskFWorker::registerTaskFKey, pthread_setspecific fails\n");
-            return -1;
-        }
-        return 0;
-    }
-    inline task_f_t *alloc_task(std::vector<param_info> &P, base_f_t *wtask) {
-        void *t=TASK_MALLOC(sizeof(task_f_t));
-        task_f_t *task = new (t) task_f_t;
-        task->P       = P;
-        task->wtask   = wtask;
-        return task;
-    }
-    template<typename F_t, typename... Param>
-    inline base_f_t *alloc_wtask(const F_t F, Param...args) {
-        void *t=TASK_MALLOC(sizeof(ff_task_f_t<F_t,Param...>));
-        ff_task_f_t<F_t,Param...>  *wtask = new (t) ff_task_f_t<F_t, Param...>(F, args...);
-        wtask->wid = ff_node::get_my_id(), wtask->done = false;
-        return wtask;
-    }
-    virtual inline bool offload(void * task, 
-                                unsigned int retry=((unsigned int)-1),
-                                unsigned int ticks=(ff_node::TICKS2WAIT)) { 
-        return ff_node::ff_send_out(task,retry,ticks);
-    }
-protected:
-    ff_allocator                  *ffalloc;
-};
-
-/* --------------  worker ------------------------------- */
-struct TaskFWorker: TaskFNode<hash_task_t> {
-    //inline int svc_init() {
-    //    registerTaskFKey();
-    //    return 0;
-    //}
-    inline hash_task_t *svc(hash_task_t *task) {
-        task->wtask->call();
-        //task->wtask->done = true;
-        return task;
-    }
-};
 
   
 } // namespace

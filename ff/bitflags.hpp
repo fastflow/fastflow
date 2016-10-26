@@ -65,7 +65,11 @@ using memoryflagsVector = std::vector<MemoryFlags>;
  */
 static inline const memoryflagsVector extractFlags(const std::string &cmd, const int kernel_id) {
     memoryflagsVector V;
-    if (cmd == "") return V;
+    // no command in input, we just return a vector with one (default) entry
+    if (cmd == "") { 
+        V.resize(1);
+        return V;
+    }
     const std::string kid = "kernel_"+std::to_string(kernel_id);
     const char semicolon = ';';
     size_t n = cmd.rfind(kid);
