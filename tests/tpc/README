@@ -1,0 +1,3 @@
+Please modify in the Makefile the TPC_LIB_DIR variable such that it points 
+to the directory where TPC libraries can be found (libtpc.so and libplatform.so).
+

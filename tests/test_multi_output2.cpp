@@ -27,11 +27,12 @@
 
 /* Author: Massimo Torquati
  * Date:   July 2014
+ *         May 2015 (simplified)
  */
 /*
  *    
  *  Testing the following skeleton:   pipeline(master-worker, multi-input);
- *
+ *  (see test_multi_output5.cpp (second stage) for a different version having the farm collector)
  *
  *                 ------------------------                  
  *               |              -----     |
@@ -51,7 +52,8 @@
  *  (workers send tasks back to the emitter thread), the second stage is a multi-input
  *  node getting input tasks from the workers (using an explicit instanciated channel)
  *
- *
+ *  W: is a multi-output node
+ *  N: is a multi-input node
  */      
 
 
@@ -63,52 +65,40 @@
 #include <ff/pipeline.hpp>
 #include <ff/node.hpp>
 
-//#if !defined(HAS_CXX11_VARIADIC_TEMPLATES)
-//#error "this test requires the -DHAS_CXX11_VARIADIC_TEMPLATES compile flag"
-//#endif
-  
 using namespace ff;
 
-struct W: ff_node {
-    W():outbuffer(100,false) {}
-
-    void *svc(void *task){
+struct W: ff_monode_t<long> {
+    long *svc(long *task){
         printf("W(%ld) got task %ld\n", get_my_id(), (long)task);
-        outbuffer.put(task);
-        return task;
+        ff_send_out_to(task, 1); // to the next stage
+        ff_send_out_to(task, 0); // to the Emitter
+        return GO_ON;
     }
-
-    void svc_end() {
-        outbuffer.put(EOS);
-    }
-
-    void get_out_nodes(svector<ff_node*> &w) {
-        w.push_back(&outbuffer);
-    }
-
-    ff_buffernode outbuffer;
-    size_t output_channels;
 };
 
 // multi input node
-struct N: ff_minode {
-    void *svc(void *task){
+struct N: ff_minode_t<long> {
+    long *svc(long *task){
         printf("N got task %ld\n",(long)task);
         return GO_ON;
     }
 };
 
-class E: public ff_node {
+class E: public ff_node_t<long> {
 public:
     E(long numtasks):numtasks(numtasks) {}
 
-    void *svc(void *task) {	
+    long *svc(long *task) {	
         if (task == NULL) {
             for(long i=1;i<=numtasks;++i)
-                ff_send_out((void*)i);
+                ff_send_out((long*)i);
             return GO_ON;
         }
-        if (--numtasks <= 0) return NULL;
+        printf("E: got back %ld\n", (long)task);
+        if (--numtasks <= 0) {
+            printf("E sending EOS\n");
+            return EOS;
+        }
         return GO_ON;	
     }
 private:
@@ -144,7 +134,8 @@ int main(int argc,  char * argv[]) {
 
     ff_pipeline pipe;
     pipe.add_stage(&farm);
-    pipe.add_stage(new N);
+    N multi_input;
+    pipe.add_stage(&multi_input);
        
     if (pipe.run_and_wait_end()<0) return -1;
     printf("DONE\n");
