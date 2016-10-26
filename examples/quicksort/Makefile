@@ -24,7 +24,7 @@
 # ---------------------------------------------------------------------------
 
 FF_HOME              = ../..
-CC                   = gcc
+CXX                  = g++ -std=c++11
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O3 -finline-functions
@@ -35,7 +35,7 @@ INCS                 = -I$(FF_HOME)
 LIBS                 = -lpthread
 
 INCLUDES             = -I. $(INCS)
-TARGET               = qs ff_qs_simple ff_qs_opt 
+TARGET               = qs ff_qs_simple ff_qs_opt quicksort_dac
 #ff_qs_mpmc_bk ff_qs_mpmc_nbk
 
 
@@ -46,6 +46,9 @@ TARGET               = qs ff_qs_simple ff_qs_opt
 
 
 all: $(TARGET)
+
+quicksort_dac: quicksort_dac.cpp
+	$(CXX) $(INCS) $(CXXFLAGS) $(OPTIMIZE_FLAGS) $< -o $@ $(LIBS)
 
 ff_qs_simple: ff_qs_simple.cpp
 	$(CXX) $(INCS) $(CXXFLAGS) $(OPTIMIZE_FLAGS) $< -o $@ $(LIBS)
