@@ -339,8 +339,6 @@ public:
         lb(new lb_t(max_num_workers)),gt(new gt_t(max_num_workers)),
         workers(max_num_workers),fixedsize(fixedsize) {
 
-        printf("BASE ff_farm CALLED\n");
-
         //fftree stuff
     	fftree_ptr = new fftree(this, FARM);
         fftree *treeptr = new fftree(lb, EMITTER);
@@ -372,8 +370,6 @@ public:
     
     /* move constructor */
     ff_farm(ff_farm &&f):ff_node(std::move(f)), workers(std::move(f.workers)), internalSupportNodes(std::move(f.internalSupportNodes)) {
-        printf("BASE ff_farm MOVE CONSTRUCTOR CALLED\n");
-
         has_input_channel = f.has_input_channel;
         prepared = f.prepared; collector_removed = f.collector_removed;
         ondemand = f.ondemand; in_buffer_entries = f.in_buffer_entries;
@@ -406,8 +402,6 @@ public:
      * gatherer, all the workers
      */
     virtual ~ff_farm() { 
-        printf("ff_farm destructor emitter_cleanup=%d, collector_cleanup=%d, lb=%p, gt=%p, worker_cleanup=%d, fftree_ptr=%p\n", emitter_cleanup,collector_cleanup, lb, gt, worker_cleanup,fftree_ptr);
-
         if (emitter_cleanup) 
             if (lb && lb->get_filter()) delete lb->get_filter();
         if (collector_cleanup)
@@ -1920,8 +1914,6 @@ public:
         ff_farm<>(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false,W.size()), 
         Workers(std::move(W)), Emitter(std::move(E)), Collector(std::move(C)) { 
 
-        printf("ff_Farm Constructor1\n");
-
         const size_t nw = Workers.size();
         assert(nw>0);
         std::vector<ff_node*> w(nw);        
@@ -1932,14 +1924,7 @@ public:
         // if you don't want the collector you have to call remove_collector
         ff_farm<>::add_collector(Collector.get());
         ff_node *e = Emitter.get();
-        if (e) ff_farm<>::add_emitter(e); 
-
-
-        printf("fftree_ptr=%p, lb=%p, gt=%p\n", fftree_ptr, lb, gt);
-        for(size_t i=0;i<Workers.size();++i)
-            printf("Worker%ld=%p\n", i, workers[i]);
-        printf("ff_Farm end of Constructor1\n");
-        
+        if (e) ff_farm<>::add_emitter(e);         
     }
 
     ff_Farm(std::vector<std::unique_ptr<ff_node> > &&W,
@@ -1947,8 +1932,6 @@ public:
             bool input_ch=false):
         ff_farm<>(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false,W.size()),
         Workers(std::move(W)) {
-
-        printf("ff_Farm Constructor2\n");
 
         const size_t nw = Workers.size();
         assert(nw>0);
@@ -1964,8 +1947,6 @@ public:
         ff_farm<>(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false,W.size()),
         Workers(std::move(W)) {
 
-        printf("ff_Farm Constructor3\n");
-
         const size_t nw = Workers.size();
         assert(nw>0);
         std::vector<ff_node*> w(nw);        
@@ -1979,20 +1960,15 @@ public:
     ff_Farm(std::vector<std::unique_ptr<ff_node> > &&W, bool input_ch):
         ff_Farm(std::move(W), std::unique_ptr<ff_node>(nullptr), 
                 std::unique_ptr<ff_node>(nullptr), input_ch) {
-
-        printf("ff_Farm Constructor4\n");
     }
    
     /* copy constructor */
     ff_Farm(ff_Farm<IN_t, OUT_t> &f): 
         ff_Farm<IN_t, OUT_t>(std::move(f.Workers), std::move(f.Emitter), std::move(f.Collector), false) {
-        printf("ff_Farm COPY Constructor\n");
-
     }
     /* move constructor */
     ff_Farm(ff_Farm<IN_t, OUT_t> &&f):ff_farm<>(std::move(f)) {
 
-        printf("ff_Farm MOVE Constructor\n");
         Workers = std::move(f.Workers);
         Emitter = std::move(f.Emitter);
         Collector = std::move(f.Collector);
