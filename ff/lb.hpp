@@ -429,9 +429,9 @@ protected:
         return 0;
     }
 
-    void absorb_eos(svector<ff_node*>& W) {
+    void absorb_eos(svector<ff_node*>& W, size_t size) {
         void *task;
-        for(ssize_t i=0;i<running;++i) {
+        for(size_t i=0;i<size;++i) {
             do ; while(!W[i]->get(&task) || (task == BLK) || (task==NBLK));
             assert((task == EOS) || (task == EOS_NOFREEZE) || (task == BLK) || (task == NBLK));            
         }
@@ -996,8 +996,9 @@ public:
                             // try to remove the additional EOS due to 
                             // the feedback channel
                             if (inpresent || multi_input.size()>0 || isfrozen()) {
-                                if (master_worker) absorb_eos(workers);
-                                if (int_multi_input.size()>0) absorb_eos(int_multi_input);
+                                if (master_worker) absorb_eos(workers, running);
+                                if (int_multi_input.size()>0) absorb_eos(int_multi_input, 
+                                                                         int_multi_input.size());
                             }
                             ret = EOS;
                             break;
