@@ -70,6 +70,7 @@ static const size_t FF_GO_ON         = (FF_EOS-0x3);  /// non automatically prop
 static const size_t FF_GO_OUT        = (FF_EOS-0x4);  /// non automatically propagated
 static const size_t FF_BLK           = (FF_EOS-0x5);  /// automatically propagated
 static const size_t FF_NBLK          = (FF_EOS-0x6);  /// automatically propagated
+static const size_t FF_TAG_MIN       = (FF_EOS-0xa);  /// just a lower bound mark
 // The FF_GO_OUT is quite similar to the FF_EOS_NOFREEZE, both are not propagated automatically but while 
 // the first one is used to exit the main computation loop and in case being freezed, the second one is used 
 // to exit the computation loop and keep spinning on the input queue for a new task without being freezed.

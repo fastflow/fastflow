@@ -111,14 +111,14 @@ protected:
                                     pthread_cond_t    *&c,
                                     std::atomic_ulong *&counter) {
         if (cons_counter.load() == (unsigned long)-1) {
-            if (pthread_mutex_init(&cons_m, NULL) != 0) return false;
-            if (pthread_cond_init(&cons_c, NULL) != 0) {
-                pthread_mutex_destroy(&cons_m);
-                return false;
-            }
+            cons_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
+            cons_c = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
+            assert(cons_m); assert(cons_c);
+            if (pthread_mutex_init(cons_m, NULL) != 0) return false;
+            if (pthread_cond_init(cons_c, NULL) != 0)  return false;
             cons_counter.store(0);
         } 
-        m = &cons_m,  c = &cons_c, counter = &cons_counter;
+        m = cons_m,  c = cons_c, counter = &cons_counter;
         return true;
     }
     inline void set_input_blocking(pthread_mutex_t   *&m,
@@ -132,14 +132,14 @@ protected:
                                      pthread_cond_t    *&c,
                                      std::atomic_ulong *&counter) {
         if (prod_counter.load() == (unsigned long)-1) {
-            if (pthread_mutex_init(&prod_m, NULL) != 0) return false;
-            if (pthread_cond_init(&prod_c, NULL) != 0) {
-                pthread_mutex_destroy(&prod_m);
-                return false;
-            }
+            prod_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
+            prod_c = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
+            assert(prod_m); assert(prod_c);
+            if (pthread_mutex_init(prod_m, NULL) != 0) return false;
+            if (pthread_cond_init(prod_c, NULL) != 0)  return false;
             prod_counter.store(0);
         } 
-        m = &prod_m, c = &prod_c, counter = &prod_counter;
+        m = prod_m, c = prod_c, counter = &prod_counter;
         return true;
     }
     inline void set_output_blocking(pthread_mutex_t   *&m,
@@ -148,8 +148,8 @@ protected:
         assert(1==0);
     }
     
-    virtual inline pthread_mutex_t   &get_cons_m()       { return cons_m;}
-    virtual inline pthread_cond_t    &get_cons_c()       { return cons_c;}
+    virtual inline pthread_mutex_t   &get_cons_m()       { return *cons_m;}
+    virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
     virtual inline std::atomic_ulong &get_cons_counter() { return cons_counter;}
     
     /**
@@ -277,11 +277,11 @@ protected:
                     ++cnt;
                     if (cnt == ntentative()) break; 
                 } while(1);
-                pthread_mutex_lock(&prod_m);
+                pthread_mutex_lock(prod_m);
                 while(prod_counter.load() >= (running*workers[0]->get_in_buffer()->buffersize())) {
-                    pthread_cond_wait(&prod_c, &prod_m);
+                    pthread_cond_wait(prod_c, prod_m);
                 }
-                pthread_mutex_unlock(&prod_m);
+                pthread_mutex_unlock(prod_m);
             } while(1);
             return true;
         } // blocking 
@@ -347,11 +347,11 @@ protected:
                 }
             } while(1);
             if (blocking_in) {
-                pthread_mutex_lock(&cons_m);
+                pthread_mutex_lock(cons_m);
                 while (cons_counter.load() == 0) {
-                    pthread_cond_wait(&cons_c, &cons_m);
+                    pthread_cond_wait(cons_c, cons_m);
                 }
-                pthread_mutex_unlock(&cons_m);
+                pthread_mutex_unlock(cons_m);
             } else losetime_in();
         } while(1);
         return ite;
@@ -371,19 +371,19 @@ protected:
         if (blocking_in) {
             if (!filter) {
                 while (! buffer->pop(task)) {
-                    pthread_mutex_lock(&cons_m);
+                    pthread_mutex_lock(cons_m);
                     while (cons_counter.load() == 0) {
-                        pthread_cond_wait(&cons_c, &cons_m);
+                        pthread_cond_wait(cons_c, cons_m);
                     }
-                    pthread_mutex_unlock(&cons_m);
+                    pthread_mutex_unlock(cons_m);
                 } // while
             } else 
                 while (! filter->pop(task)) {
-                    pthread_mutex_lock(&cons_m);
+                    pthread_mutex_lock(cons_m);
                     while (cons_counter.load() == 0) {
-                        pthread_cond_wait(&cons_c, &cons_m);
+                        pthread_cond_wait(cons_c, cons_m);
                     }
-                    pthread_mutex_unlock(&cons_m);
+                    pthread_mutex_unlock(cons_m);
                 } //while 
             
             pop_done(NULL);
@@ -411,7 +411,7 @@ protected:
         
 
         bool r= ((ff_loadbalancer *)obj)->schedule_task(task, retry, ticks);
-        if (task == BLK || task == NBLK) { 
+        if (r && (task == BLK || task == NBLK)) { 
             ((ff_loadbalancer *)obj)->blocking_out = (task==BLK); 
         }
 #if defined(FF_TASK_CALLBACK)
@@ -431,7 +431,7 @@ protected:
 
     void absorb_eos(svector<ff_node*>& W) {
         void *task;
-        for(size_t i=0;i<W.size();++i) {
+        for(ssize_t i=0;i<running;++i) {
             do ; while(!W[i]->get(&task) || (task == BLK) || (task==NBLK));
             assert((task == EOS) || (task == EOS_NOFREEZE) || (task == BLK) || (task == NBLK));            
         }
@@ -473,7 +473,28 @@ public:
      *
      *  It deallocates dynamic memory spaces previoulsy allocated for workers.
      */
-    virtual ~ff_loadbalancer() {}
+    virtual ~ff_loadbalancer() {
+        if (cons_m) {
+            pthread_mutex_destroy(cons_m);
+            free(cons_m);
+            cons_m = nullptr;
+        }
+        if (cons_c) {
+            pthread_cond_destroy(cons_c);
+            free(cons_c);
+            cons_c = nullptr;
+        }
+        if (prod_m) {
+            pthread_mutex_destroy(prod_m);
+            free(prod_m);
+            prod_m = nullptr;
+        }
+        if (prod_c) {
+            pthread_cond_destroy(prod_c);
+            free(prod_c);
+            prod_c = nullptr;
+        }
+    }
 
     /**
      * \brief Sets filter node
@@ -632,12 +653,12 @@ public:
                 pthread_mutex_unlock(&workers[id]->get_cons_m());            
                 ++prod_counter;
             } else {
-                pthread_mutex_lock(&prod_m);
+                pthread_mutex_lock(prod_m);
                 // here we do not use while
                 // the thread can be woken up more frequently
                 if (prod_counter.load() >= workers[id]->get_in_buffer()->buffersize())
-                    pthread_cond_wait(&prod_c, &prod_m);
-                pthread_mutex_unlock(&prod_m);     
+                    pthread_cond_wait(prod_c, prod_m);
+                pthread_mutex_unlock(prod_m);     
                 goto _retry;
             }
 #if defined(FF_TASK_CALLBACK)
@@ -682,10 +703,10 @@ public:
                    put_done(retry.back());
                    retry.pop_back();
                } else {
-                   pthread_mutex_lock(&prod_m);
+                   pthread_mutex_lock(prod_m);
                    while(prod_counter.load() >= (retry.size()*workers[0]->get_in_buffer()->buffersize()))
-                       pthread_cond_wait(&prod_c, &prod_m);
-                   pthread_mutex_unlock(&prod_m); 
+                       pthread_cond_wait(prod_c, prod_m);
+                   pthread_mutex_unlock(prod_m); 
                }
            }           
 #if defined(FF_TASK_CALLBACK)
@@ -974,7 +995,7 @@ public:
                             push_eos(task);
                             // try to remove the additional EOS due to 
                             // the feedback channel
-                            if (inpresent || multi_input.size()>0) {
+                            if (inpresent || multi_input.size()>0 || isfrozen()) {
                                 if (master_worker) absorb_eos(workers);
                                 if (int_multi_input.size()>0) absorb_eos(int_multi_input);
                             }
@@ -1030,11 +1051,12 @@ public:
      * \return 0 if successful, otherwise -1 is returned.
      */
     int runlb(bool=false, ssize_t nw=-1) {
+        running = (nw<=0)?workers.size():nw;
         if (this->spawn(filter?filter->getCPUId():-1) == -2) {
             error("LB, spawning LB thread\n");
+            running = -1;
             return -1;
         }
-        running = (nw<=0)?workers.size():nw;
         return 0;
     }
 
@@ -1334,8 +1356,8 @@ private:
  protected:
 
     // for the input queue
-    pthread_mutex_t    cons_m;
-    pthread_cond_t     cons_c;
+    pthread_mutex_t    *cons_m = nullptr;
+    pthread_cond_t     *cons_c = nullptr;
     std::atomic_ulong  cons_counter;
 
     // for synchronizing with the previous multi-output stage
@@ -1344,8 +1366,8 @@ private:
     std::atomic_ulong *p_prod_counter;
 
     // for the output queue
-    pthread_mutex_t    prod_m;
-    pthread_cond_t     prod_c;
+    pthread_mutex_t    *prod_m = nullptr;
+    pthread_cond_t     *prod_c = nullptr;
     std::atomic_ulong  prod_counter;
 
     bool               blocking_in;

@@ -862,7 +862,10 @@ public:
     }
 
 
-    void get_out_nodes(svector<ff_node*> &w) { w.push_back(&res); }
+    void get_out_nodes(svector<ff_node*> &w) { 
+        w.push_back(this);   // feedback, this one will be removed (see ff_farm::get_out_nodes)
+        w.push_back(&res);   // forward
+    }
 };
 
 

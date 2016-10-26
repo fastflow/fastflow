@@ -281,12 +281,21 @@ protected:
     virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
                                              pthread_cond_t    *&c,
                                              std::atomic_ulong *&counter) {
-        return lb->init_output_blocking(m,c,counter);
+        bool r = lb->init_output_blocking(m,c,counter);
+        if (!r) return false;
+        // for all registered output node (or buffernode) we have to set the lb 
+        // blocking stuff
+        for(size_t i=0;i<outputNodes.size(); ++i) 
+            outputNodes[i]->set_input_blocking(m,c,counter);
+        return true;
     }
     virtual inline void set_output_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
                                             std::atomic_ulong *&counter) {
-        ff_node::set_output_blocking(m,c,counter);
+        for(size_t i=0;i<outputNodes.size(); ++i) 
+            outputNodes[i]->set_output_blocking(m,c,counter);
+
+        //ff_node::set_output_blocking(m,c,counter);
     }
 
     virtual inline pthread_mutex_t   &get_cons_m()        { return lb->get_cons_m();}

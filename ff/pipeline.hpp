@@ -36,6 +36,10 @@
 #include <ff/fftree.hpp>
 #include <ff/node.hpp>
 #include <ff/ocl/clEnvironment.hpp>
+#if defined(MAMMUT)
+#include <mammut/mammut.hpp>
+#endif
+
 
 namespace ff {
 
@@ -68,25 +72,19 @@ protected:
                 nodes_list[i-1]->get_out_nodes(w);
                 if (w.size() == 0) {
                     nodes_list[i]->set_input(nodes_list[i-1]);
-                    if (!nodes_list[i-1]->init_output_blocking(m,c,counter)) {
-                        error("PIPE, buffernode condition, init output blocking mode for node %d\n", i);
-                        return -1;
+                } else {
+                    nodes_list[i]->set_input(w);
+                    for(size_t j=0;j<w.size();++j) {
+                        // we set p_cons_* for each buffernode
+                        w[j]->set_output_blocking(m,c,counter);
                     }
                 }
-                else {
-                    nodes_list[i]->set_input(w);
-                    for(size_t i=0;i<w.size();++i) {
-                        w[i]->set_output_blocking(m,c,counter);
-
-                        // the following is needed because w[i] can be a buffernode and not a real node
-                        pthread_mutex_t   *mo        = NULL;
-                        pthread_cond_t    *co        = NULL;
-                        std::atomic_ulong *countero  = NULL;
-                        if (!w[i]->init_output_blocking(mo,co,countero)) {
-                            error("PIPE, buffernode condition, init output blocking mode for node %d\n", i);
-                            return -1;
-                        }
-                    }
+                // Initializing prod_* for the previous stage
+                // If the previous stage is a farm without collector then the function
+                // is going to initialize prod_* for each worker.
+                if (!nodes_list[i-1]->init_output_blocking(m,c,counter)) {
+                    error("PIPE, buffernode condition, init output blocking mode for node %d\n", i);
+                    return -1;
                 }
             } else {
                 if (nodes_list[i]->create_input_buffer(in_buffer_entries, fixedsize)<0) {
@@ -378,6 +376,15 @@ public:
         int nstages=static_cast<int>(nodes_list.size());
 
         if (!skip_init) {            
+
+#if defined(MAMMUT)
+            mammut::energy::Energy *e = mammut.getInstanceEnergy();
+            mammutcounter = e->getCounter();
+            if (mammutcounter) {
+                mammutcounter->reset();
+                printf("Starting Joules = %g\n", mammutcounter->getJoules());
+            }
+#endif
             // set the initial value for the barrier 
             if (!barrier)  barrier = new BARRIER_T;
             const int nthreads = cardinality(barrier);
@@ -467,6 +474,10 @@ public:
                 ret = -1;
             } 
         
+#if defined(MAMMUT)
+        if (mammutcounter) joules = mammutcounter->getJoules();
+#endif
+
         return ret;
     }
     
@@ -530,11 +541,11 @@ public:
                  ++prod_counter;
                  return true;
              } 
-             pthread_mutex_lock(&prod_m);
+             pthread_mutex_lock(prod_m);
              while(prod_counter.load() >= (inbuffer->buffersize())) {
-                 pthread_cond_wait(&prod_c, &prod_m);
+                 pthread_cond_wait(prod_c, prod_m);
              }
-             pthread_mutex_unlock(&prod_m);
+             pthread_mutex_unlock(prod_m);
              goto _retry;
          }
          for(unsigned long i=0;i<retry;++i) {
@@ -584,11 +595,11 @@ public:
                 if ((*task != (void *)FF_EOS)) return true;
                 else return false;
             }
-            pthread_mutex_lock(&cons_m);
+            pthread_mutex_lock(cons_m);
             while(cons_counter.load() == 0) {
-                pthread_cond_wait(&cons_c, &cons_m);
+                pthread_cond_wait(cons_c, cons_m);
             }
-            pthread_mutex_unlock(&cons_m);
+            pthread_mutex_unlock(cons_m);
             goto _retry;
         }
         for(unsigned long i=0;i<retry;++i) {
@@ -658,6 +669,10 @@ public:
         out << "--- pipeline:\n";
         for(unsigned int i=0;i<nodes_list.size();++i)
             nodes_list[i]->ffStats(out);
+
+#if defined(MAMMUT)
+        out << "Joules: " << joules << "\n";
+#endif
     }
 #else
     void ffStats(std::ostream & out) { 
@@ -666,6 +681,9 @@ public:
 #endif
     
 protected:
+
+    // returns the pipeline starting time
+    const struct timeval startTime() { return nodes_list[0]->getstarttime(); }
 
     void* svc(void * task) { return NULL; }    
     int   svc_init() { return -1; };    
@@ -797,6 +815,12 @@ private:
     int out_buffer_entries;
     svector<ff_node *> nodes_list;
     svector<ff_node*>  internalSupportNodes;
+
+#if defined(MAMMUT)
+    mammut::Mammut           mammut;
+    mammut::energy::Joules   joules        = -1;
+    mammut::energy::Counter* mammutcounter = nullptr;
+#endif
 };
 
 

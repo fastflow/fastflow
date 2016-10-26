@@ -46,12 +46,12 @@ public:
     
     /// compare operator
     inline bool operator==(const gnode_t &node) const {
-	return (elem == node.getElement());
+        return (elem == node.getElement());
     }
     
     /// returns the list of output nodes
     inline void out_nodes(std::deque<gnode_t*> &out) const {
-	out = outNodes;
+        out = outNodes;
     }
     
     /// adds one node to the graph
@@ -87,82 +87,83 @@ protected:
 	    if (!all && *foundflag) return NULL;       
 	    T *node = static_cast<T*>(t);
 	    if (*tosearch == *node) { 
-		found.push_back(node); 
-		*foundflag=true; 
-		return (all?t:NULL);
+            found.push_back(node); 
+            *foundflag=true; 
+            return (all?t:NULL);
 	    }
 	    return t;
 	}
-	const std::deque<T*>& Found() const { return found;}
-    protected:
-	T *tosearch;
-	std::deque<T*> found;
-	long *const foundflag;
-	bool all;
-    };
 
+        const std::deque<T*>& Found() const { return found;}
+    protected:
+        T *tosearch;
+        std::deque<T*> found;
+        long *const foundflag;
+        bool all;
+    };
+    
     // scheduler class
     class Emitter: public ff_node {
     public:	
-	enum {CHECK_FOUND_N=256};
-
-	Emitter(const std::vector<ff_node*> &W, const long &foundflag, const bool all=false):
-	    foundflag(foundflag),W(W),start(NULL),counter(0),all(all) {}
-	
-	void setStart(T*const n) { start = n;}    
-	void setNodeToSearch(T*const n, bool a=false) {
-	    all = a;
-	    for(auto w: W) ((Worker*)w)->setNodeToSearch(n,all);
-	}
-	
-	inline int svc_init() { 
-	    mask.reset(); 
-	    counter=0; 
-	    return 0;
-	}
-	inline void *svc(void *t) {
-	    if (t == NULL) {
-		if (start==NULL) return NULL;
-		mask.set(start->getId());
-		ff_send_out((void*)start);
-		++counter;
-		std::deque<T*> outNodes;
-		start->out_nodes(outNodes);
-		for(T *n: outNodes) {
-		    ++counter;
-		    mask.set(n->getId());
-		    ff_send_out((void*)n);
-		}
-		return GO_ON;      
-	    }
-	    --counter;
-	    if (!all && foundflag>0) return NULL;
-	    const T &node = *(static_cast<T*>(t));
-	    
-	    std::deque<T*> outNodes;
-	    node.out_nodes(outNodes);
-	    auto k =0;
-	    for(T *n: outNodes) {
-		if (!all && (++k == CHECK_FOUND_N)) {
-		    if (foundflag>0) return NULL;
-		    k=0;
-		}
-		if (!mask.test(n->getId())) {
-		    ++counter;
-		    mask.set(n->getId());
-		    ff_send_out((void*)n);
-		}
-	    }
-	    if (counter == 0) 	return NULL;
-	    return ((!all && foundflag>0) ? NULL : GO_ON);
-	}
+        enum {CHECK_FOUND_N=256};
+        
+        Emitter(const std::vector<ff_node*> &W, const long &foundflag, const bool all=false):
+            foundflag(foundflag),W(W),start(NULL),counter(0),all(all) {}
+        
+        void setStart(T*const n) { start = n;}    
+        void setNodeToSearch(T*const n, bool a=false) {
+            all = a;
+            for(auto w: W) ((Worker*)w)->setNodeToSearch(n,all);
+        }
+        
+        inline int svc_init() { 
+            mask.reset(); 
+            counter=0; 
+            return 0;
+        }
+        inline void *svc(void *t) {
+            if (t == NULL) {
+                if (start==NULL) return NULL;
+                mask.set(start->getId());
+                ff_send_out((void*)start);
+                ++counter;
+                std::deque<T*> outNodes;
+                start->out_nodes(outNodes);
+                for(T *n: outNodes) {
+                    ++counter;
+                    mask.set(n->getId());
+                    ff_send_out((void*)n);
+                }
+                return GO_ON;      
+            }
+            --counter;
+            if (!all && foundflag>0) return NULL;
+            const T &node = *(static_cast<T*>(t));
+            
+            std::deque<T*> outNodes;
+            node.out_nodes(outNodes);
+            auto k =0;
+            for(T *n: outNodes) {
+                if (!all && (++k == CHECK_FOUND_N)) {
+                    if (foundflag>0) return NULL;
+                    k=0;
+                }
+                if (!mask.test(n->getId())) {
+                    ++counter;
+                    mask.set(n->getId());
+                    ff_send_out((void*)n);
+                }
+            }
+            if (counter == 0) 	return NULL;
+            return ((!all && foundflag>0) ? NULL : GO_ON);
+        }
     protected:
-	const long                    &foundflag;
-	const std::vector<ff_node*>   &W;
-	T                             *start;
-	unsigned long                  counter;
-	bool                           all;
-	std::bitset<N>                 mask;
+        const long                    &foundflag;
+        const std::vector<ff_node*>   &W;
+        T                             *start;
+        unsigned long                  counter;
+        bool                           all;
+        std::bitset<N>                 mask;
     };
 
     inline void resetqueues() {  for(auto n: W) n->reset();  }
