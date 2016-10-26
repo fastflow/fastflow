@@ -54,19 +54,10 @@ struct Task: public baseOCLTask<Task, float, float> {
 			A(A), B(B), M(A.size()), result(0.0) {}
 
 	void setTask(Task *t) {
-
-		setInPtr(const_cast<float*>(t->A.data()), t->A.size(), 
-                 CopyFlags::COPY,
-                 ReuseFlags::DONTREUSE,
-                 ReleaseFlags::RELEASE);
-		setEnvPtr(const_cast<float*>(t->B.data()), t->B.size(), 
-                 CopyFlags::COPY,
-                 ReuseFlags::DONTREUSE,
-                 ReleaseFlags::RELEASE);
-		setOutPtr(const_cast<float*>(t->M.data()), t->M.size(), 
-                  CopyFlags::COPY,
-                  ReuseFlags::DONTREUSE,
-                  ReleaseFlags::RELEASE);
+        MemoryFlags flags = {CopyFlags::COPY,ReuseFlags::DONTREUSE,ReleaseFlags::RELEASE};
+		setInPtr(const_cast<float*>(t->A.data()), t->A.size(), flags);
+		setEnvPtr(const_cast<float*>(t->B.data()), t->B.size(), flags);
+		setOutPtr(const_cast<float*>(t->M.data()), t->M.size(), flags);
 		setReduceVar(&(t->result));
 	}
 
@@ -96,8 +87,12 @@ int main(int argc, char * argv[]) {
 	std::vector<cl_device_id> dev;
     int tmp = clEnvironment::instance()->getGPUDevice();
     // if a gpu device does not exist, switching to CPU
-    if (tmp == -1) 
+    if (tmp == -1) {
+        std::cout << "selected CPU device\n";
         tmp = clEnvironment::instance()->getCPUDevice();
+    } else {
+        std::cout << "selected GPU device\n";
+    }
 	dev.push_back(clEnvironment::instance()->getDevice(tmp)); //convert logical to OpenCL Id
 
     Task task(A, B);
