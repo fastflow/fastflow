@@ -1,11 +1,29 @@
+//
+// Copyright (C) 2014 Jens Korinth, TU Darmstadt
+//
+// This file is part of ThreadPoolComposer (TPC).
+//
+// ThreadPoolComposer is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// ThreadPoolComposer is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with ThreadPoolComposer.  If not, see <http://www.gnu.org/licenses/>.
+//
 //! @file 	tpc_api.h
 //! @brief	ThreadPoolComposer API for hardware threadpool integration.
 //!		Low-level API to interface hardware accelerators programmed with
 //!		ThreadPoolComposer support.
 //! @authors 	J. Korinth, TU Darmstadt (jk@esa.cs.tu-darmstadt.de)
 //! @authors 	D. de la Chevallerie, TU Darmstadt (dc@esa.cs.tu-darmstadt.de)
-//! @version 	1.1
-//! @copyright  Copyright 2014, 2015 J. Korinth, D. de la Chevallerie
+//! @version 	1.2
+//! @copyright  Copyright 2014, 2015 J. Korinth, TU Darmstadt
 //!
 //!		This file is part of ThreadPoolComposer (TPC).
 //!
@@ -24,6 +42,8 @@
 //!		License along with ThreadPoolComposer.  If not, see
 //!		<http://www.gnu.org/licenses/>.
 //! @details	### Change Log ###
+//!		- Version 1.2 (jk)
+//!		  + removed 'rpr' namespace
 //!		- Version 1.1 (jk)
 //!		  + added API version constant and automatic checks to guarantee
 //!		    that the user is using the right header for the lib
@@ -32,6 +52,8 @@
 //!		- Version 1.0 (jk, dc) 
 //!		  + initial prototype version
 //!
+//! @todo 	device enumeration?
+//!
 #ifndef __TPC_API_H__
 #define __TPC_API_H__
 
@@ -39,7 +61,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-namespace rpr { namespace tpc { extern "C" {
+namespace rpr { // reintroduced REPARA namespace
+namespace tpc { extern "C" {
 #else
 #include <stdint.h>
 #include <stdlib.h>
@@ -135,7 +158,7 @@ typedef enum {
  *  @{
  **/
 
-#define TPC_API_VERSION					"1.1"
+#define TPC_API_VERSION					"1.2"
 
 /**
  * Returns the version string of the library.
@@ -145,7 +168,7 @@ const char *const tpc_version();
 
 /**
  * Checks if runtime version matches header. Should be called at init time.
- * @return TPC_SUCCESS if version matches, TPC_FAILURE otherwise
+ * @return TPC_SUCCESS if version matches, an error code otherwise
  **/
 tpc_res_t tpc_check_version(const char *const version);
 
@@ -262,7 +285,7 @@ tpc_res_t tpc_device_load_bitstream(tpc_dev_ctx_t *dev_ctx, size_t const len,
  * @param flags device memory allocation flags
  * @return TPC_SUCCESS if successful, error code otherwise
  **/
-tpc_res_t tpc_device_alloc(tpc_dev_ctx_t *dev_ctx, tpc_handle_t *h,
+tpc_res_t tpc_device_alloc(tpc_dev_ctx_t *dev_ctx, tpc_handle_t *handle,
 		size_t const len, tpc_device_alloc_flag_t const flags);
 
 /**
@@ -384,7 +407,8 @@ tpc_res_t tpc_device_job_get_return(tpc_dev_ctx_t *dev_ctx,
 /** @} **/
 
 #ifdef __cplusplus
-} /* extern "C" */ } /* namespace tpc */ } /* namespace rpr */
+} /* extern "C" */ } /* namespace tpc */
+} /* namespace rpr */
 #endif /* __cplusplus */
 
 #endif /* __TPC_API_H__ */

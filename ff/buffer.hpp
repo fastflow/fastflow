@@ -415,7 +415,7 @@ public:
      * returned.
      */
     bool init() {
-        assert(buf);
+        assert(buf==0);
         buf=(void**)getAlignedMemory(longxCacheLine*sizeof(long),size*sizeof(void*));
         if (!buf) return false;
         reset();

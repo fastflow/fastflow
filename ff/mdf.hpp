@@ -112,22 +112,23 @@ protected:
         
     /* --------------  scheduler ----------------------------- */
     template<typename compare_t=CompareTask_Par>
-    class Scheduler: public TaskFScheduler<compare_t> {
-        using TaskFScheduler<compare_t>::lb;
-        using TaskFScheduler<compare_t>::insertTask;
-        using TaskFScheduler<compare_t>::schedule_task;       
-        using TaskFScheduler<compare_t>::handleCompletedTask;
+    class Scheduler: public TaskFScheduler<task_f_t, compare_t> {
+        using baseSched = TaskFScheduler<task_f_t, compare_t>;
+        using baseSched::lb;
+        using baseSched::insertTask;
+        using baseSched::schedule_task;       
+        using baseSched::handleCompletedTask;
         enum { RELAX_MIN_BACKOFF=1, RELAX_MAX_BACKOFF=32};
     public:
         Scheduler(ff_loadbalancer* lb, const int maxnw, void (*schedRelaxF)(unsigned long)):
-            TaskFScheduler<compare_t>(lb,maxnw),
+            TaskFScheduler<task_f_t, compare_t>(lb,maxnw),
             task_numb(0),task_completed(0),bk_count(0),schedRelaxF(schedRelaxF),
             gd_ended(false) {
         }
         virtual ~Scheduler() {}
 
         int svc_init() {
-            if (TaskFScheduler<compare_t>::svc_init()<0) return -1;
+            if (baseSched::svc_init()<0) return -1;
             ff_node::input_active(true);
 
             task_numb = task_completed = 0, bk_count = 0;
@@ -138,36 +139,36 @@ protected:
 
         task_f_t* svc(task_f_t* task) {
             if (!task) {
-                if (!gd_ended && (task_numb-task_completed)<(unsigned long)TaskFScheduler<compare_t>::LOWER_TH)
+                if (!gd_ended && (task_numb-task_completed)<(unsigned long)baseSched::LOWER_TH)
                     ff_node::input_active(true); // start receiveing from input channel again
                 else  if (schedRelaxF) schedRelaxF(++bk_count);
-                return TaskFScheduler<compare_t>::GO_ON;
+                return baseSched::GO_ON;
             }
             bk_count = 0;
-            if (TaskFScheduler<compare_t>::fromInput()) {
+            if (baseSched::fromInput()) {
                 task_f_t *const msg = task;
                 if (msg->wtask == nullptr) {
                     gd_ended = true;
                     ff_node::input_active(false); // we don't want to read FF_EOS
                     return ((task_numb!=task_completed) ?
-                            TaskFScheduler<compare_t>::GO_ON:
-                            TaskFScheduler<compare_t>::EOS);
+                            baseSched::GO_ON:
+                            baseSched::EOS);
                 }
                 ++task_numb;
                 insertTask(msg);
                 schedule_task(0);
-                if ((task_numb-task_completed)>(unsigned long)TaskFScheduler<compare_t>::LOWER_TH) {
+                if ((task_numb-task_completed)>(unsigned long)baseSched::LOWER_TH) {
                     ff_node::input_active(false); // stop receiving from input channel
                 } 
-                return TaskFScheduler<compare_t>::GO_ON;     
+                return baseSched::GO_ON;     
             }            
             hash_task_t * t = (hash_task_t *)task;
             ++task_completed;
             handleCompletedTask(t,lb->get_channel_id());            
             schedule_task(1); // try once more
             
-            if(task_numb==task_completed && gd_ended) return TaskFScheduler<compare_t>::EOS;
-            return TaskFScheduler<compare_t>::GO_ON;
+            if(task_numb==task_completed && gd_ended) return baseSched::EOS;
+            return baseSched::GO_ON;
         }
 
         void eosnotify(ssize_t id=-1) { lb->broadcast_task(EOS); }
@@ -183,6 +184,25 @@ protected:
         gd->reset(); farm->reset(); sched->reset();
     }
 	
+    /* --------------  worker ------------------------------- */
+    struct TaskFWorker: ff_node_t<hash_task_t> {
+        inline hash_task_t *svc(hash_task_t *task) {
+            task->wtask->call();
+            return task;
+        }
+    };
+
+    /// task function
+    template<typename F_t, typename... Param>
+    struct ff_mdf_f_t: public base_f_t {
+        ff_mdf_f_t(const F_t F, Param&... a):F(F) { args = std::make_tuple(a...);}	
+        
+        inline void call() { apply(F, args); }
+        F_t F;
+        std::tuple<Param...> args;	
+    };
+
+
 public:
     /**
      *  \brief Constructor
@@ -226,7 +246,7 @@ public:
 
     template<typename F_t, typename... Param>
     inline void AddTask(std::vector<param_info> &P, const F_t F, Param... args) {	
-        ff_task_f_t<F_t, Param...> *wtask = new ff_task_f_t<F_t, Param...>(F, args...);
+        ff_mdf_f_t<F_t, Param...> *wtask = new ff_mdf_f_t<F_t, Param...>(F, args...);
         gd->alloc_and_send(P,wtask);
     }
   

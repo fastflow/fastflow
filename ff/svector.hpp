@@ -93,6 +93,18 @@ public:
         first=(vector_type*)::malloc((i2-i1)*sizeof(vector_type));
         while(i1!=i2) push_back(*(i1++));
     }
+
+    /**
+     *  Move constructor
+     */
+    svector(svector &&v) {
+        first = v.first;
+        len   = v.len;
+        cap   = v.cap;
+        chunk = v.chunk;
+
+        v.first = NULL;
+    }
     
     /**
      * Destructor 
