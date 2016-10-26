@@ -1,3 +1,10 @@
+* v.2.1.3  
+   - added makeFarm, makePipe, makeMap, makeMasterWorker, ...
+   - move constructor added in several classes (yet to be completed)
+   - Divide&Conquer pattern implementation (DAC)
+   - ffStats produces energy consumption statistics by using Mammut (MAchine Micro Management UTilities -- http://danieledesensi.github.io/mammut/)
+   - multi-input/output node management improved
+   - improved REPARA layer
 * v.2.1.2 
    - possibility to switch between BLOCKING and NON-BLOCKING mode at run-time
    - minor improvements for the OpenCL support
