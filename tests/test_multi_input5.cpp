@@ -42,7 +42,7 @@
 #include <ff/farm.hpp> 
 
 using namespace ff;
-long const int NUMTASKS=100;
+long const int NUMTASKS=10;
 
 struct Stage0: ff_minode {
     int svc_init() { counter=0; return 0;}
@@ -63,6 +63,7 @@ struct Stage0: ff_minode {
 struct Stage1: ff_monode {
     void *svc(void *task) {
         if ((long)task & 0x1) {
+            printf("Stage1 sending back=%ld\n", (long)task);
             ff_send_out_to(task, 0); // sends odd tasks back
         } else {
             ff_send_out_to(task, 1);
@@ -76,7 +77,8 @@ struct Stage1: ff_monode {
 struct Stage2: ff_monode {
     void *svc(void *task) {
         if ((long)task <= (NUMTASKS/2)) {
-            ff_send_out_to(task, 0); // sends even tasks less than back
+            printf("Stage2 sending back=%ld\n", (long)task);
+            ff_send_out_to(task, 0); // sends even tasks less than... back
         } else 
             ff_send_out_to(task, 1);
         return GO_ON;
@@ -87,6 +89,7 @@ struct Stage2: ff_monode {
 };
 struct Stage3: ff_node {
     void *svc(void *task) { 
+        printf("Stage3 got task %ld\n", (long)task);
         assert(((long)task & ~0x1) && (long)task>(NUMTASKS/2));
         return task; 
     }
@@ -94,7 +97,7 @@ struct Stage3: ff_node {
 
 int main() {
     Stage0 s0; Stage1 s1; Stage2 s2; Stage3 s3;
-
+#if 0
     ff_pipeline pipe;
     pipe.add_stage(&s0);
     pipe.add_stage(&s1);
@@ -102,6 +105,22 @@ int main() {
     pipe.add_stage(&s2);
     pipe.wrap_around(true);
     pipe.add_stage(&s3);
+    pipe.wrap_around();
+#endif
+    ff_pipeline pipe1;
+    pipe1.add_stage(&s0);
+    pipe1.add_stage(&s1);
+    pipe1.wrap_around();
+
+    ff_pipeline pipe2;   
+    pipe2.add_stage(&pipe1);
+    pipe2.add_stage(&s2);
+    pipe2.wrap_around();
+ 
+    ff_pipeline pipe;    
+    pipe.add_stage(&pipe2);
+    pipe.add_stage(&s3);
+
     pipe.wrap_around();
 
     pipe.run_and_wait_end();

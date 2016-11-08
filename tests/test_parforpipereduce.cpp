@@ -77,7 +77,7 @@ int main(int argc, char * argv[]) {
                 for(volatile long m=0;m<50;++m); 
                 C->push_back(A[i]*B[i]);
             }
-            node.put(C);
+            node.ff_send_out(C);
         };
         auto Reduce = [&](std::vector<long>* v) {
             const std::vector<long> &V = *v;
