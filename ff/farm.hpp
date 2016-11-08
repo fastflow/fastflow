@@ -2100,6 +2100,8 @@ public:
 
 };
 
+#if 0
+
 /* --------------   makeFarm   ----------------- */
 template<typename W_t, typename... Args>
 static inline 
@@ -2112,8 +2114,6 @@ ff_Farm<typename W_t::in_type, typename W_t::out_type> make_Farm(const size_t N,
 	} ());
     return farm;
 }
-
-#if 0
 
 /* --------------   makeMasterWorker ----------------- */
 template<typename W_t, typename... Args>
