@@ -68,7 +68,7 @@ int main() {
     ff_pipeline pipe2;
     pipe2.add_stage(&s2);
     pipe2.add_stage(&s3);
-    pipe2.wrap_around(true);
+    pipe2.wrap_around(true); // tells to pipe2 to skip the first pop
 
     ff_pipeline pipe;
     pipe.add_stage(&s1);

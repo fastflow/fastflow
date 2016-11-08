@@ -170,7 +170,7 @@ public:
      * \return 0 if successful, otherwise -1 is returned.
      *
      */
-    int run(bool skip_init=false) {
+    int run(bool=false) {
         gt->set_filter(this);
 
         for(size_t i=0;i<inputNodes.size();++i)
@@ -259,6 +259,16 @@ protected:
         return 1;
     }
 
+    int create_output_buffer(int nentries, bool fixedsize=false) {
+        if (ff_node::create_output_buffer(nentries,fixedsize) <0) return -1;
+        ff_node *t = new ff_buffernode(-1, get_out_buffer(), get_out_buffer());
+        assert(t);
+        internalSupportNodes.push_back(t);
+        set_output(t);
+        return 0;
+    }
+
+
     int  wait(/* timeout */) { 
         if (lb->waitlb()<0) return -1;
         return 0;
@@ -287,16 +297,21 @@ protected:
         // blocking stuff
         for(size_t i=0;i<outputNodes.size(); ++i) 
             outputNodes[i]->set_input_blocking(m,c,counter);
+        for(size_t i=0;i<outputNodesFeedback.size(); ++i) 
+            outputNodesFeedback[i]->set_input_blocking(m,c,counter);
         return true;
     }
     virtual inline void set_output_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
                                             std::atomic_ulong *&counter) {
-        for(size_t i=0;i<outputNodes.size(); ++i) 
-            outputNodes[i]->set_output_blocking(m,c,counter);
-
-        //ff_node::set_output_blocking(m,c,counter);
+        // here we don't want to call the set_output_blocking for each outputNodes
+        // because it may create inconsistencies.
+        ff_node::set_output_blocking(m,c,counter);
     }
+
+    virtual inline pthread_mutex_t   &get_prod_m()        { return lb->get_prod_m();}
+    virtual inline pthread_cond_t    &get_prod_c()        { return lb->get_prod_c();}
+    virtual inline std::atomic_ulong &get_prod_counter()  { return lb->get_prod_counter();}
 
     virtual inline pthread_mutex_t   &get_cons_m()        { return lb->get_cons_m();}
     virtual inline pthread_cond_t    &get_cons_c()        { return lb->get_cons_c();}
@@ -317,6 +332,11 @@ public:
      */
     virtual ~ff_monode() {
         if (lb) delete lb;
+        for(size_t i=0;i<internalSupportNodes.size();++i) {
+            delete internalSupportNodes.back();
+            internalSupportNodes.pop_back();
+        }
+
     }
     
     /**
@@ -340,11 +360,26 @@ public:
         return 0;
     }
 
+    /**
+     * \brief Assembly an output channels
+     *
+     * Attach a output channelname to ff_node channel
+     */
+    virtual inline int set_output_feedback(ff_node *node) { 
+        outputNodesFeedback.push_back(node); 
+        return 0;
+    }
+
+
     virtual bool isMultiOutput() const { return true;}
 
     virtual inline void get_out_nodes(svector<ff_node*>&w) {
-        w = outputNodes;
+        w += outputNodes;
     }
+    virtual inline void get_out_nodes_feedback(svector<ff_node*>&w) {
+        w += outputNodesFeedback;
+    }
+
 
     /**
      * \brief Skips the first pop
@@ -379,8 +414,11 @@ public:
         if (!lb) return -1;
         lb->set_filter(this);
 
+        for(size_t i=0;i<outputNodesFeedback.size();++i)
+            lb->register_worker(outputNodesFeedback[i]);
         for(size_t i=0;i<outputNodes.size();++i)
             lb->register_worker(outputNodes[i]);
+
         if (ff_node::skipfirstpop()) lb->skipfirstpop();       
         if (lb->runlb()<0) {
             error("ff_monode, running loadbalancer module\n");
@@ -417,6 +455,8 @@ public:
 
 protected:
     svector<ff_node*> outputNodes;
+    svector<ff_node*> outputNodesFeedback;
+    svector<ff_node*>  internalSupportNodes;
     ff_loadbalancer* lb;
 };
 

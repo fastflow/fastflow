@@ -49,7 +49,7 @@ endif
 #
 ###############################à#########################################
 CC                   = gcc 
-CXX 		     = g++ -std=c++11 # -std=c++0x for most of the code
+CXX 		     = g++ -std=c++11 #-DBLOCKING_MODE
 #CC		     = icc  -mmic
 #CXX 		     = icpc -mmic 
 #CXX		     = clang++
@@ -83,7 +83,7 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I. $(INCS)
-TARGET               = simplest test1 test1b test2 test3 test3b test3_farm test4 test5 test6 test7 test8 perf_test1 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_ofarm2 test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_scheduling2 test_dt test_torus test_torus2 perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_sendq test_spinBarrier test_multi_input test_multi_input2 test_multi_input3 test_multi_input4 test_multi_input5 test_multi_input6 test_multi_input7 test_multi_input8 test_accelerator+pinning test_dataflow test_dataflow2 test_noinput_pipe test_stopstartthreads test_stopstartthreads2 test_stopstartthreads3 test_stopstartall test_MISD test_parfor test_parfor2 test_parforpipereduce test_dotprod_parfor test_parfor_unbalanced test_parfor_multireduce test_parfor_multireduce2 test_lb_affinity test_farm test_pipe  perf_parfor perf_parfor2 test_graphsearch test_multi_output test_multi_output2 test_multi_output3 test_multi_output4 test_multi_output5 test_pool1 test_pool2 test_pool3 test_devicequery test_map test_mdf test_taskf latptr11 test_taskcallbacks test_eosw test_nodeselector test_blk test_blk2 test_blk3 test_blk4 test_stats test_dc test_mammut
+TARGET               = simplest test1 test1b test2 test3 test3b test3_farm test4 test5 test6 test7 test8 perf_test1 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_ofarm2 test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker bench_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_scheduling2 test_dt test_torus test_torus2 perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_sendq test_spinBarrier test_multi_input test_multi_input2 test_multi_input3 test_multi_input4 test_multi_input5 test_multi_input6 test_multi_input7 test_multi_input8 test_accelerator+pinning test_dataflow test_dataflow2 test_noinput_pipe test_stopstartthreads test_stopstartthreads2 test_stopstartthreads3 test_stopstartall test_MISD test_parfor test_parfor2 test_parforpipereduce test_dotprod_parfor test_parfor_unbalanced test_parfor_multireduce test_parfor_multireduce2 test_lb_affinity test_farm test_pipe  perf_parfor perf_parfor2 test_graphsearch test_multi_output test_multi_output2 test_multi_output3 test_multi_output4 test_multi_output5 test_pool1 test_pool2 test_pool3 test_devicequery test_map test_mdf test_taskf latptr11 test_taskcallbacks test_eosw test_nodeselector test_blk test_blk2 test_blk3 test_blk4 test_stats test_dc test_mammut
 
 
 #test_taskf2 test_taskf3
@@ -149,6 +149,7 @@ test_accelerator_masterworker:test_accelerator_masterworker.o
 test_farm+pipe:test_farm+pipe.o
 test_freeze:test_freeze.o
 test_masterworker:test_masterworker.o
+bench_masterworker:bench_masterworker.o
 test_multi_masterworker:test_multi_masterworker.o
 test_pipe+masterworker:test_pipe+masterworker.o
 test_dt:test_dt.o
