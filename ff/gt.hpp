@@ -784,9 +784,9 @@ protected:
     std::atomic_ulong  prod_counter;
 
     // for synchronizing with the next multi-input stage
-    pthread_mutex_t   *p_cons_m;
-    pthread_cond_t    *p_cons_c;
-    std::atomic_ulong *p_cons_counter;
+    pthread_mutex_t   *p_cons_m = nullptr;
+    pthread_cond_t    *p_cons_c = nullptr;
+    std::atomic_ulong *p_cons_counter = nullptr;
 
     bool               blocking_in;
     bool               blocking_out;

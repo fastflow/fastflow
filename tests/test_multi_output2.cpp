@@ -70,23 +70,36 @@ using namespace ff;
 struct W: ff_monode_t<long> {
     long *svc(long *task){
         printf("W(%ld) got task %ld\n", get_my_id(), (long)task);
-        ff_send_out_to(task, 1); // to the next stage
         ff_send_out_to(task, 0); // to the Emitter
+        ff_send_out_to(task, 1); // to the next stage
         return GO_ON;
     }
 };
 
 // multi input node
 struct N: ff_minode_t<long> {
+    N(const long numtasks):numtasks(numtasks) {}
     long *svc(long *task){
+        for(volatile long i=0;i<10000; ++i);
         printf("N got task %ld\n",(long)task);
+        ++received;
         return GO_ON;
     }
+    void svc_end() {
+        if (received != numtasks) abort();
+    }
+    
+    long numtasks;
+    long received = 0;
 };
 
 class E: public ff_node_t<long> {
 public:
     E(long numtasks):numtasks(numtasks) {}
+
+    int svc_init() {
+        return 0;
+    }
 
     long *svc(long *task) {	
         if (task == NULL) {
@@ -94,7 +107,7 @@ public:
                 ff_send_out((long*)i);
             return GO_ON;
         }
-        printf("E: got back %ld\n", (long)task);
+        printf("E: got back %ld numtasks=%ld\n", (long)task, numtasks);
         if (--numtasks <= 0) {
             printf("E sending EOS\n");
             return EOS;
@@ -134,7 +147,7 @@ int main(int argc,  char * argv[]) {
 
     ff_pipeline pipe;
     pipe.add_stage(&farm);
-    N multi_input;
+    N multi_input(streamlen);
     pipe.add_stage(&multi_input);
        
     if (pipe.run_and_wait_end()<0) return -1;

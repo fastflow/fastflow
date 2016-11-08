@@ -109,23 +109,25 @@ protected:
             if ((collector && !collector_removed) || lb->masterworker())  {
                 // NOTE: force unbounded queue if masterworker
                 if (workers[i]->get_out_buffer()==NULL) {
-                    if (workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
-                                                         (lb->masterworker()?false:fixedsize))<0)
-                        return -1;
-            
                     if (workers[i]->isMultiOutput()) {
-                        ff_node *t = new ff_buffernode(i, workers[i]->get_out_buffer(), workers[i]->get_out_buffer()); 
+                        ff_node *t = new ff_buffernode(out_buffer_entries, false);
                         if (!t) return -1;
+                        t->set_id(i);
                         internalSupportNodes.push_back(t);
-                        workers[i]->set_output(t);
+                        workers[i]->set_output_feedback(t);
+                        // this is needed because we don't call create_output_buffer for the worker
+                        workers[i]->set_output_buffer(t->get_out_buffer());
                         
                         t = new ff_buffernode(out_buffer_entries,fixedsize); 
                         t->set_id(i);
                         internalSupportNodes.push_back(t);
                         workers[i]->set_output(t);
-
-                        gt->register_worker(t);
-                    } 
+                        
+                        gt->register_worker(t);                        
+                    } else
+                        if (workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
+                                                             (lb->masterworker()?false:fixedsize))<0)
+                            return -1;
                 }
             }
             lb->register_worker(workers[i]);
@@ -159,9 +161,16 @@ protected:
                 error("FARM, init output blocking mode for GT\n");
                 return -1;
             }
-            for(size_t i=0;i<nworkers;++i)
-                workers[i]->set_output_blocking(m,c,counter);
-        }    
+            for(size_t i=0;i<nworkers;++i) {
+                if (workers[i]->isMultiOutput()) {
+                    svector<ff_node*> w;
+                    workers[i]->get_out_nodes(w);
+                    for(size_t i=0;i<w.size(); ++i) 
+                        w[i]->set_output_blocking(m,c,counter);
+                } else 
+                    workers[i]->set_output_blocking(m,c,counter);
+            }
+        }
 
         if (lb->masterworker()) {
             pthread_mutex_t   *m        = NULL;
@@ -176,8 +185,9 @@ protected:
                     // NOTE: in this case only the first channel (0) has to be set, 
                     // the other channels go toward the next stage                    
                     svector<ff_node*> w;
-                    workers[i]->get_out_nodes(w);
-                    w[0]->set_output_blocking(m,c,counter);
+                    workers[i]->get_out_nodes_feedback(w);
+                    for(size_t i=0;i<w.size();++i)
+                        w[i]->set_output_blocking(m,c,counter);
                 } else 
                     workers[i]->set_output_blocking(m,c,counter);
             }
@@ -1045,22 +1055,9 @@ public:
             }
             return;
         }
-        if (lb->masterworker()) {
-            // this is needed because we have to remove,
-            // among all output channels, those that go back to the emitter
-            svector<ff_node*> wtmp;
-            for(size_t i=0;i<workers.size();++i) {
-                workers[i]->get_out_nodes(wtmp);
-                wtmp.erase(wtmp.begin()); // remove feedback channel (the one with id 0)
-                assert(wtmp.size()>=1);
-                w += wtmp;
-                wtmp.clear();
-            }
-        } else {
-            for(size_t i=0;i<workers.size();++i)
-                workers[i]->get_out_nodes(w);
-            if (w.size()==0) w = workers;
-        }
+        for(size_t i=0;i<workers.size();++i)
+            workers[i]->get_out_nodes(w);
+        if (w.size()==0) w = workers;
     }
 
 
@@ -1294,26 +1291,29 @@ protected:
                 // We can be here because we are in a pipeline and the next stage
                 // is a multi-input stage. If the farm is a masterworker or if the node 
                 // has multiple output than we are a multi-output node and thus all channels
-                // have to be registered as output channels of the worker.
+                // have to be registered as output channels for the worker.
 
                 for(size_t i=0;i<nworkers;++i) {
-
-                    // NOTE: force unbounded queue if masterworker
-                    if (workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
-                                                         (lb->masterworker()?false:fixedsize))<0)
-                        return -1;
-
                     if (workers[i]->isMultiOutput() && lb->masterworker()) {
-                        ff_node *t = new ff_buffernode(i, workers[i]->get_out_buffer(), workers[i]->get_out_buffer()); 
-                        if (!t) return -1;
+                        // NOTE: force unbounded queue if masterworker
+                        ff_node *t = new ff_buffernode(out_buffer_entries,false); 
+                        t->set_id(i);
                         internalSupportNodes.push_back(t);
-                        workers[i]->set_output(t);
-
+                        workers[i]->set_output_feedback(t);
+                        // this is needed because we don't call create_output_buffer for the worker
+                        workers[i]->set_output_buffer(t->get_out_buffer());
+                 
                         t = new ff_buffernode(out_buffer_entries,fixedsize); 
                         t->set_id(i);
                         internalSupportNodes.push_back(t);
                         workers[i]->set_output(t);
-                    }
+                        
+                        gt->register_worker(t); 
+
+                    } else 
+                        if (workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
+                                                             (lb->masterworker()?false:fixedsize))<0)
+                            return -1;
                 }
             }
             return 0;
@@ -2101,9 +2101,9 @@ public:
 };
 
 /* --------------   makeFarm   ----------------- */
-template<typename W_t, unsigned int N, typename... Args>
+template<typename W_t, typename... Args>
 static inline 
-ff_Farm<typename W_t::in_type, typename W_t::out_type> make_Farm(Args&&... args) {
+ff_Farm<typename W_t::in_type, typename W_t::out_type> make_Farm(const size_t N, Args&&... args) {
     ff_Farm<typename W_t::in_type, typename W_t::out_type> farm([&]() {
 	    std::vector<std::unique_ptr<ff_node> > W;
 	    for(size_t i=0;i<N; ++i) 
@@ -2113,11 +2113,12 @@ ff_Farm<typename W_t::in_type, typename W_t::out_type> make_Farm(Args&&... args)
     return farm;
 }
 
+#if 0
 
 /* --------------   makeMasterWorker ----------------- */
-template<typename W_t, unsigned int N, typename... Args>
+template<typename W_t, typename... Args>
 static inline 
-ff_Farm<typename W_t::in_type, typename W_t::out_type> make_MasterWorker(std::unique_ptr<ff_node> && Master, Args&&... args) {
+ff_Farm<typename W_t::in_type, typename W_t::out_type> make_MasterWorker(std::unique_ptr<ff_node> && Master, const size_t N, Args&&... args) {
     ff_Farm<typename W_t::in_type, typename W_t::out_type> farm([&]() {
 	    std::vector<std::unique_ptr<ff_node> > W;
 	    for(size_t i=0;i<N; ++i) 
@@ -2128,10 +2129,9 @@ ff_Farm<typename W_t::in_type, typename W_t::out_type> make_MasterWorker(std::un
     farm.wrap_around();
     return farm;
 }
-
+#endif // if 0
 
 #endif
-
 
 } // namespace ff
 

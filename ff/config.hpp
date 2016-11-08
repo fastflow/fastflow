@@ -99,7 +99,7 @@ static const size_t FF_TAG_MIN       = (FF_EOS-0xa);  /// just a lower bound mar
 
 // maximum number of threads that can be spawned
 #if !defined(MAX_NUM_THREADS)
-#define MAX_NUM_THREADS       256 
+#define MAX_NUM_THREADS       512 
 #endif
 
 // maximum number of workers in a farm

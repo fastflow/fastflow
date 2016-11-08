@@ -836,6 +836,7 @@ public:
     forallpipereduce_W(forall_Scheduler *const sched,ffBarrier *const loopbar, F_t F):
         forallreduce_W<ff_buffernode>(sched,loopbar,F) { res.set(8192,false,get_my_id()); }
 
+
     inline void* svc(void* t) {
         auto task = (forall_task_t*)t;
         auto myid = get_my_id();
@@ -855,7 +856,9 @@ public:
         return GO_OUT;
     }
     
-    void svc_end() { res.put(EOS); }
+    void svc_end() { 
+        res.ff_send_out(EOS);
+    }
 
     inline void setF(F_t _F, const Tres_t&, bool a=true) { 
         F=_F, aggressive=a;
@@ -863,7 +866,6 @@ public:
 
 
     void get_out_nodes(svector<ff_node*> &w) { 
-        w.push_back(this);   // feedback, this one will be removed (see ff_farm::get_out_nodes)
         w.push_back(&res);   // forward
     }
 };

@@ -147,6 +147,10 @@ protected:
                                     std::atomic_ulong *&counter) {
         assert(1==0);
     }
+
+    virtual inline pthread_mutex_t   &get_prod_m()       { return *prod_m;}
+    virtual inline pthread_cond_t    &get_prod_c()       { return *prod_c;}
+    virtual inline std::atomic_ulong &get_prod_counter() { return prod_counter;}
     
     virtual inline pthread_mutex_t   &get_cons_m()       { return *cons_m;}
     virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
@@ -1362,9 +1366,9 @@ private:
     std::atomic_ulong  cons_counter;
 
     // for synchronizing with the previous multi-output stage
-    pthread_mutex_t   *p_prod_m;
-    pthread_cond_t    *p_prod_c;
-    std::atomic_ulong *p_prod_counter;
+    pthread_mutex_t   *p_prod_m = nullptr;
+    pthread_cond_t    *p_prod_c = nullptr;
+    std::atomic_ulong *p_prod_counter = nullptr;
 
     // for the output queue
     pthread_mutex_t    *prod_m = nullptr;

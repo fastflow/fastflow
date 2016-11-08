@@ -488,7 +488,6 @@ protected:
                 pthread_mutex_unlock(p_cons_m);
                 ++prod_counter;
             } else { // FULL
-                //assert(fixedsize);
                 pthread_mutex_lock(prod_m);
                 while(prod_counter.load() >= out->buffersize()) {
                     pthread_cond_wait(prod_c,prod_m);
@@ -511,15 +510,12 @@ protected:
         retry:
             bool r = in->pop(ptr);
             if (r) { // OK
-                // TODO: possible optimization, p_prod_m is NULL if the queue is unbounded
-                //if (p_prod_m) { // this is true only if fixedsize==true
                 pthread_mutex_lock(p_prod_m);
                 if ((*p_prod_counter).load() >= in->buffersize()) {
                     pthread_cond_signal(p_prod_c);
                 }
                 --(*p_prod_counter);
                 pthread_mutex_unlock(p_prod_m);
-                //}
                 --cons_counter;
             } else { // EMPTY
                 pthread_mutex_lock(cons_m);
@@ -691,10 +687,12 @@ protected:
     virtual inline void setMultiInput()      { multiInput = true; }
     virtual inline int set_output(svector<ff_node *> & w) { return -1;}
     virtual inline int set_output(ff_node *) { return -1;}
+    virtual inline int set_output_feedback(ff_node *) { return -1;}
     virtual inline bool isMultiOutput() const { return multiOutput;}
     virtual inline void setMultiOutput()      { multiOutput = true; }
 
     virtual inline void get_out_nodes(svector<ff_node*>&w) {}
+    virtual inline void get_out_nodes_feedback(svector<ff_node*>&w) {}
 
 
     /**
@@ -789,6 +787,8 @@ protected:
         barrier = b;
         return 1;
     }
+    virtual int  cardinality() { return 1; }
+
 
     virtual void set_barrier(BARRIER_T * const b) {
         barrier = b;
@@ -1345,9 +1345,9 @@ protected:
     std::atomic_ulong   cons_counter;
 
     // for synchronizing with the previous multi-output stage
-    pthread_mutex_t    *p_prod_m;
-    pthread_cond_t     *p_prod_c;
-    std::atomic_ulong  *p_prod_counter;
+    pthread_mutex_t    *p_prod_m = nullptr;
+    pthread_cond_t     *p_prod_c = nullptr;
+    std::atomic_ulong  *p_prod_counter = nullptr;
 
 
     // for the output queue
@@ -1356,9 +1356,9 @@ protected:
     std::atomic_ulong   prod_counter;
 
     // for synchronizing with the next multi-input stage
-    pthread_mutex_t    *p_cons_m;
-    pthread_cond_t     *p_cons_c;
-    std::atomic_ulong  *p_cons_counter;
+    pthread_mutex_t    *p_cons_m = nullptr;
+    pthread_cond_t     *p_cons_c = nullptr;
+    std::atomic_ulong  *p_cons_counter = nullptr;
 };
 
 /* just a node interface for the input and output buffers 
