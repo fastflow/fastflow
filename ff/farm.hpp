@@ -110,20 +110,22 @@ protected:
                 // NOTE: force unbounded queue if masterworker
                 if (workers[i]->get_out_buffer()==NULL) {
                     if (workers[i]->isMultiOutput()) {
-                        ff_node *t = new ff_buffernode(out_buffer_entries, false);
-                        if (!t) return -1;
-                        t->set_id(i);
-                        internalSupportNodes.push_back(t);
-                        workers[i]->set_output_feedback(t);
-                        // this is needed because we don't call create_output_buffer for the worker
-                        workers[i]->set_output_buffer(t->get_out_buffer());
-                        
+                        ff_node *t = nullptr;
+                        if (lb->masterworker()) {
+                            t = new ff_buffernode(out_buffer_entries, false);
+                            if (!t) return -1;
+                            t->set_id(i);
+                            internalSupportNodes.push_back(t);
+                            workers[i]->set_output_feedback(t);
+                            // this is needed because we don't call create_output_buffer for the worker
+                            workers[i]->set_output_buffer(t->get_out_buffer());
+                        }                        
                         t = new ff_buffernode(out_buffer_entries,fixedsize); 
                         t->set_id(i);
                         internalSupportNodes.push_back(t);
                         workers[i]->set_output(t);
-                        
-                        gt->register_worker(t);                        
+                        if (!lb->masterworker()) workers[i]->set_output_buffer(t->get_out_buffer());
+                        else gt->register_worker(t);                        
                     } else
                         if (workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
                                                              (lb->masterworker()?false:fixedsize))<0)
