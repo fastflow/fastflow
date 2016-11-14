@@ -802,7 +802,9 @@ public:
                         push_eos(); 
                         if (filter) filter->eosnotify();
                         break;
-                    } else if (task == EOS_NOFREEZE) {
+                    } else if (task == GO_OUT) 
+                        break;
+                    else if (task == EOS_NOFREEZE) {
                         if (filter) {
                             filter->eosnotify();
                         }
