@@ -960,7 +960,7 @@ private:
          */
         template<typename... STAGES>
         explicit ff_Pipe(bool input_ch, STAGES &&...stages):ff_pipeline(input_ch) {
-#if (!defined(__CUDACC__) && !defined(WIN32))
+#if (!defined(__CUDACC__) && !defined(WIN32) && !defined(__ICC) )
         	static_assert(valid_stage_types<STAGES...>{},
                           "Input & output types of the pipe's stages don't match");
 #endif
