@@ -111,11 +111,13 @@ TARGET               = simplest test1 test1b test2 test3 test3b test3_farm test4
 
 all: $(TARGET)
 
+tests: test
 test: all
 	@echo "*****************************************************"
 	@echo "*                                                   *"
-	@echo "* make test is rather naive at moment, it just      *"
-	@echo "* checks compilation and default running            *"
+	@echo "* make test(s) is rather naive at moment, it just   *"
+	@echo "* checks compilation and execution wit default      *"
+	@echo "* argument parameters                               *"
 	@echo "*                                                   *"
 	@echo "*****************************************************"
 	@./runtests.sh

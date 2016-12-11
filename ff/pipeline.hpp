@@ -191,7 +191,8 @@ protected:
 
     int freeze_and_run(bool skip_init=false) {
         int nstages=static_cast<int>(nodes_list.size());
-        if (!skip_init) {            
+        if (!skip_init) {        
+#if defined(FF_INITIAL_BARRIER)    
             // set the initial value for the barrier 
             if (!barrier)  barrier = new BARRIER_T;
             const int nthreads = cardinality(barrier);
@@ -200,6 +201,7 @@ protected:
                 return -1;
             }
             barrier->barrierSetup(nthreads);
+#endif
         }
         if (!prepared) if (prepare()<0) return -1;
         ssize_t startid = (get_my_id()>0)?get_my_id():0;

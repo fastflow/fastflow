@@ -341,7 +341,7 @@ public:
         prod_counter.store(-1);
         p_cons_m = NULL, p_cons_c = NULL, p_cons_counter = NULL;
 
-        blocking_in = blocking_out = RUNTIME_MODE;
+        blocking_in = blocking_out = FF_RUNTIME_MODE;
 
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
     }
