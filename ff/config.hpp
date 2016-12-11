@@ -87,10 +87,15 @@ static const size_t FF_TAG_MIN       = (FF_EOS-0xa);  /// just a lower bound mar
 #endif
 
 #if defined(BLOCKING_MODE)
-#define RUNTIME_MODE true
+#define FF_RUNTIME_MODE true
 #else
-#define RUNTIME_MODE false   // by default the run-time is in nonblocking mode
+#define FF_RUNTIME_MODE false   // by default the run-time is in nonblocking mode
 #endif
+
+// if the following is defined, then an initial barrier is executed among all threads
+// to ensure that all threads are started. It can be commented out if that condition 
+// is not needed.
+#define FF_INITIAL_BARRIER
 
 // the barrier implementation to use
 #if !defined(BARRIER_T)

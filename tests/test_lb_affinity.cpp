@@ -25,7 +25,10 @@
  ****************************************************************************
  */
 
-
+#if !defined(FF_INITIAL_BARRIER)
+// to run this test we need to be sure that the initial barrier is executed
+#define FF_INITIAL_BARRIER
+#endif
 #include <ff/farm.hpp>
 
 using namespace ff;
@@ -58,7 +61,11 @@ public:
 		if (worker_task == NULL) {
             for (int j = 0; j < INBUF_Q_SIZE; j++) {
                 for (int i = 0; i < NWORKERS; i++) {
-                    size_t targetworker = workers[i]->get_my_id();                 
+                    size_t targetworker = workers[i]->get_my_id();
+                    //
+                    // NOTE: in order to use the following low-level call, you must be sure that the 
+                    //       threads are started. To do this you can compile with FF_INITIAL_BARRIER
+                    //
                     int targetcore = threadMapper::instance()->getCoreId(lb->getTid(workers[i]));
                     int targetmnode = targetcore/8;
                     // here allocate the task
@@ -90,10 +97,10 @@ public:
                 completed[worker_task->sourceW] = true;
             }
 		}
-		/* usi male il GO_ON - brutto il for - basta contare
+		/* 
            for (int i = 0; i < NWORKERS; i++)
            if (!completed[i])
-           return GO_ON ;
+             return GO_ON ;
 		*/
 		for (int i = 0; i < NWORKERS; i++)
             done &= completed[i];
