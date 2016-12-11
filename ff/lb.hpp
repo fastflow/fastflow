@@ -6,10 +6,9 @@
  *
  *  \brief Farm Emitter (not a ff_node)
  *
- * Contains the \p ff_loadbalancer class and methods used to model the \a Emitter node,
- *  which is used to schedule tasks among workers.
+ *  Contains the \p ff_loadbalancer class and methods used to model the \a Emitter node,
+ *  which is used to schedule tasks to workers.
  *
- *  * \todo Documentation to be rewritten. To be substituted with ff_monode?
  */
 
 /* ***************************************************************************
@@ -419,6 +418,7 @@ protected:
             ((ff_loadbalancer *)obj)->blocking_out = (task==BLK); 
         }
 #if defined(FF_TASK_CALLBACK)
+        // used to notify that a task has been sent out
         if (r) ((ff_loadbalancer *)obj)->callbackOut(obj);
 #endif
         return r;
@@ -433,11 +433,12 @@ protected:
         return 0;
     }
 
+    // removes all dangling EOSs
     void absorb_eos(svector<ff_node*>& W, size_t size) {
         void *task;
         for(size_t i=0;i<size;++i) {
             do ; while(!W[i]->get(&task) || (task == BLK) || (task==NBLK));
-            assert((task == EOS) || (task == EOS_NOFREEZE) || (task == BLK) || (task == NBLK));            
+            assert((task == EOS) || (task == EOS_NOFREEZE) || (task == BLK) || (task == NBLK));
         }
     }
     
@@ -467,7 +468,7 @@ public:
         cons_counter.store(-1);
         prod_counter.store(-1);
         p_prod_m = NULL, p_prod_c = NULL, p_prod_counter = NULL;
-        blocking_in = blocking_out = RUNTIME_MODE;
+        blocking_in = blocking_out = FF_RUNTIME_MODE;
 
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
     }
@@ -761,22 +762,12 @@ public:
         return 0;
     }
 
-    /**
-     * \brief Deregister worker
-     *
-     * It deregister worker.
-     *
-     * \return -1 ia always returned.
-     */
-    int deregister_worker() {
-        return -1;
-    }
 
     /**
      *
-     * \brief Load balances task
+     * \brief Schedule engine.
      *
-     * It is a virtual function which loadbalances the task.
+     *  It is the function used to schedule the tasks.
      */
     virtual void * svc(void *) {
         void * task = NULL;
@@ -877,6 +868,14 @@ public:
                 }
                 nw = running;
             }
+            // the manager has a complete separate channel that we want to listen to
+            // as for all other input channels. The manager it is seen from the run-time
+            // point of view as an extra worker.
+            if (manager) { 
+                availworkers.push_back(manager);
+                nw += 1;
+                nw_blk += 1;
+            }
             if (int_multi_input.size()>0) {
                 assert(!master_worker);
                 for(size_t i=0;i<int_multi_input.size();++i) {
@@ -950,9 +949,19 @@ public:
                     if (filter) filter->eosnotify(channelid);
                     if ((victim != availworkers.end())) {
                         if (channelid>0 && (task != EOS_NOFREEZE) &&
-                            (!workers[channelid]->isfrozen())) {
+                            // channelid can be greater than the worker size because of the manager channel (if present)
+                            ((size_t)channelid > workers.size() ||  !workers[channelid]->isfrozen())) {  
+
                             availworkers.erase(victim);
                             start=availworkers.begin(); // restart iterator
+
+                            if ((size_t)channelid > workers.size()) { 
+                                assert(manager); 
+                                // the manager has been added as a worker
+                                // so when it terminates we have to decrease the 
+                                // starting point of the multi-input channels
+                                multi_input_start -= 1;  
+                            }
                         }
                     }
 
@@ -1290,6 +1299,11 @@ public:
         workers[n]->thaw(_freeze);
     }
 
+    void addManagerChannel(ff_node *m) {
+        manager = m;
+    }
+
+
     /**
      * \brief FastFlow start timing
      *
@@ -1343,16 +1357,18 @@ public:
 private:
     ssize_t            running;             /// Number of workers running
     size_t             max_nworkers;        /// Max number of workers allowed
-    ssize_t            nextw;               // out index
+    ssize_t            nextw;               /// out index
     ssize_t            channelid; 
-    ff_node         *  filter;
-    svector<ff_node*>  workers;
+    ff_node         *  filter;              /// user's filter
+    ff_node         *  manager = nullptr;   /// manager node, typically not present
+    svector<ff_node*>  workers;             /// farm's workers
     FFBUFFER        *  buffer;
     bool               skip1pop;
     bool               master_worker;
-    svector<ff_node*>  multi_input;
-    size_t             multi_input_start;   // position in the availworkers array
-    svector<ff_node*>  int_multi_input;
+    svector<ff_node*>  multi_input;         /// nodes coming from other stages
+    size_t             multi_input_start;   /// position in the availworkers array
+    svector<ff_node*>  int_multi_input;     /// internal buffers
+    
 
     struct timeval tstart;
     struct timeval tstop;
@@ -1391,7 +1407,6 @@ private:
     ticks         ticksmax;
     ticks         tickstot;
 #endif
-
 };
 
 

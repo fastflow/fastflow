@@ -31,6 +31,10 @@
  * farm's workers in the load-balancer thread.
  *
  */
+#if !defined(FF_INITIAL_BARRIER)
+// to run this test we need to be sure that the initial barrier is executed
+#define FF_INITIAL_BARRIER
+#endif
 #include <vector>
 #include <cstdio>
 #include <ff/farm.hpp>
@@ -42,7 +46,7 @@ protected:
     void stop_workers() {
         size_t nw = lb->getnworkers();
         for(size_t i=0; i<nw;++i)  {
-            lb->ff_send_out_to(EOS, i);
+            lb->ff_send_out_to(GO_OUT, i);
         }
         for(size_t i=0;i<nw;++i) {
             lb->wait_freezing(i);
@@ -59,7 +63,6 @@ public:
         // set freezing flag to all workers
         for(size_t i=0;i<lb->getnworkers();++i)
             lb->freeze(i);
-
         stop_workers();
 
         return 0;
@@ -82,7 +85,7 @@ public:
         }
         // restart workers before sending EOS
         wakeup_workers(false);
-        return NULL;
+        return EOS;
     }
     
     void svc_end() {

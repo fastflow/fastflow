@@ -1,4 +1,6 @@
 * v.2.1.3  
+   - introduced a the possibility to add a "manager channel" in the farm emitter for reconfiguring farm's workers (see tests/test_multi_output5.cpp)
+   - the initial barrier can be avoided by undefining the FF_INITIAL_BARRIER define in config.hpp
    - added makeFarm, makePipe, makeMap, makeMasterWorker, ...
    - move constructor added in several classes (yet to be completed)
    - Divide&Conquer pattern implementation (DAC)

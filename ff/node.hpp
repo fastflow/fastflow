@@ -181,7 +181,9 @@ protected:
     
     void thread_routine() {
         threadid = ff_getThreadID();
+#if defined(FF_INITIAL_BARRIER)
         if (barrier) barrier->doBarrier(tid);
+#endif
         void * ret;
         do {
             init_error=false;
@@ -1124,7 +1126,7 @@ protected:
         p_prod_m = NULL, p_prod_c = NULL, p_prod_counter = NULL;
         p_cons_m = NULL, p_cons_c = NULL, p_cons_counter = NULL;
 
-        blocking_in = blocking_out = RUNTIME_MODE;
+        blocking_in = blocking_out = FF_RUNTIME_MODE;
     };
         
     // move constructor
@@ -1412,6 +1414,13 @@ struct ff_buffernode: ff_node {
         }
         return r;
     }
+
+    template<typename T> 
+    bool gather_task(T *&task, unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {    
+        return gather_task((void **)&task, retry, ticks);
+    }
+
+
 
 protected:
     void* svc(void*){return NULL;}

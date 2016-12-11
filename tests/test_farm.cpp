@@ -85,7 +85,7 @@ int main(int argc, char * argv[]) {
             } 
             delete r;
         } 
-    } while( ++i< 100000); //1e6);
+    } while( ++i< 10000); //1e6);
     farm.offload(EOS);
     while(farm.load_result(r)) {
         if (r->r == number) {

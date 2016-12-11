@@ -31,7 +31,6 @@
  *
  */
 
-//#include <pthread.h>
 #include <ff/platforms/platform.h>
 #include <vector>
 #include <ff/farm.hpp>

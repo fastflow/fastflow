@@ -151,7 +151,7 @@ protected:
         pthread_mutex_t   *m        = NULL;
         pthread_cond_t    *c        = NULL;
         std::atomic_ulong *counter  = NULL;
-        if (lb->init_output_blocking(m,c,counter)<0) {
+        if (!lb->init_output_blocking(m,c,counter)) {
             error("FARM, init output blocking mode for LB\n");
             return -1;
         }
@@ -723,16 +723,16 @@ public:
      */
     int run(bool skip_init=false) {
         if (!skip_init) {
+#if defined(FF_INITIAL_BARRIER)
             // set the initial value for the barrier 
-
             if (!barrier)  barrier = new BARRIER_T;
             const int nthreads = cardinality(barrier);
             if (nthreads > MAX_NUM_THREADS) {
                 error("FARM, too much threads, increase MAX_NUM_THREADS !\n");
                 return -1;
             }
-
             barrier->barrierSetup(nthreads);            
+#endif
         }
         
         if (!prepared) if (prepare()<0) return -1;
