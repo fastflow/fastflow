@@ -24,7 +24,7 @@
 # ---------------------------------------------------------------------------
 
 FF_HOME              = ../..
-CC                   = g++
+CXX                  = g++ -std=c++11
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O3 -finline-functions
@@ -35,7 +35,7 @@ INCS                 = -I$(FF_HOME)
 LIBS                 = -lpthread
 
 INCLUDES             = -I. $(INCS)
-TARGET               = ff_fib fib
+TARGET               = ff_fib fib  fib_dac
 
 
 .PHONY: all clean cleanall distclean
@@ -51,6 +51,9 @@ ff_fib: ff_fib.cpp
 
 fib: fib.cpp
 	$(CXX) $(INCS) $(CXXFLAGS) $(OPTIMIZE_FLAGS) $< -o $@
+
+fib_dac: fib_dac.cpp
+	$(CXX) $(INCS) $(CXXFLAGS) $(OPTIMIZE_FLAGS) $< -o $@ $(LIBS)
 
 clean: 
 	-rm -fr *.o *~

@@ -64,7 +64,7 @@ inline uint64_t fib(uint64_t n) {
 
 struct Worker:  ff_node {
     int svc_init() {
-        printf("Worker %d is on core %d\n", get_my_id(), ff_getMyCpu());
+        printf("Worker %ld is on core %ld\n", get_my_id(), ff_getMyCpu());
         return 0;
     }
     void * svc(void * task) {
@@ -96,7 +96,7 @@ public:
     Emitter(size_t n, size_t b):n(n),b(b),streamlen(0),result(0) {};
 
     int svc_init() {
-        printf("Emitter is on core %d\n", ff_getMyCpu());
+        printf("Emitter is on core %ld\n", ff_getMyCpu());
         return 0;
     }    
     void * svc(void * task) {
