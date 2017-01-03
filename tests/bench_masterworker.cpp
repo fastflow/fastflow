@@ -106,6 +106,7 @@ int main(int argc, char *argv[]) {
             return W;
         } (), E);
     farm.remove_collector();
+    farm.wrap_around();
 #endif
 
     for(int i=0;i<10;++i) {
