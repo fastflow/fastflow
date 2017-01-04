@@ -105,7 +105,7 @@ typedef unsigned long int     atom_t;
 #define INLINE                  inline
 #define ALIGN_TO_PRE(alignment)
 #define ALIGN_TO_POST(alignment)        __attribute__( (aligned(alignment)) )
-#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)))
+#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(__alignment)))
 #endif
 
 #if ((defined __GNUC__ || defined __llvm__) && defined __unix__ && defined __x86_64__)
@@ -147,12 +147,12 @@ typedef unsigned long int     atom_t;
 #define INLINE                  inline
 #define ALIGN_TO_PRE(alignment)
 #define ALIGN_TO_POST(alignment)        __attribute__( (aligned(alignment)) )
-#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
+#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(__alignment)) )
 #else
 #define INLINE                  inline
 #define ALIGN_TO_PRE(alignment)
 #define ALIGN_TO_POST(alignment)        __attribute__( (aligned(alignment)) )
-#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(alignment)) )
+#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(__alignment)) )
 #endif
 #endif
 
