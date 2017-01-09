@@ -1741,7 +1741,9 @@ private:
          */
         void * svc(void * task) {
             if (C_f) task = C_f->svc(task);
-            if (ff_node::get_out_buffer()) ff_send_out(task);
+            if (ff_node::get_out_buffer() && //
+                task != GO_ON && task != GO_OUT && task != EOS_NOFREEZE)
+                    ff_send_out(task);
             do nextone = (nextone+1) % gt->getrunning();
             while(!gt->set_victim(nextone));
             return GO_ON;
