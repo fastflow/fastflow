@@ -69,12 +69,21 @@ int main(int argc, char * argv[]) {
 	for (size_t j = 0; j < inputsize; ++j)
 		task->in[j] = j;
 
+
+
 	FFMAPCUDA(cudaTask, mapF) *myMap = new FFMAPCUDA(cudaTask, mapF)(*task);
 	myMap->run_and_wait_end();
 
-//	for (long i = 0; i < inputsize; ++i)
-//		printf("%d ", task->in[i]);
-//	printf("\n");
+//#ifdef CHECK
+	for (size_t i = 0; i < inputsize; ++i) {
+		if (task->in[i] != (i + 1)) {
+			printf("ERROR\n");
+			return 1;
+		}
+	}
+//#endif
+
+	delete[] task->in;
 
 	printf("DONE\n");
 	return 0;
