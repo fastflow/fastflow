@@ -85,9 +85,15 @@ int main(int argc, char * argv[]) {
         pipe.offload((void*)ptmp);
         pipe.load_result((void**)&ptmp);
 
-//        for (size_t j = 0; j < inputsize; ++j)
-//            printf("%d ", V[j]);
-//        printf("\n");
+#ifdef CHECK
+		for (size_t j = 0; j < inputsize; ++j) {
+			if (V[j] != (i + j + 1)) {
+        		printf("ERROR\n");
+        		return 1;
+        	}
+        }
+#endif
+
     }
     pipe.offload(GO_OUT);
     pipe.wait_freezing();
