@@ -324,6 +324,7 @@ __global__ void reduceCUDAKernel(kernelF K, T *output, T *input, Tenv1 *env1, Te
     __syncthreads();
     
     // do reduction in shared mem
+    if (blockSize >= 1024) {if (tid < 512) {sdata[tid] = result = K.K(result, sdata[tid + 512], env1, env2, env3, env4, env5, env6);}__syncthreads();}
     if (blockSize >= 512) {if (tid < 256) {sdata[tid] = result = K.K(result, sdata[tid + 256], env1, env2, env3, env4, env5, env6);}__syncthreads();}
     if (blockSize >= 256) {if (tid < 128) {sdata[tid] = result = K.K(result, sdata[tid + 128], env1, env2, env3, env4, env5, env6);}__syncthreads();}
     if (blockSize >= 128) {if (tid < 64)  {sdata[tid] = result = K.K(result, sdata[tid + 64],  env1, env2, env3, env4, env5, env6);}__syncthreads();}
@@ -433,10 +434,14 @@ protected:
         if (maxThreads == 0) {
             if (deviceProp.major == 1 && deviceProp.minor < 2)
                 maxThreads = 256;
-            else
-                maxThreads = mtxb;
+            else {
+            	if (mtxb > 1024)
+            		maxThreads = 1024;
+            	else
+	                maxThreads = mtxb;
+	        }
         } else 
-            maxThreads = std::min(maxThreads, mtxb);
+            maxThreads = std::min(maxThreads, (size_t)1024);
         
         maxBlocks = deviceProp.maxGridSize[0];
         
