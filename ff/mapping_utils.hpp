@@ -7,7 +7,7 @@
  *
  *  \brief This file contains utilities for plaform inspection and thread pinning 
  *
- * Platform dependent code. Not really possible currently port it to plain C++11
+ *  Platform dependent code. Not really possible currently port it to plain C++11
  *
  */
 
@@ -31,7 +31,7 @@
 
 /*
  *
- * Author: Massimo Aldinucci, Massimo Torquati
+ * Author: Marco Aldinucci, Massimo Torquati
  * Date: Oct 5, 2010: basic linux and apple
  * Date: Mar 27, 2011: some win platform support
  *
@@ -46,35 +46,30 @@
 #include <ff/config.hpp>
 #include <ff/utils.hpp>
 #if defined(__linux__)
-#include <sched.h>
-#include <sys/types.h>
-#include <sys/resource.h>
-#include <asm/unistd.h>
-#include <stdio.h>
-#include <unistd.h>
-#define gettid() syscall(__NR_gettid)
+ #include <sched.h>
+ #include <sys/types.h>
+ #include <sys/resource.h>
+ #include <asm/unistd.h>
+ #include <stdio.h>
+ #include <unistd.h>
+
+static inline int gettid() { return syscall(__NR_gettid);}
+#if defined(MAMMUT)
+#include <mammut/mammut.hpp>
+#endif
+
 #elif defined(__APPLE__)
-//#define _DARWIN_C_SOURCE
 
-// They are needed - why?
-typedef unsigned long u_long;
-typedef unsigned int u_int;
-typedef unsigned char u_char;
-typedef unsigned short u_short;
-
-#include <sys/types.h>
-#include <sys/sysctl.h>
-#include <sys/syscall.h>
-#include <mach/mach.h> 
-#include <mach/mach_init.h>
-#include <mach/thread_policy.h> 
-// If you don't include mach/mach.h, it doesn't work.
-// In theory mach/thread_policy.h should be enough
+ #include <sys/types.h>
+ #include <sys/sysctl.h>
+ #include <sys/syscall.h>
+ #include <mach/mach.h> 
+ #include <mach/mach_init.h>
+ #include <mach/thread_policy.h> 
+ // If you don't include mach/mach.h, it doesn't work.
+ // In theory mach/thread_policy.h should be enough
 #elif defined(_WIN32)
-#include <ff/platforms/platform.h>
-//extern "C" {
-//#include <Powrprof.h>
-//}
+ #include <ff/platforms/platform.h>
 #endif
 #if defined(__APPLE__) && MAC_OS_X_HAS_AFFINITY
 #include<vector> 
@@ -146,11 +141,25 @@ static inline unsigned long ff_getCpuFreq() {
  */
 static inline ssize_t ff_numCores() {
     ssize_t  n=-1;
-#if defined(__linux__)
+#if defined(__linux__)    
+#if defined(MAMMUT)
+    mammut::Mammut m;
+    std::vector<mammut::topology::Cpu*> cpus = m.getInstanceTopology()->getCpus();
+    if (cpus.size()>0 && cpus[0]->getPhysicalCores().size()>0) {
+        n = 0;
+        for(size_t i = 0; i < cpus.size(); i++){
+            std::vector<mammut::topology::PhysicalCore*> phyCores  = cpus.at(i)->getPhysicalCores();
+            std::vector<mammut::topology::VirtualCore*>  virtCores = phyCores.at(0)->getVirtualCores();
+            n+= phyCores.size()*virtCores.size();
+        }
+    }
+#else
     FILE       *f;    
     f = popen("cat /proc/cpuinfo |grep processor | wc -l", "r");
     if (fscanf(f, "%ld", &n) == EOF) { pclose(f); return n;}
     pclose(f);
+#endif // MAMMUT
+
 #elif defined(__APPLE__) // BSD
     int nn;
     size_t len = sizeof(nn);
@@ -183,6 +192,19 @@ static inline ssize_t ff_realNumCores() {
 #else
 #if defined(__linux__)
     char inspect[]="cat /proc/cpuinfo|egrep 'core id|physical id'|tr -d '\n'|sed 's/physical/\\nphysical/g'|grep -v ^$|sort|uniq|wc -l";
+#if defined(MAMMUT)
+
+    mammut::Mammut m;
+    std::vector<mammut::topology::Cpu*> cpus = m.getInstanceTopology()->getCpus();
+    if (cpus.size()>0 && cpus[0]->getPhysicalCores().size()>0) {
+        n = 0;
+        for(size_t i = 0; i < cpus.size(); i++){
+            std::vector<mammut::topology::PhysicalCore*> phyCores  = cpus.at(i)->getPhysicalCores();
+            n+= phyCores.size();
+        }
+    }
+    return n;    
+#endif // MAMMUT
 #elif defined (__APPLE__)
     char inspect[]="sysctl hw.physicalcpu | awk '{print $2}'";
 #else 
@@ -216,6 +238,12 @@ static inline ssize_t ff_numSockets() {
 #else
 #if defined(__linux__)
     char inspect[]="cat /proc/cpuinfo|grep 'physical id'|sort|uniq|wc -l";
+#if defined(MAMMUT)
+    mammut::Mammut m;
+    std::vector<mammut::topology::Cpu*> cpus = m.getInstanceTopology()->getCpus();
+    if (cpus.size()>0) n = cpus.size();
+    return n;    
+#endif // MAMMUT
 #elif defined (__APPLE__)
     char inspect[]="sysctl hw.packages | awk '{print $2}'";
 #else 
@@ -498,6 +526,5 @@ static inline size_t cache_line_size() {
 #else
 #error Unrecognized platform
 #endif
-
 
 #endif /* FF_MAPPING_UTILS_HPP */

@@ -87,7 +87,7 @@ public:
             printf("ERROR: task received out of order, received %ld expected %ld\n", t, expected);
             error = true;
         }
-        
+        delete (long*)task;
         return GO_ON;
     }
     void svc_end() {
@@ -120,17 +120,18 @@ int main(int argc, char * argv[]) {
     }
     srandom(131071);
         
-    Start start(streamlen);
-    Stop  stop(streamlen);
-    
     ff_ofarm ofarm;
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker1);
     ofarm.add_workers(w);
-    ofarm.setEmitterF(&start);
-    ofarm.setCollectorF(&stop);
+    ofarm.setEmitterF(new Start(streamlen));
+    ofarm.setCollectorF(new Stop(streamlen));
+    ofarm.cleanup_all();
 
-    ofarm.run_and_wait_end();
+    if (ofarm.run_and_wait_end()<0) {
+        error("running ofarm\n");
+        return -1;
+    }
 
     std::cerr << "DONE\n";
     return 0;

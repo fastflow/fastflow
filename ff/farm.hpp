@@ -1849,6 +1849,15 @@ public:
     ~ff_ofarm() {
         if (E) delete E;
         if (C) delete C;
+
+        if (emitter_cleanup) {
+            if (E_f) delete E_f;
+            emitter_cleanup = false;
+        }
+        if (collector_cleanup) {
+            if (C_f) delete C_f;
+            collector_cleanup = false;
+        }        
     }
 
     /**
@@ -2084,7 +2093,8 @@ public:
     int remove_collector() = delete;
     void setEmitterF  (ff_node* f) = delete;
     void setCollectorF(ff_node* f) = delete;
-    
+    void cleanup_all()             = delete;
+
 
 
     bool load_result(void ** task,

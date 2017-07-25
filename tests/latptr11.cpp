@@ -89,8 +89,8 @@ int main(int argc, char *argv[]) {
     
     threadMapper::instance()->setMappingList(worker_mapping.c_str());
 
-    //ff_pipeline pipe(false, 512, 512, true);
-    ff_pipeline pipe(false, 8192, 8192, true);
+    ff_pipeline pipe(false, 32, 32, true);
+    //ff_pipeline pipe(false, 8192, 8192, true);
     pipe.add_stage(new firstStage(nmsgs));
     pipe.add_stage(new lastStage);
     pipe.wrap_around();
@@ -115,6 +115,8 @@ int main(int argc, char *argv[]) {
     printf("comptime =%f (ms) overhead =%f (ms)\n", comptime, overhead);
 #endif
     printf("Latency= %.3f (ns)\n", (1000000.0*(comptime-overhead))/(nmsgs*2));
+
+    pipe.ffStats(std::cout);
 	   
     return 0;
 }
