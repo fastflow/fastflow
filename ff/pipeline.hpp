@@ -873,7 +873,8 @@ private:
     template<typename IN_t=char,typename OUT_t=IN_t>
     class ff_Pipe: public ff_pipeline {
     private:
-#if (!defined(__CUDACC__) && !defined(WIN32) && !defined(__ICC)) 
+
+#if !defined(__CUDACC__) && !defined(WIN32) && !defined(__ICC)
         // 
         // Thanks to Suter Toni (HSR) for suggesting the following code for checking
         // correct input-output types ordering.
@@ -943,7 +944,7 @@ private:
          */
         template<typename... STAGES>
         ff_Pipe(STAGES &&...stages) {    // forwarding reference (aka universal reference)
-#if ( !defined(__CUDACC__) && !defined(WIN32) && !defined(__ICC) )
+#if !defined(__CUDACC__) && !defined(WIN32) && !defined(__ICC)
         	static_assert(valid_stage_types<STAGES...>{}, "Input & output types of the pipe's stages don't match");
 #endif
         	this->add2pipeall(stages...); //this->add2pipeall(std::forward<STAGES>(stages)...);
@@ -962,7 +963,7 @@ private:
          */
         template<typename... STAGES>
         explicit ff_Pipe(bool input_ch, STAGES &&...stages):ff_pipeline(input_ch) {
-#if (!defined(__CUDACC__) && !defined(WIN32) && !defined(__ICC) )
+#if !defined(__CUDACC__) && !defined(WIN32) && !defined(__ICC)
         	static_assert(valid_stage_types<STAGES...>{},
                           "Input & output types of the pipe's stages don't match");
 #endif

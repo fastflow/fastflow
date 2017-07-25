@@ -465,9 +465,6 @@ private:
     struct timeval wtstop;
     double wttime;
 
-protected:    
-    bool               blocking_in; 
-    bool               blocking_out;
 protected:
     
     void set_id(ssize_t id) { myid = id;}
@@ -1361,6 +1358,9 @@ protected:
     pthread_mutex_t    *p_cons_m = nullptr;
     pthread_cond_t     *p_cons_c = nullptr;
     std::atomic_ulong  *p_cons_counter = nullptr;
+
+    bool               FF_MEM_ALIGN(blocking_in,32); 
+    bool               FF_MEM_ALIGN(blocking_out,32);
 };
 
 /* just a node interface for the input and output buffers 

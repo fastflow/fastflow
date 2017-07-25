@@ -63,19 +63,19 @@ struct Worker: ff_node_t<long> {
 };
 
 struct Emitter: ff_node_t<long> {
-  Emitter(const size_t size): size(size) {}
+    Emitter(const size_t size): size(size) {}
     int svc_init() {
-	received = 0;
-	return 0;
+        received = 0;
+        return 0;
     }
-  long *svc(long *in) {
-      if (in == nullptr) {
-	  for(size_t i=0;i<size;++i) ff_send_out((long*)(i+1));
-	  return GO_ON;
-      }
-      ++received;
-      if (received >= size) return EOS;
-      return GO_ON;
+    long *svc(long *in) {
+        if (in == nullptr) {
+            for(size_t i=0;i<size;++i) ff_send_out((long*)(i+1));
+            return GO_ON;
+        }
+        ++received;
+        if (received >= size) return EOS;
+        return GO_ON;
   }
   const size_t size=0;
     size_t received = 0;

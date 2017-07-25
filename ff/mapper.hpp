@@ -34,6 +34,10 @@
 #include <ff/utils.hpp>
 #include <ff/mapping_utils.hpp>
 #include <vector>
+#if defined(MAMMUT)
+#include <mammut/mammut.hpp>
+#endif
+
 
 #if defined(FF_CUDA) 
 #include <cuda.h>
@@ -95,6 +99,33 @@ public:
 	 */
 	threadMapper() :
 			rrcnt(-1), mask(0) {
+#if defined(MAMMUT)
+        mammut::Mammut m;
+        std::vector<mammut::topology::Cpu*> cpus = m.getInstanceTopology()->getCpus();
+		if (cpus.size()<=0 || cpus[0]->getPhysicalCores().size() <=0) {
+            error("threadMapper: invalid number of cores\n");
+            return ;
+        }
+        size_t virtualPerPhysical = cpus[0]->getPhysicalCores()[0]->getVirtualCores().size();
+        for(size_t k = 0; k < virtualPerPhysical; k++){
+            for(size_t i = 0; i < cpus.size(); i++){
+                std::vector<mammut::topology::PhysicalCore*> phyCores = cpus.at(i)->getPhysicalCores();
+                for(size_t j = 0; j < phyCores.size(); j++){
+                    std::vector<mammut::topology::VirtualCore*> virtCores = phyCores.at(j)->getVirtualCores();
+                    CList.push_back(virtCores[k]->getVirtualCoreId());
+                }
+            }
+        }
+        int nc;
+        nc = num_cores = CList.size();
+
+		unsigned int size = num_cores;
+		// usually num_cores is a power of two....!
+		if (!isPowerOf2(size)) 
+			size = nextPowerOf2(size);
+		mask = size - 1;
+
+#else
 		int nc = ff_numCores();
 		if (nc <= 0) {
 			error("threadMapper: invalid num_cores\n");
@@ -112,6 +143,7 @@ public:
 
 		for (int i = 0; i < nc; ++i)
 			CList.push_back(i);
+#endif /* MAMMUT */
 		for (unsigned int i = nc, j = 0; i < size; ++i, j++)
 			CList.push_back(j);
 
@@ -237,12 +269,10 @@ public:
 
     
 	/**
-	 *  Returns the next CPU id using a round-robin mapping access on the
-	 *  mapping list. This is clearly a raound robind scheduling!
+	 *  Returns the next CPU id using a round-robin mapping access on the mapping list. 
 	 *
 	 *  \return The identifier of the core.
 	 */
-
 	int getCoreId() {
 		assert(rrcnt >= 0);
 		int id = CList[rrcnt++];
