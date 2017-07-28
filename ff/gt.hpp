@@ -545,7 +545,7 @@ public:
             } else {
                 FFTRACE(++taskcnt);
                 if (filter)  {
-                    channelid = workers[nextr]->get_my_id();
+                    channelid = nextr; // workers[nextr]->get_my_id();
                     FFTRACE(ticks t0 = getticks());
 
 #if defined(FF_TASK_CALLBACK)
