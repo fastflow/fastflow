@@ -332,8 +332,18 @@ protected:
                 //if (start == ite) start=availworkers.begin();  // read again next time from the same, this needs (**)
                 if((*start)->get(task)) {
                     const size_t idx = (start-availworkers.begin());
-                    channelid = (idx >= multi_input_start) ? -1: (*start)->get_my_id();
-                    if (blkvector[idx]) pop_done(*start);
+                    //channelid = (idx >= multi_input_start) ? -1: (*start)->get_my_id();
+
+                    channelid = idx;
+                    if (idx >= multi_input_start) channelid = -1;
+                    else 
+                        if (idx == (size_t)managerpos) channelid = (*start)->get_my_id();
+
+
+                    // DA RIVEDERE !!!!!!
+                    // if (blkvector[idx]) pop_done(*start);
+                    
+
                     return start;
                 }
                 else { 
@@ -460,7 +470,7 @@ public:
         running(-1),max_nworkers(max_num_workers),nextw(-1),channelid(-2),
         filter(NULL),workers(max_num_workers),
         buffer(NULL),skip1pop(false),master_worker(false),
-        multi_input(MAX_NUM_THREADS),multi_input_start(max_num_workers+1),
+        multi_input(MAX_NUM_THREADS),multi_input_start((size_t)-1),
         int_multi_input(MAX_NUM_THREADS) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
@@ -780,6 +790,7 @@ public:
             inpresent = true;
             set_in_buffer(filter->get_in_buffer());
         }
+        
 
         gettimeofday(&wtstart,NULL);
         if (!master_worker && (multi_input.size()==0) && (int_multi_input.size()==0)) {
@@ -859,8 +870,6 @@ public:
             // contains current worker
             std::deque<ff_node *> availworkers; 
 
-            //assert( master_worker ^ ( multi_input != NULL) );
-
             if (master_worker) {
                 for(int i=0;i<running;++i) {
                     availworkers.push_back(workers[i]);
@@ -869,15 +878,14 @@ public:
                 nw = running;
             }
             // the manager has a complete separate channel that we want to listen to
-            // as for all other input channels. The manager it is seen from the run-time
-            // point of view as an extra worker.
+            // as for all other input channels. The run-time sees the manager as an extra worker.
             if (manager) { 
+                managerpos = availworkers.size();
                 availworkers.push_back(manager);
                 nw += 1;
                 nw_blk += 1;
             }
             if (int_multi_input.size()>0) {
-                assert(!master_worker);
                 for(size_t i=0;i<int_multi_input.size();++i) {
                     availworkers.push_back(int_multi_input[i]);
                     blkvector.push_back(local_blocking_in);
@@ -893,7 +901,8 @@ public:
                 nw += multi_input.size();
                 nw_blk += multi_input.size();
             } 
-            if ((master_worker || int_multi_input.size()>0) && inpresent) {
+            //if ((master_worker || int_multi_input.size()>0) && inpresent) {
+            if (multi_input.size()==0 && inpresent) {
                 assert(multi_input.size() == 0);
                 nw += 1;
                 nw_blk += 1;
@@ -948,15 +957,13 @@ public:
                     (task == EOS_NOFREEZE)) {
                     if (filter) filter->eosnotify(channelid);
                     if ((victim != availworkers.end())) {
-                        if (channelid>0 && (task != EOS_NOFREEZE) &&
-                            // channelid can be greater than the worker size because of the manager channel (if present)
-                            ((size_t)channelid > workers.size() ||  !workers[channelid]->isfrozen())) {  
+                        if ((task != EOS_NOFREEZE) && channelid>0 && 
+                            (channelid == managerpos ||  ((size_t)channelid<workers.size() && !workers[channelid]->isfrozen()))) {  
 
                             availworkers.erase(victim);
                             start=availworkers.begin(); // restart iterator
 
-                            if ((size_t)channelid > workers.size()) { 
-                                assert(manager); 
+                            if (channelid == managerpos) { 
                                 // the manager has been added as a worker
                                 // so when it terminates we have to decrease the 
                                 // starting point of the multi-input channels
@@ -1360,13 +1367,14 @@ private:
     ssize_t            nextw;               /// out index
     ssize_t            channelid; 
     ff_node         *  filter;              /// user's filter
-    ff_node         *  manager = nullptr;   /// manager node, typically not present
+    ff_node         *  manager = nullptr;   /// manager node, typically not present    
     svector<ff_node*>  workers;             /// farm's workers
     FFBUFFER        *  buffer;
     bool               skip1pop;
     bool               master_worker;
     svector<ff_node*>  multi_input;         /// nodes coming from other stages
     size_t             multi_input_start;   /// position in the availworkers array
+    ssize_t            managerpos=-1;       /// position in the availworkers array of the manager
     svector<ff_node*>  int_multi_input;     /// internal buffers
     
 

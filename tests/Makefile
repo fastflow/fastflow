@@ -36,17 +36,19 @@ LIBS    +=  -ltbbmalloc -ltbb
 endif
 
 #########################################################################
-# some possible options to exercise:
+# some possible options to tests:
 #  -DFF_ESAVER             only for Linux, the run-time will use nanosleep
 #                          in busy-waiting loops
 #  -DNO_DEFAULT_MAPPING    no default thread pinning 
 #
-#  -DBLOCKING_MODE         enable blocking behavior
+#  -DBLOCKING_MODE         enable blocking behavior (experimental)
 #
 #  -DTRACE_FASTFLOW        to enable statistics
 #  -DMAMMUT                it requires to define MAMMUT_HOME and for collecting
 #                          energy consumption metrics -DTRACE_FASTFLOW has to be
 #                          defined
+#                          if MAMMUT is defined, it will be also used for thread
+#                          pinning
 #
 ###############################à#########################################
 CC                   = gcc 
@@ -91,7 +93,7 @@ ifeq ($(strip $(OS)),Darwin)
 endif
 
 INCLUDES             = -I. $(INCS) 
-TARGET               = simplest test1 test1b test2 test3 test3b test3_farm test4 test5 test6 test7 test8 perf_test1 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_ofarm2 test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker bench_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_scheduling2 test_dt test_torus test_torus2 perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_sendq test_spinBarrier test_multi_input test_multi_input2 test_multi_input3 test_multi_input4 test_multi_input5 test_multi_input6 test_multi_input7 test_multi_input8 test_accelerator+pinning test_dataflow test_dataflow2 test_noinput_pipe test_stopstartthreads test_stopstartthreads2 test_stopstartthreads3 test_stopstartall test_MISD test_parfor test_parfor2 test_parforpipereduce test_dotprod_parfor test_parfor_unbalanced test_parfor_multireduce test_parfor_multireduce2 test_lb_affinity test_farm test_pipe  perf_parfor perf_parfor2 test_graphsearch test_multi_output test_multi_output2 test_multi_output3 test_multi_output4 test_multi_output5 test_pool1 test_pool2 test_pool3 test_devicequery test_map test_mdf test_taskf latptr11 test_taskcallbacks test_eosw test_nodeselector test_blk test_blk2 test_blk3 test_blk4 test_stats test_dc test_mammut
+TARGET               = simplest test1 test1b test2 test3 test3b test3_farm test4 test5 test6 test7 test8 perf_test1 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_ofarm2 test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_freeze test_masterworker bench_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_scheduling2 test_dt test_torus test_torus2 perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_sendq test_spinBarrier test_multi_input test_multi_input2 test_multi_input3 test_multi_input4 test_multi_input5 test_multi_input6 test_multi_input7 test_multi_input8 test_accelerator+pinning test_dataflow test_dataflow2 test_noinput_pipe test_stopstartthreads test_stopstartthreads2 test_stopstartthreads3 test_stopstartall test_MISD test_parfor test_parfor2 test_parforpipereduce test_dotprod_parfor test_parfor_unbalanced test_parfor_multireduce test_parfor_multireduce2 test_lb_affinity test_farm test_pipe  perf_parfor perf_parfor2 test_graphsearch test_multi_output test_multi_output2 test_multi_output3 test_multi_output4 test_multi_output5 test_multi_output6 test_pool1 test_pool2 test_pool3 test_devicequery test_map test_mdf test_taskf latptr11 test_taskcallbacks test_eosw test_nodeselector test_blk test_blk2 test_blk3 test_blk4 test_stats test_dc 
 
 
 #test_taskf2 test_taskf3
@@ -185,6 +187,7 @@ test_multi_output2:test_multi_output2.o
 test_multi_output3:test_multi_output3.o
 test_multi_output4:test_multi_output4.o
 test_multi_output5:test_multi_output5.o
+test_multi_output6:test_multi_output6.o
 test_dataflow:test_dataflow.o
 test_dataflow2:test_dataflow2.o
 test_noinput_pipe:test_noinput_pipe.o
@@ -247,8 +250,13 @@ test_devicequery: test_devicequery.o
 test_dc: test_dc.cpp
 	$(CXX) -DDONT_USE_FFALLOC $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
+ifdef MAMMUT_HOME
 test_mammut: test_mammut.cpp
-	$(CXX) -DMAMMUT -DTRACE_FASTFLOW -I $(MAMMUT_HOME) $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(MAMMUT_HOME)/mammut/libmammut.a $(LIBS)
+	$(CXX) -DTRACE_FASTFLOW $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+else
+test_mammut:
+	@echo "The test cannot be compiled, please enable MAMMUT_HOME first."
+endif
 
 clean: 
 	-rm -fr *.o *~
