@@ -240,9 +240,9 @@ configure_file(
 add_custom_target( uninstall
     "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake" )
 
-install( FILES ${FFHEADERS} DESTINATION /include/ff/ )
-install( FILES ${FFHEADERS_PLAT} DESTINATION /include/ff/platforms )
-install( FILES ${FFHEADERS_D} DESTINATION /include/ff/d )
+install( FILES ${FFHEADERS} DESTINATION include/ff/ )
+install( FILES ${FFHEADERS_PLAT} DESTINATION include/ff/platforms )
+install( FILES ${FFHEADERS_D} DESTINATION include/ff/d )
 
 if( BUILD_EXAMPLES )
 #    enable_testing()
