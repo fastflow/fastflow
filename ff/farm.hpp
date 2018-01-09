@@ -1405,7 +1405,7 @@ public:
      *
      * \param max_num_workers defines the maximum number of workers.
      */
-    ofarm_lb(int max_num_workers):ff_loadbalancer(max_num_workers) {}
+    ofarm_lb(int max_num_workers):ff_loadbalancer(max_num_workers), victim(0) {}
 
     /**
      * \internal
