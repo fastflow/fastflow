@@ -615,11 +615,11 @@ public:
      * \return 0 if successful, otherwise -1 is returned.
      */
     int run(bool=false) {  
+        running = workers.size();
         if (this->spawn(filter?filter->getCPUId():-1)== -2) {
             error("GT, spawning GT thread\n");
             return -1; 
         }
-        running = workers.size();
         return 0;
     }
 
