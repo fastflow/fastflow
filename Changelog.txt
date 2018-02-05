@@ -1,3 +1,4 @@
+--> Toward v.3.0 
 * v.2.2 (TAG v.2.2)
    - main developemnt repository migrated to GitHub, the sourceforge SVN
    will be no longer updated. GOTO https://github.com/fastflow/fastflow
