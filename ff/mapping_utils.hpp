@@ -43,6 +43,7 @@
 
 #include <iosfwd>
 #include <errno.h>
+#include <thread>
 #include <ff/config.hpp>
 #include <ff/utils.hpp>
 #if defined(__linux__)
@@ -59,13 +60,17 @@ static inline int gettid() { return syscall(__NR_gettid);}
 #endif
 
 #elif defined(__APPLE__)
-
  #include <sys/types.h>
+/* sys/types.h should be suffiient but for some reason is not on 10.13 */
+ typedef unsigned long           u_long;
+ typedef unsigned short          u_short;    
+ typedef unsigned int            u_int;      
+ typedef unsigned char           u_char;
  #include <sys/sysctl.h>
  #include <sys/syscall.h>
  #include <mach/mach.h> 
  #include <mach/mach_init.h>
- #include <mach/thread_policy.h> 
+ #include <mach/thread_policy.h>
  // If you don't include mach/mach.h, it doesn't work.
  // In theory mach/thread_policy.h should be enough
 #elif defined(_WIN32)
@@ -382,8 +387,15 @@ static inline ssize_t ff_getMyCpu() { return ff_getMyCore(); }
  *  \return An integet value showing the priority level is returned if
  *  successful. Otherwise \p EINVAL is returned.
  */
-static inline ssize_t ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
+static inline ssize_t ff_mapThreadToCpu(int cpu_id, std::thread *t_handle=NULL, int priority_level=0) {
     if (cpu_id > ff_numCores()) return EINVAL;
+    if (t_handle==NULL) {
+        //std::cerr << "ff_mapThreadToCpu: cannot set affinity of " << t_handle << " with " << cpu_id << "\n";
+        return EINVAL;
+    }
+    auto ntnh = t_handle->native_handle();
+    auto th_handle = (pthread_t) ntnh;
+    
 #if defined(__linux__) && defined(CPU_SET)
     cpu_set_t mask;
     CPU_ZERO(&mask);
@@ -391,7 +403,16 @@ static inline ssize_t ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
     if (sched_setaffinity(gettid(), sizeof(mask), &mask) != 0) 
         return EINVAL;
     return (ff_setPriority(priority_level));
+
 #elif defined(__APPLE__) && MAC_OS_X_HAS_AFFINITY
+
+    thread_affinity_policy_data_t policy = { cpu_id };
+    thread_port_t mach_thread = pthread_mach_thread_np(th_handle);
+    thread_policy_set(mach_thread, THREAD_AFFINITY_POLICY,
+                    (thread_policy_t)&policy, 1);
+    //std::cerr << "Binding " << mach_thread << " to core " << cpu_id << "\n";
+    return(0);
+    /*    
     // Mac OS does not implement direct pinning of threads onto cores.
     // Threads can be organised in affinity set. Using requested CPU
     // tag for the set. Cores under the same L2 cache are not distinguished. 
@@ -407,23 +428,24 @@ static inline ssize_t ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
       if (sysctlbyname("hw.cacheconfig", &cacheconfig[0], &len, NULL, 0) != 0)
         perror("sysctl: unable to get hw.cacheconfig");
       else {
-      /*
+      
           for (size_t i=0;i<CACHE_LEVELS;i++)
           std::cerr << " Cache " << i << " shared by " <<  cacheconfig[i] << " cores\n";
-      */
+      
       struct thread_affinity_policy mypolicy;
       // Define sets taking in account pinning is performed on L2
       mypolicy.affinity_tag = cpu_id/cacheconfig[CACHE_L2];
       if ( thread_policy_set(mach_thread_self(), THREAD_AFFINITY_POLICY, (integer_t*) &mypolicy, THREAD_AFFINITY_POLICY_COUNT) != KERN_SUCCESS ) {
           perror("thread_policy_set: unable to set affinity of thread");
           return EINVAL;
-      } // else {
-      //   std::cerr << "Sucessfully set affinity of thread (" << 
-      //   mach_thread_self() << ") to core " << cpu_id/cacheconfig[CACHE_L2] << "\n";
-      // }
+      }  else {
+         std::cerr << "Sucessfully set affinity of thread (" << 
+         mach_thread_self() << ") to core " << cpu_id/cacheconfig[CACHE_L2] << "\n";
+       }
       }
    }
     return(ff_setPriority(priority_level));
+    */
 #elif defined(_WIN32)
     if (-1==SetThreadIdealProcessor(GetCurrentThread(),cpu_id)) {
         perror("ff_mapThreadToCpu:SetThreadIdealProcessor");

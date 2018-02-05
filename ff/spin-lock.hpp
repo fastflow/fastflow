@@ -54,16 +54,9 @@ namespace ff {
 
 ALIGN_TO_PRE(CACHE_LINE_SIZE) struct AtomicFlagWrapper {
 /* MA: MSVS 2013 does not allow initialisation of lock-free atomic_flag in the constructor. 
-	Before removing the conditional compilation we should double-check that initialisation with .clear() really works in 
-    all platforms.  
+   This should be safe as construction should be before any cuncurrent usage 
 */
-#ifndef _MSC_VER
-    AtomicFlagWrapper():F(ATOMIC_FLAG_INIT) {}
-#else
-	AtomicFlagWrapper() {
-		F.clear();
-		}
-#endif
+	AtomicFlagWrapper() { F.clear(); }
     // std::atomic_flag isn't copy-constructible, nor copy-assignable
     
     bool test_and_set(std::memory_order mo) {
@@ -73,7 +66,7 @@ ALIGN_TO_PRE(CACHE_LINE_SIZE) struct AtomicFlagWrapper {
         F.clear(mo);
     }	
 
-	std::atomic_flag F;
+	std::atomic_flag F; // = ATOMIC_FLAG_INIT;
 }ALIGN_TO_POST(CACHE_LINE_SIZE);
 
 typedef AtomicFlagWrapper lock_t[1];
@@ -268,17 +261,13 @@ static __always_inline void spin_unlock(lock_t lock)
 // (icpc -E -dM -std=c++11 -x c++ /dev/null | grep GXX_EX)
 #if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
 
+
+    
 ALIGN_TO_PRE(CACHE_LINE_SIZE) struct AtomicFlagWrapper {
 /* MA: MSVS 2013 does not allow initialisation of lock-free atomic_flag in the constructor. 
-	Before removing the conditional compilation we should double-check that initialisation with .clear() really works in all platforms. 
+   This should be safe as construction should be before any cuncurrent usage 
 */
-#ifndef _MSC_VER
-    AtomicFlagWrapper():F(ATOMIC_FLAG_INIT) {}
-#else
-	AtomicFlagWrapper() {
-		F.clear();
-		}
-#endif
+	AtomicFlagWrapper() { F.clear(); }
     // std::atomic_flag isn't copy-constructible, nor copy-assignable
     
     bool test_and_set(std::memory_order mo) {
@@ -288,9 +277,9 @@ ALIGN_TO_PRE(CACHE_LINE_SIZE) struct AtomicFlagWrapper {
         F.clear(mo);
     }	
 
-	std::atomic_flag F;
+	std::atomic_flag F; // = ATOMIC_FLAG_INIT;
 }ALIGN_TO_POST(CACHE_LINE_SIZE);
-
+    
 typedef AtomicFlagWrapper lock_t[1];
 
 _INLINE void init_unlocked(lock_t l) { }

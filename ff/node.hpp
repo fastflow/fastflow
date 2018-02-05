@@ -35,6 +35,7 @@
 #include <stdlib.h>
 #include <iosfwd>
 #include <functional>
+#include <thread>
 #include <ff/platforms/platform.h>
 #include <ff/cycle.h>
 #include <ff/utils.hpp>
@@ -62,7 +63,6 @@ enum fftype {
 	FARM, PIPE, EMITTER, WORKER, OCL_WORKER, TPC_WORKER, COLLECTOR
 };
 
-// TODO: Should be rewritten in terms of mapping_utils.hpp 
 #if defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
 
     /*
@@ -77,6 +77,8 @@ enum fftype {
      * \param cpuID is the identifier the core
      * \return -2  if error, the cpu identifier if successful
      */
+
+ #ifdef 0
 static inline int init_thread_affinity(pthread_attr_t*attr, int cpuId) {
     // This is linux-specific code
     cpu_set_t cpuset;    
@@ -126,7 +128,7 @@ static inline int init_thread_affinity(pthread_attr_t*,int) {
     return -1;
 }
 #endif /* HAVE_PTHREAD_SETAFFINITY_NP */
-
+#endif
 
 // forward decl
 /*
@@ -272,7 +274,7 @@ public:
     
     virtual int spawn(int cpuId=-1) {
         if (spawned) return -1;
-
+        /*
         if ((attr = (pthread_attr_t*)malloc(sizeof(pthread_attr_t))) == NULL) {
             printf("spawn: pthread can not be created, malloc failed\n");
             return -1;
@@ -284,7 +286,10 @@ public:
 
         int CPUId = init_thread_affinity(attr, cpuId);
         if (CPUId==-2) return -2;
-        if (barrier) tid= barrier->getCounter();
+        */
+        //if (barrier) tid= barrier->getCounter();
+        // MA
+        /*
         int r=0;
         if ((r=pthread_create(&th_handle, attr,
                               proxy_thread_routine, this)) != 0) {
@@ -292,9 +297,24 @@ public:
             perror("pthread_create: pthread creation failed.");
             return -2;
         }
+        */
+        if (barrier) tid= barrier->getCounter();
+        t_handle = std::thread(proxy_thread_routine, this);
+        auto ntnh = t_handle.native_handle();
+        th_handle = (pthread_t) ntnh;
+        
+#if !defined(NO_DEFAULT_MAPPING)
+        // pthread native code - non portable
+        if (cpuId<0)
+            if ((cpuId = threadMapper::instance()->getCoreId())<0)
+                return -2;
+        //std::cerr << "B: " << th_handle << " -> [" << cpuId << "]\n";
+        ff_mapThreadToCpu(cpuId,&t_handle);
+#endif
+        
         if (barrier) barrier->incCounter();
         spawned = true;
-        return CPUId;
+        return cpuId;
     }
      
     virtual int wait() {
@@ -305,7 +325,9 @@ public:
             thaw();
         }
         if (spawned) {
-            pthread_join(th_handle, NULL);
+            // MA
+            // pthread_join(th_handle, NULL);
+            t_handle.join();
             if (barrier) barrier->decCounter();
         }
         if (attr) {
@@ -374,6 +396,7 @@ private:
     int             freezing;   // changed from bool to int
     bool            frozen,isdone;
     bool            init_error;
+    std::thread     t_handle;
     pthread_t       th_handle;
     pthread_attr_t *attr;
     pthread_mutex_t mutex; 
@@ -1280,7 +1303,8 @@ private:
         }
         
         int svc_init() {
-#if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
+            //#if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
+#if 0            
             int cpuId = filter->getCPUId();
             if (ff_mapThreadToCpu((cpuId<0) ? (cpuId=threadMapper::instance()->getCoreId(tid)) : cpuId)!=0)
                 error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());            
