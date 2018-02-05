@@ -1,3 +1,7 @@
+* v.2.2 (TAG v.2.2)
+   - main developemnt repository migrated to GitHub, the sourceforge SVN
+   will be no longer updated. GOTO https://github.com/fastflow/fastflow
+   - bugfix
 * v.2.1.3  
    - introduced a the possibility to add a "manager channel" in the farm emitter for reconfiguring farm's workers (see tests/test_multi_output5.cpp)
    - the initial barrier can be avoided by undefining the FF_INITIAL_BARRIER define in config.hpp
