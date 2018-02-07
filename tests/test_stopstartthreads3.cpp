@@ -124,7 +124,7 @@ private:
 class Worker:public ff_node_t<long> {
 public:
     int svc_init() {
-        printf("worker%ld (%ld) woken up\n", get_my_id(), getOSThreadId());
+        printf("worker%ld (%ld) woken up\n", get_my_id(), getFFThreadId());
         return 0;
     }
     long *svc(long *t) {

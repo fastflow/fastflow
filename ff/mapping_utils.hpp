@@ -93,14 +93,21 @@ static inline int gettid() { return syscall(__NR_gettid);}
 static inline size_t ff_getThreadID() {
 #if (defined(__GNUC__) && defined(__linux))
     return  gettid();
-#elif defined(__APPLE__) && MAC_OS_X_HAS_AFFINITY
-    //uint64_t tid;
-    // pthread_getthreadid_np(NULL, &tid); // MA: for some reasons does nto works (it was working)
-    //return (long) tid; // > 10.6 only
+#elif defined(__APPLE__)
+    std::hash<std::thread::id> threadhashf;
+    size_t t = threadhashf(std::this_thread::get_id());
+    return(t);
 #elif defined(_WIN32)
     return GetCurrentThreadId();
 #endif
     return -1;
+}
+
+static inline std::thread::id ff_getOSThreadID() {
+    return(std::this_thread::get_id());
+/*
+
+*/
 }
 
 /** 
@@ -138,47 +145,13 @@ static inline unsigned long ff_getCpuFreq() {
 /**
  *  \brief Returns the number of cores in the system
  *
- *  It returns the number of cores present in the system. (Note that it does
- *  take into account hyperthreading). It works on Linux OS, Apple OS and
- *  Windows.
+ *  It returns the number of hardware threads present in the system.
  *
  *  \return An integer value showing the number of cores.
  */
 static inline ssize_t ff_numCores() {
-    ssize_t  n=-1;
-#if defined(__linux__)    
-#if defined(MAMMUT)
-    mammut::Mammut m;
-    std::vector<mammut::topology::Cpu*> cpus = m.getInstanceTopology()->getCpus();
-    if (cpus.size()>0 && cpus[0]->getPhysicalCores().size()>0) {
-        n = 0;
-        for(size_t i = 0; i < cpus.size(); i++){
-            std::vector<mammut::topology::PhysicalCore*> phyCores  = cpus.at(i)->getPhysicalCores();
-            std::vector<mammut::topology::VirtualCore*>  virtCores = phyCores.at(0)->getVirtualCores();
-            n+= phyCores.size()*virtCores.size();
-        }
-    }
-#else
-    FILE       *f;    
-    f = popen("cat /proc/cpuinfo |grep processor | wc -l", "r");
-    if (fscanf(f, "%ld", &n) == EOF) { pclose(f); return n;}
-    pclose(f);
-#endif // MAMMUT
-
-#elif defined(__APPLE__) // BSD
-    int nn;
-    size_t len = sizeof(nn);
-    if (sysctlbyname("hw.logicalcpu", &nn, &len, NULL, 0) == -1)
-        perror("sysctl");
-    n = nn;
-#elif defined(_WIN32)
-    SYSTEM_INFO sysinfo;
-    GetSystemInfo( &sysinfo );
-    n = sysinfo.dwNumberOfProcessors;
-#else
-//#warning "Cannot detect num. of cores."
-#endif
-    return n;
+    //std::cerr << std::thread::hardware_concurrency() << "\n";
+    return(ssize_t(std::thread::hardware_concurrency()));
 }
 
 
@@ -376,7 +349,7 @@ return -1;
 static inline ssize_t ff_getMyCpu() { return ff_getMyCore(); }
 
 /** 
- *  \brief Maps the calling thread to the given CPU.
+ *  \brief Maps a thread to the given CPU.
  *
  *  It maps the calling thread to the given core. It works on Linux OS, Apple
  *  OS, Windows.
@@ -412,40 +385,6 @@ static inline ssize_t ff_mapThreadToCpu(int cpu_id, std::thread *t_handle=NULL, 
                     (thread_policy_t)&policy, 1);
     //std::cerr << "Binding " << mach_thread << " to core " << cpu_id << "\n";
     return(0);
-    /*    
-    // Mac OS does not implement direct pinning of threads onto cores.
-    // Threads can be organised in affinity set. Using requested CPU
-    // tag for the set. Cores under the same L2 cache are not distinguished. 
-    // Should be called before running the thread.   
-#define CACHE_LEVELS 3
-#define CACHE_L2     2
-    size_t len;
-
-    if (sysctlbyname("hw.cacheconfig",NULL, &len, NULL, 0) != 0) {
-        perror("sysctl");
-    } else {
-        std::vector<int64_t> cacheconfig(len);
-      if (sysctlbyname("hw.cacheconfig", &cacheconfig[0], &len, NULL, 0) != 0)
-        perror("sysctl: unable to get hw.cacheconfig");
-      else {
-      
-          for (size_t i=0;i<CACHE_LEVELS;i++)
-          std::cerr << " Cache " << i << " shared by " <<  cacheconfig[i] << " cores\n";
-      
-      struct thread_affinity_policy mypolicy;
-      // Define sets taking in account pinning is performed on L2
-      mypolicy.affinity_tag = cpu_id/cacheconfig[CACHE_L2];
-      if ( thread_policy_set(mach_thread_self(), THREAD_AFFINITY_POLICY, (integer_t*) &mypolicy, THREAD_AFFINITY_POLICY_COUNT) != KERN_SUCCESS ) {
-          perror("thread_policy_set: unable to set affinity of thread");
-          return EINVAL;
-      }  else {
-         std::cerr << "Sucessfully set affinity of thread (" << 
-         mach_thread_self() << ") to core " << cpu_id/cacheconfig[CACHE_L2] << "\n";
-       }
-      }
-   }
-    return(ff_setPriority(priority_level));
-    */
 #elif defined(_WIN32)
     if (-1==SetThreadIdealProcessor(GetCurrentThread(),cpu_id)) {
         perror("ff_mapThreadToCpu:SetThreadIdealProcessor");

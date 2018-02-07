@@ -66,7 +66,7 @@ struct Emitter: ff_node_t<long> {
 
     long *svc(long *task) { 
         const long &t = reinterpret_cast<long>(task);
-        printf("Emitter, OS threadId=%ld  received %ld\n", getOSThreadId(), t);
+        printf("Emitter, OS threadId=%ld  received %ld\n", getFFThreadId(), t);
         if (t == 5) return EOSW; // this is propagated to the workers
         return task; 
     }
@@ -82,14 +82,14 @@ struct Worker: ff_node_t<long> {
 	return task; 
     }
     void svc_end() {
-	printf("Worker%ld, OS threadId=%ld svc_end() called\n", get_my_id(), getOSThreadId());
+	printf("Worker%ld, OS threadId=%ld svc_end() called\n", get_my_id(), getFFThreadId());
     }
 };
 
 struct Collector: ff_node_t<long> {
     Collector(const size_t nworkers):nworkers(nworkers),neos(0) {}
     long *svc(long *task) { 
-        printf("Collector, OS threadId=%ld, received %ld\n", getOSThreadId(), reinterpret_cast<long>(task));
+        printf("Collector, OS threadId=%ld, received %ld\n", getFFThreadId(), reinterpret_cast<long>(task));
 	return task; 
     }
 

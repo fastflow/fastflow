@@ -63,73 +63,6 @@ enum fftype {
 	FARM, PIPE, EMITTER, WORKER, OCL_WORKER, TPC_WORKER, COLLECTOR
 };
 
-#if defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
-
-    /*
-     *
-     * \brief Initialize thread affinity 
-     * It initializes thread affinity i.e. which cpu the thread should be
-     * assigned.
-     *
-     * \note Linux-specific code
-     *
-     * \param attr is the pthread attribute
-     * \param cpuID is the identifier the core
-     * \return -2  if error, the cpu identifier if successful
-     */
-
- #ifdef 0
-static inline int init_thread_affinity(pthread_attr_t*attr, int cpuId) {
-    // This is linux-specific code
-    cpu_set_t cpuset;    
-    CPU_ZERO(&cpuset);
-
-    int id;
-    if (cpuId<0) {
-        id = threadMapper::instance()->getCoreId();
-        CPU_SET (id, &cpuset);
-    } else  {
-        id = cpuId;
-        CPU_SET (cpuId, &cpuset);
-    }
-
-    if (pthread_attr_setaffinity_np (attr, sizeof(cpuset), &cpuset)<0) {
-        perror("pthread_attr_setaffinity_np");
-        return -2;
-    }
-    return id;    
-}
-#elif !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
-
-/*
- * \brief Initializes thread affinity
- *
- * It initializes thread affinity i.e. it defines to which core ths thread
- * should be assigned.
- *
- * \return always return -1 because no thread mapping is done
- */
-static inline int init_thread_affinity(pthread_attr_t*,int) {
-    // Ensure that the threadMapper constructor is called
-    threadMapper::instance();
-    return -1;
-}
-#else
-/*
- * \brief Initializes thread affinity
- *
- * It initializes thread affinity i.e. it defines to which core ths thread
- * should be assigned.
- *
- * \return always return -1 because no thread mapping is done
- */
-static inline int init_thread_affinity(pthread_attr_t*,int) {
-    // Do nothing
-    return -1;
-}
-#endif /* HAVE_PTHREAD_SETAFFINITY_NP */
-#endif
-
 // forward decl
 /*
  * \brief Proxy thread routine
@@ -274,30 +207,6 @@ public:
     
     virtual int spawn(int cpuId=-1) {
         if (spawned) return -1;
-        /*
-        if ((attr = (pthread_attr_t*)malloc(sizeof(pthread_attr_t))) == NULL) {
-            printf("spawn: pthread can not be created, malloc failed\n");
-            return -1;
-        }
-        if (pthread_attr_init(attr)) {
-                perror("pthread_attr_init: pthread can not be created.");
-                return -1;
-        }
-
-        int CPUId = init_thread_affinity(attr, cpuId);
-        if (CPUId==-2) return -2;
-        */
-        //if (barrier) tid= barrier->getCounter();
-        // MA
-        /*
-        int r=0;
-        if ((r=pthread_create(&th_handle, attr,
-                              proxy_thread_routine, this)) != 0) {
-            errno=r;
-            perror("pthread_create: pthread creation failed.");
-            return -2;
-        }
-        */
         if (barrier) tid= barrier->getCounter();
         t_handle = std::thread(proxy_thread_routine, this);
         auto ntnh = t_handle.native_handle();
@@ -383,7 +292,7 @@ public:
     pthread_t get_handle() const { return th_handle;}
 
     inline size_t getTid() const { return tid; }
-    inline size_t getOSThreadId() const { return threadid; }
+    inline size_t getFFThreadId() const { return threadid; }
 
 protected:
     fftree       *  fftree_ptr;         /// fftree stuff
@@ -929,7 +838,7 @@ public:
      * The returned id is valid (>0) only if the node is an active node (i.e. the thread has been created).
      *
      */
-    inline size_t getOSThreadId() const { if (thread) return thread->getOSThreadId(); return 0; }
+    inline size_t getFFThreadId() const { if (thread) return thread->getFFThreadId(); return 0; }
 
 
 #if defined(FF_TASK_CALLBACK)
@@ -1304,10 +1213,10 @@ private:
         
         int svc_init() {
             //#if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
-#if 0            
+#if 0
             int cpuId = filter->getCPUId();
             if (ff_mapThreadToCpu((cpuId<0) ? (cpuId=threadMapper::instance()->getCoreId(tid)) : cpuId)!=0)
-                error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());            
+                error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());
             filter->setCPUId(cpuId);
 #endif
             gettimeofday(&filter->tstart,NULL);

@@ -129,7 +129,8 @@ int main(int argc, char * argv[]) {
         return -1;
     }
     
-	std::cout << "Detected num of cores " << ff_numCores() << "\n"; 
+	std::cout << "Detected num of cores " << ff_realNumCores() << "\n";
+    std::cout << "Detected num of threads " << ff_numCores() << "\n";
 
     ff_farm<> farm;
 
