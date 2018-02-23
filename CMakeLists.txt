@@ -145,6 +145,7 @@ set(FFHEADERS
  ${FF}/buffer.hpp
  ${FF}/config.hpp
  ${FF}/cycle.h
+ ${FF}/dc.hpp
  ${FF}/dinout.hpp
  ${FF}/dnode.hpp
  ${FF}/dynlinkedlist.hpp
