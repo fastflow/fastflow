@@ -48,7 +48,6 @@
 #if defined(FF_TPC)
 
 #include <cstdlib>
-//#include <pthread.h>
 #include <atomic>
 
 #include <ff/utils.hpp>
