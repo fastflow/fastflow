@@ -61,7 +61,6 @@
 #include <CL/opencl.h>
 #endif
 
-#include <pthread.h>
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
@@ -74,7 +73,7 @@
 
 namespace ff {
 
-static pthread_mutex_t instanceMutex = PTHREAD_MUTEX_INITIALIZER;
+static std::mutex instanceMutex;
 
 struct oclParameter {
     oclParameter(cl_device_id d_id):d_id(d_id){}
@@ -182,13 +181,13 @@ public:
     static inline clEnvironment * instance() {
         while (!m_clEnvironment) {
             //std::cerr << "clEnvironment instance\n";
-            pthread_mutex_lock(&instanceMutex);
+        	instanceMutex.lock();
             if (!m_clEnvironment) {
                 m_clEnvironment = new clEnvironment();
                 //std::cerr << "clEnvironment instance\n";
             }
             assert(m_clEnvironment);
-            pthread_mutex_unlock(&instanceMutex);
+            instanceMutex.unlock();
          }
          return m_clEnvironment; 
     }
@@ -212,7 +211,7 @@ public:
         cl_device_type dt;
         size_t count = n;
         std::vector<ssize_t> ret;
-        pthread_mutex_lock(&instanceMutex);
+        instanceMutex.lock();
         //start from either the user-defined preferred_dev or the last RR-allocated device
         size_t dev = (preferred_dev>=0)? (preferred_dev%clDevices.size()): lastAssigned;
         //perform multiple passes over the device list,
@@ -246,7 +245,7 @@ public:
 			}
 			//continue to next pass
 		}
-        pthread_mutex_unlock(&instanceMutex);
+        instanceMutex.unlock();
         return ret;
     }
    
@@ -262,7 +261,7 @@ public:
     ssize_t getCPUDevice(bool exclusive=false) {
         cl_device_type dt;
         ssize_t ret=-1;
-        pthread_mutex_lock(&instanceMutex);
+        instanceMutex.lock();
         for(size_t i=0; i<clDevices.size(); i++) {
             clGetDeviceInfo(clDevices[i], CL_DEVICE_TYPE, sizeof(cl_device_type), &(dt), NULL);
             if ((!clDeviceInUse[i] | !exclusive) && ((dt) & CL_DEVICE_TYPE_CPU)) {
@@ -274,7 +273,7 @@ public:
                 break;
             }
         }
-        pthread_mutex_unlock(&instanceMutex);
+        instanceMutex.unlock();
         if (ret==-1)  std::cerr << "CPU not available or in exclusive use: aborting\n";
         return ret;
     }
