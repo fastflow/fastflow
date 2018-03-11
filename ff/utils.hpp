@@ -38,7 +38,6 @@
 //#if (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
 #include <ff/platforms/platform.h>
 //#else
-//#include <pthread.h>
 //#include <sys/time.h>
 //#endif
 
