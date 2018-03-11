@@ -29,6 +29,7 @@
  ****************************************************************************
  */
 
+#include <mutex>
 #include <stdlib.h>
 #include <ff/platforms/platform.h>
 #include <ff/utils.hpp>
@@ -72,14 +73,6 @@ struct ffBarrier {
 class Barrier: public ffBarrier {
 public:   
     Barrier(const size_t=MAX_NUM_THREADS):threadCounter(0),_barrier(0) {
-        if (pthread_mutex_init(&bLock,NULL)!=0) {
-            error("FATAL ERROR: Barrier: pthread_mutex_init fails!\n");
-            abort();
-        }
-        if (pthread_cond_init(&bCond,NULL)!=0) {
-            error("FATAL ERROR: Barrier: pthread_cond_init fails!\n");
-            abort();
-        }
     }
 
     /**
@@ -97,13 +90,13 @@ public:
     }
 
     inline void doBarrier(size_t id) {
-        pthread_mutex_lock(&bLock);
-        if (++counter == _barrier) {
-            pthread_cond_broadcast(&bCond);
-            counter = 0;
-        }
-        else pthread_cond_wait(&bCond, &bLock);
-        pthread_mutex_unlock(&bLock);
+		std::unique_lock<std::mutex> lk(bLock);
+		if (++counter == _barrier) {
+			counter = 0;
+			lk.unlock(); //notification does not need the lock
+			bCond.notify_all();
+		} else
+			bCond.wait(lk);
     }
 
     // TODO: better move counter methods in a different class
@@ -117,15 +110,55 @@ private:
 
     // it is the number of threads in the barrier. 
     size_t _barrier, counter;
-    pthread_mutex_t bLock;  // Mutex variable
-    pthread_cond_t  bCond;  // Condition variable
+    std::mutex bLock;
+    std::condition_variable  bCond;
+};
+
+#elif __has_include(<experimental/barrier>)
+    /**
+     *   implementation based on standard barrier
+     *
+     */ 
+#include <experimental/barrier>
+
+class Barrier: public ffBarrier {
+public:
+    Barrier(const size_t=MAX_NUM_THREADS):threadCounter(0),_barrier(0) { }
+    ~Barrier() { if (_barrier>0) delete bar; }
+
+    inline int barrierSetup(size_t init) {
+		assert(init>0);
+		if (_barrier == init) return 0;
+		if (_barrier==0) {
+			bar = new std::experimental::barrier(init);
+			_barrier = init;
+		}
+		else {
+			delete bar;
+			bar = new std::experimental::barrier(init);
+		}
+		return 0;
+    }
+
+    inline void doBarrier(size_t) {
+        bar->arrive_and_wait();
+    }
+
+    // TODO: better move counter methods in a different class
+    inline size_t getCounter() const { return threadCounter;}
+    inline void     incCounter()       { ++threadCounter;}
+    inline void     decCounter()       { --threadCounter;}
+
+private:
+    // This is just a counter, and is used to set the ff_node::tid value.
+    size_t            threadCounter;
+
+    // it is the number of threads in the barrier.
+    size_t _barrier;
+    std::experimental::barrier *bar = nullptr;
 };
 
 #else
-    /**
-     *   pthread_barrier based implementation
-     *
-     */ 
 class Barrier: public ffBarrier {
 public:
     Barrier(const size_t=MAX_NUM_THREADS):threadCounter(0),_barrier(0) { }
