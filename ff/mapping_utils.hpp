@@ -366,7 +366,6 @@ static inline ssize_t ff_mapThreadToCpu(int cpu_id, std::thread *t_handle=NULL, 
         //std::cerr << "ff_mapThreadToCpu: cannot set affinity of " << t_handle << " with " << cpu_id << "\n";
         return EINVAL;
     }
-    auto ntnh = t_handle->native_handle();
     
 #if defined(__linux__) && defined(CPU_SET)
     cpu_set_t mask;
@@ -378,6 +377,7 @@ static inline ssize_t ff_mapThreadToCpu(int cpu_id, std::thread *t_handle=NULL, 
 
 #elif defined(__APPLE__) && MAC_OS_X_HAS_AFFINITY
 
+    auto ntnh = t_handle->native_handle();
     auto th_handle = (pthread_t) ntnh;
     thread_affinity_policy_data_t policy = { cpu_id };
     thread_port_t mach_thread = pthread_mach_thread_np(th_handle);
