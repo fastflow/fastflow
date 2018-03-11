@@ -48,7 +48,7 @@
 #if defined(FF_TPC)
 
 #include <cstdlib>
-#include <pthread.h>
+//#include <pthread.h>
 #include <atomic>
 
 #include <ff/utils.hpp>
@@ -59,7 +59,7 @@ using namespace tpc;
 namespace ff {
 
 
-static pthread_mutex_t tpcInstanceMutex = PTHREAD_MUTEX_INITIALIZER;
+static std::mutex tpcInstanceMutex;
 
 
 /*!
@@ -107,12 +107,12 @@ public:
    
     static inline tpcEnvironment * instance() {
         while (!m_tpcEnvironment) {
-            pthread_mutex_lock(&tpcInstanceMutex);
+        	tpcInstanceMutex.lock();
             if (!m_tpcEnvironment) {
                 m_tpcEnvironment = new tpcEnvironment();
             }
             assert(m_tpcEnvironment);
-            pthread_mutex_unlock(&tpcInstanceMutex);
+            tpcInstanceMutex.unlock();
         }
         return m_tpcEnvironment; 
     }
