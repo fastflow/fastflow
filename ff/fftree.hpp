@@ -205,7 +205,7 @@ struct fftree {
 		os << (ispattern() ? "]" : ")");
 	}
 
-	size_t threadcount(threadcount_t *tc) {
+	size_t threadcount(threadcount_t *tc) const {
 		size_t cnt = !ispattern();
 		if (cnt) {
 			tc->n_emitter   += nodetype == EMITTER;
