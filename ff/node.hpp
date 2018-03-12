@@ -840,6 +840,8 @@ public:
      */
     inline size_t getFFThreadId() const { if (thread) return thread->getFFThreadId(); return 0; }
 
+    fftree *getfftree() const   { return fftree_ptr;}
+
 
 #if defined(FF_TASK_CALLBACK)
     virtual void callbackIn(void *t=NULL)  { }
@@ -1103,7 +1105,6 @@ protected:
             in_active= onoff;
     }
 
-    fftree *getfftree() const   { return fftree_ptr;}
     void setfftree(const fftree *ptr) { 
         fftree_ptr=const_cast<fftree*>(ptr); 
     }
