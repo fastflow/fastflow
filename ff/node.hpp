@@ -250,7 +250,6 @@ protected:
         return 0;
     }
 
-    fftree *getfftree() const   { return fftree_ptr;}
     void setfftree(const fftree *ptr) { 
         fftree_ptr=const_cast<fftree*>(ptr); 
     }
@@ -362,6 +361,8 @@ public:
 
     inline size_t getTid() const { return tid; }
     inline size_t getOSThreadId() const { return threadid; }
+
+    fftree *getfftree() const   { return fftree_ptr;}
 
 protected:
     fftree       *  fftree_ptr;         /// fftree stuff
