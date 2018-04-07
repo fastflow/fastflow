@@ -135,8 +135,11 @@ static const size_t FF_TAG_MIN       = (FF_EOS-0xa);  /// just a lower bound mar
 
 #if defined(__APPLE__)
 #include <AvailabilityMacros.h>
-#define MAC_OS_X_HAS_AFFINITY (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && (__MAC_OS_X_VERSION_MIN_REQUIRED >= 1050))
-//defined (MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
+#if defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && (__MAC_OS_X_VERSION_MIN_REQUIRED >= 1050)
+#define MAC_OS_X_HAS_AFFINITY 1
+#else
+#define MAC_OS_X_HAS_AFFINITY 0
+#endif
 #endif
 
 //#else
