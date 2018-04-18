@@ -87,8 +87,8 @@ protected:
         }
         // blocking stuff -----------------------------------------------------
         for(int i=1;i<nstages;++i) {
-            pthread_mutex_t   *m        = NULL;
-            pthread_cond_t    *c        = NULL;
+            std::mutex   *m        = NULL;
+            std::condition_variable    *c        = NULL;
             std::atomic_ulong *counter  = NULL;
             if (!nodes_list[i]->init_input_blocking(m,c,counter)) {
                 error("PIPE, init input blocking mode for node %d\n", i);
@@ -117,8 +117,8 @@ protected:
             // this case has been managed in the previous loop...
             if (nodes_list[i+1]->isMultiInput()) continue;
 
-            pthread_mutex_t   *m        = NULL;
-            pthread_cond_t    *c        = NULL;
+            std::mutex   *m        = NULL;
+            std::condition_variable    *c        = NULL;
             std::atomic_ulong *counter  = NULL;
             if (!nodes_list[i]->init_output_blocking(m,c,counter)) {
                 error("PIPE, init output blocking mode for node %d\n", i);
@@ -147,8 +147,8 @@ protected:
                 }
             }
 
-            pthread_mutex_t   *m        = NULL;
-            pthread_cond_t    *c        = NULL;
+            std::mutex   *m        = NULL;
+            std::condition_variable    *c        = NULL;
             std::atomic_ulong *counter  = NULL;
 
             // set blocking input for the first stage (cons_m,...)
@@ -313,16 +313,16 @@ public:
         const int last = static_cast<int>(nodes_list.size())-1;
 
         // blocking stuff for the first and last stage of the pipeline
-        pthread_mutex_t   *mi        = NULL;
-        pthread_cond_t    *ci        = NULL;
+        std::mutex   *mi        = NULL;
+        std::condition_variable    *ci        = NULL;
         std::atomic_ulong *counteri  = NULL;
         if (!init_input_blocking(mi,ci,counteri)) {
             error("PIPE, init input blocking mode for node %d\n", 0);
             return -1;
         }
         set_output_blocking(mi,ci,counteri);
-        pthread_mutex_t   *mo        = NULL;
-        pthread_cond_t    *co        = NULL;
+        std::mutex   *mo        = NULL;
+        std::condition_variable    *co        = NULL;
         std::atomic_ulong *countero  = NULL;
         if (!init_output_blocking(mo,co,countero)) {
             error("PIPE, init output blocking mode for node %d\n", last);
@@ -553,19 +553,19 @@ public:
          if (ff_node::blocking_out) {
          _retry:
              if (inbuffer->push(task)) {
-                 pthread_mutex_lock(p_cons_m);
+            	 std::unique_lock<std::mutex> lck(*p_cons_m);
                  if ((*p_cons_counter).load() == 0)
-                     pthread_cond_signal(p_cons_c);
+                     p_cons_c->notify_one();
                  ++(*p_cons_counter);
-                 pthread_mutex_unlock(p_cons_m);
+                 lck.unlock();
                  ++prod_counter;
                  return true;
              } 
-             pthread_mutex_lock(prod_m);
+             std::unique_lock<std::mutex> lck(*prod_m);
              while(prod_counter.load() >= (inbuffer->buffersize())) {
-                 pthread_cond_wait(prod_c, prod_m);
+                 prod_c->wait(lck);
              }
-             pthread_mutex_unlock(prod_m);
+             lck.unlock();
              goto _retry;
          }
          for(unsigned long i=0;i<retry;++i) {
@@ -604,22 +604,22 @@ public:
         if (ff_node::blocking_in) {
         _retry:
             if (outbuffer->pop(task)) {
-                pthread_mutex_lock(p_prod_m);
+            	std::unique_lock<std::mutex> lck(*p_prod_m);
                 if ((*p_prod_counter).load() >= outbuffer->buffersize()) {
-                    pthread_cond_signal(p_prod_c);
+                    p_prod_c->notify_one();
                 }
                 --(*p_prod_counter);
-                pthread_mutex_unlock(p_prod_m);
+                lck.unlock();
                 --cons_counter;
                 
                 if ((*task != (void *)FF_EOS)) return true;
                 else return false;
             }
-            pthread_mutex_lock(cons_m);
+            std::unique_lock<std::mutex> lck(*cons_m);
             while(cons_counter.load() == 0) {
-                pthread_cond_wait(cons_c, cons_m);
+                cons_c->wait(lck);
             }
-            pthread_mutex_unlock(cons_m);
+            lck.unlock();
             goto _retry;
         }
         for(unsigned long i=0;i<retry;++i) {
@@ -735,42 +735,42 @@ protected:
     }
 
     // consumer
-    virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c,
+    virtual inline bool init_input_blocking(std::mutex   *&m,
+                                            std::condition_variable    *&c,
                                             std::atomic_ulong *&counter) {
         return nodes_list[0]->init_input_blocking(m,c,counter);
     }
-    virtual inline void set_input_blocking(pthread_mutex_t   *&m,
-                                           pthread_cond_t    *&c,
+    virtual inline void set_input_blocking(std::mutex   *&m,
+                                           std::condition_variable    *&c,
                                            std::atomic_ulong *&counter) {
         nodes_list[0]->set_input_blocking(m,c,counter);
     }    
 
     // producer
-    virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
-                                             pthread_cond_t    *&c,
+    virtual inline bool init_output_blocking(std::mutex   *&m,
+                                             std::condition_variable    *&c,
                                              std::atomic_ulong *&counter) {
         const int last = static_cast<int>(nodes_list.size())-1;
         if (last<0) return false;
         return nodes_list[last]->init_output_blocking(m,c,counter);
     }
-    virtual inline void set_output_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c,
+    virtual inline void set_output_blocking(std::mutex   *&m,
+                                            std::condition_variable    *&c,
                                             std::atomic_ulong *&counter) {
         const int last = static_cast<int>(nodes_list.size())-1;
         if (last<0) return;
         nodes_list[last]->set_output_blocking(m,c,counter);
     }
 
-    virtual inline pthread_mutex_t   &get_cons_m()        { return nodes_list[0]->get_cons_m();}
-    virtual inline pthread_cond_t    &get_cons_c()        { return nodes_list[0]->get_cons_c();}
+    virtual inline std::mutex   &get_cons_m()        { return nodes_list[0]->get_cons_m();}
+    virtual inline std::condition_variable    &get_cons_c()        { return nodes_list[0]->get_cons_c();}
     virtual inline std::atomic_ulong &get_cons_counter()  { return nodes_list[0]->get_cons_counter();}
 
-    virtual inline pthread_mutex_t &get_prod_m()        { 
+    virtual inline std::mutex &get_prod_m()        {
         const int last = static_cast<int>(nodes_list.size())-1;
         return nodes_list[last]->get_prod_m();
     }
-    virtual inline pthread_cond_t  &get_prod_c()        { 
+    virtual inline std::condition_variable  &get_prod_c()        {
         const int last = static_cast<int>(nodes_list.size())-1;
         return nodes_list[last]->get_prod_c();
     }

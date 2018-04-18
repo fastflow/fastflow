@@ -46,6 +46,7 @@
 #include <ff/svector.hpp>
 #include <ff/barrier.hpp>
 #include <atomic>
+#include <condition_variable>
 
 static void *GO_ON        = (void*)ff::FF_GO_ON;
 static void *GO_OUT       = (void*)ff::FF_GO_OUT;
@@ -93,23 +94,6 @@ protected:
         spawned(false),
         freezing(0), frozen(false),isdone(false),
         init_error(false), attr(NULL) {
-        
-        /* Attr is NULL, default mutex attributes are used. Upon successful
-         * initialization, the state of the mutex becomes initialized and
-         * unlocked. 
-         * */
-        if (pthread_mutex_init(&mutex,NULL)!=0) {
-            error("FATAL ERROR: ff_thread: pthread_mutex_init fails!\n");
-            abort();
-        }
-        if (pthread_cond_init(&cond,NULL)!=0) {
-            error("FATAL ERROR: ff_thread: pthread_cond_init fails!\n");
-            abort();
-        }
-        if (pthread_cond_init(&cond_frozen,NULL)!=0) {
-            error("FATAL ERROR: ff_thread: pthread_cond_init fails!\n");
-            abort();
-        }
     }
 
     virtual ~ff_thread() {}
@@ -138,21 +122,18 @@ protected:
 
             // acquire lock. While freezing is true,
             // freeze and wait. 
-            pthread_mutex_lock(&mutex);
+            std::unique_lock<std::mutex> lck(mutex);
             if (ret != EOS_NOFREEZE && !stp) {
                 if ((freezing == 0) && (ret == EOS)) stp = true;
                 while(freezing==1) { // NOTE: freezing can change to 2
                     frozen=true; 
-                    pthread_cond_signal(&cond_frozen);
-                    pthread_cond_wait(&cond,&mutex);
+                    cond_frozen.notify_one();
+                    cond.wait(lck);
                 }
             }
             
-            //thawed=true;
-            //pthread_cond_signal(&cond);
-            //frozen=false; 
             if (freezing != 0) freezing = 1; // freeze again next time 
-            pthread_mutex_unlock(&mutex);
+            lck.unlock();
 
             if (enable_cancelability()) {
                 error("ff_thread, thread_routine, could not change thread cancelability");
@@ -161,10 +142,9 @@ protected:
         } while(!stp);
         
         if (freezing) {
-            pthread_mutex_lock(&mutex);
+        	std::unique_lock<std::mutex>(mutex);
             frozen=true;
-            pthread_cond_signal(&cond_frozen);
-            pthread_mutex_unlock(&mutex);
+            cond_frozen.notify_one();
         }
         isdone = true;
     }
@@ -252,9 +232,9 @@ public:
     }
 
     virtual int wait_freezing() {
-        pthread_mutex_lock(&mutex);
-        while(!frozen) pthread_cond_wait(&cond_frozen,&mutex);
-        pthread_mutex_unlock(&mutex);
+    	std::unique_lock<std::mutex> lck(mutex);
+        while(!frozen) cond_frozen.wait(lck);
+        lck.unlock();
         return (init_error?-1:0);
     }
 
@@ -266,7 +246,7 @@ public:
     }
     
     virtual void thaw(bool _freeze=false, ssize_t=-1) {
-        pthread_mutex_lock(&mutex);
+    	std::unique_lock<std::mutex> lck(mutex);
         // if this function is called even if the thread is not 
         // in frozen state, then freezing has to be set to 1 and not 2
         //if (_freeze) freezing= (frozen?2:1); // next time freeze again the thread
@@ -278,13 +258,7 @@ public:
         else freezing=0;
         //assert(thawed==false);
         frozen=false; 
-        pthread_cond_signal(&cond);
-        pthread_mutex_unlock(&mutex);
-
-        //pthread_mutex_lock(&mutex);
-        //while(!thawed) pthread_cond_wait(&cond, &mutex);
-        //thawed=false;
-        //pthread_mutex_unlock(&mutex);
+        cond.notify_one();
     }
     virtual bool isfrozen() const { return freezing>0;} 
     virtual bool done()     const { return isdone || (frozen && !stp);}
@@ -308,9 +282,9 @@ private:
     std::thread     t_handle;
     pthread_t       th_handle;
     pthread_attr_t *attr;
-    pthread_mutex_t mutex; 
-    pthread_cond_t  cond;
-    pthread_cond_t  cond_frozen;
+    std::mutex mutex;
+    std::condition_variable  cond;
+    std::condition_variable  cond_frozen;
     int             old_cancelstate;
 };
     
@@ -411,19 +385,19 @@ protected:
         retry:
             bool r = push(ptr);
             if (r) { // OK
-                pthread_mutex_lock(p_cons_m);
+            	std::unique_lock<std::mutex> lck(*p_cons_m);
                 if ((*p_cons_counter).load() == 0) {
-                    pthread_cond_signal(p_cons_c);
+                    p_cons_c->notify_one();
                 }
                 ++(*p_cons_counter);
-                pthread_mutex_unlock(p_cons_m);
+                lck.unlock();
                 ++prod_counter;
             } else { // FULL
-                pthread_mutex_lock(prod_m);
+            	std::unique_lock<std::mutex> lck(*prod_m);
                 while(prod_counter.load() >= out->buffersize()) {
-                    pthread_cond_wait(prod_c,prod_m);
+                    prod_c->wait(lck);
                 }
-                pthread_mutex_unlock(prod_m);
+                lck.unlock();
                 goto retry;
             }
             return true;
@@ -441,19 +415,19 @@ protected:
         retry:
             bool r = in->pop(ptr);
             if (r) { // OK
-                pthread_mutex_lock(p_prod_m);
+            	std::unique_lock<std::mutex> lck(*p_prod_m);
                 if ((*p_prod_counter).load() >= in->buffersize()) {
-                    pthread_cond_signal(p_prod_c);
+                    p_prod_c->notify_one();
                 }
                 --(*p_prod_counter);
-                pthread_mutex_unlock(p_prod_m);
+                lck.unlock();
                 --cons_counter;
             } else { // EMPTY
-                pthread_mutex_lock(cons_m);
+            	std::unique_lock<std::mutex> lck(*cons_m);
                 while (cons_counter.load() == 0) {
-                    pthread_cond_wait(cons_c, cons_m);
+                    cons_c->wait(lck);
                 }
-                pthread_mutex_unlock(cons_m);
+                lck.unlock();
                 goto retry;
             }
             return true;
@@ -468,53 +442,49 @@ protected:
 
 
     // consumer
-    virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c,
+    virtual inline bool init_input_blocking(std::mutex   *&m,
+                                            std::condition_variable    *&c,
                                             std::atomic_ulong *&counter) {
         if (cons_counter.load() == (unsigned long)-1) {
-            cons_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
-            cons_c = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
+            cons_m = new std::mutex{};
+            cons_c = new std::condition_variable{};
             assert(cons_m); assert(cons_c);
-            if (pthread_mutex_init(cons_m, NULL) != 0) return false;
-            if (pthread_cond_init(cons_c, NULL) != 0)  return false;
             cons_counter.store(0);
         } 
         m = cons_m,  c = cons_c, counter = &cons_counter;
         return true;
     }
-    virtual inline void set_input_blocking(pthread_mutex_t   *&m,
-                                           pthread_cond_t    *&c,
+    virtual inline void set_input_blocking(std::mutex   *&m,
+                                           std::condition_variable    *&c,
                                            std::atomic_ulong *&counter) {
         p_prod_m = m,  p_prod_c = c,  p_prod_counter = counter;
     }    
 
     // producer
-    virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
-                                             pthread_cond_t    *&c,
+    virtual inline bool init_output_blocking(std::mutex   *&m,
+                                             std::condition_variable    *&c,
                                              std::atomic_ulong *&counter) {
         if (prod_counter.load() == (unsigned long)-1) {
-            prod_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
-            prod_c = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
+            prod_m = new std::mutex{};
+            prod_c = new std::condition_variable{};
             assert(prod_m); assert(prod_c);
-            if (pthread_mutex_init(prod_m, NULL) != 0) return false;
-            if (pthread_cond_init(prod_c, NULL) != 0)  return false;
             prod_counter.store(0);
         } 
         m = prod_m, c = prod_c, counter = &prod_counter;
         return true;
     }
-    virtual inline void set_output_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c,
+    virtual inline void set_output_blocking(std::mutex   *&m,
+                                            std::condition_variable    *&c,
                                             std::atomic_ulong *&counter) {
         p_cons_m = m, p_cons_c = c, p_cons_counter = counter;
     }
 
-    virtual inline pthread_mutex_t   &get_cons_m()       { return *cons_m;}
-    virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
+    virtual inline std::mutex   &get_cons_m()       { return *cons_m;}
+    virtual inline std::condition_variable    &get_cons_c()       { return *cons_c;}
     virtual inline std::atomic_ulong &get_cons_counter() { return cons_counter;}
 
-    virtual inline pthread_mutex_t   &get_prod_m()       { return *prod_m;}
-    virtual inline pthread_cond_t    &get_prod_c()       { return *prod_c;}
+    virtual inline std::mutex   &get_prod_m()       { return *prod_m;}
+    virtual inline std::condition_variable    &get_prod_c()       { return *prod_c;}
     virtual inline std::atomic_ulong &get_prod_counter() { return prod_counter;}
 
     /**
@@ -759,23 +729,19 @@ public:
         if (out && myoutbuffer) delete out;
         if (thread && my_own_thread) delete reinterpret_cast<thWorker*>(thread);
         if (cons_m) {
-            pthread_mutex_destroy(cons_m);
-            free(cons_m);
+            delete (cons_m);
             cons_m = nullptr;
         }
         if (cons_c) {
-            pthread_cond_destroy(cons_c);
-            free(cons_c);
+            delete (cons_c);
             cons_c = nullptr;
         }
         if (prod_m) {
-            pthread_mutex_destroy(prod_m);
-            free(prod_m);
+            delete (prod_m);
             prod_m = nullptr;
         }
         if (prod_c) {
-            pthread_cond_destroy(prod_c);
-            free(prod_c);
+            delete (prod_c);
             prod_c = nullptr;
         }
     };
@@ -1273,24 +1239,24 @@ protected:
     fftree *fftree_ptr;       //fftree stuff
 
     // for the input queue
-    pthread_mutex_t    *cons_m = nullptr;
-    pthread_cond_t     *cons_c = nullptr;
+    std::mutex    *cons_m = nullptr;
+    std::condition_variable     *cons_c = nullptr;
     std::atomic_ulong   cons_counter;
 
     // for synchronizing with the previous multi-output stage
-    pthread_mutex_t    *p_prod_m = nullptr;
-    pthread_cond_t     *p_prod_c = nullptr;
+    std::mutex    *p_prod_m = nullptr;
+    std::condition_variable     *p_prod_c = nullptr;
     std::atomic_ulong  *p_prod_counter = nullptr;
 
 
     // for the output queue
-    pthread_mutex_t    *prod_m = nullptr;
-    pthread_cond_t     *prod_c = nullptr;
+    std::mutex    *prod_m = nullptr;
+    std::condition_variable     *prod_c = nullptr;
     std::atomic_ulong   prod_counter;
 
     // for synchronizing with the next multi-input stage
-    pthread_mutex_t    *p_cons_m = nullptr;
-    pthread_cond_t     *p_cons_c = nullptr;
+    std::mutex    *p_cons_m = nullptr;
+    std::condition_variable     *p_cons_c = nullptr;
     std::atomic_ulong  *p_cons_counter = nullptr;
 
     bool               FF_MEM_ALIGN(blocking_in,32); 
@@ -1321,8 +1287,8 @@ struct ff_buffernode: ff_node {
         }
         set_output_buffer(ff_node::get_in_buffer());
         
-        pthread_mutex_t   *m        = NULL;
-        pthread_cond_t    *c        = NULL;
+        std::mutex   *m        = NULL;
+        std::condition_variable    *c        = NULL;
         std::atomic_ulong *counter  = NULL;
         
         if (!ff_node::init_output_blocking(m,c,counter)) {
@@ -1359,12 +1325,12 @@ struct ff_buffernode: ff_node {
 protected:
     void* svc(void*){return NULL;}
 
-    pthread_mutex_t   &get_cons_m()       { return *p_cons_m;}
-    pthread_cond_t    &get_cons_c()       { return *p_cons_c;}
+    std::mutex   &get_cons_m()       { return *p_cons_m;}
+    std::condition_variable    &get_cons_c()       { return *p_cons_c;}
     std::atomic_ulong &get_cons_counter() { return *p_cons_counter;}
 
-    pthread_mutex_t   &get_prod_m()       { return *p_prod_m;}
-    pthread_cond_t    &get_prod_c()       { return *p_prod_c;}
+    std::mutex   &get_prod_m()       { return *p_prod_m;}
+    std::condition_variable    &get_prod_c()       { return *p_prod_c;}
     std::atomic_ulong &get_prod_counter() { return *p_prod_counter;}
     
 

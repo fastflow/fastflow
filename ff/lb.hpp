@@ -78,81 +78,75 @@ public:
 protected:
 
     inline void put_done(int id) {
-        pthread_mutex_lock(&workers[id]->get_cons_m());
+        std::unique_lock<std::mutex> lck(workers[id]->get_cons_m());
         if ((workers[id]->get_cons_counter()).load() == 0) {
-            pthread_cond_signal(&workers[id]->get_cons_c());
+            workers[id]->get_cons_c().notify_one();
         }
         ++((workers[id]->get_cons_counter()));
-        pthread_mutex_unlock(&workers[id]->get_cons_m());       
+        lck.unlock();
         ++prod_counter;
     }
 
     inline void pop_done(ff_node *node) {
         if (!node) {
-            pthread_mutex_lock(p_prod_m);
+        	std::unique_lock<std::mutex> lck(*p_prod_m);
             if ((*p_prod_counter).load() >= buffer->buffersize()) {
-                pthread_cond_signal(p_prod_c);
+                p_prod_c->notify_one();
             }
             --(*p_prod_counter);
-            pthread_mutex_unlock(p_prod_m);
         } else {
-            pthread_mutex_lock(&node->get_prod_m());
+        	std::unique_lock<std::mutex> lck(node->get_prod_m());
             if ((node->get_prod_counter()).load() >= node->get_out_buffer()->buffersize()) {
-                pthread_cond_signal(&node->get_prod_c());
+                node->get_prod_c().notify_one();
             }
             --(node->get_prod_counter());
-            pthread_mutex_unlock(&node->get_prod_m());
         }
         --cons_counter;                         
     }
     
-    inline bool init_input_blocking(pthread_mutex_t   *&m,
-                                    pthread_cond_t    *&c,
+    inline bool init_input_blocking(std::mutex   *&m,
+                                    std::condition_variable    *&c,
                                     std::atomic_ulong *&counter) {
         if (cons_counter.load() == (unsigned long)-1) {
-            cons_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
-            cons_c = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
+            cons_m = new std::mutex{};
+            cons_c = new std::condition_variable{};
             assert(cons_m); assert(cons_c);
-            if (pthread_mutex_init(cons_m, NULL) != 0) return false;
-            if (pthread_cond_init(cons_c, NULL) != 0)  return false;
             cons_counter.store(0);
         } 
         m = cons_m,  c = cons_c, counter = &cons_counter;
         return true;
     }
-    inline void set_input_blocking(pthread_mutex_t   *&m,
-                                   pthread_cond_t    *&c,
+    inline void set_input_blocking(std::mutex   *&m,
+                                   std::condition_variable    *&c,
                                    std::atomic_ulong *&counter) {
         p_prod_m = m,  p_prod_c = c,  p_prod_counter = counter;
     }    
     
     // producer
-    inline bool init_output_blocking(pthread_mutex_t   *&m,
-                                     pthread_cond_t    *&c,
+    inline bool init_output_blocking(std::mutex   *&m,
+                                     std::condition_variable    *&c,
                                      std::atomic_ulong *&counter) {
         if (prod_counter.load() == (unsigned long)-1) {
-            prod_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
-            prod_c = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
+            prod_m = new std::mutex{};
+            prod_c = new std::condition_variable{};
             assert(prod_m); assert(prod_c);
-            if (pthread_mutex_init(prod_m, NULL) != 0) return false;
-            if (pthread_cond_init(prod_c, NULL) != 0)  return false;
             prod_counter.store(0);
         } 
         m = prod_m, c = prod_c, counter = &prod_counter;
         return true;
     }
-    inline void set_output_blocking(pthread_mutex_t   *&m,
-                                    pthread_cond_t    *&c,
+    inline void set_output_blocking(std::mutex   *&m,
+                                    std::condition_variable    *&c,
                                     std::atomic_ulong *&counter) {
         assert(1==0);
     }
 
-    virtual inline pthread_mutex_t   &get_prod_m()       { return *prod_m;}
-    virtual inline pthread_cond_t    &get_prod_c()       { return *prod_c;}
+    virtual inline std::mutex        &get_prod_m()       { return *prod_m;}
+    virtual inline std::condition_variable    &get_prod_c()       { return *prod_c;}
     virtual inline std::atomic_ulong &get_prod_counter() { return prod_counter;}
     
-    virtual inline pthread_mutex_t   &get_cons_m()       { return *cons_m;}
-    virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
+    virtual inline std::mutex   &get_cons_m()       { return *cons_m;}
+    virtual inline std::condition_variable    &get_cons_c()       { return *cons_c;}
     virtual inline std::atomic_ulong &get_cons_counter() { return cons_counter;}
     
     /**
@@ -280,11 +274,10 @@ protected:
                     ++cnt;
                     if (cnt == ntentative()) break; 
                 } while(1);
-                pthread_mutex_lock(prod_m);
+                std::unique_lock<std::mutex> lck(*prod_m);
                 while(prod_counter.load() >= (running*workers[0]->get_in_buffer()->buffersize())) {
-                    pthread_cond_wait(prod_c, prod_m);
+                    prod_c->wait(lck);
                 }
-                pthread_mutex_unlock(prod_m);
             } while(1);
             return true;
         } // blocking 
@@ -360,11 +353,10 @@ protected:
                 }
             } while(1);
             if (blocking_in) {
-                pthread_mutex_lock(cons_m);
+            	std::unique_lock<std::mutex> lck(*cons_m);
                 while (cons_counter.load() == 0) {
-                    pthread_cond_wait(cons_c, cons_m);
+                    cons_c->wait(lck);
                 }
-                pthread_mutex_unlock(cons_m);
             } else losetime_in();
         } while(1);
         return ite;
@@ -384,19 +376,17 @@ protected:
         if (blocking_in) {
             if (!filter) {
                 while (! buffer->pop(task)) {
-                    pthread_mutex_lock(cons_m);
+                	std::unique_lock<std::mutex> lck(*cons_m);
                     while (cons_counter.load() == 0) {
-                        pthread_cond_wait(cons_c, cons_m);
+                        cons_c->wait(lck);
                     }
-                    pthread_mutex_unlock(cons_m);
                 } // while
             } else 
                 while (! filter->pop(task)) {
-                    pthread_mutex_lock(cons_m);
+                	std::unique_lock<std::mutex> lck(*cons_m);
                     while (cons_counter.load() == 0) {
-                        pthread_cond_wait(cons_c, cons_m);
+                        cons_c->wait(lck);
                     }
-                    pthread_mutex_unlock(cons_m);
                 } //while 
             
             pop_done(NULL);
@@ -490,23 +480,19 @@ public:
      */
     virtual ~ff_loadbalancer() {
         if (cons_m) {
-            pthread_mutex_destroy(cons_m);
-            free(cons_m);
+            delete cons_m;
             cons_m = nullptr;
         }
         if (cons_c) {
-            pthread_cond_destroy(cons_c);
-            free(cons_c);
+            delete cons_c;
             cons_c = nullptr;
         }
         if (prod_m) {
-            pthread_mutex_destroy(prod_m);
-            free(prod_m);
+            delete prod_m;
             prod_m = nullptr;
         }
         if (prod_c) {
-            pthread_cond_destroy(prod_c);
-            free(prod_c);
+            delete prod_c;
             prod_c = nullptr;
         }
     }
@@ -661,19 +647,19 @@ public:
             if (workers[id]->put(task)) {
                 FFTRACE(++taskcnt);
                 
-                pthread_mutex_lock(&workers[id]->get_cons_m());
+                std::unique_lock<std::mutex> lck(workers[id]->get_cons_m());
                 if ((workers[id]->get_cons_counter()).load() == 0)
-                    pthread_cond_signal(&workers[id]->get_cons_c());
+                    workers[id]->get_cons_c().notify_one();
                 ++(workers[id]->get_cons_counter());
-                pthread_mutex_unlock(&workers[id]->get_cons_m());            
+                lck.unlock();
                 ++prod_counter;
             } else {
-                pthread_mutex_lock(prod_m);
+            	std::unique_lock<std::mutex> lck(*prod_m);
                 // here we do not use while
                 // the thread can be woken up more frequently
                 if (prod_counter.load() >= workers[id]->get_in_buffer()->buffersize())
-                    pthread_cond_wait(prod_c, prod_m);
-                pthread_mutex_unlock(prod_m);     
+                    prod_c->wait(lck);
+                lck.unlock();
                 goto _retry;
             }
 #if defined(FF_TASK_CALLBACK)
@@ -718,10 +704,9 @@ public:
                    put_done(retry.back());
                    retry.pop_back();
                } else {
-                   pthread_mutex_lock(prod_m);
+            	   std::unique_lock<std::mutex> lck(*prod_m);
                    while(prod_counter.load() >= (retry.size()*workers[0]->get_in_buffer()->buffersize()))
-                       pthread_cond_wait(prod_c, prod_m);
-                   pthread_mutex_unlock(prod_m); 
+                       prod_c->wait(lck);
                }
            }           
 #if defined(FF_TASK_CALLBACK)
@@ -1387,18 +1372,18 @@ private:
  protected:
 
     // for the input queue
-    pthread_mutex_t    *cons_m = nullptr;
-    pthread_cond_t     *cons_c = nullptr;
+    std::mutex    *cons_m = nullptr;
+    std::condition_variable     *cons_c = nullptr;
     std::atomic_ulong  cons_counter;
 
     // for synchronizing with the previous multi-output stage
-    pthread_mutex_t   *p_prod_m = nullptr;
-    pthread_cond_t    *p_prod_c = nullptr;
+    std::mutex   *p_prod_m = nullptr;
+    std::condition_variable    *p_prod_c = nullptr;
     std::atomic_ulong *p_prod_counter = nullptr;
 
     // for the output queue
-    pthread_mutex_t    *prod_m = nullptr;
-    pthread_cond_t     *prod_c = nullptr;
+    std::mutex    *prod_m = nullptr;
+    std::condition_variable     *prod_c = nullptr;
     std::atomic_ulong  prod_counter;
 
     bool               blocking_in;

@@ -89,32 +89,32 @@ protected:
     }
 
     // consumer
-    virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c,
+    virtual inline bool init_input_blocking(std::mutex   *&m,
+                                            std::condition_variable    *&c,
                                             std::atomic_ulong *&counter) {
         return gt->init_input_blocking(m,c,counter);
     }
-    virtual inline void set_input_blocking(pthread_mutex_t   *&m,
-                                           pthread_cond_t    *&c,
+    virtual inline void set_input_blocking(std::mutex   *&m,
+                                           std::condition_variable    *&c,
                                            std::atomic_ulong *&counter) {
         ff_node::set_input_blocking(m,c,counter);
     }    
 
     // producer
-    virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
-                                             pthread_cond_t    *&c,
+    virtual inline bool init_output_blocking(std::mutex   *&m,
+                                             std::condition_variable    *&c,
                                              std::atomic_ulong *&counter) {
         return gt->init_output_blocking(m,c,counter);
     }
-    virtual inline void set_output_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c,
+    virtual inline void set_output_blocking(std::mutex   *&m,
+                                            std::condition_variable    *&c,
                                             std::atomic_ulong *&counter) {
         gt->set_output_blocking(m,c,counter);
         ff_node::set_output_blocking(m,c,counter);
     }
 
-    virtual inline pthread_mutex_t   &get_prod_m()        { return gt->get_prod_m(); }
-    virtual inline pthread_cond_t    &get_prod_c()        { return gt->get_prod_c(); }
+    virtual inline std::mutex   &get_prod_m()        { return gt->get_prod_m(); }
+    virtual inline std::condition_variable    &get_prod_c()        { return gt->get_prod_c(); }
     virtual inline std::atomic_ulong &get_prod_counter()  { return gt->get_prod_counter();}
 
 public:
@@ -275,21 +275,21 @@ protected:
     }
 
     // consumer
-    virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c,
+    virtual inline bool init_input_blocking(std::mutex   *&m,
+                                            std::condition_variable    *&c,
                                             std::atomic_ulong *&counter) {
         return lb->init_input_blocking(m,c,counter);
     }
-    virtual inline void set_input_blocking(pthread_mutex_t   *&m,
-                                           pthread_cond_t    *&c,
+    virtual inline void set_input_blocking(std::mutex   *&m,
+                                           std::condition_variable    *&c,
                                            std::atomic_ulong *&counter) {
         lb->set_input_blocking(m,c,counter);
         ff_node::set_input_blocking(m,c,counter);
     }    
 
     // producer
-    virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
-                                             pthread_cond_t    *&c,
+    virtual inline bool init_output_blocking(std::mutex   *&m,
+                                             std::condition_variable    *&c,
                                              std::atomic_ulong *&counter) {
         bool r = lb->init_output_blocking(m,c,counter);
         if (!r) return false;
@@ -301,20 +301,20 @@ protected:
             outputNodesFeedback[i]->set_input_blocking(m,c,counter);
         return true;
     }
-    virtual inline void set_output_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c,
+    virtual inline void set_output_blocking(std::mutex   *&m,
+                                            std::condition_variable    *&c,
                                             std::atomic_ulong *&counter) {
         // here we don't want to call the set_output_blocking for each outputNodes
         // because it may create inconsistencies.
         ff_node::set_output_blocking(m,c,counter);
     }
 
-    virtual inline pthread_mutex_t   &get_prod_m()        { return lb->get_prod_m();}
-    virtual inline pthread_cond_t    &get_prod_c()        { return lb->get_prod_c();}
+    virtual inline std::mutex   &get_prod_m()        { return lb->get_prod_m();}
+    virtual inline std::condition_variable    &get_prod_c()        { return lb->get_prod_c();}
     virtual inline std::atomic_ulong &get_prod_counter()  { return lb->get_prod_counter();}
 
-    virtual inline pthread_mutex_t   &get_cons_m()        { return lb->get_cons_m();}
-    virtual inline pthread_cond_t    &get_cons_c()        { return lb->get_cons_c();}
+    virtual inline std::mutex   &get_cons_m()        { return lb->get_cons_m();}
+    virtual inline std::condition_variable    &get_cons_c()        { return lb->get_cons_c();}
     virtual inline std::atomic_ulong &get_cons_counter()  { return lb->get_cons_counter();}
 
 public:
