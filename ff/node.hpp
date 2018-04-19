@@ -93,7 +93,7 @@ protected:
         stp(true), // only one shot by default
         spawned(false),
         freezing(0), frozen(false),isdone(false),
-        init_error(false), attr(NULL) {
+        init_error(false) {
     }
 
     virtual ~ff_thread() {}
@@ -139,6 +139,7 @@ protected:
                 error("ff_thread, thread_routine, could not change thread cancelability");
                 return;
             }
+
         } while(!stp);
         
         if (freezing) {
@@ -149,21 +150,27 @@ protected:
         isdone = true;
     }
 
-    int disable_cancelability() {
-        if (pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancelstate)) {
-            perror("pthread_setcanceltype");
-            return -1;
-        }
-        return 0;
-    }
+	/**
+	 * MD todo
+	 */
+	int disable_cancelability() {
+//        if (pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancelstate)) {
+//            perror("pthread_setcanceltype");
+//            return -1;
+//        }
+		return 0;
+	}
 
-    int enable_cancelability() {
-        if (pthread_setcancelstate(old_cancelstate, 0)) {
-            perror("pthread_setcanceltype");
-            return -1;
-        }
-        return 0;
-    }
+	/**
+	 * MD todo
+	 */
+	int enable_cancelability() {
+//        if (pthread_setcancelstate(old_cancelstate, 0)) {
+//            perror("pthread_setcanceltype");
+//            return -1;
+//        }
+		return 0;
+	}
 
     fftree *getfftree() const   { return fftree_ptr;}
     void setfftree(const fftree *ptr) { 
@@ -189,11 +196,8 @@ public:
         if (spawned) return -1;
         if (barrier) tid= barrier->getCounter();
         t_handle = std::thread(proxy_thread_routine, this);
-        auto ntnh = t_handle.native_handle();
-        th_handle = (pthread_t) ntnh;
         
 #if !defined(NO_DEFAULT_MAPPING)
-        // pthread native code - non portable
         if (cpuId<0)
             if ((cpuId = threadMapper::instance()->getCoreId())<0)
                 return -2;
@@ -214,18 +218,8 @@ public:
             thaw();
         }
         if (spawned) {
-            // MA
-            // pthread_join(th_handle, NULL);
             t_handle.join();
             if (barrier) barrier->decCounter();
-        }
-        if (attr) {
-            if (pthread_attr_destroy(attr)) {
-                error("ERROR: ff_thread.wait: pthread_attr_destroy fails!");
-                r=-1;
-            }        
-            free(attr);
-            attr = NULL;
         }
         spawned=false;
         return r;
@@ -263,7 +257,7 @@ public:
     virtual bool isfrozen() const { return freezing>0;} 
     virtual bool done()     const { return isdone || (frozen && !stp);}
 
-    pthread_t get_handle() const { return th_handle;}
+    std::thread::native_handle_type get_handle() { return t_handle.native_handle();}
 
     inline size_t getTid() const { return tid; }
     inline size_t getFFThreadId() const { return threadid; }
@@ -280,18 +274,15 @@ private:
     bool            frozen,isdone;
     bool            init_error;
     std::thread     t_handle;
-    pthread_t       th_handle;
-    pthread_attr_t *attr;
     std::mutex mutex;
     std::condition_variable  cond;
     std::condition_variable  cond_frozen;
-    int             old_cancelstate;
+    //int             old_cancelstate = 0;
 };
     
 static void * proxy_thread_routine(void * arg) {
     ff_thread & obj = *(ff_thread *)arg;
     obj.thread_routine();
-    pthread_exit(NULL);
     return NULL;
 }
 
