@@ -29,11 +29,16 @@
  ****************************************************************************
  */
 
-#include <mutex>
 #include <stdlib.h>
 #include <ff/platforms/platform.h>
 #include <ff/utils.hpp>
 #include <ff/config.hpp>
+
+#if not __has_include(<experimental/barrier>)
+#include <atomic>
+#include <mutex>
+#include <condition_variable>
+#endif
 
 // 
 // Inside FastFlow barriers are used only for:
@@ -65,11 +70,11 @@ struct ffBarrier {
      *  
      */
 
-#if (defined(__APPLE__) || defined(_MSC_VER))
+#if not __has_include(<experimental/barrier>)
     /**
-     *   No pthread_barrier available on these platforms.
+     *   No experimental available on these platforms.
      *   The implementation uses only mutex and cond variable.
-     */ 
+     */
 class Barrier: public ffBarrier {
 public:   
     Barrier(const size_t=MAX_NUM_THREADS):threadCounter(0),_barrier(0) {
@@ -109,12 +114,12 @@ private:
     size_t            threadCounter;
 
     // it is the number of threads in the barrier. 
-    size_t _barrier, counter;
+    size_t _barrier, counter = 0;
     std::mutex bLock;
     std::condition_variable  bCond;
 };
 
-#elif __has_include(<experimental/barrier>)
+#else
     /**
      *   implementation based on standard barrier
      *
@@ -157,54 +162,6 @@ private:
     size_t _barrier;
     std::experimental::barrier *bar = nullptr;
 };
-
-#else
-class Barrier: public ffBarrier {
-public:
-    Barrier(const size_t=MAX_NUM_THREADS):threadCounter(0),_barrier(0) { }
-    ~Barrier() { if (_barrier>0) pthread_barrier_destroy(&bar); }
-
-    inline int barrierSetup(size_t init) {
-        assert(init>0);
-        if (_barrier == init) return 0;
-        if (_barrier==0) {
-            if (pthread_barrier_init(&bar,NULL,init) != 0) {
-                error("ERROR: pthread_barrier_init failed\n");
-                return -1;
-            }
-            _barrier = init;
-            return 0;
-        }
-        if (pthread_barrier_destroy(&bar) != 0) {
-            error("ERROR: pthread_barrier_destroy failed\n");
-            return -1;
-        }
-        if (pthread_barrier_init(&bar,NULL,init) == 0) {
-            _barrier = init;
-            return 0;
-        }
-        error("ERROR: pthread_barrier_init failed\n");
-        return -1;
-    }
-
-    inline void doBarrier(size_t) {  
-        pthread_barrier_wait(&bar); 
-    }
-
-    // TODO: better move counter methods in a different class
-    inline size_t getCounter() const { return threadCounter;}
-    inline void     incCounter()       { ++threadCounter;}
-    inline void     decCounter()       { --threadCounter;}
-
-private:
-    // This is just a counter, and is used to set the ff_node::tid value.
-    size_t            threadCounter;
-
-    // it is the number of threads in the barrier. 
-    size_t _barrier;
-    pthread_barrier_t bar;
-};
-
 #endif 
 
 /**

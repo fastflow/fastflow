@@ -191,49 +191,6 @@ INLINE int pthread_cond_destroy(pthread_cond_t *cond) {
 	return (0); // Errors not managed
  }
 
-// Barrier 
-
-/* MA:
-
-Starting from Windows 8 it can be used:
-
-EnterSynchronizationBarrier
-DeleteSynchronizationBarrier
-Synchronization Barriers
-
-Not supported in Win 7 - here a sketch of the interface
-Not really used - the FF code enable an alternative barrier via #ifdef
-
-typedef struct _opaque_pthread_barrier_t {
-	pthread_mutex_t bar_lock;
-	pthread_cond_t bar_cond;
-	unsigned count;
-} pthread_barrier_t;
-
-typedef struct _opaque_pthread_barrierattr_t {
-	// Not implemented
-	char c;
-} pthread_barrierattr_t;
-
-INLINE int pthread_barrier_init(pthread_barrier_t RESTRICT * barrier, 
-		const pthread_barrierattr_t RESTRICT * attr, unsigned count) {
-	barrier->count = count;
-	// errors currently not managed;
-	return 0;
-}
-
-INLINE int pthread_barrier_destroy(pthread_barrier_t *barrier) {
-	// errors currently not managed;
-	return 0;
-}
-
-INLINE int pthread_barrier_wait(pthread_barrier_t *barrier) {
-	// errors currently not managed;
-	return 0;
-}
-
-*/
-
 #else 
 // Win XP hasn't Condition variables!
 //
