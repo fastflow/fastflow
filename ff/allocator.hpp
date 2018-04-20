@@ -107,13 +107,13 @@
 // #include <ff/atomic/atomic.h>
 // #endif
 #include <atomic>
+#include <thread>
 
 #if defined(ALLOCATOR_STATS)
 #include <iostream>
 #endif
 
 
-//#include <pthread.h>
 #include <ff/ubuffer.hpp>
 #include <ff/spin-lock.hpp>
 #include <ff/svector.hpp>
@@ -357,7 +357,7 @@ namespace ff {
     struct xThreadData {
         enum { LEAK_CHUNK=4096 };
     
-        xThreadData(const bool allocator, size_t nslabs, const pthread_t key)
+        xThreadData(const bool allocator, size_t nslabs, std::thread::id key)
             : leak(0), key(key) {
             //leak = (uSWSR_Ptr_Buffer*)::malloc(sizeof(uSWSR_Ptr_Buffer));
             leak = (uSWSR_Ptr_Buffer*)getAlignedMemory(128,sizeof(uSWSR_Ptr_Buffer));
@@ -371,8 +371,8 @@ namespace ff {
         }
     
         uSWSR_Ptr_Buffer * leak;   //
-        const pthread_t    key;    // used to identify a thread (threadID)
-        long padding[longxCacheLine-((sizeof(const pthread_t)+sizeof(uSWSR_Ptr_Buffer*))/sizeof(long))]; //
+        const std::thread::id    key;    // used to identify a thread (threadID)
+        long padding[longxCacheLine-((sizeof(const std::thread::id)+sizeof(uSWSR_Ptr_Buffer*))/sizeof(long))]; //
     };
 
     /* 
@@ -577,7 +577,7 @@ namespace ff {
             return 0;
         }
 
-        inline int searchfb(const pthread_t key) {
+        inline int searchfb(std::thread::id key) {
             for(unsigned i=0;i<fb_size;++i)
                 if (fb[i]->key == key) return (int)i;
             return -1;
@@ -671,7 +671,7 @@ namespace ff {
         inline xThreadData * register4free(const bool allocator=false) {
             DBG(assert(nslabs>0));
         
-            pthread_t key= pthread_self();  // obtain ID of the calling thread
+            std::thread::id key= std::this_thread::get_id();  // obtain ID of the calling thread
             int entry = searchfb(key);      // search for threadID in leak queue
             if (entry<0) {                  // if threadID not found
                 // allocate a new buffer for thread 'key'
@@ -802,7 +802,7 @@ namespace ff {
             /*
              * If nomorealloc is 0,
              */
-            int entry = searchfb(pthread_self());   // look for calling thread
+            int entry = searchfb(std::this_thread::get_id());   // look for calling thread
             xThreadData * xtd = NULL;
             if (entry<0) xtd = register4free();     // if not present, register it
             else xtd = fb[entry];                   // else, point to its position
@@ -1325,7 +1325,7 @@ namespace ff {
 
     // forward decl
     class ffa_wrapper;
-    static void FFAkeyDestructorHandler(void * kv);
+    //static void FFAkeyDestructorHandler(void * kv);
     static void killMyself(ffa_wrapper * ptr);
 
     /*
@@ -1340,6 +1340,9 @@ namespace ff {
      * This class is defined in \ref allocator.hpp
      */
     class ffa_wrapper: public ff_allocator {
+    	friend class FFAllocator;
+    	friend struct xThreadStorage;
+
     protected:
 
         virtual inline bool free(Buf_ctl * buf) {
@@ -1385,6 +1388,7 @@ namespace ff {
         inline void * growsup(void * ptr, size_t newsize) {
             return ff_allocator::growsup(ptr,newsize);
         }
+
     private:
         inline void nomoremalloc() {
             nomorealloc.store(1);
@@ -1400,6 +1404,19 @@ namespace ff {
         ffa_wrapper * f;
         long padding[longxCacheLine-(sizeof(ffa_wrapper*)/sizeof(long))];
     };
+
+    int       delayedReclaim;
+    struct xThreadStorage {
+        ~xThreadStorage() {
+        	if(!delayedReclaim) {
+        		FFAxThreadData * ffaxtd = (FFAxThreadData*)v;
+        		ffaxtd->f->nomoremalloc();
+        		ffaxtd->f->deregisterAllocator();
+        	}
+        }
+        void *v;
+    };
+    static thread_local xThreadStorage tkvs;
 
     /**
      * \class FFAllocator
@@ -1482,17 +1499,11 @@ namespace ff {
          *
          * \param delayedReclaim Deferred reclamation configuration
          */
-        FFAllocator(int delayedReclaim=0) :
-            A(0), A_capacity(0), A_size(0),
-            delayedReclaim(delayedReclaim)
+        FFAllocator(int delayedReclaim_=0) :
+            A(0), A_capacity(0), A_size(0)
         {
+        	delayedReclaim = delayedReclaim_;
             init_unlocked(lock);
-
-            if (pthread_key_create( &A_key,
-                                    (delayedReclaim ? NULL : FFAkeyDestructorHandler) )!=0)  {
-                error("FFAllocator FATAL ERROR: pthread_key_create fails\n");
-                abort();
-            }
         }
 
         /**
@@ -1507,7 +1518,6 @@ namespace ff {
                         if (A[i]) deleteAllocator(A[i]->f);
                     ::free(A);
                 }
-                pthread_key_delete(A_key);
             }
 
         }
@@ -1581,7 +1591,7 @@ namespace ff {
          *
          */
         inline void deleteAllocator() {
-            FFAxThreadData * ffaxtd = (FFAxThreadData*)pthread_getspecific(A_key);
+            FFAxThreadData * ffaxtd = (FFAxThreadData*)tkvs.v;
             if (!ffaxtd) return;
             deleteAllocator(ffaxtd->f,true);
         }
@@ -1606,7 +1616,7 @@ namespace ff {
                 return (char *)ptr + sizeof(Buf_ctl);
             }
 
-            FFAxThreadData * ffaxtd = (FFAxThreadData*) pthread_getspecific(A_key);
+            FFAxThreadData * ffaxtd = (FFAxThreadData*)tkvs.v;
             if (!ffaxtd) {
                 // if no thread-data is associated to the key
                 // initialise and register a new allocator
@@ -1620,13 +1630,7 @@ namespace ff {
                 }
 
                 // REW -- ?
-                spin_lock(lock);
-                if (pthread_setspecific(A_key, ffaxtd)!=0) {
-                    deleteAllocator(ffaxtd->f);
-                    spin_unlock(lock);
-                    return NULL;
-                }
-                spin_unlock(lock);
+                tkvs.v = ffaxtd;
             }
 
             return ffaxtd->f->malloc(size);
@@ -1658,7 +1662,7 @@ namespace ff {
                 *memptr = ptraligned;
                 return 0;
             }
-            FFAxThreadData * ffaxtd = (FFAxThreadData*)pthread_getspecific(A_key);
+            FFAxThreadData * ffaxtd = (FFAxThreadData*)tkvs.v;
             if (!ffaxtd) {
                 // initialise and register a new allocator
                 // REW -- why prealloc FALSE??
@@ -1669,13 +1673,7 @@ namespace ff {
                     return -1;
                 }
 
-                spin_lock(lock);
-                if (pthread_setspecific(A_key, ffaxtd)!=0) {
-                    deleteAllocator(ffaxtd->f);
-                    spin_unlock(lock);
-                    return -1;
-                }
-                spin_unlock(lock);
+                tkvs.v = ffaxtd;
             }
 
             return ffaxtd->f->posix_memalign(memptr,alignment,size);
@@ -1728,7 +1726,7 @@ namespace ff {
                     return (char *)newptr + sizeof(Buf_ctl);
                 }
 
-                ffa_wrapper * f = (ffa_wrapper*) pthread_getspecific(A_key);
+                ffa_wrapper * f = (ffa_wrapper*) tkvs.v;
                 if (!f) return NULL;
                 return f->realloc(ptr,newsize);
             }
@@ -1746,7 +1744,7 @@ namespace ff {
                     return (char *)newptr + sizeof(Buf_ctl);
                 }
 
-                ffa_wrapper * f = (ffa_wrapper*)pthread_getspecific(A_key);
+                ffa_wrapper * f = (ffa_wrapper*)tkvs.v;
                 if (!f) return NULL;
                 return f->growsup(ptr,newsize);
             }
@@ -1763,16 +1761,8 @@ namespace ff {
         size_t          A_size;         //
 
         lock_t          lock;
-        pthread_key_t   A_key;
-        const int       delayedReclaim;
     };
 
-    /* REW - Document these? */
-    static void FFAkeyDestructorHandler(void * kv) {
-        FFAxThreadData * ffaxtd = (FFAxThreadData*)kv;
-        ffaxtd->f->nomoremalloc();
-        ffaxtd->f->deregisterAllocator();
-    }
     static inline void killMyself(ffa_wrapper * ptr) {
         FFAllocator::instance()->deleteAllocator(ptr);
     }
