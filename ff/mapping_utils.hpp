@@ -73,12 +73,10 @@ static inline int gettid() { return syscall(__NR_gettid);}
  #include <mach/thread_policy.h>
  // If you don't include mach/mach.h, it doesn't work.
  // In theory mach/thread_policy.h should be enough
-#elif defined(_WIN32)
- #include <ff/platforms/platform.h>
+#ifdef MAC_OS_X_HAS_AFFINITY
+#include<vector>
 #endif
-#if defined(__APPLE__) && MAC_OS_X_HAS_AFFINITY
-#include<vector> 
-#endif
+#endif //defined(__APPLE__)
 
 /** 
  *  \brief Returns the ID of the calling thread
@@ -150,7 +148,6 @@ static inline unsigned long ff_getCpuFreq() {
  *  \return An integer value showing the number of cores.
  */
 static inline ssize_t ff_numCores() {
-    //std::cerr << std::thread::hardware_concurrency() << "\n";
     return(ssize_t(std::thread::hardware_concurrency()));
 }
 
