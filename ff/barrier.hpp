@@ -34,7 +34,13 @@
 #include <ff/utils.hpp>
 #include <ff/config.hpp>
 
-#if not __has_include(<experimental/barrier>)
+#ifdef __has_include
+#if __has_include(<experimental/barrier>)
+#define experimental_barrier
+#endif
+#endif
+
+#ifndef experimental_barrier
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
@@ -70,7 +76,7 @@ struct ffBarrier {
      *  
      */
 
-#if not __has_include(<experimental/barrier>)
+#ifndef experimental_barrier
     /**
      *   No experimental available on these platforms.
      *   The implementation uses only mutex and cond variable.
