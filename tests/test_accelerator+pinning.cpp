@@ -446,6 +446,9 @@ public:
       break;
     case 2:
       //max
+#ifdef max
+#undef max //MD workaround to avoid clashing with max macro in minwindef.h
+#endif
       res = data.max();
       break;
     }

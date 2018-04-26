@@ -52,6 +52,10 @@ const long MYSIZE = 100;
 
 typedef  std::vector<long> ff_task_t;
 
+#ifdef min
+#undef min //MD workaround to avoid clashing with min macro in minwindef.h
+#endif
+
 struct mapWorker : ff_Map<ff_task_t> {
     ff_task_t *svc(ff_task_t *in) {
         ff_task_t *A = new ff_task_t(MYSIZE);
