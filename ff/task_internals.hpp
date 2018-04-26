@@ -436,6 +436,7 @@ protected:
     //std::vector<std::deque<hash_task_t*> > taskscheduled;
 };
 
+#if 0
 /* ------------------------------------------------------ */
 
 class TaskFKeyOnce {
@@ -455,6 +456,7 @@ public:
         return TFKey.key;
     }
 };
+#endif
 
 
   
