@@ -36,10 +36,9 @@
 
 #include <ff/farm.hpp>
 #include <ff/selector.hpp>  
-using namespace ff;
 
 // first kernel 
-struct kernel1: ff_node_t<long> {
+struct kernel1: ff::ff_node_t<long> {
     long *svc(long *in) {
 	printf("kernel1 %ld\n", *in);
 	return GO_ON;
@@ -47,7 +46,7 @@ struct kernel1: ff_node_t<long> {
 };
 
 // second kernel
-struct kernel2: ff_node_t<long> {
+struct kernel2: ff::ff_node_t<long> {
     long *svc(long *in) {
 	printf("kernel2 %ld\n", *in);
 	return GO_ON;
@@ -55,7 +54,7 @@ struct kernel2: ff_node_t<long> {
 };
 
 // the task-farm uses the same Emitter (it is possible to use multiple Emitter as well)
-struct Emitter: ff_node_t<long> {
+struct Emitter: ff::ff_node_t<long> {
     long *svc(long *) {
 	for(long i=0;i<20;++i)
 	    ff_send_out(new long(i));
@@ -64,6 +63,8 @@ struct Emitter: ff_node_t<long> {
 };
 
 int main() {
+	using namespace ff;
+
     const size_t farmworkers = 1;
     Emitter E;
 
@@ -71,7 +72,7 @@ int main() {
     ff_Farm<> farm([farmworkers]() {
 	    std::vector<std::unique_ptr<ff_node> > W;
 	    for(size_t i=0;i<farmworkers;++i)
-		W.push_back(ff::make_unique<ff_nodeSelector<long>>(ff::make_unique<kernel1>(), ff::make_unique<kernel2>()));
+	    	W.push_back(ff::make_unique<ff_nodeSelector<long>>(ff::make_unique<kernel1>(), ff::make_unique<kernel2>()));
 	    return W;
 	} (), E);
     farm.remove_collector();
