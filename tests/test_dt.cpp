@@ -127,7 +127,7 @@ int main(int argc,  char * argv[]) {
     
     ffalloc.init();
 
-    ff_farm<> farm(false,8192,8192);
+    ff_farm farm(false,8192,8192);
     farm.set_scheduling_ondemand(); // set on-demand scheduling policy
 
     Emitter emitter(ntask);

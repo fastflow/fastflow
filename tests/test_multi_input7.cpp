@@ -109,27 +109,30 @@ protected:
 
 
 int main() {
-    ff_farm<> farm1;
+    ff_farm farm1;
     std::vector<ff_node*> w;
     for(int i=0;i<FARM1WORKERS;++i)
         w.push_back(new W1);
     farm1.add_workers(w);
     farm1.remove_collector();
 
-    ff_farm<> farm2;
+    ff_farm farm2;
     w.clear();
     w.push_back(new W2);
     w.push_back(new W2);
     farm2.add_workers(w);
     farm2.add_emitter(new E(farm2.getlb()));
-    farm2.setMultiInput();
+    //farm2.setMultiInput();    // not needed anymore
     farm2.wrap_around(true);
 
     ff_pipeline pipe;
     pipe.add_stage(&farm1);
     pipe.add_stage(&farm2);
 
-    pipe.run_and_wait_end();
+    if (pipe.run_and_wait_end()<0) {
+        error("running pipe\n");
+        return -1;
+    }
 
     printf("DONE\n");
     return 0;

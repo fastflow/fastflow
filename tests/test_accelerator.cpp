@@ -68,7 +68,7 @@ int main(int argc, char * argv[]) {
         return -1;
     }
     
-    ff_farm<> farm(true /* accelerator set */);
+    ff_farm farm(true /* accelerator set */);
     
     // Using standard emitter
     /*

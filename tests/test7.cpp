@@ -145,7 +145,7 @@ int main(int argc, char * argv[]) {
     // init FastFlow allocator
     ffalloc.init();
 
-    ff_farm<> farm;
+    ff_farm farm;
 
     Emitter e(streamlen);
     Collector c(streamlen);

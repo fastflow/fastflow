@@ -29,8 +29,8 @@
  *     pipe(farm1, pipe_internal(farm2, Collector) )   version 1
  *     pipe(farm1, farm2)                              version 2
  *
- *        | ----------------------------- pipe --------------------------------------- |                                      
- *                                              | ------------- pipe_internal -------- |
+ *        | ----------------------------- pipe --------------------------------------- |            
+ *                                          | -------------- pipe_internal ----------- |
  *                      farm1                         farm2                   Collector
  *                                               ____________________
  *                                              |                    |
@@ -330,6 +330,13 @@ struct Manager: ff_node_t<Command_t> {
 
 
 int main(int argc, char* argv[]) {
+#if defined(BLOCKING_MODE)
+
+    //TODO: in blocking mode the manager channel does not work!!!
+    return 0;
+#endif
+    
+    
     unsigned nworkers = 3;
     int ntasks = 1000;
     if (argc>1) {
@@ -371,18 +378,14 @@ int main(int argc, char* argv[]) {
     farm2.remove_collector();
     farm2.add_emitter(E2); 
 #if 0   // version 1
-    // the farm2 is a multi-input pattern, if setMultiInput call appers 
-    // after the wrap_around call, then we have to call wrap_around(true)
-    farm2.setMultiInput(); 
-    farm2.wrap_around(); 
+    farm2.wrap_around(true); 
     Collector C;
     ff_Pipe<long> pipe_internal(farm2, C);
 
     ff_Pipe<> pipe(farm1, pipe_internal);
 #else   // version 2
-
-    farm2.setMultiInput();
-    farm2.wrap_around();
+    //farm2.setMultiInput();  // not needed anymore!
+    farm2.wrap_around(true);
     // here the order of instruction is important. The collector must be
     // added after the wrap_around otherwise the feedback channel will be
     // between the Collector and the Emitter2

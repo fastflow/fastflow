@@ -26,7 +26,7 @@
  */
 
 /*  
- *   Just one single ofarm
+ *   Just one single ordered farm (building block) with auto-scheduling policy.
  *               
  *           --> Worker1 -->         
  *          |               |        
@@ -34,7 +34,8 @@
  *          |               |        
  *           --> Worker1 -->         
  *                                     
- *                 
+ *  By defining TEST_BROADCAST it is possible to test broadcast_task and all_gather with 
+ *  ordered farm!               
  */
 
 
@@ -47,47 +48,62 @@
 
 using namespace ff;
 
-class Start: public ff_node {
+class Start: public ff_monode_t<long> {
 public:
-    Start(int streamlen):streamlen(streamlen) {}
-    void* svc(void*) {    
-        if (streamlen--) {
-            printf("sending %d\n", streamlen);
-            ff_send_out(new long(streamlen));
+    Start(long streamlen):streamlen(streamlen) {}
+    long* svc(long*) {    
+        if (--streamlen) {
+#if !defined(TEST_BROADCAST)
+            ff_send_out((long*)streamlen);
+#else            
+            broadcast_task((long*)streamlen);
+#endif            
             return GO_ON;
-            //return new long(streamlen);
         }
-        printf("RETURNING EOS\n");
         return EOS;
     }
 private:
-    int streamlen;
+    long streamlen;
 };
 
 
-class Worker1: public ff_node {
+class Worker1: public ff_node_t<long> {
 public:
-    void * svc(void * task) {
-        printf("Worker received task\n");
-        usleep(random() % 20000);
+    long * svc(long * task) {
+        printf("Worker received task %ld\n", (long)task);
+        if (get_my_id() == 0) usleep(random() % 20000);
         return task;
     }
 };
 
 
-class Stop: public ff_node {
+class Stop: public ff_minode_t<long> {
 public:
-    Stop(int streamlen):expected(streamlen),error(false) {}
+    Stop(long streamlen):
+        expected(streamlen),error(false) {}
 
-    void* svc(void* task) {    
-        long t = *(long*)task;
-        printf("received %ld\n", t);
-        
+    long* svc(long* task) {    
+        long t = (long)task;
+        printf("received %ld from %ld\n", t, get_channel_id());
+
+#if !defined(TEST_BROADCAST)        
         if (t != --expected) {
             printf("ERROR: task received out of order, received %ld expected %ld\n", t, expected);
             error = true;
         }
-        delete (long*)task;
+#else
+        --expected;
+        std::vector<long*> V;
+        all_gather(task,V);
+        for(size_t i=0;i<V.size();++i) {
+            auto t = (long)V[i];
+            if (t != expected) {
+                printf("ERROR: task received out of order, received %ld expected %ld\n", t, expected);
+                error = true;
+            }
+        }
+
+#endif
         return GO_ON;
     }
     void svc_end() {
@@ -101,7 +117,7 @@ private:
 
 int main(int argc, char * argv[]) {
     int nworkers = 3;
-    int streamlen = 1000;
+    long streamlen = 1000;
     if (argc>1) {
         if (argc<3) {
             std::cerr << "use: " 
@@ -111,7 +127,7 @@ int main(int argc, char * argv[]) {
         }
                
         nworkers=atoi(argv[1]);
-        streamlen=atoi(argv[2]);
+        streamlen=atol(argv[2]);
     }
 
     if (nworkers<=0 || streamlen<=0) {
@@ -120,12 +136,11 @@ int main(int argc, char * argv[]) {
     }
     srandom(131071);
         
-    ff_ofarm ofarm;
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker1);
-    ofarm.add_workers(w);
-    ofarm.setEmitterF(new Start(streamlen));
-    ofarm.setCollectorF(new Stop(streamlen));
+    ff_farm ofarm(w, new Start(streamlen), new Stop(streamlen));
+    ofarm.set_ordered();               // ordered farm 
+    ofarm.set_scheduling_ondemand();   // auto-scheduling policy 
     ofarm.cleanup_all();
 
     if (ofarm.run_and_wait_end()<0) {

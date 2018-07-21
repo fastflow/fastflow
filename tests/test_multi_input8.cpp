@@ -24,9 +24,9 @@
  *
  ****************************************************************************
  */
-/* Author: Massimo
- * Date  : April 2014
- *
+/* Author  : Massimo
+ * Date    : April 2014
+ * Modified: July 2018 
  */                                    
 /*
  *                             
@@ -46,7 +46,7 @@
  *   2-stage pipeline: 
  *     - the first stage is a farm with no Emitter and Collector
  *     - the second stage is a farm with the Collector and feedback channel
- *     - the Collector C uses the gather-all
+ *     - the Collector C uses the all_gather method
  *
  */
 
@@ -58,100 +58,85 @@ long   NUMTASKS=10;
 int    FARM1WORKERS=2; 
 
 
-struct W1: ff_node {
-    void *svc(void*) {
+struct W1: ff_node_t<long> {
+    long* svc(long*) {
         for(long i=(get_my_id()+1); i<=NUMTASKS; ++i) {
-            ff_send_out((void*)i);
+            ff_send_out((long*)i);
         }
-        return NULL;
+        return EOS;
     }
 };
 
-struct W2: ff_node {
-    void *svc(void *task) {
+struct W2: ff_node_t<long> {
+    long* svc(long* task) {
         long t = (long)task;
         assert(t>1);
         --t;
-        return (void*)t;
+        return (long*)t;
     }
 };
 
-class E: public ff_node {
+class E: public ff_monode_t<long> {
 public:
-    E(ff_loadbalancer *const lb):neos(0),numtasks(0),lb(lb) {}
-
-    void *svc(void *task) {
-        if (lb->get_channel_id() == -1) {
-            long t = (long)task;
+    long *svc(long *task) {
+        long t = (long)task;
+        if (get_channel_id() == -1) {
             if (t == 1) return GO_ON;            
             ++numtasks;
-            printf("INPUT: sending %ld to worker\n", t);
-            lb->broadcast_task((void*)t);
+            printf("INPUT: sending %ld to all workers\n", t);
+            broadcast_task(task);
             return GO_ON;
         }
-        long t = (long)(((long**)task)[0]);
         printf("BACK: got  %ld from collector (numtasks=%ld)\n", t,numtasks);
         
-        if ((t != 1) && (t & 0x1)) {
-            lb->broadcast_task((void*)t);
+        if (t != 1) {
+            broadcast_task(task);
             return GO_ON;
         }
-        --numtasks;
-        if (numtasks == 0) return NULL;
+        if (--numtasks == 0) return EOS;
         return GO_ON;
     }
-
 protected:
-    int neos;
-    long numtasks;
-    ff_loadbalancer *const lb;
+    int neos=0;
+    long numtasks=0;
 };
 
-class C: public ff_node {
-public:
-    C(ff_gatherer *const gt):gt(gt) {}
-
-    void *svc(void *task) {
-        long **V = new long*[FARM1WORKERS];
-        
-        gt->all_gather(task, (void**)&V[0]);
-        return V;
+struct C: ff_minode_t<long> {
+    long* svc(long* task) {
+        std::vector<long*> V;        
+        all_gather(task, V);
+        return V[0];
     }
-
-protected:
-    ff_gatherer *const gt;
 };
 
 
 int main(int argc, char *argv[]) {
-
     if (argc > 1) {
         NUMTASKS=atol(argv[1]);
     }
 
-    ff_farm<> farm1;
-    std::vector<ff_node*> w;
+    std::vector<std::unique_ptr<ff_node>> w1;
     for(int i=0;i<FARM1WORKERS;++i)
-        w.push_back(new W1);
-    farm1.add_workers(w);
+        w1.push_back(make_unique<W1>());
+    ff_Farm<> farm1(std::move(w1));
     farm1.remove_collector();
+    
+    E e;
+    C c;
+    std::vector<std::unique_ptr<ff_node>> w2;
+    for(int i=0;i<FARM1WORKERS;++i)
+        w2.push_back(make_unique<W2>());
+    ff_Farm<> farm2(std::move(w2),e, c);
 
-    ff_farm<> farm2;
-    w.clear();
-    w.push_back(new W2);
-    w.push_back(new W2);
-    farm2.add_workers(w);
-    farm2.add_emitter(new E(farm2.getlb()));
-    farm2.add_collector(new C(farm2.getgt()));
-    farm2.setMultiInput();
-    farm2.wrap_around(true);
-
+    farm2.wrap_around(true); // <---
     ff_pipeline pipe;
     pipe.add_stage(&farm1);
     pipe.add_stage(&farm2);
 
-    pipe.run_and_wait_end();
-
+    if (pipe.run_and_wait_end()<0) {
+        error("running pipe\n");
+        return -1;
+    }
     printf("DONE\n");
     return 0;
 }

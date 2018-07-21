@@ -141,12 +141,6 @@ public:
         return devices.size()-1;
     }
 
-    fftype getFFType() const   { 
-        for(size_t i=0;i<devices.size();++i)
-            if (devices[i]->getFFType() == OCL_WORKER) return OCL_WORKER;
-        return WORKER;
-    }
-
     const size_t numNodes() const { return devices.size(); }
 
     int run(bool = false) { return ff_node::run();  }

@@ -87,7 +87,7 @@ int main(int argc, char * argv[]) {
         nworkers  =atoi(argv[1]);
     }
 
-    ff_farm<> farm;
+    ff_farm farm;
     Emitter E;
     farm.add_emitter(&E); 
 

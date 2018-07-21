@@ -82,7 +82,9 @@ public:
             const_iterator i2=v.end();
             first=(vector_type*)::malloc((i2-i1)*sizeof(vector_type));
             while(i1!=i2) push_back(*(i1++));
+            return;
         }
+        reserve(v.chunk);
     }
 
     /**
@@ -121,8 +123,7 @@ public:
      * Copy
      */
     svector& operator=(const svector & v) {
-        len=0;
-        if(!v.len) first=NULL; 
+        if(!v.len) clear();
         else {
             const_iterator i1=v.begin();
             const_iterator i2=v.end();
@@ -184,7 +185,7 @@ public:
     /**
      * back
      */
-    inline vector_type& back() { 
+    inline vector_type& back() const { 
         return first[len-1]; 
         //return *(vector_type *)0;
     }
@@ -219,6 +220,31 @@ public:
         
         return begin();
     }
+    /**
+     * insert
+     */    
+    inline iterator insert(iterator where, const vector_type & elem) {
+        iterator i1=begin();
+        iterator i2=end();
+        if (where == i2) {
+            push_back(elem);
+            return end();
+        }
+        while(i1!=i2) {
+            if (i1==where) {
+                ++len;
+                if (len==cap) reserve(cap+chunk);
+                break;
+            }
+            else i1++;
+        }
+        for(iterator i3=i2+1; i2>=i1; --i2, --i3) 
+            *i3 = *i2;
+        size_t pos=(i1-begin());
+        new (first + pos) vector_type(elem);
+        return begin()+pos;
+    }
+
     
     /**
      * size

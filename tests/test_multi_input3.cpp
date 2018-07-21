@@ -105,8 +105,8 @@ int main(int argc, char* argv[]) {
         ntasks    =atoi(argv[2]);
     }
     ff_pipeline pipe;
-    ff_farm<> farm1;
-    ff_farm<> farm2;
+    ff_farm farm1;
+    ff_farm farm2;
     pipe.add_stage(&farm1);
     pipe.add_stage(&farm2);
     farm1.add_emitter(new Emitter1(ntasks));
@@ -124,9 +124,13 @@ int main(int argc, char* argv[]) {
     farm2.add_emitter(new Emitter2(farm2.getlb()));
     farm2.add_collector(NULL); // default collector
     farm2.add_workers(w);
-    farm2.wrap_around(true); // true since we have multi-input in the Emitter
+    // true since we have multi-input in the Emitter
+    farm2.wrap_around(true);   
 
-    pipe.run_and_wait_end();
+    if (pipe.run_and_wait_end()<0) {
+        error("running pipe\n");
+        return -1;
+    }
 
     printf("Time= %.2f (ms)\n", pipe.ffwTime());
     return 0;

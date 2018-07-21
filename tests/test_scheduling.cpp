@@ -63,29 +63,11 @@ private:
 };
 
 
-/* 
- * You have to extend the ff_loadbalancer....
- */
-class my_loadbalancer: public ff_loadbalancer {
-protected:
-    // implement your policy...
-    inline size_t selectworker() { return victim; }
-
-public:
-    // this is necessary because ff_loadbalancer has non default parameters....
-    my_loadbalancer(int max_num_workers):ff_loadbalancer(max_num_workers) {}
-
-    void set_victim(int v) { victim=v;}
-
-private:
-    int victim;
-};
-
 // emitter filter
-class Emitter: public ff_node {
+class Emitter: public ff_monode {
 public:
-    Emitter(int maxtasks, int nworkers, my_loadbalancer * const lb):
-        maxtasks(maxtasks),ntask(0),nworkers(nworkers),load(nworkers,0),lb(lb) {}
+    Emitter(int maxtasks, int nworkers):
+        maxtasks(maxtasks),ntask(0),nworkers(nworkers),load(nworkers,0) {}
 
     int svc_init() {
         srandom(::getpid()+(getusec()%4999));
@@ -97,8 +79,7 @@ public:
             for(int i=0;i<nworkers;++i) {
                 int * t = new int(random() % MAX_TIME_MS);
                 load[i] += *t;
-                lb->set_victim(i);
-                ff_send_out(t);
+                ff_send_out_to(t,i);
                 ++ntask;
             }
             return GO_ON;
@@ -112,11 +93,8 @@ public:
             /* this is my scheduling policy */
             std::vector<int>::iterator idx_it = std::min_element(load.begin(),load.end());
             long idx = static_cast<long>(idx_it - load.begin());
-            lb->set_victim(idx); /* set next worker to select */
             load[idx] += *t;
-            
-
-            ff_send_out(t);
+            ff_send_out_to(t, idx);
             ++ntask;
         }
 
@@ -128,7 +106,6 @@ private:
     int ntask;
     int nworkers;
     std::vector<int> load;
-    my_loadbalancer * lb;
 };
 
 
@@ -152,8 +129,8 @@ int main(int argc, char * argv[]) {
         return -1;
     }
     
-    ff_farm<my_loadbalancer> farm(false, 1024,8192);
-    Emitter emitter(ntask,nworkers,farm.getlb());
+    ff_farm farm(false, 1024,8192);
+    Emitter emitter(ntask,nworkers);
     farm.add_emitter(&emitter);
 
     std::vector<ff_node *> w;

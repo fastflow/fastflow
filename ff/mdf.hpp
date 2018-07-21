@@ -171,7 +171,7 @@ protected:
             return baseSched::GO_ON;
         }
 
-        void eosnotify(ssize_t id=-1) { lb->broadcast_task(EOS); }
+        void eosnotify(ssize_t id=-1) { lb->broadcast_task(FF_EOS); }
         int wait_freezing()           { return lb->wait_lb_freezing(); }
 
     private:
@@ -218,7 +218,7 @@ public:
         ff_pipeline(false,outstandingTasks), farmworkers(maxnw) { //NOTE: pipe has fixed size queue by default 
         GD<T1> *_gd   = new GD<T1>(F,args);
         _gd->setMaxTasks(outstandingTasks+16); // NOTE: TASKS must be greater than pipe's queue!
-        farm = new ff_farm<>(false,640*maxnw,1024*maxnw,true,maxnw,true);
+        farm = new ff_farm(false,640*maxnw,1024*maxnw,true,maxnw,true);
 	    
         std::vector<ff_node *> w;
         // NOTE: Worker objects are going to be destroyed by the farm destructor
@@ -283,7 +283,7 @@ public:
 protected:
     int farmworkers;   // n. of workers in the farm
     base_gd   *gd;     // first stage
-    ff_farm<> *farm;   // second stage
+    ff_farm   *farm;   // second stage
     ff_node   *sched;  // farm's scheduler
 };
 
