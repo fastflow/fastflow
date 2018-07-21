@@ -507,7 +507,7 @@ protected:
             }
         }
 
-        void eosnotify(ssize_t id=-1) { lb->broadcast_task(EOS); }
+        void eosnotify(ssize_t id=-1) { lb->broadcast_task(FF_EOS); }
         int wait_freezing()           { return lb->wait_lb_freezing(); }
 
     private:
@@ -561,7 +561,7 @@ public:
           int maxnw=ff_numCores(), void (*schedRelaxF)(unsigned long)=NULL):
         _divide_fn(divide_fn), _combine_fn(combine_fn), _seq_fn(seq_fn), _condition_fn(cond_fn) {
         
-        farm = new ff_farm<>(false,640*maxnw,1024*maxnw,true,maxnw,true);
+        farm = new ff_farm(false,640*maxnw,1024*maxnw,true,maxnw,true);
         std::vector<ff_node *> w;
         // NOTE: Worker objects are going to be destroyed by the farm destructor
         for(int i=0;i<numw;++i) w.push_back(new DACWorker);
@@ -576,7 +576,7 @@ public:
                                _divide_fn(divide_fn), _combine_fn(combine_fn), _seq_fn(seq_fn), _condition_fn(cond_fn)
     {
 
-        farm = new ff_farm<>(false,640*maxnw,1024*maxnw,true,maxnw,true);
+        farm = new ff_farm(false,640*maxnw,1024*maxnw,true,maxnw,true);
         std::vector<ff_node *> w;
         // NOTE: Worker objects are going to be destroyed by the farm destructor
         for(int i=0;i<numw;++i) w.push_back(new DACWorker);
@@ -635,7 +635,7 @@ protected:
     const cond_f_t&     _condition_fn;
 
     int farmworkers;   // n. of workers in the farm
-    ff_farm<> *farm;   
+    ff_farm   *farm;   
     Scheduler *sched;  // farm's scheduler
 };
 

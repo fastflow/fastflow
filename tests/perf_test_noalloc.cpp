@@ -98,7 +98,7 @@ int main(int argc, char * argv[]) {
         nticks         = atoi(argv[4]);
     }
 
-    ff_farm<> farm(false, nworkers*buffer_entries);    
+    ff_farm farm(false, nworkers*buffer_entries);    
     Emitter E(numtasks);
     farm.add_emitter(&E);
     std::vector<ff_node *> w;

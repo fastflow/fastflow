@@ -104,7 +104,7 @@ int main(int argc, char* argv[]) {
     printf("Time =%g\n", ffTime(GET_TIME));
 
 #if defined(ON_DEMAND)
-    ff_farm<>   farm;
+    ff_farm   farm;
     std::vector<ff_node *> w;
     farm.add_emitter(new Ondemand(size));
     farm.set_scheduling_ondemand(1);

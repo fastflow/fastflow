@@ -142,7 +142,7 @@ int main(int argc, char * argv[]) {
         return -1;
     }
 
-    ff_farm<> mainFarm;
+    ff_farm mainFarm;
     mainEmitter mainE(streamlen);
     mainFarm.add_emitter(&mainE);
     mainFarm.set_scheduling_ondemand();
@@ -150,8 +150,8 @@ int main(int argc, char * argv[]) {
     std::vector<ff_node *> w;
     std::vector<ff_node *> w2;
     for(int i=0;i<nworkers;++i) {
-        ff_farm<> * W = new ff_farm<>;
-        Emitter * e = new Emitter(i,W->getlb());
+        ff_farm *W = new ff_farm;
+        Emitter *e = new Emitter(i,W->getlb());
         W->add_emitter(e);
         
         w.push_back(new Worker(i));

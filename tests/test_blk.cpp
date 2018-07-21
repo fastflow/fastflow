@@ -26,7 +26,7 @@
  */
 /* testing BLK and NBLK 
  *
- *  pipe(First, Farm(2), Last)
+ *  pipe(First, Farm(4), Last)
  */
 
 /* Author: Massimo Torquati
@@ -79,6 +79,7 @@ struct Last: ff_node_t<long> {
 struct Worker: ff_node_t<long> {
     long *svc(long *task) { 
         printf("Worker%ld, received %ld\n", get_my_id(), reinterpret_cast<long>(task));
+        usleep(get_my_id()*1000);
         return task; 
     }
 };
@@ -86,14 +87,16 @@ struct Worker: ff_node_t<long> {
 
 
 int main() {
-    const size_t nworkers = 2;
+    const size_t nworkers = 4;
     First first;
     Last  last;
+
     ff_Farm<long,long> farm(  [nworkers]() { 
 	    std::vector<std::unique_ptr<ff_node> > W;
 	    for(size_t i=0;i<nworkers;++i)  W.push_back(make_unique<Worker>());
 	    return W;
 	} () );
+    
     farm.setFixedSize(true);
     farm.setInputQueueLength(nworkers*1);
     farm.setOutputQueueLength(nworkers*1);

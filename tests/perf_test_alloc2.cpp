@@ -276,37 +276,20 @@ private:
 #endif 
 
 
-/* 
- * You have to extend the ff_loadbalancer....
- */
-class my_loadbalancer: public ff_loadbalancer {
-public:
-    // this is necessary because ff_loadbalancer has non default parameters....
-    my_loadbalancer(int max_num_workers):ff_loadbalancer(max_num_workers) {}
-
-    void broadcast(void * task) {
-        ff_loadbalancer::broadcast_task(task);
-    }   
-};
-
-
 
 // it just starts all workers than it exits
-class Emitter: public ff_node {
+class Emitter: public ff_monode {
 public:
-    Emitter(my_loadbalancer * const lb):lb(lb) {}
     void * svc(void * ) {
         std::cerr << "Emitter received task\n";
-        lb->broadcast(GO_ON);
-        return NULL; 
+        broadcast_task(GO_ON);
+        return EOS; 
     }
-private:
-    my_loadbalancer * lb;
 };
 
-class Collector: public ff_node {
+class Collector: public ff_minode {
 public:
-    Collector(int itemsize, ff_gatherer*const gt):itemsize(itemsize),gt(gt) {}
+    Collector(int itemsize):itemsize(itemsize) {}
     
     int svc_init() {
 #if defined(USE_PROC_AFFINITY)
@@ -318,7 +301,7 @@ public:
         itemsize = 0;          // just to avoid warnings
 #endif
 #if !defined(DONT_USE_FFA)
-        gt->get_channel_id();  // just to avoid warnings
+        get_channel_id();  // just to avoid warnings
 #endif
         return 0;
     }
@@ -329,7 +312,7 @@ public:
     //    the allocator and the worker id (you must define DONT_USE_FFA for this option)
     void * svc(void * task) { 
 #if defined(DONT_USE_FFA)
-        FREE(task, gt->get_channel_id());
+        FREE(task, get_channel_id());
 #else
         // the size is required for TBB's allocator
         FREE(task,itemsize*sizeof(ff_task_t));
@@ -338,7 +321,6 @@ public:
     }
 private:
     int itemsize; // needed for TBB's allocators
-    ff_gatherer*const gt;
 };
 
 int main(int argc, char * argv[]) {    
@@ -382,9 +364,9 @@ int main(int argc, char * argv[]) {
     } 
 
     // create the farm object
-    ff_farm<my_loadbalancer> farm;
+    ff_farm farm;
     // create and add emitter object to the farm
-    Emitter E(farm.getlb());
+    Emitter E;
     farm.add_emitter(&E);
     
     std::vector<ff_node *> w;
@@ -392,7 +374,7 @@ int main(int argc, char * argv[]) {
         w.push_back(new Worker(itemsize,ntasks/nworkers,nticks));
     farm.add_workers(w);
         
-    Collector C(itemsize,farm.getgt());
+    Collector C(itemsize);
     farm.add_collector(&C);
     
     // let's start

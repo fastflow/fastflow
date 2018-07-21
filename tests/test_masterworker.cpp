@@ -73,7 +73,7 @@ public:
             ++numtasks;
             return task;
         }        
-        if (--numtasks == 0 && eosreceived) return EOS;
+        if (--numtasks == 0 && eosreceived) return FF_EOS;
         return GO_ON;	
     }
     void eosnotify(ssize_t id) {
@@ -82,7 +82,7 @@ public:
             if (numtasks == 0) {
                 printf("BROADCAST\n");
                 fflush(stdout);
-                lb->broadcast_task(EOS);
+                lb->broadcast_task(FF_EOS);
             }
         }
     }
@@ -115,7 +115,7 @@ int main(int argc,  char * argv[]) {
         return -1;
     }
 
-    ff_farm<> farm(true /* accelerator set */);
+    ff_farm farm(true /* accelerator set */);
     E emitter(farm.getlb());
     farm.add_emitter(&emitter);
 
@@ -138,7 +138,7 @@ int main(int argc,  char * argv[]) {
 			std::cout << "[Main] Offloading " << *ii << "\n";
             farm.offload(ii); 
         }
-        farm.offload(EOS);    
+        farm.offload(FF_EOS);    
         // Here join
         farm.wait_freezing();          
         std::cout << "[Main] Farm accelerator frozen, time= " << farm.ffTime() << " (ms)\n";

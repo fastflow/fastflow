@@ -187,9 +187,7 @@ int main() {
         Emitter E(lambda);
         farm1.add_emitter(E);
         farm1.remove_collector();
-        farm2.setMultiInput();
         farm2.remove_collector();
-        farm3.setMultiInput();
         farm3.remove_collector();
         Collector C;
         farm3.add_collector(C);
@@ -207,7 +205,7 @@ int main() {
         ff_Farm<myTask> farm0(f3, 3);
         ff_node_F<myTask> F1(f1), F2(f2);
         ff_Pipe<myTask> pipe6(F1,F2,farm0);
-        struct Scheduler:public ff_node_t<myTask> {
+        struct Scheduler:public ff_monode_t<myTask> {
             ff_loadbalancer* lb;
             Scheduler(ff_loadbalancer* lb):lb(lb) {}
             myTask *svc(myTask *t) {
@@ -225,7 +223,7 @@ int main() {
         Scheduler S(farm0.getlb());
         farm0.add_emitter(S);
         farm0.remove_collector();
-        farm0.wrap_around();
+        farm0.wrap_around(true); // true because the farm has extra input when inserted in the pipe
         pipe6.run_and_wait_end();
         printf("done 6th\n\n");
     }

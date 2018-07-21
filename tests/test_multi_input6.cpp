@@ -42,7 +42,7 @@
  *
  *   2-stage pipeline: 
  *     - the first stage is a farm with no Emitter and Collector
- *     - the second stage is a sequential stage          
+ *     - the second stage is a multi-input node
  *
  */
 
@@ -77,14 +77,14 @@ int main() {
     w.push_back(new W);
     w.push_back(new W);
     w.push_back(new W);
-    ff_farm<> farm(w);
+    ff_farm farm(w);
     farm.remove_collector();
     ff_pipe<long> pipe(&farm,&S);
     pipe.run_and_wait_end();
 
 #else
     Stage S;
-    ff_farm<> farm;
+    ff_farm farm;
     std::vector<ff_node*> w;
     w.push_back(new W);
     w.push_back(new W);

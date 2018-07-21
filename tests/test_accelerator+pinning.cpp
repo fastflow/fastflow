@@ -106,7 +106,7 @@ public:
     nsims = input_tasks.size();
     
     //set the accelerator
-    ff_farm<> farm(true, nsims);  
+    ff_farm farm(true, nsims);  
     vector<ff_node *> workers;
     for(int i=0; i<nworkers; i++)
       workers.push_back(new Acc1_Worker());
@@ -485,7 +485,7 @@ public:
   n_stat_workers(nworkers)
   {
     stat_windows = NULL;
-    St = new ff_farm<>(true); //set stat. farm-acc.
+    St = new ff_farm(true); //set stat. farm-acc.
     for(int i=0; i<n_stat_workers; ++i)
       stat_workers.push_back(new Acc2_Worker());
     St->add_workers(stat_workers);
@@ -535,7 +535,7 @@ private:
   int n_monitors;
   vector<Stat_Window<double> *> *stat_windows; //the most recent stat. windows
   int n_stat_workers;
-  ff_farm<> *St;
+  ff_farm *St;
   Acc2_Collector *C;
   vector<ff_node *> stat_workers;
 };

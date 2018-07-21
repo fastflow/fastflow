@@ -131,7 +131,7 @@ int main(int argc, char * argv[]) {
     Start start(streamlen);
     pipe.add_stage(&start);
 
-    ff_farm<> farm1;
+    ff_farm farm1;
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers1;++i) w.push_back(new Worker1);
     farm1.add_workers(w);
@@ -139,7 +139,7 @@ int main(int argc, char * argv[]) {
 
     pipe.add_stage(&farm1);
 
-    ff_farm<> farm2;
+    ff_farm farm2;
     Emitter emitter(farm2.getlb());
     farm2.add_emitter(&emitter);
 

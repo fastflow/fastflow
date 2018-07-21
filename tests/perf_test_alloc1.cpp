@@ -264,7 +264,7 @@ int main(int argc, char * argv[]) {
         return 0;
     } 
     // create the farm object
-    ff_farm<> farm(false, buffer_entries*nworkers);
+    ff_farm farm(false, buffer_entries*nworkers);
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) 
         w.push_back(new Worker(itemsize,nticks));

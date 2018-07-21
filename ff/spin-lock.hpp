@@ -57,9 +57,7 @@ ALIGN_TO_PRE(CACHE_LINE_SIZE) struct AtomicFlagWrapper {
 	Before removing the conditional compilation we should double-check that initialisation with .clear() really works in 
     all platforms.  
 */
-#ifndef _MSC_VER
-    AtomicFlagWrapper():F(ATOMIC_FLAG_INIT) {}
-#else
+#if defined(_MSC_VER)
 	AtomicFlagWrapper() {
 		F.clear();
 		}
@@ -72,8 +70,11 @@ ALIGN_TO_PRE(CACHE_LINE_SIZE) struct AtomicFlagWrapper {
     void clear(std::memory_order mo) {
         F.clear(mo);
     }	
-
+#if defined(_MSC_VER)
 	std::atomic_flag F;
+#else
+    std::atomic_flag F=ATOMIC_FLAG_INIT;
+#endif
 }ALIGN_TO_POST(CACHE_LINE_SIZE);
 
 typedef AtomicFlagWrapper lock_t[1];

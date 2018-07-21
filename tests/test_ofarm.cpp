@@ -25,16 +25,16 @@
  ****************************************************************************
  */
 
-/*  
- *           3-stages pipeline
+/* 3-stages pipeline 
+ *           
+ *          |<-------- ordered farm --------->|
  *               
- *             --> Worker1 -->         
- *            |               |        
- * Start ----> --> Worker1 -->  -----> Stop
- *            |               |        
- *             --> Worker1 -->         
+ *                  | --> Worker1 -->|         
+ *                  |                |        
+ * Start -->DefEmi->| --> Worker1 -->| -> DefCol --> Stop
+ *                  |                |        
+ *                  | --> Worker1 -->|         
  *                                     
- *                 farm
  *               
  * This test shows how to implement an ordered farm. In this case
  * the farm respects the FIFO ordering of tasks.....
@@ -54,34 +54,31 @@ class Start: public ff_node_t<long> {
 public:
     Start(int streamlen):streamlen(streamlen) {}
     long* svc(long*) {    
-        for (int j=0;j<streamlen;j++) {
-            ff_send_out(new long(j));
+        for (long j=1;j<=streamlen;j++) {
+            ff_send_out((long*)j);
         }
-        return NULL;
+        return EOS;
     }
 private:
     int streamlen;
 };
 
-
 // worker function
-long *Fworker(long *task, ff_node*const) {
-        usleep(random() % 20000);
-        return task;
+long *Fworker(long *task, ff_node*const node) {
+    if (node->get_my_id() == 0) usleep(20000);
+    return task;
 }
-
 
 class Stop: public ff_node_t<long> {
 public:
-    Stop():expected(0),error(false) {}
+    Stop():expected(1),error(false) {}
 
     long* svc(long* t) {    
-        long &task = *t;
+        long task = (long)t;
         if (task != expected) {
             printf("ERROR: task received out of order, received %ld expected %ld\n", task, expected);
             error = true;
         }
-        
         expected++;
         return GO_ON;
     }
@@ -123,11 +120,13 @@ int main(int argc, char * argv[]) {
     pipe.add_stage(make_unique<ff_OFarm<long>>(Fworker, nworkers));
     pipe.add_stage(make_unique<Stop>());
 #else  // one-line command
+
     ff_Pipe<> pipe(make_unique<Start>(streamlen),
                    make_unique<ff_OFarm<long>>(Fworker, nworkers),
                    make_unique<Stop>());
 #endif
 
+    
     if (pipe.run_and_wait_end()<0) {
         error("running pipe\n");
         return -1;

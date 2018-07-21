@@ -68,13 +68,14 @@ struct Scheduler: ff_node_t<long> {
 struct Worker: ff_node_t<long> {
     long *svc(long *task) { 
         printf("Worker%ld, received %ld\n", get_my_id(), reinterpret_cast<long>(task));
+        usleep(get_my_id()*50000);
         return task; 
     }
 };
 
 
 int main() {
-    const size_t nworkers = 2;
+    const size_t nworkers = 3;
     ff_Farm<> farm(  [nworkers]() { 
 	    std::vector<std::unique_ptr<ff_node> > W;
 	    for(size_t i=0;i<nworkers;++i)  W.push_back(make_unique<Worker>());
@@ -84,8 +85,8 @@ int main() {
     farm.add_emitter(sched);
     farm.remove_collector();
     farm.setFixedSize(true);
-    farm.setInputQueueLength(nworkers*100);
-    farm.setOutputQueueLength(nworkers*100);
+    farm.setInputQueueLength(1);
+    farm.setOutputQueueLength(1);
     farm.wrap_around();
     farm.run_and_wait_end();
     return 0;

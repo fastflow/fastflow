@@ -126,6 +126,12 @@ private:
     int     mcnt;
 #endif
 
+public:    
+    /* pointer to member function for the push method */
+    bool (SWSR_Ptr_Buffer::*pushPMF)(void * const);
+    /* pointer to member function for the ppop method */
+    bool (SWSR_Ptr_Buffer::*popPMF)(void **);
+    
 public:
     /** 
      *  Constructor.
@@ -134,6 +140,8 @@ public:
      */
     SWSR_Ptr_Buffer(unsigned long n, const bool=true):
         pread(0),pwrite(0),size(n),buf(0) {
+        pushPMF=&SWSR_Ptr_Buffer::push;
+        popPMF =&SWSR_Ptr_Buffer::pop;
         // Avoid unused private field warning on padding1, padding2
         //(void)padding1;
         //(void)padding2;
@@ -196,7 +204,7 @@ public:
      *
      * \return The size of the buffer.
      */
-    inline unsigned long buffersize() const { return size; };
+    inline size_t buffersize() const { return size; };
     
     /** 
      *  Push method: push the input value into the queue. A Write Memory
@@ -366,6 +374,17 @@ public:
         return size;  
     }
 
+    // Not yet implemented 
+    inline bool mp_push(void *const data) {
+        abort();
+        return false;
+    }
+    // Not yet implemented 
+    inline bool mc_pop(void ** data) {
+        abort();
+        return false;
+    }
+    
     inline bool isFixedSize() const { return true; }
 };
 
@@ -387,8 +406,8 @@ private:
     volatile unsigned long    pwrite;
     long padding2[longxCacheLine-1];
 
-    const    unsigned long size;
-    void                   ** buf;
+    const    size_t size;
+    void         ** buf;
     
 public:
     /**
@@ -438,7 +457,7 @@ public:
     /**
      * TODO
      */
-    inline unsigned long buffersize() const { return size; };
+    inline size_t buffersize() const { return size; };
     
     /**
      * TODO
