@@ -904,6 +904,10 @@ public:
         }
         return newvector;
     };
+    /**
+     *  \brief returns the stage i of the pipeline. If the stage is a pipeline
+     *  the function is called recursively extracting its first stage. 
+     */
     ff_node* get_node(int i) const {
         if (i<0 || i>=(int)nodes_list.size()) return nullptr;
         if (nodes_list[i]->isPipe()) {
