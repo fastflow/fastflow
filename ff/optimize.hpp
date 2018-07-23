@@ -80,7 +80,16 @@ int optimize_static(ff_farm& farm, const OptLevel& opt=OptLevel1()) {
             farm.blocking_mode(true);
         }
     }
-    
+    // turning off initial/default mapping if the n. of threads is greater than the threshold
+    if (opt.no_default_mapping) {
+        ssize_t card = farm.cardinality();
+        if (opt.max_mapped_threads < card) {
+            opt_report(opt.verbose_level, OPT_NORMAL,
+                       "OPT (farm): MAPPING: Disabling mapping, threshold=%ld, number of threads=%ld\n",opt.max_mapped_threads, card);
+            
+            farm.no_mapping();
+        }
+    }
     // here it looks for internal farms with null collectors
     if (opt.remove_collector) {
         const svector<ff_node*>& W = farm.getWorkers();
@@ -98,6 +107,12 @@ int optimize_static(ff_farm& farm, const OptLevel& opt=OptLevel1()) {
             }
         }
     }
+    // no initial barrier
+    if (opt.no_initial_barrier) {
+        opt_report(opt.verbose_level, OPT_NORMAL,
+                   "OPT (farm): NO_INITIAL_BARRIER: Initial barrier disabled\n");
+        farm.no_barrier();
+   }
     return 0;
 }
     
@@ -376,6 +391,16 @@ int optimize_static(ff_pipeline& pipe, const OptLevel& opt=OptLevel1()) {
                       "OPT (pipe): BLOCKING_MODE: Activating blocking mode, threshold=%ld, number of threads=%ld\n",opt.max_nb_threads, card);
            pipe.blocking_mode(true);
        } 
+   }
+    // turning off initial/default mapping if the n. of threads is greater than the threshold
+   if (opt.no_default_mapping) {
+       ssize_t card = pipe.cardinality();
+       if (opt.max_mapped_threads < card) {
+           opt_report(opt.verbose_level, OPT_NORMAL,
+                      "OPT (pipe): MAPPING: Disabling mapping, threshold=%ld, number of threads=%ld\n",opt.max_mapped_threads, card);
+           
+           pipe.no_mapping();
+       }
    }
    // no initial barrier
    if (opt.no_initial_barrier) {
