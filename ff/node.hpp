@@ -48,6 +48,20 @@
 
 
 namespace ff {
+
+static void* FF_EOS           = (void*)(ULLONG_MAX);     /// automatically propagated
+static void* FF_EOS_NOFREEZE  = (void*)(ULLONG_MAX-1);   /// non automatically propagated
+static void* FF_EOSW          = (void*)(ULLONG_MAX-2);   /// propagated only by farm's stages
+static void* FF_GO_ON         = (void*)(ULLONG_MAX-3);   /// non automatically propagated
+static void* FF_GO_OUT        = (void*)(ULLONG_MAX-4);   /// non automatically propagated
+static void* FF_TAG_MIN       = (void*)(ULLONG_MAX-10);  /// just a lower bound mark
+// The FF_GO_OUT is quite similar to the FF_EOS_NOFREEZE. Both of them are not propagated automatically to
+// the next stage, but while the first one is used to exit the main computation loop and, if this is the case, to be frozen,
+// the second one is used to exit the computation loop and keep spinning on the input queue waiting for a new task
+// without being frozen.
+// EOSW is like EOS but it is not propagated outside a farm pattern. If an emitter receives EOSW in input,
+// then it will be discarded.
+//
     
 /* optimization levels used in the optimize_static call (see optimize.hpp) */    
 struct OptLevel {
