@@ -126,18 +126,44 @@ public:
         }
     }
 
-    // NOTE: it is multi-input only if the first node is multi-input
-    inline bool isMultiInput() const {
-        if (comp_nodes[0]->isMultiInput()) return true;
-        return comp_multi_input;
-    }
-    inline bool isMultiOutput() const {
-        if (comp_nodes[1]->isMultiOutput()) return true;
-        return comp_multi_output;
+    int run(bool=false) {
+        if (!prepared) if (prepare()<0) return -1;
+
+        // set blocking mode for the last node of the composition
+        getLast()->blocking_mode(blocking_in);      
+        if (comp_nodes[0]->isMultiInput())
+            return ff_minode::run();
+        
+        if (ff_node::run(true)<0) return -1;
+        return 0;
     }
 
-    inline bool isComp() const        { return true; }
+     int  wait() {
+         if (comp_nodes[0]->isMultiInput())
+             return ff_minode::wait();
+         if (ff_node::wait()<0) return -1;
+         return 0;
+    }
+
+    int run_and_wait_end() {
+        if (isfrozen()) {  // TODO 
+            error("COMB: Error: feature not yet supported\n");
+            return -1;
+        } 
+        stop();
+        if (run()<0) return -1;           
+        if (wait()<0) return -1;
+        return 0;
+    }
     
+    inline bool isComp() const        { return true; }
+
+    double ffTime() {
+        return diffmsec(getstoptime(),getstarttime());
+    }
+    double ffwTime() {
+        return diffmsec(getwstoptime(),getwstartime());
+    }
 protected:
     ff_comb():ff_minode() {}
 
@@ -262,6 +288,15 @@ protected:
         return 0;
     }
 
+    // NOTE: it is multi-input only if the first node is multi-input
+    bool isMultiInput() const {
+        if (comp_nodes[0]->isMultiInput()) return true;
+        return comp_multi_input;
+    }
+    bool isMultiOutput() const {
+        if (comp_nodes[1]->isMultiOutput()) return true;
+        return comp_multi_output;
+    }    
     void set_multiinput() {
         // see farm.hpp
         // to avoid that in the eosnotify the EOS is propogated
@@ -445,25 +480,6 @@ protected:
         return n->ondemand_buffer();
     }
    
-    int run(bool=false) {
-        if (!prepared) if (prepare()<0) return -1;
-
-        // set blocking mode for the last node of the composition
-        getLast()->blocking_mode(blocking_in);      
-        if (comp_nodes[0]->isMultiInput())
-            return ff_minode::run();
-        
-        if (ff_node::run(true)<0) return -1;
-        return 0;
-    }
-
-     int  wait(/* timeout */) {
-         if (comp_nodes[0]->isMultiInput())
-             return ff_minode::wait();
-         if (ff_node::wait()<0) return -1;
-         return 0;
-    }
-
     void eosnotify(ssize_t id=-1) {
         ++neos;
         comp_nodes[0]->eosnotify(id);

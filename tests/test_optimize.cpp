@@ -236,17 +236,18 @@ int main(int argc, char* argv[]) {
     if (optimize) {
         OptLevel opt;
         opt.max_nb_threads=ff_realNumCores();
-        //opt.prepare=true;
+        opt.max_mapped_threads=opt.max_nb_threads;
         opt.verbose_level=2;
         opt.no_initial_barrier=true;
+        opt.no_default_mapping=true; // disable mapping if #threads > max_mapped_threads
         opt.blocking_mode=true;      // enabling blocking if #threads > max_nb_threads
         opt.merge_farms=true;        // introducing normal form, if possible
         opt.merge_with_emitter=true; // merging previous pipeline stage with farm emitter 
         opt.remove_collector=true;   // remove farm collector
         opt.introduce_a2a=true;      // introduce all-2-all between two farms, if possible
         
-        // this call tries to apply all previous optimizations modifying the pipe passed
-        // as parameter
+        // the next call tries to apply all previous optimizations by changing the 
+        // internal structure of the pipe passed as parameter
         if (optimize_static(pipe,opt)<0) {
             error("optimize_static\n");
             return -1;

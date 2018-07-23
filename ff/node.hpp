@@ -51,9 +51,11 @@ namespace ff {
     
 /* optimization levels used in the optimize_static call (see optimize.hpp) */    
 struct OptLevel {
-    ssize_t  max_nb_threads=MAX_NUM_THREADS;
-    int      verbose_level=0;
-    bool     no_initial_barrier{false};   
+    ssize_t  max_nb_threads{MAX_NUM_THREADS};
+    ssize_t  max_mapped_threads{MAX_NUM_THREADS};
+    int      verbose_level{0};
+    bool     no_initial_barrier{false};
+    bool     no_default_mapping{false};
     bool     blocking_mode{false};
     bool     merge_with_emitter{false};
     bool     remove_collector{false};
@@ -170,10 +172,10 @@ class ff_thread {
     friend void * proxy_thread_routine(void *arg);
 
 protected:
-    ff_thread(BARRIER_T * barrier=NULL):
+    ff_thread(BARRIER_T * barrier=NULL, bool default_mapping=true):
         tid((size_t)-1),threadid(0), barrier(barrier),
         stp(true), // only one shot by default
-        spawned(false),
+        spawned(false), default_mapping(default_mapping),
         freezing(0), frozen(false),isdone(false),
         init_error(false), attr(NULL) {
         (void)FF_TAG_MIN; // to avoid warnings
@@ -304,7 +306,9 @@ public:
                 return -1;
         }
 
-        int CPUId = init_thread_affinity(attr, cpuId);
+        int CPUId = -1;
+        if (default_mapping)
+            init_thread_affinity(attr, cpuId);
         if (CPUId==-2) return -2;
         if (barrier) {
             tid= barrier->getCounter();
@@ -394,6 +398,7 @@ private:
     BARRIER_T    *  barrier;            /// A \p Barrier object
     bool            stp;
     bool            spawned;
+    bool            default_mapping;
     int             freezing;  
     bool            frozen,isdone;
     bool            init_error;
@@ -1267,13 +1272,16 @@ protected:
     virtual void no_barrier() {
         initial_barrier=false;
     }
+    virtual void no_mapping() {
+        default_mapping=false;
+    }
     
 private:  
     /* ------------------------------------------------------------------------------------- */
     class thWorker: public ff_thread {
     public:
         thWorker(ff_node * const filter, const int input_neos=1):
-            ff_thread(filter->barrier),filter(filter),input_neos(input_neos) {}
+            ff_thread(filter->barrier, filter->default_mapping),filter(filter),input_neos(input_neos) {}
         
         inline bool push(void * task) {
             /* NOTE: filter->push and not buffer->push because of the filter can be a dnode
@@ -1364,10 +1372,12 @@ private:
         
         int svc_init() {
 #if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
-            int cpuId = filter->getCPUId();
-            if (ff_mapThreadToCpu((cpuId<0) ? (cpuId=threadMapper::instance()->getCoreId(tid)) : cpuId)!=0)
-                error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());            
-            filter->setCPUId(cpuId);
+            if (default_mapping) {
+                int cpuId = filter->getCPUId();
+                if (ff_mapThreadToCpu((cpuId<0) ? (cpuId=threadMapper::instance()->getCoreId(tid)) : cpuId)!=0)
+                    error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());            
+                filter->setCPUId(cpuId);
+            }
 #endif
             gettimeofday(&filter->tstart,NULL);
             return filter->svc_init();
@@ -1451,6 +1461,7 @@ protected:
 
     bool                  prepared = false;
     bool                  initial_barrier = true;
+    bool                  default_mapping = true;
     svector<void*>    comp_localdata;
 };  // ff_node
 

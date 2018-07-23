@@ -97,100 +97,108 @@ int main() {
     std::cout << "TEST  PIPE Time = " << pipe.ffwTime() << " ms\n";
     
     {    
-    // we declared them const because we want to re-use the same nodes in multiple tests
-    const firstStage    _1;
-    const secondStage   _2;
-    const secondStage2  _3; 
-    const secondStage3  _4;
-    const thirdStage    _5;
-    {
-        ff_Pipe<> pipe(_1, combine_nodes(
-                                     combine_nodes(_2, _3),
-                                     combine_nodes(_4, _5)
-                                     ));
-        // starts the pipeline
-        if (pipe.run_and_wait_end()<0)
-            error("running pipe\n");
-        std::cout << "TEST0 DONE Time = " << pipe.ffwTime() << " ms\n";
-    }
-    usleep(500000);
-    {
-        ff_Pipe<> pipe(_1, combine_nodes(combine_nodes(_2, _3), combine_nodes(_4, _5)) );
-        // starts the pipeline
-        if (pipe.run_and_wait_end()<0)
-            error("running pipe\n");
-        std::cout << "TEST1 DONE Time = " << pipe.ffwTime() << " ms\n";
-    }
-    usleep(500000);
-    {
-        ff_Pipe<> pipe(_1, _2, combine_nodes(_3, combine_nodes(_4, _5)) );
-        // starts the pipeline
-        if (pipe.run_and_wait_end()<0)
-            error("running pipe\n");
-        std::cout << "TEST2 DONE Time = " << pipe.ffwTime() << " ms\n";
-    }
-    usleep(500000);
-    {
-        ff_Pipe<> pipe(_1, _2, _3, combine_nodes(_4, _5) );
-        // starts the pipeline
-        if (pipe.run_and_wait_end()<0)
-            error("running pipe\n");
-        std::cout << "TEST3 DONE Time = " << pipe.ffwTime() << " ms\n";
-    }
-    usleep(500000);
-    {
-        ff_Pipe<> pipe( combine_nodes(_1,_2), _3, combine_nodes(_4, _5) );
-        // starts the pipeline
-        if (pipe.run_and_wait_end()<0)
-            error("running pipe\n");
-        std::cout << "TEST4 DONE Time = " << pipe.ffwTime() << " ms\n";
-    }
-    usleep(500000);
-    {
-        ff_Pipe<> pipe( combine_nodes(combine_nodes(_1,_2), _3), combine_nodes(_4,_5) );
-        // starts the pipeline
-        if (pipe.run_and_wait_end()<0)
-            error("running pipe\n");
-        std::cout << "TEST5 DONE Time = " << pipe.ffwTime() << " ms\n";
-    }
-    usleep(500000);
-    {
-        ff_Pipe<> pipe( combine_nodes(_1,_2), combine_nodes(_3,_4), _5 );
-        // starts the pipeline
-        if (pipe.run_and_wait_end()<0)
-            error("running pipe\n");
-        std::cout << "TEST6 DONE Time = " << pipe.ffwTime() << " ms\n";
-    }
-    usleep(500000);
-    {
-        ff_Pipe<> pipe( combine_nodes(combine_nodes(_1,_2), combine_nodes(_3,_4)), _5 );
-        // starts the pipeline
-        if (pipe.run_and_wait_end()<0)
-            error("running pipe\n");
-        std::cout << "TEST7 DONE Time = " << pipe.ffwTime() << " ms\n";
-    }
-    usleep(500000);
-    {
-        ff_Pipe<> pipe( combine_nodes(combine_nodes(_1,_2), combine_nodes(_3,_4)), _5 );
-        // starts the pipeline
-        if (pipe.run_and_wait_end()<0)
-            error("running pipe\n");
-        std::cout << "TEST8 DONE Time = " << pipe.ffwTime() << " ms\n";
-    }
-    usleep(500000);
-    {  
-        ff_Pipe<> pipe(  combine_nodes(
-                                 combine_nodes(_1,_2),
-                                 combine_nodes(_3,_4)
-                                 ),
-                         _5);
-        // starts the pipeline
-        if (pipe.run_and_wait_end()<0)
-            error("running pipe\n");
-        std::cout << "TEST9 DONE Time = " << pipe.ffwTime() << " ms\n";
-    }
-    usleep(500000);
+        // we declared them const because we want to re-use the same nodes in multiple tests
+        const firstStage    _1;
+        const secondStage   _2;
+        const secondStage2  _3; 
+        const secondStage3  _4;
+        const thirdStage    _5;
+        {
+            auto comb = combine_nodes(_1, combine_nodes(_2, combine_nodes(_3, combine_nodes(_4, _5))));
+            if (comb.run_and_wait_end()<0)
+                error("running comb\n");
+            std::cout << "TEST0 DONE Time = " << comb.ffwTime() << " ms\n";
+
+        }
+        usleep(500000);
+        {
+            ff_Pipe<> pipe(_1, combine_nodes(
+                                             combine_nodes(_2, _3),
+                                             combine_nodes(_4, _5)
+                                             ));
+            // starts the pipeline
+            if (pipe.run_and_wait_end()<0)
+                error("running pipe\n");
+            std::cout << "TEST1 DONE Time = " << pipe.ffwTime() << " ms\n";
+        }
+        usleep(500000);
+        {
+            ff_Pipe<> pipe(_1, combine_nodes(combine_nodes(_2, _3), combine_nodes(_4, _5)) );
+            // starts the pipeline
+            if (pipe.run_and_wait_end()<0)
+                error("running pipe\n");
+            std::cout << "TEST2 DONE Time = " << pipe.ffwTime() << " ms\n";
+        }
+        usleep(500000);
+        {
+            ff_Pipe<> pipe(_1, _2, combine_nodes(_3, combine_nodes(_4, _5)) );
+            // starts the pipeline
+            if (pipe.run_and_wait_end()<0)
+                error("running pipe\n");
+            std::cout << "TEST3 DONE Time = " << pipe.ffwTime() << " ms\n";
+        }
+        usleep(500000);
+        {
+            ff_Pipe<> pipe(_1, _2, _3, combine_nodes(_4, _5) );
+            // starts the pipeline
+            if (pipe.run_and_wait_end()<0)
+                error("running pipe\n");
+            std::cout << "TEST4 DONE Time = " << pipe.ffwTime() << " ms\n";
+        }
+        usleep(500000);
+        {
+            ff_Pipe<> pipe( combine_nodes(_1,_2), _3, combine_nodes(_4, _5) );
+            // starts the pipeline
+            if (pipe.run_and_wait_end()<0)
+                error("running pipe\n");
+            std::cout << "TEST5 DONE Time = " << pipe.ffwTime() << " ms\n";
+        }
+        usleep(500000);
+        {
+            ff_Pipe<> pipe( combine_nodes(combine_nodes(_1,_2), _3), combine_nodes(_4,_5) );
+            // starts the pipeline
+            if (pipe.run_and_wait_end()<0)
+                error("running pipe\n");
+            std::cout << "TEST6 DONE Time = " << pipe.ffwTime() << " ms\n";
+        }
+        usleep(500000);
+        {
+            ff_Pipe<> pipe( combine_nodes(_1,_2), combine_nodes(_3,_4), _5 );
+            // starts the pipeline
+            if (pipe.run_and_wait_end()<0)
+                error("running pipe\n");
+            std::cout << "TEST7 DONE Time = " << pipe.ffwTime() << " ms\n";
+        }
+        usleep(500000);
+        {
+            ff_Pipe<> pipe( combine_nodes(combine_nodes(_1,_2), combine_nodes(_3,_4)), _5 );
+            // starts the pipeline
+            if (pipe.run_and_wait_end()<0)
+                error("running pipe\n");
+            std::cout << "TEST8 DONE Time = " << pipe.ffwTime() << " ms\n";
+        }
+        usleep(500000);
+        {
+            ff_Pipe<> pipe( combine_nodes(combine_nodes(_1,_2), combine_nodes(_3,_4)), _5 );
+            // starts the pipeline
+            if (pipe.run_and_wait_end()<0)
+                error("running pipe\n");
+            std::cout << "TEST9 DONE Time = " << pipe.ffwTime() << " ms\n";
+        }
+        usleep(500000);
+        {  
+            ff_Pipe<> pipe(  combine_nodes(
+                                           combine_nodes(_1,_2),
+                                           combine_nodes(_3,_4)
+                                           ),
+                             _5);
+            // starts the pipeline
+            if (pipe.run_and_wait_end()<0)
+                error("running pipe\n");
+            std::cout << "TEST10 DONE Time = " << pipe.ffwTime() << " ms\n";
+        }
+        usleep(500000);
     }
   
-  return 0;
+    return 0;
 }
