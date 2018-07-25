@@ -481,7 +481,6 @@ private:
     friend class ff_nodeSelector;
     friend class ff_loadbalancer;
     friend class ff_gatherer;
-    friend class ff_ofarm;
     friend class ff_minode;
     friend class ff_monode;
     friend class ff_a2a;
@@ -850,14 +849,8 @@ protected:
     }
     virtual int  cardinality() const { return 1; }
 
-
-    virtual void set_barrier(BARRIER_T * const b) {
-        barrier = b;
-    }
-    virtual BARRIER_T* get_barrier() const { return barrier; }
-
-    virtual inline void setlb(ff_loadbalancer*) {}
-    virtual inline void setgt(ff_gatherer*) {}
+    virtual inline void setlb(ff_loadbalancer*,bool=false) {}
+    virtual inline void setgt(ff_gatherer*,bool=false) {}
 
     
     /**
@@ -1002,6 +995,10 @@ public:
         CPUId=cpuID;
     }
 
+    virtual void set_barrier(BARRIER_T * const b) {
+        barrier = b;
+    }
+    virtual BARRIER_T* get_barrier() const { return barrier; }
     
     /** 
      * \internal
@@ -1206,7 +1203,7 @@ protected:
     }
 
        
-    virtual void propagateEOS() { }
+    virtual void propagateEOS(void* task=FF_EOS) { (void)task; }
     
     
 protected:
@@ -1325,7 +1322,12 @@ private:
             bool outpresent = (filter->get_out_buffer() != NULL);
             bool skipfirstpop = filter->skipfirstpop(); 
             bool exit=false;            
+            bool filter_outpresent = false;
 
+            // if the node is a combine where the last stage is a multi-output
+            if ( filter && ( !outpresent && filter->isMultiOutput() ) ) {
+                filter_outpresent=true;
+            }
             gettimeofday(&filter->wtstart,NULL);
             do {
                 if (inpresent) {
@@ -1337,10 +1339,11 @@ private:
                         
                         if (--input_neos > 0) continue;  
                         filter->eosnotify();
-                        
+
                         // only EOS and EOSW are propagated
-                        if (outpresent && ( (task == FF_EOS) || (task == FF_EOSW)) )  {
-                            push(task);                         
+                        if ( (task == FF_EOS) || (task == FF_EOSW) )  {
+                            if (outpresent)  push(task);
+                            if (filter_outpresent) filter->propagateEOS();
                         }
                         break;
                     }
@@ -1513,6 +1516,13 @@ struct ff_node_t: ff_node {
     virtual ~ff_node_t()  {}
     virtual OUT_t* svc(IN_t*)=0;
     inline  void *svc(void *task) { return svc(reinterpret_cast<IN_t*>(task)); };
+private:
+    // deleting some functions that do not have to be used in the svc
+    using ff_node::push;
+    using ff_node::pop;
+    using ff_node::Push;
+    using ff_node::Pop;
+
 };
 
 #if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))

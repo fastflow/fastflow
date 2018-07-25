@@ -96,6 +96,8 @@ public:
         while(i1!=i2) push_back(*(i1++));
     }
 
+    // TODO: implement swap and re-implement move constructor and move operator with swap
+    
     /**
      *  Move constructor
      */
@@ -105,7 +107,7 @@ public:
         cap   = v.cap;
         chunk = v.chunk;
 
-        v.first = NULL;
+        v.first = nullptr;
     }
     
     /**
@@ -130,6 +132,18 @@ public:
             if (first) { clear(); ::free(first); }
             first=(vector_type*)::malloc((i2-i1)*sizeof(vector_type));
             while(i1!=i2) push_back(*(i1++));
+        }
+        return *this;
+    }
+    svector& operator=(svector && v) {
+        if (this != &v) {
+            if (first) { clear(); ::free(first); }
+            first=v.first;
+            len  =v.len;
+            cap  =v.cap;
+            chunk=v.chunk;
+            
+            v.first = nullptr;
         }
         return *this;
     }

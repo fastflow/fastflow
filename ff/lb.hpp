@@ -166,7 +166,7 @@ protected:
         broadcast_task(goon);
     }
 
-    void propagateEOS() { push_eos(FF_EOS); }
+    void propagateEOS(void *task=FF_EOS) { push_eos(task); }
     
     /** 
      * \brief Virtual function that can be redefined to implement a new scheduling
@@ -1131,9 +1131,10 @@ public:
         else 
             running=workers.size();
         
-        if (filter) {            
-            if (!filter->isMultiOutput()  ||
-                (filter->isComp() && (filter->get_out_buffer() == nullptr))) {
+        if (filter) {
+            // WARNING: If the last node of a composition is a multi-output node, then the
+            // callback must not be set.
+            if (!filter->isMultiOutput()) {
                 filter->registerCallback(ff_send_out_emitter, this);
             }
             // setting the thread for the filter

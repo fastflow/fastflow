@@ -204,7 +204,10 @@ int main(int argc, char* argv[]) {
     }
     printf("TEST4 DONE\n");
     usleep(500000);
-    { // merging collecto and emitter of the two ORDERED farms 
+#if 0
+    // DA RIVEDERE
+    
+    { // merging collector and emitter of the two ORDERED farms 
         First first(ntasks);
         Last last;
         Emitter E;
@@ -234,8 +237,9 @@ int main(int argc, char* argv[]) {
             return -1;
         }
     }
-    printf("TEST5 DONE\n");
+    printf("TEST5 DONE\n");    
     usleep(500000);
+#endif    
     { // everything allocated on the heap
         First *first  = new First(ntasks);
         Last  *last   = new Last;

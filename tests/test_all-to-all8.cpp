@@ -197,8 +197,8 @@ int main() {
         }
         
         ff_a2a a2a;
-        a2a.add_firstset(W1);
-        a2a.add_secondset(W2);
+        a2a.add_firstset(W1,0,true);
+        a2a.add_secondset(W2, true);
         if (a2a.wrap_around()<0) {
             error("wrap_around\n");
             return -1;
@@ -208,11 +208,6 @@ int main() {
             error("running A2A\n");
             return -1;
         }
-
-        for(int i=0;i<nfilter1;++i) delete W1[i];
-
-        for(int i=0;i<nfilter2;++i) delete W2[i];
-        
     }
 
     printf("TEST1 DONE\n");

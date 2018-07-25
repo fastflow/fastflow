@@ -140,7 +140,7 @@ struct Stage6: ff_node_t<long> {
         nanosleep(&req, (struct timespec *)NULL);
         
         return in;
-    }
+    }    
 };
 struct Last: ff_node_t<long> {
     long* svc(long*in) {
@@ -155,7 +155,7 @@ struct Last: ff_node_t<long> {
 int main(int argc, char* argv[]) {
 
     // default arguments
-    size_t ntasks    = 100000;
+    size_t ntasks    = 10000;
     bool   optimize  = true;
     size_t nworkers1 = 3;
     size_t nworkers2 = 2;
@@ -230,6 +230,7 @@ int main(int argc, char* argv[]) {
     farm6.set_scheduling_ondemand();
 #endif
     // original network
+    //ff_Pipe<> pipe(first, farm1, farm2, farm3, farm4, farm5, farm6, last);
     ff_Pipe<> pipe(first, farm1, farm2, farm3, farm4, farm5, farm6, last);
 
     // optimization that I would like to apply, if possible

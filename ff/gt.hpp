@@ -66,7 +66,6 @@ namespace ff {
 class ff_gatherer: public ff_thread {
 
     friend class ff_farm;
-    friend class ff_ofarm;
     friend class ff_pipeline;
     friend class ff_minode;
 public:
@@ -528,6 +527,8 @@ public:
      */
     inline size_t getNWorkers() const { return workers.size();}
 
+    const svector<ff_node*>& getWorkers() const { return workers; }
+    
 
     /**
      * \brief Skips the first pop

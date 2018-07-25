@@ -77,20 +77,20 @@ struct Filter1: ff_minode_t<long> {   // multi-input
 
 struct Filter2: ff_monode_t<long> {   // multi-output
 	long *svc(long *in) {
-        //std::cout << "Filter2: (" << get_my_id() << "): " << (long)in << "\n";
+        std::cout << "Filter2: (" << get_my_id() << "): " << (long)in << "\n";
         return in;
     }
 };
 
 struct Filter3: ff_minode_t<long> {   // multi-input
 	long *svc(long *in) {
-        //std::cout << "Filter3: (" << get_my_id() << "): sending back " << (long)in << "\n";
+        std::cout << "Filter3: (" << get_my_id() << "): sending back " << (long)in << "\n";
         return in;
     }
 };
 struct Filter4: ff_monode_t<long> {   // multi-output
 	long *svc(long *in) {
-        //std::cout << "Filter3: (" << get_my_id() << "): sending back " << (long)in << "\n";
+        std::cout << "Filter3: (" << get_my_id() << "): sending back " << (long)in << "\n";
         return in;
     }
 };
