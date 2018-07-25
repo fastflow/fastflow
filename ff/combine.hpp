@@ -40,6 +40,7 @@
 #include <ff/node.hpp>
 #include <ff/multinode.hpp>
 #include <ff/pipeline.hpp>
+#include <ff/ordering_policies.hpp>
 #include <ff/farm.hpp>
 
 namespace ff {
@@ -87,8 +88,7 @@ public:
     ff_comb(T1& n1, T2& n2) {
         add_node(n1,n2);
     }
-    template<typename T1, typename T2>
-    ff_comb(T1* n1, T2* n2, bool first_cleanup=false, bool second_cleanup=false){
+    ff_comb(ff_node* n1, ff_node* n2, bool first_cleanup=false, bool second_cleanup=false){
         if (!n1 || !n2) {
             error("COMBINE, passing null pointer to constructor\n");
             return;
@@ -131,9 +131,15 @@ public:
 
         // set blocking mode for the last node of the composition
         getLast()->blocking_mode(blocking_in);      
-        if (comp_nodes[0]->isMultiInput())
+        if (comp_nodes[0]->isMultiInput()) {
+            svector<ff_node*> w(1);
+            getFirst()->get_in_nodes(w);
+            if (w.size() == 0)  getFirst()->skipfirstpop(true);
             return ff_minode::run();
-        
+        }
+
+        if (getFirst()->get_in_buffer() == nullptr)
+            getFirst()->skipfirstpop(true);
         if (ff_node::run(true)<0) return -1;
         return 0;
     }
@@ -147,7 +153,7 @@ public:
 
     int run_and_wait_end() {
         if (isfrozen()) {  // TODO 
-            error("COMB: Error: feature not yet supported\n");
+            error("COMB: Error: FEATURE NOT YET SUPPORTED\n");
             return -1;
         } 
         stop();
@@ -155,7 +161,16 @@ public:
         if (wait()<0) return -1;
         return 0;
     }
-    
+    // NOTE: it is multi-input only if the first node is multi-input
+    bool isMultiInput() const {
+        if (getFirst()->isMultiInput()) return true;
+        return false; //comp_multi_input;
+    }
+    // NOTE: it is multi-output only if the last node is multi-output
+    bool isMultiOutput() const {
+        if (getLast()->isMultiOutput()) return true;
+        return false; //comp_multi_output;
+    }        
     inline bool isComp() const        { return true; }
 
     double ffTime() {
@@ -233,6 +248,12 @@ protected:
         cleanup_stages.push_back(node1);
         add_node(*node1, n2);
     }
+
+    void skipfirstpop(bool sk)   {
+        getFirst()->skipfirstpop(sk);
+        ff_node::skipfirstpop(sk);
+    }
+
     
     void registerCallback(bool (*cb)(void *,unsigned long,unsigned long,void *), void * arg) {
         comp_nodes[1]->registerCallback(cb,arg);
@@ -280,23 +301,25 @@ protected:
         // registering a special callback if the last stage does
         // not have an output channel
         ff_node *n2 = getLast();
-        if (!n2->isMultiOutput() && (n2->get_out_buffer() == nullptr))
+        if (n2->isMultiOutput()) {
+            svector<ff_node*> w(1);
+            n2->get_out_nodes(w);
+            if (w.size()==0) 
+                n2->registerCallback(devnull, nullptr);   // devnull callback
+            else {
+                // NOTE: if the last stage of a composition is a multi-output node
+                // we must be sure that the callback is not set.
+                // see comments in lb.hpp (dryrun) and in multinode.hpp (ff_monode::ff_send_out_to)
+                n2->registerCallback(nullptr, nullptr); // resetting callback
+            }
+        } else 
+            if (n2->get_out_buffer() == nullptr)
             n2->registerCallback(devnull, nullptr);   // devnull callback
 
         
         prepared = true;
         return 0;
     }
-
-    // NOTE: it is multi-input only if the first node is multi-input
-    bool isMultiInput() const {
-        if (comp_nodes[0]->isMultiInput()) return true;
-        return comp_multi_input;
-    }
-    bool isMultiOutput() const {
-        if (comp_nodes[1]->isMultiOutput()) return true;
-        return comp_multi_output;
-    }    
     void set_multiinput() {
         // see farm.hpp
         // to avoid that in the eosnotify the EOS is propogated
@@ -349,7 +372,7 @@ protected:
                     comp_nodes[1]->eosnotify();
                     /*ret = FF_GO_OUT;*/ // NOTE: we cannot exit if the previous comp node does not exit
                     if (comp_nodes[1]->isMultiOutput())
-                        comp_nodes[1]->propagateEOS();         
+                        comp_nodes[1]->propagateEOS(FF_EOS);         
                     else {
                         if (comp_multi_output) ret = FF_EOS;
                         else comp_nodes[1]->ff_send_out(FF_EOS); // if no output is present it calls devnull
@@ -361,7 +384,7 @@ protected:
                 if (r2 == FF_EOS) {
                     ret = FF_GO_OUT;
                     if (comp_nodes[1]->isMultiOutput())
-                        comp_nodes[1]->propagateEOS();
+                        comp_nodes[1]->propagateEOS(FF_EOS);
                     else {
                         if (comp_multi_output) ret = FF_EOS;
                         comp_nodes[1]->ff_send_out(FF_EOS); // if no output is present it calls devnull
@@ -404,10 +427,12 @@ protected:
                 }
                 localdata1.clear();
             } else {
-                r1= comp_nodes[0]->svc(task);
-                if (!(r1 == FF_GO_ON || r1 == FF_GO_OUT || r1 == FF_EOS_NOFREEZE))
-                    comp_nodes[1]->push_comp_local(r1);
-                if (r1 == FF_EOS) ret=FF_GO_OUT;
+                if (task || comp_nodes[0]->skipfirstpop()) {
+                    r1= comp_nodes[0]->svc(task);
+                    if (!(r1 == FF_GO_ON || r1 == FF_GO_OUT || r1 == FF_EOS_NOFREEZE))
+                        comp_nodes[1]->push_comp_local(r1);
+                    if (r1 == FF_EOS) ret=FF_GO_OUT;
+                }
             }
         }
         ret = svc_comp_node1(nullptr, ret);        
@@ -482,12 +507,12 @@ protected:
    
     void eosnotify(ssize_t id=-1) {
         ++neos;
-        comp_nodes[0]->eosnotify(id);
+        getFirst()->eosnotify(id);
 
         // the eosnotify might produce some data in output so we have to call the svc
         // of the next stage
         void *ret = svc_comp_node1(nullptr, GO_ON);
-
+        
         // NOTE: if the first node is multi-input the EOS is not propagated        
         if (comp_nodes[0]->isMultiInput() ||
             comp_multi_input) {
@@ -503,27 +528,19 @@ protected:
         }
         if (ret != FF_GO_OUT)
             comp_nodes[1]->eosnotify(id);
-        
-        if (comp_nodes[1]->isComp()) return;
-        
-        if (comp_nodes[1]->isMultiOutput() ||
-            comp_multi_output)
-            comp_nodes[1]->propagateEOS();
-        else
-            comp_nodes[1]->ff_send_out(FF_EOS);
     }
 
-    void propagateEOS() {
+    void propagateEOS(void *task=FF_EOS) {
         if (comp_nodes[1]->isComp()) {
-            comp_nodes[1]->propagateEOS();
+            comp_nodes[1]->propagateEOS(task);
             return;
         }
         
         if (comp_nodes[1]->isMultiOutput() ||
             comp_multi_output)               
-            comp_nodes[1]->propagateEOS();
+            comp_nodes[1]->propagateEOS(task);
         else
-            comp_nodes[1]->ff_send_out(FF_EOS);
+            comp_nodes[1]->ff_send_out(task);
     }
     
     void get_out_nodes(svector<ff_node*>&w) {
@@ -561,13 +578,13 @@ protected:
     }
 
     // a composition can be passed as filter to a farm emitter  
-    void setlb(ff_loadbalancer *elb) {
-        comp_nodes[1]->setlb(elb);
+    void setlb(ff_loadbalancer *elb, bool cleanup=false) {
+        comp_nodes[1]->setlb(elb, cleanup);
     }
     // a composition can be passed as filter to a farm collector
-    void setgt(ff_gatherer *egt) {
-        comp_nodes[0]->setgt(egt);
-        ff_minode::setgt(egt);
+    void setgt(ff_gatherer *egt, bool cleanup=false) {
+        comp_nodes[0]->setgt(egt, cleanup);
+        ff_minode::setgt(egt, cleanup);
     }
 
     // consumer
@@ -693,6 +710,10 @@ std::unique_ptr<ff_node> unique_combine_nodes(T1& n1, T2& n2) {
 const ff_pipeline combine_nodes_in_pipeline(ff_node& node1, ff_node& node2, bool cleanup1=false, bool cleanup2=false) {
     if (node1.isAll2All() || node2.isAll2All()) {
         error("combine_nodes_in_pipeline, cannot be used if one of the nodes is A2A\n");
+        return ff_pipeline();
+    }
+    if (node1.isOFarm()) {
+        error("combine_nodes_in_pipeline, cannot be used if the first node is an ordered farm\n");
         return ff_pipeline();
     }
     if (!node1.isFarm() && !node2.isFarm()) { // two sequential nodes
@@ -843,14 +864,17 @@ const ff_farm combine_farms_a2a(ff_farm &farm1, const E_t& node, ff_farm &farm2)
             //const auto emitter_mo = mo_transformer(node);
             //auto c = combine_nodes(*W1[i], emitter_mo);
             //auto pc = new decltype(c)(c);
-            auto pc = new ff_comb(W1[i], (ff_node*)(new mo_transformer(node)),
+            auto mo = new mo_transformer(node);
+            assert(mo);
+            auto pc = new ff_comb(W1[i], mo,
                                   farm1.isset_cleanup_workers() , true);    
             assert(pc);
             Wtmp[i]=pc;
         } else {
             //auto c = combine_nodes(*W1[i], node);
             //auto pc = new decltype(c)(c);
-            auto pc = new ff_comb(W1[i], (ff_node*)(new E_t(node)),
+            auto e = new E_t(node);
+            auto pc = new ff_comb(W1[i], e,
                                   farm1.isset_cleanup_workers(), true);    
             assert(pc);
             Wtmp[i]=pc;
@@ -872,18 +896,24 @@ const ff_farm combine_farms_a2a(ff_farm &farm1, const E_t& node, ff_farm &farm2)
 /* 
  * This function produced the NF of two farms having the same n. of workers.
  */    
-const ff_farm combine_farms(ff_farm& farm1, ff_farm& farm2) {
+const ff_farm combine_farms_nf(ff_farm& farm1, ff_farm& farm2) {
     ff_farm newfarm;
 
     if (farm1.getNWorkers() != farm2.getNWorkers()) {
-        error("combine_farms, cannot combine farms with different number of workers\n");
+        error("combine_farms_nf, cannot combine farms with different number of workers\n");
         return newfarm;
+    }
+    if (farm1.isOFarm() && farm2.isOFarm()) {
+        if (farm1.ondemand_buffer() != farm2.ondemand_buffer()) {
+            error("combine_farms_nf, cannot combine ordered farms with different ondemand buffer\n");
+            return newfarm;
+        }
     }
     const svector<ff_node *> & w1= farm1.getWorkers();
     const svector<ff_node *> & w2= farm2.getWorkers();
     
     if (w1[0]->isMultiOutput() || w2[0]->isMultiInput()) {
-        error("combine_farms, cannot combine farms whose workers are either multi-output or multi-input nodes\n");
+        error("combine_farms_nf, cannot combine farms whose workers are either multi-output or multi-input nodes\n");
         return newfarm;
     }
     std::vector<ff_node*> W1(w1.size());
@@ -892,23 +922,159 @@ const ff_farm combine_farms(ff_farm& farm1, ff_farm& farm2) {
     for(size_t i=0;i<W2.size();++i) W2[i]=w2[i];
     
     ff_node* emitter1 = farm1.getEmitter();
-    if (emitter1) newfarm.add_emitter(emitter1);
+    if (emitter1) {
+        newfarm.add_emitter(emitter1);
+        if (farm1.isset_cleanup_emitter()) {
+            newfarm.cleanup_emitter(true);
+            farm1.cleanup_emitter(false);
+        }
+    }
     ff_node* collector2 = farm2.getCollector();
-    if (farm2.hasCollector()) newfarm.add_collector(collector2);
+    if (farm2.hasCollector()) {
+        newfarm.add_collector(collector2);
+        if (farm2.isset_cleanup_collector()) {
+            newfarm.cleanup_collector(true);
+            farm2.cleanup_collector(false);
+        }
+    }
     
     std::vector<ff_node*> Wtmp1(W1.size());
     for(size_t i=0;i<W1.size();++i) {
-        auto c = combine_nodes(*W1[i], *W2[i]);
-        auto pc = new decltype(c)(c);
+        //auto c = combine_nodes(*W1[i], *W2[i]);
+        //auto pc = new decltype(c)(c);
+        auto pc = new ff_comb(W1[i], W2[i],
+                              farm1.isset_cleanup_workers(),
+                              farm2.isset_cleanup_workers());
+        assert(pc);
         Wtmp1[i]=pc;
     }
     newfarm.add_workers(Wtmp1);
     newfarm.cleanup_workers();
+    if (farm1.isset_cleanup_workers()) farm1.cleanup_workers(false);
+    if (farm2.isset_cleanup_workers()) farm2.cleanup_workers(false);
     newfarm.set_scheduling_ondemand(farm1.ondemand_buffer());
     
     return newfarm;
 }
 
+/* 
+ *
+ * This function allows to combine two farms where the first one is an ordered farm.
+ *
+ *
+ */
+const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2) {
+    ff_pipeline newpipe;
+    if (!farm1.isOFarm()) {
+        error("combine_ofarm_farm, the first farm is not an ordered farm");
+        return newpipe;
+    }
+
+    ff_farm newfarm1;
+    ff_farm newfarm2;
+    
+    newfarm1.set_scheduling_ondemand(farm1.ondemand_buffer());
+    
+    ordered_lb* _lb= new ordered_lb(farm1.getNWorkers());
+    assert(_lb);
+    const size_t memsize = farm1.getNWorkers() * (2*newfarm1.ondemand_buffer()+ff_farm::DEF_IN_OUT_DIFF+3)+ DEF_OFARM_ONDEMAND_MEMORY; 
+    newfarm1.ordered_resize_memory(memsize);
+    _lb->init(newfarm1.ordered_get_memory(), memsize);
+    newfarm1.setlb(_lb, true);
+    OrderedCollectorWrapper* cw = new OrderedCollectorWrapper(DEF_OFARM_ONDEMAND_MEMORY);
+    assert(cw);
+    
+    // emitter1 
+    ff_node* emitter1 = farm1.getEmitter();   
+    if (emitter1) {
+        newfarm1.add_emitter(emitter1);
+        if (farm1.isset_cleanup_emitter()) {
+            newfarm1.cleanup_emitter(true);
+            farm1.cleanup_emitter(false);
+        }
+    }     
+    // workers1
+    const svector<ff_node*>& w1= farm1.getWorkers();
+    std::vector<ff_node*> W1(w1.size());
+    for(size_t i=0;i<w1.size();++i) {
+        W1[i] = new OrderedWorkerWrapper(w1[i], farm1.isset_cleanup_workers());
+        assert(W1[i]);
+    }
+    if (farm1.isset_cleanup_workers())
+        farm1.cleanup_workers(false);
+    
+    newfarm1.add_workers(W1);
+    newfarm1.cleanup_workers(true);
+
+    // collector1 + emitter2
+    ff_node* collector1 = farm1.getCollector();
+    ff_node* emitter2 = farm2.getEmitter();    
+    if (!collector1 && !emitter2) {
+        newfarm2.add_emitter(cw);        
+        newfarm2.cleanup_emitter(true);
+    } else {
+        if (!collector1) {
+            ff_comb *comb = new ff_comb(cw, emitter2, 
+                                        true, farm2.isset_cleanup_emitter());
+            if (farm2.isset_cleanup_emitter()) 
+                farm2.cleanup_emitter(false);
+
+            newfarm2.add_emitter(comb);
+            newfarm2.cleanup_emitter(true);
+        } else {
+            if (!emitter2) {
+                ff_comb *comb = new ff_comb(cw, collector1, 
+                                            true, farm1.isset_cleanup_collector());
+                if (farm1.isset_cleanup_collector()) 
+                    farm1.cleanup_collector(false);
+
+                newfarm2.add_emitter(comb);
+                newfarm2.cleanup_emitter(true);
+            } else {
+                ff_comb *comb0 = new ff_comb(collector1,emitter2,
+                                             farm1.isset_cleanup_collector(),
+                                             farm2.isset_cleanup_emitter());
+                if (farm1.isset_cleanup_collector()) 
+                    farm1.cleanup_collector(false);
+                if (farm2.isset_cleanup_emitter()) 
+                    farm2.cleanup_emitter(false);
+                
+                ff_comb *comb = new ff_comb(cw, comb0,
+                                            true, true);
+                newfarm2.add_emitter(comb);
+                newfarm2.cleanup_emitter(true);
+            }
+        }
+    }
+    
+    // workers2
+    const svector<ff_node*>& w2= farm2.getWorkers();
+    std::vector<ff_node*> W2(w2.size());
+    for(size_t i=0;i<w2.size();++i) {
+        W2[i] = w2[i];
+    }
+    newfarm2.add_workers(W2);
+    if (farm2.isset_cleanup_workers()) {
+        farm2.cleanup_workers(false);
+        newfarm2.cleanup_workers(true);
+    }
+
+    // collector2
+    ff_node* collector2 = farm2.getCollector();
+    if (farm2.hasCollector()) {
+        newfarm2.add_collector(collector2);
+        if (farm2.isset_cleanup_collector()) {
+            newfarm2.cleanup_collector(true);
+            farm2.cleanup_collector(false);
+        }
+    }
+    newpipe.add_stage(newfarm1);
+    newpipe.add_stage(newfarm2);
+
+    return newpipe;
+}
+    
+    
 /* 
  *
  * This function allows to combine two farms in several different ways
@@ -920,7 +1086,7 @@ const ff_farm combine_farms(ff_farm& farm1, ff_farm& farm2) {
  *        of calling combine_farms_a2a(farm1,farm2)
  *     2. mergeCE==true:  if the parallelism degree of the two farms is 
  *        the same, it produces a pipeline of a single farm 
- *        whose workers are a composition of both farm1 and farm2 workers.
+ *        whose workers are a composition of both farm1 and farm2 workers (normal form).
  *        If the parallelism degree of the two farms is different, we fall back 
  *        to the case1.1
  *
@@ -956,9 +1122,26 @@ const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
     ff_pipeline newpipe;
     
     if (mergeCE) { // we have to merge nodes!!!
+
+        if (farm1.isOFarm() || farm2.isOFarm()) {
+            if (node1!=nullptr || node2!=nullptr) { // TODO
+                error("combine_farms, FEATURE NOT YET SUPPORTED, if at least one of the two farms is an ordered farm then node1 and node2 must be nullptr\n"); 
+                return newpipe;
+            }
+            if (farm1.getNWorkers() == farm2.getNWorkers()) { // case1.2
+                newpipe.add_stage(combine_farms_nf(farm1,farm2));
+                return newpipe;
+            }
+            // the most complex scenario is when farm1 is ordered
+            if (farm1.isOFarm()) {
+                auto pipe = combine_ofarm_farm(farm1, farm2);
+                return pipe;
+            }
+        }
+
         if (node2==nullptr && node1==nullptr) {  
             if (farm1.getNWorkers() == farm2.getNWorkers()) { // case1.2
-                newpipe.add_stage(combine_farms(farm1,farm2));
+                newpipe.add_stage(combine_farms_nf(farm1,farm2));
                 return newpipe;
             }
             // fall back to case1.1
@@ -1012,6 +1195,11 @@ const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
         return newpipe;
         
     }  // mergeCE is false  -------------------------------------------------
+
+    if (farm1.isOFarm() || farm2.isOFarm()) {
+        error("combine_farms, if mergeCE is true farms cannot be ordered farms\n");
+        return newpipe;
+    }
     
     if (node2==nullptr && node1==nullptr) { // case1.1
         farm1.remove_collector();
@@ -1061,14 +1249,18 @@ const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
                 //const auto collector_mo = mo_transformer(*node1);
                 //auto c = combine_nodes(*W1[i], collector_mo);
                 //auto pc = new decltype(c)(c);
-                auto pc = new ff_comb(W1[i], (ff_node*)(new mo_transformer(*node1)),
+                auto mo = new mo_transformer(*node1);
+                assert(mo);
+                auto pc = new ff_comb(W1[i], mo,
                                       farm1.isset_cleanup_workers() , true);
                 assert(pc);
                 Wtmp1[i]=pc;
             } else {
                 //auto c = combine_nodes(*W1[i], *node1);
                 //auto pc = new decltype(c)(c);
-                auto pc = new ff_comb(W1[i], (ff_node*)(new C_t(*node1)),
+                auto c = new C_t(*node1);
+                assert(c);
+                auto pc = new ff_comb(W1[i], c,
                                       farm1.isset_cleanup_workers(), true);
                 assert(pc);
                 Wtmp1[i]=pc;
@@ -1136,13 +1328,17 @@ const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
             //const auto collector_mo = mo_transformer(*node1);
             //auto c = combine_nodes(*W1[i], collector_mo);
             //auto pc = new decltype(c)(c);
-            auto pc = new ff_comb(W1[i], (ff_node*)(new mo_transformer(*node1)),
+            auto mo = new mo_transformer(*node1);
+            assert(mo);
+            auto pc = new ff_comb(W1[i], mo, 
                                   farm1.isset_cleanup_workers() , true);
             Wtmp1[i]=pc;
         } else {
             //auto c = combine_nodes(*W1[i], *node1);
             //auto pc = new decltype(c)(c);
-            auto pc = new ff_comb(W1[i], (ff_node*)(new C_t(*node1)),
+            auto c = new C_t(*node1);
+            assert(c);
+            auto pc = new ff_comb(W1[i], c,
                                   farm1.isset_cleanup_workers(), true);
             Wtmp1[i]=pc;
         }
@@ -1156,15 +1352,20 @@ const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
             //const auto emitter_mi = mi_transformer(*node2);
             //auto c = combine_nodes(emitter_mi, *W2[i]);
             //auto pc = new decltype(c)(c);
-            auto pc = new ff_comb((ff_node*)(new mi_transformer(*node2)),W2[i],
+            auto mi = new mi_transformer(*node2);
+            assert(mi);
+            auto pc = new ff_comb(mi,W2[i],
                                   true, farm2.isset_cleanup_workers());
-            
+            assert(pc);
             Wtmp2[i]=pc;
         } else {
             //auto c = combine_nodes(*node2, *W2[i]);
             //auto pc = new decltype(c)(c);
-            auto pc = new ff_comb((ff_node*)(new E_t(*node2)), W2[i],
-                                  true, farm2.isset_cleanup_workers());            
+            auto e = new E_t(*node2);
+            assert(e);
+            auto pc = new ff_comb(e, W2[i],
+                                  true, farm2.isset_cleanup_workers());
+            assert(pc);
             Wtmp2[i]=pc;
         }
     }

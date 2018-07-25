@@ -87,7 +87,7 @@ struct Worker1: ff_node_t<long> {
 };
 struct Worker2: ff_node_t<long> {
     long *svc(long *in) {
-        printf("Worker2 received %ld\n", (long)in);
+        //printf("Worker2 received %ld\n", (long)in);
         return in;
     }
 };
@@ -103,7 +103,7 @@ struct Emitter2: ff_node_t<long> {
         //printf("Emitter2 received %ld\n", (long)in);
         ff_send_out(in);
         return GO_ON;
-    }    
+    }
 };
 
 struct Collector2: ff_minode_t<long> {
@@ -128,6 +128,15 @@ int main(int argc, char* argv[]) {
     int nworkers1 = 2;
     int nworkers2 = 3;
     int ntasks   = 1000;
+    if (argc>1) {
+        if (argc!=4) {
+            error("use: %s nworkers1 nworkers2 ntasks\n", argv[0]);
+            return -1;
+        }
+        nworkers1=atoi(argv[1]);
+        nworkers2=atoi(argv[2]);
+        ntasks=atoi(argv[3]);
+    }
     {
         // it produces a farm of all-to-all whose nodes
         // are compositions of the two farm workers

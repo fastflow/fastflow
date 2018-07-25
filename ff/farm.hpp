@@ -57,7 +57,6 @@
 
 #include <iosfwd>
 #include <vector>
-#include <queue>
 #include <algorithm>
 #include <memory>
 #include <ff/platforms/platform.h>
@@ -65,6 +64,7 @@
 #include <ff/gt.hpp>
 #include <ff/node.hpp>
 #include <ff/multinode.hpp>
+#include <ff/ordering_policies.hpp>
 #include <ff/all2all.hpp>
 
 
@@ -98,6 +98,8 @@ class ff_farm: public ff_node {
 
 protected:
     // -------- strict round-robin load balancer and gatherer -------
+    // This the default policy used by the ff_farm when set_ordered
+    // is called
     struct ofarm_lb: ff_loadbalancer {
         size_t victim = 0;        
         ofarm_lb(int max_num_workers):ff_loadbalancer(max_num_workers), victim(0) {}
@@ -192,120 +194,7 @@ protected:
         }    
         size_t victim = 0;
         svector<bool> dead;
-    };
-    // --------------------------------------------------------------
-
-    // -------- ondemand load balancer and gatherer -----------------
-    // first is the unique id, second.first is the data element
-    // second.second is used to store the sender
-    using pair_t = std::pair<size_t, std::pair<void*,ssize_t> >;
-    struct ofarm_od_lb:ff_loadbalancer {
-        ofarm_od_lb(int max_num_workers):ff_loadbalancer(max_num_workers) {}
-        void init(svector<pair_t> * v) {
-            _M=v; cnt=0; idx=0;
-        }
-        inline bool schedule_task(void * task, unsigned long retry, unsigned long ticks) {
-            svector<pair_t>&M = *_M;
-            M[idx].first  = cnt;
-            M[idx].second.first = task;
-            auto r = ff_loadbalancer::schedule_task(&M[idx], retry, ticks);
-            assert(r);
-            ++cnt; ++idx %= M.size();
-            return r;
-        }
-        inline void broadcast_task(void * task) {
-            if (task > FF_TAG_MIN) {
-                ff_loadbalancer::broadcast_task(task);
-                return;
-            }
-            svector<pair_t>&M = *_M;
-            M[idx].first  = cnt;
-            M[idx].second.first = task;
-            ff_loadbalancer::broadcast_task(&M[idx]);
-            ++cnt; ++idx %= M.size();            
-        }
-        inline bool ff_send_out_to(void *task, int id, unsigned long retry, unsigned long ticks) {
-            assert(task<FF_TAG_MIN);
-            svector<pair_t>&M = *_M;
-            M[idx].first  = cnt;
-            M[idx].second.first = task;
-            auto r = ff_loadbalancer::ff_send_out_to(&M[idx], id, retry, ticks);
-            if (r) {++cnt; ++idx %= M.size();}
-            return r;
-        }        
-        size_t idx,cnt;
-        svector<pair_t> * _M=nullptr;
-    };
-    struct ofarm_od_gt: ff_gatherer {
-        struct PairCmp {
-            bool operator()(const pair_t* lhs, const pair_t* rhs) const { 
-                return lhs->first > rhs->first;
-            }
-        };
-        ofarm_od_gt(int max_num_workers): ff_gatherer(max_num_workers) {}
-        void init(const size_t size) { MemSize=size; cnt =0; }
-        inline ssize_t gather_task(void ** task) {
-            if (!Q.empty()) {
-                auto next = Q.top();
-                if (cnt == next->first) {
-                    ++cnt;
-                    *task = next->second.first;
-                    Q.pop();
-                    return next->second.second;
-                }
-            }
-            ssize_t nextr=  ff_gatherer::gather_task(task);
-            if (*task < FF_TAG_MIN) {
-                pair_t *in =  reinterpret_cast<pair_t*>(*task);
-                if (cnt == in->first) { // it's the next to send out
-                    cnt++;
-                    *task = in->second.first;
-                    return nextr;
-                }
-                in->second.second = nextr;
-                Q.push(in);
-                if (Q.size()>MemSize) {
-                    error("FATAL ERROR: OFARM, ondemand, not enough memory, increase MemoryElements\n");
-                }
-                *task = FF_GO_ON;
-            }
-            return nextr;                            
-        }
-        int all_gather(void *task, void **V) {
-            ssize_t sender = channelid; // set current sender of element task
-            int r= ff_gatherer::all_gather(task,V);
-            size_t nw = getnworkers();
-            for(size_t i=0;i<nw;++i) {
-                if (V[i]) {
-                    if (i!=(size_t)sender)
-                        V[i] = (reinterpret_cast<pair_t*>(V[i]))->second.first;
-                }
-            }
-            return r;
-        }
-        
-        size_t cnt;
-        std::priority_queue<pair_t*,std::vector<pair_t*>, PairCmp> Q;
-        size_t MemSize;       
-    };
-    // wrapper for on-demand scheduling
-    struct WorkerWrapper: ff_node_t<pair_t> {
-        WorkerWrapper(ff_node* worker, bool cleanup=false):worker(worker),cleanup(cleanup) {
-            set_barrier(worker->get_barrier());
-            worker->set_barrier(nullptr);
-        }
-        ~WorkerWrapper() {
-            if (cleanup) delete worker;
-        }
-        pair_t *svc(pair_t *in) {
-            auto out=worker->svc(in->second.first);
-            in->second.first=out;
-            return in;
-        }
-        ff_node* worker;
-        bool cleanup;
-    };
-    // --------------------------------------------------------------
+    };    
 protected:
     inline int cardinality(BARRIER_T * const barrier)  { 
         int card=0;
@@ -324,51 +213,28 @@ protected:
         
         return (card + 1 + ((collector && !collector_removed)?1:0));
     }
-
-    // used to redefine scheduling/gathering policy
-    void setgt(ff_gatherer *external_gt) {        
-        assert(external_gt);
-        if (gt) {
-            *external_gt = std::move(*gt);
-        }
-        if (myowngt) {
-            if (collector == (ff_node*)gt) collector = (ff_node*)external_gt;
-            delete gt;
-            myowngt=false;
-        }
-        gt = external_gt;
-    }
-    void setlb(ff_loadbalancer *external_lb) {
-        assert(external_lb);
-        if (lb) { 
-            *external_lb = std::move(*lb);
-        }
-        if (myownlb) {
-            delete lb;
-            myownlb=false;
-        }
-        lb = external_lb;
-    }    
     
     inline int prepare() {
         size_t nworkers = workers.size();
-        if (nworkers==0 || nworkers > max_nworkers) return -1;
+        if (nworkers==0 || nworkers > max_nworkers) {
+            error("FARM: wrong number of workers\n");
+            return -1;
+        }
 
         // ordering
         if (ordered) {
             if (ondemand) {
-                ofarm_od_lb* _lb= new ofarm_od_lb(nworkers);
-                ofarm_od_gt* _gt= new ofarm_od_gt(nworkers);
+                ordered_lb* _lb= new ordered_lb(nworkers);
+                ordered_gt* _gt= new ordered_gt(nworkers);
                 assert(_lb); assert(_gt);
-                ofarm_od_Memory.resize(nworkers * (2*ff_farm::ondemand_buffer()+DEF_IN_OUT_DIFF+3)+ofarm_od_memsize);
-                _lb->init(&ofarm_od_Memory);
-                _gt->init(ofarm_od_memsize);
-                setlb(_lb);
-                setgt(_gt);
-                myownlb = true; myowngt = true;
-
+                ordering_Memory.resize(nworkers * (2*ff_farm::ondemand_buffer()+DEF_IN_OUT_DIFF+3)+ordering_memsize);
+                _lb->init(ordering_Memory.begin(), ordering_Memory.size());
+                _gt->init(ordering_memsize);
+                setlb(_lb, true);
+                setgt(_gt, true);
+                
                 for(size_t i=0;i<nworkers;++i) {
-                    workers[i] = new WorkerWrapper(workers[i], worker_cleanup);
+                    workers[i] = new OrderedWorkerWrapper(workers[i], worker_cleanup);
                     assert(workers[i]);
                 }
                 worker_cleanup = true;
@@ -376,10 +242,9 @@ protected:
                 ofarm_lb* _lb = new ofarm_lb(nworkers);
                 ofarm_gt* _gt = new ofarm_gt(nworkers);
                 assert(lb); assert(gt);
-                setlb(_lb);
-                setgt(_gt);
-                myownlb = true; myowngt = true; // the farm destructor will take care of deleting _lb and _gt
-            }
+                setlb(_lb, true);
+                setgt(_gt, true);
+            }        
         }
         
         // accelerator
@@ -748,7 +613,7 @@ public:
         collector_cleanup(false),ondemand(0),
         in_buffer_entries(DEF_IN_BUFF_ENTRIES),
         out_buffer_entries(DEF_OUT_BUFF_ENTRIES),
-        max_nworkers(DEF_MAX_NUM_WORKERS),ofarm_od_memsize(0),
+        max_nworkers(DEF_MAX_NUM_WORKERS),ordering_memsize(0),
         emitter(NULL),collector(NULL),
         lb(new lb_t(max_nworkers)),gt(new gt_t(max_nworkers)),
         workers(W.size()) {
@@ -788,7 +653,7 @@ public:
         collector_cleanup(false), ondemand(0),
         in_buffer_entries(in_buffer_entries),
         out_buffer_entries(out_buffer_entries),        
-        max_nworkers(max_num_workers),ofarm_od_memsize(0),
+        max_nworkers(max_num_workers),ordering_memsize(0),
         emitter(NULL),collector(NULL),
         lb(new lb_t(max_num_workers)),gt(new gt_t(max_num_workers)),
         workers(max_num_workers)  {
@@ -796,7 +661,7 @@ public:
         for(size_t i=0;i<max_num_workers;++i) workers[i]=NULL;        
     }
 
-    ff_farm(const ff_farm& f) { 
+    ff_farm(const ff_farm& f):ff_farm() { 
         if (f.prepared) {
             error("ff_farm, copy constructor, the input farm is already prepared\n");
             return;
@@ -805,7 +670,7 @@ public:
         has_input_channel = f.has_input_channel;
         collector_removed = f.collector_removed;
         ordered           = f.ordered;
-        ofarm_od_memsize  = f.ofarm_od_memsize;
+        ordering_memsize  = f.ordering_memsize;
         ondemand = f.ondemand; in_buffer_entries = f.in_buffer_entries;
         out_buffer_entries = f.out_buffer_entries;
         worker_cleanup = f.worker_cleanup; 
@@ -818,8 +683,10 @@ public:
         workers = f.workers;
         emitter = nullptr;
         collector = nullptr;
-        lb = new lb_t(max_nworkers);
-        gt = new gt_t(max_nworkers);
+        //lb = new lb_t(max_nworkers);
+        //gt = new gt_t(max_nworkers);
+        setlb(f.lb); myownlb = f.myownlb;
+        setgt(f.gt); myowngt = f.myowngt;
         assert(lb); assert(gt);
         
         add_emitter(f.emitter);
@@ -827,9 +694,12 @@ public:
         
         // this is a dirty part, we modify a const object.....
         ff_farm *dirty         = const_cast<ff_farm*>(&f);
+        ordering_Memory          = std::move(dirty->ordering_Memory);
         dirty->worker_cleanup    = false;
         dirty->emitter_cleanup   = false;
         dirty->collector_cleanup = false;
+        dirty->myownlb           = false;
+        dirty->myowngt           = false;
     }
     
     /* move constructor */
@@ -838,6 +708,8 @@ public:
         has_input_channel = f.has_input_channel;
         collector_removed = f.collector_removed;
         ordered           = f.ordered;
+        ordering_memsize  = f.ordering_memsize;
+        ordering_Memory   = std::move(f.ordering_Memory);
         ondemand = f.ondemand; in_buffer_entries = f.in_buffer_entries;
         out_buffer_entries = f.out_buffer_entries;
         worker_cleanup = f.worker_cleanup; 
@@ -848,13 +720,15 @@ public:
 
         emitter = f.emitter;  collector = f.collector;
         lb = f.lb;   gt = f.gt;     
-
+        myownlb = f.myownlb; myowngt = f.myowngt;
         f.lb = nullptr;
         f.gt = nullptr;
         f.max_nworkers=0;
         f.worker_cleanup    = false;
         f.emitter_cleanup   = false;
         f.collector_cleanup = false;
+        f.myownlb           = false;
+        f.myowngt           = false;        
     }
 
 
@@ -885,6 +759,33 @@ public:
         
         if (barrier) {delete barrier; barrier=NULL;}
     }
+
+    // used to redefine scheduling/gathering policy
+    void setgt(ff_gatherer *external_gt, bool cleanup=false) {        
+        assert(external_gt);
+        if (gt) {
+            *external_gt = std::move(*gt);
+        }
+        if (myowngt) {
+            if (collector == (ff_node*)gt) collector = (ff_node*)external_gt;
+            delete gt;
+            myowngt=false;
+        }
+        gt = external_gt;
+        myowngt = cleanup;
+    }
+    void setlb(ff_loadbalancer *external_lb, bool cleanup=false) {
+        assert(external_lb);
+        if (lb) { 
+            *external_lb = std::move(*lb);
+        }
+        if (myownlb) {
+            delete lb;
+            myownlb=false;
+        }
+        lb = external_lb;
+        myownlb = cleanup;
+    }    
     
     /** 
      *
@@ -989,7 +890,7 @@ public:
             error("FARM, set_scheduling_ondemand, farm already prepared\n");
             return;
         }
-        if (inbufferentries<0) ondemand=1;
+        if (inbufferentries<=0) ondemand=1;
         else ondemand=inbufferentries;
     }
     /**
@@ -1007,9 +908,14 @@ public:
             return;
         }
         ordered = true;
-        ofarm_od_memsize=MemoryElements;
+        ordering_memsize=MemoryElements;
     }
 
+    void ordered_resize_memory(const size_t size) {
+        ordering_Memory.resize(size);
+    }
+    ordering_pair_t* const ordered_get_memory() { return ordering_Memory.begin(); }
+    
     int ondemand_buffer() const { return ondemand; }
     
     /**
@@ -1551,7 +1457,9 @@ public:
      *
      * \return A pointer of the FastFlow node which is actually the emitter.
      */
-    virtual ff_node* getEmitter() const   { return emitter;}
+    virtual ff_node* getEmitter() const   {
+        return emitter;
+    }
 
     /**
      * \brief Gets Collector
@@ -1943,7 +1851,7 @@ protected:
     int in_buffer_entries;
     int out_buffer_entries;
     size_t max_nworkers;
-    size_t ofarm_od_memsize;
+    size_t ordering_memsize;
     
     ff_node          *  emitter;
     ff_node          *  collector;
@@ -1953,7 +1861,7 @@ protected:
     svector<ff_node*>  workers;
     svector<ff_node*>  outputNodes;       
     svector<ff_node*>  internalSupportNodes;
-    svector<pair_t>    ofarm_od_Memory;
+    svector<ordering_pair_t>  ordering_Memory;     // used for ordering purposes
 };
 
 

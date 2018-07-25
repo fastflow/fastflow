@@ -105,15 +105,6 @@ protected:
         prepared=true;
         return 0;
     }
-
-    // used when a multi-input node is a filter of a collector or of a comp
-    void setgt(ff_gatherer *external_gt) {
-        if (myowngt) {
-            delete gt;
-            myowngt=false;
-        }
-        gt = external_gt;
-    }
     
     int  wait(/* timeout */) { 
         if (gt->wait()<0) return -1;
@@ -220,6 +211,18 @@ public:
         return gt->set_filter(filter);
     }
 
+    // used when a multi-input node is a filter of a collector or of a comp
+    // it can also be used to set a particular gathering policy like for
+    // example the ones pre-defined in the file ordering_policies.hpp
+    void setgt(ff_gatherer *external_gt, bool cleanup=false) {
+        if (myowngt) {
+            delete gt;
+            myowngt=false;
+        }
+        gt = external_gt;
+        myowngt = cleanup;
+    }
+
     
     /**
      * \brief Assembly input channels
@@ -249,6 +252,11 @@ public:
     virtual bool isMultiInput() const { return true;}
 
     virtual inline void get_in_nodes(svector<ff_node*>&w) {
+        // it is possible that the multi-input node is register
+        // as collector of farm
+        if (inputNodes.size() == 0 && gt->getNWorkers()>0) {
+            w += gt->getWorkers();
+        }
         w += inputNodes;
     }
 
@@ -412,8 +420,8 @@ protected:
         return 0;
     }
 
-    void propagateEOS() {
-        lb->propagateEOS();
+    void propagateEOS(void*task=FF_EOS) {
+        lb->propagateEOS(task);
     }
     
     int  wait(/* timeout */) { 
@@ -568,6 +576,11 @@ public:
     virtual bool isMultiOutput() const { return true;}
 
     virtual inline void get_out_nodes(svector<ff_node*>&w) {
+        // it is possible that the multi-output node is register
+        // as emitter of farm
+        if (outputNodes.size() == 0 && lb->getNWorkers()>0) {
+            w += lb->getWorkers();
+        }
         w += outputNodes;
     }
     virtual inline void get_out_nodes_feedback(svector<ff_node*>&w) {
@@ -647,11 +660,17 @@ public:
      * \return A pointer to the lb
      */
     inline ff_loadbalancer * getlb() const { return lb;}
-    
-    void setlb(ff_loadbalancer *elb) {
-        if (lb && myownlb) delete lb;
-        myownlb = false;
+
+    // used when a multi-input node is a filter of an emitter (i.e. a comp)
+    // it can also be used to set a particular gathering policy like for
+    // example the ones pre-defined in the file ordering_policies.hpp
+    void setlb(ff_loadbalancer *elb, bool cleanup=false) {
+        if (lb && myownlb) {
+            delete lb;
+            myownlb = false;
+        }
         lb = elb;
+        myownlb=cleanup;
     }
 
     /**
@@ -794,6 +813,8 @@ struct mo_transformer: ff_monode {
     }
     inline void* svc(void* task) { return n->svc(task);}
 
+    inline void eosnotify(ssize_t id=-1) { n->eosnotify(id); }
+    
     int create_input_buffer(int nentries, bool fixedsize=true) {
         int r= ff_monode::create_input_buffer(nentries,fixedsize);
         if (r<0) return -1;
@@ -871,12 +892,13 @@ struct mi_transformer: ff_minode {
     void registerCallback(bool (*cb)(void *,unsigned long,unsigned long,void *), void * arg) {
         n->registerCallback(cb,arg);
     }
-
     
     int set_output_buffer(FFBUFFER * const o) {
         return ff_minode::getgt()->set_output_buffer(o);
     }
-        
+
+    inline void eosnotify(ssize_t id=-1) { n->eosnotify(id); }
+    
     int run(bool skip_init=false) {
         if (!prepared) {
             if (n && n->prepare()<0) return -1;

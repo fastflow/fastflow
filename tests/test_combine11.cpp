@@ -93,7 +93,10 @@ struct Gatherer: ff_node_t<long> {
         return GO_ON;
     }
     void svc_end() {
-        assert(ntasks==cnt);
+        if (ntasks!=cnt) {
+            error("TEST FAILED\n");
+            exit(-1);
+        }
     }
     size_t cnt=0;
 };
