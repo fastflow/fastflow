@@ -917,6 +917,7 @@ public:
     ordering_pair_t* const ordered_get_memory() { return ordering_Memory.begin(); }
     
     int ondemand_buffer() const { return ondemand; }
+    ssize_t ordering_memory_size() const { return ordering_memsize; }
     
     /**
      *  \brief Adds workers to the form

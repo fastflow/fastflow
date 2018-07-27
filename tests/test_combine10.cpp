@@ -110,7 +110,6 @@ int main(int argc, char* argv[]) {
         ntasks    = std::stol(argv[1]);
         nworkers  = std::stol(argv[2]);
     }
-
     { // two sequential
         First first(ntasks);
         Last last;
@@ -172,10 +171,10 @@ int main(int argc, char* argv[]) {
             error("TEST FAILED\n");
             return -1;
         }
-    }
+    }    
     printf("TEST3 DONE\n");
     usleep(500000);
-    { // merging collecto and emitter of the two farms (it isn't the all-to-all introduction) 
+    { // merging collector and emitter of the two farms (it isn't the all-to-all introduction) 
         First first(ntasks);
         Last last;
         Emitter E;
@@ -206,11 +205,22 @@ int main(int argc, char* argv[]) {
     }
     printf("TEST4 DONE\n");
     usleep(500000);
-#if 0
-    // TO BE FIXED    
     { // merging collector and emitter of the two ORDERED farms 
         First first(ntasks);
-        Last last;
+        struct Last: ff_node_t<long> {
+            long* svc(long*in) {
+                printf("Last received %ld\n", (long)in);
+                if ((long)in != expected) {
+                    error("Last WRONG ORDERING, received %ld expected %ld\n", (long)in, expected);
+                    exit(-1);
+                }
+                ++counter;
+                ++expected;
+                return GO_ON;
+            }
+            size_t counter=0;
+            long expected=1;
+        } last;                
         Emitter E;
         Collector C;
         ff_OFarm<long,long> farm1([&]() {
@@ -222,7 +232,7 @@ int main(int argc, char* argv[]) {
         farm1.add_collector(C);
         ff_OFarm<long,long> farm2([&]() {
                 std::vector<std::unique_ptr<ff_node> > V;
-                for(size_t i=0;i<nworkers;++i)
+                for(size_t i=0;i<(nworkers+1);++i)   // different n. of workers
                     V.push_back(make_unique<Worker>());
                 return V;
             } ());
@@ -240,7 +250,6 @@ int main(int argc, char* argv[]) {
     }
     printf("TEST5 DONE\n");    
     usleep(500000);
-#endif    
     { // everything allocated on the heap
         First *first  = new First(ntasks);
         Last  *last   = new Last;
@@ -270,6 +279,5 @@ int main(int argc, char* argv[]) {
         delete pipe;
     }
     printf("TEST6 DONE\n");
- 
     return 0;
 }
