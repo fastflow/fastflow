@@ -672,7 +672,11 @@ private:
  *                             helper functions                                *
  *                                                                             *
  * *************************************************************************** */
-      
+
+// forward declaration    
+const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2);
+
+    
 /**
  *  combines either basic nodes or ff_comb(s)
  *
@@ -712,7 +716,15 @@ const ff_pipeline combine_nodes_in_pipeline(ff_node& node1, ff_node& node2, bool
         return ff_pipeline();
     }
     if (node1.isOFarm()) {
-        error("combine_nodes_in_pipeline, cannot be used if the first node is an ordered farm\n");
+        if (node2.isFarm()) {
+            ff_farm *farm1 = reinterpret_cast<ff_farm*>(&node1);
+            ff_farm *farm2 = reinterpret_cast<ff_farm*>(&node2);
+            if (cleanup1) farm1->cleanup_all();
+            if (cleanup2) farm2->cleanup_all();
+            return combine_ofarm_farm(*farm1, *farm2);
+        }
+        error("combine_nodes_in_pipeline, FEATURE NOT YET SUPPORTED (node1 ordered farm and node1 standard or combine node\n");
+        abort(); // TODO
         return ff_pipeline();
     }
     if (!node1.isFarm() && !node2.isFarm()) { // two sequential nodes
@@ -824,7 +836,8 @@ const ff_farm combine_farms_a2a(ff_farm& farm1, ff_farm& farm2) {
     std::vector<ff_node*> W;
     W.push_back(a2a);
     newfarm.add_workers(W);
-    newfarm.set_scheduling_ondemand(farm1.ondemand_buffer());
+    if (farm1.ondemand_buffer())
+        newfarm.set_scheduling_ondemand(farm1.ondemand_buffer());
     newfarm.cleanup_workers(); 
     
     return newfarm;    
@@ -887,13 +900,16 @@ const ff_farm combine_farms_a2a(ff_farm &farm1, const E_t& node, ff_farm &farm2)
     W.push_back(a2a);
     newfarm.add_workers(W);
     newfarm.cleanup_workers(); // a2a will be delated at the end
-    newfarm.set_scheduling_ondemand(farm1.ondemand_buffer());
+    if (farm1.ondemand_buffer())
+        newfarm.set_scheduling_ondemand(farm1.ondemand_buffer());
     
     return newfarm;    
 }
 
 /* 
  * This function produced the NF of two farms having the same n. of workers.
+ * If the farms are ordered farm they must have the same ondemand buffer and 
+ * the same ordering memory size.
  */    
 const ff_farm combine_farms_nf(ff_farm& farm1, ff_farm& farm2) {
     ff_farm newfarm;
@@ -902,9 +918,18 @@ const ff_farm combine_farms_nf(ff_farm& farm1, ff_farm& farm2) {
         error("combine_farms_nf, cannot combine farms with different number of workers\n");
         return newfarm;
     }
+    if (farm1.isOFarm() ^ farm2.isOFarm()) {
+        error("combine_farms_nf, if one of the two farms is ordered both must be ordered\n");
+        return newfarm;
+    }
+
     if (farm1.isOFarm() && farm2.isOFarm()) {
         if (farm1.ondemand_buffer() != farm2.ondemand_buffer()) {
             error("combine_farms_nf, cannot combine ordered farms with different ondemand buffer\n");
+            return newfarm;
+        }
+        if (farm1.ordering_memory_size()!=farm2.ordering_memory_size()) {
+            error("combine_farms_nf, cannot combine ordered farms with different memory size\n");
             return newfarm;
         }
     }
@@ -951,8 +976,10 @@ const ff_farm combine_farms_nf(ff_farm& farm1, ff_farm& farm2) {
     newfarm.cleanup_workers();
     if (farm1.isset_cleanup_workers()) farm1.cleanup_workers(false);
     if (farm2.isset_cleanup_workers()) farm2.cleanup_workers(false);
-    newfarm.set_scheduling_ondemand(farm1.ondemand_buffer());
-    
+    if (farm1.ondemand_buffer())
+        newfarm.set_scheduling_ondemand(farm1.ondemand_buffer());
+    if (farm1.isOFarm() || farm2.isOFarm())
+        newfarm.set_ordered(farm1.ordering_memory_size());
     return newfarm;
 }
 
@@ -968,11 +995,18 @@ const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2) {
         error("combine_ofarm_farm, the first farm is not an ordered farm");
         return newpipe;
     }
-
-    ff_farm newfarm1;
-    ff_farm newfarm2;
+    if (farm2.isOFarm() && farm1.getNWorkers() == farm2.getNWorkers()) {
+        newpipe.add_stage(combine_farms_nf(farm1,farm2));
+        return newpipe;
+    }
+    // here we have that the first farm is an ordered farm and the second farm
+    // is either a standard farm or is an ordered farm with a number of workers
+    // that is different from the one of the first farm
     
-    newfarm1.set_scheduling_ondemand(farm1.ondemand_buffer());
+    ff_farm newfarm1;
+
+    if (farm1.ondemand_buffer())
+        newfarm1.set_scheduling_ondemand(farm1.ondemand_buffer());
     
     ordered_lb* _lb= new ordered_lb(farm1.getNWorkers());
     assert(_lb);
@@ -1009,8 +1043,7 @@ const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2) {
     ff_node* collector1 = farm1.getCollector();
     ff_node* emitter2 = farm2.getEmitter();    
     if (!collector1 && !emitter2) {
-        newfarm2.add_emitter(cw);        
-        newfarm2.cleanup_emitter(true);
+        farm2.change_emitter(cw, true);
     } else {
         if (!collector1) {
             ff_comb *comb = new ff_comb(cw, emitter2, 
@@ -1018,8 +1051,7 @@ const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2) {
             if (farm2.isset_cleanup_emitter()) 
                 farm2.cleanup_emitter(false);
 
-            newfarm2.add_emitter(comb);
-            newfarm2.cleanup_emitter(true);
+            farm2.change_emitter(comb, true);
         } else {
             if (!emitter2) {
                 ff_comb *comb = new ff_comb(cw, collector1, 
@@ -1027,8 +1059,7 @@ const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2) {
                 if (farm1.isset_cleanup_collector()) 
                     farm1.cleanup_collector(false);
 
-                newfarm2.add_emitter(comb);
-                newfarm2.cleanup_emitter(true);
+                farm2.change_emitter(comb, true);
             } else {
                 ff_comb *comb0 = new ff_comb(collector1,emitter2,
                                              farm1.isset_cleanup_collector(),
@@ -1040,35 +1071,12 @@ const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2) {
                 
                 ff_comb *comb = new ff_comb(cw, comb0,
                                             true, true);
-                newfarm2.add_emitter(comb);
-                newfarm2.cleanup_emitter(true);
+                farm2.change_emitter(comb, true);
             }
         }
     }
-    
-    // workers2
-    const svector<ff_node*>& w2= farm2.getWorkers();
-    std::vector<ff_node*> W2(w2.size());
-    for(size_t i=0;i<w2.size();++i) {
-        W2[i] = w2[i];
-    }
-    newfarm2.add_workers(W2);
-    if (farm2.isset_cleanup_workers()) {
-        farm2.cleanup_workers(false);
-        newfarm2.cleanup_workers(true);
-    }
-
-    // collector2
-    ff_node* collector2 = farm2.getCollector();
-    if (farm2.hasCollector()) {
-        newfarm2.add_collector(collector2);
-        if (farm2.isset_cleanup_collector()) {
-            newfarm2.cleanup_collector(true);
-            farm2.cleanup_collector(false);
-        }
-    }
     newpipe.add_stage(newfarm1);
-    newpipe.add_stage(newfarm2);
+    newpipe.add_stage(farm2);
 
     return newpipe;
 }
@@ -1196,7 +1204,7 @@ const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
     }  // mergeCE is false  -------------------------------------------------
 
     if (farm1.isOFarm() || farm2.isOFarm()) {
-        error("combine_farms, if mergeCE is true farms cannot be ordered farms\n");
+        error("combine_farms, A2A cannot be introduced if one of the two farms is an ordered farms\n");
         return newpipe;
     }
     
@@ -1274,7 +1282,8 @@ const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
         W.push_back(a2a);
         newfarm.add_workers(W);
         newfarm.cleanup_workers(); // a2a will be delated at the end
-        newfarm.set_scheduling_ondemand(farm1.ondemand_buffer());
+        if (farm1.ondemand_buffer())
+            newfarm.set_scheduling_ondemand(farm1.ondemand_buffer());
         
         newpipe.add_stage(newfarm);
         return newpipe;
@@ -1375,7 +1384,8 @@ const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
     W.push_back(a2a);
     newfarm.add_workers(W);
     newfarm.cleanup_workers(); // a2a will be deleted at the end
-    newfarm.set_scheduling_ondemand(farm1.ondemand_buffer());
+    if (farm1.ondemand_buffer())
+        newfarm.set_scheduling_ondemand(farm1.ondemand_buffer());
     
     newpipe.add_stage(newfarm);
     return newpipe;;
