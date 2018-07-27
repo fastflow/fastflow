@@ -107,8 +107,8 @@ protected:
             } ();
             const bool isa2a_prev   = get_node(i-1)->isAll2All();
             const bool isfarm_prev  = get_node(i-1)->isFarm();
-            const bool prev_isfarm_nocollector   = (isfarm_prev && !get_node(i-1)->isOFarm() && ((ff_farm*)nodes_list[i-1])->getCollector() == nullptr);
-            const bool prev_isfarm_withcollector = (isfarm_prev && ((ff_farm*)nodes_list[i-1])->hasCollector());        
+            const bool prev_isfarm_nocollector   = (isfarm_prev && !get_node(i-1)->isOFarm() && ((ff_farm*)get_node(i-1))->getCollector() == nullptr);
+            const bool prev_isfarm_withcollector = (isfarm_prev && ((ff_farm*)get_node(i-1))->hasCollector());        
             
             
             const bool prev_single_standard      = (!nodes_list[i-1]->isMultiOutput());

@@ -575,7 +575,11 @@ public:
     virtual int svc_init() { 
         gettimeofday(&tstart,NULL);
         for(ssize_t i=0;i<running;++i)  offline[i]=false;
-        if (filter) return filter->svc_init(); 
+        if (filter) {
+            if (filter->isComp() && !filter->isMultiInput())
+                filter->set_neos(running);
+            return filter->svc_init();
+        }
         return 0;
     }
 

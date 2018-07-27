@@ -58,14 +58,15 @@ struct Worker: ff_node_t<long> {
         return in;
     }
 };
-struct Collector: ff_minode_t<long> {
+struct Collector: ff_node_t<long> {   // ff_minode_t<long> {
     Collector(size_t nworkers):nworkers(nworkers) {}
     long *svc(long *in) {
         return in;
     }
-    void eosnotify(ssize_t) {
-        if (++neos == nworkers) ff_send_out(EOS); // redundant
+    void eosnotify(ssize_t=-1) {
+        //if (++neos == nworkers) ff_send_out(EOS); // redundant
     }
+
     size_t neos=0;
     size_t nworkers;
 };

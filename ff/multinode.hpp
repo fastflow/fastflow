@@ -322,6 +322,12 @@ public:
      */
     
     size_t get_num_inchannels() const  { return gt->getrunning(); }
+
+    /**
+     * For a multi-input node the number of EOS to receive before terminating is equal to 
+     * the current number of input channels.
+     */
+    ssize_t get_neos() const { return get_num_inchannels(); }
     
     /**
      * \internal
@@ -813,7 +819,7 @@ struct mo_transformer: ff_monode {
     }
     inline void* svc(void* task) { return n->svc(task);}
 
-    inline void eosnotify(ssize_t id=-1) { n->eosnotify(id); }
+    inline void eosnotify(ssize_t id) { n->eosnotify(id); }
     
     int create_input_buffer(int nentries, bool fixedsize=true) {
         int r= ff_monode::create_input_buffer(nentries,fixedsize);
@@ -897,7 +903,7 @@ struct mi_transformer: ff_minode {
         return ff_minode::getgt()->set_output_buffer(o);
     }
 
-    inline void eosnotify(ssize_t id=-1) { n->eosnotify(id); }
+    inline void eosnotify(ssize_t id) { n->eosnotify(id); }
     
     int run(bool skip_init=false) {
         if (!prepared) {

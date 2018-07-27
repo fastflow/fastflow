@@ -322,18 +322,21 @@ protected:
     }
     void set_multiinput() {
         // see farm.hpp
-        // to avoid that in the eosnotify the EOS is propogated
+        // when the composition is passed as filter of a farm collector (which is a multi-input)
+        // the filter is seen as multi-input because we want to avoid to call eosnotify 
+        // too many times (see ff_comb::eosnotify)
         if (comp_nodes[0]->isComp())
             return comp_nodes[0]->set_multiinput();
         comp_multi_input=true;
     }
     void set_multioutput() {
-        // see farm.hpp
-        // to avoid that in the eosnotify the EOS is propagated
-        // NOTE that propagateEOS for a standard node is nop.
         if (comp_nodes[1]->isComp())
             return comp_nodes[1]->set_multioutput();
         comp_multi_output=true;
+    }
+
+    void set_neos(ssize_t n) {
+        getFirst()->set_neos(n);
     }
     
     inline int cardinality(BARRIER_T * const barrier)  { 
@@ -512,18 +515,14 @@ protected:
         // the eosnotify might produce some data in output so we have to call the svc
         // of the next stage
         void *ret = svc_comp_node1(nullptr, GO_ON);
-        
-        // NOTE: if the first node is multi-input the EOS is not propagated        
-        if (comp_nodes[0]->isMultiInput() ||
-            comp_multi_input) {
 
-            if (comp_nodes[0]->isMultiInput()) {
-                ff_minode* mi = reinterpret_cast<ff_minode*>(comp_nodes[0]);
-                if (neos >= mi->get_num_inchannels() &&
-                    (ret != FF_GO_OUT) /*this means that svc_comp_node1 has already called eosnotify */
-                    )
-                    comp_nodes[1]->eosnotify(id);                
-            } 
+        // if the first node is multi-input or is a comp passed as filter to a farm collector,
+        // then we have to call eosnotify only if we have received all EOSs
+        if (comp_nodes[0]->isMultiInput() || comp_multi_input) {
+            if (neos >= comp_nodes[0]->get_neos() &&
+                (ret != FF_GO_OUT) /*this means that svc_comp_node1 has already called eosnotify */
+                )
+                comp_nodes[1]->eosnotify(id);                
             return;
         }
         if (ret != FF_GO_OUT)
@@ -664,7 +663,7 @@ private:
     svector<ff_node*> cleanup_stages;   
     bool comp_multi_input = false;
     bool comp_multi_output= false;
-    size_t neos=0;
+    ssize_t neos=0;
 };
 
 
