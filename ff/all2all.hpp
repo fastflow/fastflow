@@ -514,14 +514,14 @@ protected:
     bool isMultiOutput() const { return true;}
     bool isAll2All()     const { return true; }    
 
-    int create_input_buffer(int nentries, bool fixedsize=true) {
+    int create_input_buffer(int nentries, bool fixedsize) {
         size_t nworkers1 = workers1.size();
         for(size_t i=0;i<nworkers1; ++i)
             if (workers1[i]->create_input_buffer(nentries,fixedsize)==-1) return -1;
         return 0;
     }
 
-    int create_input_buffer_mp(int nentries, bool fixedsize=true, int neos=1) {
+    int create_input_buffer_mp(int nentries, bool fixedsize, int neos=1) {
         size_t nworkers1 = workers1.size();
         for(size_t i=0;i<nworkers1; ++i) {
             if (workers1[i]->create_input_buffer_mp(nentries,fixedsize, neos)==-1) return -1;

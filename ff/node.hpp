@@ -965,8 +965,24 @@ public:
      */
     virtual void  nodeEnd()  { }
 
+    /**
+     * \brief EOS callback
+     *
+     * This method is called when an EOS has just been received from one input channel. 
+     * Inside this method it is possible to call ff_send_out to produce data elements in output 
+     * (this is not possible in the svc_end method).
+     * The parameter \param id is the ID of the channel that received the EOS. 
+     */
     virtual void eosnotify(ssize_t id=-1) {}
-    
+
+    /**
+     * \brief Returns the number of EOS the node has to receive before terminating.
+     */    
+    virtual ssize_t get_neos() const { return neos;}
+
+    /**
+     *  \brief Returns the identifier of the node (not unique)
+     */    
     virtual ssize_t get_my_id() const { return myid; };
 
     /**
@@ -1138,7 +1154,7 @@ public:
     virtual inline bool isComp() const        { return false; }
     virtual inline bool isPipe() const        { return false; }
 
-    virtual inline void set_multiinput()  {};
+    virtual inline void set_multiinput()  {}
     virtual inline void set_multioutput() {}
 
 #if defined(FF_REPARA)
@@ -1291,7 +1307,7 @@ private:
     /* ------------------------------------------------------------------------------------- */
     class thWorker: public ff_thread {
     public:
-        thWorker(ff_node * const filter, const int input_neos=1):
+        thWorker(ff_node * const filter, const ssize_t input_neos=1):
             ff_thread(filter->barrier, filter->default_mapping),filter(filter),input_neos(input_neos) {}
         
         inline bool push(void * task) {
@@ -1323,7 +1339,9 @@ private:
             bool skipfirstpop = filter->skipfirstpop(); 
             bool exit=false;            
             bool filter_outpresent = false;
+            ssize_t neos=input_neos;
 
+            
             // if the node is a combine where the last stage is a multi-output
             if ( filter && ( !outpresent && filter->isMultiOutput() ) ) {
                 filter_outpresent=true;
@@ -1337,7 +1355,7 @@ private:
                         (task == FF_EOS_NOFREEZE)) {
                         ret = task;
                         
-                        if (--input_neos > 0) continue;  
+                        if (--neos > 0) continue;  
                         filter->eosnotify();
 
                         // only EOS and EOSW are propagated
@@ -1425,7 +1443,7 @@ private:
 #endif        
     protected:            
         ff_node * const filter;
-        int input_neos;
+        const ssize_t input_neos;
     };
     /* ------------------------------------------------------------------------------------- */
 

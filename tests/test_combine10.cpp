@@ -110,6 +110,7 @@ int main(int argc, char* argv[]) {
         ntasks    = std::stol(argv[1]);
         nworkers  = std::stol(argv[2]);
     }
+
     { // two sequential
         First first(ntasks);
         Last last;
@@ -125,6 +126,7 @@ int main(int argc, char* argv[]) {
     }
     printf("TEST1 DONE\n");
     usleep(500000);
+
     { // merging first stage with farm's emitter
         First first(ntasks);
         Last last;
@@ -205,8 +207,7 @@ int main(int argc, char* argv[]) {
     printf("TEST4 DONE\n");
     usleep(500000);
 #if 0
-    // DA RIVEDERE
-    
+    // TO BE FIXED    
     { // merging collector and emitter of the two ORDERED farms 
         First first(ntasks);
         Last last;
