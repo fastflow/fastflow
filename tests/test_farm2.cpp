@@ -132,7 +132,10 @@ int main(int argc, char* argv[]) {
     ff_Farm<> farm(std::move(W), E, C);
 #if 1
     OptLevel1 opt;
-    opt.max_nb_threads=ff_realNumCores();  
+    opt.max_nb_threads=ff_realNumCores();
+    opt.max_mapped_threads=opt.max_nb_threads;
+    opt.no_default_mapping=true;
+    opt.verbose_level=2;
     farm.set_scheduling_ondemand();
     
     if (optimize_static(farm,opt)<0) {

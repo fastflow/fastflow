@@ -96,6 +96,11 @@ struct OptLevel2: OptLevel {
 };
 /* ----------------------------------------------------------------------- */
 
+// This is just a counter, and is used to set the ff_node::tid value.
+// The _noBarrier counter is to use with threads that are not part of a topology,
+// such for example stand-alone nodes or manager node or ...etc...    
+static std::atomic_ulong   internal_threadCounter{0};
+static std::atomic_ulong   internal_threadCounter_noBarrier{MAX_NUM_THREADS};
     
 // TODO: Should be rewritten in terms of mapping_utils.hpp 
 #if defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
@@ -187,10 +192,9 @@ class ff_thread {
 
 protected:
     ff_thread(BARRIER_T * barrier=NULL, bool default_mapping=true):
-        tid((size_t)-1),threadid(0), barrier(barrier),
-        stp(true), // only one shot by default
-        spawned(false), default_mapping(default_mapping),
-        freezing(0), frozen(false),isdone(false),
+        tid((size_t)-1),threadid(0), default_mapping(default_mapping),
+        barrier(barrier), stp(true), // only one shot by default
+        spawned(false), freezing(0), frozen(false),isdone(false),
         init_error(false), attr(NULL) {
         (void)FF_TAG_MIN; // to avoid warnings
         
@@ -305,6 +309,9 @@ public:
 
     virtual void set_barrier(BARRIER_T * const b) { barrier=b;}
     virtual BARRIER_T* get_barrier() const { return barrier; }
+
+    virtual void no_mapping() { default_mapping=false; }
+    bool get_mapping() const { return default_mapping; }
     
     virtual int run(bool=false) { return spawn(); }
     
@@ -324,17 +331,19 @@ public:
         if (default_mapping)
             init_thread_affinity(attr, cpuId);
         if (CPUId==-2) return -2;
-        if (barrier) {
-            tid= barrier->getCounter();
-        }
+
+        if (barrier)
+            tid= internal_threadCounter.fetch_add(1);
+        else
+            tid= internal_threadCounter_noBarrier.fetch_add(1);
         int r=0;
         if ((r=pthread_create(&th_handle, attr,
                               proxy_thread_routine, this)) != 0) {
             errno=r;
             perror("pthread_create: pthread creation failed.");
+            barrier?--internal_threadCounter:--internal_threadCounter_noBarrier;
             return -2;
         }
-        if (barrier) barrier->incCounter();
         spawned = true;
         return CPUId;
     }
@@ -348,7 +357,7 @@ public:
         }
         if (spawned) {
             pthread_join(th_handle, NULL);
-            if (barrier) barrier->decCounter();
+            barrier ? --internal_threadCounter: --internal_threadCounter_noBarrier;
         }
         if (attr) {
             if (pthread_attr_destroy(attr)) {
@@ -408,11 +417,11 @@ public:
 protected:
     size_t          tid;                /// unique logical id of the thread
     size_t          threadid;           /// OS specific thread ID
+    bool            default_mapping;
 private:
     BARRIER_T    *  barrier;            /// A \p Barrier object
     bool            stp;
     bool            spawned;
-    bool            default_mapping;
     int             freezing;  
     bool            frozen,isdone;
     bool            init_error;
@@ -1256,6 +1265,7 @@ protected:
         p_cons_m = n.p_cons_m, p_cons_c = n.p_cons_c, p_cons_counter = n.p_cons_counter;
         blocking_in = n.blocking_in;
         blocking_out = n.blocking_out;
+        default_mapping = n.default_mapping;
         in_active = n.in_active;
         cons_m = n.cons_m;  cons_c = n.cons_c;
         prod_m = n.prod_m;  prod_c = n.prod_c;
@@ -1407,7 +1417,7 @@ private:
         
         int svc_init() {
 #if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
-            if (default_mapping) {
+            if (filter->default_mapping) {
                 int cpuId = filter->getCPUId();
                 if (ff_mapThreadToCpu((cpuId<0) ? (cpuId=threadMapper::instance()->getCoreId(tid)) : cpuId)!=0)
                     error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());            

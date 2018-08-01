@@ -936,7 +936,7 @@ protected:
             PAUSE();            
         }
     public:
-        foralllb_t(size_t n):ff_loadbalancer(n),ncores(ff_numCores()) {}
+        foralllb_t(size_t n):ff_loadbalancer(n),ncores(ff_realNumCores()) {}
         inline int getNCores() const { return ncores;}
     private:
         const int ncores;
@@ -1039,7 +1039,7 @@ public:
         const ssize_t nwtostart = (nw_ == -1)?getNWorkers():nw_;
         auto r = -1;
         if (schedRunning) {
-            getlb()->skipfirstpop();
+            getlb()->skipfirstpop(true);
             if (spinwait) {
                 // NOTE: here we have to be sure to send one task to each worker!
                 ((forall_Scheduler*)getEmitter())->sendTask(true);
@@ -1066,7 +1066,7 @@ public:
         auto r= -1;
         if (schedRunning) {
             //resetqueues(nwtostart);
-            getlb()->skipfirstpop(); 
+            getlb()->skipfirstpop(true); 
             // (**) this way we avoid the initial barrier
             if (getlb()->runlb()!= -1) {
                 if (getlb()->runWorkers(nwtostart)!=-1)

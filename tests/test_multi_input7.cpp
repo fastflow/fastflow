@@ -90,7 +90,7 @@ public:
         printf("BACK: got  %ld from %zd (numtasks=%ld)\n", t,lb->get_channel_id(),numtasks);
         if ((t != 1) && (t & 0x1)) return task;
         --numtasks;
-        if (numtasks == 0 && neos==FARM1WORKERS) return NULL;
+        if (numtasks == 0 && neos==FARM1WORKERS) return EOS;
         return GO_ON;
     }
 
@@ -122,8 +122,7 @@ int main() {
     w.push_back(new W2);
     farm2.add_workers(w);
     farm2.add_emitter(new E(farm2.getlb()));
-    //farm2.setMultiInput();    // not needed anymore
-    farm2.wrap_around(true);
+    farm2.wrap_around();
 
     ff_pipeline pipe;
     pipe.add_stage(&farm1);

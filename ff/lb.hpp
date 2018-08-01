@@ -673,11 +673,15 @@ public:
      * It sets \p skip1pop to \p true
      *
      */
-    void skipfirstpop() { skip1pop=true;}
+    void skipfirstpop(bool sk) { skip1pop=sk;}
 
 
     void blocking_mode(bool blk=true) {
         blocking_in = blocking_out = blk;
+    }
+
+    void no_mapping() {
+        default_mapping = false;
     }
     
     /**
@@ -1042,7 +1046,7 @@ public:
                         // this conditions means there is a loop
                         // so in this case I don't want to send an additional
                         // EOS since I have already received all of them
-                        if (!master_worker && (task==FF_EOS) && (int_multi_input.size()==0)) {
+                        if (!master_worker && (task==FF_EOS) && (int_multi_input.size()==0 || multi_input.size()==0)) {
                             push_eos();
                         }
                         ret = task;
@@ -1105,7 +1109,15 @@ public:
      * \return 0 if successful, otherwise -1 is returned.
      *
      */
-    virtual int svc_init() { 
+    virtual int svc_init() {
+#if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
+        if (this->get_mapping()) {
+            int cpuId = (filter)?filter->getCPUId():-1;
+            if (ff_mapThreadToCpu((cpuId<0) ? (cpuId=threadMapper::instance()->getCoreId(tid)) : cpuId)!=0)
+                error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());            
+            if (filter) filter->setCPUId(cpuId);
+        }
+#endif        
         gettimeofday(&tstart,NULL);
         if (filter) {
             if (filter->svc_init() <0) return -1;
@@ -1173,6 +1185,7 @@ public:
                  */
                 assert(blocking_in==blocking_out);
                 workers[i]->blocking_mode(blocking_in);
+                if (!default_mapping) workers[i]->no_mapping();
                 if (workers[i]->freeze_and_run(true)<0) {
                     error("LB, spawning worker thread\n");
                     return -1;
@@ -1184,6 +1197,7 @@ public:
                  */
                 assert(blocking_in==blocking_out);
                 workers[i]->blocking_mode(blocking_in);
+                if (!default_mapping) workers[i]->no_mapping();
                 if (workers[i]->run(true)<0) {
                     error("LB, spawning worker thread\n");
                     return -1;

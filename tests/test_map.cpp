@@ -89,7 +89,7 @@ struct mapStage: ff_Map<ff_task_t> {
 
 
 int main() {
-
+    
     // farm having map workers
     ff_Farm<ff_task_t, ff_task_t> farm( []() {
             std::vector<std::unique_ptr<ff_node> > W;	

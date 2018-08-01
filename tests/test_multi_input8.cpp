@@ -128,7 +128,7 @@ int main(int argc, char *argv[]) {
         w2.push_back(make_unique<W2>());
     ff_Farm<> farm2(std::move(w2),e, c);
 
-    farm2.wrap_around(true); // <---
+    farm2.wrap_around();
     ff_pipeline pipe;
     pipe.add_stage(&farm1);
     pipe.add_stage(&farm2);

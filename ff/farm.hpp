@@ -2,7 +2,7 @@
 
 /*! 
  *  \file farm.hpp
- *  \ingroup high_level_patterns core_patterns building_blocks
+ *  \ingroup high_level_patterns building_blocks
  *  \brief Farm pattern
  *
  *  It works on a stream of tasks. Workers are non-blocking threads
@@ -80,7 +80,7 @@ namespace ff {
 
 /*!
  *  \class ff_farm
- * \ingroup  high_level_patterns core_patterns
+ * \ingroup  building_block
  *
  *  \brief The Farm skeleton, with Emitter (\p lb_t) and Collector (\p gt_t).
  *
@@ -532,7 +532,7 @@ protected:
     }
 
     inline void skipfirstpop(bool sk)   { 
-        if (sk) lb->skipfirstpop();
+        lb->skipfirstpop(sk);
         skip1pop=sk;
     }
     
@@ -542,10 +542,7 @@ protected:
         lb->blocking_mode(blk);
         if (gt) gt->blocking_mode(blk);            
     }
-    virtual void no_barrier() {
-        initial_barrier = false;
-    }
-
+    
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
@@ -596,10 +593,10 @@ public:
     using gt_t = ff_gatherer;    
 
     /*
-     * \ingroup core_patterns
-     * @brief Core patterns constructor 2
+     * \ingroup building_blocks
+     * @brief farm building block 
      *
-     * This is a constructor at core patterns level.
+     * This is the farm constructor.
      * Note that, by using this constructor, the collector IS added automatically !
      *
      * @param W vector of workers
@@ -607,7 +604,7 @@ public:
      * @param Collector pointer to Collector object (optional)
      * @param input_ch \p true for enabling the input stream
      */
-    ff_farm(std::vector<ff_node*>& W, ff_node *const Emitter=NULL, ff_node *const Collector=NULL, bool input_ch=false):
+    ff_farm(const std::vector<ff_node*>& W, ff_node *const Emitter=NULL, ff_node *const Collector=NULL, bool input_ch=false):
         has_input_channel(input_ch),collector_removed(false),ordered(false),fixedsize(false),
         myownlb(true),myowngt(true),worker_cleanup(false),emitter_cleanup(false),
         collector_cleanup(false),ondemand(0),
@@ -628,11 +625,20 @@ public:
         add_collector(Collector); 
     }
 
-    /**
-     * \ingroup core_patterns
-     * \brief Core patterns constructor 1
+    /*
+     * \ingroup building_blocks
+     * @brief farm building block 
      *
-     *  This is a constructor at core patterns level. To be coupled with \p add_worker, \p add_emitter, and \p add_collector
+     * This is the farm constructor.
+     */
+    ff_farm(const std::vector<ff_node*>& W, ff_node& E, ff_node& C):ff_farm(W,&E,&C,false) {
+    }
+    
+    /**
+     * \ingroup building_blocks
+     * \brief farm building block
+     *
+     *  This is the basic constructor for the farm building block. To be coupled with \p add_worker, \p add_emitter, and \p add_collector
      *  Note that, by using this constructor, the collector is NOT added automatically !
      *
      *  \param input_ch = true to set accelerator mode
@@ -932,7 +938,7 @@ public:
      *
      *  \return 0 if successsful, otherwise -1 is returned.
      */
-    int add_workers(std::vector<ff_node *> & w) { 
+    int add_workers(const std::vector<ff_node *> & w) { 
         if ((workers.size()+w.size())> max_nworkers) {
             error("FARM, try to add too many workers, please increase max_nworkers\n");
             return -1; 
@@ -997,13 +1003,14 @@ public:
      * \return 0 if successful, otherwise -1 is returned.
      *
      */
-    int wrap_around(bool multi_input=false) {
+    int wrap_around() {
         if (!collector || collector_removed) { // all stuff are in the prepare method
             if (lb->set_masterworker()<0) return -1;           
-            if (!multi_input && !has_input_channel) lb->skipfirstpop();
+            if (!has_input_channel) lb->skipfirstpop(true);
             return 0;
         }
 
+        // blocking stuff        
         pthread_mutex_t   *m        = NULL;
         pthread_cond_t    *c        = NULL;
         std::atomic_ulong *counter  = NULL;
@@ -1018,34 +1025,23 @@ public:
             return -1;
         }
         set_input_blocking(m,c,counter);             
-
-        if (!multi_input) {
-            if (create_input_buffer(in_buffer_entries, false)<0) {
-                error("FARM, creating input buffer\n");
-                return -1;
-            }
-            if (set_output_buffer(get_in_buffer())<0) {
-                error("FARM, setting output buffer\n");
-                return -1;
-            }
-            lb->skipfirstpop();
-        } else {
-            if (create_output_buffer(out_buffer_entries, false)<0) {
-                error("FARM, creating output buffer for multi-input configuration\n");
-                return -1;
-            }
-            ff_buffernode *tmpbuffer = new ff_buffernode(0, NULL,get_out_buffer());
-            if (!tmpbuffer) return -1;
-            tmpbuffer->set_input_blocking(m,c,counter);
-            internalSupportNodes.push_back(tmpbuffer);
-            if (set_output_buffer(get_out_buffer())<0) {
-                error("FARM, setting output buffer for multi-input configuration\n");
-                return -1;
-            }
-            if (lb->set_internal_multi_input(internalSupportNodes)<0)
-                return -1;
+        /* ------ */
+        
+        if (create_output_buffer(out_buffer_entries, false)<0) {
+            error("FARM, creating output buffer for multi-input configuration\n");
+            return -1;
         }
-
+        ff_buffernode *tmpbuffer = new ff_buffernode(-1, NULL,get_out_buffer());
+        if (!tmpbuffer) return -1;
+        tmpbuffer->set_input_blocking(m,c,counter);
+        internalSupportNodes.push_back(tmpbuffer);
+        if (set_output_buffer(get_out_buffer())<0) {
+            error("FARM, setting output buffer for multi-input configuration\n");
+            return -1;
+        }
+        if (lb->set_internal_multi_input(internalSupportNodes)<0)
+            return -1;
+        lb->skipfirstpop(true);
         return 0;
     }
 
@@ -1106,6 +1102,16 @@ public:
         emitter_cleanup  = true;
         collector_cleanup= true;
     }
+
+    virtual void no_barrier() {
+        initial_barrier = false;
+    }
+    virtual void no_mapping() {
+        default_mapping = false;
+        lb->no_mapping();
+        if (gt) gt->no_mapping();
+    }
+
     
     /**
      * \brief Execute the Farm 
@@ -1132,6 +1138,8 @@ public:
                 barrier->barrierSetup(nthreads);
             }
 #endif
+            // only the first stage has to skip the first pop
+            lb->skipfirstpop(!has_input_channel);
         }
         
         if (!prepared) if (prepare()<0) return -1;
@@ -1150,6 +1158,7 @@ public:
                  for(size_t j=0; j<W2.size(); ++j) {
                      if (W2[j]->getTid() == (size_t)-1) {
                          W2[j]->blocking_mode(blocking_in);
+                         if (!default_mapping) W2[j]->no_mapping();
                          if (W2[j]->run(true)<0) {
                              error("FARM, running A2A workers\n");                                
                              return -1;
@@ -1874,6 +1883,12 @@ protected:
 
 #include <ff/make_unique.hpp>
 
+/*
+ * \class ff_Farm
+ * \ingroup  high_level_patterns
+ *
+ *  \brief The Farm pattern.
+ */    
 template<typename IN_t=char, typename OUT_t=IN_t>
 class ff_Farm: public ff_farm {
 protected:
@@ -2013,7 +2028,13 @@ public:
 };
 
 
+    
 /*
+ * \class ff_Farm
+ * \ingroup  high_level_patterns
+ *
+ * \brief The ordered Farm pattern.
+ *
  * Ordered task-farm pattern based on ff_farm building-block
  *
  */
@@ -2097,36 +2118,6 @@ public:
 
 
     
-#if 0
-
-/* --------------   makeFarm   ----------------- */
-template<typename W_t, typename... Args>
-static inline 
-ff_Farm<typename W_t::in_type, typename W_t::out_type> make_Farm(const size_t N, Args&&... args) {
-    ff_Farm<typename W_t::in_type, typename W_t::out_type> farm([&]() {
-	    std::vector<std::unique_ptr<ff_node> > W;
-	    for(size_t i=0;i<N; ++i) 
-		W.push_back(make_unique<W_t>(std::forward<Args>(args)...));
-	    return W;
-	} ());
-    return farm;
-}
-
-/* --------------   makeMasterWorker ----------------- */
-template<typename W_t, typename... Args>
-static inline 
-ff_Farm<typename W_t::in_type, typename W_t::out_type> make_MasterWorker(std::unique_ptr<ff_node> && Master, const size_t N, Args&&... args) {
-    ff_Farm<typename W_t::in_type, typename W_t::out_type> farm([&]() {
-	    std::vector<std::unique_ptr<ff_node> > W;
-	    for(size_t i=0;i<N; ++i) 
-		W.push_back(make_unique<W_t>(std::forward<Args>(args)...));
-	    return W;
-        } (), std::move(Master));
-    farm.remove_collector();
-    farm.wrap_around();
-    return farm;
-}
-#endif // if 0
 
 #endif
 

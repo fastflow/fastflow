@@ -572,7 +572,15 @@ public:
      *
      * \return It returns the task if successful, otherwise 0 is returned.
      */
-    virtual int svc_init() { 
+    virtual int svc_init() {
+#if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
+        if (this->get_mapping()) {
+            int cpuId = filter?filter->getCPUId():-1;
+            if (ff_mapThreadToCpu((cpuId<0) ? (cpuId=threadMapper::instance()->getCoreId(tid)) : cpuId)!=0)
+                error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());            
+            if (filter) filter->setCPUId(cpuId);
+        }
+#endif        
         gettimeofday(&tstart,NULL);
         for(ssize_t i=0;i<running;++i)  offline[i]=false;
         if (filter) {
@@ -742,6 +750,11 @@ public:
         blocking_in = blocking_out = blk;
     }
 
+    void no_mapping() {
+        default_mapping = false;
+    }
+
+    
     inline int wait_freezing() {
         int r = ff_thread::wait_freezing();
         running = -1;

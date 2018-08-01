@@ -151,7 +151,7 @@ public:
         }
 
         if ((size_t)wid < lb->getNWorkers()) { // ack coming from the workers
-            printf("Emitter got %ld back from %d data.size=%ld\n", (long)t, wid, data.size());
+            printf("Emitter got %ld back from %d data.size=%ld, onthefly=%d\n", (long)t, wid, data.size(), onthefly);
             assert(ready[wid] == false);
             ready[wid] = true;
             ++nready;
@@ -165,6 +165,7 @@ public:
             return GO_ON;
         }
         --onthefly;
+        printf("Emitter got %ld back from COLLECTOR data.size=%ld, onthefly=%d\n", (long)t, data.size(), onthefly);
         if (eos_received && (nready + sleeping) == ready.size() && onthefly<=0) {
             printf("Emitter exiting\n");
             return EOS;
@@ -309,13 +310,13 @@ int main(int argc, char* argv[]) {
 
     farm.remove_collector();
     farm.add_emitter(E); 
-    farm.wrap_around(true);
+    farm.wrap_around();
     // here the order of instruction is important. The collector must be
     // added after the wrap_around otherwise the feedback channel will be
     // between the Collector and the Emitter
     Collector C;
     farm.add_collector(C);
-    farm.wrap_around(true);
+    farm.wrap_around();
 
     ff_Pipe<> pipe(seq, farm);
     

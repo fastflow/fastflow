@@ -106,12 +106,12 @@ int main() {
     ff_pipeline pipe;
     pipe.add_stage(&s0);
     pipe.add_stage(&s1);
-    pipe.wrap_around(true);
+    pipe.wrap_around();
     pipe.add_stage(&s2);
-    pipe.wrap_around(true);
+    pipe.wrap_around();
     pipe.add_stage(&s3);
     pipe.wrap_around();
-#endif
+#else
     ff_Pipe<long,long> pipe1(s0, s1);
     pipe1.wrap_around();
 
@@ -120,7 +120,7 @@ int main() {
  
     ff_Pipe<> pipe(pipe2, s3);
     pipe.wrap_around();
-
+#endif
     if (pipe.run_and_wait_end()<0) {
         error("running pipe\n");
         return -1;

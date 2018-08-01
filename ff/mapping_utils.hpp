@@ -458,7 +458,6 @@ static inline ssize_t ff_getMyCpu() { return ff_getMyCore(); }
  *  successful. Otherwise \p EINVAL is returned.
  */
 static inline ssize_t ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
-    if (cpu_id > ff_numCores()) return EINVAL;
 #if defined(__linux__) && defined(CPU_SET)
     cpu_set_t mask;
     CPU_ZERO(&mask);

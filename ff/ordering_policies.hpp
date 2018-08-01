@@ -151,10 +151,37 @@ public:
         in->second.first=out;
         return in;
     }
+    int  svc_init() { return worker->svc_init();}
+    void svc_end() { worker->svc_end(); }
+    void eosnotify(ssize_t id) { worker->eosnotify(id);}
 protected:    
     ff_node* worker;
     bool cleanup;
 };
+// A node that removes the ordering_pair_t around the data element
+template<typename IN_t>    
+class OrderedEmitterWrapper: public ff_node_t<IN_t, ordering_pair_t> {
+public:
+    OrderedEmitterWrapper(ordering_pair_t*const  m, const size_t size):
+        idx(0),cnt(0),Memory(m), MemSize(size) {}
+
+    int svc_init() {
+        idx=0;
+        return 0;
+    } 
+    inline ordering_pair_t* svc(IN_t* in) {
+        Memory[idx].first=cnt;
+        Memory[idx].second.first = in;
+        this->ff_send_out(&Memory[idx]);
+        ++cnt;
+        ++idx %= MemSize;
+        return this->GO_ON;
+    }
+    size_t idx,cnt;
+    ordering_pair_t* Memory;
+    size_t MemSize;
+};
+    
 // A node that removes the ordering_pair_t around the data element
 class OrderedCollectorWrapper: public ff_node_t<ordering_pair_t, void> {
 public:

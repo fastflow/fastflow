@@ -285,6 +285,9 @@ struct Manager: ff_node_t<Command_t> {
         channel2(100, true, MAX_NUM_THREADS+200) {}
 
     Command_t* svc(Command_t *) {
+
+#if 0
+        
         Command_t *cmd1 = new Command_t(0, REMOVE);
         channel1.ff_send_out(cmd1);
         Command_t *cmd2 = new Command_t(1, REMOVE);
@@ -304,7 +307,7 @@ struct Manager: ff_node_t<Command_t> {
         channel1.ff_send_out(cmd7);
         Command_t *cmd8 = new Command_t(0, ADD);
         channel2.ff_send_out(cmd8);
-
+#endif
         channel1.ff_send_out(EOS);
         channel2.ff_send_out(EOS);
 
@@ -371,21 +374,22 @@ int main(int argc, char* argv[]) {
             return W;
         } () );
 
+
     // registering the manager channel as one extra input channel for the load balancer
     farm2.getlb()->addManagerChannel(manager.getChannel2());
     Emitter2 E2(farm2.getlb());
-
+    
     farm2.remove_collector();
     farm2.add_emitter(E2); 
 #if 0   // version 1
-    farm2.wrap_around(true); 
+    farm2.wrap_around(); 
     Collector C;
     ff_Pipe<long> pipe_internal(farm2, C);
 
     ff_Pipe<> pipe(farm1, pipe_internal);
 #else   // version 2
     //farm2.setMultiInput();  // not needed anymore!
-    farm2.wrap_around(true);
+    farm2.wrap_around();
     // here the order of instruction is important. The collector must be
     // added after the wrap_around otherwise the feedback channel will be
     // between the Collector and the Emitter2

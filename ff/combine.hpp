@@ -126,7 +126,12 @@ public:
         }
     }
 
-    int run(bool=false) {
+    int run(bool skip_init=false) {
+        if (!skip_init) {
+            if (getFirst()->get_in_buffer() == nullptr)
+                getFirst()->skipfirstpop(true);
+        }
+
         if (!prepared) if (prepare()<0) return -1;
 
         // set blocking mode for the last node of the composition
@@ -138,8 +143,6 @@ public:
             return ff_minode::run();
         }
 
-        if (getFirst()->get_in_buffer() == nullptr)
-            getFirst()->skipfirstpop(true);
         if (ff_node::run(true)<0) return -1;
         return 0;
     }

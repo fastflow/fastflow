@@ -168,7 +168,7 @@ int main() {
         error("adding second set of workers failed\n");
         return -1;
     }
-    if (a2a.wrap_around(true)<0) {      // set multi-input
+    if (a2a.wrap_around()<0) {      
         error("wrap_around failed\n");
         return -1;
     }

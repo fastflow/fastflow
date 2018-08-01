@@ -86,7 +86,6 @@ struct Filter1: ff_monode_t<mypair> {
         }
         delete in;
         if (--ntasks == 0) {
-            printf("FILTER1 GENERATING EOS\n");
             return EOS;
         }
         return GO_ON;

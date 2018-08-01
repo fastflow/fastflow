@@ -225,7 +225,7 @@ public:
         for(int i=0;i<maxnw;++i) w.push_back(new TaskFWorker);
         farm->add_workers(w);
         farm->add_emitter(sched = new Scheduler<compare_t>(farm->getlb(), maxnw, schedRelaxF));
-        farm->wrap_around(true);
+        farm->wrap_around();
 	    
         ff_pipeline::add_stage(_gd);
         ff_pipeline::add_stage(farm);

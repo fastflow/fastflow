@@ -119,7 +119,7 @@ int main(int argc, char* argv[]) {
             return -1;
         }
         if (last.counter!=ntasks) {
-            error("TEST FAILED\n");
+            error("TEST FAILED (%ld)\n", last.counter);
             return -1;
         }
     }
@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
             return -1;
         }
         if (last.counter!=ntasks) {
-            error("TEST FAILED\n");
+            error("TEST FAILED (%ld)\n", last.counter);
             return -1;
         }
     }
@@ -168,7 +168,7 @@ int main(int argc, char* argv[]) {
             return -1;
         }
         if (last.counter!=ntasks) {
-            error("TEST FAILED\n");
+            error("TEST FAILED (%ld)\n", last.counter);
             return -1;
         }
     }    
@@ -199,7 +199,7 @@ int main(int argc, char* argv[]) {
             return -1;
         }
         if (last.counter!=ntasks) {
-            error("TEST FAILED\n");
+            error("TEST FAILED (%ld)\n", last.counter);
             return -1;
         }
     }
@@ -244,7 +244,7 @@ int main(int argc, char* argv[]) {
             return -1;
         }
         if (last.counter!=ntasks) {
-            error("TEST FAILED\n");
+            error("TEST FAILED (%ld)\n", last.counter);
             return -1;
         }
     }
@@ -273,7 +273,7 @@ int main(int argc, char* argv[]) {
             return -1;
         }
         if (last->counter!=ntasks) {
-            error("TEST FAILED\n");
+            error("TEST FAILED (%ld)\n", last->counter);
             return -1;
         }
         delete pipe;

@@ -143,8 +143,7 @@ int main(int argc, char* argv[]) {
     Emitter2 E2(farm2.getlb(), nworkers);
     farm2.add_emitter(E2);
     farm2.remove_collector();
-    farm2.wrap_around(true);
-    //farm2.setMultiInput();  // not needed anymore
+    farm2.wrap_around();
 
     ff_Pipe<> pipe(farm1, farm2);
     pipe.setFixedSize(true);

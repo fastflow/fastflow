@@ -256,6 +256,10 @@ public:
         blocking_in = blocking_out = blk;
     }
 
+    void no_mapping() {
+        default_mapping = false;
+    }
+    
     void no_barrier() {
         initial_barrier=false;
     }
@@ -274,6 +278,7 @@ public:
                 barrier->barrierSetup(nthreads);
             }
 #endif
+            skipfirstpop(true);
         }
         if (!prepared) if (prepare()<0) return -1;
         
@@ -282,6 +287,7 @@ public:
         
         for(size_t i=0;i<nworkers1; ++i) {
             workers1[i]->blocking_mode(blocking_in);
+            if (!default_mapping) workers1[i]->no_mapping();
             if (workers1[i]->run(true)<0) {
                 error("ERROR: A2A, running worker (first set) %d\n", i);
                 return -1;
@@ -289,6 +295,7 @@ public:
         }
         for(size_t i=0;i<nworkers2; ++i) {
             workers2[i]->blocking_mode(blocking_in);
+            if (!default_mapping) workers1[i]->no_mapping();
             if (workers2[i]->run(true)<0) {
                 error("ERROR: A2A, running worker (second set) %d\n", i);
                 return -1;
@@ -363,7 +370,7 @@ public:
      * The last stage output stream will be connected to the first stage 
      * input stream in a cycle (feedback channel)
      */
-    int wrap_around(bool multi_input=false) {
+    int wrap_around() {
 
         if (workers2[0]->isMultiOutput()) { // we suppose that all others are the same
             if (workers1[0]->isMultiInput()) { // we suppose that all others are the same
@@ -377,11 +384,6 @@ public:
                     }                    
                 }
             } else {
-                if (multi_input) {
-                    error("A2A, wrap_around(true) used but the nodes of the firstSet are not multi-input nodes\n");
-                    return -1;
-                }
-
                 // the cardinatlity of the first and second set of workers must be the same
                 if (workers1.size() != workers2.size()) {
                     error("A2A, wrap_around, the workers of the second set are not multi-output nodes so the cardinatlity of the first and second set must be the same\n");
@@ -397,29 +399,24 @@ public:
                     workers2[i]->set_output_feedback(workers1[i]);
                                
             }
-            if (!multi_input) skipfirstpop(true);                
+            skipfirstpop(true);                
         } else {
             // the cardinatlity of the first and second set of workers must be the same
             if (workers1.size() != workers2.size()) {
                 error("A2A, wrap_around, the workers of the second set are not multi-output nodes so the cardinatlity of the first and second set must be the same\n");
                 return -1;
             }
-            
-            if (!multi_input) {
+
+            if (!workers1[0]->isMultiInput()) {  // we suppose that all others are the same
                 if (create_input_buffer(in_buffer_entries, false) <0) {
                     error("A2A, error creating input buffers\n");
                     return -1;
                 }
-
+                
                 for(size_t i=0;i<workers2.size(); ++i)
                     workers2[i]->set_output_buffer(workers1[i]->get_in_buffer());
                 
-                skipfirstpop(true);    
             } else {
-                if (!workers1[0]->isMultiInput()) {
-                    error("A2A, wrap_around(true), the nodes of the first set are not multi-input\n");
-                    return -1;
-                }
                 
                 if (create_output_buffer(in_buffer_entries, false) <0) {
                     error("A2A, error creating output buffers\n");
@@ -427,7 +424,10 @@ public:
                 }
                 
                 for(size_t i=0;i<workers1.size(); ++i)
-                    workers1[i]->set_input_feedback(workers2[i]);
+                    if (workers1[i]->set_input_feedback(workers2[i])<0) {
+                        error("A2A, wrap_around, the nodes of the first set are not multi-input\n");
+                        return -1;
+                    }
             }
         }
 
