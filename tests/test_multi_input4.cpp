@@ -69,7 +69,7 @@ int main() {
     ff_pipeline pipe2;
     pipe2.add_stage(&s2);
     pipe2.add_stage(&s3);
-    if (pipe2.wrap_around(true)<0) { // true allows to skip the first pop
+    if (pipe2.wrap_around()<0) {
         error("wrap_around\n");
         return -1;
     }

@@ -2,7 +2,7 @@
 
 /*! 
  * \file pipeline.hpp
- * \ingroup core_patterns high_level_patterns
+ * \ingroup building_block high_level_patterns
  *
  * \brief This file implements the pipeline skeleton, both in the high-level pattern
  * syntax (\ref ff::ff_pipe) and low-level syntax (\ref ff::ff_pipeline)
@@ -83,7 +83,7 @@ protected:
         //
         //
         //
-        for(int i=1;i<nstages;++i) {
+        for(int i=1;i<nstages;++i) {            
             const bool isa2a_curr                = get_node(i)->isAll2All();
             const bool curr_single_standard      = (!nodes_list[i]->isMultiInput());
             // the farm is considered single_multiinput
@@ -449,6 +449,8 @@ protected:
                 barrier->barrierSetup(nthreads);
             }
 #endif
+            // only the first stage has to skip the first pop
+            skipfirstpop(!has_input_channel);
         }
         if (!prepared) if (prepare()<0) return -1;
         ssize_t startid = (get_my_id()>0)?get_my_id():0;
@@ -568,7 +570,7 @@ public:
      * The last stage output stream will be connected to the first stage 
      * input stream in a cycle (feedback channel)
      */
-    int wrap_around(bool multi_input=false) {
+    int wrap_around() {
         if (nodes_list.size()<2) {
             error("PIPE, too few pipeline nodes\n");
             return -1;
@@ -652,11 +654,6 @@ public:
 
         // first stage: standard node
         if (first_single_standard) {
-            if (multi_input) {
-                error("PIPE, wrap_around(true) but the first stage is not multi-input");
-                return -1;
-            }
-            
             if (create_input_buffer(out_buffer_entries, false)<0) return -1;
             if (last_single_standard) {                
                 if (set_output_buffer(get_in_buffer())<0)  return -1;
@@ -712,17 +709,12 @@ public:
                     }
                 }
             }
-            if (!multi_input) nodes_list[0]->skipfirstpop(true);
+            nodes_list[0]->skipfirstpop(true);
         }
         // first stage: multi standard
         if (first_multi_standard) {  // all-to-all
             assert(get_node(0)->isAll2All());
 
-            if (multi_input) {
-                error("PIPE, wrap_around(true) but the stage of the all-to-all are not multi-input");
-                return -1;
-            }
-            
             ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[0]);
             const svector<ff_node*>& firstSet=a2a->getFirstSet();
              
@@ -753,7 +745,7 @@ public:
                 error("PIPE, wrap_around, cannot connect last stage with first stage\n");
                 return -1;                
             }
-            if (!multi_input) nodes_list[0]->skipfirstpop(true);
+            nodes_list[0]->skipfirstpop(true);
         }
         // first stage: multi multi-input
         if (first_multi_multiinput) { 
@@ -803,7 +795,7 @@ public:
                     }
                 }
             }
-            if (!multi_input) nodes_list[0]->skipfirstpop(true);
+            nodes_list[0]->skipfirstpop(true);
         }        
         
         // ------------------------------------------------------------
@@ -924,13 +916,24 @@ public:
         }
         return nodes_list[last];
     }
-            
+
+    void skipfirstpop(bool sk)   { 
+        get_node(0)->skipfirstpop(sk);
+        for(size_t i=1;i<nodes_list.size();++i)
+            nodes_list[i]->skipfirstpop(false);            
+    }
+
+    
     /* WARNING: these methods must be called before the run() method */
     void blocking_mode(bool blk=true) {
         blocking_in = blocking_out = blk;
     }
     void no_barrier() {
         initial_barrier = false;
+    }
+
+    void no_mapping() {
+        default_mapping = false;
     }
     
     /**
@@ -979,7 +982,9 @@ public:
             }
 #endif            
 #endif
-
+            
+            // only the first stage has to skip the first pop
+            skipfirstpop(!has_input_channel);
         }
         if (!prepared) if (prepare()<0) return -1;
 
@@ -989,6 +994,7 @@ public:
             nodes_list[i]->set_id(startid);
             assert(blocking_in == blocking_out);
             nodes_list[i]->blocking_mode(blocking_in);
+            if (!default_mapping) nodes_list[i]->no_mapping();
             if (nodes_list[i]->run(true)<0) {
                 error("ERROR: PIPE, running stage %d\n", i);
                 return -1;

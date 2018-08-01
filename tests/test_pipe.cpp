@@ -81,7 +81,7 @@ int main(int argc, char * argv[]) {
     for(long i=0;i<streamlen;++i) {
         fftask_t *task = nullptr;
         pipe.load_result(task);
-        assert(task != (void*)EOS);
+        assert(task != pipe.EOS);
         printf("result %ld\n", task->r);
         delete task;
     }

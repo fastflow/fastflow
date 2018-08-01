@@ -203,10 +203,7 @@ int main() {
     ff_a2a a2a;
     a2a.add_firstset(firstSet);
     a2a.add_secondset(secondSet, true);
-
-    // 'true' means that the a2a building block will
-    // have other inputs (added when the full topology will be built)
-    a2a.wrap_around(true); // <--- true
+    a2a.wrap_around();
 
     // ---- last stage
     Last last;

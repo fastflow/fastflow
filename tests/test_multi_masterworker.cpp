@@ -159,7 +159,7 @@ int main(int argc, char * argv[]) {
 
         W->add_workers(w);
         w.clear();
-        W->wrap_around(true);
+        W->wrap_around();
 
         w2.push_back(W);
     }

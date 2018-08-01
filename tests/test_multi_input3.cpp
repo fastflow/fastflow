@@ -125,7 +125,7 @@ int main(int argc, char* argv[]) {
     farm2.add_collector(NULL); // default collector
     farm2.add_workers(w);
     // true since we have multi-input in the Emitter
-    farm2.wrap_around(true);   
+    farm2.wrap_around();   
 
     if (pipe.run_and_wait_end()<0) {
         error("running pipe\n");

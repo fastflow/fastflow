@@ -288,7 +288,8 @@ public:
 
         if (!prepared) if (prepare()<0) return -1;
 
-        if (ff_node::skipfirstpop()) gt->skipfirstpop();       
+        if (ff_node::skipfirstpop()) gt->skipfirstpop();
+        if (!default_mapping) gt->no_mapping();
         if (gt->run()<0) {
             error("ff_minode, running gather module\n");
             return -1;
@@ -600,7 +601,7 @@ public:
      * Set up spontaneous start
      */
     inline void skipfirstpop(bool sk)   {
-        if (sk) lb->skipfirstpop();
+        if (sk) lb->skipfirstpop(sk);
     }
 
     /**
@@ -644,7 +645,8 @@ public:
 
         if (!prepared) if (prepare()<0) return -1;
        
-        if (ff_node::skipfirstpop()) lb->skipfirstpop();       
+        if (ff_node::skipfirstpop()) lb->skipfirstpop(true);
+        if (!default_mapping) lb->no_mapping();
         if (lb->runlb()<0) {
             error("ff_monode, running loadbalancer module\n");
             return -1;
@@ -829,13 +831,16 @@ struct mo_transformer: ff_monode {
     }    
     
     int run(bool skip_init=false) {
+        assert(n);
         if (!prepared) {
             if (n && n->prepare()<0) return -1;
         }
-
         assert(blocking_in == blocking_out);
-        if (n) n->blocking_mode(blocking_in);
-
+        n->blocking_mode(blocking_in);
+        if (!default_mapping) {
+            n->no_mapping();
+            ff_monode::no_mapping();
+        }
         ff_monode::getlb()->get_filter()->set_id(get_my_id());
         return ff_monode::run(skip_init);
     }   
@@ -906,13 +911,18 @@ struct mi_transformer: ff_minode {
     inline void eosnotify(ssize_t id) { n->eosnotify(id); }
     
     int run(bool skip_init=false) {
+        assert(n);
         if (!prepared) {
             if (n && n->prepare()<0) return -1;
         }
 
         assert(blocking_in == blocking_out);
-        if (n) n->blocking_mode(blocking_in);
-
+        n->blocking_mode(blocking_in);
+        if (!default_mapping) {
+            n->no_mapping();
+            ff_minode::no_mapping();
+        }
+        
         ff_minode::getgt()->get_filter()->set_id(get_my_id());
         return ff_minode::run(skip_init);
     }

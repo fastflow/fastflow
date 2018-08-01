@@ -148,7 +148,7 @@ int main(int argc, char * argv[]) {
     farm2.add_workers(w);
 
     // set master_worker mode 
-    farm2.wrap_around(true);
+    farm2.wrap_around();
 
     pipe.add_stage(&farm2);
     pipe.run_and_wait_end();

@@ -126,7 +126,7 @@ public:
         for(int i=0;i<maxnw;++i) w.push_back(new Worker);
         ff_farm::add_workers(w);
         ff_farm::add_emitter(sched = new Scheduler(ff_farm::getlb(), maxnw));
-        ff_farm::wrap_around(true);
+        ff_farm::wrap_around();
         ff_farm::set_scheduling_ondemand(ondemand_buffer);
         
         // needed to avoid the initial barrier

@@ -66,14 +66,10 @@ using mypair = std::pair<long,long>;
 // one multi-output).
 struct MultiInputHelper1: ff_minode_t<mypair> {
 	mypair *svc(mypair *in) {
-        if (in == nullptr) {
-            mypair *init=new mypair;
-            init->first=-1;
-            init->second=-1;
-            return init;
-        }
+        if (in == nullptr) return &init;
         return in;
     }
+    mypair init{-1,-1};
 };
 struct MultiInputHelper2: ff_minode_t<mypair> {
 	mypair *svc(mypair *in) {
@@ -92,14 +88,13 @@ struct Filter1: ff_monode_t<mypair> {
     }
     
 	mypair *svc(mypair *in) {
-        if (in == nullptr || (in->first==-1 && in->second == -1)) {
+        if (in->first==-1 && in->second == -1) {
             for(size_t i=0; i<ntasks; ++i) {
                 mypair *out = new mypair;
                 out->first = get_my_id();
                 out->second = i;
                 ff_send_out_to(out, i%nfilter2);
             }
-            delete in;
             return GO_ON;
         }
         if (check) {
@@ -209,10 +204,8 @@ int main() {
             return -1;
         }
     }
-
     printf("TEST1 DONE\n");
     sleep(1);
-
     { // second test
 
         // we force the same cardinality for the 2 sets
