@@ -51,10 +51,10 @@ static inline void broadcast_(const gam::public_ptr<T> &p, Internals &internals)
 	internals.broadcast(p);
 }
 
-template<typename T, typename Internals>
-static inline void broadcast_(gam::private_ptr<T> &&p, Internals &internals) {
-	internals.broadcast(std::move(p));
-}
+//template<typename T, typename Internals>
+//static inline void broadcast_(gam::private_ptr<T> &&p, Internals &internals) {
+//	internals.broadcast(std::move(p));
+//}
 
 class OneToOne {
 public:
