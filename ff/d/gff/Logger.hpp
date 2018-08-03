@@ -61,9 +61,6 @@ public:
 	}
 
 	void init(std::string fname, int id) {
-		fname.append("/GFF.").append(to_string(id)).append(".log");
-		m_Logfile.open(fname, ios::out);
-		assert(m_Logfile);
 		//print header message
 		log("I am GFF node %d", id);
 	}
@@ -77,23 +74,18 @@ public:
 	 *   @param format string for the message to be logged.
 	 */
 	void log(const char * format, ...) {
-		//print timestamp
-		m_Logfile << "[" << getTime() << "] ";
-
 		//print message
 		va_start(args, format);
 		vsprintf(sMessage, format, args);
-		m_Logfile << sMessage << std::endl;
+		out_stream() << sMessage << std::endl;
 		va_end(args);
 	}
 
 	std::ostream &out_stream() {
-		return m_Logfile << "[" << getTime() << "] ";
+		return cout << "[" << getTime() << "] ";
 	}
 
 private:
-	ofstream m_Logfile;
-
 	char sMessage[256];
 	va_list args;
 
