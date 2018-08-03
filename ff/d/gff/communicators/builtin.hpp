@@ -46,6 +46,16 @@ static inline void emit_(gam::private_ptr<T> &&p, Internals &internals, //
 	internals.put(std::move(p), std::forward<PolicyArgs>(__a)...);
 }
 
+template<typename T, typename Internals>
+static inline void broadcast_(const gam::public_ptr<T> &p, Internals &internals) {
+	internals.broadcast(p);
+}
+
+template<typename T, typename Internals>
+static inline void broadcast_(gam::private_ptr<T> &&p, Internals &internals) {
+	internals.broadcast(std::move(p));
+}
+
 class OneToOne {
 public:
 	template<typename T>
@@ -59,6 +69,36 @@ public:
 	}
 
 	CommunicatorInternals<Switch<ConstantTo>, Merge<ConstantFrom>> internals;
+};
+
+class OneToAll {
+public:
+	template<typename T>
+	void emit(const gam::public_ptr<T> &p) {
+		broadcast_(p, internals);
+	}
+
+	template<typename T>
+	void emit(gam::private_ptr<T> &&p) {
+		broadcast_(std::move(p), internals);
+	}
+
+	CommunicatorInternals<Switch<ConstantTo>, Merge<ConstantFrom>> internals;
+};
+
+class NDOneToAll {
+public:
+	template<typename T>
+	void emit(const gam::public_ptr<T> &p) {
+		broadcast_(p, internals);
+	}
+
+	template<typename T>
+	void emit(gam::private_ptr<T> &&p) {
+		broadcast_(std::move(p), internals);
+	}
+
+	CommunicatorInternals<Switch<ConstantTo>, NDMerge> internals;
 };
 
 class RoundRobinSwitch {

@@ -70,7 +70,6 @@ public:
 	void finalize(int id) {
 		//print footer message
 		log("stop logging GFF node %d", id);
-		m_Logfile.close();
 	}
 
 	/**
