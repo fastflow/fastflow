@@ -62,6 +62,7 @@ public:
 
 	void init(std::string fname, int id) {
 		//print header message
+		id_ = id;
 		log("I am GFF node %d", id);
 	}
 	void finalize(int id) {
@@ -82,10 +83,11 @@ public:
 	}
 
 	std::ostream &out_stream() {
-		return cout << "[" << getTime() << "] ";
+		return cout << "[" << getTime() << ", Worker " << id_ << "] ";
 	}
 
 private:
+	uint id_;
 	char sMessage[256];
 	va_list args;
 
