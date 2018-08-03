@@ -83,7 +83,7 @@ public:
 	}
 
 	std::ostream &out_stream() {
-		return cout << "[" << getTime() << ", Worker " << id_ << "] ";
+		return cout << "[" << getTime() << ", proc " << id_ << "] ";
 	}
 
 private:
