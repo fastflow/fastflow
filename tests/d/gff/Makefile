@@ -24,7 +24,7 @@
 #########################################################################
 FF_HOME              = ../../..
 FF_INCS              = $(FF_HOME)
-GAM_HOME             ?= $(FF_HOME)/gam
+GAM_HOME             ?= ../$(FF_HOME)/gam/gam
 GAM_INCS             = $(GAM_HOME)/include
 GAM_RUN              = $(GAM_HOME)/bin/gamrun
 GAM_RUN_LOCAL        = $(GAM_HOME)/bin/gamrun-local
