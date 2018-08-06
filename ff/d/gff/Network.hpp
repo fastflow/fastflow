@@ -95,6 +95,8 @@ public:
 		GFF_PROFILER_HRT(t_init);
 
 		/* check cardinality */
+		GFF_LOGLN_OS("gam cardinality = " << gam::cardinality());
+		GFF_LOGLN_OS("network cardinality = " << cardinality());
 		assert(gam::cardinality() >= cardinality()); //todo error reporting
 
 		if (gam::rank() < cardinality()) {

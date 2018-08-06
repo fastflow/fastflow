@@ -46,15 +46,13 @@ static inline void emit_(gam::private_ptr<T> &&p, Internals &internals, //
 	internals.put(std::move(p), std::forward<PolicyArgs>(__a)...);
 }
 
+/*
+ * No broadcast defined for private pointer, semantically it does not make sense.
+ */
 template<typename T, typename Internals>
 static inline void broadcast_(const gam::public_ptr<T> &p, Internals &internals) {
 	internals.broadcast(p);
 }
-
-//template<typename T, typename Internals>
-//static inline void broadcast_(gam::private_ptr<T> &&p, Internals &internals) {
-//	internals.broadcast(std::move(p));
-//}
 
 class OneToOne {
 public:
