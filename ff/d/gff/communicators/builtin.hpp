@@ -46,14 +46,6 @@ static inline void emit_(gam::private_ptr<T> &&p, Internals &internals, //
 	internals.put(std::move(p), std::forward<PolicyArgs>(__a)...);
 }
 
-/*
- * No broadcast defined for private pointer, semantically it does not make sense.
- */
-template<typename T, typename Internals>
-static inline void broadcast_(const gam::public_ptr<T> &p, Internals &internals) {
-	internals.broadcast(p);
-}
-
 class OneToOne {
 public:
 	template<typename T>
@@ -73,30 +65,20 @@ class OneToAll {
 public:
 	template<typename T>
 	void emit(const gam::public_ptr<T> &p) {
-		broadcast_(p, internals);
+		emit_(p, internals);
 	}
 
-	template<typename T>
-	void emit(gam::private_ptr<T> &&p) {
-		broadcast_(std::move(p), internals);
-	}
-
-	CommunicatorInternals<Switch<ConstantTo>, Merge<ConstantFrom>> internals;
+	CommunicatorInternals<Multicast<ConstantToAll>, Merge<ConstantFrom>> internals;
 };
 
 class NDOneToAll {
 public:
 	template<typename T>
 	void emit(const gam::public_ptr<T> &p) {
-		broadcast_(p, internals);
+		emit_(p, internals);
 	}
 
-	template<typename T>
-	void emit(gam::private_ptr<T> &&p) {
-		broadcast_(std::move(p), internals);
-	}
-
-	CommunicatorInternals<Switch<ConstantTo>, NDMerge> internals;
+	CommunicatorInternals<Multicast<ConstantToAll>, NDMerge> internals;
 };
 
 class RoundRobinSwitch {
