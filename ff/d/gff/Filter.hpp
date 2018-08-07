@@ -110,7 +110,8 @@ private:
 
 		GFF_LOGLN("FLT start");
 
-		Node::init_(logic);
+//		Node::init_(logic, out_comm);
+		logic.svc_init(out_comm);
 
 		in_t in;
 		token_t out;

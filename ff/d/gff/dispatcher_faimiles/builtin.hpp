@@ -100,8 +100,10 @@ public:
 	template<typename T>
 	void broadcast(const std::vector<gam::executor_id> &d, //
 			const gam::public_ptr<T> &p) {
-		for (auto to : d)
-			p.push(to);
+		for (auto to : d) {
+			if ( to != gam::rank() )
+				p.push(to);
+		}
 	}
 
 	template<typename T>
