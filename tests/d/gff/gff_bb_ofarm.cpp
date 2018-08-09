@@ -71,7 +71,7 @@ public:
     {
     }
 
-    void svc_end()
+    void svc_end(gff::RoundRobinSwitch &c)
     {
     }
 };
@@ -92,11 +92,11 @@ public:
         return gff::go_on;
     }
 
-    void svc_init()
+    void svc_init(gff::RoundRobinMerge &c)
     {
     }
 
-    void svc_end()
+    void svc_end(gff::RoundRobinMerge &c)
     {
     }
 };

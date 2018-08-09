@@ -116,7 +116,7 @@ private:
 			}
 		}
 
-		Node::end_(logic);
+		logic.svc_end(out_comm);
 
 		/* broadcast eos token */
 		out_comm.internals.broadcast(global_eos<out_t>());

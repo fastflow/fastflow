@@ -100,7 +100,7 @@ public:
 	void svc_init() {
 	}
 
-	void svc_end() {
+	void svc_end(gff::RoundRobinSwitch &c) {
 	}
 
 private:
@@ -140,10 +140,10 @@ public:
 		return gff::go_on;
 	}
 
-	void svc_init() {
+	void svc_init(gff::NondeterminateMerge &c) {
 	}
 
-	void svc_end() {
+	void svc_end(gff::NondeterminateMerge &c) {
 	}
 };
 

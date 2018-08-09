@@ -87,7 +87,7 @@ public:
     {
     }
 
-    void svc_end()
+    void svc_end(gff::OneToOne &c)
     {
     }
 };
@@ -109,11 +109,11 @@ public:
         return gff::go_on;
     }
 
-    void svc_init()
+    void svc_init(gff::OneToOne &c)
     {
     }
 
-    void svc_end()
+    void svc_end(gff::OneToOne &c)
     {
     }
 };
@@ -139,11 +139,11 @@ public:
         return gff::go_on;
     }
 
-    void svc_init()
+    void svc_init(gff::OneToOne &c)
     {
     }
 
-    void svc_end()
+    void svc_end(gff::OneToOne &c)
     {
         float res = 0;
         for (unsigned i = 0; i < STREAMLEN; ++i)

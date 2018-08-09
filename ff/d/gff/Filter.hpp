@@ -110,7 +110,6 @@ private:
 
 		GFF_LOGLN("FLT start");
 
-//		Node::init_(logic, out_comm);
 		logic.svc_init(out_comm);
 
 		in_t in;
@@ -163,7 +162,7 @@ private:
 
 		assert(!svc_termination || received_eos == 0); //todo error reporting
 
-		Node::end_(logic);
+		logic.svc_end(out_comm);
 
 		/* propagate eos token */
 		out_comm.internals.broadcast(global_eos<out_t>());
