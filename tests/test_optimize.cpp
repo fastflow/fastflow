@@ -254,6 +254,7 @@ int main(int argc, char* argv[]) {
             return -1;
          }
     }
+    printf("the n. of threads implementing the pipe is %d\n", pipe.cardinality());
     // running the optimized pipe
     if (pipe.run_and_wait_end()<0) {
         error("running pipeline\n");
