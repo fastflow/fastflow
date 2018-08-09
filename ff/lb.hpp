@@ -464,8 +464,8 @@ protected:
     
 
 #if defined(FF_TASK_CALLBACK)
-    virtual void callbackIn(void  *t=NULL) { filter->callbackIn(t);  }
-    virtual void callbackOut(void *t=NULL) { filter->callbackOut(t); }
+    virtual void callbackIn(void  *t=NULL) { if (filter) filter->callbackIn(t);  }
+    virtual void callbackOut(void *t=NULL) { if (filter) filter->callbackOut(t); }
 #endif
 
 public:

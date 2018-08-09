@@ -677,7 +677,7 @@ private:
  * *************************************************************************** */
 
 // forward declaration    
-const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2);
+static const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2);
 
     
 /**
@@ -685,7 +685,7 @@ const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2);
  *
  */
 template<typename T1, typename T2>    
-const ff_comb combine_nodes(T1& n1, T2& n2) {
+static inline const ff_comb combine_nodes(T1& n1, T2& n2) {
     ff_comb comp;
     comp.add_node(n1,n2);
     return comp;
@@ -696,7 +696,7 @@ const ff_comb combine_nodes(T1& n1, T2& n2) {
  *  useful to add ff_comb as farm's workers
  */    
 template<typename T1, typename T2>    
-std::unique_ptr<ff_node> unique_combine_nodes(T1& n1, T2& n2) {
+static inline std::unique_ptr<ff_node> unique_combine_nodes(T1& n1, T2& n2) {
     ff_comb *c = new ff_comb;
     assert(c);
     std::unique_ptr<ff_node> comp(c);
@@ -713,7 +713,7 @@ std::unique_ptr<ff_node> unique_combine_nodes(T1& n1, T2& n2) {
  *   - node1 and node2 are both farms                --> pipeline(node1, node2)  (collector is merged with emitter -- see case4.2 of combine_farms)
  *     (NOTE: if node1 is an ordered farm, then its collector is not removed)
  */   
-const ff_pipeline combine_nodes_in_pipeline(ff_node& node1, ff_node& node2, bool cleanup1=false, bool cleanup2=false) {
+static inline const ff_pipeline combine_nodes_in_pipeline(ff_node& node1, ff_node& node2, bool cleanup1=false, bool cleanup2=false) {
     if (node1.isAll2All() || node2.isAll2All()) {
         error("combine_nodes_in_pipeline, cannot be used if one of the nodes is A2A\n");
         return ff_pipeline();
@@ -789,7 +789,7 @@ const ff_pipeline combine_nodes_in_pipeline(ff_node& node1, ff_node& node2, bool
  *  worker is an all-to-all building block.
  *
  */    
-const ff_farm combine_farms_a2a(ff_farm& farm1, ff_farm& farm2) {
+static inline const ff_farm combine_farms_a2a(ff_farm& farm1, ff_farm& farm2) {
     ff_farm newfarm;
 
     if (farm1.getCollector() != nullptr) {
@@ -854,7 +854,7 @@ const ff_farm combine_farms_a2a(ff_farm& farm1, ff_farm& farm2) {
  * 
  */    
 template<typename E_t>     
-const ff_farm combine_farms_a2a(ff_farm &farm1, const E_t& node, ff_farm &farm2) {
+static inline const ff_farm combine_farms_a2a(ff_farm &farm1, const E_t& node, ff_farm &farm2) {
     ff_farm newfarm;
 
     ff_a2a *a2a = new ff_a2a;
@@ -914,7 +914,7 @@ const ff_farm combine_farms_a2a(ff_farm &farm1, const E_t& node, ff_farm &farm2)
  * If the farms are ordered farm they must have the same ondemand buffer and 
  * the same ordering memory size.
  */    
-const ff_farm combine_farms_nf(ff_farm& farm1, ff_farm& farm2) {
+static inline const ff_farm combine_farms_nf(ff_farm& farm1, ff_farm& farm2) {
     ff_farm newfarm;
 
     if (farm1.getNWorkers() != farm2.getNWorkers()) {
@@ -992,14 +992,18 @@ const ff_farm combine_farms_nf(ff_farm& farm1, ff_farm& farm2) {
  *
  *
  */
-const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2) {
+static inline const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2) {
     ff_pipeline newpipe;
     if (!farm1.isOFarm()) {
         error("combine_ofarm_farm, the first farm is not an ordered farm");
         return newpipe;
     }
-    if (farm2.isOFarm() && farm1.getNWorkers() == farm2.getNWorkers()) {
-        newpipe.add_stage(combine_farms_nf(farm1,farm2));
+    // here it would be possible to call directly the combine_farms_nf function but
+    // since this kind of transformation may violates the ordering semantics,
+    // the user must call it explicitly
+    if (farm2.isOFarm() && farm1.getNWorkers() == farm2.getNWorkers()) {   
+        error("combine_ofarm_farm, two ordered farms with the same cardinality, the function cambine_farms_nf must be called explicitly\n");
+        //newpipe.add_stage(combine_farms_nf(farm1,farm2));
         return newpipe;
     }
     // here we have that the first farm is an ordered farm and the second farm
@@ -1126,7 +1130,7 @@ const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2) {
  * WARNING: farm1 and farm2 are passed by reference and they might be changed!
  */    
 template<typename E_t, typename C_t>
-const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
+static inline const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
                                 ff_farm& farm2, const E_t *node2,
                                 bool mergeCE) {
     ff_pipeline newpipe;
@@ -1134,19 +1138,29 @@ const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
     if (mergeCE) { // we have to merge nodes!!!
 
         if (farm1.isOFarm() || farm2.isOFarm()) {
-            if (node1!=nullptr || node2!=nullptr) { // TODO
+            if (node1!=nullptr || node2!=nullptr) {  // TODO
                 error("combine_farms, FEATURE NOT YET SUPPORTED, if at least one of the two farms is an ordered farm then node1 and node2 must be nullptr\n"); 
                 return newpipe;
             }
-            if (farm1.getNWorkers() == farm2.getNWorkers()) { // case1.2
-                newpipe.add_stage(combine_farms_nf(farm1,farm2));
+            if (farm1.getNWorkers() == farm2.getNWorkers()) {
+                // here it would be possible to call directly the combine_farms_nf function but
+                // since this kind of transformation may violates the ordering semantics,
+                // the user must call it explicitly
+                error("combine_farms, at least one of the two farms is ordered and they have the same cardinality, the function cambine_farms_nf must be called explicitly\n");
+                //newpipe.add_stage(combine_farms_nf(farm1,farm2));
                 return newpipe;
             }
-            // the most complex scenario is when farm1 is ordered
+            // the first farm is ordered 
             if (farm1.isOFarm()) {
                 auto pipe = combine_ofarm_farm(farm1, farm2);
                 return pipe;
             }
+            // the second farm is ordered
+            // here we can just remove the collector of the first farm
+            farm1.remove_collector();
+            newpipe.add_stage(&farm1);
+            newpipe.add_stage(&farm2);
+            return newpipe;
         }
 
         if (node2==nullptr && node1==nullptr) {  
@@ -1204,7 +1218,8 @@ const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
         newpipe.add_stage(&farm2);
         return newpipe;
         
-    }  // mergeCE is false  -------------------------------------------------
+    }
+    // mergeCE is false 
 
     if (farm1.isOFarm() || farm2.isOFarm()) {
         error("combine_farms, A2A cannot be introduced if one of the two farms is an ordered farms\n");
