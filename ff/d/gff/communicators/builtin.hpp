@@ -61,6 +61,26 @@ public:
 	CommunicatorInternals<Switch<ConstantTo>, Merge<ConstantFrom>> internals;
 };
 
+class OneToAll {
+public:
+	template<typename T>
+	void emit(const gam::public_ptr<T> &p) {
+		emit_(p, internals);
+	}
+
+	CommunicatorInternals<Multicast<ConstantToAll>, Merge<ConstantFrom>> internals;
+};
+
+class NDOneToAll {
+public:
+	template<typename T>
+	void emit(const gam::public_ptr<T> &p) {
+		emit_(p, internals);
+	}
+
+	CommunicatorInternals<Multicast<ConstantToAll>, NDMerge> internals;
+};
+
 class RoundRobinSwitch {
 public:
 	template<typename T>

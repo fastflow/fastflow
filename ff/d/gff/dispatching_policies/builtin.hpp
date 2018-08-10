@@ -76,6 +76,21 @@ public:
 };
 
 /*
+ *
+ */
+class ConstantToAll {
+public:
+	std::vector< gam::executor_id > operator()(const std::vector<gam::executor_id> &dest) {
+		vector< gam::executor_id > newdest;
+		for (auto to : dest){
+			if (to != gam::rank())
+				newdest.push_back(to);
+		}
+		return newdest;
+	}
+};
+
+/*
  *******************************************************************************
  *
  * Pulling Policies

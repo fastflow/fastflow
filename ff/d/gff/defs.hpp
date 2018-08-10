@@ -49,16 +49,16 @@ static constexpr uint64_t go_on = eos - 1;
  ***************************************************************************
  */
 template<typename T>
-bool is_eos(const gam::public_ptr<T> &token) {
+static inline bool is_eos(const gam::public_ptr<T> &token) {
 	return token.get().address() == eos;
 }
 
 template<typename T>
-bool is_eos(const gam::private_ptr<T> &token) {
+static inline bool is_eos(const gam::private_ptr<T> &token) {
 	return token.get().address() == eos;
 }
 
-bool is_eos(const token_t &token) {
+static inline bool is_eos(const token_t &token) {
 	return token == eos;
 }
 
@@ -77,7 +77,7 @@ T global_eos() {
  *
  ***************************************************************************
  */
-bool is_go_on(const token_t &token) {
+static inline bool is_go_on(const token_t &token) {
 	return token == go_on;
 }
 

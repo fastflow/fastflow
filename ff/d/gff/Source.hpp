@@ -93,7 +93,7 @@ private:
 
 		GFF_LOGLN("SRC start");
 
-		Node::init_(logic);
+		logic.svc_init();
 		token_t out;
 
 		while (true) {
@@ -116,7 +116,7 @@ private:
 			}
 		}
 
-		Node::end_(logic);
+		logic.svc_end(out_comm);
 
 		/* broadcast eos token */
 		out_comm.internals.broadcast(global_eos<out_t>());

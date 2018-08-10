@@ -100,8 +100,9 @@ public:
 	template<typename T>
 	void broadcast(const std::vector<gam::executor_id> &d, //
 			const gam::public_ptr<T> &p) {
-		for (auto to : d)
+		for (auto to : d) {
 			p.push(to);
+		}
 	}
 
 	template<typename T>
@@ -114,6 +115,49 @@ public:
 
 	Policy dist;
 };
+
+template<typename Policy>
+class Multicast {
+public:
+	template<typename T>
+	void put(const std::vector<gam::executor_id> &d, //
+			const gam::public_ptr<T> &p) {
+		auto dest_set = dist(d);
+		for (auto to : dest_set) {
+			p.push(to);
+		}
+	}
+
+
+	template<typename T, typename ... PolicyArgs>
+	void put(const std::vector<gam::executor_id> &d, //
+			gam::private_ptr<T> &&p) {
+		auto dest_set = dist(d);
+		for (auto to : dest_set) {
+			p.push(to);
+		}
+	}
+
+	template<typename T>
+	void broadcast(const std::vector<gam::executor_id> &d, //
+			const gam::public_ptr<T> &p) {
+		for (auto to : d) {
+			p.push(to);
+		}
+	}
+
+	template<typename T>
+	void broadcast(const std::vector<gam::executor_id> &d, //
+			gam::private_ptr<T> &&p) {
+		USRASSERT(!p.get().is_address());
+		for (auto to : d)
+			gam::private_ptr<T>(p.get()).push(to);
+	}
+
+
+	Policy dist;
+};
+
 
 } /* namespace gff */
 

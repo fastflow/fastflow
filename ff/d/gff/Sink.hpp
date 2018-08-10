@@ -84,7 +84,7 @@ private:
 
 		GFF_LOGLN("SNK start");
 
-		Node::init_(logic);
+		logic.svc_init();
 
 		in_t in;
 
@@ -119,7 +119,7 @@ private:
 			++token_id;
 		}
 
-		Node::end_(logic);
+		logic.svc_end();
 
 		/* write profiling */
 		GFF_PROFLN("SNK svc      = %f s", d_svc.count());
