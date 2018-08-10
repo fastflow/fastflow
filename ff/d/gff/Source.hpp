@@ -93,7 +93,7 @@ private:
 
 		GFF_LOGLN("SRC start");
 
-		Node::init_(logic);
+		logic.svc_init();
 		token_t out;
 
 		while (true) {
