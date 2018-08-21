@@ -63,13 +63,13 @@ protected:
 
         // possible cases:                                                                       [captured by]
         //
-        // the current stage s a standard node (the previous stage can also be multi-output)     [curr_single_standard]
+        // the current stage is a standard node (the previous stage can also be multi-output)    [curr_single_standard]
         //
         // the current stage is multi-input
         //          - it's a farm (the emettitore is multi-input by default)                     [curr_single_multiinput]
         //          - it's a single multi-input node                                             [curr_single_multiinput]
         //          - it's all2all with standard nodes                                           [curr_multi_standard]
-        //          - its' all2all with multi-input nodes                                        [curr_multi_multiinput]
+        //          - it's all2all with multi-input nodes                                        [curr_multi_multiinput]
         //
         // the previous stage is a standard node                                                 [prev_single_standard]
         //
@@ -79,7 +79,7 @@ protected:
         //          - it's a farm without collector with multi-output workers                    [prev_multi_multioutput]
         //          - it's a all2all with standard nodes                                         [prev_multi_standard]
         //          - it's a all2all with multi-output nodes                                     [prev_multi_multioutput]
-        //          - it's a single nodo (comp or pipeline) with the last stage multi-output     [prev_single_multioutput]
+        //          - it's a single node (comp or pipeline) with the last stage multi-output     [prev_single_multioutput]
         //
         //
         //
@@ -147,13 +147,19 @@ protected:
                 if (prev_single_standard) {
                     if (nodes_list[i-1]->set_output_buffer(nodes_list[i]->get_in_buffer())<0) return -1;
                 } else {
-                    if (prev_multi_standard || prev_multi_multioutput) {
-                        error("PIPE, cannot connect stage %d with stage %d\n", i-1, i);
-                        return -1;
+                    if (prev_multi_standard || prev_multi_multioutput) {                        
+                        svector<ff_node*> w(1);
+                        nodes_list[i-1]->get_out_nodes(w);
+                        if (w.size()>1) {
+                            error("PIPE, cannot connect stage %d with stage %d\n", i-1, i);
+                            return -1;
+                        }
+                        nodes_list[i-1]->set_output(w);
+                    } else {
+                        assert(prev_single_multioutput);
+                        nodes_list[i-1]->set_output(nodes_list[i]);
                     }
-                    nodes_list[i-1]->set_output(nodes_list[i]);
                 }
-
                 // blocking stuff --------------------------------------------
                 if (!nodes_list[i]->init_input_blocking(m,c,counter)) {
                     error("PIPE, init input blocking mode for node %d\n", i);
@@ -224,7 +230,7 @@ protected:
                         w[j]->set_output_blocking(m,c,counter);
                     }
                     if (!nodes_list[i-1]->init_output_blocking(m,c,counter)) {
-                        error("PIPE, buffernode condition, init output blocking mode for node %d\n", i);
+                        error("PIPE, init output blocking mode for node %d\n", i);
                         return -1;
                     }
 
@@ -232,76 +238,89 @@ protected:
                 }
             }
             if (curr_multi_standard) {
-                if (prev_single_standard) {
-                    error("PIPE, cannot connect stage %d with stage %d\n", i-1, i);
-                    return -1;
-                }
                 ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[i]);
                 const svector<ff_node*>& W1 = a2a->getFirstSet();
-                
-                if (prev_single_multioutput) {
-                    if (a2a->create_input_buffer(in_buffer_entries, fixedsize)<0) return -1;
-                    svector<ff_node*> w(MAX_NUM_THREADS);
-                    nodes_list[i]->get_in_nodes(w);
-                    if (nodes_list[i-1]->set_output(w)<0) return -1;
 
-                    // blocking stuff --------------------------------------------
-                    w.clear();
-                    nodes_list[i]->get_in_nodes(w);
-                    assert(w.size() == W1.size());
-                    for(size_t j=0;j<w.size();++j) {
-                        if (!W1[j]->init_input_blocking(m,c,counter)) return -1;
-                        w[j]->set_output_blocking(m,c,counter);
-
-                        if (!w[j]->init_output_blocking(m,c,counter)) return -1;
-                        W1[j]->set_input_blocking(m,c,counter);
-                    }                                        
-                    if (!nodes_list[i-1]->init_output_blocking(m,c,counter)) {
-                        error("PIPE, init output blocking mode for node %d\n", i-1);
+                if (prev_single_standard) {
+                    if (W1.size()>1) {
+                        error("PIPE, cannot connect stage %d with stage %d because of different cardinality\n", i-1, i);
                         return -1;
                     }
-                    // -----------------------------------------------------------
+                    if (a2a->create_input_buffer(in_buffer_entries, fixedsize)<0) return -1;
+                    svector<ff_node*> w(1);
+                    nodes_list[i]->get_in_nodes(w);
+                    assert(w.size() == 1);
+                    if (nodes_list[i-1]->set_output_buffer(w[0]->get_in_buffer())<0) return -1;
                 } else {
-                    if (prev_multi_standard) {
+                    if (prev_single_multioutput) {
+                        if (a2a->create_input_buffer(in_buffer_entries, fixedsize)<0) return -1;
                         svector<ff_node*> w(MAX_NUM_THREADS);
-                        nodes_list[i-1]->get_out_nodes(w);
-                        assert(w.size());
+                        nodes_list[i]->get_in_nodes(w);
+                        if (nodes_list[i-1]->set_output(w)<0) return -1;
+                        
+                        // blocking stuff --------------------------------------------
+                        w.clear();
+                        nodes_list[i]->get_in_nodes(w);
+                        assert(w.size() == W1.size());
+                        for(size_t j=0;j<w.size();++j) {
+                            if (!W1[j]->init_input_blocking(m,c,counter)) return -1;
+                            w[j]->set_output_blocking(m,c,counter);
+                            
+                            if (!w[j]->init_output_blocking(m,c,counter)) return -1;
+                            W1[j]->set_input_blocking(m,c,counter);
+                        }                                        
+                        if (!nodes_list[i-1]->init_output_blocking(m,c,counter)) {
+                            error("PIPE, init output blocking mode for node %d\n", i-1);
+                            return -1;
+                        }
+                        // -----------------------------------------------------------
+                    } else {
+                        assert(prev_multi_multioutput || prev_multi_standard);
+
+                        svector<ff_node*> w1(1);
+                        nodes_list[i-1]->get_out_nodes(w1);
+                        assert(w1.size());
                         // here we pretend to have point-to-point connections
-                        if (w.size() != W1.size()) {
+                        if (w1.size() != W1.size()) {
                             error("PIPE, cannot connect stage %d with stage %d, because of different input/output cardinality (**)\n", i-1, i);
                             return -1;
                         }
                         if (a2a->create_input_buffer(in_buffer_entries, fixedsize)<0) return -1;
-                        w.clear();
-                        a2a->get_in_nodes(w);
-                        assert(w.size() == W1.size());
-                        if (nodes_list[i-1]->set_output(w)<0) return -1; // previous one can be a farm or a all2all                       
-                    } else {
-                        assert(prev_multi_multioutput);
-                        error("PIPE, cannot connect stage %d with stage %d, because of different input/out cardinality (*)\n", i-1, i);
-                        return -1;
+                        w1.clear();
+                        a2a->get_in_nodes(w1);
+                        assert(w1.size() == W1.size());
+                        if (nodes_list[i-1]->set_output(w1)<0) return -1; // previous one can be a farm or a all2all                       
+                        
+                        // blocking stuff --------------------------------------------
+                        svector<ff_node*> w(MAX_NUM_THREADS);
+                        nodes_list[i-1]->get_out_nodes(w);
+                        assert(w.size());
+                        for(size_t i=0;i<w.size();++i) {
+                            if (!W1[i]->init_input_blocking(m,c,counter)) return -1;
+                            w[i]->set_output_blocking(m,c,counter);
+                            
+                            if (!w[i]->init_output_blocking(m,c,counter)) return -1;
+                            W1[i]->set_input_blocking(m,c,counter);
+                        }       
+                        // -----------------------------------------------------------
                     }
-                    // blocking stuff --------------------------------------------
-                    svector<ff_node*> w(MAX_NUM_THREADS);
-                    nodes_list[i-1]->get_out_nodes(w);
-                    assert(w.size());
-                    for(size_t i=0;i<w.size();++i) {
-                        if (!W1[i]->init_input_blocking(m,c,counter)) return -1;
-                        w[i]->set_output_blocking(m,c,counter);
-
-                        if (!w[i]->init_output_blocking(m,c,counter)) return -1;
-                        W1[i]->set_input_blocking(m,c,counter);
-                    }       
-                    // -----------------------------------------------------------
-                }            
+                }
             }
             if (curr_multi_multiinput) {
-                if (prev_single_standard) {
-                    error("PIPE, cannot connect stage %d with stage %d\n", i-1, i);
-                    return -1;
-                }
                 ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[i]);
                 const svector<ff_node*>& W1 = a2a->getFirstSet();
+
+                if (prev_single_standard) {
+                    if (W1.size()>1) {
+                        error("PIPE, cannot connect stage %d with stage %d\n", i-1, i);
+                        return -1;
+                    }
+                    if (a2a->create_input_buffer(in_buffer_entries, fixedsize)<0) return -1;
+                    svector<ff_node*> w(1);
+                    nodes_list[i]->get_in_nodes(w);
+                    assert(w.size() == 1);
+                    if (nodes_list[i-1]->set_output_buffer(w[0]->get_in_buffer())<0) return -1;
+                }
                 if (prev_single_multioutput) {
                     for(size_t j=0;j<W1.size();++j) {
                         ff_node* t = new ff_buffernode(in_buffer_entries,fixedsize, j);

@@ -829,6 +829,11 @@ struct mo_transformer: ff_monode {
         ff_monode::getlb()->get_filter()->set_input_buffer(ff_monode::get_in_buffer());
         return 0;
     }    
+
+    void set_id(ssize_t id) {
+        if (n) n->set_id(id);
+        ff_monode::set_id(id);
+    }
     
     int run(bool skip_init=false) {
         assert(n);
@@ -909,6 +914,11 @@ struct mi_transformer: ff_minode {
     }
 
     inline void eosnotify(ssize_t id) { n->eosnotify(id); }
+
+    void set_id(ssize_t id) {
+        if (n) n->set_id(id);
+        ff_minode::set_id(id);
+    }
     
     int run(bool skip_init=false) {
         assert(n);
