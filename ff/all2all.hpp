@@ -186,7 +186,7 @@ public:
         // the nodes in the first set cannot be multi-input nodes without being
         // also multi-output
         if (w[0]->isMultiInput()) {
-            error("A2A, nodes in the first set cannot be standard multi-input nodes\n");
+            error("A2A, the nodes of the first set cannot be multi-input nodes without being also multi-output (i.e., a composition of nodes). The node must be either standard node or multi-output node or compositions where the second stage is a multi-output node\n");
             return -1;
         }
         // it is a standard node, so we transform it to a multi-output node
@@ -225,7 +225,7 @@ public:
             workers2_to_free = cleanup;
         } else {
             if (w[0]->isMultiOutput()) {
-                error("A2A, the nodes of the second set cannot be multi-output nodes without being olso multi-input (i.e. composition of nodes). The node must be either standard node or multi-input node or a composition where the first stage is a multi-input node\n");
+                error("A2A, the nodes of the second set cannot be multi-output nodes without being also multi-input (i.e., a composition of nodes). The node must be either standard node or multi-input node or compositions where the first stage is a multi-input node\n");
                 return -1;
             }
 

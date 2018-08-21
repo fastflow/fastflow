@@ -1307,6 +1307,8 @@ static inline const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
         return newpipe;
     }
     assert(node2!=nullptr && node1!=nullptr);    // case4.1
+
+    // TODO: we can relax the following two constraints.
     if (node1->isMultiInput()) {
         error("combine_farms, node1 cannot be a multi-input node\n");
         return newpipe;

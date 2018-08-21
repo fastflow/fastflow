@@ -70,7 +70,7 @@ struct Generator: ff_monode_t<long> {
         long start = myid*10 + 1;
         long stop  = start + 10 + 1;
         for(long i=start;i<stop;++i) {
-            ff_send_out_to((long*)i, i % 1); // <------------- RIMETTERE 3);
+            ff_send_out_to((long*)i, i % 3);
         }
         return EOS;
     }
@@ -101,13 +101,13 @@ int main() {
     std::vector<ff_node*> W1;  
     Generator g1, g2, g3;
     W1.push_back(&g1);
-    //W1.push_back(&g2);
-    //W1.push_back(&g3);
+    W1.push_back(&g2);
+    W1.push_back(&g3);
     std::vector<ff_node*> W2;
     Filter1 f11, f12, f13;
     W2.push_back(&f11);
-    //W2.push_back(&f12);
-    //W2.push_back(&f13);
+    W2.push_back(&f12);
+    W2.push_back(&f13);
 
     ff_a2a a2a_1;
     a2a_1.add_firstset(W1);
@@ -117,11 +117,11 @@ int main() {
     W2.clear();
     Filter2 f21, f22, f23;
     W1.push_back(&f21);
-    //W1.push_back(&f22);
-    //W1.push_back(&f23);
+    W1.push_back(&f22);
+    W1.push_back(&f23);
     Filter3 f31,f32;
     W2.push_back(&f31);
-    //W2.push_back(&f32);
+    W2.push_back(&f32);
     
     ff_a2a a2a_2;
     a2a_2.add_firstset(W1);
