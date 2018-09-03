@@ -62,8 +62,8 @@ static inline void opt_report(int verbose_level, reportkind_t kind, const char *
     
 /* This is farm specific. 
  *  - It basically sets the threshold for enabling blocking mode.
- *  - It can remove the collector of internal farms
- *  - TODO: Farm of farms?????? ---> single farm with two emitters combined (external+internal)
+ *  - It can remove the collector of internal farms in a farm of farms composition.
+ *  - TODO: Farm of farms ---> single farm with two emitters combined (external+internal)
  */    
 int optimize_static(ff_farm& farm, const OptLevel& opt=OptLevel1()) {
     if (farm.prepared) {
@@ -80,6 +80,37 @@ int optimize_static(ff_farm& farm, const OptLevel& opt=OptLevel1()) {
             farm.blocking_mode(true);
         }
     }
+    // here it looks for internal farms with null collectors
+    if (opt.remove_collector) {
+        auto optimize_internal_farm = [opt](ff_farm& ifarm) {
+            OptLevel iopt;
+            iopt.remove_collector=true;
+            iopt.verbose_level = opt.verbose_level;
+            if (optimize_static(ifarm, iopt)<0) return -1;
+            if (ifarm.getCollector() == nullptr) {
+                opt_report(opt.verbose_level, OPT_NORMAL, "OPT (farm): REMOVE_COLLECTOR: Removed farm collector\n");
+                ifarm.remove_collector();
+            }
+            return 0;
+        };
+        
+        const svector<ff_node*>& W = farm.getWorkers();
+        for(size_t i=0;i<W.size();++i) {
+            if (W[i]->isFarm() && !W[i]->isOFarm()) {
+                ff_farm* ifarm = reinterpret_cast<ff_farm*>(W[i]);
+                if (optimize_internal_farm(*ifarm)<0) return -1;
+            } else {
+                if (W[i]->isPipe()) {
+                    ff_pipeline* ipipe = reinterpret_cast<ff_pipeline*>(W[i]);
+                    ff_node* last  = ipipe->get_lastnode();
+                    if (last->isFarm() && !last->isOFarm()) {
+                        ff_farm* ifarm = reinterpret_cast<ff_farm*>(last);
+                        if (optimize_internal_farm(*ifarm)<0) return -1;
+                    }
+                }
+            }
+        }
+    }
     // turning off initial/default mapping if the n. of threads is greater than the threshold
     if (opt.no_default_mapping) {
         ssize_t card = farm.cardinality();
@@ -88,23 +119,6 @@ int optimize_static(ff_farm& farm, const OptLevel& opt=OptLevel1()) {
                        "OPT (farm): MAPPING: Disabling mapping, threshold=%ld, number of threads=%ld\n",opt.max_mapped_threads, card);
             
             farm.no_mapping();
-        }
-    }
-    // here it looks for internal farms with null collectors
-    if (opt.remove_collector) {
-        const svector<ff_node*>& W = farm.getWorkers();
-        for(size_t i=0;i<W.size();++i) {
-            if (W[i]->isFarm() && !W[i]->isOFarm()) {
-                ff_farm* ifarm = reinterpret_cast<ff_farm*>(W[i]);
-                OptLevel iopt;
-                iopt.remove_collector=true;
-                iopt.verbose_level = opt.verbose_level;
-                if (optimize_static(*ifarm, iopt)<0) return -1;
-                if (ifarm->getCollector() == nullptr) {
-                    opt_report(opt.verbose_level, OPT_NORMAL, "OPT (farm): REMOVE_COLLECTOR: Removed farm collector\n");
-                    ifarm->remove_collector();
-                }
-            }
         }
     }
     // no initial barrier
@@ -124,7 +138,7 @@ int optimize_static(ff_pipeline& pipe, const OptLevel& opt=OptLevel1()) {
         error("optimize_static (pipeline) called after prepare\n");
         return -1;
     }
-   // flattening the pipeline ----------------------------------
+   // flattening the pipeline (1st level) ----------------------
    const svector<ff_node*>& W = pipe.get_pipeline_nodes();
    int nstages=static_cast<int>(pipe.nodes_list.size());
    for(int i=0;i<nstages;++i)  pipe.remove_stage(0); 
@@ -132,6 +146,43 @@ int optimize_static(ff_pipeline& pipe, const OptLevel& opt=OptLevel1()) {
    for(int i=0;i<nstages;++i) pipe.add_stage(W[i]);
    // ----------------------------------------------------------
 
+   // looking for farm and all-to-all because they might have pipeline inside
+   // for each nested pipeline the optimize_pipeline function is recursively
+   // called following a depth-first search
+
+   OptLevel iopt(opt);
+   iopt.blocking_mode      = false;
+   iopt.no_initial_barrier = false;
+   iopt.no_default_mapping = false;
+   for(int i=0;i<nstages;++i) {
+       if (pipe.nodes_list[i]->isFarm()) {
+           ff_farm *farm = reinterpret_cast<ff_farm*>(pipe.nodes_list[i]);
+           const svector<ff_node*>& W = farm->getWorkers();
+           for(size_t j=0;j<W.size();++j) {
+               if (W[j]->isPipe()) {
+                   ff_pipeline* ipipe=reinterpret_cast<ff_pipeline*>(W[j]);
+                   if (optimize_static(*ipipe, iopt)) return -1;
+               }
+           }
+       } else if (pipe.nodes_list[i]->isAll2All()) {
+           ff_a2a *a2a   = reinterpret_cast<ff_a2a*>(pipe.nodes_list[i]);
+           const svector<ff_node*>& W1 = a2a->getFirstSet();
+           const svector<ff_node*>& W2 = a2a->getSecondSet();
+           for(size_t j=0;j<W1.size();++j) {
+               if (W1[j]->isPipe()) {
+                   ff_pipeline* ipipe=reinterpret_cast<ff_pipeline*>(W1[j]);
+                   if (optimize_static(*ipipe, iopt)) return -1;
+               }
+           }
+           for(size_t j=0;j<W2.size();++j) {
+               if (W2[j]->isPipe()) {
+                   ff_pipeline* ipipe=reinterpret_cast<ff_pipeline*>(W2[j]);
+                   if (optimize_static(*ipipe, iopt)) return -1;
+               }
+           }           
+       }
+   }
+   
    // ------------------ helping function ----------------------
    auto find_farm_with_null_collector =
        [](const svector<ff_node*>& nodeslist, int start=0)->int {

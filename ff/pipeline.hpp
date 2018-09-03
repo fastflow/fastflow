@@ -286,10 +286,15 @@ protected:
                             return -1;
                         }
                         if (a2a->create_input_buffer(in_buffer_entries, fixedsize)<0) return -1;
-                        w1.clear();
-                        a2a->get_in_nodes(w1);
-                        assert(w1.size() == W1.size());
-                        if (nodes_list[i-1]->set_output(w1)<0) return -1; // previous one can be a farm or a all2all                       
+                        // the previous node can be a farm or a all2all                       
+                        for(size_t i=0;i<w1.size();++i) {
+                            if (prev_multi_multioutput) {
+                                if (w1[i]->set_output(W1[i])<0) return -1;
+                            } else {
+                                if (w1[i]->set_output_buffer(W1[i]->get_in_buffer())<0) return -1;
+                            }
+                        }
+                        //if (nodes_list[i-1]->set_output(w1)<0) return -1; 
                         
                         // blocking stuff --------------------------------------------
                         svector<ff_node*> w(MAX_NUM_THREADS);
