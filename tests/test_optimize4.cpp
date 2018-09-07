@@ -25,7 +25,7 @@
  ****************************************************************************
  */
 /*  
- * Test checking the optimizations of pipeline inside a farm.
+ * This test checks the optimizations of pipelines inside a farm.
  *
  *   pipe(First, farm(pipe(Stage, farm(Worker))), Last)
  *
@@ -59,11 +59,7 @@ struct First: ff_node_t<long> {
     const int ntasks;
 };
 
-struct Stage: ff_node_t<long> {
-    long* svc(long* in) { return in; }    
-};
-
-struct Worker: ff_node_t<long> {
+struct Worker1: ff_node_t<long> {
     long* svc(long*in) {
         switch(get_my_id()) {
         case 0: {
@@ -83,6 +79,12 @@ struct Worker: ff_node_t<long> {
         return in;
     }
 };
+struct Worker2: ff_node_t<long> {
+    long* svc(long*in) {
+        return in;
+    }
+};
+
 struct Last: ff_node_t<long> {
     long* svc(long* in) {
         printf("Last received %ld\n", (long)in);
@@ -94,17 +96,20 @@ int main(int argc, char* argv[]) {
     // default arguments
     size_t ntasks    = 10000;
     bool   optimize  = true;
-    size_t nworkers  = 4;
-
+    size_t nworkers  = 4;   // external workers
+    size_t inworkers1= 2;   // internal workers of the first farm
+    size_t inworkers2= 3;   // internal workers of the second farm
 
     if (argc>1) {
-        if (argc!=4) {
-            error("use: %s ntasks nworkers optimize\n",argv[0]);
+        if (argc!=6) {
+            error("use: %s ntasks nworkers inworkers1 inworkers2 optimize\n",argv[0]);
             return -1;
         }
         ntasks    = std::stol(argv[1]);
         nworkers  = std::stol(argv[2]);
-        optimize  = (std::stol(argv[3])!=0);
+        inworkers1= std::stol(argv[3]);
+        inworkers2= std::stol(argv[4]);
+        optimize  = (std::stol(argv[5])!=0);
     }
 
     First first(ntasks);
@@ -114,19 +119,25 @@ int main(int argc, char* argv[]) {
     ff_Farm<long,long> farm([&]() {	    
 	    std::vector<std::unique_ptr<ff_node> > V;
 	    for(size_t i=0;i<nworkers;++i) {
-		auto stage = make_unique<Stage>();
+            // first internal farm
+            std::vector<std::unique_ptr<ff_node> > W1;
+            for(size_t j=0;j<inworkers1;++j)		    
+                W1.push_back(make_unique<Worker1>());		
+            auto ifarm1 = make_unique<ff_Farm<long,long>>(std::move(W1));
 
-		std::vector<std::unique_ptr<ff_node> > W;
-		for(size_t j=0;j<3;++j)		    
-		    W.push_back(make_unique<Worker>());		
-		auto ifarm = make_unique<ff_Farm<long,long>>(std::move(W));
-		
-		auto ipipe = make_unique<ff_Pipe<long,long>>(std::move(stage), std::move(ifarm));
-		V.push_back(std::move(ipipe));
+            // second internal farm
+            std::vector<std::unique_ptr<ff_node> > W2;
+            for(size_t j=0;j<inworkers2;++j)		    
+                W2.push_back(make_unique<Worker2>());		
+            auto ifarm2 = make_unique<ff_Farm<long,long>>(std::move(W2));
+
+            auto ipipe = make_unique<ff_Pipe<long,long>>(std::move(ifarm1), std::move(ifarm2));
+            V.push_back(std::move(ipipe));
+
 	    }
 	    return V;
         } ());
-    
+
     // original network
     ff_Pipe<> pipe(first, farm, last);
     
@@ -134,15 +145,19 @@ int main(int argc, char* argv[]) {
     if (optimize) {
         OptLevel opt;
         opt.max_nb_threads=ff_realNumCores();
+        opt.max_mapped_threads=opt.max_nb_threads;
         opt.verbose_level=2;
         opt.no_initial_barrier=true;
+        opt.no_default_mapping=true; // disable mapping if #threads > max_mapped_threads
         opt.blocking_mode     =true;   // enabling blocking if #threads > max_nb_threads
+        opt.merge_farms=true;
         opt.merge_with_emitter=true;   // merging previous pipeline stage with farm emitter 
         opt.remove_collector  =true;   // remove farm collector
-        
+        opt.introduce_a2a=true;      // introduce all-2-all between two farms, if possible
+
         // this call tries to apply all previous optimizations modifying the pipe passed
         // as parameter
-        if (optimize_static(pipe,opt)<0) {
+        if (optimize_static(farm,opt)<0) {
             error("optimize_static\n");
             return -1;
          }

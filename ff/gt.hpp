@@ -482,7 +482,6 @@ public:
      * It sets the output buffer.
      */
     int set_output_buffer(FFBUFFER * const buff) {
-        buffer=buff;
         if (filter) {
 
             if (filter->set_output_buffer(buff)<0) return -1;
@@ -492,7 +491,9 @@ public:
             if ( p_cons_m!=nullptr) {
                 filter->set_output_blocking(p_cons_m, p_cons_c, p_cons_counter);
             }
-        }                
+        }
+        if (buffer) return -1;
+        buffer=buff;
         return 0;
     }
 
