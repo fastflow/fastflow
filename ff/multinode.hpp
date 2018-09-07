@@ -897,8 +897,12 @@ struct mi_transformer: ff_minode {
         n->neos+=1;
         return ff_minode::set_input(node);
     }
-
+    int set_output(ff_node *node) {
+        return ff_minode::set_output(node);
+    }
+    
     int create_output_buffer(int nentries, bool fixedsize=true) {
+        if (ff_minode::getgt()->get_out_buffer()) return -1;
         int r= ff_minode::create_output_buffer(nentries,fixedsize);
         if (r<0) return -1;
         ff_minode::getgt()->set_output_buffer(ff_minode::get_out_buffer());

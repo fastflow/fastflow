@@ -70,16 +70,22 @@ int optimize_static(ff_farm& farm, const OptLevel& opt=OptLevel1()) {
         error("optimize_static (farm) called after prepare\n");
         return -1;
     }
-    // swithing to blocking mode if the n. of threads is greater than the threshold
-    if (opt.blocking_mode) {
-        ssize_t card = farm.cardinality();
-        if (opt.max_nb_threads < card) {
+    // optimizing internal pipelines, if any
+    OptLevel iopt(opt);
+    iopt.blocking_mode      = false;
+    iopt.no_initial_barrier = false;
+    iopt.no_default_mapping = false;
+    const svector<ff_node*> &Workers = farm.getWorkers();
+    for(size_t i=0;i<Workers.size();++i) {
+        if (Workers[i]->isPipe()) {
             opt_report(opt.verbose_level, OPT_NORMAL,
-                       "OPT (farm): BLOCKING_MODE: Activating blocking mode, threshold=%ld, number of threads=%ld\n",opt.max_nb_threads, card);
-            
-            farm.blocking_mode(true);
+                       "OPT (farm): Looking for optimizations in the internal pipeline %ld\n",i);
+
+            ff_pipeline *ipipe = reinterpret_cast<ff_pipeline*>(Workers[i]);
+            if (optimize_static(*ipipe, iopt)) return -1;
         }
     }
+
     // here it looks for internal farms with null collectors
     if (opt.remove_collector) {
         auto optimize_internal_farm = [opt](ff_farm& ifarm) {
@@ -98,6 +104,9 @@ int optimize_static(ff_farm& farm, const OptLevel& opt=OptLevel1()) {
         for(size_t i=0;i<W.size();++i) {
             if (W[i]->isFarm() && !W[i]->isOFarm()) {
                 ff_farm* ifarm = reinterpret_cast<ff_farm*>(W[i]);
+                opt_report(opt.verbose_level, OPT_NORMAL,
+                           "OPT (farm): Looking for optimizations in the internal farm %ld\n",i);
+                
                 if (optimize_internal_farm(*ifarm)<0) return -1;
             } else {
                 if (W[i]->isPipe()) {
@@ -105,12 +114,28 @@ int optimize_static(ff_farm& farm, const OptLevel& opt=OptLevel1()) {
                     ff_node* last  = ipipe->get_lastnode();
                     if (last->isFarm() && !last->isOFarm()) {
                         ff_farm* ifarm = reinterpret_cast<ff_farm*>(last);
+
+                        opt_report(opt.verbose_level, OPT_NORMAL,
+                                   "OPT (farm): Looking for optimizations in the internal last farm of a pipeline %ld\n",i);
+
                         if (optimize_internal_farm(*ifarm)<0) return -1;
                     }
                 }
             }
         }
     }
+
+    // swithing to blocking mode if the n. of threads is greater than the threshold
+    if (opt.blocking_mode) {
+        ssize_t card = farm.cardinality();
+        if (opt.max_nb_threads < card) {
+            opt_report(opt.verbose_level, OPT_NORMAL,
+                       "OPT (farm): BLOCKING_MODE: Activating blocking mode, threshold=%ld, number of threads=%ld\n",opt.max_nb_threads, card);
+            
+            farm.blocking_mode(true);
+        }
+    }
+
     // turning off initial/default mapping if the n. of threads is greater than the threshold
     if (opt.no_default_mapping) {
         ssize_t card = farm.cardinality();

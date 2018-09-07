@@ -749,7 +749,9 @@ protected:
     virtual inline int set_input(ff_node *) { return -1;}
     virtual inline int set_input_feedback(ff_node *) { return -1;}
     virtual inline int set_output(const svector<ff_node *> & w) { return -1;}
-    virtual inline int set_output(ff_node *) { return -1;}
+    virtual inline int set_output(ff_node *n) {
+        return set_output_buffer(n->get_in_buffer());
+    }
     virtual inline int set_output_feedback(ff_node *) { return -1;}
    
     virtual inline void get_out_nodes(svector<ff_node*>&w) {}

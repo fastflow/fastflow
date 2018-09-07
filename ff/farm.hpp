@@ -206,13 +206,6 @@ protected:
 
         return (card + 1 + ((collector && !collector_removed)?1:0));
     }
-    inline int cardinality() const { 
-        int card=0;
-        for(size_t i=0;i<workers.size();++i) 
-            card += workers[i]->cardinality();
-        
-        return (card + 1 + ((collector && !collector_removed)?1:0));
-    }
     
     inline int prepare() {
         size_t nworkers = workers.size();
@@ -295,13 +288,6 @@ protected:
                 if (a2a->create_input_buffer((int) (ondemand ? ondemand: (in_buffer_entries/nworkers + 1)), 
                                              (ondemand ? true: fixedsize))<0) return -1;
                 
-                // NOTE: the following call might fail because the buffers were already created for example by
-                // the pipeline that contains this stage.
-                if (a2a->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
-                                              (lb->masterworker()?false:fixedsize))<0) {
-                    if (lb->masterworker()) return -1; //something went wrong
-                }
-
 
                 const svector<ff_node*>& W1 = a2a->getFirstSet();
                 const svector<ff_node*>& W2 = a2a->getSecondSet();
@@ -310,11 +296,31 @@ protected:
                     lb->register_worker(W1[i]);
                 }
 
-                if (collector && !collector_removed && !lb->masterworker())
-                    for(size_t i=0;i<W2.size();++i) {
-                        gt->register_worker(W2[i]);
+                // TODO: If the internal A2A has feedbacks toward the Emitter (i.e. master-worker) and there is also the collector
+                //       then this case is not properly handled because R-Workers are not connected to the collector
+                if (collector && !collector_removed) {
+                    if (!lb->masterworker()) {
+                        for(size_t i=0;i<W2.size();++i) {
+                            gt->register_worker(W2[i]);
+                        }
+                    } else abort(); // <---- FIX
+                } else { // there is no collector
+                    if (outputNodes.size()) { 
+                        assert(W2.size() == outputNodes.size());
+                        for(size_t i=0;i<W2.size();++i) {
+                            if (W2[i]->set_output(outputNodes[i])<0) return -1;  //(**)
+                                                                                     }
                     }
+                }
+                
+                // NOTE: the following call might fail because the buffers were already created for example by
+                // the pipeline that contains this stage or here (**).
+                if (a2a->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
+                                              (lb->masterworker()?false:fixedsize))<0) {
+                    if (lb->masterworker()) return -1; //something went wrong
+                }
 
+                
                 continue;
             }
 
@@ -1027,15 +1033,11 @@ public:
         set_input_blocking(m,c,counter);             
         /* ------ */
         
-        if (create_output_buffer(out_buffer_entries, false)<0) {
-            error("FARM, creating output buffer for multi-input configuration\n");
-            return -1;
-        }
-        ff_buffernode *tmpbuffer = new ff_buffernode(-1, NULL,get_out_buffer());
+        ff_buffernode *tmpbuffer = new ff_buffernode(out_buffer_entries, false);
         if (!tmpbuffer) return -1;
         tmpbuffer->set_input_blocking(m,c,counter);
         internalSupportNodes.push_back(tmpbuffer);
-        if (set_output_buffer(get_out_buffer())<0) {
+        if (set_output_buffer(tmpbuffer->get_in_buffer())<0) {
             error("FARM, setting output buffer for multi-input configuration\n");
             return -1;
         }
@@ -1110,6 +1112,14 @@ public:
         default_mapping = false;
         lb->no_mapping();
         if (gt) gt->no_mapping();
+    }
+
+    inline int cardinality() const { 
+        int card=0;
+        for(size_t i=0;i<workers.size();++i) 
+            card += workers[i]->cardinality();
+        
+        return (card + 1 + ((collector && !collector_removed)?1:0));
     }
 
     
