@@ -182,6 +182,21 @@ public:
     double ffwTime() {
         return diffmsec(getwstoptime(),getwstartime());
     }
+
+#if defined(TRACE_FASTFLOW)
+    void ffStats(std::ostream & out) { 
+        out << "--- Comp:\n";
+        if (comp_nodes[0]->isMultiInput()) {
+            ff_minode::ffStats(out);
+        } else
+            ff_node::ffStats(out);
+    }
+#else
+    void ffStats(std::ostream & out) { 
+        out << "FastFlow trace not enabled\n";
+    }
+#endif
+    
 protected:
     ff_comb():ff_minode() {}
 

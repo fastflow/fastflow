@@ -508,6 +508,21 @@ public:
 
     double ffwTime() { return diffmsec(getwstoptime(),getwstartime()); }
 
+#if defined(TRACE_FASTFLOW)
+    void ffStats(std::ostream & out) { 
+        out << "--- a2a:\n";
+        out << "--- L-Workers:\n";
+        for(size_t i=0;i<workers1.size();++i) workers1[i]->ffStats(out);
+        out << "--- R-Workers:\n";
+        for(size_t i=0;i<workers2.size();++i) workers2[i]->ffStats(out);
+    }
+#else
+    void ffStats(std::ostream & out) { 
+        out << "FastFlow trace not enabled\n";
+    }
+#endif
+
+    
     
 protected:
     bool isMultiInput()  const { return true;}
