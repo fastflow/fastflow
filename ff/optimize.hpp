@@ -59,6 +59,35 @@ static inline void opt_report(int verbose_level, reportkind_t kind, const char *
     va_end(argp);
     free(p);
 }
+
+/**
+ *  This function looks for internal farms with default collector in a farm building block.
+ *  The internal default collectors are removed.
+ */    
+static inline int remove_internal_collectors(ff_farm& farm) {
+    const svector<ff_node*>& W = farm.getWorkers();
+    for(size_t i=0;i<W.size();++i) {
+        if (W[i]->isFarm() && !W[i]->isOFarm()) {
+            ff_farm* ifarm = reinterpret_cast<ff_farm*>(W[i]);            
+            if (remove_internal_collectors(*ifarm)<0) return -1;
+            if (ifarm->getCollector() == nullptr)
+                ifarm->remove_collector();
+        } else {
+            if (W[i]->isPipe()) {
+                ff_pipeline* ipipe = reinterpret_cast<ff_pipeline*>(W[i]);
+                ff_node* last  = ipipe->get_lastnode();
+                if (last->isFarm() && !last->isOFarm()) {
+                    ff_farm* ifarm = reinterpret_cast<ff_farm*>(last);
+                    if (remove_internal_collectors(*ifarm)<0) return -1;
+                    if (ifarm->getCollector() == nullptr)
+                        ifarm->remove_collector();                    
+                }
+            }
+        }
+    }
+    return 0;
+}
+
     
 /* This is farm specific. 
  *  - It basically sets the threshold for enabling blocking mode.
@@ -487,27 +516,6 @@ int optimize_static(ff_pipeline& pipe, const OptLevel& opt=OptLevel1()) {
    return 0;
 }
 
-
-#if 0    
-template<typename T1, typename T2>
-const ff_Pipe<typename T1::in_type, typename T2::out_type> optimize_static() {
-    using pipe_t = ff_Pipe<typename T1::in_type, typename T2::out_type>;
-    struct emptyNode:ff_node_t<typename T1::in_type, typename T2::out_type> {
-        using in_type  = typename ff_node_t<typename T1::in_type, typename T2::out_type>::in_type;
-        using out_type = typename ff_node_t<typename T1::in_type, typename T2::out_type>::out_type;
-        out_type *svc(in_type*) {return nullptr;}
-    };
-    const emptyNode n;   
-    pipe_t empty_pipe(n);
-
-    return empty_pipe;
-}
-
-template<typename T1, typename T2>
-const ff_Farm<typename T1::in_type, typename T2::out_type> optimize_static(ff_Farm<typename T1::in_type, typename T2::out_type>& farm) {
-
-}
-#endif
 
     
 } // namespace ff 

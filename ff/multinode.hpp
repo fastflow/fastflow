@@ -352,10 +352,16 @@ public:
      *
      * It prints the trace of FastFlow.
      */
-    inline void ffStats(std::ostream & out) { 
+    inline void ffStats(std::ostream & out) {
+        out << "--- multi-input:\n";
         gt->ffStats(out);
     }
+#else
+    void ffStats(std::ostream & out) { 
+        out << "FastFlow trace not enabled\n";
+    }
 #endif
+
     
 private:
     ff_gatherer* gt;
@@ -702,10 +708,16 @@ public:
      *
      * It prints the trace of FastFlow.
      */
-    inline void ffStats(std::ostream & out) { 
+    inline void ffStats(std::ostream & out) {
+        out << "--- multi-output:\n";
         lb->ffStats(out);
     }
+#else
+    void ffStats(std::ostream & out) { 
+        out << "FastFlow trace not enabled\n";
+    }
 #endif
+
     
 protected:
     ff_loadbalancer* lb;
