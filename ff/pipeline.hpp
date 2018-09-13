@@ -45,6 +45,9 @@
 
 
 namespace ff {
+
+class ff_pipeline;
+static int optimize_static(ff_pipeline&, const OptLevel&);
     
 /**
  * \class ff_pipeline
@@ -55,7 +58,7 @@ namespace ff {
  */
 class ff_pipeline: public ff_node {
 
-    friend int optimize_static(ff_pipeline&, const OptLevel&);
+    friend inline int optimize_static(ff_pipeline&, const OptLevel&);
 
 protected:
     inline int prepare() {
@@ -1133,6 +1136,27 @@ public:
         return true;
     }
     
+    inline bool isPipe() const { return true; }
+    inline bool isPrepared() const { return prepared;}    
+    inline bool isMultiInput() const { 
+        if (nodes_list.size()==0) return false;
+        return nodes_list[0]->isMultiInput();
+    }
+    inline bool isMultiOutput() const {
+        if (nodes_list.size()==0) return false;
+        int last = static_cast<int>(nodes_list.size())-1;
+        return nodes_list[last]->isMultiOutput();
+    }
+
+    inline void flatten() {
+        const svector<ff_node*>& W = this->get_pipeline_nodes();
+        int nstages=static_cast<int>(this->nodes_list.size());
+        for(int i=0;i<nstages;++i)  this->remove_stage(0); 
+        nstages = static_cast<int>(W.size());
+        for(int i=0;i<nstages;++i) this->add_stage(W[i]);
+    }
+
+    
     /** 
      * \brief offload a task to the pipeline from the offloading thread (accelerator mode)
      * 
@@ -1324,6 +1348,11 @@ protected:
         nodes_list.erase(it+pos);
     }
     void insert_stage(int pos, ff_node* node, bool cleanup=false) {
+        if (prepared) {
+            error("PIPE, insert_stage, stage %d cannot be added because the PIPE has already been prepared\n");
+            return;
+        }
+
         if (pos<0 || pos>static_cast<int>(nodes_list.size())) {
             error("PIPE, insert_stage, invalid position\n");
             return;
@@ -1439,17 +1468,6 @@ protected:
         return 0;
     }
 
-    inline bool isPipe() const { return true; }
-
-    inline bool isMultiInput() const { 
-        if (nodes_list.size()==0) return false;
-        return nodes_list[0]->isMultiInput();
-    }
-    inline bool isMultiOutput() const {
-        if (nodes_list.size()==0) return false;
-        int last = static_cast<int>(nodes_list.size())-1;
-        return nodes_list[last]->isMultiOutput();
-    }
     inline int set_input(ff_node *node) { 
         return nodes_list[0]->set_input(node);
     }
@@ -1659,5 +1677,6 @@ private:
 //#endif //VS12
 
 } // namespace ff
+
 
 #endif /* FF_PIPELINE_HPP */

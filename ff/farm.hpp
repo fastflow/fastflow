@@ -77,6 +77,10 @@ namespace ff {
  *
  */
 
+// forward decls
+class ff_farm;
+static inline int optimize_static(ff_farm&, const OptLevel&);
+    
 
 /*!
  *  \class ff_farm
@@ -94,7 +98,7 @@ namespace ff {
  */
 class ff_farm: public ff_node {
 
-    friend int optimize_static(ff_farm&, const OptLevel&);
+    friend inline int optimize_static(ff_farm&, const OptLevel&);
 
 protected:
     // -------- strict round-robin load balancer and gatherer -------
@@ -541,14 +545,7 @@ protected:
         lb->skipfirstpop(sk);
         skip1pop=sk;
     }
-    
-    virtual void blocking_mode(bool blk=true) {
-        // NOTE: blocking_mode for workers is managed by the load-balancer
-        blocking_in = blocking_out = blk;
-        lb->blocking_mode(blk);
-        if (gt) gt->blocking_mode(blk);            
-    }
-    
+        
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
@@ -1075,7 +1072,8 @@ public:
 
     inline bool isFarm() const { return true; }
     inline bool isOFarm() const { return ordered; }
-
+    inline bool isPrepared() const { return prepared;}
+    
     inline bool hasCollector() const {
         return (ordered ? true: (collector && !collector_removed));
     }
@@ -1113,7 +1111,13 @@ public:
         lb->no_mapping();
         if (gt) gt->no_mapping();
     }
-
+    virtual void blocking_mode(bool blk=true) {
+        // NOTE: blocking_mode for workers is managed by the load-balancer
+        blocking_in = blocking_out = blk;
+        lb->blocking_mode(blk);
+        if (gt) gt->blocking_mode(blk);            
+    }
+    
     inline int cardinality() const { 
         int card=0;
         for(size_t i=0;i<workers.size();++i) 
@@ -2125,12 +2129,9 @@ public:
         return ff_farm::load_result_nb((void**)&r);
     }
 };
-
-
-    
-
 #endif
 
 } // namespace ff
+
 
 #endif /* FF_FARM_HPP */
