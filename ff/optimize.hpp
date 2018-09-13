@@ -94,7 +94,7 @@ static inline int remove_internal_collectors(ff_farm& farm) {
  *  - It can remove the collector of internal farms in a farm of farms composition.
  *  - TODO: Farm of farms ---> single farm with two emitters combined (external+internal)
  */    
-int optimize_static(ff_farm& farm, const OptLevel& opt=OptLevel1()) {
+static inline int optimize_static(ff_farm& farm, const OptLevel& opt=OptLevel1()) {
     if (farm.prepared) {
         error("optimize_static (farm) called after prepare\n");
         return -1;
@@ -187,7 +187,7 @@ int optimize_static(ff_farm& farm, const OptLevel& opt=OptLevel1()) {
 /* 
  *
  */    
-int optimize_static(ff_pipeline& pipe, const OptLevel& opt=OptLevel1()) {
+static inline int optimize_static(ff_pipeline& pipe, const OptLevel& opt=OptLevel1()) {
     if (pipe.prepared) {
         error("optimize_static (pipeline) called after prepare\n");
         return -1;
