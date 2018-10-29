@@ -958,6 +958,10 @@ static inline const ff_farm combine_farms_nf(ff_farm& farm1, ff_farm& farm2) {
         error("combine_farms_nf, cannot combine farms whose workers are either multi-output or multi-input nodes\n");
         return newfarm;
     }
+    if (w1[0]->isPipe() || w2[0]->isPipe()) {
+        error("combine_farms_nf, cannot combine farms whose workers are pipeline nodes\n");
+        return newfarm;
+    }
     std::vector<ff_node*> W1(w1.size());
     std::vector<ff_node*> W2(w2.size());
     for(size_t i=0;i<W1.size();++i) W1[i]=w1[i];

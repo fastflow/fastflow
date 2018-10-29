@@ -220,7 +220,15 @@ protected:
 
         // ordering
         if (ordered) {
-            if (ondemand) {
+
+            // TODO: this constraint must be relaxed!!!!!!
+            if (workers[0]->isFarm() || workers[0]->isPipe() || workers[0]->isMultiInput()
+                || workers[0]->isMultiOutput() || workers[0]->isAll2All() || workers[0]->isComp() ) {
+                error("FARM: ordered farm is currently supported only for standard node!\n");
+                return -1;
+            }
+            
+            if (ondemand) {                                   
                 ordered_lb* _lb= new ordered_lb(nworkers);
                 ordered_gt* _gt= new ordered_gt(nworkers);
                 assert(_lb); assert(_gt);

@@ -39,8 +39,8 @@
 
 using namespace ff;
 
-long ntasks = 1000;
-long worktime = 5; // usecs
+long ntasks = 100000;
+long worktime = 1*2400; // usecs
 
 struct firstStage: ff_node_t<long> {
     long *svc(long*) {
@@ -52,25 +52,25 @@ struct firstStage: ff_node_t<long> {
 };
 struct secondStage: ff_node_t<long> { // 2nd stage
     long *svc(long *t) {
-        usleep(worktime);
+        ticks_wait(worktime);
         return t;
     }
 };
 struct secondStage2: ff_node_t<long> { // 2nd stage
     long *svc(long *t) {
-        usleep(worktime);
+        ticks_wait(worktime);
         return t;
     }
 };
 struct secondStage3: ff_node_t<long> { // 2nd stage
     long *svc(long *t) {
-        usleep(worktime);
+        ticks_wait(worktime);
         return t;
     }
 };
 struct thirdStage: ff_node_t<long> {  // 3rd stage
     long *svc(long *task) {
-        usleep(worktime);
+        ticks_wait(worktime);
         return GO_ON; 
     }
 }; 
@@ -87,7 +87,7 @@ int main() {
         r = _2.svc((long*)i);
         r = _3.svc(r);
         r = _4.svc(r);
-        r = _4.svc(r);
+        r = _5.svc(r);
     }
     unsigned long fine=getusec();
     std::cout << "TEST  FOR  Time = " << (fine-inizio) / 1000.0 << " ms\n";
@@ -123,7 +123,7 @@ int main() {
         }
         usleep(500000);
         {
-            ff_Pipe<> pipe(_1, combine_nodes(combine_nodes(_2, _3), combine_nodes(_4, _5)) );
+            ff_Pipe<> pipe(_1, _2, combine_nodes(_3, combine_nodes(_4, _5)) );
             // starts the pipeline
             if (pipe.run_and_wait_end()<0)
                 error("running pipe\n");
@@ -131,7 +131,7 @@ int main() {
         }
         usleep(500000);
         {
-            ff_Pipe<> pipe(_1, _2, combine_nodes(_3, combine_nodes(_4, _5)) );
+            ff_Pipe<> pipe(_1, _2, _3, combine_nodes(_4, _5) );
             // starts the pipeline
             if (pipe.run_and_wait_end()<0)
                 error("running pipe\n");
@@ -139,7 +139,7 @@ int main() {
         }
         usleep(500000);
         {
-            ff_Pipe<> pipe(_1, _2, _3, combine_nodes(_4, _5) );
+            ff_Pipe<> pipe( _1, combine_nodes(_2,_3), combine_nodes(_4, _5) );
             // starts the pipeline
             if (pipe.run_and_wait_end()<0)
                 error("running pipe\n");
@@ -147,7 +147,7 @@ int main() {
         }
         usleep(500000);
         {
-            ff_Pipe<> pipe( combine_nodes(_1,_2), _3, combine_nodes(_4, _5) );
+            ff_Pipe<> pipe( combine_nodes(combine_nodes(_1,_2), _3), combine_nodes(_4,_5) );
             // starts the pipeline
             if (pipe.run_and_wait_end()<0)
                 error("running pipe\n");
@@ -155,7 +155,7 @@ int main() {
         }
         usleep(500000);
         {
-            ff_Pipe<> pipe( combine_nodes(combine_nodes(_1,_2), _3), combine_nodes(_4,_5) );
+            ff_Pipe<> pipe( combine_nodes(_1,_2), combine_nodes(_3,_4), _5 );
             // starts the pipeline
             if (pipe.run_and_wait_end()<0)
                 error("running pipe\n");
@@ -163,7 +163,7 @@ int main() {
         }
         usleep(500000);
         {
-            ff_Pipe<> pipe( combine_nodes(_1,_2), combine_nodes(_3,_4), _5 );
+            ff_Pipe<> pipe( _1, combine_nodes(_2, combine_nodes(_3,_4)), _5 );
             // starts the pipeline
             if (pipe.run_and_wait_end()<0)
                 error("running pipe\n");
