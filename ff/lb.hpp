@@ -330,9 +330,12 @@ protected:
             do {
                 if (++start == ite) start=availworkers.begin();
                 //if (start == ite) start=availworkers.begin();  // read again next time from the same, this needs (**)
-                if((*start)->get(task)) {
-                    const size_t idx = (start-availworkers.begin());
 
+                const size_t idx = (start-availworkers.begin());
+                if (filter && !filter->in_active && (idx >= multi_input_start)) continue;
+                
+                if((*start)->get(task)) {
+                    
                     input_channelid = (idx >= multi_input_start) ? (*start)->get_my_id():-1;
                     channelid = idx;
                     if (idx >= multi_input_start) channelid = -1;
@@ -918,7 +921,9 @@ public:
                 if (inpresent) {
                     if (!skipfirstpop) pop(&task);
                     else skipfirstpop=false;
-                    
+
+                    // ignoring EOSW in input
+                    if (task == FF_EOSW) continue;                     
                     if (task == FF_EOS) {
                         if (--neos>0) continue;
                         if (filter) filter->eosnotify();
@@ -1021,7 +1026,9 @@ public:
                 if (task == FF_GO_OUT) { 
                     ret = task; 
                     break; 
-                } 
+                }
+                // ignoring EOSW in input
+                if (task == FF_EOSW) continue; 
 
                 if ((task == FF_EOS) || 
                     (task == FF_EOS_NOFREEZE)) {
