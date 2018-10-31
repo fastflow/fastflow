@@ -41,7 +41,10 @@
  *           Manager -------
  *
  *
- *
+ *  NOTE: the Emitter can be a standard ff_node_t and in this case it has to use the 
+ *        ff_loadbalancer of the farm (to test this case define EMITTER_FF_NODE. 
+ *        Alternatively, it can be a ff_monode_t and in this case its internal load-balancer
+ *        will be (automatically) attached to that of the farm.
  *
  */
 
@@ -57,6 +60,9 @@
 
 using namespace ff;
 
+// if the emitter is just a ff_node (and not a ff_monode) then we have to pass
+// to the constructor the internal load-balancer of the farm
+//#define EMITTER_FF_NODE 1
 
 const int MANAGERID = MAX_NUM_THREADS+100;
 
@@ -79,8 +85,11 @@ struct Seq: ff_node_t<long> {
     }
 };
 
-
+#if defined(EMITTER_FF_NODE)
 class Emitter: public ff_node_t<long> {
+#else
+class Emitter: public ff_monode_t<long> {
+#endif
 protected:
     int selectReadyWorker() {
         for (unsigned i=last+1;i<ready.size();++i) {
@@ -98,9 +107,15 @@ protected:
         return -1;
     }
 public:
+    #if defined(EMITTER_FF_NODE)
     Emitter(ff_loadbalancer *lb):lb(lb) {}
+#endif
 
     int svc_init() {
+#if !defined(EMITTER_FF_NODE)
+        lb = ff_monode_t<long>::getlb();
+        assert(lb != nullptr);
+#endif        
         last = lb->getNWorkers();
         ready.resize(lb->getNWorkers());
         for(size_t i=0; i<ready.size(); ++i) ready[i] = true;
@@ -136,7 +151,7 @@ public:
         }
 
         if ((size_t)wid < lb->getNWorkers()) { // ack coming from the workers
-            printf("Emitter got %ld back from %d data.size=%ld\n", (long)t, wid, data.size());
+            printf("Emitter got %ld back from %d data.size=%ld, onthefly=%d\n", (long)t, wid, data.size(), onthefly);
             assert(ready[wid] == false);
             ready[wid] = true;
             ++nready;
@@ -150,6 +165,7 @@ public:
             return GO_ON;
         }
         --onthefly;
+        printf("Emitter got %ld back from COLLECTOR data.size=%ld, onthefly=%d\n", (long)t, data.size(), onthefly);
         if (eos_received && (nready + sleeping) == ready.size() && onthefly<=0) {
             printf("Emitter exiting\n");
             return EOS;
@@ -175,7 +191,7 @@ private:
     unsigned last, nready, onthefly=0;
     std::vector<bool> ready;
     std::vector<long*> data;
-    ff_loadbalancer *lb;    
+    ff_loadbalancer *lb = nullptr;    
     int sleeping=0;
 };
 
@@ -252,6 +268,12 @@ struct Manager: ff_node_t<Command_t> {
 
 
 int main(int argc, char* argv[]) {
+#if defined(BLOCKING_MODE)
+    //TODO: in blocking mode the manager channel does not work!!!
+    return 0;
+#endif
+
+
     unsigned nworkers = 3;
     int ntasks = 1000;
     if (argc>1) {
@@ -279,7 +301,12 @@ int main(int argc, char* argv[]) {
 
     // registering the manager channel as one extra input channel for the load balancer
     farm.getlb()->addManagerChannel(manager.getChannel());
+    
+    #if defined(EMITTER_FF_NODE)
     Emitter E(farm.getlb());
+#else
+    Emitter E;
+#endif
 
     farm.remove_collector();
     farm.add_emitter(E); 
@@ -289,7 +316,7 @@ int main(int argc, char* argv[]) {
     // between the Collector and the Emitter
     Collector C;
     farm.add_collector(C);
-    farm.wrap_around(true);
+    farm.wrap_around();
 
     ff_Pipe<> pipe(seq, farm);
     

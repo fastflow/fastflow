@@ -119,7 +119,7 @@ int main(int argc, char * argv[]) {
     
     init_unlocked(lock);
 
-    ff_farm<> farm; // farm object
+    ff_farm farm; // farm object
     
     Emitter E(streamlen);
     farm.add_emitter(&E);

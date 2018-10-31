@@ -90,7 +90,7 @@ public:
         printf("BACK: got  %ld from %zd (numtasks=%ld)\n", t,lb->get_channel_id(),numtasks);
         if ((t != 1) && (t & 0x1)) return task;
         --numtasks;
-        if (numtasks == 0 && neos==FARM1WORKERS) return NULL;
+        if (numtasks == 0 && neos==FARM1WORKERS) return EOS;
         return GO_ON;
     }
 
@@ -109,27 +109,29 @@ protected:
 
 
 int main() {
-    ff_farm<> farm1;
+    ff_farm farm1;
     std::vector<ff_node*> w;
     for(int i=0;i<FARM1WORKERS;++i)
         w.push_back(new W1);
     farm1.add_workers(w);
     farm1.remove_collector();
 
-    ff_farm<> farm2;
+    ff_farm farm2;
     w.clear();
     w.push_back(new W2);
     w.push_back(new W2);
     farm2.add_workers(w);
     farm2.add_emitter(new E(farm2.getlb()));
-    farm2.setMultiInput();
-    farm2.wrap_around(true);
+    farm2.wrap_around();
 
     ff_pipeline pipe;
     pipe.add_stage(&farm1);
     pipe.add_stage(&farm2);
 
-    pipe.run_and_wait_end();
+    if (pipe.run_and_wait_end()<0) {
+        error("running pipe\n");
+        return -1;
+    }
 
     printf("DONE\n");
     return 0;

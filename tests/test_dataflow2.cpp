@@ -230,7 +230,7 @@ int main(int argc, char* argv[]) {
     
 
     ff_pipeline pipe(false, 10);  // queues in the pipeline are bounded !
-    ff_farm<>   farm;
+    ff_farm   farm;
     std::vector<ff_node *> w;
     for(int i=0;i<nw;++i) {
 #if defined(TEST_INNER_PIPELINE)

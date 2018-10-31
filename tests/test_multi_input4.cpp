@@ -48,7 +48,8 @@ struct Stage2: ff_minode {
     void *svc(void *task) {
         printf("Stage2 got task from %zd\n", get_channel_id());
         
-        if (get_channel_id()==0) return task; // FIX!!!
+        if (get_channel_id()==-1)
+            return task; 
         return GO_ON;
     }
     void eosnotify(ssize_t) {
@@ -68,7 +69,10 @@ int main() {
     ff_pipeline pipe2;
     pipe2.add_stage(&s2);
     pipe2.add_stage(&s3);
-    pipe2.wrap_around(true); // tells to pipe2 to skip the first pop
+    if (pipe2.wrap_around()<0) {
+        error("wrap_around\n");
+        return -1;
+    }
 
     ff_pipeline pipe;
     pipe.add_stage(&s1);

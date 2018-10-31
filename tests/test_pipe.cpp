@@ -77,11 +77,11 @@ int main(int argc, char * argv[]) {
         fftask_t *task = new fftask_t(i);
         pipe.offload(task);
     }
-    pipe.offload(EOS);
+    pipe.offload(pipe.EOS);
     for(long i=0;i<streamlen;++i) {
         fftask_t *task = nullptr;
         pipe.load_result(task);
-        assert(task != (void*)EOS);
+        assert(task != pipe.EOS);
         printf("result %ld\n", task->r);
         delete task;
     }

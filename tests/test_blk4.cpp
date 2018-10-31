@@ -54,10 +54,8 @@ public:
         // enforces nonblocking mode since the beginning
         // regardless the compilation setting
         lb->broadcast_task(NBLK); 
-        
         for(long i=0;i<ntasks;++i) {
             ff_send_out((long*)(i+10));
-
             switch(i) {
             case 100:{
             lb->broadcast_task(BLK);
@@ -83,10 +81,10 @@ public:
     long* svc(long* t) {
         int wid = lb->get_channel_id();
         if (wid == -1) {
-            //printf("TASK FROM INPUT %ld\n", (long)(t));
+            printf("TASK FROM INPUT %ld\n", (long)(t));
             return t;
         }
-        //printf("got back a task from Worker2(%d)\n", wid);
+        printf("got back a task from Worker2(%d)\n", wid);
         return GO_ON;
     }
     void eosnotify(ssize_t id) {
@@ -146,7 +144,6 @@ int main(int argc, char* argv[]) {
     farm2.add_emitter(E2);
     farm2.remove_collector();
     farm2.wrap_around();
-    farm2.setMultiInput();
 
     ff_Pipe<> pipe(farm1, farm2);
     pipe.setFixedSize(true);

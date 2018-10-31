@@ -94,6 +94,12 @@ public:
 
         return task;
     }
+
+    void svc_end() {
+        printf("Emitter received EOS\n");
+    }
+
+    
 private:
     int streamlen;
 };
@@ -119,7 +125,7 @@ public:
 
         if (++cnt == streamlen) {
             ffalloc.free(task);
-            return NULL;
+            return EOS;
         }
         std::cout << "Collector got -1 cnt= " << cnt << "\n";
         return GO_ON;
@@ -145,7 +151,7 @@ int main(int argc, char * argv[]) {
     // init FastFlow allocator
     ffalloc.init();
 
-    ff_farm<> farm;
+    ff_farm farm;
 
     Emitter e(streamlen);
     Collector c(streamlen);

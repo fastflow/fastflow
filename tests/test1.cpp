@@ -98,8 +98,7 @@ int main(int argc, char * argv[]) {
         return -1;
     }
     
-    //ff_farm<> farm; // farm object
-    ff_farm<> farm(false,10*nworkers, 10*nworkers, false, 32, true);
+    ff_farm farm(false,10*nworkers, 10*nworkers, false, 32, true);
     
     Emitter E(streamlen);
     farm.add_emitter(&E);

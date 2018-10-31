@@ -95,7 +95,7 @@ int main(int argc, char * argv[]) {
         return -1;
     }
 
-    ff_farm<> farm(true /* accelerator set */);
+    ff_farm farm(true /* accelerator set */);
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker);
     farm.add_workers(w);

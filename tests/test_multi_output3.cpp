@@ -24,14 +24,10 @@
  *
  ****************************************************************************
  */
-
-/* Author: Massimo Torquati
- * Date:   November 2015
- */
 /*
- *    
- *  Testing the following skeleton:   
- *    
+ *  A strange skeleton implemented by using building-blocks
+ *   
+ *    pipe(E, feedback(A2A))   
  *
  *                               ---------------------
  *                               v                    |
@@ -49,99 +45,141 @@
  *                              ^                     |
  *                              ----------------------
  *
- *  This is a standard farm with collector plus some extra channels
- *  connected "by hand".
- *
+ * NOTE:
+ *  - In front of workers there are multiInputHelper(s)
+ *  - The collector uses a multiOutputHeler
  */      
+/* Author: Massimo Torquati
+ *
+ */
 
 #include <iostream>
-#include <ff/multinode.hpp>
-#include <ff/farm.hpp>
+#include <ff/pipeline.hpp>
+#include <ff/all2all.hpp>
+#include <ff/combine.hpp>
 
 using namespace ff;
 
-static const long ITER = 10;
+static const long ITER = 200;
 
-struct Emitter: ff_node_t<long> {
-    
+struct Emitter: ff_monode_t<long> {
     long* svc(long *) {
         for(long i=1;i<=ITER;++i)
-            ff_send_out((void*)i);
+            ff_send_out((long*)i);
         return EOS;
     }
-    
 };
 
-struct Collector: ff_node_t<long> {
-    
-    Collector(ff_gatherer *gt, std::vector<ff_buffernode> &channels):
-        gt(gt), channels(channels) {}
-    
-    long* svc(long *in) {
-        long *V[2];
-        
-        gt->all_gather(in, reinterpret_cast<void**>(&V[0]));
+using mypair = std::pair<long,long>;
+struct Collector: ff_minode_t<long, mypair> {
 
-        for(int i=0;i<2;++i)
-            std::cout << "received from " << i << " value " << (long)V[i] << "\n";
-
-
-        for(size_t i=0;i<2;++i) {
-            bool r= channels[i].ff_send_out(in);
-            assert(r==true);
-        }
-    
+    mypair* svc(long *in) {
+        long id = get_channel_id();
+        mypair *p = new mypair;
+        p->first  = (long)in;
+        p->second = id;        
+        return p;
+    }
+};
+struct multiOutputHelper: ff_monode_t<mypair, long> {
+    long* svc(mypair *in) {
+        ff_send_out_to((long*)(in->first), in->second);
+        delete in;
         return GO_ON;
     }
-    
-    ff_gatherer *gt;
-    std::vector<ff_buffernode> &channels;
-        
 };
 
-struct Worker: ff_node_t<long> {
+struct multiInputHelper: ff_minode_t<long, mypair> {
+    mypair* svc(long *in) {
+        long id = get_channel_id();
+        mypair *p = new mypair;
+        p->first  = (long)in;
+        p->second = id;
+        return p;
+    }
+    void eosnotify(ssize_t id) {
+        // NOTE: we have to send EOS explicitly to the next stage
+        // because for multi-input node the EOS is propagated only
+        // it has been received from all input channels
+        if (id != -1) ff_send_out(EOS);
+    }
+};
+// this node must be multi-output even if  it is connected only to 
+// one node
+struct Worker: ff_monode_t<mypair, long> { 
+    long* svc(mypair *in) {
+        if (in->second == -1) {
+            ntasks++;
 
-    Worker(ff_buffernode &channel):channel(channel) {}
-
-    long* svc(long *in) {
-        std::cout << "worker" << get_my_id() << " sending " << long(in) << "\n";
-        ff_send_out(in);
-        long in2;
-        bool r= channel.gather_task((void **)&in2);
-        assert(r==true);
-        std::cout << "worker" << get_my_id() << " received " << in2 << "\n";
+            // introducing a minimal delay
+            if (get_my_id()== 0 || get_my_id() == 1)
+                usleep(50000);
+            
+            ff_send_out((long*)(in->first));
+            delete in;
+        } else {
+            printf("Worker received %ld back \n",
+                   (long)in->first);
+            --ntasks;
+            assert(ntasks>=0);
+            delete in;
+            if (ntasks == 0 && eosarrived) return EOS;
+        }            
         return GO_ON;       
     }
-
     void eosnotify(ssize_t id) {
-        if (id != -1) return;
-        ff_send_out(EOS);
+        eosarrived=true;
+        if (eosarrived && ntasks==0)
+            ff_send_out(EOS);
     }
-    ff_buffernode &channel;
+    long ntasks=0;
+    bool eosarrived=false;
 };
 
 
 int main() {
+    Emitter E;
 
-    std::vector<ff_buffernode> channels(2);
-    channels[0].set(100,false, 0);
-    channels[1].set(100,false, 1);
+    // creating 3 workers 
+    const Worker W;
+    const multiInputHelper h1;
 
-    std::vector<std::unique_ptr<ff_node> > W;
-    W.push_back(make_unique<Worker>(channels[0]));
-    W.push_back(make_unique<Worker>(channels[1]));
+    auto comp1 = combine_nodes(h1,W);
+    auto comp2 = combine_nodes(h1,W);
+    auto comp3 = combine_nodes(h1,W);
 
-
-    ff_Farm<> farm(std::move(W));
-    Emitter   E;
-    Collector C(farm.getgt(), channels);
-    farm.add_emitter(E);
-    farm.add_collector(C);
-    if (farm.run_and_wait_end()<0) {
-        error("running farm\n");
+    std::vector<ff_node*> W1;
+    W1.push_back(&comp1);
+    W1.push_back(&comp2);
+    W1.push_back(&comp3);
+    
+    Collector C;
+    multiOutputHelper h2;
+    auto comp = combine_nodes(C, h2);
+    std::vector<ff_node*> W2;
+    W2.push_back(&comp);
+    
+    ff_a2a a2a;
+    if (a2a.add_firstset(W1)<0) {
+        error("adding first set of workers failed\n");
+        return -1;
+    }
+    if (a2a.add_secondset(W2)<0) {
+        error("adding second set of workers failed\n");
+        return -1;
+    }
+    if (a2a.wrap_around()<0) {      
+        error("wrap_around failed\n");
         return -1;
     }
     
+    ff_Pipe<> pipe(E, a2a);
+    if (pipe.run_and_wait_end()<0) {
+        error("running pipe\n");
+        return -1;
+    }
+    printf("TEST DONE\n");
     return 0;
 
 }
+

@@ -59,6 +59,8 @@ namespace ff {
  */
 
 class ff_minode: public ff_node {
+    friend class ff_farm;
+    friend class ff_comb;
 protected:
 
     /**
@@ -74,25 +76,65 @@ protected:
      *
      * \return >=0 if successful, otherwise -1 is returned.
      */
-    int create_input_buffer(int nentries, bool fixedsize=true) {      
-        if (inputNodes.size()==0) {
-            int r = ff_node::create_input_buffer(nentries, fixedsize);
-            if (r!=0) return r;
-            return 1;
-        }
+    int create_input_buffer(int nentries, bool fixedsize=true) {
+        assert(inputNodes.size() == 0);
+
+        ff_node* t = new ff_buffernode(nentries,fixedsize); 
+        t->set_id(-1);
+        internalSupportNodes.push_back(t);
+        set_input(t);
+        
         return 0;
     }
-
+    
+    int dryrun() {
+        if (prepared) return 0;
+        for(size_t i=0;i<inputNodesFeedback.size();++i)
+            gt->register_worker(inputNodesFeedback[i]);        
+        if (inputNodesFeedback.size()>0)
+            gt->set_feedbackid_threshold(inputNodesFeedback.size());        
+        for(size_t i=0;i<inputNodes.size();++i)
+            gt->register_worker(inputNodes[i]);
+        if (gt->dryrun()<0) return -1;
+        return 0;
+    }
+    
+    int prepare() {
+        if (prepared) return 0;
+        if (dryrun()<0) return -1;
+        prepared=true;
+        return 0;
+    }
+    
     int  wait(/* timeout */) { 
         if (gt->wait()<0) return -1;
         return 0;
     }
 
+    void blocking_mode(bool blk=true) {
+        blocking_in = blocking_out = blk;
+        gt->blocking_mode(blk);
+    }
+    template<typename T>
+    int all_gather(T* in, T** V) { return gt->all_gather(in,(void**)V); }
+
+    void registerAllGatherCallback(int (*cb)(void *,void **,void*), void * arg) {
+        gt->registerAllGatherCallback(cb,arg);
+    }
+    
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
                                             std::atomic_ulong *&counter) {
-        return gt->init_input_blocking(m,c,counter);
+        bool r = gt->init_input_blocking(m,c,counter);
+        if (!r) return false;
+        // for all registered input node (or buffernode) we have to set the gt 
+        // blocking stuff
+        for(size_t i=0;i<inputNodes.size(); ++i) 
+            inputNodes[i]->set_output_blocking(m,c,counter);
+        for(size_t i=0;i<inputNodesFeedback.size(); ++i) 
+            inputNodesFeedback[i]->set_output_blocking(m,c,counter);
+        return true;        
     }
     virtual inline void set_input_blocking(pthread_mutex_t   *&m,
                                            pthread_cond_t    *&c,
@@ -122,21 +164,72 @@ public:
      * \brief Constructor
      */
     ff_minode(int max_num_workers=DEF_MAX_NUM_WORKERS):
-        ff_node(), gt(new ff_gatherer(max_num_workers)) { ff_node::setMultiInput(); }
+        ff_node(), gt(new ff_gatherer(max_num_workers)),myowngt(true) { }
 
+    ff_minode(ff_node *filter, int max_num_workers=DEF_MAX_NUM_WORKERS):
+        ff_node(), gt(new ff_gatherer(max_num_workers)),myowngt(true) {
+        if (filter == nullptr) {
+            delete gt;
+            gt = nullptr;
+            return;
+        }
+        gt->set_filter(filter);
+    }
+    ff_minode(const ff_minode& n) {
+        // here we re-initialize a new gatherer
+        gt = new ff_gatherer(n.gt->max_nworkers);
+        if (!gt) {
+            error("ff_minode, not enough memory\n");
+            return;
+        }
+        if (n.gt->get_filter())
+            gt->set_filter(n.gt->get_filter());
+        myowngt=true;
+
+        inputNodes=n.inputNodes;
+        inputNodesFeedback=n.inputNodesFeedback;
+        internalSupportNodes = n.internalSupportNodes;
+                
+        // this is a dirty part, we modify a const object.....
+        ff_minode *dirty= const_cast<ff_minode*>(&n);
+        for (size_t i=0;i<dirty->internalSupportNodes.size();++i) {
+            dirty->internalSupportNodes[i]=nullptr;
+        }
+    }
+    
     /**
      * \brief Destructor 
      */
     virtual ~ff_minode() { 
-        if (gt) delete gt;
+        if (gt && myowngt) delete gt;
+        for(size_t i=0;i<internalSupportNodes.size();++i) {
+            delete internalSupportNodes[i];
+        }
     }
+
+    int set_filter(ff_node *filter) {
+        return gt->set_filter(filter);
+    }
+
+    // used when a multi-input node is a filter of a collector or of a comp
+    // it can also be used to set a particular gathering policy like for
+    // example the ones pre-defined in the file ordering_policies.hpp
+    void setgt(ff_gatherer *external_gt, bool cleanup=false) {
+        if (myowngt) {
+            delete gt;
+            myowngt=false;
+        }
+        gt = external_gt;
+        myowngt = cleanup;
+    }
+
     
     /**
      * \brief Assembly input channels
      *
      * Assembly input channelnames to ff_node channels
      */
-    virtual inline int set_input(svector<ff_node *> & w) { 
+    virtual inline int set_input(const svector<ff_node *> & w) { 
         inputNodes += w;
         return 0; 
     }
@@ -151,8 +244,26 @@ public:
         return 0;
     }
 
+    virtual inline int set_input_feedback(ff_node *node) { 
+        inputNodesFeedback.push_back(node); 
+        return 0;
+    }
+
     virtual bool isMultiInput() const { return true;}
 
+    virtual inline void get_in_nodes(svector<ff_node*>&w) {
+        // it is possible that the multi-input node is register
+        // as collector of farm
+        if (inputNodes.size() == 0 && gt->getNWorkers()>0) {
+            w += gt->getWorkers();
+        }
+        w += inputNodes;
+    }
+
+    virtual void get_in_nodes_feedback(svector<ff_node*>&w) {
+        w += inputNodesFeedback;
+    }
+    
     virtual inline void get_out_nodes(svector<ff_node*>&w) {
         w.push_back(this);
     }
@@ -171,11 +282,14 @@ public:
      *
      */
     int run(bool=false) {
-        gt->set_filter(this);
+        if (!gt) return -1;
+        if (gt->get_filter() == nullptr)
+            gt->set_filter(this);
 
-        for(size_t i=0;i<inputNodes.size();++i)
-            gt->register_worker(inputNodes[i]);
-        if (ff_node::skipfirstpop()) gt->skipfirstpop();       
+        if (!prepared) if (prepare()<0) return -1;
+
+        if (ff_node::skipfirstpop()) gt->skipfirstpop();
+        if (!default_mapping) gt->no_mapping();
         if (gt->run()<0) {
             error("ff_minode, running gather module\n");
             return -1;
@@ -205,6 +319,18 @@ public:
     ssize_t get_channel_id() const { return gt->get_channel_id();}
 
     /**
+     * \brief Gets the number of input channels
+     */
+    
+    size_t get_num_inchannels() const  { return gt->getrunning(); }
+
+    /**
+     * For a multi-input node the number of EOS to receive before terminating is equal to 
+     * the current number of input channels.
+     */
+    ssize_t get_neos() const { return get_num_inchannels(); }
+    
+    /**
      * \internal
      * \brief Gets the gt
      *
@@ -214,20 +340,35 @@ public:
      */
     inline ff_gatherer *getgt() const { return gt;}
 
+    const struct timeval getstarttime() const { return gt->getstarttime();}
+    const struct timeval getstoptime()  const { return gt->getstoptime();}
+    const struct timeval getwstartime() const { return gt->getwstartime();}
+    const struct timeval getwstoptime() const { return gt->getwstoptime();}    
+
+    
 #if defined(TRACE_FASTFLOW) 
     /**
      * \brief Prints the FastFlow trace
      *
      * It prints the trace of FastFlow.
      */
-    inline void ffStats(std::ostream & out) { 
+    inline void ffStats(std::ostream & out) {
+        out << "--- multi-input:\n";
         gt->ffStats(out);
+    }
+#else
+    void ffStats(std::ostream & out) { 
+        out << "FastFlow trace not enabled\n";
     }
 #endif
 
+    
 private:
-    svector<ff_node*> inputNodes;
     ff_gatherer* gt;
+    bool myowngt;
+    svector<ff_node*> inputNodes;
+    svector<ff_node*> inputNodesFeedback;
+    svector<ff_node*> internalSupportNodes;
 };
 
 
@@ -244,6 +385,7 @@ private:
  */
 
 class ff_monode: public ff_node {
+    friend class ff_a2a;
 protected:
     /**
      * \brief Cardinatlity
@@ -260,6 +402,10 @@ protected:
     }
 
     int create_output_buffer(int nentries, bool fixedsize=false) {
+
+        // this is needed for example when a worker of a farm is a multi-output node
+        // (even without a feedback channel)
+        
         if (ff_node::create_output_buffer(nentries,fixedsize) <0) return -1;
         ff_node *t = new ff_buffernode(-1, get_out_buffer(), get_out_buffer());
         assert(t);
@@ -268,12 +414,39 @@ protected:
         return 0;
     }
 
+    int dryrun() {
+        if (prepared) return 0;
+        for(size_t i=0;i<outputNodesFeedback.size();++i)
+            lb->register_worker(outputNodesFeedback[i]);
+        if (outputNodesFeedback.size()>0)
+            lb->set_feedbackid_threshold(outputNodesFeedback.size());        
+        for(size_t i=0;i<outputNodes.size();++i)
+            lb->register_worker(outputNodes[i]);
+        if (lb->dryrun()<0) return -1;
+        return 0;
+    }
+    
+    int prepare() {
+        if (prepared) return 0;
+        if (dryrun()<0) return -1;
+        prepared=true;
+        return 0;
+    }
 
+    void propagateEOS(void*task=FF_EOS) {
+        lb->propagateEOS(task);
+    }
+    
     int  wait(/* timeout */) { 
         if (lb->waitlb()<0) return -1;
         return 0;
     }
 
+    void blocking_mode(bool blk=true) {
+        blocking_in = blocking_out = blk;
+        lb->blocking_mode(blk);
+    }
+    
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
@@ -325,18 +498,61 @@ public:
      *
      */
     ff_monode(int max_num_workers=DEF_MAX_NUM_WORKERS):
-        ff_node(), lb(new ff_loadbalancer(max_num_workers)) {}
+        ff_node(), lb(new ff_loadbalancer(max_num_workers)), myownlb(true) {
+    }
 
+    ff_monode(ff_node *filter, int max_num_workers=DEF_MAX_NUM_WORKERS):
+        ff_node(), lb(new ff_loadbalancer(max_num_workers)),myownlb(true) {
+        if (filter == nullptr) {
+            delete lb;
+            lb = nullptr;
+            return;
+        }
+        lb->set_filter(filter);
+    }
+
+    ff_monode(const ff_monode& n) {
+        // here we re-initialize a new gatherer
+        lb = new ff_loadbalancer(n.lb->max_nworkers);
+        if (!lb) {
+            error("ff_monode, not enough memory\n");
+            return;
+        }
+        if (n.lb->get_filter()) 
+            lb->set_filter(n.lb->get_filter());
+        myownlb=true;
+
+        outputNodes=n.outputNodes;
+        outputNodesFeedback=n.outputNodesFeedback;
+        internalSupportNodes = n.internalSupportNodes;
+                
+        // this is a dirty part, we modify a const object.....
+        ff_monode *dirty= const_cast<ff_monode*>(&n);
+        for (size_t i=0;i<dirty->internalSupportNodes.size();++i) {
+            dirty->internalSupportNodes[i]=nullptr;
+        }
+    }
+
+    
     /**
      * \brief Destructor 
      */
     virtual ~ff_monode() {
-        if (lb) delete lb;
+        if (lb && myownlb) delete lb;
         for(size_t i=0;i<internalSupportNodes.size();++i) {
-            delete internalSupportNodes.back();
-            internalSupportNodes.pop_back();
+            delete internalSupportNodes[i];
         }
+    }
 
+    void set_scheduling_ondemand(const int inbufferentries=1) { 
+        if (inbufferentries<0) ondemand=1;
+        else ondemand=inbufferentries;
+    }
+    int ondemand_buffer() const { return ondemand; } 
+
+    
+    int set_filter(ff_node *filter) {
+        return lb->set_filter(filter);
     }
     
     /**
@@ -344,9 +560,8 @@ public:
      *
      * Attach output channelnames to ff_node channels
      */
-    virtual inline int set_output(svector<ff_node *> & w) {
-        for(size_t i=0;i<w.size();++i)
-            outputNodes.push_back(w[i]);
+    virtual inline int set_output(const svector<ff_node *> & w) {
+        outputNodes += w;
         return 0; 
     }
 
@@ -374,6 +589,11 @@ public:
     virtual bool isMultiOutput() const { return true;}
 
     virtual inline void get_out_nodes(svector<ff_node*>&w) {
+        // it is possible that the multi-output node is register
+        // as emitter of farm
+        if (outputNodes.size() == 0 && lb->getNWorkers()>0) {
+            w += lb->getWorkers();
+        }
         w += outputNodes;
     }
     virtual inline void get_out_nodes_feedback(svector<ff_node*>&w) {
@@ -387,7 +607,7 @@ public:
      * Set up spontaneous start
      */
     inline void skipfirstpop(bool sk)   {
-        if (sk) lb->skipfirstpop();
+        if (sk) lb->skipfirstpop(sk);
     }
 
     /**
@@ -395,14 +615,28 @@ public:
      *
      * \return true if successful, false otherwise
      */
-    inline bool ff_send_out_to(void *task, int id) {
-        return lb->ff_send_out_to(task,id);
+    inline bool ff_send_out_to(void *task, int id, unsigned long retry=((unsigned long)-1),
+                               unsigned long ticks=(ff_node::TICKS2WAIT)) {
+        // NOTE: this callback should be set only if the multi-output node is part of
+        // a composition that it isn't the last stage 
+        if (callback) return  callback(task,retry,ticks, callback_arg);
+        return lb->ff_send_out_to(task,id,retry,ticks);
+    }
+    
+    inline bool ff_send_out(void * task, 
+                     unsigned long retry=((unsigned long)-1),
+                     unsigned long ticks=(ff_node::TICKS2WAIT)) {
+        // NOTE: this callback should be set only if the multi-output node is part of
+        // a composition the it is not the last stage 
+        if (callback) return  callback(task,retry,ticks,callback_arg);
+        return lb->schedule_task(task,retry,ticks);
     }
     
     inline void broadcast_task(void *task) {
         lb->broadcast_task(task);
     }
 
+    
     /**
      * \brief run
      *
@@ -412,14 +646,13 @@ public:
      */
     int run(bool skip_init=false) {
         if (!lb) return -1;
-        lb->set_filter(this);
+        if (lb->get_filter() == nullptr)
+            lb->set_filter(this);
 
-        for(size_t i=0;i<outputNodesFeedback.size();++i)
-            lb->register_worker(outputNodesFeedback[i]);
-        for(size_t i=0;i<outputNodes.size();++i)
-            lb->register_worker(outputNodes[i]);
-
-        if (ff_node::skipfirstpop()) lb->skipfirstpop();       
+        if (!prepared) if (prepare()<0) return -1;
+       
+        if (ff_node::skipfirstpop()) lb->skipfirstpop(true);
+        if (!default_mapping) lb->no_mapping();
         if (lb->runlb()<0) {
             error("ff_monode, running loadbalancer module\n");
             return -1;
@@ -442,22 +675,57 @@ public:
      */
     inline ff_loadbalancer * getlb() const { return lb;}
 
+    // used when a multi-input node is a filter of an emitter (i.e. a comp)
+    // it can also be used to set a particular gathering policy like for
+    // example the ones pre-defined in the file ordering_policies.hpp
+    void setlb(ff_loadbalancer *elb, bool cleanup=false) {
+        if (lb && myownlb) {
+            delete lb;
+            myownlb = false;
+        }
+        lb = elb;
+        myownlb=cleanup;
+    }
+
+    /**
+     * \brief Gets the channel id from which the data has just been received
+     *
+     */
+    ssize_t get_channel_id() const { return lb->get_channel_id();}
+    
+    size_t get_num_backchannels() const { return outputNodesFeedback.size(); }
+    size_t get_num_outchannels() const  { return lb->getnworkers(); }
+
+    const struct timeval getstarttime() const { return lb->getstarttime();}
+    const struct timeval getstoptime()  const { return lb->getstoptime();}
+    const struct timeval getwstartime() const { return lb->getwstartime();}
+    const struct timeval getwstoptime() const { return lb->getwstoptime();}    
+
+    
 #if defined(TRACE_FASTFLOW) 
     /*
      * \brief Prints the FastFlow trace
      *
      * It prints the trace of FastFlow.
      */
-    inline void ffStats(std::ostream & out) { 
+    inline void ffStats(std::ostream & out) {
+        out << "--- multi-output:\n";
         lb->ffStats(out);
+    }
+#else
+    void ffStats(std::ostream & out) { 
+        out << "FastFlow trace not enabled\n";
     }
 #endif
 
+    
 protected:
+    ff_loadbalancer* lb;
+    bool myownlb;
+    int  ondemand=0;
     svector<ff_node*> outputNodes;
     svector<ff_node*> outputNodesFeedback;
-    svector<ff_node*>  internalSupportNodes;
-    ff_loadbalancer* lb;
+    svector<ff_node*> internalSupportNodes;    
 };
 
 
@@ -483,13 +751,23 @@ struct ff_minode_t: ff_minode {
         GO_ON((OUT_t*)FF_GO_ON),
         EOS((OUT_t*)FF_EOS),EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
-        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE),
-        BLK((OUT_t*)FF_BLK), NBLK((OUT_t*)FF_NBLK) {
+        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
 	}
-    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE, *const BLK, *const NBLK;
+    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_minode_t()  {}
     virtual OUT_t* svc(IN_t*)=0;
     inline  void *svc(void *task) { return svc(reinterpret_cast<IN_t*>(task)); };
+    inline  int all_gather(IN_t* in, std::vector<IN_t*>& V) {
+        size_t nw = get_num_inchannels();
+        svector<IN_t*> v(nw);
+        v.resize(nw);
+        for(size_t i=0;i<v.size();++i) v[i]=nullptr;
+        IN_t **data = v.begin();
+        int r = ff_minode::all_gather(in,data);
+        V.resize(nw);
+        for(size_t i=0;i<v.size();++i) V[i]=v[i];
+        return r;
+    }
 };
 
 /*!
@@ -511,10 +789,9 @@ struct ff_monode_t: ff_monode {
         GO_ON((OUT_t*)FF_GO_ON),
         EOS((OUT_t*)FF_EOS),EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
-        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE),
-        BLK((OUT_t*)FF_BLK), NBLK((OUT_t*)FF_NBLK) {
+        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
 	}
-    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE, *const BLK, *const NBLK;
+    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_monode_t()  {}
     virtual OUT_t* svc(IN_t*)=0;
     inline  void *svc(void *task) { return svc(reinterpret_cast<IN_t*>(task)); };
@@ -522,7 +799,165 @@ struct ff_monode_t: ff_monode {
 
     // TODO: implement ff_minode_F<> and ff_monode_F<>
 
+    
+/**
+ *   Transforms a standard node into a multi-output node 
+ */
+struct mo_transformer: ff_monode {
+    mo_transformer(ff_node* n, bool cleanup=false):
+        ff_monode(n),cleanup(cleanup),n(n) {
+    }
 
+    template<typename T>
+    mo_transformer(const T& _n) {
+        T *t = new T(_n);
+        assert(t);
+        n = t;
+        cleanup=true;
+        ff_monode::set_filter(n);
+    }
+    mo_transformer(const mo_transformer& t) {
+        cleanup=t.cleanup;
+        n = t.n;
+        ff_monode::set_filter(n);
+
+        // this is a dirty part, we modify a const object.....
+        mo_transformer *dirty= const_cast<mo_transformer*>(&t);
+        dirty->cleanup=false;
+    }
+    ~mo_transformer() {
+        if (cleanup && n) {
+            delete n;
+            n=nullptr;
+        }
+    }
+    inline void* svc(void* task) { return n->svc(task);}
+
+    inline void eosnotify(ssize_t id) { n->eosnotify(id); }
+    
+    int create_input_buffer(int nentries, bool fixedsize=true) {
+        int r= ff_monode::create_input_buffer(nentries,fixedsize);
+        if (r<0) return -1;
+        ff_monode::getlb()->get_filter()->set_input_buffer(ff_monode::get_in_buffer());
+        return 0;
+    }    
+
+    void set_id(ssize_t id) {
+        if (n) n->set_id(id);
+        ff_monode::set_id(id);
+    }
+    
+    int run(bool skip_init=false) {
+        assert(n);
+        if (!prepared) {
+            if (n && n->prepare()<0) return -1;
+        }
+        assert(blocking_in == blocking_out);
+        n->blocking_mode(blocking_in);
+        if (!default_mapping) {
+            n->no_mapping();
+            ff_monode::no_mapping();
+        }
+        ff_monode::getlb()->get_filter()->set_id(get_my_id());
+        return ff_monode::run(skip_init);
+    }   
+    bool cleanup;
+    ff_node *n=nullptr;
+};
+
+/**
+ *   Transforms a standard node into a multi-input node 
+ *
+ *   NOTE: it is importat to call the eosnotify method only if 
+ *         all input EOSs have been received and not at each EOS.
+ */
+struct mi_transformer: ff_minode {
+    mi_transformer(ff_node* n, bool cleanup=false):ff_minode(n),cleanup(cleanup),n(n) {}
+
+    template<typename T>
+    mi_transformer(const T& _n) {
+        T *t = new T(_n);
+        assert(t);
+        n = t;
+        cleanup=true;
+        ff_minode::set_filter(n);
+    }
+    
+    mi_transformer(const mi_transformer& t) {
+        cleanup=t.cleanup;
+        n = t.n;
+        ff_minode::set_filter(n);
+
+        // this is a dirty part, we modify a const object.....
+        mi_transformer *dirty= const_cast<mi_transformer*>(&t);
+        dirty->cleanup=false;
+        dirty->n = nullptr;
+    }
+
+    ~mi_transformer() {
+        if (cleanup && n)
+            delete n;
+    }
+    inline void* svc(void*task) {return n->svc(task);}
+
+    int set_input(const svector<ff_node *> & w) {
+        n->neos += w.size();
+        return ff_minode::set_input(w);
+    }
+
+    int set_input(ff_node *node) {
+        n->neos+=1;
+        return ff_minode::set_input(node);
+    }
+    int set_output(ff_node *node) {
+        return ff_minode::set_output(node);
+    }
+    
+    int create_output_buffer(int nentries, bool fixedsize=true) {
+        if (ff_minode::getgt()->get_out_buffer()) return -1;
+        int r= ff_minode::create_output_buffer(nentries,fixedsize);
+        if (r<0) return -1;
+        ff_minode::getgt()->set_output_buffer(ff_minode::get_out_buffer());
+        return 0;
+    }    
+
+    void registerCallback(bool (*cb)(void *,unsigned long,unsigned long,void *), void * arg) {
+        n->registerCallback(cb,arg);
+    }
+    
+    int set_output_buffer(FFBUFFER * const o) {
+        return ff_minode::getgt()->set_output_buffer(o);
+    }
+
+    inline void eosnotify(ssize_t id) { n->eosnotify(id); }
+
+    void set_id(ssize_t id) {
+        if (n) n->set_id(id);
+        ff_minode::set_id(id);
+    }
+    
+    int run(bool skip_init=false) {
+        assert(n);
+        if (!prepared) {
+            if (n && n->prepare()<0) return -1;
+        }
+
+        assert(blocking_in == blocking_out);
+        n->blocking_mode(blocking_in);
+        if (!default_mapping) {
+            n->no_mapping();
+            ff_minode::no_mapping();
+        }
+        
+        ff_minode::getgt()->get_filter()->set_id(get_my_id());
+        return ff_minode::run(skip_init);
+    }
+    bool cleanup;
+    ff_node *n=nullptr;
+};
+
+    
+    
 } // namespace
 
 #endif /* FF_MULTINODE_HPP */
