@@ -15,9 +15,7 @@
 namespace gff {
 
 template <typename Comm>
-class BundleInternals {
-public:
-
+struct BundleInternals {
 	void source(gam::executor_id s) {
 		for (auto communicator : commBundle)
 			communicator.internals.source(s);
@@ -37,36 +35,18 @@ public:
 
 	template<typename T, typename ... PolicyArgs>
 	void put(const gam::public_ptr<T> &p, PolicyArgs&&... __a) {
-		for (auto communicator : commBundle)
-		GFF_LOGLN_OS("COM put public=" << p);
-		push_dispatcher.put(output, p, std::forward<PolicyArgs>(__a)...);
-	}
-
-	template<typename T, typename ... PolicyArgs>
-	void put(gam::private_ptr<T> &&p, PolicyArgs&&... __a) {
-		GFF_LOGLN_OS("COM put private=" << p);
-		push_dispatcher.put(output, std::move(p),
-				std::forward<PolicyArgs>(__a)...);
-	}
-
-	template<typename ptr_t>
-	ptr_t get() {
-		ptr_t res;
-		pull_dispatcher.get(input, res);
-		GFF_LOGLN_OS("COM got pointer=" << res);
-		return std::move(res);
+		for (auto communicator : commBundle) {
+			GFF_LOGLN_OS("COM put public=" << p);
+			communicator.internals.put(p, std::forward<PolicyArgs>(__a)...);
+		}
 	}
 
 	template<typename T>
 	void broadcast(const gam::public_ptr<T> &p) {
-		GFF_LOGLN_OS("COM broadcast public=" << p);
-		push_dispatcher.broadcast(output, p);
-	}
-
-	template<typename T>
-	void broadcast(gam::private_ptr<T> &&p) {
-		GFF_LOGLN_OS("COM broadcast private=" << p);
-		push_dispatcher.broadcast(output, std::move(p));
+		for (auto communicator : commBundle) {
+			GFF_LOGLN_OS("COM broadcast public=" << p);
+			communicator.internals.broadcast(p);
+		}
 	}
 
 	vector<Comm> commBundle;
