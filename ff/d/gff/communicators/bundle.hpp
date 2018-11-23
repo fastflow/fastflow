@@ -29,18 +29,29 @@
 
 #include <gam.hpp>
 
-#include "bundle.hpp"
+#include "../defs.hpp"
+#include "../BundleInternals.hpp"
 
 namespace gff {
 
-class MultiNDOneToAll {
+template <typename Comm>
+class OutBundleBroadcast {
 public:
+	/*
+	 * In case the broadcast is not suitable, it is possible to point to specific communicators that are exposed
+	 * as internals.get(id)
+	 */
 	template<typename T>
 	void emit(const gam::public_ptr<T> &p) {
-		emit_(p, internals);
+		for (auto communicator : internals.commBundle)
+			communicator.emit(p);
 	}
 
-	CommunicatorInternals<Multicast<ConstantToAll>, NDMerge> internals;
+	Comm get(const gam::executor_id &id) {
+		return internals.commBundle.at(id);
+	}
+
+	BundleInternals<Comm> internals;
 };
 
 } // namespce gff
