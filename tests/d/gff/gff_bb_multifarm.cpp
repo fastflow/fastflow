@@ -46,7 +46,7 @@
 #include <ff/d/gff/gff.hpp>
 
 #define NWORKERS                 4
-#define STREAMLEN             1024
+#define STREAMLEN             32
 #define RNG_LIMIT             1000
 #define THRESHOLD  (RNG_LIMIT / 2)
 
@@ -133,7 +133,7 @@ public:
 	 * @param c is the output channel (could be a template for simplicity)
 	 * @return a gff token
 	 */
-	gff::token_t svc(gam::private_ptr<int> &in, gff::NondeterminateMerge &c) {
+	gff::token_t svc(gam::public_ptr<int> &in, gff::NondeterminateMerge &c) {
 		auto local_in = in.local();
 		if (*local_in < THRESHOLD)
 			c.emit(gam::make_private<char>((char) std::sqrt(*local_in)));
@@ -227,8 +227,8 @@ int main(int argc, char * argv[]) {
 	 */
 	gff::NondeterminateMerge w2c;
 	gff::OutBundleBroadcast<gff::RoundRobinSwitch> e2w;
-	e2w.internals.commBundle.push_back(gff::RoundRobinSwitch());
-	e2w.internals.commBundle.push_back(gff::RoundRobinSwitch());
+	e2w.internals.add_comm();
+	e2w.internals.add_comm();
 
 	/*
 	 * In this preliminary implementation, a single global network is
@@ -237,8 +237,9 @@ int main(int argc, char * argv[]) {
 
 	/* bind nodes to channels and add to the network */
 	gff::add(Emitter(e2w)); //e2w is the emitter's output channel
-	for (unsigned i = 0; i < NWORKERS; ++i)
-		gff::add(Worker(e2w.get(i%2), w2c)); //e2w/w2c are the workers' i/o channels
+	for (unsigned i = 0; i < NWORKERS; ++i) {
+		gff::add(Worker(*e2w.get(i%2), w2c)); //e2w/w2c are the workers' i/o channels
+	}
 	gff::add(Collector(w2c)); //w2c is the collector's input channel
 
 	/* execute the network */

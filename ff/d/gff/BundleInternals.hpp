@@ -18,18 +18,18 @@ template <typename Comm>
 struct BundleInternals {
 	void source(gam::executor_id s) {
 		for (auto communicator : commBundle)
-			communicator.internals.source(s);
+			communicator->internals.source(s);
 	}
 
 	void destination(gam::executor_id d) {
 		for (auto communicator : commBundle)
-			communicator.internals.destination(d);
+			communicator->internals.destination(d);
 	}
 
 	gam::executor_id in_cardinality() {
 		gam::executor_id count = 0;
 		for (auto communicator : commBundle)
-			count += communicator.internals.in_cardinality();
+			count += communicator->internals.in_cardinality();
 		return count;
 	}
 
@@ -37,7 +37,7 @@ struct BundleInternals {
 	void put(const gam::public_ptr<T> &p, PolicyArgs&&... __a) {
 		for (auto communicator : commBundle) {
 			GFF_LOGLN_OS("COM put public=" << p);
-			communicator.internals.put(p, std::forward<PolicyArgs>(__a)...);
+			communicator->internals.put(p, std::forward<PolicyArgs>(__a)...);
 		}
 	}
 
@@ -45,11 +45,15 @@ struct BundleInternals {
 	void broadcast(const gam::public_ptr<T> &p) {
 		for (auto communicator : commBundle) {
 			GFF_LOGLN_OS("COM broadcast public=" << p);
-			communicator.internals.broadcast(p);
+			communicator->internals.broadcast(p);
 		}
 	}
 
-	vector<Comm> commBundle;
+	void add_comm() {
+		commBundle.push_back(new Comm);
+	}
+
+	vector<Comm *> commBundle;
 
 };
 

@@ -44,10 +44,10 @@ public:
 	template<typename T>
 	void emit(const gam::public_ptr<T> &p) {
 		for (auto communicator : internals.commBundle)
-			communicator.emit(p);
+			communicator->emit(p);
 	}
 
-	Comm get(const gam::executor_id &id) const {
+	Comm * get(const gam::executor_id id) {
 		return internals.commBundle.at(id);
 	}
 
