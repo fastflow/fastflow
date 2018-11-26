@@ -47,7 +47,7 @@ public:
 			communicator.emit(p);
 	}
 
-	Comm get(const gam::executor_id &id) {
+	Comm get(const gam::executor_id &id) const {
 		return internals.commBundle.at(id);
 	}
 

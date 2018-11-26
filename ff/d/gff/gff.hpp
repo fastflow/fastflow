@@ -35,6 +35,7 @@
 #include <gam.hpp>
 
 #include "communicators/builtin.hpp"
+#include "communicators/bundle.hpp"
 #include "Network.hpp"
 #include "Filter.hpp"
 #include "Sink.hpp"
