@@ -16,6 +16,13 @@ namespace gff {
 
 template <typename Comm>
 struct BundleInternals {
+	~BundleInternals() {
+		for (auto comm : commBundle) {
+			delete comm;
+		}
+		commBundle.clear();
+	}
+
 	void source(gam::executor_id s) {
 		for (auto communicator : commBundle)
 			communicator->internals.source(s);
