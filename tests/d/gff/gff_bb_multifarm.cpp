@@ -45,10 +45,9 @@
 
 #include <ff/d/gff/gff.hpp>
 
-#define NWORKERS                 4
+#define NWORKERS                 2
 #define STREAMLEN             32
-#define RNG_LIMIT             1000
-#define THRESHOLD  (RNG_LIMIT / 2)
+#define NUMBER             4
 
 /*
  * To define a gff node, the user has to define first an internal class (a.k.a.
@@ -76,10 +75,6 @@
  */
 class EmitterLogic {
 public:
-	EmitterLogic() :
-			dist(0, RNG_LIMIT) {
-	}
-
 	/**
 	 * The svc function is called repeatedly by the runtime, until an eos
 	 * token is returned.
@@ -89,9 +84,9 @@ public:
 	 * @param c is the output channel (could be a template for simplicity)
 	 * @return a gff token
 	 */
-	gff::token_t svc(gff::OutBundleBroadcast<gff::RoundRobinSwitch> &c) {
+	gff::token_t svc(gff::OutBundleBroadcast<gff::OneToOne> &c) {
 		if (n++ < STREAMLEN) {
-			c.emit(gam::make_public<int>(dist(rng)));
+			c.emit(gam::make_public<int>(NUMBER));
 			return gff::go_on;
 		}
 		return gff::eos;
@@ -100,13 +95,11 @@ public:
 	void svc_init() {
 	}
 
-	void svc_end(gff::OutBundleBroadcast<gff::RoundRobinSwitch> &c) {
+	void svc_end(gff::OutBundleBroadcast<gff::OneToOne> &c) {
 	}
 
 private:
 	unsigned n = 0;
-	std::mt19937 rng;
-	std::uniform_int_distribution<int> dist;
 };
 
 /*
@@ -115,7 +108,7 @@ private:
  * - the type of the emitted pointers
  * - the gff logic
  */
-typedef gff::Source<gff::OutBundleBroadcast<gff::RoundRobinSwitch>, //
+typedef gff::Source<gff::OutBundleBroadcast<gff::OneToOne>, //
 		gam::public_ptr<int>, //
 		EmitterLogic> Emitter;
 
@@ -135,8 +128,7 @@ public:
 	 */
 	gff::token_t svc(gam::public_ptr<int> &in, gff::NondeterminateMerge &c) {
 		auto local_in = in.local();
-		if (*local_in < THRESHOLD)
-			c.emit(gam::make_private<char>((char) std::sqrt(*local_in)));
+		c.emit(gam::make_private<char>((char) *local_in));
 		return gff::go_on;
 	}
 
@@ -155,7 +147,7 @@ public:
  * - the type of the output pointers
  * - the gff logic
  */
-typedef gff::Filter<gff::RoundRobinSwitch, gff::NondeterminateMerge, //
+typedef gff::Filter<gff::OneToOne, gff::NondeterminateMerge, //
 		gam::public_ptr<int>, gam::private_ptr<char>, //
 		WorkerLogic> Worker;
 
@@ -164,8 +156,6 @@ typedef gff::Filter<gff::RoundRobinSwitch, gff::NondeterminateMerge, //
  */
 class CollectorLogic {
 public:
-	CollectorLogic() : dist(0, RNG_LIMIT) {}
-
 	/**
 	 * The svc function is called upon each incoming pointer from upstream.
 	 *
@@ -175,7 +165,7 @@ public:
 	void svc(gam::private_ptr<char> &in) {
 		auto local_in = in.local();
 		std::cout << (int) *local_in << std::endl;
-		sum += *local_in;
+		assert(*local_in == NUMBER);
 	}
 
 	void svc_init() {
@@ -185,22 +175,10 @@ public:
 	 * at the end of processing, check the result
 	 */
 	void svc_end() {
-		int res = 0;
-		for (unsigned i = 0; i < STREAMLEN; ++i) {
-			int x = dist(rng);
-			if (x < THRESHOLD)
-				res += (char) std::sqrt(x);
-		}
-		if (res != sum) {
-			fprintf(stderr, "sum=%d exp=%d\n", sum, res);
-			exit(1);
-		}
 	}
 
 private:
 	int sum = 0;
-	std::mt19937 rng;
-	std::uniform_int_distribution<int> dist;
 };
 
 /*
@@ -226,7 +204,7 @@ int main(int argc, char * argv[]) {
 	 * A channel can carry both public and private pointers.
 	 */
 	gff::NondeterminateMerge w2c;
-	gff::OutBundleBroadcast<gff::RoundRobinSwitch> e2w;
+	gff::OutBundleBroadcast<gff::OneToOne> e2w;
 	e2w.internals.add_comm();
 	e2w.internals.add_comm();
 
