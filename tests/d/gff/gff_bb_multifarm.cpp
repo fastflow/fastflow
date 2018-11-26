@@ -113,7 +113,7 @@ typedef gff::Source<gff::OutBundleBroadcast<gff::OneToOne>, //
 		EmitterLogic> Emitter;
 
 /*
- * gff logic low-passing input integers below THRESHOLD and computes sqrt
+ * gff logic type changing input integers
  */
 class WorkerLogic {
 public:
@@ -152,7 +152,7 @@ typedef gff::Filter<gff::OneToOne, gff::NondeterminateMerge, //
 		WorkerLogic> Worker;
 
 /*
- * gff logic summing up all filtered tokens and finally checking the result
+ * gff logic check consistency
  */
 class CollectorLogic {
 public:
@@ -200,8 +200,9 @@ typedef gff::Sink<gff::NondeterminateMerge, //
  */
 int main(int argc, char * argv[]) {
 	/*
-	 * Create the channels for inter-node communication.
+	 * Create multiple channels for inter-node communication.
 	 * A channel can carry both public and private pointers.
+	 * A multi-ouptut channel can only carry public pointers
 	 */
 	gff::NondeterminateMerge w2c;
 	gff::OutBundleBroadcast<gff::OneToOne> e2w;
