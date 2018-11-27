@@ -16,13 +16,6 @@ namespace gff {
 
 template <typename Comm>
 struct BundleInternals {
-	~BundleInternals() {
-		for (auto comm : commBundle) {
-			delete comm;
-		}
-		commBundle.clear();
-	}
-
 	void source(gam::executor_id s) {
 		for (auto communicator : commBundle)
 			communicator->internals.source(s);
@@ -56,8 +49,8 @@ struct BundleInternals {
 		}
 	}
 
-	void add_comm() {
-		commBundle.push_back(new Comm);
+	void add_comm(Comm & comm) {
+		commBundle.push_back(&comm);
 	}
 
 	vector<Comm *> commBundle;

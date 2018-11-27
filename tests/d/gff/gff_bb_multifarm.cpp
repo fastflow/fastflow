@@ -205,9 +205,10 @@ int main(int argc, char * argv[]) {
 	 * A multi-ouptut channel can only carry public pointers
 	 */
 	gff::NondeterminateMerge w2c;
+	gff::OneToOne e2w_1, e2w_2;
 	gff::OutBundleBroadcast<gff::OneToOne> e2w;
-	e2w.internals.add_comm();
-	e2w.internals.add_comm();
+	e2w.internals.add_comm(e2w_1);
+	e2w.internals.add_comm(e2w_2);
 
 	/*
 	 * In this preliminary implementation, a single global network is
