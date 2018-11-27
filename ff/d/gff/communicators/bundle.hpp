@@ -19,26 +19,45 @@
  */
 
 /**
- * @defgroup gff-bb-api GFF building blocks API
- */
-
-/**
- * @file gff.hpp
- * @author Maurizio Drocco
- * @date Apr 12, 2017
+ *
+ * @file        builtin.hpp
+ * @author      Paolo Viviani
  *
  */
-
-#ifndef FF_D_GFF_GFF_HPP_
-#define FF_D_GFF_GFF_HPP_
+#ifndef FF_D_GFF_COMMUNICATORS_BUNDLE_HPP_
+#define FF_D_GFF_COMMUNICATORS_BUNDLE_HPP_
 
 #include <gam.hpp>
 
-#include "communicators/builtin.hpp"
-#include "communicators/bundle.hpp"
-#include "Network.hpp"
-#include "Filter.hpp"
-#include "Sink.hpp"
-#include "Source.hpp"
+#include "../defs.hpp"
+#include "../BundleInternals.hpp"
 
-#endif /* FF_D_GFF_GFF_HPP_ */
+namespace gff {
+
+template <typename Comm>
+class OutBundleBroadcast {
+public:
+	/*
+	 * In case the broadcast is not suitable, it is possible to point to specific communicators that are exposed
+	 * as internals.get(id)
+	 */
+	template<typename T>
+	void emit(const gam::public_ptr<T> &p) {
+		for (auto communicator : internals.commBundle)
+			communicator->emit(p);
+	}
+
+	Comm * get(const gam::executor_id id) {
+		return internals.commBundle.at(id);
+	}
+
+	void add_comm(Comm & comm) {
+		internals.push_back(comm);
+	}
+
+	BundleInternals<Comm> internals;
+};
+
+} // namespce gff
+
+#endif /* FF_D_GFF_COMMUNICATORS_BUNDLE_HPP_ */
