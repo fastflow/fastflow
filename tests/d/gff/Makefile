@@ -85,9 +85,9 @@ test: all
 	$(GAM_CMD) $(VERBOSE) -n 4 -f $(GAM_CONF) $(PWD)/gff_bb_multifarm
 
 test-local: all
-	#$(GAM_CMD_LOCAL) $(VERBOSE) -n 4 -l $(GAM_LOCALHOST) $(PWD)/gff_bb_pipeline
-	#$(GAM_CMD_LOCAL) $(VERBOSE) -n 6 -l $(GAM_LOCALHOST) $(PWD)/gff_bb_farm
-	#$(GAM_CMD_LOCAL) $(VERBOSE) -n 6 -l $(GAM_LOCALHOST) $(PWD)/gff_bb_ofarm
+	$(GAM_CMD_LOCAL) $(VERBOSE) -n 4 -l $(GAM_LOCALHOST) $(PWD)/gff_bb_pipeline
+	$(GAM_CMD_LOCAL) $(VERBOSE) -n 6 -l $(GAM_LOCALHOST) $(PWD)/gff_bb_farm
+	$(GAM_CMD_LOCAL) $(VERBOSE) -n 6 -l $(GAM_LOCALHOST) $(PWD)/gff_bb_ofarm
 	$(GAM_CMD_LOCAL) $(VERBOSE) -n 4 -l $(GAM_LOCALHOST) $(PWD)/gff_bb_multifarm
 	
 kill:
