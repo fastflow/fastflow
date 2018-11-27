@@ -51,6 +51,10 @@ public:
 		return internals.commBundle.at(id);
 	}
 
+	void add_comm(Comm & comm) {
+		internals.push_back(comm);
+	}
+
 	BundleInternals<Comm> internals;
 };
 

@@ -49,7 +49,7 @@ struct BundleInternals {
 		}
 	}
 
-	void add_comm(Comm & comm) {
+	void push_back(Comm & comm) {
 		commBundle.push_back(&comm);
 	}
 
