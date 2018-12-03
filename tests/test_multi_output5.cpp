@@ -64,8 +64,7 @@
 
 
 #include <iostream>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 
@@ -319,7 +318,7 @@ struct Manager: ff_node_t<Command_t> {
     }
 
 
-    int run() { return ff_node_t<Command_t>::run(); }
+    int run(bool=false) { return ff_node_t<Command_t>::run(); }
     int wait() { return ff_node_t<Command_t>::wait(); }
 
 

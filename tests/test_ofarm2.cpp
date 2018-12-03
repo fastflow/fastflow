@@ -41,11 +41,7 @@
 
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/node.hpp>
-  
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 class Start: public ff_monode_t<long> {

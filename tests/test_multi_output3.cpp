@@ -54,9 +54,7 @@
  */
 
 #include <iostream>
-#include <ff/pipeline.hpp>
-#include <ff/all2all.hpp>
-#include <ff/combine.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 

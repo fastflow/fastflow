@@ -36,7 +36,7 @@
 
 #include <iostream>
 #include <new>
-#include <ff/pipeline.hpp>
+#include <ff/ff.hpp>
 // if you want to test the program with valgrind please enable the following define
 //#if !defined(MAKE_VALGRIND_HAPPY)
 //#define MAKE_VALGRIND_HAPPY 1

@@ -40,9 +40,7 @@
  */
 
 #include <iostream>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/combine.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 

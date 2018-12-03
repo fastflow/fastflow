@@ -79,7 +79,7 @@ public:
         }
         return EOS;
     }
-    void set_id(int id) {
+    void set_id(ssize_t id) {
         ff_node::set_id(id);
     }
     int run(bool=false)  { return ff_node::run();}

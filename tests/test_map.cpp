@@ -42,8 +42,7 @@
 #define HAS_CXX11_VARIADIC_TEMPLATES 1
 #endif
 #include <ff/parallel_for.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 #include <ff/map.hpp>
 
 

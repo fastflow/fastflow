@@ -43,8 +43,7 @@
 
 
 #include <ff/node.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>  // for ff_monode
+#include <ff/ff.hpp>
 
 using namespace ff;
 

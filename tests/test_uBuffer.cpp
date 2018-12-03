@@ -145,7 +145,7 @@ static inline void PUSH(const int i) {
     long * p = (long *)malloc(8*sizeof(long));
 
     if (p) {
-        for(register int j=0;j<8;++j) p[j]=i+j;
+        for(int j=0;j<8;++j) p[j]=i+j;
 #endif
 
         //ticks_wait(0); // just to slow down a bit the producer
@@ -302,7 +302,7 @@ void * C(void *) {
             if (task.b != (void *)(0x1234+k))
                 std::cerr << " ERROR, wrong task received " << task.b << " expected " << (void *)(0x1234+k) << " \n";
 #else
-        for(register int j=0;j<8;++j) {
+        for(int j=0;j<8;++j) {
             long * t = (long *)task.b;
 		    if (t[j]!=(k+j)) {
 			std::cerr << " ERROR, value is " << t[j] << " should be " << k+j << "\n";

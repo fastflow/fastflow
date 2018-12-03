@@ -46,9 +46,7 @@
  *
  */
 
-//#define HAS_CXX11_VARIADIC_TEMPLATES 1  // needed to use the ff_pipe pattern
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp> 
+#include <ff/ff.hpp>
 
 using namespace ff;
 long const int NUMTASKS=10;

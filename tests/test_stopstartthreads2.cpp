@@ -37,8 +37,7 @@
 #endif
 #include <vector>
 #include <cstdio>
-#include <ff/farm.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 class Emitter: public ff_node {

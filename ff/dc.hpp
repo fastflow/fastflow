@@ -30,8 +30,7 @@
 #include <functional>
 #include <tuple>
 #include <vector>
-#include <ff/node.hpp>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 #define DONT_USE_FFALLOC 1
 #include <ff/task_internals.hpp>
@@ -119,7 +118,7 @@ protected:
         inline void call(void *w) {
             //Before invoking the function, pass to it the context as first parameter (i.e. a reference to the current worker)
             std::get<0>(args)=w;
-            apply(F, args);
+            ffapply(F, args);
         }
         
         F_t F;

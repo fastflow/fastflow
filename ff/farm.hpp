@@ -67,7 +67,6 @@
 #include <ff/ordering_policies.hpp>
 #include <ff/all2all.hpp>
 
-
 namespace ff {
 
 
@@ -884,7 +883,6 @@ public:
         return this->add_emitter(e);
     }
 
-    
     /**
      *
      * \brief Set scheduling with on demand polity

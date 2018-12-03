@@ -49,9 +49,7 @@
  *
  */
 
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 const long   NUMTASKS=10;
 const int  FARM1WORKERS=2; 

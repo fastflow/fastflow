@@ -32,7 +32,7 @@
 #include <bitset>
 #include <algorithm>
 
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 namespace ff {
 

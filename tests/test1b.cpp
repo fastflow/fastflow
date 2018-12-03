@@ -31,7 +31,7 @@
  */
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 
 using namespace ff;

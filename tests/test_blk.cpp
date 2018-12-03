@@ -34,9 +34,7 @@
  */
 
 #include <cstdio>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 struct First: ff_node_t<long> {   

@@ -44,7 +44,7 @@ protected:
     template<typename F_t, typename... Param>
     struct ff_task_f_t: public base_f_t {
         ff_task_f_t(const F_t F, Param&... a):F(F) { args = std::make_tuple(a...);}	
-        inline void call() { apply(F, args); }
+        inline void call() { ffapply(F, args); }
         F_t F;
         std::tuple<Param...> args;	
     };

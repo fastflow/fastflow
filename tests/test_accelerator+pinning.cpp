@@ -3,8 +3,7 @@
 #include <cmath>
 using namespace std;
 
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 using namespace ff;
 
 #define NOFFLOADS 10 //scheduling slices
