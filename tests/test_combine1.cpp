@@ -24,86 +24,65 @@
  *
  ****************************************************************************
  */
-
 /*
- * Very basic test for the FastFlow pipeline+farm.
+ * Basic tests for combine_with_firststage/laststage.
+ */
+
+/* Author: Massimo Torquati
  *
  */
 
-#include <iostream>
+#include <cstdio>
 #include <ff/ff.hpp>
 using namespace ff;
 
-#include <vector>
-using namespace std;
-
-
-// generic stage
-struct Stage: ff_node {
-    void * svc(void * task) {
-        return task;
-    }
-};
-
-struct Emitter   : ff_node {
-    Emitter(unsigned streamlen):streamlen(streamlen){}
-    void *svc(void *in) {
-        if (in== nullptr) {
-            for(unsigned i=0;i<streamlen;++i)
-                ff_send_out(new unsigned int(i));
+struct Stage:ff_node_t<long> {
+    Stage(long n):n(n) {}
+    long* svc(long* in) {
+        if (n<0) return in;
+        if (n==0) {
+            printf("%ld: producing %ld\n",n,n+1);
+            printf("%ld: producing %ld\n",n,n+2);
+            ff_send_out((long*)(n+1));
+            ff_send_out((long*)(n+2));
             return EOS;
         }
+        printf("%ld: producing %ld\n", n, (long)in +1 );
+        ff_send_out((long*)((long)in+1));
         return GO_ON;
     }
-    unsigned int streamlen;
+    long n=-1;
 };
 
-struct Collector : ff_node {
-    void * svc(void *task) {
-        ff_send_out(task);
-        return GO_ON;
-    }
-};
+int main() {
+    Stage first(0), _1(1), _2(2), _3(3), _4(4), last(6);
+    Stage *_5=new Stage(5);
 
-
-
-int main(int argc, char * argv[]) {
-    int streamlen = 1000;
-    if (argc>1) {
-        if (argc!=2) {
-            std::cerr << "use: "  << argv[0] << " streamlen\n";
-            return -1;
-        }
-        streamlen = atoi(argv[1]);
-    }
+    Stage *E = new Stage(-1);
+    Stage *C = new Stage(-2);
+    std::vector<ff_node*> W;
+    W.push_back(new Stage(-3));
+    W.push_back(new Stage(-4));
+    ff_farm farm(W,*E,*C);
+    farm.cleanup_all();
+    farm.set_ordered(); // ordered farm
     
-    // build a 2-stage pipeline
-    ff_pipeline pipe;
-    ff_farm f1, f2;
-    vector<ff_node *> w1(1, new Stage);
-    vector<ff_node *> w2(1, new Stage);
-    f1.add_emitter(new Emitter(streamlen));
-    f1.add_workers(w1);
-    f1.add_collector(new Collector());
-    f2.add_workers(w2);
-    f2.add_collector(new Collector());
-    pipe.add_stage(&f1);
-    pipe.add_stage(&f2);
+    ff_Pipe<> pipe0(farm);
+    ff_Pipe<> pipe1(_2, pipe0);
+    ff_Pipe<> pipe2(pipe1);
+    ff_Pipe<> pipe3(pipe2);
+    ff_Pipe<> pipeMain(pipe3);
 
-    if (pipe.wrap_around()<0) {
-        error("wrap_around\n");
+    if (combine_with_firststage(pipe0, &_3)<0) return -1;
+    if (combine_with_laststage(pipe0,  &_4)<0) return -1;
+    if (combine_with_firststage(pipe2, &_1)<0) return -1;
+    if (combine_with_firststage(pipe3, &first)<0) return -1;
+    if (combine_with_laststage(pipeMain, _5, true)<0) return -1;
+    if (combine_with_laststage(pipeMain, &last)<0) return -1;
+    if (pipeMain.run_and_wait_end()<0) {
+        error("running pipeMain\n");
         return -1;
     }
-    
-    ffTime(START_TIME);
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipeline\n");
-        return -1;
-    }
-    ffTime(STOP_TIME);
 
-    std::cerr << "DONE, pipe  time= " << pipe.ffTime() << " (ms)\n";
-    std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
-    pipe.ffStats(std::cerr);
     return 0;
 }

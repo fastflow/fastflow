@@ -34,7 +34,7 @@
  */
 #include <cstdlib>
 #include <vector>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 

@@ -32,11 +32,7 @@
 // basic composition of sequential stages
 
 #include <iostream>
-
-#include <ff/config.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/combine.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 long ntasks = 100000;

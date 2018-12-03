@@ -45,6 +45,16 @@
 
 namespace ff {
 
+
+// forward declaration    
+class ff_comb;
+static const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2);
+template<typename T1, typename T2>    
+static const ff_comb combine_nodes(T1& n1, T2& n2);
+template<typename T1, typename T2>    
+static std::unique_ptr<ff_node> unique_combine_nodes(T1& n1, T2& n2);
+
+    
 class ff_comb: public ff_minode {
     //
     // NOTE: the ff_comb appears either as a standard ff_node or as ff_minode depending on
@@ -690,10 +700,6 @@ private:
  *                             helper functions                                *
  *                                                                             *
  * *************************************************************************** */
-
-// forward declaration    
-static const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2);
-
     
 /**
  *  combines either basic nodes or ff_comb(s)

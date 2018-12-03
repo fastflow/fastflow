@@ -88,6 +88,121 @@ static inline int remove_internal_collectors(ff_farm& farm) {
     return 0;
 }
 
+/**
+ * It combines the node passed as second parameter with the farm's emitter. 
+ * The node is added at the left-hand side of the emitter.
+ * This transformation is logically equivalent to the following pipeline: ff_Pipe<> pipe(node, farm);
+ */
+static inline int combine_with_emitter(ff_farm& farm, ff_node*node, bool cleanup_node=false) {
+    if (node->isFarm() || node->isPipe() || node->isAll2All()) {
+        error("combine_with_emitter: the node to combine cannot be a parallel building block\n");
+        return -1;
+    }
+    ff_node* emitter = farm.getEmitter();
+    if (!emitter) {
+        farm.add_emitter(node);
+        farm.cleanup_emitter(cleanup_node);
+        return 0;
+    }
+    ff_comb* comb    = new ff_comb(node,emitter,
+                                   cleanup_node, farm.isset_cleanup_emitter());
+    if (farm.isset_cleanup_emitter())
+        farm.cleanup_emitter(false);
+
+    farm.change_emitter(comb, true);
+    return 0;
+}
+
+/*
+ * It combines the node passed as parameter with the farm's collector. 
+ * The node is added at the right-hand side of the collector.
+ * This transformation is logically equivalent to the following pipeline: ff_Pipe<> pipe(farm, node);
+ */
+static inline int combine_with_collector(ff_farm& farm, ff_node*node, bool cleanup_node=false) {
+    if (!farm.getCollector()) {
+        error("combine_with_collector: the farm passed as parameter does not have a collector\n");
+        return -1;
+    }
+    if (node->isFarm() || node->isPipe() || node->isAll2All()) {
+        error("combine_with_emitter: the node to combine cannot be a parallel building block\n");
+        return -1;
+    }
+    ff_node* collector = farm.getCollector();
+    ff_comb* comb    = new ff_comb(collector, node,
+                                   farm.isset_cleanup_collector(), cleanup_node);
+    if (farm.isset_cleanup_collector())
+        farm.cleanup_collector(false);
+    farm.remove_collector();
+    farm.add_collector(comb, true);
+    return 0;
+}
+
+/*
+ * It combines the node passed as parameter with the first stage of the pipeline. 
+ * The node is added at the left-hand side of the first pipeline node.
+ * This transformation is logically equivalent to the following pipeline: ff_Pipe<> pipe2(node, pipe);
+ */
+static inline int combine_with_firststage(ff_pipeline& pipe, ff_node*node, bool cleanup_node=false) {
+    ff_node* node0 = pipe.get_node(0); // cannot be a pipeline
+    if (!node0) {
+        error("combine_with_firststage: empty pipeline\n");
+        return -1;
+    }
+    if (node0->isAll2All()) {
+        error("combine_with_firststage: first stage is an all-to-all node, combine not yet supported\n");
+        return -1;
+    }
+    pipe.flatten();
+    if (node0->isFarm()) {
+        ff_farm &farm=*(ff_farm*)node0;
+        if (combine_with_emitter(farm, node, cleanup_node)<0) return -1;
+        pipe.remove_stage(0);        
+        pipe.insert_stage(0, node0);        
+    } else {
+        ff_comb* comb = new ff_comb(node, node0, cleanup_node);
+        pipe.remove_stage(0);
+        pipe.insert_stage(0, comb, true);
+    }
+    
+    return 0;
+}
+
+/*
+ * It combines the node passed as second parameter with the last stage of the pipeline. 
+ * The node is added at the right-hand side of the last pipeline stage.
+ * This transformation is logically equivalent to the following pipeline: ff_Pipe<> pipe2(pipe, node);
+ */    
+static inline int combine_with_laststage(ff_pipeline& pipe, ff_node*node, bool cleanup_node=false) {    
+    ff_node* last = pipe.get_lastnode(); // it cannot be a pipeline
+    if (!last) {
+        error("combine_with_laststage: empty pipeline\n");
+        return -1;
+    }
+    if (last->isAll2All()) {
+        error("combine_with_laststage: last stage is an all-to-all node, combine not yet supported\n");
+        return -1;
+    }
+    const bool last_isfarm_nocollector = (last->isFarm() && !last->isOFarm() && ((ff_farm*)last)->getCollector() == nullptr);    
+    if (last_isfarm_nocollector) {
+        error("combine_with_laststage: last stage is a farm without collector, combine not yet supported\n");
+        return -1;
+    }
+    pipe.flatten();
+    int nstages=static_cast<int>(pipe.nodes_list.size());    
+    if (last->isFarm()) {
+        ff_farm &farm=*(ff_farm*)last;
+        if (combine_with_collector(farm, node, cleanup_node)<0) return -1;
+        pipe.remove_stage(nstages-1);
+        pipe.insert_stage((nstages-1)>0?(nstages-1):0, last);        
+    } else {
+        ff_comb* comb = new ff_comb(last, node, false , cleanup_node);
+        pipe.remove_stage(nstages-1);
+        pipe.insert_stage((nstages-1)>0?(nstages-1):0, comb, true);        
+    }
+    
+    return 0;
+}
+    
     
 /* This is farm specific. 
  *  - It basically sets the threshold for enabling blocking mode.
@@ -192,13 +307,10 @@ static inline int optimize_static(ff_pipeline& pipe, const OptLevel& opt=OptLeve
         error("optimize_static (pipeline) called after prepare\n");
         return -1;
     }
-   // flattening the pipeline (1st level) ----------------------
-   const svector<ff_node*>& W = pipe.get_pipeline_nodes();
-   int nstages=static_cast<int>(pipe.nodes_list.size());
-   for(int i=0;i<nstages;++i)  pipe.remove_stage(0); 
-   nstages = static_cast<int>(W.size());
-   for(int i=0;i<nstages;++i) pipe.add_stage(W[i]);
-   // ----------------------------------------------------------
+
+   // flattening the pipeline 
+    pipe.flatten();
+    int nstages=static_cast<int>(pipe.nodes_list.size());    
 
    // looking for farm and all-to-all because they might have pipeline inside
    // for each nested pipeline the optimize_pipeline function is recursively

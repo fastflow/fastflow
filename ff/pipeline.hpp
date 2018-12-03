@@ -47,8 +47,10 @@
 namespace ff {
 
 class ff_pipeline;
-static int optimize_static(ff_pipeline&, const OptLevel&);
-    
+static inline int optimize_static(ff_pipeline&, const OptLevel&);
+static inline int combine_with_firststage(ff_pipeline&,ff_node*,bool);
+static inline int combine_with_laststage(ff_pipeline&,ff_node*,bool);        
+
 /**
  * \class ff_pipeline
  * \ingroup core_patterns
@@ -59,7 +61,9 @@ static int optimize_static(ff_pipeline&, const OptLevel&);
 class ff_pipeline: public ff_node {
 
     friend inline int optimize_static(ff_pipeline&, const OptLevel&);
-
+    friend inline int combine_with_firststage(ff_pipeline&,ff_node*,bool);
+    friend inline int combine_with_laststage(ff_pipeline&,ff_node*,bool);        
+    
 protected:
     inline int prepare() {
         const int nstages=static_cast<int>(nodes_list.size());
@@ -928,6 +932,7 @@ public:
      *  the function is called recursively extracting its first stage. 
      */
     ff_node* get_node(int i) const {
+        if (!nodes_list.size()) return nullptr;
         if (i<0 || i>=(int)nodes_list.size()) return nullptr;
         if (nodes_list[i]->isPipe()) {
             ff_pipeline * p = reinterpret_cast<ff_pipeline*>(nodes_list[i]);
@@ -936,6 +941,7 @@ public:
         return nodes_list[i];
     }
     ff_node* get_lastnode() const {
+        if (!nodes_list.size()) return nullptr;
         const int last = static_cast<int>(nodes_list.size())-1;
         if (nodes_list[last]->isPipe()) {
             ff_pipeline * p = reinterpret_cast<ff_pipeline*>(nodes_list[last]);
@@ -1148,6 +1154,7 @@ public:
         return nodes_list[last]->isMultiOutput();
     }
 
+    // remove internal pipeline (only the first level)
     inline void flatten() {
         const svector<ff_node*>& W = this->get_pipeline_nodes();
         int nstages=static_cast<int>(this->nodes_list.size());
@@ -1678,5 +1685,7 @@ private:
 
 } // namespace ff
 
+// to avoid warning when optimize_static is not used
+#include<ff/optimize.hpp>
 
 #endif /* FF_PIPELINE_HPP */

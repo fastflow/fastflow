@@ -33,12 +33,10 @@
  */
 
 #include <ff/platforms/platform.h>
-#include <vector>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/node.hpp>
-#include <ff/allocator.hpp>
 #include <iostream>
+#include <ff/ff.hpp>
+#include <ff/allocator.hpp>
+
 
 using namespace ff;
 

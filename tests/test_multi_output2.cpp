@@ -60,11 +60,7 @@
 
 #include <vector>
 #include <iostream>
-#include <ff/svector.hpp>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/node.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 struct W: ff_monode_t<long> {
