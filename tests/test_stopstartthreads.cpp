@@ -32,7 +32,9 @@
  *
  */
 
+#ifndef __APPLE__
 #include <ff/platforms/platform.h>
+#endif
 #include <iostream>
 #include <ff/ff.hpp>
 #include <ff/allocator.hpp>
