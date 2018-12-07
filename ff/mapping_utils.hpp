@@ -279,22 +279,25 @@ static inline ssize_t ff_realNumCores() {
     } while(0);
 #endif // HAVE_PTHREAD_SETAFFINITY_NP
     char inspect[]="cat /proc/cpuinfo|egrep 'core id|physical id'|tr -d '\n'|sed 's/physical/\\nphysical/g'|grep -v ^$|sort|uniq|wc -l";
-    FILE       *f; 
-    f = popen(inspect, "r");
-    if (f) {
-        if (fscanf(f, "%ld", &n) == EOF) { 
-            perror("fscanf");
-        }
-        pclose(f);
-    } else perror("popen");
-#endif // Linux    
-#elif defined (__APPLE__)
-    char inspect[]="sysctl hw.physicalcpu | awk '{print $2}'";
-#else 
+#endif // Linux
+#elif defined(__APPLE__)
+    char inspect[] = "sysctl hw.physicalcpu | awk '{print $2}'";
+#else
     char inspect[]="";
     n=1;
 #pragma message ("ff_realNumCores not supported on this platform")
 #endif
+    if (strlen(inspect)) {
+      FILE *f;
+      f = popen(inspect, "r");
+      if (f) {
+        if (fscanf(f, "%ld", &n) == EOF) {
+          perror("fscanf");
+        }
+        pclose(f);
+      } else
+        perror("popen");
+    }
 #endif // _WIN32
     return n;
 }
