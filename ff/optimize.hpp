@@ -143,6 +143,7 @@ static inline int combine_with_collector(ff_farm& farm, ff_node*node, bool clean
  * This transformation is logically equivalent to the following pipeline: ff_Pipe<> pipe2(node, pipe);
  */
 static inline int combine_with_firststage(ff_pipeline& pipe, ff_node*node, bool cleanup_node=false) {
+    pipe.flatten();
     ff_node* node0 = pipe.get_node(0); // cannot be a pipeline
     if (!node0) {
         error("combine_with_firststage: empty pipeline\n");
@@ -152,7 +153,6 @@ static inline int combine_with_firststage(ff_pipeline& pipe, ff_node*node, bool 
         error("combine_with_firststage: first stage is an all-to-all node, combine not yet supported\n");
         return -1;
     }
-    pipe.flatten();
     if (node0->isFarm()) {
         ff_farm &farm=*(ff_farm*)node0;
         if (combine_with_emitter(farm, node, cleanup_node)<0) return -1;
@@ -173,6 +173,7 @@ static inline int combine_with_firststage(ff_pipeline& pipe, ff_node*node, bool 
  * This transformation is logically equivalent to the following pipeline: ff_Pipe<> pipe2(pipe, node);
  */    
 static inline int combine_with_laststage(ff_pipeline& pipe, ff_node*node, bool cleanup_node=false) {    
+    pipe.flatten();
     ff_node* last = pipe.get_lastnode(); // it cannot be a pipeline
     if (!last) {
         error("combine_with_laststage: empty pipeline\n");
@@ -187,7 +188,6 @@ static inline int combine_with_laststage(ff_pipeline& pipe, ff_node*node, bool c
         error("combine_with_laststage: last stage is a farm without collector, combine not yet supported\n");
         return -1;
     }
-    pipe.flatten();
     int nstages=static_cast<int>(pipe.nodes_list.size());    
     if (last->isFarm()) {
         ff_farm &farm=*(ff_farm*)last;

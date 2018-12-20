@@ -531,11 +531,13 @@ public:
         out_buffer_entries = p.out_buffer_entries;
         nodes_list = p.nodes_list;
         internalSupportNodes = p.internalSupportNodes;
+        dontcleanup = p.dontcleanup;
         
         // this is a dirty part, we modify a const object.....
         ff_pipeline *dirty= const_cast<ff_pipeline*>(&p);
         dirty->node_cleanup = false;
         dirty->internalSupportNodes.resize(0);
+        dirty->dontcleanup.resize(0);
     }
     
     /**
@@ -549,7 +551,11 @@ public:
 
                 bool found = false;
                 for(size_t i=0;i<internalSupportNodes.size();++i)
-                    if (internalSupportNodes[i] == n) { found = true; break; }                
+                    if (internalSupportNodes[i] == n) { found = true; break; }
+                if (!found) {
+                    for(size_t i=0;i<dontcleanup.size();++i)
+                        if (dontcleanup[i] == n) { found = true; break; }
+                }
                 nodes_list.pop_back();
                 if (!found) delete n;
             }
@@ -1153,14 +1159,19 @@ public:
         int last = static_cast<int>(nodes_list.size())-1;
         return nodes_list[last]->isMultiOutput();
     }
-
-    // remove internal pipeline (only the first level)
-    inline void flatten() {
-        const svector<ff_node*>& W = this->get_pipeline_nodes();
-        int nstages=static_cast<int>(this->nodes_list.size());
-        for(int i=0;i<nstages;++i)  this->remove_stage(0); 
-        nstages = static_cast<int>(W.size());
-        for(int i=0;i<nstages;++i) this->add_stage(W[i]);
+    
+    // remove internal pipeline 
+    void flatten() {
+        const svector<std::pair<ff_node*,bool>>& W = this->get_and_remove_nodes();
+        assert(get_pipeline_nodes().size() == 0);
+        for(size_t i=0;i<W.size();++i) this->add_stage(W[i].first);
+        if (node_cleanup) {
+            for(size_t i=0;i<W.size();++i)
+                if (!W[i].second) dontcleanup.push_back(W[i].first);                    
+        } else {
+            for(size_t i=0;i<W.size();++i)
+                if (W[i].second) internalSupportNodes.push_back(W[i].first);                                
+        }
     }
 
     
@@ -1370,6 +1381,32 @@ protected:
         if (cleanup) internalSupportNodes.push_back(node);
     }
 
+    /*
+     * returns the list of nodes like the function get_pipeline_nodes but the nodes are removed
+     * from the respective pipelines
+     */
+    const svector<std::pair<ff_node*,bool>> get_and_remove_nodes() {
+        int nstages=static_cast<int>(this->nodes_list.size());
+        svector<std::pair<ff_node*,bool>> newvector;
+        for(int i=0;i<nstages;++i)  {
+            if (nodes_list[i]->isPipe()) {
+                ff_pipeline * p = reinterpret_cast<ff_pipeline*>(nodes_list[i]);
+                const svector<std::pair<ff_node*,bool>>& W = p->get_and_remove_nodes();
+                newvector+=W;
+                if (node_cleanup) {
+                    bool found=false;
+                    for(size_t i=0;i<internalSupportNodes.size();++i)
+                        if (internalSupportNodes[i]==p) {found =true; break;}
+                    if (!found) internalSupportNodes.push_back(p);
+                }
+            } else 
+                newvector.push_back(std::make_pair(nodes_list[i], node_cleanup));
+        }
+        for(int i=0;i<nstages;++i)  this->remove_stage(0);
+        return newvector;
+    }
+
+    
     
     // returns the pipeline starting time
     const struct timeval startTime() { return nodes_list[0]->getstarttime(); }
@@ -1503,6 +1540,7 @@ private:
     int out_buffer_entries;
     svector<ff_node *> nodes_list;
     svector<ff_node*>  internalSupportNodes;
+    svector<ff_node*>  dontcleanup;  // used by the flatten method
 
 #if defined(MAMMUT)
     mammut::Mammut           mammut;
@@ -1567,14 +1605,10 @@ private:
         //
         void add2pipeall(){} // base case
 
-        
         // need to see this before add2pipeall variadic template function
         inline void add2pipe(ff_node &node) { ff_pipeline::add_stage(&node); }
         // need to see this before add2pipeall variadic template function
-        inline void add2pipe(ff_node *node) { 
-            cleanup_stages.push_back(node);
-            ff_pipeline::add_stage(node); 
-        }
+        inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node);  }
 
         template<typename FIRST,typename ...ARGS>
         void add2pipeall(FIRST &stage,ARGS&...args){
@@ -1591,8 +1625,10 @@ private:
 
         
         template<typename FIRST,typename ...ARGS>
-        void add2pipeall(std::unique_ptr<FIRST> & stage,ARGS&...args){            
-        	add2pipe(stage.release());
+        void add2pipeall(std::unique_ptr<FIRST> & stage,ARGS&...args){
+            ff_node* node = stage.release();
+        	add2pipe(*node); //stage.release());
+            cleanup_stages.push_back(node);
         	add2pipeall(args...); // recurse
         }
 

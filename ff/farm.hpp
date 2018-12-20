@@ -314,7 +314,10 @@ protected:
                         for(size_t i=0;i<W2.size();++i) {
                             gt->register_worker(W2[i]);
                         }
-                    } else abort(); // <---- FIX
+                    } else {
+                        error("FARM feature not yet supported\n");
+                        abort(); // <---- FIX
+                    }
                 } else { // there is no collector
                     if (outputNodes.size()) { 
                         assert(W2.size() == outputNodes.size());

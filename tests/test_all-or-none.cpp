@@ -173,11 +173,11 @@ struct Scheduler: ff_node_t<Task_t> {
 };
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
-	printf("use: %s n-iterations\n",argv[0]);
-	return -1;
+    long niter = 10;
+    if (argc > 1) {
+	niter=std::stol(std::string(argv[1]));
     }
-    const long niter=std::stol(std::string(argv[1]));
+    
     Generator Gen(niter);
     Gatherer  Gat;
 

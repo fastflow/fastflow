@@ -74,6 +74,9 @@ protected:
     /**
      * \brief Creates the input channels
      *
+     * This function may be called because the multi-input node is  
+     * used just as a standard node (for example as a farm's worker).
+     *
      * \return >=0 if successful, otherwise -1 is returned.
      */
     int create_input_buffer(int nentries, bool fixedsize=true) {
@@ -86,6 +89,15 @@ protected:
         
         return 0;
     }
+
+    /* The multi-input node is used as a standard node. 
+     */
+    virtual inline bool  put(void * ptr) { 
+        assert(inputNodes.size() == 1);
+        return inputNodes[0]->put(ptr);
+    }
+    
+
     
     int dryrun() {
         if (prepared) return 0;
