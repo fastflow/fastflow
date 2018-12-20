@@ -36,6 +36,9 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
+const long FIRST=0;
+const long LAST=10;
+
 struct Stage:ff_node_t<long> {
     Stage(long n):n(n) {}
     long* svc(long* in) {
@@ -47,15 +50,17 @@ struct Stage:ff_node_t<long> {
             ff_send_out((long*)(n+2));
             return EOS;
         }
-        printf("%ld: producing %ld\n", n, (long)in +1 );
-        ff_send_out((long*)((long)in+1));
+        if (n != LAST) {
+            printf("%ld: producing %ld\n", n, (long)in +1 );
+            ff_send_out((long*)((long)in+1));
+        }
         return GO_ON;
     }
     long n=-1;
 };
 
 int main() {
-    Stage first(0), _1(1), _2(2), _3(3), _4(4), last(6);
+    Stage first(FIRST), _1(1), _2(2), _3(3), _4(4), last(LAST);
     Stage *_5=new Stage(5);
 
     Stage *E = new Stage(-1);
