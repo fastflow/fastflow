@@ -282,7 +282,10 @@ protected:
         ff_node::skipfirstpop(sk);
     }
 
-    
+    bool  put(void * ptr) { 
+        return ff_node::put(ptr);
+    }
+       
     void registerCallback(bool (*cb)(void *,unsigned long,unsigned long,void *), void * arg) {
         comp_nodes[1]->registerCallback(cb,arg);
     }
@@ -588,15 +591,22 @@ protected:
     }
 
     int create_input_buffer(int nentries, bool fixedsize=true) {
-        if (isMultiInput())
-            return ff_minode::create_input_buffer(nentries,fixedsize);
+        if (isMultiInput()) {
+            int r= ff_minode::create_input_buffer(nentries,fixedsize);
+            if (r<0) return r;
+            svector<ff_node*> w(1);
+            ff_minode::get_in_nodes(w);
+            assert(w.size()==1);
+            r=ff_node::set_input_buffer(w[0]->get_in_buffer());
+            return r;
+        }
         return ff_node::create_input_buffer(nentries,fixedsize);
     }
     int create_output_buffer(int nentries, bool fixedsize=true) {
         return comp_nodes[1]->create_output_buffer(nentries,fixedsize);
     }
     FFBUFFER * get_in_buffer() const {
-        if (getFirst()->isMultiInput()) return nullptr;
+        //if (getFirst()->isMultiInput()) return nullptr;
         return ff_node::get_in_buffer();
     }
 

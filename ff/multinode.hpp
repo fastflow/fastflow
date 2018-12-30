@@ -86,13 +86,12 @@ protected:
         t->set_id(-1);
         internalSupportNodes.push_back(t);
         set_input(t);
-        
-        return 0;
+        return ff_node::set_input_buffer(t->get_in_buffer());
     }
 
     /* The multi-input node is used as a standard node. 
      */
-    virtual inline bool  put(void * ptr) { 
+    inline bool  put(void * ptr) { 
         assert(inputNodes.size() == 1);
         return inputNodes[0]->put(ptr);
     }
