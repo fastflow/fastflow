@@ -99,7 +99,7 @@ static inline int combine_with_emitter(ff_farm& farm, ff_node*node, bool cleanup
         return -1;
     }
     ff_node* emitter = farm.getEmitter();
-    if (!emitter) {
+    if (!emitter) {        
         farm.add_emitter(node);
         farm.cleanup_emitter(cleanup_node);
         return 0;

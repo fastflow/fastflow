@@ -112,10 +112,10 @@ protected:
                 }
                 return false;
             } ();
-            const bool isa2a_prev   = get_node(i-1)->isAll2All();
-            const bool isfarm_prev  = get_node(i-1)->isFarm();
-            const bool prev_isfarm_nocollector   = (isfarm_prev && !get_node(i-1)->isOFarm() && ((ff_farm*)get_node(i-1))->getCollector() == nullptr);
-            const bool prev_isfarm_withcollector = (isfarm_prev && ((ff_farm*)get_node(i-1))->hasCollector());        
+            const bool isa2a_prev   = get_node_last(i-1)->isAll2All();
+            const bool isfarm_prev  = get_node_last(i-1)->isFarm();
+            const bool prev_isfarm_nocollector   = (isfarm_prev && !get_node_last(i-1)->isOFarm() && ((ff_farm*)get_node_last(i-1))->getCollector() == nullptr);
+            const bool prev_isfarm_withcollector = (isfarm_prev && ((ff_farm*)get_node_last(i-1))->hasCollector());        
             
             
             const bool prev_single_standard      = (!nodes_list[i-1]->isMultiOutput());
@@ -854,7 +854,7 @@ public:
         if (first_single_multiinput || first_multi_multiinput) {
             if (!nodes_list[0]->init_input_blocking(m,c,counter)) return -1;
 
-            // the first stage is the farm emitter that is not a plain multi-input node
+            // the first stage is the farm's emitter that is not a plain multi-input node
             if (get_node(0)->isFarm()) { 
                 svector<ff_node*> w1(MAX_NUM_THREADS);
                 nodes_list[last]->get_out_nodes_feedback(w1);
@@ -946,6 +946,22 @@ public:
         }
         return nodes_list[i];
     }
+    /**
+     *  \brief returns the stage i of the pipeline. If the stage is a pipeline
+     *  the function is called recursively extracting its last stage. 
+     */
+    ff_node* get_node_last(int i) const {
+        if (!nodes_list.size()) return nullptr;
+        if (i<0 || i>=(int)nodes_list.size()) return nullptr;
+        if (nodes_list[i]->isPipe()) {
+            ff_pipeline * p = reinterpret_cast<ff_pipeline*>(nodes_list[i]);
+            return p->get_lastnode();
+        }
+        return nodes_list[i];
+    }
+    /**
+     *  \brief returns the last stage of the pipeline. 
+     */
     ff_node* get_lastnode() const {
         if (!nodes_list.size()) return nullptr;
         const int last = static_cast<int>(nodes_list.size())-1;
@@ -1406,7 +1422,12 @@ protected:
         return newvector;
     }
 
-    
+    /* The pipeline has not been flattened and its first stage is a multi-input node used as 
+     * a standard node. 
+     */
+    inline bool  put(void * ptr) { 
+        return nodes_list[0]->put(ptr);
+    }
     
     // returns the pipeline starting time
     const struct timeval startTime() { return nodes_list[0]->getstarttime(); }

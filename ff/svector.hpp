@@ -34,6 +34,12 @@
 #include <stdlib.h>
 #include <new>
 
+// to disable the warning related to the use of realloc for non trivially copyable types
+#if defined(__GNUC__) && !defined(__INTEL_COMPILER) && (((__GNUC__ * 100) + __GNUC_MINOR__) >= 800)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
+#endif
+
 namespace ff {
 
 /*!
@@ -329,5 +335,11 @@ private:
  */
 
 } // namespace ff
+
+#if defined(__GNUC__) && !defined(__INTEL_COMPILER) && (((__GNUC__ * 100) + __GNUC_MINOR__) >= 800)
+#pragma GCC diagnostic pop
+#endif
+
+
 
 #endif /* FF_SVECTOR_HPP */

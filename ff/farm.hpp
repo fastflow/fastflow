@@ -555,7 +555,8 @@ protected:
         lb->skipfirstpop(sk);
         skip1pop=sk;
     }
-        
+
+
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
@@ -680,7 +681,7 @@ public:
         for(size_t i=0;i<max_num_workers;++i) workers[i]=NULL;        
     }
 
-    ff_farm(const ff_farm& f):ff_farm() { 
+    ff_farm(const ff_farm& f) { 
         if (f.prepared) {
             error("ff_farm, copy constructor, the input farm is already prepared\n");
             return;
@@ -829,20 +830,15 @@ public:
             error("FARM, add_emitter: emitter already present\n");
             return -1; 
         }
-        if (e->isMultiInput() && !e->isComp()) {
-            error("FARM, add_emitter: the Emitter filter cannot be a multi-input node. A farm emitter is already a multi-input node!\n");
-            return -1;
-        }        
         emitter = e;
         
+        // if the emitter is a real multi-input, then we have to register the callback for
+        // the all_gather call        
+        if (e->isMultiInput()) {
+            e->registerAllGatherCallback(lb->ff_all_gather_emitter, lb);
+        }
+      
         if (e->isComp()) {
-
-            // if the comp is a real multi-input, then we have to register the callback for
-            // the all_gather call
-            if (e->isMultiInput()) {
-                e->registerAllGatherCallback(lb->ff_all_gather_emitter, lb);
-            }
-            
             // NOTE: if a comp is set as a filter in the emitter of a farm,
             // it is a multiinput and multioutput node (like an emitter) even if
             // the first/last stage of the composition are not a multi-input/output.   
@@ -1161,7 +1157,6 @@ public:
                 barrier->barrierSetup(nthreads);
             }
 #endif
-            // only the first stage has to skip the first pop
             lb->skipfirstpop(!has_input_channel);
         }
         
@@ -1745,7 +1740,16 @@ protected:
         }
         if (emitter) {
             if (emitter->create_input_buffer(nentries,fixedsize)<0) return -1;
-            in = emitter->get_in_buffer();
+            if (emitter->isMultiInput()) {
+                if (emitter->isComp()) 
+                    in = emitter->get_in_buffer();
+                else {
+                    svector<ff_node*> w(1);
+                    emitter->get_in_nodes(w);
+                    assert(w.size()==1);
+                    in = w[0]->get_in_buffer();
+                }
+            } else  in = emitter->get_in_buffer();
         } else {
             if (ff_node::create_input_buffer(nentries, fixedsize)<0) return -1;
         }
