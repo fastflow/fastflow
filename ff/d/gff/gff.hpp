@@ -32,7 +32,7 @@
 #ifndef FF_D_GFF_GFF_HPP_
 #define FF_D_GFF_GFF_HPP_
 
-#include <gam.hpp>
+#include <gam/gam.hpp>
 
 #include "communicators/builtin.hpp"
 #include "communicators/bundle.hpp"

@@ -28,7 +28,7 @@
 #ifndef FF_D_GFF_FILTER_HPP_
 #define FF_D_GFF_FILTER_HPP_
 
-#include <gam.hpp>
+#include <gam/gam.hpp>
 
 #include "Node.hpp"
 #include "Logger.hpp"

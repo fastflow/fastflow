@@ -31,7 +31,7 @@ namespace gff {
 
 #include <vector>
 
-#include <gam.hpp>
+#include <gam/gam.hpp>
 
 /**
  * Nondeterminate Merge (singleton) family.
