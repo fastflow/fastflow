@@ -32,7 +32,7 @@
 #include <vector>
 #include <algorithm>
 
-#include <gam.hpp>
+#include <gam/gam.hpp>
 
 #include "Logger.hpp"
 

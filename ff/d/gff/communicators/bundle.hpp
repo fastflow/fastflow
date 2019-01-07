@@ -27,7 +27,7 @@
 #ifndef FF_D_GFF_COMMUNICATORS_BUNDLE_HPP_
 #define FF_D_GFF_COMMUNICATORS_BUNDLE_HPP_
 
-#include <gam.hpp>
+#include <gam/gam.hpp>
 
 #include "../defs.hpp"
 #include "../BundleInternals.hpp"

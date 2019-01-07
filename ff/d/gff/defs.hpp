@@ -27,7 +27,7 @@
 #ifndef FF_D_GFF_DEFS_HPP_
 #define FF_D_GFF_DEFS_HPP_
 
-#include <gam.hpp>
+#include <gam/gam.hpp>
 
 namespace gff {
 /*
