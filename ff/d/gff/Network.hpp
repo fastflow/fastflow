@@ -30,7 +30,7 @@
 
 #include <cassert>
 
-#include <gam/gam.hpp>
+#include <gam.hpp>
 
 #include "Node.hpp"
 #include "Logger.hpp"

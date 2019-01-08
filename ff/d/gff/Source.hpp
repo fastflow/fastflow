@@ -28,7 +28,7 @@
 #ifndef FF_D_GFF_SOURCE_HPP_
 #define FF_D_GFF_SOURCE_HPP_
 
-#include <gam/gam.hpp>
+#include <gam.hpp>
 
 #include "Node.hpp"
 #include "Logger.hpp"
