@@ -139,7 +139,7 @@ public:
         // the id of the manager channel is greater than the maximum id of the workers
         if ((size_t)wid == MANAGERID) {  
             Command_t *cmd = reinterpret_cast<Command_t*>(t);
-            //printf("EMITTER2 SENDING %s to WORKER %d\n", cmd->op==ADD?"ADD":"REMOVE", cmd->id);
+            printf("EMITTER2 SENDING %s to WORKER %d\n", cmd->op==ADD?"ADD":"REMOVE", cmd->id);
             switch(cmd->op) {
             case ADD:     lb->thaw(cmd->id, true);             break;
             case REMOVE:  lb->ff_send_out_to(GO_OUT, cmd->id); break;

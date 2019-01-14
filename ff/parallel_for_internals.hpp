@@ -755,6 +755,7 @@ public:
             return GO_ON; 
         }
         auto wid =  lb->get_channel_id();
+        assert(wid>=0);
         if (--totaltasks <=0) {
             if (!eossent[wid]) {
                 lb->ff_send_out_to(workersspinwait?EOS_NOFREEZE:GO_OUT, int(wid));

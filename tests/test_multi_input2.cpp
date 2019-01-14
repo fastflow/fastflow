@@ -68,7 +68,7 @@ public:
             // task caming from farm1's workers
             return t;
         }
-        printf("got back a task from Worker2(%d)\n", wid);
+        printf("got back task %ld from Worker2(%d)\n", (long)t, wid);
         return GO_ON;
     }
     void eosnotify(ssize_t id) {

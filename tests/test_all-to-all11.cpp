@@ -144,10 +144,10 @@ struct Worker: ff_monode_t<long> {
         std::cout << "Worker" << get_my_id() << " got " << *in << "\n";
 
         // Here we know that we have only one output channel
-        // and we have 'get_num_backchannels()' feedback channels.
+        // and we have 'get_num_feedbackchannels()' feedback channels.
         // Since the numbering of the channels is: first the feedback ones
         // and then the output ones .....
-        ff_send_out_to(in, get_num_backchannels() ); // to Last
+        ff_send_out_to(in, get_num_feedbackchannels() ); // to Last
 
         ff_send_out((long*)0x1); // sends it back
 
@@ -156,7 +156,7 @@ struct Worker: ff_monode_t<long> {
 
     void eosnotify(ssize_t id) {
         broadcast_task(EOS);
-        ff_send_out_to(EOS, get_num_backchannels());
+        ff_send_out_to(EOS, get_num_feedbackchannels());
     }
 };
 

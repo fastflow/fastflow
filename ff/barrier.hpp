@@ -180,7 +180,7 @@ public:
     inline int barrierSetup(size_t init) {
         assert(init>0);
         if (init == _barrier) return -1;
-        for(size_t i=0; i<init; ++i) barArray[i]=false;
+        for(size_t i=0; i<maxNThreads; ++i) barArray[i]=false;
         B[0]=0; B[1]=0;
         _barrier = init; 
         return 0;

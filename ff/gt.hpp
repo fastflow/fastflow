@@ -330,6 +330,8 @@ protected:
     }
 
 
+    void set_input_channelid(ssize_t id, bool fromin=true) { channelid = id; frominput=fromin;}
+    
     static bool ff_send_out_collector(void * task,
                                       unsigned long retry, 
                                       unsigned long ticks, void *obj) {
@@ -340,6 +342,8 @@ protected:
         return r;
     }
 
+    bool fromInput() const { return frominput; }
+    
 #if defined(FF_TASK_CALLBACK)
     void callbackIn(void  *t=NULL) { filter->callbackIn(t);  }
     void callbackOut(void *t=NULL) { filter->callbackOut(t); }
@@ -354,9 +358,9 @@ public:
      */
     ff_gatherer(int max_num_workers):
         max_nworkers(max_num_workers), running(-1), nextr(-1),
-        neos(0),neosnofreeze(0),channelid(-1),feedbackid(-1),
+        neos(0),neosnofreeze(0),channelid(-1),feedbackid(0),
         filter(NULL), workers(max_nworkers), offline(max_nworkers), buffer(NULL),
-        skip1pop(false) {
+        skip1pop(false),frominput(false) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
@@ -393,6 +397,7 @@ public:
         blocking_in    = gtin.blocking_in;
         blocking_out   = gtin.blocking_out;
         skip1pop       = gtin.skip1pop;
+        frominput      = gtin.frominput;
         filter         = gtin.filter;
         workers        = gtin.workers;
         
@@ -645,8 +650,15 @@ public:
             } else {
                 FFTRACE(++taskcnt);
                 if (filter)  {
-                    channelid = nextr; 
-                    if (feedbackid>0 && (nextr>=feedbackid)) channelid=-1; 
+                    channelid = (nextr-feedbackid);
+                    frominput=true;
+                    if (feedbackid>0) { // there are feedback channels
+                        if (nextr<feedbackid)  {
+                            frominput=false;
+                            channelid=nextr;
+                        }
+                    }
+
                     FFTRACE(ticks t0 = getticks());
 
 #if defined(FF_TASK_CALLBACK)
@@ -923,7 +935,7 @@ private:
     svector<bool>     offline;
     FFBUFFER        * buffer;
     bool              skip1pop;
-
+    bool              frominput;
     int  (*ag_callback)(void *,void **, void*);
     void  * ag_callback_arg;
 
