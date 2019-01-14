@@ -27,9 +27,23 @@
 /*  
  * This test checks the optimizations of pipelines inside a farm.
  *
- *   pipe(First, farm(pipe(Stage, farm(Worker))), Last)
+ *   pipe(First, farm(pipe(farm(Worker1), farm(Worker2))), Last)
  *
  *
+ * if optimize=true:
+ *
+ *                                
+ *                                |--> Worker1 -->| --> Worker2|
+ *             | --> DefEmitter-->|               |            |-->|
+ *             |                  |--> Worker1 -->| --> Worker2|   |
+ *    First -->|                                                   |-->Last
+ *             |                  |--> Worker1 -->| --> Worker2|   |
+ *             | --> DefEmitter-->|               |            |-->| 
+ *                                |--> Worker1 -->| --> Worker2|
+ *   
+ *                                 |<---------- A2A ----------->|
+ *                   |<--------farm with no collector--- ------>|
+ *   |<----------------------- farm with no collector------------->|
  */
 /* Author: Massimo Torquati
  *
@@ -154,7 +168,8 @@ int main(int argc, char* argv[]) {
 
         // this call tries to apply all previous optimizations modifying the pipe passed
         // as parameter
-        if (optimize_static(farm,opt)<0) {
+        if (optimize_static(pipe,opt)<0) {
+            //if (optimize_static(farm,opt)<0) {
             error("optimize_static\n");
             return -1;
          }

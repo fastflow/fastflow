@@ -114,13 +114,13 @@ protected:
             } ();
             const bool isa2a_prev   = get_node_last(i-1)->isAll2All();
             const bool isfarm_prev  = get_node_last(i-1)->isFarm();
-            const bool prev_isfarm_nocollector   = (isfarm_prev && !get_node_last(i-1)->isOFarm() && ((ff_farm*)get_node_last(i-1))->getCollector() == nullptr);
+            const bool prev_isfarm_nocollector   = (isfarm_prev && !get_node_last(i-1)->isOFarm() && !((ff_farm*)get_node_last(i-1))->hasCollector());
             const bool prev_isfarm_withcollector = (isfarm_prev && ((ff_farm*)get_node_last(i-1))->hasCollector());        
             
             
-            const bool prev_single_standard      = (!nodes_list[i-1]->isMultiOutput());
-            const bool prev_single_multioutput   = ((nodes_list[i-1]->isMultiOutput() && !isa2a_prev && !isfarm_prev) ||
-                                                    (prev_isfarm_withcollector && nodes_list[i-1]->isMultiOutput()));        
+            const bool prev_single_standard      = (!get_node_last(i-1)->isMultiOutput());
+            const bool prev_single_multioutput   = ((get_node_last(i-1)->isMultiOutput() && !isa2a_prev && !isfarm_prev) ||
+                                                    (prev_isfarm_withcollector && get_node_last(i-1)->isMultiOutput()));        
             const bool prev_multi_standard       = [&]() {
                 if (prev_isfarm_nocollector) {
                     svector<ff_node*> w1;
@@ -857,10 +857,14 @@ public:
             // the first stage is the farm's emitter that is not a plain multi-input node
             if (get_node(0)->isFarm()) { 
                 svector<ff_node*> w1(MAX_NUM_THREADS);
-                nodes_list[last]->get_out_nodes_feedback(w1);
+                if (last_single_standard || last_multi_standard) {
+                    nodes_list[last]->get_out_nodes(w1);
+                } else
+                    nodes_list[last]->get_out_nodes_feedback(w1);
+                
                 if (w1.size() == 0) {
                     assert(last_single_standard);
-                    nodes_list[last]->set_output_blocking(m,c,counter);
+                    nodes_list[last]->set_output_blocking(m,c,counter);  // <----
                 } else {
                     for(size_t i=0;i<w1.size();++i)
                         w1[i]->set_output_blocking(m,c,counter);

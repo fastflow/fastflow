@@ -105,8 +105,8 @@ struct Worker2: ff_monode_t<long> {
     }
 
     void eosnotify(ssize_t id) {
-        ff_send_out_to(last, get_num_backchannels() ); 
-        ff_send_out_to(EOS, get_num_backchannels());
+        ff_send_out_to(last, get_num_feedbackchannels() ); 
+        ff_send_out_to(EOS, get_num_feedbackchannels());
     }
 
     long *last = nullptr;;

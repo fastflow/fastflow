@@ -152,14 +152,13 @@ protected:
      */
     inline void push_eos(void *task=NULL) {
         //register int cnt=0;
-        if (!task) {
-            broadcast_task(FF_EOS);
-            if (feedbackid > 0) {
-                for(size_t i=feedbackid; i<workers.size();++i)
-                    this->ff_send_out_to(FF_EOS, i);
-            }
-        } else
-            broadcast_task(task);
+
+        if (!task) task = FF_EOS;
+        broadcast_task(task);
+        if (feedbackid > 0) {
+            for(size_t i=feedbackid; i<workers.size();++i)
+                this->ff_send_out_to(task, i);
+        }
     }
     inline void push_goon() {
         void * goon = FF_GO_ON;
@@ -338,9 +337,19 @@ protected:
                     
                     input_channelid = (idx >= multi_input_start) ? (*start)->get_my_id():-1;
                     channelid = idx;
-                    if (idx >= multi_input_start) channelid = -1;
-                    else 
-                        if (idx == (size_t)managerpos) channelid = (*start)->get_my_id();
+                    if (idx >= multi_input_start) {
+                        channelid = -1;
+                        // NOTE: the filter can be a multi-input node so this call allows
+                        //       to set the proper channelid of the gatherer (gt).
+                        if (filter) filter->set_input_channelid((ssize_t)(idx-multi_input_start), true);
+                    }
+                    else {
+                        if (idx == (size_t)managerpos) {
+                            channelid = (*start)->get_my_id();
+                            if (filter) filter->set_input_channelid(channelid, true);
+                        } else 
+                            if (filter) filter->set_input_channelid((ssize_t)idx, false);
+                    }
                     
                     if (blocking_in) pop_done(*start);
 
@@ -446,7 +455,8 @@ protected:
     static inline int ff_all_gather_emitter(void *task, void **V, void*obj) {
         return ((ff_loadbalancer*)obj)->all_gather(task,V);
     }
-    
+
+#if 0    
     int set_internal_multi_input(svector<ff_node*> &mi) {
         if (mi.size() == 0) {
             error("LB, invalid internal multi-input vector size\n");
@@ -455,7 +465,8 @@ protected:
         int_multi_input = mi;
         return 0;
     }
-
+#endif
+    
     // removes all dangling EOSs
     void absorb_eos(svector<ff_node*>& W, size_t size) {
         void *task;
@@ -483,9 +494,8 @@ public:
         running(-1),max_nworkers(max_num_workers),nextw(-1),feedbackid(-1),
         channelid(-2),input_channelid(-1),
         filter(NULL),workers(max_num_workers),
-        buffer(NULL),skip1pop(false),master_worker(false),
-        multi_input(MAX_NUM_THREADS),multi_input_start((size_t)-1),
-        int_multi_input(MAX_NUM_THREADS) {
+        buffer(NULL),skip1pop(false),master_worker(false),parallel_workers(false),
+        multi_input(MAX_NUM_THREADS), inputNodesFeedback(MAX_NUM_THREADS), multi_input_start((size_t)-1) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
@@ -506,7 +516,7 @@ public:
         set_barrier(lbin.get_barrier());
 
         multi_input = lbin.multi_input;
-        int_multi_input = lbin.int_multi_input;
+        inputNodesFeedback= lbin.inputNodesFeedback;
         cons_m       = lbin.cons_m;
         cons_c       = lbin.cons_c;
         if (cons_counter) delete cons_counter;
@@ -728,11 +738,16 @@ public:
         multi_input.push_back(node);
         return 0;
     }
-
+    int set_input_feedback(ff_node * node) {
+        inputNodesFeedback.push_back(node);
+        return 0;
+    }
     void get_in_nodes(svector<ff_node*>&w) {
         w+=multi_input;
     }
-    
+    void get_in_nodes_feedback(svector<ff_node*>&w) {
+        w += inputNodesFeedback;
+    }
 
     virtual inline bool ff_send_out_to(void *task, int id,  
                                unsigned long retry=((unsigned long)-1),
@@ -914,7 +929,7 @@ public:
         
 
         gettimeofday(&wtstart,NULL);
-        if (!master_worker && (multi_input.size()==0) && (int_multi_input.size()==0)) {
+        if (!master_worker && (multi_input.size()==0) && (inputNodesFeedback.size()==0)) {
 
             // it is possible that the input queue has been configured as multi-producer
             // therefore multiple node write in that queue and so the EOS has to be
@@ -988,7 +1003,7 @@ public:
         } else {
             size_t nw=0;
             availworkers.resize(0);
-            if (master_worker) {
+            if (master_worker && !parallel_workers) {
                 for(int i=0;i<running;++i) {
                     availworkers.push_back(workers[i]);
                 }
@@ -1001,11 +1016,10 @@ public:
                 availworkers.push_back(manager);
                 nw += 1;
             }
-            if (int_multi_input.size()>0) {
-                for(size_t i=0;i<int_multi_input.size();++i) {
-                    availworkers.push_back(int_multi_input[i]);
-                }
-                nw += int_multi_input.size();
+            if (inputNodesFeedback.size()>0) {
+                for(size_t i=0;i<inputNodesFeedback.size();++i)
+                    availworkers.push_back(inputNodesFeedback[i]);
+                nw += inputNodesFeedback.size();
             }
             if (multi_input.size()>0) {
                 multi_input_start = availworkers.size();
@@ -1015,9 +1029,7 @@ public:
                 }
                 nw += multi_input.size();
             } 
-            //if ((master_worker || int_multi_input.size()>0) && inpresent) {
             if (multi_input.size()==0 && inpresent) {
-                assert(multi_input.size() == 0);
                 nw += 1;
             }
             std::deque<ff_node *>::iterator start(availworkers.begin());
@@ -1054,10 +1066,10 @@ public:
                         }
                     }
                     if (!--nw) {
-                        // this conditions means there is a loop
-                        // so in this case I don't want to send an additional
-                        // EOS since I have already received all of them
-                        if (!master_worker && (task==FF_EOS) && (int_multi_input.size()==0 || multi_input.size()==0)) {
+                        // this conditions means that if there is a loop
+                        // we don't want to send an additional
+                        // EOS since all EOSs have already been received
+                        if (!master_worker && (task==FF_EOS) && (inputNodesFeedback.size()==0)) {
                             push_eos();
                         }
                         ret = task;
@@ -1090,10 +1102,11 @@ public:
                             push_eos(task);
                             // try to remove the additional EOS due to 
                             // the feedback channel
+                            
                             if (inpresent || multi_input.size()>0 || isfrozen()) {
-                                if (master_worker) absorb_eos(workers, running);
-                                if (int_multi_input.size()>0) absorb_eos(int_multi_input, 
-                                                                         int_multi_input.size());
+                                if (master_worker && !parallel_workers) absorb_eos(workers, running);
+                                if (inputNodesFeedback.size()>0) absorb_eos(inputNodesFeedback, 
+                                                                            inputNodesFeedback.size());
                             }
                             ret = FF_EOS;
                             break;
@@ -1481,11 +1494,11 @@ private:
     FFBUFFER        *  buffer;
     bool               skip1pop;
     bool               master_worker;
+    bool               parallel_workers;    /// true if workers are A2As, pipes or farms
     svector<ff_node*>  multi_input;         /// nodes coming from other stages
+    svector<ff_node*>  inputNodesFeedback;  /// nodes coming node feedback channels
     size_t             multi_input_start;   /// position in the availworkers array
     ssize_t            managerpos=-1;       /// position in the availworkers array of the manager
-    svector<ff_node*>  int_multi_input;     /// internal buffers
-    
 
     struct timeval tstart;
     struct timeval tstop;

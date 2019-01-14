@@ -301,7 +301,7 @@ int main(int argc, char* argv[]) {
             return -1;
         }    
         printf("TEST5 DONE\n");
-    }
+    }    
     usleep(500000);
     {
         Emitter1 E(nworkers1,ntasks);

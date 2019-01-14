@@ -75,13 +75,30 @@ static inline int remove_internal_collectors(ff_farm& farm) {
         } else {
             if (W[i]->isPipe()) {
                 ff_pipeline* ipipe = reinterpret_cast<ff_pipeline*>(W[i]);
-                ff_node* last  = ipipe->get_lastnode();
-                if (last->isFarm() && !last->isOFarm()) {
-                    ff_farm* ifarm = reinterpret_cast<ff_farm*>(last);
-                    if (remove_internal_collectors(*ifarm)<0) return -1;
-                    if (ifarm->getCollector() == nullptr)
-                        ifarm->remove_collector();                    
+                OptLevel iopt;
+                iopt.remove_collector=true;
+                if (optimize_static(*ipipe, iopt)<0) return -1;
+            }
+            if (W[i]->isAll2All()) {
+                ff_a2a *a2a   = reinterpret_cast<ff_a2a*>(W[i]);
+                const svector<ff_node*>& W1 = a2a->getFirstSet();
+                const svector<ff_node*>& W2 = a2a->getSecondSet();
+                for(size_t j=0;j<W1.size();++j) {
+                    if (W1[j]->isPipe()) {
+                        ff_pipeline* ipipe=reinterpret_cast<ff_pipeline*>(W1[j]);
+                        OptLevel iopt;
+                        iopt.remove_collector=true;
+                        if (optimize_static(*ipipe, iopt)<0) return -1;
+                    }
                 }
+                for(size_t j=0;j<W2.size();++j) {
+                    if (W2[j]->isPipe()) {
+                        ff_pipeline* ipipe=reinterpret_cast<ff_pipeline*>(W2[j]);
+                        OptLevel iopt;
+                        iopt.remove_collector=true;
+                        if (optimize_static(*ipipe, iopt)<0) return -1;
+                    }
+                }                                           
             }
         }
     }
@@ -255,6 +272,13 @@ static inline int optimize_static(ff_farm& farm, const OptLevel& opt=OptLevel1()
             } else {
                 if (W[i]->isPipe()) {
                     ff_pipeline* ipipe = reinterpret_cast<ff_pipeline*>(W[i]);
+                    OptLevel iopt;
+                    iopt.remove_collector=true;
+                    iopt.verbose_level = opt.verbose_level;
+                    if (optimize_static(*ipipe, iopt)<0) return -1;
+
+
+#if 0                    
                     ff_node* last  = ipipe->get_lastnode();
                     if (last->isFarm() && !last->isOFarm()) {
                         ff_farm* ifarm = reinterpret_cast<ff_farm*>(last);
@@ -264,6 +288,30 @@ static inline int optimize_static(ff_farm& farm, const OptLevel& opt=OptLevel1()
 
                         if (optimize_internal_farm(*ifarm)<0) return -1;
                     }
+#endif                    
+                }
+                if (W[i]->isAll2All()) {
+                    ff_a2a *a2a   = reinterpret_cast<ff_a2a*>(W[i]);
+                    const svector<ff_node*>& W1 = a2a->getFirstSet();
+                    const svector<ff_node*>& W2 = a2a->getSecondSet();
+                    for(size_t j=0;j<W1.size();++j) {
+                        if (W1[j]->isPipe()) {
+                            ff_pipeline* ipipe=reinterpret_cast<ff_pipeline*>(W1[j]);
+                            OptLevel iopt;
+                            iopt.remove_collector=true;
+                            iopt.verbose_level = opt.verbose_level;
+                            if (optimize_static(*ipipe, iopt)<0) return -1;
+                        }
+                    }
+                    for(size_t j=0;j<W2.size();++j) {
+                        if (W2[j]->isPipe()) {
+                            ff_pipeline* ipipe=reinterpret_cast<ff_pipeline*>(W2[j]);
+                            OptLevel iopt;
+                            iopt.remove_collector=true;
+                            iopt.verbose_level = opt.verbose_level;
+                            if (optimize_static(*ipipe, iopt)<0) return -1;
+                        }
+                    }                                           
                 }
             }
         }
@@ -524,38 +572,49 @@ static inline int optimize_static(ff_pipeline& pipe, const OptLevel& opt=OptLeve
            }
        }
        
-       int first_farm = find_farm_with_null_collector(pipe.nodes_list);
-       if (first_farm!=-1) {
+       int first_farm, next=0; 
+       while((first_farm=find_farm_with_null_collector(pipe.nodes_list, next)) != -1) {
            if (first_farm < static_cast<int>(pipe.nodes_list.size()-1)) {
 
                // TODO: if the next stage is A2A would be nice to have a rule
                //       that attaches the farm workers with the first set of nodes
 
                ff_farm *farm = reinterpret_cast<ff_farm*>(pipe.nodes_list[first_farm]);
-               if (farm->isOFarm()) {
-                   if ((!pipe.nodes_list[first_farm+1]->isAll2All()) &&
-                       (!pipe.nodes_list[first_farm+1]->isFarm())) {
-                       farm->add_collector(pipe.nodes_list[first_farm+1]);
-                       pipe.remove_stage(first_farm+1);
-                       opt_report(opt.verbose_level, OPT_NORMAL, "OPT (pipe): REMOVE_COLLECTOR: Merged next stage with ordered-farm collector\n");
+               if (farm->hasCollector()) {
+                   if (farm->isOFarm()) {
+                       if ((!pipe.nodes_list[first_farm+1]->isAll2All()) &&
+                           (!pipe.nodes_list[first_farm+1]->isFarm())) {
+                           farm->add_collector(pipe.nodes_list[first_farm+1]);
+                           pipe.remove_stage(first_farm+1);
+                           opt_report(opt.verbose_level, OPT_NORMAL, "OPT (pipe): REMOVE_COLLECTOR: Merged next stage with ordered-farm collector\n");
+                       }
+                   } else {
+                       if (!pipe.nodes_list[first_farm+1]->isAll2All()) {
+                           farm->remove_collector();
+                           opt_report(opt.verbose_level, OPT_NORMAL, "OPT (pipe): REMOVE_COLLECTOR: Removed farm collector\n");
+                           
+                           if (!pipe.nodes_list[first_farm+1]->isMultiInput()) {
+                               // the next stage is a standard node
+                               ff_node *next = pipe.nodes_list[first_farm+1];
+                               pipe.remove_stage(first_farm+1);
+                               ff_minode *mi = new mi_transformer(next);
+                               assert(mi);
+                               pipe.insert_stage(first_farm+1, mi, true);
+                               opt_report(opt.verbose_level, OPT_NORMAL, "OPT (pipe): REMOVE_COLLECTOR: Transformed next stage to multi-input node\n");
+                           } 
+                       }
                    }
-               } else {
-                   if (!pipe.nodes_list[first_farm+1]->isAll2All()) {
+               }
+           } else { // this is the last stage (or the only stage)
+               ff_farm *farm = reinterpret_cast<ff_farm*>(pipe.nodes_list[first_farm]);
+               if (!farm->isOFarm()) {
+                   if (farm->hasCollector()) {
                        farm->remove_collector();
                        opt_report(opt.verbose_level, OPT_NORMAL, "OPT (pipe): REMOVE_COLLECTOR: Removed farm collector\n");
-                       
-                       if (!pipe.nodes_list[first_farm+1]->isMultiInput()) {
-                           // the next stage is a standard node
-                           ff_node *next = pipe.nodes_list[first_farm+1];
-                           pipe.remove_stage(first_farm+1);
-                           ff_minode *mi = new mi_transformer(next);
-                           assert(mi);
-                           pipe.insert_stage(first_farm+1, mi, true);
-                           opt_report(opt.verbose_level, OPT_NORMAL, "OPT (pipe): REMOVE_COLLECTOR: Transformed next stage to multi-input node\n");
-                       } 
                    }
                }
            }
+           next=first_farm+1;
        }
    }
    if (opt.merge_with_emitter) {

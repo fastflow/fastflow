@@ -173,7 +173,11 @@ public:
             error("A2A, try to add invalid nodes to the first set\n");
             return -1;
         }
-        if (w[0]->isMultiOutput()) {  // supposing all are of the same type
+        if (w[0]->isPipe() && !w[0]->isMultiOutput()) {
+            error("A2A, workers of the first set can be pipelines but only if they are multi-output (automatic transformation not yet supported)\n");
+            return -1;
+        }
+        if (w[0]->isMultiOutput()) {  // supposing all others to be the same
             for(size_t i=0;i<w.size();++i) {
                 if (ondemand && (w[i]->ondemand_buffer()==0))
                     w[i]->set_scheduling_ondemand(ondemand);
@@ -189,16 +193,31 @@ public:
             error("A2A, the nodes of the first set cannot be multi-input nodes without being also multi-output (i.e., a composition of nodes). The node must be either standard node or multi-output node or compositions where the second stage is a multi-output node\n");
             return -1;
         }
-        // it is a standard node, so we transform it to a multi-output node
+        // it is a standard node or a pipeline with a standard node last stage, so we transform it to a multi-output node
         for(size_t i=0;i<w.size();++i) {
-            ff_monode *mo = new mo_transformer(w[i], cleanup);
-            if (!mo) {
-                error("A2A, FATAL ERROR not enough memory\n");
-                return -1;
+#if 0            
+            if (w[i]->isPipe()) {
+                w[i]->flatten();
+                ff_node* last = pipe.get_lastnode();
+                assert(last);
+                
+                if (last->isAll2All()) {
+                    error("add_firstset, last stage of the L-Worker pipeline cannot be an all-to-all building block (case not yet supported)\n");
+                    return -1;
+                }
+                
+            } else
+#endif                
+                {
+                ff_monode *mo = new mo_transformer(w[i], cleanup);
+                if (!mo) {
+                    error("A2A, FATAL ERROR not enough memory\n");
+                    return -1;
+                }
+                mo->set_id(int(i));
+                mo->set_scheduling_ondemand(ondemand);
+                workers1.push_back(mo);
             }
-            mo->set_id(int(i));
-            mo->set_scheduling_ondemand(ondemand);
-            workers1.push_back(mo);
         }
         workers1_to_free = true;
         return 0;
@@ -548,10 +567,15 @@ protected:
         size_t nworkers2 = workers2.size();
         for(size_t i=0;i<nworkers2; ++i) {
             if (workers2[i]->isMultiOutput()) {
-                ff_node* t = new ff_buffernode(nentries,fixedsize); 
-                t->set_id(i);
-                internalSupportNodes.push_back(t);
-                workers2[i]->set_output(t);
+                svector<ff_node*> w(1);
+                workers2[i]->get_out_nodes(w);
+                assert(w.size());
+                for(size_t j=0;j<w.size();++j) {
+                    ff_node* t = new ff_buffernode(nentries,fixedsize); 
+                    t->set_id(j);
+                    internalSupportNodes.push_back(t);
+                    if (workers2[i]->set_output(t)<0) return -1;
+                }
             } else
                 if (workers2[i]->create_output_buffer(nentries,fixedsize)==-1) return -1;
         }

@@ -79,7 +79,7 @@ class E: public ff_monode_t<long> {
 public:
     long *svc(long *task) {
         long t = (long)task;
-        if (get_channel_id() == -1) {
+        if (get_channel_id() == -1) { // message coming from the input channels
             if (t == 1) return GO_ON;            
             ++numtasks;
             printf("INPUT: sending %ld to all workers\n", t);
