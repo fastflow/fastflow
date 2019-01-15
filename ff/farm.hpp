@@ -460,12 +460,11 @@ protected:
                                 assert(outputNodesFeedback.size() == workers.size()); // same cardinality
                                 workers[i]->set_output_buffer(outputNodesFeedback[i]->get_in_buffer());
                             } else {
-
-                            
-                            // NOTE: this call could fail because the buffer has already been created (e.g. in the pipeline)
-                            //
-                                workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), false);
-                                if (lb->masterworker() && lb->parallel_workers) {
+                                if (lb->masterworker()) {
+                                    // NOTE: this call could fail because the buffer has already been created (e.g. in the pipeline)
+                                    workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), false);
+                                }                                                                
+                                if (lb->masterworker() && lb->parallel_workers) {    
                                     svector<ff_node*> w(1);
                                     workers[i]->get_out_nodes(w);
                                     this->set_input(w);
