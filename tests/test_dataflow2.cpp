@@ -44,9 +44,7 @@
 
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/node.hpp>
+#include <ff/ff.hpp>
 #include <ff/allocator.hpp>
 
 using namespace ff;
@@ -230,7 +228,7 @@ int main(int argc, char* argv[]) {
     
 
     ff_pipeline pipe(false, 10);  // queues in the pipeline are bounded !
-    ff_farm<>   farm;
+    ff_farm   farm;
     std::vector<ff_node *> w;
     for(int i=0;i<nw;++i) {
 #if defined(TEST_INNER_PIPELINE)

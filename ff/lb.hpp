@@ -65,7 +65,7 @@ namespace ff {
  */
 
 class ff_loadbalancer: public ff_thread {
-    template <typename T1, typename T2>  friend class ff_farm;
+    friend class ff_farm;
     friend class ff_ofarm;
     friend class ff_monode;
 public:    
@@ -78,46 +78,34 @@ public:
 protected:
 
     inline void put_done(int id) {
-        pthread_mutex_lock(&workers[id]->get_cons_m());
-        if ((workers[id]->get_cons_counter()).load() == 0) {
-            pthread_cond_signal(&workers[id]->get_cons_c());
-        }
-        ++((workers[id]->get_cons_counter()));
-        pthread_mutex_unlock(&workers[id]->get_cons_m());       
-        ++prod_counter;
+        ++(*prod_counter);
+        ++((workers[id]->get_cons_counter()));        
+        pthread_cond_signal(&workers[id]->get_cons_c());
     }
 
     inline void pop_done(ff_node *node) {
         if (!node) {
-            pthread_mutex_lock(p_prod_m);
-            if ((*p_prod_counter).load() >= buffer->buffersize()) {
-                pthread_cond_signal(p_prod_c);
-            }
+            pthread_cond_signal(p_prod_c);
             --(*p_prod_counter);
-            pthread_mutex_unlock(p_prod_m);
         } else {
-            pthread_mutex_lock(&node->get_prod_m());
-            if ((node->get_prod_counter()).load() >= node->get_out_buffer()->buffersize()) {
-                pthread_cond_signal(&node->get_prod_c());
-            }
+            pthread_cond_signal(&node->get_prod_c());
             --(node->get_prod_counter());
-            pthread_mutex_unlock(&node->get_prod_m());
         }
-        --cons_counter;                         
+        --(*cons_counter);                         
     }
     
     inline bool init_input_blocking(pthread_mutex_t   *&m,
                                     pthread_cond_t    *&c,
                                     std::atomic_ulong *&counter) {
-        if (cons_counter.load() == (unsigned long)-1) {
+        if (cons_counter->load() == (size_t)-1) {
             cons_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
             cons_c = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
             assert(cons_m); assert(cons_c);
             if (pthread_mutex_init(cons_m, NULL) != 0) return false;
             if (pthread_cond_init(cons_c, NULL) != 0)  return false;
-            cons_counter.store(0);
+            cons_counter->store(0);
         } 
-        m = cons_m,  c = cons_c, counter = &cons_counter;
+        m = cons_m,  c = cons_c, counter = cons_counter;
         return true;
     }
     inline void set_input_blocking(pthread_mutex_t   *&m,
@@ -130,15 +118,16 @@ protected:
     inline bool init_output_blocking(pthread_mutex_t   *&m,
                                      pthread_cond_t    *&c,
                                      std::atomic_ulong *&counter) {
-        if (prod_counter.load() == (unsigned long)-1) {
+        //if (prod_counter.load() == (size_t)-1) {
+        if (prod_counter->load() == (size_t)-1) {
             prod_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
             prod_c = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
             assert(prod_m); assert(prod_c);
             if (pthread_mutex_init(prod_m, NULL) != 0) return false;
             if (pthread_cond_init(prod_c, NULL) != 0)  return false;
-            prod_counter.store(0);
+            prod_counter->store(0);
         } 
-        m = prod_m, c = prod_c, counter = &prod_counter;
+        m = prod_m, c = prod_c, counter = prod_counter;
         return true;
     }
     inline void set_output_blocking(pthread_mutex_t   *&m,
@@ -149,11 +138,11 @@ protected:
 
     virtual inline pthread_mutex_t   &get_prod_m()       { return *prod_m;}
     virtual inline pthread_cond_t    &get_prod_c()       { return *prod_c;}
-    virtual inline std::atomic_ulong &get_prod_counter() { return prod_counter;}
+    virtual inline std::atomic_ulong &get_prod_counter() { return *prod_counter;}
     
     virtual inline pthread_mutex_t   &get_cons_m()       { return *cons_m;}
     virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
-    virtual inline std::atomic_ulong &get_cons_counter() { return cons_counter;}
+    virtual inline std::atomic_ulong &get_cons_counter() { return *cons_counter;}
     
     /**
      * \brief Pushes EOS to the worker
@@ -163,14 +152,21 @@ protected:
      */
     inline void push_eos(void *task=NULL) {
         //register int cnt=0;
-        void * eos = (!task) ? EOS : task;
-        broadcast_task(eos);
+
+        if (!task) task = FF_EOS;
+        broadcast_task(task);
+        if (feedbackid > 0) {
+            for(size_t i=feedbackid; i<workers.size();++i)
+                this->ff_send_out_to(task, i);
+        }
     }
     inline void push_goon() {
-        void * goon = (void *)(GO_ON);
+        void * goon = FF_GO_ON;
         broadcast_task(goon);
     }
 
+    void propagateEOS(void *task=FF_EOS) { push_eos(task); }
+    
     /** 
      * \brief Virtual function that can be redefined to implement a new scheduling
      * policy.
@@ -259,9 +255,9 @@ protected:
      * \return \p true, if successful, or \p false if not successful.
      *
      */
-    virtual bool schedule_task(void * task, 
-                               unsigned long retry=((unsigned long)-1), 
-                               unsigned long ticks=0) {
+    virtual inline bool schedule_task(void * task, 
+                                      unsigned long retry=((unsigned long)-1), 
+                                      unsigned long ticks=0) {
         unsigned long cnt;
         if (blocking_out) {
             do {
@@ -276,13 +272,16 @@ protected:
                         FFTRACE(++taskcnt);
                         put_done(nextw);
                         return true;
-                    }
+                    } 
                     ++cnt;
                     if (cnt == ntentative()) break; 
                 } while(1);
+                
                 pthread_mutex_lock(prod_m);
-                while(prod_counter.load() >= (running*workers[0]->get_in_buffer()->buffersize())) {
-                    pthread_cond_wait(prod_c, prod_m);
+                if (prod_counter->load() >= (running*workers[0]->get_in_buffer()->buffersize())) {
+                    struct timespec tv;
+                    timedwait_timeout(tv);
+                    pthread_cond_timedwait(prod_c, prod_m, &tv);
                 }
                 pthread_mutex_unlock(prod_m);
             } while(1);
@@ -330,19 +329,29 @@ protected:
             do {
                 if (++start == ite) start=availworkers.begin();
                 //if (start == ite) start=availworkers.begin();  // read again next time from the same, this needs (**)
+
+                const size_t idx = (start-availworkers.begin());
+                if (filter && !filter->in_active && (idx >= multi_input_start)) continue;
+                
                 if((*start)->get(task)) {
-                    const size_t idx = (start-availworkers.begin());
-                    //channelid = (idx >= multi_input_start) ? -1: (*start)->get_my_id();
-
-                    channelid = idx;
-                    if (idx >= multi_input_start) channelid = -1;
-                    else 
-                        if (idx == (size_t)managerpos) channelid = (*start)->get_my_id();
-
-
-                    // DA RIVEDERE !!!!!!
-                    // if (blkvector[idx]) pop_done(*start);
                     
+                    input_channelid = (idx >= multi_input_start) ? (*start)->get_my_id():-1;
+                    channelid = idx;
+                    if (idx >= multi_input_start) {
+                        channelid = -1;
+                        // NOTE: the filter can be a multi-input node so this call allows
+                        //       to set the proper channelid of the gatherer (gt).
+                        if (filter) filter->set_input_channelid((ssize_t)(idx-multi_input_start), true);
+                    }
+                    else {
+                        if (idx == (size_t)managerpos) {
+                            channelid = (*start)->get_my_id();
+                            if (filter) filter->set_input_channelid(channelid, true);
+                        } else 
+                            if (filter) filter->set_input_channelid((ssize_t)idx, false);
+                    }
+                    
+                    if (blocking_in) pop_done(*start);
 
                     return start;
                 }
@@ -351,7 +360,7 @@ protected:
                     if (++cnt == nw) {
                         if (filter && !filter->in_active) { *task=NULL; channelid=-2; return ite;}
                         if (buffer && buffer->pop(task)) {
-                            if (blkvector[availworkers.size()]) pop_done(NULL);
+                            if (blocking_in) pop_done(NULL);
                             channelid = -1;
                             return ite;
                         }
@@ -361,8 +370,10 @@ protected:
             } while(1);
             if (blocking_in) {
                 pthread_mutex_lock(cons_m);
-                while (cons_counter.load() == 0) {
-                    pthread_cond_wait(cons_c, cons_m);
+                if (cons_counter->load()==0) {
+                    struct timespec tv;
+                    timedwait_timeout(tv);                    
+                    pthread_cond_timedwait(cons_c, cons_m, &tv);
                 }
                 pthread_mutex_unlock(cons_m);
             } else losetime_in();
@@ -385,16 +396,20 @@ protected:
             if (!filter) {
                 while (! buffer->pop(task)) {
                     pthread_mutex_lock(cons_m);
-                    while (cons_counter.load() == 0) {
-                        pthread_cond_wait(cons_c, cons_m);
+                    if (cons_counter->load() == 0) {
+                        struct timespec tv;
+                        timedwait_timeout(tv);
+                        pthread_cond_timedwait(cons_c, cons_m, &tv);
                     }
                     pthread_mutex_unlock(cons_m);
                 } // while
             } else 
                 while (! filter->pop(task)) {
                     pthread_mutex_lock(cons_m);
-                    while (cons_counter.load() == 0) {
-                        pthread_cond_wait(cons_c, cons_m);
+                    if (cons_counter->load() ==0) {
+                        struct timespec tv;
+                        timedwait_timeout(tv);
+                        pthread_cond_timedwait(cons_c, cons_m, &tv);
                     }
                     pthread_mutex_unlock(cons_m);
                 } //while 
@@ -424,9 +439,6 @@ protected:
         
 
         bool r= ((ff_loadbalancer *)obj)->schedule_task(task, retry, ticks);
-        if (r && (task == BLK || task == NBLK)) { 
-            ((ff_loadbalancer *)obj)->blocking_out = (task==BLK); 
-        }
 #if defined(FF_TASK_CALLBACK)
         // used to notify that a task has been sent out
         if (r) ((ff_loadbalancer *)obj)->callbackOut(obj);
@@ -434,6 +446,17 @@ protected:
         return r;
     }
 
+    /**
+     *
+     * \brief It gathers all tasks from input channels.
+     *
+     *
+     */
+    static inline int ff_all_gather_emitter(void *task, void **V, void*obj) {
+        return ((ff_loadbalancer*)obj)->all_gather(task,V);
+    }
+
+#if 0    
     int set_internal_multi_input(svector<ff_node*> &mi) {
         if (mi.size() == 0) {
             error("LB, invalid internal multi-input vector size\n");
@@ -442,20 +465,21 @@ protected:
         int_multi_input = mi;
         return 0;
     }
-
+#endif
+    
     // removes all dangling EOSs
     void absorb_eos(svector<ff_node*>& W, size_t size) {
         void *task;
         for(size_t i=0;i<size;++i) {
-            do ; while(!W[i]->get(&task) || (task == BLK) || (task==NBLK));
-            assert((task == EOS) || (task == EOS_NOFREEZE) || (task == BLK) || (task == NBLK));
+            do ; while(!W[i]->get(&task));
+            assert((task == FF_EOS) || (task == FF_EOS_NOFREEZE));
         }
     }
     
 
 #if defined(FF_TASK_CALLBACK)
-    virtual void callbackIn(void  *t=NULL) { filter->callbackIn(t);  }
-    virtual void callbackOut(void *t=NULL) { filter->callbackOut(t); }
+    virtual void callbackIn(void  *t=NULL) { if (filter) filter->callbackIn(t);  }
+    virtual void callbackOut(void *t=NULL) { if (filter) filter->callbackOut(t); }
 #endif
 
 public:
@@ -467,20 +491,59 @@ public:
      *  \param max_num_workers The max number of workers allowed
      */
     ff_loadbalancer(size_t max_num_workers): 
-        running(-1),max_nworkers(max_num_workers),nextw(-1),channelid(-2),
+        running(-1),max_nworkers(max_num_workers),nextw(-1),feedbackid(-1),
+        channelid(-2),input_channelid(-1),
         filter(NULL),workers(max_num_workers),
-        buffer(NULL),skip1pop(false),master_worker(false),
-        multi_input(MAX_NUM_THREADS),multi_input_start((size_t)-1),
-        int_multi_input(MAX_NUM_THREADS) {
+        buffer(NULL),skip1pop(false),master_worker(false),parallel_workers(false),
+        multi_input(MAX_NUM_THREADS), inputNodesFeedback(MAX_NUM_THREADS), multi_input_start((size_t)-1) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
-        cons_counter.store(-1);
-        prod_counter.store(-1);
         p_prod_m = NULL, p_prod_c = NULL, p_prod_counter = NULL;
+        // these two are allocated on the head because they have to be copiable
+        prod_counter = new std::atomic_ulong;
+        cons_counter = new std::atomic_ulong;
+        assert(prod_counter);assert(cons_counter);
+        prod_counter->store(-1);
+        cons_counter->store(-1);
+
         blocking_in = blocking_out = FF_RUNTIME_MODE;
 
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
+    }
+
+    ff_loadbalancer& operator=(ff_loadbalancer&& lbin) {
+        set_barrier(lbin.get_barrier());
+
+        multi_input = lbin.multi_input;
+        inputNodesFeedback= lbin.inputNodesFeedback;
+        cons_m       = lbin.cons_m;
+        cons_c       = lbin.cons_c;
+        if (cons_counter) delete cons_counter;
+        cons_counter = lbin.cons_counter;
+        prod_m       = lbin.prod_m;
+        prod_c       = lbin.prod_c;
+        if (prod_counter) delete prod_counter;
+        prod_counter =  lbin.prod_counter;
+        p_prod_m       = lbin.p_prod_m;
+        p_prod_c       = lbin.p_prod_c;
+        p_prod_counter = lbin.p_prod_counter;
+        buffer         = lbin.buffer;
+        blocking_in    = lbin.blocking_in;
+        blocking_out   = lbin.blocking_out;
+        skip1pop       = lbin.skip1pop;
+        filter         = lbin.filter;
+        workers        = lbin.workers;
+        manager        = lbin.manager;
+        
+        lbin.cons_m = nullptr;
+        lbin.cons_c = nullptr;
+        lbin.cons_counter = nullptr;
+        lbin.prod_m = nullptr;
+        lbin.prod_c = nullptr;
+        lbin.prod_counter = nullptr;
+        lbin.set_barrier(nullptr);
+        return *this;
     }
 
     /** 
@@ -499,6 +562,10 @@ public:
             free(cons_c);
             cons_c = nullptr;
         }
+        if (cons_counter) {
+            delete cons_counter;
+            cons_counter = nullptr;
+        }
         if (prod_m) {
             pthread_mutex_destroy(prod_m);
             free(prod_m);
@@ -508,6 +575,10 @@ public:
             pthread_cond_destroy(prod_c);
             free(prod_c);
             prod_c = nullptr;
+        }
+        if (prod_counter) {
+            delete prod_counter;
+            prod_counter = nullptr;
         }
     }
 
@@ -526,16 +597,18 @@ public:
             return -1;
         }
         filter = f;
-        filter->registerCallback(ff_send_out_emitter, this);
-
-        // setting the thread for the filter
-        filter->setThread(this);
-
         return 0;
     }
 
     ff_node *get_filter() const { return filter;}
 
+    void reset_filter() {
+        if (filter == NULL) return;
+        filter->registerCallback(NULL,NULL);
+        filter->setThread(NULL);
+        filter = NULL;
+    }
+    
 
     /**
      * \brief Sets input buffer
@@ -603,13 +676,30 @@ public:
 
     const svector<ff_node*>& getWorkers() const { return workers; }
 
+    void set_feedbackid_threshold(size_t id) {
+        feedbackid = id;
+    }
+    
     /**
      * \brief Skips first pop
      *
      * It sets \p skip1pop to \p true
      *
      */
-    void skipfirstpop() { skip1pop=true;}
+    void skipfirstpop(bool sk) {
+        skip1pop=sk;
+        for(size_t i=0;i<workers.size();++i)
+            workers[i]->skipfirstpop(false);
+    }
+
+
+    void blocking_mode(bool blk=true) {
+        blocking_in = blocking_out = blk;
+    }
+
+    void no_mapping() {
+        default_mapping = false;
+    }
     
     /**
      * \brief Decides master-worker schema
@@ -639,11 +729,7 @@ public:
      *
      * \return 0 if successful, otherwise -1.
      */
-    int set_input(svector<ff_node*> &mi) {
-        if (mi.size() == 0) {
-            error("LB, set_input, invalid multi-input vector size\n");
-            return -1;
-        }
+    int set_input(const svector<ff_node*> &mi) {
         multi_input += mi;
         return 0;
     }
@@ -651,6 +737,16 @@ public:
     int set_input(ff_node * node) {
         multi_input.push_back(node);
         return 0;
+    }
+    int set_input_feedback(ff_node * node) {
+        inputNodesFeedback.push_back(node);
+        return 0;
+    }
+    void get_in_nodes(svector<ff_node*>&w) {
+        w+=multi_input;
+    }
+    void get_in_nodes_feedback(svector<ff_node*>&w) {
+        w += inputNodesFeedback;
     }
 
     virtual inline bool ff_send_out_to(void *task, int id,  
@@ -660,28 +756,20 @@ public:
         _retry:
             if (workers[id]->put(task)) {
                 FFTRACE(++taskcnt);
-                
-                pthread_mutex_lock(&workers[id]->get_cons_m());
-                if ((workers[id]->get_cons_counter()).load() == 0)
-                    pthread_cond_signal(&workers[id]->get_cons_c());
-                ++(workers[id]->get_cons_counter());
-                pthread_mutex_unlock(&workers[id]->get_cons_m());            
-                ++prod_counter;
+                put_done(id);
             } else {
                 pthread_mutex_lock(prod_m);
-                // here we do not use while
-                // the thread can be woken up more frequently
-                if (prod_counter.load() >= workers[id]->get_in_buffer()->buffersize())
-                    pthread_cond_wait(prod_c, prod_m);
+                if (prod_counter->load() >= workers[id]->get_in_buffer()->buffersize()) {
+                    struct timespec tv;
+                    timedwait_timeout(tv);
+                    pthread_cond_timedwait(prod_c, prod_m, &tv);
+                }
                 pthread_mutex_unlock(prod_m);     
                 goto _retry;
             }
 #if defined(FF_TASK_CALLBACK)
             callbackOut(this);
 #endif
-            if (task == BLK || task == NBLK) { 
-                blocking_out = (task==BLK); 
-            }
             return true;
         }
         for(unsigned long i=0;i<retry;++i) {
@@ -690,9 +778,6 @@ public:
 #if defined(FF_TASK_CALLBACK)
                 callbackOut(this);
 #endif
-                if (task == BLK || task == NBLK) { 
-                    blocking_out = (task==BLK); 
-                }                
                return true;
             }
             losetime_out(ticks);
@@ -719,17 +804,17 @@ public:
                    retry.pop_back();
                } else {
                    pthread_mutex_lock(prod_m);
-                   while(prod_counter.load() >= (retry.size()*workers[0]->get_in_buffer()->buffersize()))
-                       pthread_cond_wait(prod_c, prod_m);
+                   if (prod_counter->load() >= (retry.size()*workers[0]->get_in_buffer()->buffersize())) {
+                       struct timespec tv;
+                       timedwait_timeout(tv);
+                       pthread_cond_timedwait(prod_c, prod_m, &tv);
+                   }
                    pthread_mutex_unlock(prod_m); 
                }
            }           
 #if defined(FF_TASK_CALLBACK)
            callbackOut(this);
 #endif
-           if (task == BLK || task == NBLK) { 
-               blocking_out = (task==BLK); 
-           }    
            return;
        }
        for(ssize_t i=0;i<running;++i) {
@@ -744,11 +829,62 @@ public:
 #if defined(FF_TASK_CALLBACK)
        callbackOut(this);
 #endif
-       if (task == BLK || task == NBLK) { 
-           blocking_out = (task==BLK); 
-       }    
     }
 
+    int all_gather(void* task, void**V) {
+        V[input_channelid]=task;
+        if (multi_input.size()==0) return -1;
+        size_t _nw=0;
+        svector<ff_node*> _workers(MAX_NUM_THREADS);
+        for(size_t i=0;i<multi_input.size(); ++i) {
+            if (!offline[i]) {
+                ++_nw;
+                _workers.push_back(multi_input[i]);
+            }
+            else _workers.push_back(nullptr);
+        }
+        svector<size_t> retry(_nw);
+        for(size_t i=0;i<_workers.size();++i) {
+            if(i!=(size_t)input_channelid) {
+                if (_workers[i]) {
+                    if (!_workers[i]->get(&V[i])) retry.push_back(i);
+                    else if (blocking_in) pop_done(_workers[i]);
+                }
+            }
+        }
+        while(retry.size()) {
+            input_channelid = retry.back();
+            if(_workers[input_channelid]->get(&V[input_channelid])) {
+                if (blocking_in) pop_done(_workers[input_channelid]);
+                retry.pop_back();
+            }
+            else {
+                if (blocking_in) {
+                    pthread_mutex_lock(cons_m);
+                    if (cons_counter->load() == 0) {
+                        struct timespec tv;
+                        timedwait_timeout(tv);
+                        pthread_cond_timedwait(cons_c, cons_m, &tv);
+                    }
+                    pthread_mutex_unlock(cons_m);
+                } else losetime_in();
+            }
+        }
+        bool eos=false;
+        for(size_t i=0;i<_nw;++i) {
+            if (V[i] == FF_EOS || V[i] == FF_EOS_NOFREEZE) {
+                eos=true;
+                offline[i] = true;
+                availworkers.erase(availworkers.begin()+i);
+                V[i]=nullptr;
+                FFTRACE(taskcnt--);
+            } 
+        }
+        FFTRACE(taskcnt+=_nw-1);
+        return eos?-1:0;
+    }
+        
+    
     /**
      * \brief Gets the masterworker flags
      */
@@ -781,7 +917,7 @@ public:
      */
     virtual void * svc(void *) {
         void * task = NULL;
-        void * ret  = (void *)FF_EOS;
+        void * ret  = FF_EOS;
         bool inpresent  = (get_in_buffer() != NULL);
         bool skipfirstpop = skip1pop;
 
@@ -793,30 +929,34 @@ public:
         
 
         gettimeofday(&wtstart,NULL);
-        if (!master_worker && (multi_input.size()==0) && (int_multi_input.size()==0)) {
+        if (!master_worker && (multi_input.size()==0) && (inputNodesFeedback.size()==0)) {
 
+            // it is possible that the input queue has been configured as multi-producer
+            // therefore multiple node write in that queue and so the EOS has to be
+            // notified only when 'neos' EOSs have been received. By default neos = 1
+            int neos = filter?filter->neos:1;
+            
             do {
                 if (inpresent) {
                     if (!skipfirstpop) pop(&task);
                     else skipfirstpop=false;
-                    
-                    if (task == EOS) {
-                        push_eos(); 
+
+                    // ignoring EOSW in input
+                    if (task == FF_EOSW) continue;                     
+                    if (task == FF_EOS) {
+                        if (--neos>0) continue;
                         if (filter) filter->eosnotify();
+                        push_eos(); 
                         break;
-                    } else if (task == GO_OUT) 
+                    } else if (task == FF_GO_OUT) 
                         break;
-                    else if (task == EOS_NOFREEZE) {
-                        if (filter) {
+                    else if (task == FF_EOS_NOFREEZE) {
+                        if (--neos>0) continue;
+                        if (filter) 
                             filter->eosnotify();
-                        }
                         ret = task;
                         break;
-                    } else if (task == BLK || task == NBLK) {
-                        push_eos(task); // *BLK are propagated
-                        blocking_in = blocking_out = (task == BLK);
-                        continue;
-                    }                       
+                    } 
                 }
 
                 if (filter) {
@@ -827,6 +967,7 @@ public:
 #endif
                     task = filter->svc(task);
 
+                    
 #if defined(TRACE_FASTFLOW)
                     ticks diff=(getticks()-t0);
                     tickstot +=diff;
@@ -834,27 +975,22 @@ public:
                     ticksmax=(std::max)(ticksmax,diff);
 #endif  
 
-                    if (task == GO_ON) continue;
-                    if (task == BLK || task == NBLK) { 
-                        push_eos(task);
-                        blocking_out = (task==BLK); 
-                        continue;
-                    }
-                    if ((task == GO_OUT) || (task == EOS_NOFREEZE)) {
+                    if (task == FF_GO_ON) continue;
+                    if ((task == FF_GO_OUT) || (task == FF_EOS_NOFREEZE)) {
                         ret = task;
                         break; // exiting from the loop without sending out the task
                     }
                     // if the filter returns NULL/EOS we exit immediatly
-                    if (!task || (task==EOS) || (task==EOSW)) {  // EOSW is propagated to workers
+                    if (!task || (task==FF_EOS) || (task==FF_EOSW)) {  // EOSW is propagated to workers
                         push_eos(task);
-                        ret = EOS;
+                        ret = FF_EOS;
                         break;
                     }
                 } else 
                     if (!inpresent) { 
                         push_goon(); 
                         push_eos();
-                        ret = EOS; 
+                        ret = FF_EOS; 
                         break;
                     }
                 
@@ -865,15 +1001,11 @@ public:
 #endif
             } while(true);
         } else {
-            bool local_blocking_in = blocking_in;
-            size_t nw=0, nw_blk=0, nblk=0;                        
-            // contains current worker
-            std::deque<ff_node *> availworkers; 
-
-            if (master_worker) {
+            size_t nw=0;
+            availworkers.resize(0);
+            if (master_worker && !parallel_workers) {
                 for(int i=0;i<running;++i) {
                     availworkers.push_back(workers[i]);
-                    blkvector.push_back(local_blocking_in);
                 }
                 nw = running;
             }
@@ -883,30 +1015,22 @@ public:
                 managerpos = availworkers.size();
                 availworkers.push_back(manager);
                 nw += 1;
-                nw_blk += 1;
             }
-            if (int_multi_input.size()>0) {
-                for(size_t i=0;i<int_multi_input.size();++i) {
-                    availworkers.push_back(int_multi_input[i]);
-                    blkvector.push_back(local_blocking_in);
-                }
-                nw += int_multi_input.size();
+            if (inputNodesFeedback.size()>0) {
+                for(size_t i=0;i<inputNodesFeedback.size();++i)
+                    availworkers.push_back(inputNodesFeedback[i]);
+                nw += inputNodesFeedback.size();
             }
             if (multi_input.size()>0) {
                 multi_input_start = availworkers.size();
                 for(size_t i=0;i<multi_input.size();++i) {
+                    offline[i]=false;
                     availworkers.push_back(multi_input[i]);
-                    blkvector.push_back(local_blocking_in);
                 }
                 nw += multi_input.size();
-                nw_blk += multi_input.size();
             } 
-            //if ((master_worker || int_multi_input.size()>0) && inpresent) {
             if (multi_input.size()==0 && inpresent) {
-                assert(multi_input.size() == 0);
                 nw += 1;
-                nw_blk += 1;
-                blkvector.push_back(local_blocking_in);
             }
             std::deque<ff_node *>::iterator start(availworkers.begin());
             std::deque<ff_node *>::iterator victim(availworkers.begin());
@@ -915,54 +1039,24 @@ public:
                     victim=collect_task(&task, availworkers, start);
                 } else skipfirstpop=false;
                 
-                if (task == GO_OUT) { 
+                if (task == FF_GO_OUT) { 
                     ret = task; 
                     break; 
-                } 
-                if (task == BLK || task == NBLK) {
-                    if (channelid == -1) { // msg coming from input channels (not feedback ones) !
-                        if (inpresent) {
-                            assert(multi_input.size() == 0);
-                            push_eos(task); // *BLK are propagated
-                            local_blocking_in = blocking_in = blocking_out = (task == BLK);
-                            blkvector[availworkers.size()] = local_blocking_in;
-                        } else {
-                            const bool taskblocking = (task == BLK);
-                            const size_t idx = (victim-availworkers.begin());                        
-                            assert(idx>=0);
-                            blkvector[idx] = taskblocking;
+                }
+                // ignoring EOSW in input
+                if (task == FF_EOSW) continue; 
 
-                            if (local_blocking_in ^ taskblocking) { // reset
-                                nblk = 1;
-                                if (nblk == nw_blk) {
-                                    push_eos(task);
-                                    blocking_out = blocking_in = taskblocking;                    
-                                }                                 
-                                local_blocking_in = !local_blocking_in;
-                            } else {
-                                if (++nblk == nw_blk) {
-                                    assert(taskblocking == local_blocking_in);
-                                    push_eos(task);
-                                    blocking_out = blocking_in = taskblocking; 
-                                    nblk=0;
-                                }                                 
-                            }                                                                        
-                        }
-                    } // NOTE: BLK and NBLK tasks that are coming from internal channels 
-                      //       are not propagated ! 
-                    continue;
-                }      
-
-                if ((task == EOS) || 
-                    (task == EOS_NOFREEZE)) {
-                    if (filter) filter->eosnotify(channelid);
+                if ((task == FF_EOS) || 
+                    (task == FF_EOS_NOFREEZE)) {
+                    if (filter) {
+                        filter->eosnotify(channelid);
+                    }
                     if ((victim != availworkers.end())) {
-                        if ((task != EOS_NOFREEZE) && channelid>0 && 
+                        if ((task != FF_EOS_NOFREEZE) && channelid>0 && 
                             (channelid == managerpos ||  ((size_t)channelid<workers.size() && !workers[channelid]->isfrozen()))) {  
 
                             availworkers.erase(victim);
                             start=availworkers.begin(); // restart iterator
-
                             if (channelid == managerpos) { 
                                 // the manager has been added as a worker
                                 // so when it terminates we have to decrease the 
@@ -971,15 +1065,11 @@ public:
                             }
                         }
                     }
-
-                    //if (master_worker || 
-                    //    (channelid==-1 && multi_input.size()>0) || 
-                    //    (channelid>=0 && int_multi_input.size()>0)) { 
                     if (!--nw) {
-                        // this conditions means there is a loop
-                        // so in this case I don't want to send an additional
-                        // EOS since I have already received all of them
-                        if (!master_worker && (task==EOS) && (int_multi_input.size()==0)) {
+                        // this conditions means that if there is a loop
+                        // we don't want to send an additional
+                        // EOS since all EOSs have already been received
+                        if (!master_worker && (task==FF_EOS) && (inputNodesFeedback.size()==0)) {
                             push_eos();
                         }
                         ret = task;
@@ -1002,27 +1092,23 @@ public:
                         ticksmax=(std::max)(ticksmax,diff);
 #endif  
 
-                        if (task == GO_ON) continue;
-                        if (task == BLK || task == NBLK) {
-                            push_eos(task);
-                            blocking_out = (task == BLK);
-                            continue;
-                        }
-                        if ((task == GO_OUT) || (task == EOS_NOFREEZE)){
+                        if (task == FF_GO_ON) continue;
+                        if ((task == FF_GO_OUT) || (task == FF_EOS_NOFREEZE)){
                             ret = task;
                             break; // exiting from the loop without sending out the task
                         }
                         // if the filter returns NULL we exit immediatly
-                        if (!task || (task == EOS) || (task == EOSW) ) {
+                        if (!task || (task == FF_EOS) || (task == FF_EOSW) ) {
                             push_eos(task);
                             // try to remove the additional EOS due to 
                             // the feedback channel
+                            
                             if (inpresent || multi_input.size()>0 || isfrozen()) {
-                                if (master_worker) absorb_eos(workers, running);
-                                if (int_multi_input.size()>0) absorb_eos(int_multi_input, 
-                                                                         int_multi_input.size());
+                                if (master_worker && !parallel_workers) absorb_eos(workers, running);
+                                if (inputNodesFeedback.size()>0) absorb_eos(inputNodesFeedback, 
+                                                                            inputNodesFeedback.size());
                             }
-                            ret = EOS;
+                            ret = FF_EOS;
                             break;
                         }
                     }
@@ -1047,10 +1133,19 @@ public:
      * \return 0 if successful, otherwise -1 is returned.
      *
      */
-    virtual int svc_init() { 
+    virtual int svc_init() {
+#if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
+        if (this->get_mapping()) {
+            int cpuId = (filter)?filter->getCPUId():-1;
+            if (ff_mapThreadToCpu((cpuId<0) ? (cpuId=threadMapper::instance()->getCoreId(tid)) : cpuId)!=0)
+                error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());            
+            if (filter) filter->setCPUId(cpuId);
+        }
+#endif        
         gettimeofday(&tstart,NULL);
-
-        if (filter && filter->svc_init() <0) return -1;        
+        if (filter) {
+            if (filter->svc_init() <0) return -1;
+        }
 
         return 0;
     }
@@ -1062,10 +1157,31 @@ public:
      *
      */
     virtual void svc_end() {
-        if (filter) filter->svc_end();
+        if (filter) filter->svc_end();        
         gettimeofday(&tstop,NULL);
     }
 
+    int dryrun() {
+        if (feedbackid>0)
+            running = feedbackid;
+        else 
+            running=workers.size();
+        
+        if (filter) {
+            // WARNING: If the last node of a composition is a multi-output node, then the
+            // callback must not be set.
+            if (!filter->isMultiOutput()) {
+                filter->registerCallback(ff_send_out_emitter, this);
+            }
+            // setting the thread for the filter
+            filter->setThread(this);
+            
+            assert(blocking_in==blocking_out);
+            filter->blocking_mode(blocking_in);
+        }        
+        return 0;
+    }
+    
     /**
      * \brief Runs the loadbalancer
      *
@@ -1074,7 +1190,9 @@ public:
      * \return 0 if successful, otherwise -1 is returned.
      */
     int runlb(bool=false, ssize_t nw=-1) {
-        running = (nw<=0)?workers.size():nw;
+        dryrun();        
+        running = (nw<=0)?(feedbackid>0?feedbackid:workers.size()):nw;
+        
         if (this->spawn(filter?filter->getCPUId():-1) == -2) {
             error("LB, spawning LB thread\n");
             running = -1;
@@ -1087,14 +1205,26 @@ public:
         running = (nw<=0)?workers.size():nw;
         if (isfrozen()) {
             for(size_t i=0;i<(size_t)running;++i) {
-                if (workers[i]->freeze_and_run()<0) {
+                /* set the initial blocking mode
+                 */
+                assert(blocking_in==blocking_out);
+                workers[i]->blocking_mode(blocking_in);
+                if (!default_mapping) workers[i]->no_mapping();
+                workers[i]->skipfirstpop(false);
+                if (workers[i]->freeze_and_run(true)<0) {
                     error("LB, spawning worker thread\n");
                     return -1;
                 }            
             }
         } else {
             for(size_t i=0;i<(size_t)running;++i) {
-                if (workers[i]->run()<0) {
+                /* set the initial blocking mode
+                 */
+                assert(blocking_in==blocking_out);
+                workers[i]->blocking_mode(blocking_in);
+                if (!default_mapping) workers[i]->no_mapping();
+                workers[i]->skipfirstpop(false);
+                if (workers[i]->run(true)<0) {
                     error("LB, spawning worker thread\n");
                     return -1;
                 }            
@@ -1138,26 +1268,14 @@ public:
      * \return 0 if successful, otherwise -1 is returned
      */
     virtual int run(bool=false) {
-        running = workers.size();
-        if (this->spawn(filter?filter->getCPUId():-1) == -2) {
+        if (runlb(false, -1) <0) {
             error("LB, spawning LB thread\n");
             return -1;
-        }        
-        if (isfrozen()) {
-            for(size_t i=0;i<workers.size();++i) {
-                if (workers[i]->freeze_and_run(true)<0) {
-                    error("LB, spawning worker thread\n");
-                    return -1;
-                }            
-            }                
-        } else {            
-            for(size_t i=0;i<workers.size();++i) {
-                if (workers[i]->run(true)<0) {
-                    error("LB, spawning worker thread\n");
-                    return -1;
-                }            
-            }                
         }
+        if (runWorkers() <0) {
+            error("LB, spawning worker thread\n");
+            return -1;
+        }            
         return 0;
     }
 
@@ -1365,18 +1483,22 @@ private:
     ssize_t            running;             /// Number of workers running
     size_t             max_nworkers;        /// Max number of workers allowed
     ssize_t            nextw;               /// out index
-    ssize_t            channelid; 
+    ssize_t            feedbackid;          /// threshold index
+    ssize_t            channelid;
+    ssize_t            input_channelid;     
     ff_node         *  filter;              /// user's filter
     ff_node         *  manager = nullptr;   /// manager node, typically not present    
     svector<ff_node*>  workers;             /// farm's workers
+    std::deque<ff_node *> availworkers;     /// contains current worker, used in multi-input mode
+    svector<bool>      offline;             /// input workers that are offline
     FFBUFFER        *  buffer;
     bool               skip1pop;
     bool               master_worker;
+    bool               parallel_workers;    /// true if workers are A2As, pipes or farms
     svector<ff_node*>  multi_input;         /// nodes coming from other stages
+    svector<ff_node*>  inputNodesFeedback;  /// nodes coming node feedback channels
     size_t             multi_input_start;   /// position in the availworkers array
     ssize_t            managerpos=-1;       /// position in the availworkers array of the manager
-    svector<ff_node*>  int_multi_input;     /// internal buffers
-    
 
     struct timeval tstart;
     struct timeval tstop;
@@ -1389,7 +1511,8 @@ private:
     // for the input queue
     pthread_mutex_t    *cons_m = nullptr;
     pthread_cond_t     *cons_c = nullptr;
-    std::atomic_ulong  cons_counter;
+    std::atomic_ulong  *cons_counter = nullptr;
+    //std::atomic_ulong  cons_counter;
 
     // for synchronizing with the previous multi-output stage
     pthread_mutex_t   *p_prod_m = nullptr;
@@ -1399,11 +1522,11 @@ private:
     // for the output queue
     pthread_mutex_t    *prod_m = nullptr;
     pthread_cond_t     *prod_c = nullptr;
-    std::atomic_ulong  prod_counter;
+    std::atomic_ulong  *prod_counter = nullptr;
+    //std::atomic_ulong  prod_counter;
 
     bool               blocking_in;
     bool               blocking_out;
-    svector<bool>      blkvector;
 
 #if defined(TRACE_FASTFLOW)
     unsigned long taskcnt;

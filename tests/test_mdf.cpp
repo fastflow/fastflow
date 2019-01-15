@@ -58,7 +58,7 @@
 
 using namespace ff;
 
-const bool check = false;    // true to check the result
+const bool check = true;
 const long MYSIZE = (1 << 20);
 
 // X = X + Y
@@ -221,6 +221,10 @@ int main() {
 		sum2(C, D, MYSIZE);
 		reduce(&res, A, B, C, D, MYSIZE);
         printf("result = %ld\n",res);
+        if (P.res != res) {
+            printf("WRONG RESULT\n");
+            return -1;
+        }
     }
     return 0;
 

@@ -42,10 +42,7 @@
  */
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
-#include <ff/node.hpp>
-  
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 // generic worker
@@ -66,7 +63,7 @@ private:
 // the gatherer filter
 class Collector: public ff_node {
 public:
-    Collector(ff_farm<> * f):secondFarm(f) {}
+    Collector(ff_farm * f):secondFarm(f) {}
 
     int svc_init() {
         if (secondFarm==NULL) return 0;
@@ -111,7 +108,7 @@ public:
 
 
 private:
-    ff_farm<> * secondFarm;
+    ff_farm *secondFarm;
 };
 
 int main(int argc, char * argv[]) {
@@ -133,13 +130,13 @@ int main(int argc, char * argv[]) {
         return -1;
     }
     
-    ff_farm<> farm(true /* accelerator set */);
+    ff_farm farm(true /* accelerator set */);
 
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker("1"));
     farm.add_workers(w);
 
-    ff_farm<> farm2(true);
+    ff_farm farm2(true);
     std::vector<ff_node *> w2;
     for(int i=0;i<nworkers;++i) w2.push_back(new Worker("2"));
     farm2.add_workers(w2);

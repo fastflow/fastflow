@@ -42,8 +42,7 @@
 
 #include <stdlib.h>
 #include <iostream>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 #include <ff/allocator.hpp>
 #include <ff/mapping_utils.hpp>
 
@@ -152,7 +151,7 @@ int main(int argc, char * argv[]) {
     srandom(::getpid()+(getusec()%4999)); // init seed
      
     // build the farm module
-    ff_farm<> farm(true, IN_QUEUE_SIZE, OUT_QUEUE_SIZE);
+    ff_farm farm(true, IN_QUEUE_SIZE, OUT_QUEUE_SIZE);
     farm.set_scheduling_ondemand(); // set on-demand scheduling policy
 
     // we just want a generic gather without any user filter

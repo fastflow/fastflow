@@ -32,8 +32,7 @@
  */
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
-#include <ff/node.hpp>
+#include <ff/ff.hpp>
 #include <ff/allocator.hpp>
 #include <ff/utils.hpp>  
 

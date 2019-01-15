@@ -26,7 +26,7 @@
  */
 // simple task-farm pattern test used as software accelerator 
 
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
   
 using namespace ff;
 
@@ -86,7 +86,7 @@ int main(int argc, char * argv[]) {
             delete r;
         } 
     } while( ++i< 10000); //1e6);
-    farm.offload(EOS);
+    farm.offload(farm.EOS);
     while(farm.load_result(r)) {
         if (r->r == number) {
             printf("found %ld after all iterations\n",number);

@@ -37,14 +37,14 @@
 
 namespace ff {
 
-class ff_taskf: public ff_farm<> {
+class ff_taskf: public ff_farm {
     enum {DEFAULT_OUTSTANDING_TASKS = 2048};
 protected:
     /// task function
     template<typename F_t, typename... Param>
     struct ff_task_f_t: public base_f_t {
         ff_task_f_t(const F_t F, Param&... a):F(F) { args = std::make_tuple(a...);}	
-        inline void call() { apply(F, args); }
+        inline void call() { ffapply(F, args); }
         F_t F;
         std::tuple<Param...> args;	
     };
@@ -113,7 +113,7 @@ public:
     ff_taskf(int maxnw=ff_realNumCores(), 
              const size_t maxTasks=DEFAULT_OUTSTANDING_TASKS, 
              const int ondemand_buffer=0):
-        ff_farm<>(true, 
+        ff_farm(true, 
                   (std::max)(maxTasks, (size_t)(MAX_NUM_THREADS*8)),
                   (std::max)(maxTasks, (size_t)(MAX_NUM_THREADS*8)),
                   true, maxnw, true),
@@ -124,18 +124,18 @@ public:
         std::vector<ff_node *> w;
         // NOTE: Worker objects are going to be destroyed by the farm destructor
         for(int i=0;i<maxnw;++i) w.push_back(new Worker);
-        ff_farm<>::add_workers(w);
-        ff_farm<>::add_emitter(sched = new Scheduler(ff_farm<>::getlb(), maxnw));
-        ff_farm<>::wrap_around(true);
-        ff_farm<>::set_scheduling_ondemand(ondemand_buffer);
+        ff_farm::add_workers(w);
+        ff_farm::add_emitter(sched = new Scheduler(ff_farm::getlb(), maxnw));
+        ff_farm::wrap_around();
+        ff_farm::set_scheduling_ondemand(ondemand_buffer);
         
         // needed to avoid the initial barrier
-        if (ff_farm<>::prepare() < 0) 
+        if (ff_farm::prepare() < 0) 
             error("ff_taskf: running farm (1)\n");
         
         auto r=-1;
         getlb()->freeze();
-        ff_farm<>::offload(GO_OUT);
+        ff_farm::offload(GO_OUT);
         if (getlb()->run() != -1) {
             getlb()->broadcast_task(GO_OUT);
             r = getlb()->wait_freezing();   
@@ -152,19 +152,19 @@ public:
         ff_task_f_t<F_t, Param...> *wtask = new ff_task_f_t<F_t, Param...>(F, args...);
         std::vector<param_info> useless;
         task_f_t *task = alloc_task(useless,wtask);	
-        while(!ff_farm<>::offload(task, 1)) ff_relax(1);	
+        while(!ff_farm::offload(task, 1)) ff_relax(1);	
         ++taskscounter;
         return task;
     } 
     
     virtual inline int run_and_wait_end() {
-        while(!ff_farm<>::offload(EOS, 1)) ff_relax(1);
+        while(!ff_farm::offload(EOS, 1)) ff_relax(1);
         sched->thaw(true,farmworkers);
         sched->wait_freezing();
             return sched->wait();
     }
     virtual int run_then_freeze(ssize_t nw=-1) {
-        while(!ff_farm<>::offload(EOS, 1)) ff_relax(1);
+        while(!ff_farm::offload(EOS, 1)) ff_relax(1);
         sched->thaw(true,(nw>0) ? nw:taskscounter);
         int r=sched->wait_freezing();
         taskscounter=0;
@@ -177,7 +177,7 @@ public:
         return 0;
     }
     virtual inline int wait() { 
-        while(!ff_farm<>::offload(EOS, 1)) ff_relax(1);
+        while(!ff_farm::offload(EOS, 1)) ff_relax(1);
         int r=sched->wait_freezing();
         taskscounter=0;
         return r;
@@ -186,7 +186,7 @@ public:
 #if defined(TRACE_FASTFLOW)
     void ffStats(std::ostream & out) { 
         out << "--- taskf:\n";
-        ff_farm<>::ffStats(out);
+        ff_farm::ffStats(out);
     }
 #else
     void ffStats(std::ostream & out) { 

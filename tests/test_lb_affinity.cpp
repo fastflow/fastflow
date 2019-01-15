@@ -29,7 +29,7 @@
 // to run this test we need to be sure that the initial barrier is executed
 #define FF_INITIAL_BARRIER
 #endif
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 
@@ -143,7 +143,7 @@ private:
 
 int main() {
 	std::vector<ff_node *> workers;
-	ff_farm<> farm(false);
+	ff_farm farm(false);
 	for (int i = 0; i < NWORKERS; i++)
 		workers.push_back(new worker());
 	emitter em(farm.getlb(), farm.getWorkers());

@@ -58,11 +58,12 @@ namespace ff {
  */
 template<typename IN_t , typename OUT_t=IN_t , typename reduceT=int>
 class ff_Map: public ff_node_t<IN_t, OUT_t> {
+    using _node = ff_node_t<IN_t,OUT_t>;
 protected:
     ParallelForReduce<reduceT> pfr;
 protected:
     int prepare() {
-        if (!prepared) {
+        if (!_node::prepared) {
             // warmup phase
             pfr.resetskipwarmup();
             auto r=-1;
@@ -79,13 +80,13 @@ protected:
                     return -1;
                 }
             }
-            prepared = true;
+            _node::prepared = true;
         }
         return 0;
     }
         
     int freeze_and_run(bool=false) {
-        if (!prepared) if (prepare()<0) return -1;
+        if (!_node::prepared) if (prepare()<0) return -1;
         return ff_node::freeze_and_run(true);
     }
     
@@ -96,7 +97,7 @@ public:
 
     ff_Map(size_t maxp=-1, bool spinWait=false, bool spinBarrier=false):
         pfr(maxp,false,true,spinBarrier),// skip loop warmup and disable spinwait
-        spinWait(spinWait),prepared(false)  {
+        spinWait(spinWait) {
         pfr.disableScheduler(true);
     }
     virtual ~ff_Map() {}
@@ -172,7 +173,7 @@ public:
 
     
     virtual int run(bool=false) {
-        if (!prepared) if (prepare()<0) return -1;
+        if (!_node::prepared) if (prepare()<0) return -1;
         return ff_node::run(true);
     }
 
@@ -184,12 +185,11 @@ public:
     virtual int wait_freezing() { return ff_node::wait_freezing(); }
 
 
-    int nodeInit() { if (!prepared) return prepare(); return 0;  }
+    int nodeInit() { if (!_node::prepared) return prepare(); return 0;  }
     void nodeEnd() {}
 
 protected:
     bool spinWait;
-    bool prepared;
 };
     
 } // namespace ff

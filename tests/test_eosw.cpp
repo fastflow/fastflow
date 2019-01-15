@@ -31,8 +31,7 @@
  */
 
 #include <cstdio>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 
@@ -114,7 +113,7 @@ int main() {
     Last  last;
     Emitter E;
     Collector C(nworkers);
-    ff_Farm<long,long> farm(  [nworkers]() { 
+    ff_Farm<long,long> farm(  []() { 
 	    std::vector<std::unique_ptr<ff_node> > W;
 	    for(size_t i=0;i<nworkers;++i)  W.push_back(make_unique<Worker>());
 	    return W;

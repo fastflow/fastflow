@@ -123,7 +123,7 @@ public:
      * parallel_for_thid, parallel_for_idx) can be called in sequence.
 
      * \param maxnw Maximum number of worker threads (not including active scheduler, if
-     * any). Deafault <b>FF_AUTO</b> = N. of HW contexts. 
+     * any). Deafault <b>FF_AUTO</b> = N. of real cores.
      * \param spinwait. \p true nonblocking, \p false blocking.
      * \param spinbarrier. \p true it uses spinning barrier, \p false it uses blocking barrier.
      * The nonbloking behaviour will leave worker threads active until class destruction is called 

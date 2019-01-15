@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
     K.store(0);
 
     for(long i=1;i<=100;++i) {
-	pf.parallel_for(0,10,1,1,[i, &K,&taskf](const long j) { K+=j; }, 1+i%4);
+	pf.parallel_for(0,10,1,1,[&K](const long j) { K+=j; }, 1+i%4);
 	printf("."); fflush(stdout);
 	pf.threadPause();
     }

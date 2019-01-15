@@ -36,7 +36,9 @@
 //#include <unistd.h> // Not availbe on windows - to be managed
 #include <iosfwd>
 //#if (defined(_MSC_VER) || defined(__INTEL_COMPILER)) && defined(_WIN32)
+#include <ff/config.hpp>
 #include <ff/platforms/platform.h>
+
 //#else
 //#include <pthread.h>
 //#include <sys/time.h>
@@ -112,7 +114,7 @@ static inline void ff_relax(unsigned long us) {
 static inline void error(const char * str, ...) {
     const char err[]="ERROR: ";
     va_list argp;
-    char * p=(char *)malloc(strlen(str)+strlen(err)+10);
+    char * p=(char *)malloc(strlen(str)+strlen(err)+128);
     if (!p) {
         printf("FATAL ERROR: no enough memory!\n");
         abort();
@@ -209,6 +211,14 @@ static inline unsigned long nextPowerOf2(unsigned long x) {
     return p;
 }
 
+static inline void timedwait_timeout(struct timespec&tv) {
+    clock_gettime(CLOCK_REALTIME, &tv);
+    tv.tv_nsec+=FF_TIMEDWAIT_NS;
+    if (tv.tv_nsec>=1e+9) {
+        tv.tv_sec+=1;
+        tv.tv_nsec-=1e+9;
+    }
+}
 
 static inline unsigned int nextMultipleOfIf(unsigned int x, unsigned int m) {
     unsigned r = x % m;

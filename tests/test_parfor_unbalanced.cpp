@@ -111,7 +111,7 @@ int main(int argc, char *argv[]) {
             float c = ceil((float(_N/MAX_PARALLELISM))*powf(float(i),-1.1));	
             V[i] = (long)(c);
             iter += (long)(c);
-            //printf("%ld\n", V[i]);
+            //printf("%ld ", V[i]);
         }
         //printf("_N=%ld iter=%ld\n", _N, iter);
         

@@ -34,7 +34,7 @@
 // Another way is to uses lambdas as in the ff_taskf pattern.
 //
 
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 #include <ff/selector.hpp>  
 
 // first kernel 
@@ -69,7 +69,7 @@ int main() {
     Emitter E;
 
     // create the farm (3 Workers)
-    ff_Farm<> farm([farmworkers]() {
+    ff_Farm<> farm([]() {
 	    std::vector<std::unique_ptr<ff_node> > W;
 	    for(size_t i=0;i<farmworkers;++i)
 	    	W.push_back(ff::make_unique<ff_nodeSelector<long>>(ff::make_unique<kernel1>(), ff::make_unique<kernel2>()));

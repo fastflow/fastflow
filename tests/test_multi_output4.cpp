@@ -48,16 +48,14 @@
  */
 
 #include <iostream>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 
 
 class Emitter: public ff_node_t<long> {
 public:
-    Emitter(ff_loadbalancer *lb, long ntasks):ntasks(ntasks), lb(lb) {}
+    Emitter(long ntasks):ntasks(ntasks) {}
     long* svc(long *t) {
 	if (t == NULL) {
 	    for(long i=0;i<ntasks;++i)
@@ -76,9 +74,7 @@ public:
 	return (long*)((long)t +1);
     }
 private:
-    unsigned  neos = 0;
     long      ntasks;
-    ff_loadbalancer *lb;    
 };
 
 // multi-output worker 
@@ -121,7 +117,7 @@ int main(int argc, char* argv[]) {
 	    }
 	    return W;
 	} () );
-    Emitter E(farm.getlb(), ntasks);
+    Emitter E(ntasks);
     farm.remove_collector();
     farm.add_emitter(E);  
     farm.wrap_around();

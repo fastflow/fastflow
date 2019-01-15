@@ -34,9 +34,8 @@
 
 #include <iostream>
 #include <vector>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 #include <ff/allocator.hpp>
-
 
 using namespace ff;
 
@@ -60,10 +59,15 @@ public:
         task = t;
         return task;
     }
+    void svc_end() {
+        std::cout << "Worker id= " << get_my_id() << " received EOS\n";
+    }
+
+    
 };
 
 // the load-balancer filter
-class Emitter: public ff_node {
+class Emitter: public ff_monode {
 public:
     Emitter(int streamlen):streamlen(streamlen) {
         srandom(::getpid()+(getusec()%4999));
@@ -89,11 +93,17 @@ public:
                 *t = i;
                 ff_send_out(t);
             }
-            task = GO_ON; // we want to go on
+            task = GO_ON; // we want to keep going
         }
-
         return task;
     }
+
+    void svc_end() {
+        printf("Emitter received EOS\n");
+        broadcast_task(EOS);
+    }
+
+    
 private:
     int streamlen;
 };
@@ -118,8 +128,9 @@ public:
         }
 
         if (++cnt == streamlen) {
+            std::cout << "Collector generating EOS\n";
             ffalloc.free(task);
-            return NULL;
+            return EOS;
         }
         std::cout << "Collector got -1 cnt= " << cnt << "\n";
         return GO_ON;
@@ -145,7 +156,7 @@ int main(int argc, char * argv[]) {
     // init FastFlow allocator
     ffalloc.init();
 
-    ff_farm<> farm;
+    ff_farm farm;
 
     Emitter e(streamlen);
     Collector c(streamlen);

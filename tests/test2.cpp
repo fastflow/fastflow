@@ -35,7 +35,7 @@
 
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 #include <ff/allocator.hpp>
 
 using namespace ff;
@@ -131,7 +131,7 @@ int main(int argc, char * argv[]) {
     
 	std::cout << "Detected num of cores " << ff_numCores() << "\n"; 
 
-    ff_farm<> farm;
+    ff_farm farm;
 
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker);

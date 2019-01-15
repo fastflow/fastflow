@@ -31,8 +31,7 @@
  */
 
 #include <iostream>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 using namespace ff;
 
 #include <vector>
@@ -40,52 +39,29 @@ using namespace std;
 
 
 // generic stage
-class Stage: public ff_node {
-public:
-    Stage(unsigned int streamlen):streamlen(streamlen),sum(0)  {}
-
+struct Stage: ff_node {
     void * svc(void * task) {
-        unsigned int * t = (unsigned int *)task;
-        
-        if (!t) {
-            t = (unsigned int*)malloc(sizeof(int));
-            if (!t) abort();
-            
-            *t=0;
-            task = t;
-        } else { sum+=*t; *t+=1;}
-
-        if (*t == streamlen) return NULL;
-        task = t;
         return task;
     }
-    void  svc_end() {
-        if (ff_node::get_my_id()) 
-            std::cout << "Sum: " << sum << "\n";
-    }
-
-private:
-    unsigned int streamlen;
-    unsigned int sum;
 };
 
-
-class Emitter   : public ff_node {
-public:
+struct Emitter   : ff_node {
     Emitter(unsigned streamlen):streamlen(streamlen){}
-    void *svc(void*) {
-        for(unsigned i=0;i<streamlen;++i)
-            ff_send_out(new unsigned int(i));
-        return NULL;
+    void *svc(void *in) {
+        if (in== nullptr) {
+            for(unsigned i=0;i<streamlen;++i)
+                ff_send_out(new unsigned int(i));
+            return EOS;
+        }
+        return GO_ON;
     }
-private:
     unsigned int streamlen;
 };
 
-class Collector : public ff_node {
-public:
+struct Collector : ff_node {
     void * svc(void *task) {
-        return task;
+        ff_send_out(task);
+        return GO_ON;
     }
 };
 
@@ -103,9 +79,9 @@ int main(int argc, char * argv[]) {
     
     // build a 2-stage pipeline
     ff_pipeline pipe;
-    ff_farm<> f1, f2;
-    vector<ff_node *> w1(1, new Stage(streamlen));
-    vector<ff_node *> w2(1, new Stage(streamlen));
+    ff_farm f1, f2;
+    vector<ff_node *> w1(1, new Stage);
+    vector<ff_node *> w2(1, new Stage);
     f1.add_emitter(new Emitter(streamlen));
     f1.add_workers(w1);
     f1.add_collector(new Collector());
@@ -114,8 +90,11 @@ int main(int argc, char * argv[]) {
     pipe.add_stage(&f1);
     pipe.add_stage(&f2);
 
-    pipe.wrap_around();
-
+    if (pipe.wrap_around()<0) {
+        error("wrap_around\n");
+        return -1;
+    }
+    
     ffTime(START_TIME);
     if (pipe.run_and_wait_end()<0) {
         error("running pipeline\n");

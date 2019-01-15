@@ -32,7 +32,7 @@
 #include <bitset>
 #include <algorithm>
 
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 namespace ff {
 
@@ -170,7 +170,7 @@ protected:
 
 private:
     long        found;
-    ff_farm<>  *farm;
+    ff_farm    *farm;
     Emitter    *scheduler;
     T          *start;
     std::vector<ff_node*> W;
@@ -179,7 +179,7 @@ public:
     
     ff_graphsearch(const int nw=ff_numCores(), const bool all=false):found(0),start(NULL),all(all) {
         for(int i=0;i<nw;++i) W.push_back(new Worker(&found,all));
-        farm = new ff_farm<>(false, 524288*nw, 524800*nw, false, nw, true);
+        farm = new ff_farm(false, 524288*nw, 524800*nw, false, nw, true);
         farm->add_workers(W);
         scheduler = new Emitter(W,found);
         farm->add_emitter(scheduler);

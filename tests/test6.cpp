@@ -38,7 +38,7 @@
 
 #include <iostream>
 #include <vector>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 #include <ff/allocator.hpp>
 
 
@@ -136,7 +136,7 @@ int main(int argc, char * argv[]) {
     ffalloc.init();
 
     // bild main farm
-    ff_farm<> farm;
+    ff_farm farm;
 
     Emitter e(streamlen);
     Collector c;
@@ -144,11 +144,11 @@ int main(int argc, char * argv[]) {
     farm.add_collector(&c);
     
 
-    ff_farm<> farm1;
+    ff_farm farm1;
     farm1.add_collector(NULL); // just a pass by filter
-    ff_farm<> farm2;
+    ff_farm farm2;
     farm2.add_collector(NULL); // just a pass by filter
-    ff_farm<> farm3;
+    ff_farm farm3;
     farm3.add_collector(NULL); // just a pass by filter
 
     std::vector<ff_node *> w;

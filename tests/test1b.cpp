@@ -31,7 +31,7 @@
  */
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 
 using namespace ff;
@@ -106,7 +106,7 @@ int main(int argc, char * argv[]) {
         return -1;
     }
     
-    ff_farm<> farm; // farm object
+    ff_farm farm; // farm object
     
     Emitter E(streamlen);
     farm.add_emitter(&E);

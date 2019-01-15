@@ -244,10 +244,14 @@ public:
      *  \brief Constructor
      *
      */
-    uSWSR_Ptr_Buffer(unsigned long n, const bool fixedsize=false, const bool fillcache=false):
+    uSWSR_Ptr_Buffer(unsigned long n,
+                     const bool fixedsize=false,
+                     const bool fillcache=false):
         buf_r(0),buf_w(0),in_use_buffers(1),size(n),fixedsize(fixedsize),
         pool(CACHE_SIZE,fillcache,size) {
         init_unlocked(P_lock); init_unlocked(C_lock);
+        pushPMF=&uSWSR_Ptr_Buffer::push;
+        popPMF =&uSWSR_Ptr_Buffer::pop;
 #if defined(UBUFFER_STATS)
         numBuffers = 0;
         //atomic_long_set(&numBuffers,0);
@@ -346,7 +350,7 @@ public:
 
     inline bool mp_push(void *const data) {
         spin_lock(P_lock);
-        bool r=push(data);  // should it be mpush(data)?
+        bool r=push(data);  
         spin_unlock(P_lock);
         return r;
     }
@@ -441,8 +445,8 @@ public:
      *
      * \return The size of the buffer.
      */
-    inline unsigned long buffersize() const { 
-        if (!fixedsize) return (unsigned long)-1;        
+    inline size_t buffersize() const { 
+        if (!fixedsize) return (size_t)-1;        
         return buf_w->buffersize(); 
     };
 
@@ -467,6 +471,12 @@ public:
         buf_w = buf_r;
         pool.reset();
     }
+
+    /* pointer to member function for the push method */
+    bool (uSWSR_Ptr_Buffer::*pushPMF)(void * const);
+    /* pointer to member function for the ppop method */
+    bool (uSWSR_Ptr_Buffer::*popPMF)(void **);
+
 
 private:
     // Padding is required to avoid false-sharing between 

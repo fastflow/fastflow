@@ -25,9 +25,7 @@
  ****************************************************************************
  */
 
-/* Author: Massimo Torquati
- * 
- *  Using ff_monode (multi-output node) as a pipeline stage. 
+/*  pipe( feedback(pipe(A,B)), C)
  *
  *    -----            ------            ------ 
  *   |  A  |--------> |  B   |--------> |  C   |
@@ -39,55 +37,55 @@
  *
  */
 
+/* Author: Massimo Torquati
+ *
+ */
+
+
 #include <ff/node.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>  // for ff_monode
+#include <ff/ff.hpp>
 
 using namespace ff;
 
 #define NUMTASKS 10
 
 /* --------------------------------------- */
-class A: public ff_node {
+// NOTE: multi-input node!!!!!!
+//       That is because node B is multi-output!
+class A: public ff_minode_t<long> {    
 public:
-    void *svc(void *task) {
+    long *svc(long *task) {
         static long k=1;
         if (task==NULL) {
-            ff_send_out((void*)k);
+            ff_send_out((long*)k);
             return GO_ON;
         }
         printf("A received %ld back from B\n", (long)task);
         if (k++==NUMTASKS) return NULL;
-        return (void*)k;
+        return (long*)k;
     }
 };
 /* --------------------------------------- */
 
-class B: public ff_monode {
+class B: public ff_monode_t<long> {
 public:
-    void *svc(void *task) {
-        const long t = (long)task;
+    long *svc(long *task) {
+        const long& t = (long)task;
         printf("B got %ld from A\n", t);
         if (t & 0x1) {
             printf("B sending %ld to C\n", t);
-            ff_send_out_to(task, 1); 
+            ff_send_out_to(task, 1);  // sending forward 
         }
         printf("B sending %ld back\n", t);
-        ff_send_out_to(task, 0); 
+        ff_send_out_to(task, 0);  // sending back
         return GO_ON;
     }
-    
-    // void eosnotify(ssize_t) {
-    //     ff_send_out_to((void*)EOS, 1);
-    // }
-
-
 };
 /* --------------------------------------- */
 
-class C: public ff_node {
+class C: public ff_node_t<long> {
 public:
-    void *svc(void *t) { 
+    long *svc(long *t) { 
         printf("C got %ld\n", (long)t);
         return GO_ON;
     }
@@ -97,19 +95,19 @@ public:
 int main() {
     A a;  B b;  C c;
 
-    ff_pipeline pipe1;
-    pipe1.add_stage(&a);
-    pipe1.add_stage(&b);
-    pipe1.wrap_around();
-    pipe1.setMultiOutput();
+    ff_Pipe<long,long> pipe1(a, b);
+    if (pipe1.wrap_around()<0) {
+        error("creating feedback channel between b and a\n");
+        return -1;
+    }
 
-    ff_pipeline pipe;
-    pipe.add_stage(&pipe1);
-    pipe.add_stage(&c);
+    ff_Pipe<> pipe(pipe1, c);
 
-    pipe.run_and_wait_end();
-    printf("DONE\n");
-    
+    if (pipe.run_and_wait_end()<0) {
+        error("running pipe\n");
+        return -1;
+    }
+    printf("DONE\n");    
     return 0;
 }
 

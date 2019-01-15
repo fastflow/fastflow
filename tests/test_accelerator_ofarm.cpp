@@ -31,9 +31,7 @@
  */
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
-#include <ff/node.hpp>
-  
+#include <ff/ff.hpp>  
 using namespace ff;
 
 // generic worker
@@ -75,7 +73,8 @@ int main(int argc, char * argv[]) {
         return -1;
     }
     
-    ff_ofarm farm(true);
+    ff_farm farm(true);
+    farm.set_ordered();
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker);
     farm.add_workers(w);

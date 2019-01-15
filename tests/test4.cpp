@@ -42,8 +42,7 @@
  */
 
 #include <iostream>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 #include <ff/allocator.hpp>
 
 
@@ -151,7 +150,7 @@ int main(int argc, char * argv[]) {
     pipe.add_stage(new Stage1(streamlen));
 
     // build the farm module without the Emitter and the Collector filters
-    ff_farm<> farm;
+    ff_farm farm;
     // we just want a generic gather without any user filter
     farm.add_collector(NULL); 
    

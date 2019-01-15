@@ -33,7 +33,8 @@
 #endif
 
 #include <vector>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
+#include <ff/taskf.hpp>
 
 using namespace ff;
 
