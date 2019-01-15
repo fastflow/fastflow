@@ -31,7 +31,7 @@
  */
 /*
  *    
- *  Testing the following skeleton:   pipeline(master-worker, multi-input);
+ *  pipeline(master-worker, multi-input);
  *  (see test_multi_output5.cpp (second stage) for a different version having the farm collector)
  *
  *                 ------------------------                  
@@ -60,11 +60,7 @@
 
 #include <vector>
 #include <iostream>
-#include <ff/svector.hpp>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/node.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 struct W: ff_monode_t<long> {
@@ -99,12 +95,12 @@ public:
 
     int svc_init() {
         return 0;
-    }
-
+    }    
+    
     long *svc(long *task) {	
         if (task == NULL) {
             for(long i=1;i<=numtasks;++i)
-                ff_send_out((long*)i);
+                ff_send_out((long*)i);            
             return GO_ON;
         }
         printf("E: got back %ld numtasks=%ld\n", (long)task, numtasks);
@@ -141,8 +137,8 @@ int main(int argc,  char * argv[]) {
     E emitter(streamlen);
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new W);
-    ff_farm<> farm(w,&emitter);
-    farm.remove_collector(); // this is needed here to avoid init errors!
+    ff_farm farm(w,&emitter); // this constructor add the default collector !!!
+    farm.remove_collector();
     farm.wrap_around();
 
     ff_pipeline pipe;

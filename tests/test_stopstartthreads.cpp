@@ -28,16 +28,17 @@
 /*  
  *
  *  This is a dummy example on how to put workers to sleep for a while.
+ *  Please see other tests that do not use condition variable explicitly.
  *
  */
 
+#ifndef __APPLE__
 #include <ff/platforms/platform.h>
-#include <vector>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/node.hpp>
-#include <ff/allocator.hpp>
+#endif
 #include <iostream>
+#include <ff/ff.hpp>
+#include <ff/allocator.hpp>
+
 
 using namespace ff;
 
@@ -91,36 +92,18 @@ public:
 };
 
 
-class myScheduler: public ff_loadbalancer {
-protected:
-    inline size_t selectworker() { 
-        size_t sel = victim++ % getnworkers(); 
-        printf("selected %zd\n", sel);
-        return sel;
-    }
-public:
-    myScheduler(int max_num_workers):ff_loadbalancer(max_num_workers) {
-        victim=0;
-    }
-    void set_victim(int v) { victim=v; }
-    void broadcast(void* task) { ff_loadbalancer::broadcast_task(task); }
-private:
-    int    victim;
-};
 
-
-class Emitter: public ff_node {
+class Emitter: public ff_monode {
 public:
-    Emitter(int ntasks,int nworkers,myScheduler* lb):
-        ntasks(ntasks),nworkers(nworkers),getback(0),lb(lb) {}
+    Emitter(int ntasks,int nworkers):
+        ntasks(ntasks),nworkers(nworkers),getback(0) {}
     
     void ff_sendout(int idx, fftask_t* task) {
         if (idx<0) { 
             ff_send_out((void*)task); 
             return; 
         }        
-        lb->set_victim(idx);
-        ff_send_out((void*)task);        
+        ff_send_out_to((void*)task,idx);        
     }
     
     void* svc(void* t) {
@@ -141,7 +124,7 @@ public:
 
         sleep(2);
         printf("checking now who is sleeping\n");
-        lb->broadcast(new fftask_t(WAIT, 0));
+        broadcast_task(new fftask_t(WAIT, 0));
 
         sleep(2);
         printf("waking up all threads now!\n");
@@ -155,11 +138,15 @@ private:
     int ntasks;
     int nworkers;
     int getback;
-    myScheduler* lb;
 };
 
 
 int main(int argc, char* argv[]) {    
+#if defined(BLOCKING_MODE)
+    printf("TODO: mixing dynamic behavior and blocking mode has not been tested yet!!!!!\n");
+    return 0;
+#endif
+
 	// Init global mutexes and cond vars
 	pthread_mutex_init(&mutex, NULL);
 	pthread_cond_init(&cond, NULL);
@@ -185,8 +172,8 @@ int main(int argc, char* argv[]) {
         return -1;
     }
     
-    ff_farm<myScheduler> farm;
-    Emitter emitter(ntask,nworkers,farm.getlb());
+    ff_farm farm;
+    Emitter emitter(ntask,nworkers);
     farm.add_emitter(&emitter);
     farm.set_scheduling_ondemand(2);
 

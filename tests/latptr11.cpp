@@ -1,7 +1,6 @@
 #include <string>
 #include <iostream>
-#include <ff/utils.hpp>
-#include <ff/pipeline.hpp>
+#include <ff/ff.hpp>
 #include <ff/mapper.hpp>
 using namespace ff;
 
@@ -36,7 +35,6 @@ struct firstStage: public ff_node_t<unsigned long> {
 
 	// simulate some works
 	ticks_wait(WITER);
-
 	if (task == NULL) {
 	  if (!ff_send_out((void*)++counter)) abort();
 	  return GO_ON;
@@ -46,7 +44,7 @@ struct firstStage: public ff_node_t<unsigned long> {
 #endif
     };
   void svc_end() {
-    ::ffTime(STOP_TIME);
+      ::ffTime(STOP_TIME);
       comptime = ::ffTime(GET_TIME);
 #if defined(BEST_CASE)
       printf("Time: %g (ms)  Avg Latency: %f (ns)\n", ::ffTime(GET_TIME),(1000000.0*::ffTime(GET_TIME))/(nmsgs*2));    
@@ -74,6 +72,10 @@ void usage(char * name) {
 }
 
 int main(int argc, char *argv[]) {
+#if defined(FF_BOUNDED_BUFFER)
+    std::cerr << "This test requires unbounded buffers\n";
+    return 0;
+#endif
     unsigned long nmsgs=1000000;
     std::string worker_mapping("0,1");
 

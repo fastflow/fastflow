@@ -33,35 +33,34 @@
  */
 #include <vector>
 #include <cstdio>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 
 class Emitter: public ff_node_t<long> {
 protected:
     void freezeAll() {
-        lb->freezeWorkers();
-        gt->freeze();
+        ofarm->getlb()->freezeWorkers();
+        ofarm->getgt()->freeze();
     }
     void blockAll() {
-        lb->broadcast_task(EOSW); 
-        lb->wait_freezingWorkers();
-        gt->wait_freezing();
+        ofarm->getlb()->broadcast_task(EOSW); 
+        ofarm->getlb()->wait_freezingWorkers();
+        ofarm->getgt()->wait_freezing();
     }
     void wakeupAll(bool freeze=true) {
-        lb->thawWorkers(freeze, -1);  // wake-up all workers
-        gt->thaw(freeze, -1);         // wake-up the collector
+        ofarm->getlb()->thawWorkers(freeze, -1);  // wake-up all workers
+        ofarm->getgt()->thaw(freeze, -1);         // wake-up the collector
     }
     void stopAll() {
-        lb->stop();
-        gt->stop();
+        ofarm->getlb()->stop();
+        ofarm->getgt()->stop();
         wakeupAll(false);
     }
 public:
     Emitter(long streamlen, 
-            ff_loadbalancer *const lb, ff_gatherer *const gt):streamlen(streamlen), lb(lb), gt(gt) {}
+            ff_farm* ofarm):streamlen(streamlen),ofarm(ofarm) {}
     
-
     int svc_init() {     
         freezeAll();    // set freezing flag to all workers
         blockAll();     // wait that all workers go to sleep
@@ -69,20 +68,17 @@ public:
     }
 
     long *svc(long *) {
-        
-        for(int i=0;i<10 && streamlen>0; ++i) {
+
+        for(int i=0;i<10; ++i) {
             printf("iter %d\n", i);
             usleep(i*10000);
 
             // restart all workers
             wakeupAll();
             
-            if (streamlen>0) {
-                for(long k=1;k<=111;++k)
-                    ff_send_out(new long(streamlen-k));
-                streamlen-=111;
-            }
-                            
+            for(long k=0;k<streamlen;++k)
+                ff_send_out(new long(i*streamlen + k));
+            
             // put workers to sleep
             blockAll();
         }
@@ -92,30 +88,30 @@ public:
         return EOS;
     }
 private:
-    long                   streamlen;
-    ff_loadbalancer *const lb;
-    ff_gatherer     *const gt;
+    long      streamlen;
+    ff_farm  *ofarm;
 };
 
-class Collector: public ff_node_t<long> {
+class Collector: public ff_minode_t<long> {
 public:
-    Collector(long streamlen):expected(streamlen),error(false) {}
+    Collector(long streamlen): error(false) {}
 
     long* svc(long *task) {
         const long &t = *task;
-        
-        if (t != --expected) {
+
+        printf("Collector received %ld from %ld\n",t,get_channel_id());
+        if (t != expected) {
             printf("ERROR: task received out of order, received %ld expected %ld\n", t, expected);
             error = true;
         }
-                
+        ++expected;
         return GO_ON;
     }
     void svc_end() {
         if (error) abort();
     }
 private:
-    long expected;
+    long expected = 0;
     bool error;
 };
 
@@ -129,6 +125,7 @@ public:
     }
     long *svc(long *t) {
         printf("worker%ld received %ld\n", get_my_id(), *t);
+        if (get_my_id()==0 || get_my_id()==1) usleep(5000);
         return t;
     }
     void svc_end() {
@@ -137,6 +134,11 @@ public:
 };
 
 int main(int argc, char *argv[]) {
+#if defined(BLOCKING_MODE)
+    printf("TODO: mixing dynamic behavior and blocking mode has not been tested yet!!!!!\n");
+    return 0;
+#endif
+
     int nworkers = 3;
     if (argc>1) {
         if (argc!=2) {
@@ -152,15 +154,15 @@ int main(int argc, char *argv[]) {
                 W.push_back(make_unique<Worker>());
             return W;
         } () );
-    Emitter E(10000, ofarm.getlb(), ofarm.getgt());
-    Collector C(10000);
-    ofarm.setEmitterF(E);
-    ofarm.setCollectorF(C);
+    Emitter E(10, &ofarm);
+    Collector C(10);
+    ofarm.add_emitter(E);
+    ofarm.add_collector(C);
     ofarm.setFixedSize(true);
     ofarm.setInputQueueLength(4); // setting very small queues
     ofarm.setOutputQueueLength(4);
-
     ofarm.run();
     ofarm.getgt()->wait(); // waiting for the termination of the collector
+
     return 0;
 }

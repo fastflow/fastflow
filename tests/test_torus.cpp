@@ -27,7 +27,7 @@
 
 /* simple torus pipeline */
 #include <iostream> // cerr
-#include <ff/pipeline.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 
@@ -44,7 +44,7 @@ struct masterStage: public ff_node {
         if (task==NULL) {
             for(long i=0;i<bigbatchSize;++i)
                 if (!ff_send_out((void*)(i+1))) abort();
-            if (numBatch>0) --numBatch;
+            //if (numBatch>0) --numBatch;
             return GO_ON;
         }
         

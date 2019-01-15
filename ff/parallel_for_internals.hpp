@@ -409,26 +409,6 @@ struct dataPair {
     dataPair& operator=(const dataPair &d) { ntask=d.ntask.load(std::memory_order_relaxed), task=d.task; return *this; }
 };
 
-
-//  used just to redefine losetime_in
-class foralllb_t: public ff_loadbalancer {
-protected:
-    virtual inline void losetime_in(unsigned long) { 
-        if ((int)(getnworkers())>=ncores) {
-            //FFTRACE(lostpopticks+=(100*TICKS2WAIT);++popwait); // FIX: adjust tracing
-            ff_relax(0);
-            return;
-        }    
-        //FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
-        PAUSE();            
-    }
-public:
-    foralllb_t(size_t n):ff_loadbalancer(n),ncores(ff_numCores()) {}
-    inline int getNCores() const { return ncores;}
-private:
-    const int ncores;
-};
-
 // compare functiong
 static inline bool data_cmp(const dataPair &a,const dataPair &b) {
     return a.ntask < b.ntask;
@@ -775,6 +755,7 @@ public:
             return GO_ON; 
         }
         auto wid =  lb->get_channel_id();
+        assert(wid>=0);
         if (--totaltasks <=0) {
             if (!eossent[wid]) {
                 lb->ff_send_out_to(workersspinwait?EOS_NOFREEZE:GO_OUT, int(wid));
@@ -896,7 +877,10 @@ public:
     typedef std::function<void(const long,const long, const int, ff_buffernode&)> F_t;
 public:
     forallpipereduce_W(forall_Scheduler *const sched,ffBarrier *const loopbar, F_t F):
-        forallreduce_W<ff_buffernode>(sched,loopbar,F) { res.set(8192,false,get_my_id()); }
+        forallreduce_W<ff_buffernode>(sched,loopbar,F) {
+        res.set(8192,false,get_my_id());
+        res.init_blocking_stuff();
+    }
 
     inline void* svc(void* t) {
         auto task = (forall_task_t*)t;
@@ -910,14 +894,14 @@ public:
             F(task->start,task->end,myid,res);
 
         if (spinwait) {
-            res.put(EOS);
+            res.ff_send_out(EOS);
             loopbar->doBarrier(myid);
             return GO_ON;
         }
         return GO_OUT;
     }
     
-    void svc_end() { res.put(EOS); }
+    void svc_end() { res.ff_send_out(EOS); }
 
     inline void setF(F_t _F, const Tres_t&, bool a=true) { 
         F=_F, aggressive=a;
@@ -930,7 +914,7 @@ public:
 
 
 template <typename Worker_t>
-class ff_forall_farm: public ff_farm<foralllb_t> {
+class ff_forall_farm: public ff_farm {
 public:
     typedef typename Worker_t::Tres_t Tres_t;
     typedef typename Worker_t::F_t    F_t;
@@ -940,7 +924,25 @@ protected:
         const svector<ff_node*> &nodes = getWorkers();
         for(int i=0;i<_nw;++i) nodes[i]->reset();
     }
-
+    //  used just to redefine losetime_in
+    class foralllb_t: public ff_loadbalancer {
+    protected:
+        virtual inline void losetime_in(unsigned long) { 
+            if ((int)(getnworkers())>=ncores) {
+                //FFTRACE(lostpopticks+=(100*TICKS2WAIT);++popwait); // FIX: adjust tracing
+                ff_relax(0);
+                return;
+            }    
+            //FFTRACE(lostpushticks+=TICKS2WAIT;++pushwait);
+            PAUSE();            
+        }
+    public:
+        foralllb_t(size_t n):ff_loadbalancer(n),ncores(ff_realNumCores()) {}
+        inline int getNCores() const { return ncores;}
+    private:
+        const int ncores;
+    };
+    
 private:
     Tres_t t; // not used
     size_t numCores;
@@ -948,25 +950,30 @@ private:
 public:
 
     ff_forall_farm(ssize_t maxnw, const bool spinwait=false, const bool skipwarmup=false, const bool spinbarrier=false):
-        ff_farm<foralllb_t>(false,8*DEF_MAX_NUM_WORKERS,8*DEF_MAX_NUM_WORKERS,
+        ff_farm(false,8*DEF_MAX_NUM_WORKERS,8*DEF_MAX_NUM_WORKERS,
                             true, DEF_MAX_NUM_WORKERS,true), // cleanup at exit !
         loopbar( (spinwait && spinbarrier) ? 
                  (ffBarrier*)(new spinBarrier(maxnw<=0?DEF_MAX_NUM_WORKERS+1:(size_t)(maxnw+1))) :
                  (ffBarrier*)(new Barrier(maxnw<=0?DEF_MAX_NUM_WORKERS+1:(size_t)(maxnw+1))) ),
         skipwarmup(skipwarmup),spinwait(spinwait) {
+
+        foralllb_t* _lb = new foralllb_t(DEF_MAX_NUM_WORKERS);
+        assert(_lb);
+        ff_farm::setlb(_lb);
+        
         numCores = ((foralllb_t*const)getlb())->getNCores();
         if (maxnw<=0) maxnw=numCores;
         std::vector<ff_node *> forall_w;
         auto donothing=[](const long,const long,const int,const Tres_t&) -> void { };
         forall_Scheduler *sched = new forall_Scheduler(getlb(),maxnw);
-        ff_farm<foralllb_t>::add_emitter(sched);
+        ff_farm::add_emitter(sched);
         for(size_t i=0;i<(size_t)maxnw;++i)
             forall_w.push_back(new Worker_t(sched, loopbar, donothing));
-        ff_farm<foralllb_t>::add_workers(forall_w);
-        ff_farm<foralllb_t>::wrap_around();
+        ff_farm::add_workers(forall_w);
+        ff_farm::wrap_around();
 
         // needed to avoid the initial barrier (see (**) below)
-        if (ff_farm<foralllb_t>::prepare() < 0) 
+        if (ff_farm::prepare() < 0) 
             error("running base forall farm(2)\n");
         
         // NOTE: the warmup phase has to be done, if not now latern on. 
@@ -988,10 +995,11 @@ public:
             }
             //resetqueues(maxnw);
         }
-        ff_farm<foralllb_t>::cleanup_all(); // delete everything at exit
+        ff_farm::cleanup_all(); // delete everything at exit
     }
     virtual ~ff_forall_farm() {
-        if (loopbar) delete loopbar;        
+        if (loopbar) delete loopbar;
+        if (ff_farm::getlb()) delete ff_farm::getlb();
     }
 
 
@@ -1032,12 +1040,12 @@ public:
         const ssize_t nwtostart = (nw_ == -1)?getNWorkers():nw_;
         auto r = -1;
         if (schedRunning) {
-            getlb()->skipfirstpop();
+            getlb()->skipfirstpop(true);
             if (spinwait) {
                 // NOTE: here we have to be sure to send one task to each worker!
                 ((forall_Scheduler*)getEmitter())->sendTask(true);
             }
-            r=ff_farm<foralllb_t>::run_then_freeze(nwtostart);
+            r=ff_farm::run_then_freeze(nwtostart);
         } else {
             if (spinwait) {
                 // all worker threads have already crossed the barrier so it is safe to restart it
@@ -1059,7 +1067,7 @@ public:
         auto r= -1;
         if (schedRunning) {
             //resetqueues(nwtostart);
-            getlb()->skipfirstpop(); 
+            getlb()->skipfirstpop(true); 
             // (**) this way we avoid the initial barrier
             if (getlb()->runlb()!= -1) {
                 if (getlb()->runWorkers(nwtostart)!=-1)
@@ -1114,7 +1122,7 @@ public:
             for(size_t i=0;i<nodes.size();++i) 
                 getlb()->ff_send_out_to(EOS,i);
         }
-        return ff_farm<foralllb_t>::wait();
+        return ff_farm::wait();
     }
 
     inline void setF(F_t  _F, const Tres_t& idtt=Tres_t()) { //(Tres)0) { 

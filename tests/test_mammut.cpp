@@ -1,7 +1,7 @@
 #include <cstdio>
 #include <iostream>
 
-#include <ff/pipeline.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 

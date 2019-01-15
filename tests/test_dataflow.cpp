@@ -28,13 +28,13 @@
 /*  
  *       2-stages pipeline
  *               
- *          -------------------------------- <--
- *         |                                |   |
- *         |                     ---> FU ---    |
- *         v                    |               |
- *        MU ----> Scheduler --- ---> FU ------- 
- *         ^                    |
- *         |                     ---> FU ---
+ *          -------------------------------- 
+ *         |                                |
+ *         |                     ---> FU -->| 
+ *         v                    |           | 
+ *        MU ----> Scheduler --- ---> FU -->| 
+ *         ^                    |           |
+ *         |                     ---> FU -->|
  *         |                                |
  *          --------------------------------
  *
@@ -42,14 +42,11 @@
 
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/node.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 /*
- * NOTE: this is a multi-input node ff_minode !!
+ * NOTE: this is a multi-input node
  */
 class MU: public ff_minode {
 public:
@@ -66,7 +63,7 @@ public:
 
         long t = (long)task;
         if (--t > 0) ff_send_out((void*)t);
-        else if (++k == numtasks) return NULL;
+        else if (++k == numtasks) return EOS;
         return GO_ON;
     }
 private:
@@ -82,7 +79,7 @@ struct Scheduler: public ff_node {
 
 struct FU: public ff_node {
     void* svc(void* task) {
-        printf("FU (%ld) got one task\n", get_my_id());
+        printf("FU (%ld) got one task (%ld)\n", get_my_id(), (long)task);
         return task;
     }
 };
@@ -101,7 +98,7 @@ int main(int argc, char* argv[]) {
     }
 
     ff_pipeline pipe;
-    ff_farm<>   farm;
+    ff_farm     farm;
 
     std::vector<ff_node *> w;
     for(int i=0;i<nw;++i) 

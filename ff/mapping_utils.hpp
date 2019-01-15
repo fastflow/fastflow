@@ -40,7 +40,9 @@
 #ifndef FF_MAPPING_UTILS_HPP
 #define FF_MAPPING_UTILS_HPP
 
-
+#include <climits>
+#include <set>
+#include <algorithm>
 #include <iosfwd>
 #include <errno.h>
 #include <ff/config.hpp>
@@ -154,6 +156,27 @@ static inline ssize_t ff_numCores() {
         }
     }
 #else
+#if defined(HAVE_PTHREAD_SETAFFINITY_NP)
+    // trying to understand which are the cores on which the thread can be executed
+    // so that we obtain only the cores that are currently online
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    do {
+        if (pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) != 0) 
+            break;        
+#if defined(CPU_COUNT_S)
+        n = CPU_COUNT_S(sizeof(cpu_set_t), &cpuset);
+#elif defined(CPU_COUNT)
+        n = CPU_COUNT(&cpuset);
+#else
+        n=0;
+        for(size_t i=0;i<sizeof(cpu_set_t);++i) {
+            if (CPU_ISSET(i, &cpuset)) ++n;
+        }
+#endif
+        return n;
+    } while(0);
+#endif /* HAVE_PTHREAD_SETAFFINITY_NP */   
     FILE       *f;    
     f = popen("cat /proc/cpuinfo |grep processor | wc -l", "r");
     if (fscanf(f, "%ld", &n) == EOF) { pclose(f); return n;}
@@ -179,7 +202,7 @@ static inline ssize_t ff_numCores() {
 
 /**
  *  \brief Returns the real number of cores in the system without considering 
- *  HT or HMT
+ *  HT or SMT
  *
  *  It returns the number of cores present in the system. It works on Linux OS
  *
@@ -191,7 +214,6 @@ static inline ssize_t ff_realNumCores() {
 	n = 2; // Not yet implemented
 #else
 #if defined(__linux__)
-    char inspect[]="cat /proc/cpuinfo|egrep 'core id|physical id'|tr -d '\n'|sed 's/physical/\\nphysical/g'|grep -v ^$|sort|uniq|wc -l";
 #if defined(MAMMUT)
 
     mammut::Mammut m;
@@ -204,22 +226,78 @@ static inline ssize_t ff_realNumCores() {
         }
     }
     return n;    
-#endif // MAMMUT
-#elif defined (__APPLE__)
-    char inspect[]="sysctl hw.physicalcpu | awk '{print $2}'";
-#else 
+#else // MAMMUT
+
+#if defined(HAVE_PTHREAD_SETAFFINITY_NP)
+    // trying to understand which are the cores on which the thread can be executed
+    // so that we obtain only the cores that are currently online
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    int cnt=-1;
+    do {
+        if (pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) != 0) 
+            break;        
+#if defined(CPU_COUNT_S)
+        cnt = CPU_COUNT_S(sizeof(cpu_set_t), &cpuset);
+#elif defined(CPU_COUNT)
+        cnt = CPU_COUNT(&cpuset);
+#endif
+        std::set<int> S;    
+        for(size_t i=0;i<CHAR_BIT*sizeof(cpu_set_t);++i) {
+            if (CPU_ISSET(i, &cpuset)) {
+                std::string str="cat /sys/devices/system/cpu/cpu"+std::to_string(i)+"/topology/thread_siblings_list";
+                char buf[64];
+                FILE       *f;                
+                if ((f = popen(str.c_str(), "r"))!= NULL) {
+                    if (fscanf(f, "%s", buf) == EOF) { 
+                        perror("fscanf");
+                        return -1;
+                    }
+                    pclose(f);
+                } else { perror("popen"); return -1; }
+                const std::string bufstr(buf);
+                size_t pos = bufstr.find_first_of('-');
+                int first = std::stoi(bufstr.substr(0,pos));
+                int second = std::stoi(bufstr.substr(pos+1));
+                bool found = false;
+                for(int j=first;j<=second; ++j)
+                    if (S.find(j) != S.end()) {
+                        found = true;
+                        break;
+                    }
+                if (!found) S.insert(i);                
+                if (--cnt==0) {
+                    n=0;
+                    std::for_each(S.begin(), S.end(), [&n](int const& i) { ++n;});
+                    return n;
+                }
+            }
+        }
+        n=0;
+        std::for_each(S.begin(), S.end(), [&n](int const& i) { ++n;});
+        return n;
+    } while(0);
+#endif // HAVE_PTHREAD_SETAFFINITY_NP
+    char inspect[]="cat /proc/cpuinfo|egrep 'core id|physical id'|tr -d '\n'|sed 's/physical/\\nphysical/g'|grep -v ^$|sort|uniq|wc -l";
+#endif // Linux
+#elif defined(__APPLE__)
+    char inspect[] = "sysctl hw.physicalcpu | awk '{print $2}'";
+#else
     char inspect[]="";
     n=1;
 #pragma message ("ff_realNumCores not supported on this platform")
 #endif
-    FILE       *f; 
-    f = popen(inspect, "r");
-    if (f) {
-        if (fscanf(f, "%ld", &n) == EOF) { 
-            perror("fscanf");
+    if (strlen(inspect)) {
+      FILE *f;
+      f = popen(inspect, "r");
+      if (f) {
+        if (fscanf(f, "%ld", &n) == EOF) {
+          perror("fscanf");
         }
         pclose(f);
-    } else perror("popen");
+      } else
+        perror("popen");
+    }
 #endif // _WIN32
     return n;
 }
@@ -383,7 +461,6 @@ static inline ssize_t ff_getMyCpu() { return ff_getMyCore(); }
  *  successful. Otherwise \p EINVAL is returned.
  */
 static inline ssize_t ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
-    if (cpu_id > ff_numCores()) return EINVAL;
 #if defined(__linux__) && defined(CPU_SET)
     cpu_set_t mask;
     CPU_ZERO(&mask);

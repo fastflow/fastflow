@@ -34,7 +34,7 @@
  */
 #include <cstdlib>
 #include <vector>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 
@@ -58,20 +58,11 @@ public:
     }
 };
 
-class myScheduler: public ff_loadbalancer {
-protected:
-    inline size_t selectworker() { return victim; }
-public:
-    myScheduler(int max_num_workers):ff_loadbalancer(max_num_workers),victim(0) {}
-    void set_victim(int v) { victim=v; }
-private:
-    size_t   victim;
-};
 
-class Emitter: public ff_node {
+class Emitter: public ff_monode {
 public:
-    Emitter(int nw1, int nw2, int ntasks, myScheduler * const lb):
-        nw1(nw1),nw2(nw2),even(0),odd(0),ntasks(ntasks),lb(lb) {}
+    Emitter(int nw1, int nw2, int ntasks):
+        nw1(nw1),nw2(nw2),even(0),odd(0),ntasks(ntasks) {}
     
     int svc_init() {
         srandom(::getpid()+(getusec()%4999));
@@ -79,17 +70,15 @@ public:
     }
     
     void * svc(void *) {	
-	for(int i=0;i<ntasks;++i) {
-	    long * t = new long(random() % 10485760);
-	    if (*t % 2)	lb->set_victim((odd++%nw2) + nw1);
-	    else        lb->set_victim(even++%nw1);	    
-	    ff_send_out(t);
-    }
-    return NULL;
+        for(int i=0;i<ntasks;++i) {
+            long * t = new long(random() % 10485760);
+            if (*t % 2)	ff_send_out_to(t, ((odd++%nw2) + nw1));
+            else        ff_send_out_to(t, (even++%nw1));	    
+        }
+        return EOS;
     }    
 private:
     int nw1,nw2,even,odd,ntasks;
-    myScheduler * lb;
 };
 
 
@@ -107,8 +96,8 @@ int main(int argc, char* argv[]) {
         ntasks= atoi(argv[3]);
     }
     
-    ff_farm<myScheduler> farm;   
-    Emitter E(nw1, nw2, ntasks, farm.getlb());
+    ff_farm farm;   
+    Emitter E(nw1, nw2, ntasks);
     farm.add_emitter(&E);
     std::vector<ff_node *> w;
     for(int i=0;i<nw1;++i) 

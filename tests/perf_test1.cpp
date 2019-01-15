@@ -37,7 +37,7 @@
 
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 #include <ff/allocator.hpp>
 #include <ff/cycle.h>
 
@@ -51,7 +51,7 @@ static ff_allocator ffalloc;
 class Worker: public ff_node {
 protected:
     void do_work(int * task, int size, long long nticks) {
-        for(register int i=0;i<size;++i)
+        for(int i=0;i<size;++i)
             task[i]+=1;
         
         ticks_wait(nticks);
@@ -92,7 +92,7 @@ protected:
 
     inline void filltask(int * task, size_t size) {
         static int val = 0;
-        for(register unsigned int i=0;i<size;++i)
+        for(unsigned int i=0;i<size;++i)
             task[i]=val++;
     }
 
@@ -158,7 +158,7 @@ int main(int argc, char * argv[]) {
     }
 
     // create the farm object
-    ff_farm<> farm(false, buffer_entries);
+    ff_farm farm(false, buffer_entries);
     std::vector<ff_node *> w;
     for(unsigned int i=0;i<nworkers;++i) 
         w.push_back(new Worker(itemsize,nticks));

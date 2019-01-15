@@ -42,8 +42,7 @@
 #define HAS_CXX11_VARIADIC_TEMPLATES 1
 #endif
 #include <ff/parallel_for.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 #include <ff/map.hpp>
 
 
@@ -89,7 +88,7 @@ struct mapStage: ff_Map<ff_task_t> {
 
 
 int main() {
-
+    
     // farm having map workers
     ff_Farm<ff_task_t, ff_task_t> farm( []() {
             std::vector<std::unique_ptr<ff_node> > W;	

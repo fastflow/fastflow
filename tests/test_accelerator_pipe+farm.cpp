@@ -42,9 +42,7 @@
 
 #include <stdlib.h>
 #include <iostream>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
-#include <ff/allocator.hpp>
+#include <ff/ff.hpp>
 #include <ff/mapping_utils.hpp>
 
 
@@ -124,7 +122,7 @@ int main(int argc, char * argv[]) {
         nworkers  =atoi(argv[2]);
     }
 
-    ff_farm<> farm_1(false, IN_QUEUE_SIZE, OUT_QUEUE_SIZE);
+    ff_farm farm_1(false, IN_QUEUE_SIZE, OUT_QUEUE_SIZE);
     Emitter E;
     Collector C;
     farm_1.add_emitter(&E); 
@@ -135,7 +133,7 @@ int main(int argc, char * argv[]) {
     }
     farm_1.add_workers(w);
 
-    ff_farm<> farm_2(false, IN_QUEUE_SIZE, OUT_QUEUE_SIZE);
+    ff_farm farm_2(false, IN_QUEUE_SIZE, OUT_QUEUE_SIZE);
     Emitter E2;
     Collector C2;
     farm_2.add_emitter(&E2); 

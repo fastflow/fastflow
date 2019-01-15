@@ -1,3 +1,5 @@
+* v.3.0.0
+
 * v.2.2 (TAG v.2.2)
    - main developemnt repository migrated to GitHub, the sourceforge SVN
    will be no longer updated. GOTO https://github.com/fastflow/fastflow
@@ -33,7 +35,7 @@
    - OpenCL support completely re-implemented
 * 10/06/15 - v.2.0.8
    - added BLOCKING_MODE compile time optione. Now it is possible to select 
-     a blocking run-time. The default mode is unblocking.
+     a blocking run-time. The default mode is non-blocking.
 * - v.2.0.7 (not released)
    - new high level interface for pipeline and farm: ff_Pipe, ff_Farm
    - revised ff_taskf pattern

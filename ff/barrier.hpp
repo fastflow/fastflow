@@ -71,7 +71,7 @@ struct ffBarrier {
      */ 
 class Barrier: public ffBarrier {
 public:   
-    Barrier(const size_t=MAX_NUM_THREADS):threadCounter(0),_barrier(0) {
+    Barrier(const size_t=MAX_NUM_THREADS):_barrier(0) {
         if (pthread_mutex_init(&bLock,NULL)!=0) {
             error("FATAL ERROR: Barrier: pthread_mutex_init fails!\n");
             abort();
@@ -105,16 +105,7 @@ public:
         else pthread_cond_wait(&bCond, &bLock);
         pthread_mutex_unlock(&bLock);
     }
-
-    // TODO: better move counter methods in a different class
-    inline size_t getCounter() const { return threadCounter;}
-    inline void   incCounter()       { ++threadCounter;}
-    inline void   decCounter()       { --threadCounter;}
-
 private:
-    // This is just a counter, and is used to set the ff_node::tid value.
-    size_t            threadCounter;
-
     // it is the number of threads in the barrier. 
     size_t _barrier, counter;
     pthread_mutex_t bLock;  // Mutex variable
@@ -128,7 +119,7 @@ private:
      */ 
 class Barrier: public ffBarrier {
 public:
-    Barrier(const size_t=MAX_NUM_THREADS):threadCounter(0),_barrier(0) { }
+    Barrier(const size_t=MAX_NUM_THREADS):_barrier(0) { }
     ~Barrier() { if (_barrier>0) pthread_barrier_destroy(&bar); }
 
     inline int barrierSetup(size_t init) {
@@ -158,15 +149,7 @@ public:
         pthread_barrier_wait(&bar); 
     }
 
-    // TODO: better move counter methods in a different class
-    inline size_t getCounter() const { return threadCounter;}
-    inline void     incCounter()       { ++threadCounter;}
-    inline void     decCounter()       { --threadCounter;}
-
 private:
-    // This is just a counter, and is used to set the ff_node::tid value.
-    size_t            threadCounter;
-
     // it is the number of threads in the barrier. 
     size_t _barrier;
     pthread_barrier_t bar;
@@ -184,7 +167,7 @@ private:
 class spinBarrier: public ffBarrier {
 public:
    
-    spinBarrier(const size_t _maxNThreads=MAX_NUM_THREADS):maxNThreads(_maxNThreads), _barrier(0),threadCounter(0) {
+    spinBarrier(const size_t _maxNThreads=MAX_NUM_THREADS):maxNThreads(_maxNThreads), _barrier(0) {
         barArray=new bool[maxNThreads];
         assert(barArray!=NULL);
     }
@@ -197,7 +180,7 @@ public:
     inline int barrierSetup(size_t init) {
         assert(init>0);
         if (init == _barrier) return -1;
-        for(size_t i=0; i<init; ++i) barArray[i]=false;
+        for(size_t i=0; i<maxNThreads; ++i) barArray[i]=false;
         B[0]=0; B[1]=0;
         _barrier = init; 
         return 0;
@@ -216,17 +199,10 @@ public:
             c = B[whichBar];
             PAUSE();  // TODO: define a spin policy !
         }
-    }
-
-    // TODO: better move counter methods in a different class
-    inline size_t getCounter() const { return threadCounter;}
-    inline void   incCounter()       { ++threadCounter;}
-    inline void   decCounter()       { --threadCounter;}
-    
+    }    
 private:
     const size_t maxNThreads;
     size_t _barrier;
-    size_t threadCounter;
     bool* barArray;
     std::atomic<long> B[2];
 };

@@ -43,11 +43,7 @@
 
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/node.hpp>
-  
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 struct  Worker1: ff_node {
@@ -131,7 +127,7 @@ int main(int argc, char * argv[]) {
     Start start(streamlen);
     pipe.add_stage(&start);
 
-    ff_farm<> farm1;
+    ff_farm farm1;
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers1;++i) w.push_back(new Worker1);
     farm1.add_workers(w);
@@ -139,7 +135,7 @@ int main(int argc, char * argv[]) {
 
     pipe.add_stage(&farm1);
 
-    ff_farm<> farm2;
+    ff_farm farm2;
     Emitter emitter(farm2.getlb());
     farm2.add_emitter(&emitter);
 
@@ -148,7 +144,7 @@ int main(int argc, char * argv[]) {
     farm2.add_workers(w);
 
     // set master_worker mode 
-    farm2.wrap_around(true);
+    farm2.wrap_around();
 
     pipe.add_stage(&farm2);
     pipe.run_and_wait_end();

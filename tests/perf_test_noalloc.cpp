@@ -32,7 +32,7 @@
 #include <stdint.h>
 
 #include <ff/mapping_utils.hpp>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 
@@ -67,7 +67,7 @@ public:
     Emitter(unsigned int numtasks):numtasks(numtasks) {};
 
     void * svc(void * ) {	
-	for(register unsigned int i=0;i<numtasks;++i)
+	for(unsigned int i=0;i<numtasks;++i)
 	    ff_send_out(&i);
 	
 	return NULL;       
@@ -98,7 +98,7 @@ int main(int argc, char * argv[]) {
         nticks         = atoi(argv[4]);
     }
 
-    ff_farm<> farm(false, nworkers*buffer_entries);    
+    ff_farm farm(false, nworkers*buffer_entries);    
     Emitter E(numtasks);
     farm.add_emitter(&E);
     std::vector<ff_node *> w;
@@ -114,7 +114,7 @@ int main(int argc, char * argv[]) {
     printf("SEQ:\n");
     
     ff::ffTime(ff::START_TIME);
-    for(register unsigned int i=0;i<numtasks;++i) 
+    for(unsigned int i=0;i<numtasks;++i) 
 	ticks_wait(nticks);
     ff::ffTime(ff::STOP_TIME);
     printf("Time: %g (ms)\n", ff::ffTime(ff::GET_TIME));

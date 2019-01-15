@@ -38,7 +38,7 @@
 #include <vector>
 #include <cstdio>
 #include <ff/mapping_utils.hpp>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 
@@ -102,6 +102,11 @@ struct  Worker: ff_node {
 };
 
 int main(int argc, char *argv[]) {
+#if defined(BLOCKING_MODE)
+    printf("TODO: mixing dynamic behavior and blocking mode has not been tested yet!!!!!\n");
+    return 0;
+#endif
+
     int maxworkers   = ff_numCores();
     int ntasks       = 100;
     int nstopstart   = 10;
@@ -116,7 +121,7 @@ int main(int argc, char *argv[]) {
         nstopstart = atoi(argv[3]);
     }
 
-    ff_farm<> farm;
+    ff_farm farm;
     std::vector<ff_node*> w;
     for(int i=0;i<maxworkers;++i) w.push_back(new Worker);
     farm.add_workers(w);

@@ -37,8 +37,7 @@
 #endif
 #include <vector>
 #include <cstdio>
-#include <ff/farm.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 class Emitter: public ff_node {
@@ -108,6 +107,11 @@ public:
 };
 
 int main(int argc, char *argv[]) {
+#if defined(BLOCKING_MODE)
+    printf("TODO: mixing dynamic behavior and blocking mode has not been tested yet!!!!!\n");
+    return 0;
+#endif
+
     int nworkers = 3;
     if (argc>1) {
         if (argc!=2) {
@@ -117,7 +121,7 @@ int main(int argc, char *argv[]) {
         
         nworkers = atoi(argv[1]);
     }
-    ff_farm<> farm;
+    ff_farm farm;
     std::vector<ff_node*> w;
     for(int i=0;i<nworkers;++i)
         w.push_back(new Worker);
