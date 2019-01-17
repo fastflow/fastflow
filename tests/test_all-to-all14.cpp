@@ -133,7 +133,6 @@ struct FarmA2A: ff_pipeline {
 	Emitter1* e = new Emitter1;
 	combine_with_firststage(*pipe, e, true);	
     }
-    void *svc(void*) { return EOS;}
 };
 
 

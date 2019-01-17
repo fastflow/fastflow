@@ -79,15 +79,26 @@ protected:
             }
         } else {
             int ondemand = workers1[0]->ondemand_buffer();  // NOTE: here we suppose that all nodes in workers1 are homogeneous!
-            for(size_t i=0;i<nworkers2; ++i) {
-                for(size_t j=0;j<nworkers1;++j) {
+
+            svector<ff_node*> L;
+            for(size_t i=0;i<nworkers1;++i)
+                workers1[i]->get_out_nodes(L);
+            if (L.size()==0) L=workers1;
+
+            svector<ff_node*> R;
+            for(size_t i=0;i<nworkers2;++i)
+                workers2[i]->get_in_nodes(R);
+            if (R.size()==0) R=workers2;
+
+            for(size_t i=0;i<R.size(); ++i) {
+                for(size_t j=0;j<L.size();++j) {
                     // NOTE: if reduce_channels is set, each worker2 node has to wait nworkers1 EOS messages before
                     //       terminating
                     ff_node* t = new ff_buffernode(ondemand?ondemand:in_buffer_entries,ondemand?true:fixedsize, j);
                     assert(t);
                     internalSupportNodes.push_back(t);                    
-                    workers1[j]->set_output(t);
-                    workers2[i]->set_input(t);
+                    L[j]->set_output(t);
+                    R[i]->set_input(t);
                 }
             }
         }

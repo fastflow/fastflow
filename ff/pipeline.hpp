@@ -601,6 +601,59 @@ public:
         return add_stage(newstage, true);
     }
     
+    void remove_stage(int pos) {
+        if (prepared) {
+            error("PIPE, remove_stage, stage %d cannot be removed because the PIPE has already been prepared\n");
+            return;
+        }
+        if (pos<0 || pos>static_cast<int>(nodes_list.size())) {
+            error("PIPE, remove_stage, stage number %d does not exist\n", pos);
+            return;
+        }
+        svector<ff_node*>::iterator it=nodes_list.begin();
+        assert(it+pos < nodes_list.end());
+        nodes_list.erase(it+pos);
+    }
+    void insert_stage(int pos, ff_node* node, bool cleanup=false) {
+        if (prepared) {
+            error("PIPE, insert_stage, stage %d cannot be added because the PIPE has already been prepared\n");
+            return;
+        }
+
+        if (pos<0 || pos>static_cast<int>(nodes_list.size())) {
+            error("PIPE, insert_stage, invalid position\n");
+            return;
+        }
+        svector<ff_node*>::iterator it=nodes_list.begin();
+        assert(it+pos <= nodes_list.end());
+        nodes_list.insert(it+pos, node);
+        if (cleanup) internalSupportNodes.push_back(node);
+    }
+
+    /*
+     * returns the list of nodes removing them from the pipeline(s)
+     */
+    const svector<std::pair<ff_node*,bool>> get_and_remove_nodes() {
+        int nstages=static_cast<int>(this->nodes_list.size());
+        svector<std::pair<ff_node*,bool>> newvector;
+        for(int i=0;i<nstages;++i)  {
+            if (nodes_list[i]->isPipe()) {
+                ff_pipeline * p = reinterpret_cast<ff_pipeline*>(nodes_list[i]);
+                const svector<std::pair<ff_node*,bool>>& W = p->get_and_remove_nodes();
+                newvector+=W;
+                if (node_cleanup) {
+                    bool found=false;
+                    for(size_t i=0;i<internalSupportNodes.size();++i)
+                        if (internalSupportNodes[i]==p) {found =true; break;}
+                    if (!found) internalSupportNodes.push_back(p);
+                }
+            } else 
+                newvector.push_back(std::make_pair(nodes_list[i], node_cleanup));
+        }
+        for(int i=0;i<nstages;++i)  this->remove_stage(0);
+        return newvector;
+    }
+
     /**
      * \brief Feedback channel (pattern modifier)
      * 
@@ -1371,60 +1424,12 @@ protected:
         int last = static_cast<int>(nodes_list.size())-1;
         nodes_list[last]->get_out_nodes(w);
     }
+
+    inline void get_in_nodes(svector<ff_node*>&w) {
+        assert(nodes_list.size()>0);
+        nodes_list[0]->get_in_nodes(w);
+    }
     
-    void remove_stage(int pos) {
-        if (prepared) {
-            error("PIPE, remove_stage, stage %d cannot be removed because the PIPE has already been prepared\n");
-            return;
-        }
-        if (pos<0 || pos>static_cast<int>(nodes_list.size())) {
-            error("PIPE, remove_stage, stage number %d does not exist\n", pos);
-            return;
-        }
-        svector<ff_node*>::iterator it=nodes_list.begin();
-        assert(it+pos < nodes_list.end());
-        nodes_list.erase(it+pos);
-    }
-    void insert_stage(int pos, ff_node* node, bool cleanup=false) {
-        if (prepared) {
-            error("PIPE, insert_stage, stage %d cannot be added because the PIPE has already been prepared\n");
-            return;
-        }
-
-        if (pos<0 || pos>static_cast<int>(nodes_list.size())) {
-            error("PIPE, insert_stage, invalid position\n");
-            return;
-        }
-        svector<ff_node*>::iterator it=nodes_list.begin();
-        assert(it+pos <= nodes_list.end());
-        nodes_list.insert(it+pos, node);
-        if (cleanup) internalSupportNodes.push_back(node);
-    }
-
-    /*
-     * returns the list of nodes like the function get_pipeline_nodes but the nodes are removed
-     * from the respective pipelines
-     */
-    const svector<std::pair<ff_node*,bool>> get_and_remove_nodes() {
-        int nstages=static_cast<int>(this->nodes_list.size());
-        svector<std::pair<ff_node*,bool>> newvector;
-        for(int i=0;i<nstages;++i)  {
-            if (nodes_list[i]->isPipe()) {
-                ff_pipeline * p = reinterpret_cast<ff_pipeline*>(nodes_list[i]);
-                const svector<std::pair<ff_node*,bool>>& W = p->get_and_remove_nodes();
-                newvector+=W;
-                if (node_cleanup) {
-                    bool found=false;
-                    for(size_t i=0;i<internalSupportNodes.size();++i)
-                        if (internalSupportNodes[i]==p) {found =true; break;}
-                    if (!found) internalSupportNodes.push_back(p);
-                }
-            } else 
-                newvector.push_back(std::make_pair(nodes_list[i], node_cleanup));
-        }
-        for(int i=0;i<nstages;++i)  this->remove_stage(0);
-        return newvector;
-    }
 
     /* The pipeline has not been flattened and its first stage is a multi-input node used as 
      * a standard node. 
