@@ -359,6 +359,7 @@ protected:
                         if (lb->masterworker()) {
                             svector<ff_node*> w(1);
                             a2a->get_out_nodes(w);
+                            assert(w.size()>0);
                             for(size_t j=0;j<w.size();++j)
                                 lb->set_input_feedback(w[j]);
                         }
@@ -1605,6 +1606,9 @@ public:
         else w += wtmp;
     }
 
+    inline void get_in_nodes(svector<ff_node*>&w) {
+        w.push_back(this);
+    }
 
     /*  WARNING: if these methods are called after prepare (i.e. after having called
      *  run_and_wait_end/run_then_freeze/run/....) they have no effect.     
