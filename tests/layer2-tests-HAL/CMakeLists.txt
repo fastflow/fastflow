@@ -1,7 +1,7 @@
 # FIXME some tests not compiling
 
 set(TESTS
-funny-pipeline
+# funny-pipeline
 l1_ff_nodes_graph
 l2_cyclic_graph
 l2_cyclic_graph_trace
@@ -26,3 +26,7 @@ add_test( l2_cyclic_graph ${CMAKE_CURRENT_BINARY_DIR}/l2_cyclic_graph 10 10)
 add_test( l2_cyclic_graph_trace ${CMAKE_CURRENT_BINARY_DIR}/l2_cyclic_graph 10 10)
 # add_test( l2_mapping_utils ${CMAKE_CURRENT_BINARY_DIR}/l2_mapping_utils 10 10)
 add_test( l2_generic_dag_pinning ${CMAKE_CURRENT_BINARY_DIR}/l2_generic_dag_pinning)
+
+foreach( t ${TESTS} )
+  set_tests_properties ( ${t} PROPERTIES TIMEOUT 180)
+endforeach ()
