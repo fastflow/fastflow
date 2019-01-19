@@ -1,6 +1,3 @@
-# FIXME
-# some tests not compiling:
-
 set ( TESTS
 bench_masterworker
 latptr11
@@ -51,10 +48,10 @@ test_all-to-all6
 test_all-to-all7
 test_all-to-all8
 test_all-to-all9
-# test_blk
-# test_blk2
-# test_blk3
-# test_blk4
+test_blk
+test_blk2
+test_blk3
+test_blk4
 test_combine
 test_combine1
 test_combine10
@@ -81,7 +78,7 @@ test_farm+A2A2
 test_farm+farm
 test_farm+pipe
 test_farm2
-# test_ffthread
+test_ffthread
 test_freeze
 test_graphsearch
 test_lb_affinity
@@ -89,7 +86,7 @@ test_mammut
 test_map
 test_masterworker
 test_mdf
-# test_mdf2
+test_mdf2
 test_multi_input
 test_multi_input10
 test_multi_input11
@@ -129,7 +126,7 @@ test_pool1
 test_pool2
 test_pool3
 test_scheduling
-# test_scheduling2
+test_scheduling2
 test_sendq
 test_spinBarrier
 test_stats
@@ -162,12 +159,11 @@ foreach( t ${TESTS} )
     set_tests_properties ( ${t}_BLOCKING PROPERTIES TIMEOUT 180)
 endforeach( t )
 
-# FIXME
 # tests with special compilation parameters
-# set_target_properties(test_scheduling2_NONBLOCKING PROPERTIES
-#	              COMPILE_DEFINITIONS LB_CALLBACK)
-# set_target_properties(test_scheduling2_BLOCKING PROPERTIES
-#	              COMPILE_DEFINITIONS LB_CALLBACK)
+set_target_properties(test_scheduling2_NONBLOCKING PROPERTIES
+	              COMPILE_DEFINITIONS LB_CALLBACK)
+set_target_properties(test_scheduling2_BLOCKING PROPERTIES
+	              COMPILE_DEFINITIONS LB_CALLBACK)
 
 #layer2 tests
 add_subdirectory( layer2-tests-HAL )
