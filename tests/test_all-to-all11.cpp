@@ -105,7 +105,7 @@ struct Emitter: ff_monode_t<long> {
 
 struct Gatherer: ff_minode_t<long> {
     long* svc(long* in) {
-        if (get_channel_id() != -1) {
+        if (!fromInput()) {
             long n=ntasks.fetch_sub(1);
             if (n == 1){
                 return EOS;
@@ -141,7 +141,7 @@ struct MultiInputHelper: ff_minode_t<long> {
 
 struct Worker: ff_monode_t<long> {
     long* svc(long* in) {
-        std::cout << "Worker" << get_my_id() << " got " << *in << "\n";
+        //std::cout << "Worker" << get_my_id() << " got " << *in << "\n";
 
         // Here we know that we have only one output channel
         // and we have 'get_num_feedbackchannels()' feedback channels.

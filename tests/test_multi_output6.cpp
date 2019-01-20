@@ -139,7 +139,7 @@ public:
         // the id of the manager channel is greater than the maximum id of the workers
         if ((size_t)wid == MANAGERID) {  
             Command_t *cmd = reinterpret_cast<Command_t*>(t);
-            printf("EMITTER2 SENDING %s to WORKER %d\n", cmd->op==ADD?"ADD":"REMOVE", cmd->id);
+            //printf("EMITTER2 SENDING %s to WORKER %d\n", cmd->op==ADD?"ADD":"REMOVE", cmd->id);
             switch(cmd->op) {
             case ADD:     lb->thaw(cmd->id, true);             break;
             case REMOVE:  lb->ff_send_out_to(GO_OUT, cmd->id); break;
@@ -180,7 +180,7 @@ public:
             eos_received++; 
             //printf("EOS received eos_received = %u nready = %u\n", eos_received, nready);
             if ((nready + sleeping) == ready.size() && data.size() == 0 && onthefly<=0) {
-                printf("EMITTER2 BROADCASTING EOS\n");
+                //printf("EMITTER2 BROADCASTING EOS\n");
                 lb->broadcast_task(EOS);
             }
         }
@@ -208,7 +208,7 @@ struct Worker: ff_monode_t<long> {
     }
 
     void svc_end() {
-        printf("Worker2 id=%ld going to sleep\n", get_my_id());
+        //printf("Worker2 id=%ld going to sleep\n", get_my_id());
     }
 
 };
@@ -216,7 +216,7 @@ struct Worker: ff_monode_t<long> {
 // multi-input stage
 struct Collector: ff_minode_t<long> {
     long* svc(long* task) {
-        printf("Collector received task = %ld, sending it back to the Emitter\n", (long)(task));
+        //printf("Collector received task = %ld, sending it back to the Emitter\n", (long)(task));
         return task;
     }
 };

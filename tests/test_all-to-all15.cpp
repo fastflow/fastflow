@@ -30,9 +30,9 @@
  *
  *                                              
  *  | --> Source1 -->| 
- *  |                |    |--> Worker1 -->|
- *  |                | -->|               |--> Sink
- *  |                |    |--> Worker1 -->|
+ *  |                |    |-->mi-> Worker1->mo -->|
+ *  |                | -->|                       |--> Sink
+ *  |                |    |-->mi-> Worker1->mo -->|
  *  | --> Source2 -->|
  * 
  *                        |<--- all-to-all -------->|
@@ -68,33 +68,49 @@ struct PipeA2A: ff_pipeline {
 	}
 	long cnt=0;
     };
-    struct Worker:ff_minode_t<long> {
-	long* svc(long* in) {
-	    return in;
-	}    
+    struct miHelper:ff_minode_t<long> {
+        long* svc(long* in) {
+            return in;
+        }
+        void eosnotify(ssize_t) {
+            printf("miHelper %ld received EOS\n", get_my_id());
+        }
+    };   
+    struct Worker:ff_node_t<long> {
+        long* svc(long* in) {
+            return in;
+        }
+        void eosnotify(ssize_t) {
+            printf("Worker %ld received EOS\n", get_my_id());
+        }
     };
     struct moHelper:ff_monode_t<long> {
-	long* svc(long* in) {
-	    return in;
-	}    
+        long* svc(long* in) {
+            return in;
+        }    
+        void eosnotify(ssize_t) {
+            printf("moHelper %ld received EOS\n", get_my_id());
+        }
     };
-    
-    PipeA2A(int nsources) {
-	
-	ff_a2a* a2a = new ff_a2a;
-	std::vector<ff_node*> W1;
-	ff_comb *w1 = new ff_comb(new Worker, new moHelper, true, true);
-	ff_comb *w2 = new ff_comb(new Worker, new moHelper, true, true);
-	W1.push_back(w1);
-	W1.push_back(w2);
-	a2a->add_firstset(W1, 0, true);
 
-	std::vector<ff_node*> W2;
-	sink = new Sink;
-	assert(sink);
-	W2.push_back(sink);
-	a2a->add_secondset(W2,true);
-	add_stage(a2a, true);
+    PipeA2A(int nsources) {
+        const long nworkers=1;
+
+        ff_a2a* a2a = new ff_a2a;
+        std::vector<ff_node*> W1;
+        for(long int i=0;i<nworkers;++i) {
+            ff_comb *t  = new ff_comb(new miHelper, new Worker, true, true);
+            ff_comb *w1 = new ff_comb(t, new moHelper, true, true);
+            W1.push_back(w1);
+        }
+        a2a->add_firstset(W1, 0, true);
+        
+        std::vector<ff_node*> W2;
+        sink = new Sink;
+        assert(sink);
+        W2.push_back(sink);
+        a2a->add_secondset(W2,true);
+        add_stage(a2a, true);
     }
     Sink*sink=nullptr;
 };

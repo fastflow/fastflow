@@ -454,6 +454,7 @@ protected:
     }
 
     void propagateEOS(void*task=FF_EOS) {
+        if (lb->getnworkers() == 0) ff_send_out(task);
         lb->propagateEOS(task);
     }
     
