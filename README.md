@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/fastflow/fastflow.svg?branch=master)](https://travis-ci.com/fastflow/fastflow)
+
 FastFlow
 ^^^^^^^^
 
