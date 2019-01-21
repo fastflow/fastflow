@@ -30,7 +30,7 @@ control of a scheduler.
 
 FastFlow is header-only, no need for building.
 
-See the BUILD.ME file for instructions about building unit tests and examples.
+See the [BUILD.ME](BUILD.ME) file for instructions about building unit tests and examples.
 
 ## Supported Platforms
 
@@ -46,6 +46,7 @@ Although not officially supported (yet), FastFlow has been tested on:
 
 Since version 2.0.4, FastFlow is expected to work on any platform with a C++11 compiler. 
 
+### Windows Issues
 Windows platform can be particuarly slow in debug mode due to iterator
 debugging and secure crt layers. Release mode appers to be not affected by the
 issue. See http://blogs.warwick.ac.uk/ahazelden/entry/visual_studio_stl/
