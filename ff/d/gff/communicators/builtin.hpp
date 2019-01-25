@@ -27,9 +27,10 @@
 #ifndef FF_D_GFF_COMMUNICATORS_BUILTIN_HPP_
 #define FF_D_GFF_COMMUNICATORS_BUILTIN_HPP_
 
+#include "../dispatcher_faimilies/builtin.hpp"
+
 #include <gam.hpp>
 
-#include "../dispatcher_faimiles/builtin.hpp"
 #include "../dispatching_policies/builtin.hpp"
 #include "../CommunicatorInternals.hpp"
 

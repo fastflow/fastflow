@@ -176,9 +176,6 @@ public:
 	 */
 	void svc_end() {
 	}
-
-private:
-	int sum = 0;
 };
 
 /*
