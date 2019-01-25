@@ -1,4 +1,4 @@
----> DISTRIBUTED2 branch
+* v.3.0.0
 
 * v.2.2 (TAG v.2.2)
    - main developemnt repository migrated to GitHub, the sourceforge SVN

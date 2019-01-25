@@ -67,7 +67,6 @@
 #include <ff/ordering_policies.hpp>
 #include <ff/all2all.hpp>
 
-
 namespace ff {
 
 
@@ -218,6 +217,20 @@ protected:
             return -1;
         }
 
+        // NOTE: if the farm is in a master-worker configuration, all workers must be either
+        //       sequential or parallel  building block
+        if (lb->masterworker()) {
+            bool is_parallel_bb = workers[0]->isAll2All() || workers[0]->isFarm() || workers[0]->isPipe();
+            lb->parallel_workers = is_parallel_bb;
+            for(size_t i=1;i<workers.size();++i) {
+                bool tmp=workers[i]->isAll2All() || workers[i]->isFarm() || workers[i]->isPipe();
+                if (tmp != is_parallel_bb) {
+                    error("FARM, prepare, farm in master-worker configuration but with non homogeneous workers\n");
+                    return -1;
+                }
+            }
+        }
+        
         // ordering
         if (ordered) {
 
@@ -307,31 +320,51 @@ protected:
                 for(size_t i=0;i<W1.size();++i) {
                     lb->register_worker(W1[i]);
                 }
+                               
 
                 // TODO: If the internal A2A has feedbacks toward the Emitter (i.e. master-worker) and there is also the collector
                 //       then this case is not properly handled because R-Workers are not connected to the collector
                 if (collector && !collector_removed) {
                     if (!lb->masterworker()) {
+                        
+                        // NOTE: the following call might fail because the buffers were already created for example by
+                        // the pipeline that contains this stage
+                        a2a->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
+                                                  (lb->masterworker()?false:fixedsize));
+                        
                         for(size_t i=0;i<W2.size();++i) {
-                            gt->register_worker(W2[i]);
+                            svector<ff_node*> w(1);
+                            W2[i]->get_out_nodes(w);
+                            assert(w.size()>0);
+                            for(size_t j=0;j<w.size();++j)
+                                gt->register_worker(w[j]);
                         }
-                    } else abort(); // <---- FIX
+                    } else {
+                        error("FARM feature not yet supported\n");
+                        abort(); // <---- FIX
+                    }
                 } else { // there is no collector
                     if (outputNodes.size()) { 
                         assert(W2.size() == outputNodes.size());
                         for(size_t i=0;i<W2.size();++i) {
                             if (W2[i]->set_output(outputNodes[i])<0) return -1;  //(**)
                                                                                      }
+                    } else {
+                        // NOTE: the following call might fail because the buffers were already created for example by
+                        // the pipeline that contains this stage or here (**)
+                        if (a2a->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
+                                                      (lb->masterworker()?false:fixedsize))<0) {
+                            if (lb->masterworker()) return -1; // something went wrong
+                        }
+                        if (lb->masterworker()) {
+                            svector<ff_node*> w(1);
+                            a2a->get_out_nodes(w);
+                            assert(w.size()>0);
+                            for(size_t j=0;j<w.size();++j)
+                                lb->set_input_feedback(w[j]);
+                        }
                     }
-                }
-                
-                // NOTE: the following call might fail because the buffers were already created for example by
-                // the pipeline that contains this stage or here (**).
-                if (a2a->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
-                                              (lb->masterworker()?false:fixedsize))<0) {
-                    if (lb->masterworker()) return -1; //something went wrong
-                }
-
+                }                
                 
                 continue;
             }
@@ -391,15 +424,24 @@ protected:
             } else { // there is not a collector
                 if (workers[i]->get_out_buffer()==NULL) {
                     if (workers[i]->isMultiOutput()) {
-                        ff_node *t = nullptr;
                         if (lb->masterworker()) {
-                            t = new ff_buffernode(out_buffer_entries, false);
-                            if (!t) return -1;
-                            t->set_id(i);
-                            internalSupportNodes.push_back(t);
-                            workers[i]->set_output_feedback(t);
-                            // this is needed because we don't call create_output_buffer for the worker
-                            workers[i]->set_output_buffer(t->get_out_buffer());
+                            static int idx=0;
+
+                            svector<ff_node*> w(1);
+                            workers[i]->get_out_nodes(w);
+                            for(size_t j=0;j<w.size();++j) {
+                                ff_node* t = new ff_buffernode(out_buffer_entries,false, idx++);
+                                assert(t);
+                                internalSupportNodes.push_back(t);
+                                workers[i]->set_output_feedback(t);
+                                if (lb->parallel_workers)
+                                    this->set_input(t);
+
+                                if (!lb->parallel_workers) {
+                                    // this is needed because we don't call create_output_buffer for the worker
+                                    workers[i]->set_output_buffer(t->get_out_buffer());
+                                }
+                            }
                         }
                                                 
                         if (outputNodes.size()) { 
@@ -408,23 +450,34 @@ protected:
                         
                     } else {
                         if (outputNodes.size()) {
+                            assert(outputNodesFeedback.size()==0);
                             assert(!lb->masterworker());    // no master-worker 
                             assert(outputNodes.size() == workers.size()); // same cardinality
                             workers[i]->set_output_buffer(outputNodes[i]->get_in_buffer());
                         }
                         else{
-                            // NOTE: this call could fail because the buffer has already been created (e.g. in the pipeline)
-                            //
-                            if (lb->masterworker())
-                                workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
-                                                                 (lb->masterworker()?false:fixedsize));
+                            if (outputNodesFeedback.size()) {
+                                assert(!lb->masterworker());    // no master-worker 
+                                assert(outputNodesFeedback.size() == workers.size()); // same cardinality
+                                workers[i]->set_output_buffer(outputNodesFeedback[i]->get_in_buffer());
+                            } else {
+                                if (lb->masterworker()) {
+                                    // NOTE: this call could fail because the buffer has already been created (e.g. in the pipeline)
+                                    workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), false);
+                                }                                                                
+                                if (lb->masterworker() && lb->parallel_workers) {    
+                                    svector<ff_node*> w(1);
+                                    workers[i]->get_out_nodes(w);
+                                    this->set_input(w);
+                                }
+                            }
                         }
                     }
                 }
             }
             lb->register_worker(workers[i]);
         }
-
+        
         // preparing emitter
         if (emitter) {
             if (emitter->isMultiOutput()) {
@@ -553,7 +606,8 @@ protected:
         lb->skipfirstpop(sk);
         skip1pop=sk;
     }
-        
+
+
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
@@ -678,7 +732,7 @@ public:
         for(size_t i=0;i<max_num_workers;++i) workers[i]=NULL;        
     }
 
-    ff_farm(const ff_farm& f):ff_farm() { 
+    ff_farm(const ff_farm& f) { 
         if (f.prepared) {
             error("ff_farm, copy constructor, the input farm is already prepared\n");
             return;
@@ -702,8 +756,8 @@ public:
         collector = nullptr;
         //lb = new lb_t(max_nworkers);
         //gt = new gt_t(max_nworkers);
-        setlb(f.lb); myownlb = f.myownlb;
-        setgt(f.gt); myowngt = f.myowngt;
+        lb=nullptr;setlb(f.lb); myownlb = f.myownlb;
+        gt=nullptr;setgt(f.gt); myowngt = f.myowngt;
         assert(lb); assert(gt);
         
         add_emitter(f.emitter);
@@ -757,11 +811,11 @@ public:
      */
     virtual ~ff_farm() { 
         if (emitter_cleanup) {
-            if (lb && lb->get_filter()) delete lb->get_filter();
+            if (lb && myownlb && lb->get_filter()) delete lb->get_filter();
             else if (emitter) delete emitter;
         }
         if (collector_cleanup) {
-            if (gt && gt->get_filter()) delete gt->get_filter();
+            if (gt && myowngt && gt->get_filter()) delete gt->get_filter();
             else if (collector != (ff_node*)gt) delete collector;
         }
         if (lb && myownlb) { delete lb; lb=NULL;}
@@ -785,7 +839,7 @@ public:
         }
         if (myowngt) {
             if (collector == (ff_node*)gt) collector = (ff_node*)external_gt;
-            delete gt;
+            delete gt; gt = nullptr;
             myowngt=false;
         }
         gt = external_gt;
@@ -797,7 +851,7 @@ public:
             *external_lb = std::move(*lb);
         }
         if (myownlb) {
-            delete lb;
+            delete lb; lb=nullptr;
             myownlb=false;
         }
         lb = external_lb;
@@ -827,20 +881,15 @@ public:
             error("FARM, add_emitter: emitter already present\n");
             return -1; 
         }
-        if (e->isMultiInput() && !e->isComp()) {
-            error("FARM, add_emitter: the Emitter filter cannot be a multi-input node. A farm emitter is already a multi-input node!\n");
-            return -1;
-        }        
         emitter = e;
         
+        // if the emitter is a real multi-input, then we have to register the callback for
+        // the all_gather call        
+        if (e->isMultiInput()) {
+            e->registerAllGatherCallback(lb->ff_all_gather_emitter, lb);
+        }
+      
         if (e->isComp()) {
-
-            // if the comp is a real multi-input, then we have to register the callback for
-            // the all_gather call
-            if (e->isMultiInput()) {
-                e->registerAllGatherCallback(lb->ff_all_gather_emitter, lb);
-            }
-            
             // NOTE: if a comp is set as a filter in the emitter of a farm,
             // it is a multiinput and multioutput node (like an emitter) even if
             // the first/last stage of the composition are not a multi-input/output.   
@@ -884,7 +933,6 @@ public:
         return this->add_emitter(e);
     }
 
-    
     /**
      *
      * \brief Set scheduling with on demand polity
@@ -1015,7 +1063,7 @@ public:
      *
      */
     int wrap_around() {
-        if (!collector || collector_removed) { // all stuff are in the prepare method
+        if (!this->hasCollector()) { // all stuff are in the prepare method
             if (lb->set_masterworker()<0) return -1;           
             if (!has_input_channel) lb->skipfirstpop(true);
             return 0;
@@ -1039,15 +1087,17 @@ public:
         /* ------ */
         
         ff_buffernode *tmpbuffer = new ff_buffernode(out_buffer_entries, false);
-        if (!tmpbuffer) return -1;
+        assert(tmpbuffer);
         tmpbuffer->set_input_blocking(m,c,counter);
         internalSupportNodes.push_back(tmpbuffer);
         if (set_output_buffer(tmpbuffer->get_in_buffer())<0) {
             error("FARM, setting output buffer for multi-input configuration\n");
             return -1;
         }
-        if (lb->set_internal_multi_input(internalSupportNodes)<0)
-            return -1;
+        if (getCollector() && collector->isMultiOutput())
+            collector->set_output_feedback(tmpbuffer);
+        
+        lb->set_input_feedback(tmpbuffer);
         lb->skipfirstpop(true);
         return 0;
     }
@@ -1160,7 +1210,6 @@ public:
                 barrier->barrierSetup(nthreads);
             }
 #endif
-            // only the first stage has to skip the first pop
             lb->skipfirstpop(!has_input_channel);
         }
         
@@ -1496,7 +1545,9 @@ public:
     /**
      * \brief Gets Collector
      * 
-     * It returns a pointer to the collector.
+     * It returns a pointer to the collector filter (if present). 
+     * It returns \p NULL even if the collector is present and it is the default one.
+     * To check the presence of the collector it has to be used @hasCollector
      *
      * \return A pointer to collector node if exists, otherwise a \p NULL
      */
@@ -1539,6 +1590,7 @@ public:
         if (collector && !collector_removed) {
             if ((ff_node*)gt == collector) {
                 ff_node *outnode = new ff_buffernode(-1, NULL,gt->get_out_buffer());
+                assert(outnode);
                 internalSupportNodes.push_back(outnode);
                 w.push_back(outnode);
             } else {
@@ -1554,6 +1606,9 @@ public:
         else w += wtmp;
     }
 
+    inline void get_in_nodes(svector<ff_node*>&w) {
+        w.push_back(this);
+    }
 
     /*  WARNING: if these methods are called after prepare (i.e. after having called
      *  run_and_wait_end/run_then_freeze/run/....) they have no effect.     
@@ -1744,7 +1799,16 @@ protected:
         }
         if (emitter) {
             if (emitter->create_input_buffer(nentries,fixedsize)<0) return -1;
-            in = emitter->get_in_buffer();
+            if (emitter->isMultiInput()) {
+                if (emitter->isComp()) 
+                    in = emitter->get_in_buffer();
+                else {
+                    svector<ff_node*> w(1);
+                    emitter->get_in_nodes(w);
+                    assert(w.size()==1);
+                    in = w[0]->get_in_buffer();
+                }
+            } else  in = emitter->get_in_buffer();
         } else {
             if (ff_node::create_input_buffer(nentries, fixedsize)<0) return -1;
         }
@@ -1818,6 +1882,11 @@ protected:
         return lb->set_input(node);
     }
 
+    inline int set_input_feedback(ff_node *node) { 
+        assert(isMultiInput());
+        return lb->set_input_feedback(node);
+    }
+
     inline int set_output(const svector<ff_node *> & w) {
         if (collector && !collector_removed) {
             if (collector != (ff_node*)gt)
@@ -1828,7 +1897,9 @@ protected:
             error("FARM, cannot add output nodes, the collector is not multi-output\n");
             return -1;
         }
-        if (outputNodes.size()+w.size() > workers.size()) return -1;
+        if (outputNodes.size()+w.size() > workers.size()) {
+            return -1;
+        }
         outputNodes +=w;
         return 0; 
     }
@@ -1843,9 +1914,20 @@ protected:
             error("FARM, cannot add output node\n");
             return -1;
         }
+        svector<ff_node*> w(1);
+        this->get_out_nodes(w);
+        if (outputNodes.size()+1 > w.size()) {
+            return -1;
+        }
         outputNodes.push_back(node);
         return 0; 
     }
+
+    inline int set_output_feedback(ff_node *node) { 
+        outputNodesFeedback.push_back(node); 
+        return 0;
+    }
+
     
     /**
      *
@@ -1865,9 +1947,7 @@ protected:
             return -1;
         }
         if (gt->set_output_buffer(o)<0) return -1;
-        if (collector && !collector_removed) {
-            if (collector != (ff_node*)gt) collector->set_output_buffer(o);
-        }
+        if (this->getCollector()) collector->set_output_buffer(o);
         return 0;
     }
 
@@ -1891,7 +1971,8 @@ protected:
     lb_t             * lb;
     gt_t             * gt;
     svector<ff_node*>  workers;
-    svector<ff_node*>  outputNodes;       
+    svector<ff_node*>  outputNodes;
+    svector<ff_node*>  outputNodesFeedback;       
     svector<ff_node*>  internalSupportNodes;
     svector<ordering_pair_t>  ordering_Memory;     // used for ordering purposes
 };

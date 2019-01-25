@@ -45,14 +45,7 @@
  *
  */
 #include <iostream>
-#include <ff/farm.hpp>
-#include <ff/combine.hpp>
-
-#include <iostream>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/all2all.hpp>
-#include <ff/optimize.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 

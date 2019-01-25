@@ -29,7 +29,7 @@
 // to run this test we need to be sure that the initial barrier is executed
 #define FF_INITIAL_BARRIER
 #endif
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 

@@ -32,7 +32,7 @@
 
 #include <iostream>
 #include <cstdio>
-#include <ff/pipeline.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 

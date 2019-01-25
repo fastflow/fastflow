@@ -753,8 +753,9 @@ protected:
         return set_output_buffer(n->get_in_buffer());
     }
     virtual inline int set_output_feedback(ff_node *) { return -1;}
-   
-    virtual inline void get_out_nodes(svector<ff_node*>&w) {}
+    virtual inline void set_input_channelid(ssize_t, bool=true) {}
+    
+    virtual inline void get_out_nodes(svector<ff_node*>&w) { w.push_back(this); }
     virtual inline void get_out_nodes_feedback(svector<ff_node*>&w) {}
     virtual inline void get_in_nodes(svector<ff_node*>&w) {}
     virtual inline void get_in_nodes_feedback(svector<ff_node*>&w) {}

@@ -61,10 +61,7 @@
  */
 
 #include <iostream>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/combine.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 struct Emitter1: ff_monode_t<long> { 
@@ -304,7 +301,7 @@ int main(int argc, char* argv[]) {
             return -1;
         }    
         printf("TEST5 DONE\n");
-    }
+    }    
     usleep(500000);
     {
         Emitter1 E(nworkers1,ntasks);

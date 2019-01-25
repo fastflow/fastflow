@@ -47,8 +47,10 @@
 namespace ff {
 
 class ff_pipeline;
-static int optimize_static(ff_pipeline&, const OptLevel&);
-    
+static inline int optimize_static(ff_pipeline&, const OptLevel&);
+static inline int combine_with_firststage(ff_pipeline&,ff_node*,bool);
+static inline int combine_with_laststage(ff_pipeline&,ff_node*,bool);        
+
 /**
  * \class ff_pipeline
  * \ingroup core_patterns
@@ -59,7 +61,9 @@ static int optimize_static(ff_pipeline&, const OptLevel&);
 class ff_pipeline: public ff_node {
 
     friend inline int optimize_static(ff_pipeline&, const OptLevel&);
-
+    friend inline int combine_with_firststage(ff_pipeline&,ff_node*,bool);
+    friend inline int combine_with_laststage(ff_pipeline&,ff_node*,bool);        
+    
 protected:
     inline int prepare() {
         const int nstages=static_cast<int>(nodes_list.size());
@@ -108,15 +112,15 @@ protected:
                 }
                 return false;
             } ();
-            const bool isa2a_prev   = get_node(i-1)->isAll2All();
-            const bool isfarm_prev  = get_node(i-1)->isFarm();
-            const bool prev_isfarm_nocollector   = (isfarm_prev && !get_node(i-1)->isOFarm() && ((ff_farm*)get_node(i-1))->getCollector() == nullptr);
-            const bool prev_isfarm_withcollector = (isfarm_prev && ((ff_farm*)get_node(i-1))->hasCollector());        
+            const bool isa2a_prev   = get_node_last(i-1)->isAll2All();
+            const bool isfarm_prev  = get_node_last(i-1)->isFarm();
+            const bool prev_isfarm_nocollector   = (isfarm_prev && !get_node_last(i-1)->isOFarm() && !((ff_farm*)get_node_last(i-1))->hasCollector());
+            const bool prev_isfarm_withcollector = (isfarm_prev && ((ff_farm*)get_node_last(i-1))->hasCollector());        
             
             
-            const bool prev_single_standard      = (!nodes_list[i-1]->isMultiOutput());
-            const bool prev_single_multioutput   = ((nodes_list[i-1]->isMultiOutput() && !isa2a_prev && !isfarm_prev) ||
-                                                    (prev_isfarm_withcollector && nodes_list[i-1]->isMultiOutput()));        
+            const bool prev_single_standard      = (!get_node_last(i-1)->isMultiOutput());
+            const bool prev_single_multioutput   = ((get_node_last(i-1)->isMultiOutput() && !isa2a_prev && !isfarm_prev) ||
+                                                    (prev_isfarm_withcollector && get_node_last(i-1)->isMultiOutput()));        
             const bool prev_multi_standard       = [&]() {
                 if (prev_isfarm_nocollector) {
                     svector<ff_node*> w1;
@@ -527,11 +531,13 @@ public:
         out_buffer_entries = p.out_buffer_entries;
         nodes_list = p.nodes_list;
         internalSupportNodes = p.internalSupportNodes;
+        dontcleanup = p.dontcleanup;
         
         // this is a dirty part, we modify a const object.....
         ff_pipeline *dirty= const_cast<ff_pipeline*>(&p);
         dirty->node_cleanup = false;
         dirty->internalSupportNodes.resize(0);
+        dirty->dontcleanup.resize(0);
     }
     
     /**
@@ -545,7 +551,11 @@ public:
 
                 bool found = false;
                 for(size_t i=0;i<internalSupportNodes.size();++i)
-                    if (internalSupportNodes[i] == n) { found = true; break; }                
+                    if (internalSupportNodes[i] == n) { found = true; break; }
+                if (!found) {
+                    for(size_t i=0;i<dontcleanup.size();++i)
+                        if (dontcleanup[i] == n) { found = true; break; }
+                }
                 nodes_list.pop_back();
                 if (!found) delete n;
             }
@@ -591,6 +601,59 @@ public:
         return add_stage(newstage, true);
     }
     
+    void remove_stage(int pos) {
+        if (prepared) {
+            error("PIPE, remove_stage, stage %d cannot be removed because the PIPE has already been prepared\n");
+            return;
+        }
+        if (pos<0 || pos>static_cast<int>(nodes_list.size())) {
+            error("PIPE, remove_stage, stage number %d does not exist\n", pos);
+            return;
+        }
+        svector<ff_node*>::iterator it=nodes_list.begin();
+        assert(it+pos < nodes_list.end());
+        nodes_list.erase(it+pos);
+    }
+    void insert_stage(int pos, ff_node* node, bool cleanup=false) {
+        if (prepared) {
+            error("PIPE, insert_stage, stage %d cannot be added because the PIPE has already been prepared\n");
+            return;
+        }
+
+        if (pos<0 || pos>static_cast<int>(nodes_list.size())) {
+            error("PIPE, insert_stage, invalid position\n");
+            return;
+        }
+        svector<ff_node*>::iterator it=nodes_list.begin();
+        assert(it+pos <= nodes_list.end());
+        nodes_list.insert(it+pos, node);
+        if (cleanup) internalSupportNodes.push_back(node);
+    }
+
+    /*
+     * returns the list of nodes removing them from the pipeline(s)
+     */
+    const svector<std::pair<ff_node*,bool>> get_and_remove_nodes() {
+        int nstages=static_cast<int>(this->nodes_list.size());
+        svector<std::pair<ff_node*,bool>> newvector;
+        for(int i=0;i<nstages;++i)  {
+            if (nodes_list[i]->isPipe()) {
+                ff_pipeline * p = reinterpret_cast<ff_pipeline*>(nodes_list[i]);
+                const svector<std::pair<ff_node*,bool>>& W = p->get_and_remove_nodes();
+                newvector+=W;
+                if (node_cleanup) {
+                    bool found=false;
+                    for(size_t i=0;i<internalSupportNodes.size();++i)
+                        if (internalSupportNodes[i]==p) {found =true; break;}
+                    if (!found) internalSupportNodes.push_back(p);
+                }
+            } else 
+                newvector.push_back(std::make_pair(nodes_list[i], node_cleanup));
+        }
+        for(int i=0;i<nstages;++i)  this->remove_stage(0);
+        return newvector;
+    }
+
     /**
      * \brief Feedback channel (pattern modifier)
      * 
@@ -844,13 +907,17 @@ public:
         if (first_single_multiinput || first_multi_multiinput) {
             if (!nodes_list[0]->init_input_blocking(m,c,counter)) return -1;
 
-            // the first stage is the farm emitter that is not a plain multi-input node
+            // the first stage is the farm's emitter that is not a plain multi-input node
             if (get_node(0)->isFarm()) { 
                 svector<ff_node*> w1(MAX_NUM_THREADS);
-                nodes_list[last]->get_out_nodes_feedback(w1);
+                if (last_single_standard || last_multi_standard) {
+                    nodes_list[last]->get_out_nodes(w1);
+                } else
+                    nodes_list[last]->get_out_nodes_feedback(w1);
+                
                 if (w1.size() == 0) {
                     assert(last_single_standard);
-                    nodes_list[last]->set_output_blocking(m,c,counter);
+                    nodes_list[last]->set_output_blocking(m,c,counter);  // <----
                 } else {
                     for(size_t i=0;i<w1.size();++i)
                         w1[i]->set_output_blocking(m,c,counter);
@@ -928,6 +995,7 @@ public:
      *  the function is called recursively extracting its first stage. 
      */
     ff_node* get_node(int i) const {
+        if (!nodes_list.size()) return nullptr;
         if (i<0 || i>=(int)nodes_list.size()) return nullptr;
         if (nodes_list[i]->isPipe()) {
             ff_pipeline * p = reinterpret_cast<ff_pipeline*>(nodes_list[i]);
@@ -935,7 +1003,24 @@ public:
         }
         return nodes_list[i];
     }
+    /**
+     *  \brief returns the stage i of the pipeline. If the stage is a pipeline
+     *  the function is called recursively extracting its last stage. 
+     */
+    ff_node* get_node_last(int i) const {
+        if (!nodes_list.size()) return nullptr;
+        if (i<0 || i>=(int)nodes_list.size()) return nullptr;
+        if (nodes_list[i]->isPipe()) {
+            ff_pipeline * p = reinterpret_cast<ff_pipeline*>(nodes_list[i]);
+            return p->get_lastnode();
+        }
+        return nodes_list[i];
+    }
+    /**
+     *  \brief returns the last stage of the pipeline. 
+     */
     ff_node* get_lastnode() const {
+        if (!nodes_list.size()) return nullptr;
         const int last = static_cast<int>(nodes_list.size())-1;
         if (nodes_list[last]->isPipe()) {
             ff_pipeline * p = reinterpret_cast<ff_pipeline*>(nodes_list[last]);
@@ -1147,13 +1232,19 @@ public:
         int last = static_cast<int>(nodes_list.size())-1;
         return nodes_list[last]->isMultiOutput();
     }
-
-    inline void flatten() {
-        const svector<ff_node*>& W = this->get_pipeline_nodes();
-        int nstages=static_cast<int>(this->nodes_list.size());
-        for(int i=0;i<nstages;++i)  this->remove_stage(0); 
-        nstages = static_cast<int>(W.size());
-        for(int i=0;i<nstages;++i) this->add_stage(W[i]);
+    
+    // remove internal pipeline 
+    void flatten() {
+        const svector<std::pair<ff_node*,bool>>& W = this->get_and_remove_nodes();
+        assert(get_pipeline_nodes().size() == 0);
+        for(size_t i=0;i<W.size();++i) this->add_stage(W[i].first);
+        if (node_cleanup) {
+            for(size_t i=0;i<W.size();++i)
+                if (!W[i].second) dontcleanup.push_back(W[i].first);                    
+        } else {
+            for(size_t i=0;i<W.size();++i)
+                if (W[i].second) internalSupportNodes.push_back(W[i].first);                                
+        }
     }
 
     
@@ -1333,36 +1424,19 @@ protected:
         int last = static_cast<int>(nodes_list.size())-1;
         nodes_list[last]->get_out_nodes(w);
     }
+
+    inline void get_in_nodes(svector<ff_node*>&w) {
+        assert(nodes_list.size()>0);
+        nodes_list[0]->get_in_nodes(w);
+    }
     
-    void remove_stage(int pos) {
-        if (prepared) {
-            error("PIPE, remove_stage, stage %d cannot be removed because the PIPE has already been prepared\n");
-            return;
-        }
-        if (pos<0 || pos>static_cast<int>(nodes_list.size())) {
-            error("PIPE, remove_stage, stage number %d does not exist\n", pos);
-            return;
-        }
-        svector<ff_node*>::iterator it=nodes_list.begin();
-        assert(it+pos < nodes_list.end());
-        nodes_list.erase(it+pos);
-    }
-    void insert_stage(int pos, ff_node* node, bool cleanup=false) {
-        if (prepared) {
-            error("PIPE, insert_stage, stage %d cannot be added because the PIPE has already been prepared\n");
-            return;
-        }
 
-        if (pos<0 || pos>static_cast<int>(nodes_list.size())) {
-            error("PIPE, insert_stage, invalid position\n");
-            return;
-        }
-        svector<ff_node*>::iterator it=nodes_list.begin();
-        assert(it+pos <= nodes_list.end());
-        nodes_list.insert(it+pos, node);
-        if (cleanup) internalSupportNodes.push_back(node);
+    /* The pipeline has not been flattened and its first stage is a multi-input node used as 
+     * a standard node. 
+     */
+    inline bool  put(void * ptr) { 
+        return nodes_list[0]->put(ptr);
     }
-
     
     // returns the pipeline starting time
     const struct timeval startTime() { return nodes_list[0]->getstarttime(); }
@@ -1496,6 +1570,7 @@ private:
     int out_buffer_entries;
     svector<ff_node *> nodes_list;
     svector<ff_node*>  internalSupportNodes;
+    svector<ff_node*>  dontcleanup;  // used by the flatten method
 
 #if defined(MAMMUT)
     mammut::Mammut           mammut;
@@ -1560,14 +1635,10 @@ private:
         //
         void add2pipeall(){} // base case
 
-        
         // need to see this before add2pipeall variadic template function
         inline void add2pipe(ff_node &node) { ff_pipeline::add_stage(&node); }
         // need to see this before add2pipeall variadic template function
-        inline void add2pipe(ff_node *node) { 
-            cleanup_stages.push_back(node);
-            ff_pipeline::add_stage(node); 
-        }
+        inline void add2pipe(ff_node *node) { ff_pipeline::add_stage(node);  }
 
         template<typename FIRST,typename ...ARGS>
         void add2pipeall(FIRST &stage,ARGS&...args){
@@ -1584,8 +1655,10 @@ private:
 
         
         template<typename FIRST,typename ...ARGS>
-        void add2pipeall(std::unique_ptr<FIRST> & stage,ARGS&...args){            
-        	add2pipe(stage.release());
+        void add2pipeall(std::unique_ptr<FIRST> & stage,ARGS&...args){
+            ff_node* node = stage.release();
+        	add2pipe(*node); //stage.release());
+            cleanup_stages.push_back(node);
         	add2pipeall(args...); // recurse
         }
 
@@ -1678,5 +1751,7 @@ private:
 
 } // namespace ff
 
+// to avoid warning when optimize_static is not used
+#include<ff/optimize.hpp>
 
 #endif /* FF_PIPELINE_HPP */

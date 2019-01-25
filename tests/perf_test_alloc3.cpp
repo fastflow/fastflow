@@ -36,12 +36,11 @@
  */
 
 #include <sys/types.h>
-//#include <unistd.h>
 #include <stdlib.h>
 
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 #include <ff/allocator.hpp>
 #include <ff/cycle.h>
 #if defined(USE_PROC_AFFINITY)
@@ -111,7 +110,7 @@ public:
                 task[i]= (ff_task_t*)MALLOC(itemsize*sizeof(ff_task_t));
                 memset(task[i],0,itemsize*sizeof(ff_task_t));
             }
-            for(register int i=0;i<batchsize;++i) {
+            for(int i=0;i<batchsize;++i) {
                 FREE(task[i],itemsize*sizeof(ff_task_t));
             }
             ntasks-=batchsize;
@@ -120,7 +119,7 @@ public:
             task[i]= (ff_task_t*)MALLOC(itemsize*sizeof(ff_task_t));
             memset(task[i],0,itemsize*sizeof(ff_task_t));
         }
-        for(register int i=0;i<ntasks;++i) {
+        for(int i=0;i<ntasks;++i) {
             FREE(task[i],itemsize*sizeof(ff_task_t));
         }
         return NULL; 
@@ -188,7 +187,7 @@ public:
                 task[i]= (ff_task_t*)MALLOC(itemsize*sizeof(ff_task_t));
                 memset(task[i],0,itemsize*sizeof(ff_task_t));
             }
-            for(register int i=0;i<batchsize;++i) {
+            for(int i=0;i<batchsize;++i) {
                 FREE(task[i],itemsize*sizeof(ff_task_t));
             }
             ntasks-=batchsize;
@@ -197,7 +196,7 @@ public:
             task[i]= (ff_task_t*)MALLOC(itemsize*sizeof(ff_task_t));
             memset(task[i],0,itemsize*sizeof(ff_task_t));
         }
-        for(register int i=0;i<ntasks;++i) {
+        for(int i=0;i<ntasks;++i) {
             FREE(task[i],itemsize*sizeof(ff_task_t));
         }
 		FREE(task,batchsize*sizeof(ff_task_t *));

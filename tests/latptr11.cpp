@@ -1,7 +1,6 @@
 #include <string>
 #include <iostream>
-#include <ff/utils.hpp>
-#include <ff/pipeline.hpp>
+#include <ff/ff.hpp>
 #include <ff/mapper.hpp>
 using namespace ff;
 

@@ -54,13 +54,7 @@
  */
 
 #include <iostream>
-
-#include <ff/config.hpp>
-#include <ff/all2all.hpp>
-#include <ff/combine.hpp>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 int NITER = 500;
@@ -111,8 +105,8 @@ struct Worker2: ff_monode_t<long> {
     }
 
     void eosnotify(ssize_t id) {
-        ff_send_out_to(last, get_num_backchannels() ); 
-        ff_send_out_to(EOS, get_num_backchannels());
+        ff_send_out_to(last, get_num_feedbackchannels() ); 
+        ff_send_out_to(EOS, get_num_feedbackchannels());
     }
 
     long *last = nullptr;;

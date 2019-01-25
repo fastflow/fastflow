@@ -39,10 +39,7 @@
  */
 
 #include <iostream>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
-
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 class Stage1: public ff_node {
@@ -71,7 +68,7 @@ public:
         if (task==NULL)  return new int(1000);
 
         int t = *(int*)task;
-        if (t<=0) return NULL;
+        if (t<=0) { delete (int*)task; return nullptr;}
         return task;
     }
 };
@@ -95,12 +92,13 @@ int main(int argc, char * argv[]) {
     for(int i=0;i<nworkers;++i) {
         // build worker pipeline 
         ff_pipeline * pipe = new ff_pipeline;
-        pipe->add_stage(new Stage1);
-        pipe->add_stage(new Stage2);
+        pipe->add_stage(new Stage1, true);
+        pipe->add_stage(new Stage2, true);
         w.push_back(pipe);
     }
     farm.add_workers(w);
     farm.wrap_around();
+    farm.cleanup_workers();
 
     farm.run();
     // wait all threads join

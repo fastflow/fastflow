@@ -32,11 +32,7 @@
 // basic composition of sequential stages
 
 #include <iostream>
-
-#include <ff/config.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/combine.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 long ntasks = 100000;
@@ -198,6 +194,38 @@ int main() {
             std::cout << "TEST10 DONE Time = " << pipe.ffwTime() << " ms\n";
         }
         usleep(500000);
+        {
+            // testing multi-input + multi-output combined
+
+            struct miStage:ff_minode_t<long> {
+                long* svc(long* in) { return in;}
+                void eosnotify(ssize_t) {
+                    printf("MULTI INPUT %ld, eosnotify\n", get_my_id());
+                }
+            };
+            struct moStage:ff_monode_t<long> {
+                long* svc(long* in) {
+                    return in;
+                }
+                void eosnotify(ssize_t) {
+                    printf("MULTI OUTPUT %ld, eosnotify\n", get_my_id());
+                }
+                
+            };
+            const miStage mi;
+            const moStage mo;
+            const ff_comb comb0(mi, mi);
+            const ff_comb comb1(mo, mo);
+
+            ff_comb comb(comb1, comb0);
+            
+            ff_Pipe<> pipe(_1, comb, _5);
+            // starts the pipeline
+            if (pipe.run_and_wait_end()<0)
+                error("running pipe\n");
+            std::cout << "TEST11 DONE\n";
+        }
+
     }
   
     return 0;
