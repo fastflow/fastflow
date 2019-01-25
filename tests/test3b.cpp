@@ -32,9 +32,7 @@
 
 #include <cmath>
 #include <iostream>
-#include <ff/pipeline.hpp>
-#include <ff/mapping_utils.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 int stage1=0;

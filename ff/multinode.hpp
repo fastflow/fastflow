@@ -74,6 +74,9 @@ protected:
     /**
      * \brief Creates the input channels
      *
+     * This function may be called because the multi-input node is  
+     * used just as a standard node (for example as a farm's worker).
+     *
      * \return >=0 if successful, otherwise -1 is returned.
      */
     int create_input_buffer(int nentries, bool fixedsize=true) {
@@ -83,9 +86,17 @@ protected:
         t->set_id(-1);
         internalSupportNodes.push_back(t);
         set_input(t);
-        
-        return 0;
+        return ff_node::set_input_buffer(t->get_in_buffer());
     }
+
+    /* The multi-input node is used as a standard node. 
+     */
+    inline bool  put(void * ptr) { 
+        assert(inputNodes.size() == 1);
+        return inputNodes[0]->put(ptr);
+    }
+    
+
     
     int dryrun() {
         if (prepared) return 0;
@@ -110,7 +121,7 @@ protected:
         if (gt->wait()<0) return -1;
         return 0;
     }
-
+    
     void blocking_mode(bool blk=true) {
         blocking_in = blocking_out = blk;
         gt->blocking_mode(blk);
@@ -159,6 +170,27 @@ protected:
     virtual inline pthread_cond_t    &get_prod_c()        { return gt->get_prod_c(); }
     virtual inline std::atomic_ulong &get_prod_counter()  { return gt->get_prod_counter();}
 
+    void set_input_channelid(ssize_t id, bool fromin=true) {
+        gt->set_input_channelid(id, fromin);
+    }
+
+    virtual inline void get_in_nodes(svector<ff_node*>&w) {
+        // it is possible that the multi-input node is register
+        // as collector of farm
+        if (inputNodes.size() == 0 && gt->getNWorkers()>0) {
+            w += gt->getWorkers();
+        }
+        w += inputNodes;
+    }
+
+    virtual void get_in_nodes_feedback(svector<ff_node*>&w) {
+        w += inputNodesFeedback;
+    }
+    
+    virtual inline void get_out_nodes(svector<ff_node*>&w) {
+        w.push_back(this);
+    }
+    
 public:
     /**
      * \brief Constructor
@@ -248,25 +280,8 @@ public:
         inputNodesFeedback.push_back(node); 
         return 0;
     }
-
-    virtual bool isMultiInput() const { return true;}
-
-    virtual inline void get_in_nodes(svector<ff_node*>&w) {
-        // it is possible that the multi-input node is register
-        // as collector of farm
-        if (inputNodes.size() == 0 && gt->getNWorkers()>0) {
-            w += gt->getWorkers();
-        }
-        w += inputNodes;
-    }
-
-    virtual void get_in_nodes_feedback(svector<ff_node*>&w) {
-        w += inputNodesFeedback;
-    }
     
-    virtual inline void get_out_nodes(svector<ff_node*>&w) {
-        w.push_back(this);
-    }
+    virtual bool isMultiInput() const { return true;}
 
     /**
      * \brief Skip first pop
@@ -312,18 +327,23 @@ public:
 
     int wait_freezing() { return gt->wait_freezing(); }
 
+    bool fromInput() const { return gt->fromInput(); }
+    
     /**
      * \brief Gets the channel id from which the data has just been received
      *
      */
     ssize_t get_channel_id() const { return gt->get_channel_id();}
 
+    
     /**
      * \brief Gets the number of input channels
      */
     
-    size_t get_num_inchannels() const  { return gt->getrunning(); }
+    size_t get_num_inchannels()       const { return gt->getrunning(); }
 
+    size_t get_num_feedbackchannels() const { return inputNodesFeedback.size(); }
+    
     /**
      * For a multi-input node the number of EOS to receive before terminating is equal to 
      * the current number of input channels.
@@ -434,6 +454,7 @@ protected:
     }
 
     void propagateEOS(void*task=FF_EOS) {
+        if (lb->getnworkers() == 0) ff_send_out(task);
         lb->propagateEOS(task);
     }
     
@@ -441,7 +462,7 @@ protected:
         if (lb->waitlb()<0) return -1;
         return 0;
     }
-
+    
     void blocking_mode(bool blk=true) {
         blocking_in = blocking_out = blk;
         lb->blocking_mode(blk);
@@ -693,8 +714,8 @@ public:
      */
     ssize_t get_channel_id() const { return lb->get_channel_id();}
     
-    size_t get_num_backchannels() const { return outputNodesFeedback.size(); }
-    size_t get_num_outchannels() const  { return lb->getnworkers(); }
+    size_t get_num_feedbackchannels() const { return outputNodesFeedback.size(); }
+    size_t get_num_outchannels() const      { return lb->getnworkers(); }
 
     const struct timeval getstarttime() const { return lb->getstarttime();}
     const struct timeval getstoptime()  const { return lb->getstoptime();}

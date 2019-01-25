@@ -39,14 +39,13 @@
  */
 
 #include <sys/types.h>
-//#include <unistd.h>
 #include <stdlib.h>
 #include <math.h>
 
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 #include <ff/cycle.h>
 #if defined(USE_PROC_AFFINITY)
 #include <ff/mapping_utils.hpp>
@@ -121,7 +120,7 @@ static ff_allocator * ffalloc = 0;
 class Worker: public ff_node {
 protected:
     void do_work(ff_task_t * task, int size, long long nticks) {
-        for(register int i=0;i<size;++i) {
+        for(int i=0;i<size;++i) {
             task[i]+=1;
 
             // task[i]+=sin(1.0/(task[i]));
@@ -175,7 +174,7 @@ protected:
 
     inline void filltask(ff_task_t * task, size_t size) {
         ++val;
-        for(register unsigned int i=0;i<size;++i)
+        for(unsigned int i=0;i<size;++i)
             task[i]=val;
     }
 

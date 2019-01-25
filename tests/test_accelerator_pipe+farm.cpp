@@ -42,9 +42,7 @@
 
 #include <stdlib.h>
 #include <iostream>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
-#include <ff/allocator.hpp>
+#include <ff/ff.hpp>
 #include <ff/mapping_utils.hpp>
 
 

@@ -38,9 +38,7 @@
  */
 
 #include <iostream>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 #if defined(USE_FF_ALLOCATOR)

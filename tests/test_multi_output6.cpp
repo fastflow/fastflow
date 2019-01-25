@@ -55,8 +55,7 @@
 
 
 #include <iostream>
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 
@@ -125,7 +124,7 @@ public:
     long* svc(long* t) {
         int wid = lb->get_channel_id();
         if (wid == -1) { // task coming from seq
-            printf("Emitter: TASK FROM INPUT %ld \n", (long)t);
+            //printf("Emitter: TASK FROM INPUT %ld \n", (long)t);
             int victim = selectReadyWorker();
             if (victim < 0) data.push_back(t);
             else {
@@ -140,7 +139,7 @@ public:
         // the id of the manager channel is greater than the maximum id of the workers
         if ((size_t)wid == MANAGERID) {  
             Command_t *cmd = reinterpret_cast<Command_t*>(t);
-            printf("EMITTER2 SENDING %s to WORKER %d\n", cmd->op==ADD?"ADD":"REMOVE", cmd->id);
+            //printf("EMITTER2 SENDING %s to WORKER %d\n", cmd->op==ADD?"ADD":"REMOVE", cmd->id);
             switch(cmd->op) {
             case ADD:     lb->thaw(cmd->id, true);             break;
             case REMOVE:  lb->ff_send_out_to(GO_OUT, cmd->id); break;
@@ -151,7 +150,7 @@ public:
         }
 
         if ((size_t)wid < lb->getNWorkers()) { // ack coming from the workers
-            printf("Emitter got %ld back from %d data.size=%ld, onthefly=%d\n", (long)t, wid, data.size(), onthefly);
+            //printf("Emitter got %ld back from %d data.size=%ld, onthefly=%d\n", (long)t, wid, data.size(), onthefly);
             assert(ready[wid] == false);
             ready[wid] = true;
             ++nready;
@@ -165,9 +164,9 @@ public:
             return GO_ON;
         }
         --onthefly;
-        printf("Emitter got %ld back from COLLECTOR data.size=%ld, onthefly=%d\n", (long)t, data.size(), onthefly);
+        //printf("Emitter got %ld back from COLLECTOR data.size=%ld, onthefly=%d\n", (long)t, data.size(), onthefly);
         if (eos_received && (nready + sleeping) == ready.size() && onthefly<=0) {
-            printf("Emitter exiting\n");
+            //printf("Emitter exiting\n");
             return EOS;
         }
         return GO_ON;
@@ -179,9 +178,9 @@ public:
     void eosnotify(ssize_t id) {
         if (id == -1) { // we have to receive all EOS from the previous stage            
             eos_received++; 
-            printf("EOS received eos_received = %u nready = %u\n", eos_received, nready);
+            //printf("EOS received eos_received = %u nready = %u\n", eos_received, nready);
             if ((nready + sleeping) == ready.size() && data.size() == 0 && onthefly<=0) {
-                printf("EMITTER2 BROADCASTING EOS\n");
+                //printf("EMITTER2 BROADCASTING EOS\n");
                 lb->broadcast_task(EOS);
             }
         }
@@ -202,14 +201,14 @@ struct Worker: ff_monode_t<long> {
     }
 
     long* svc(long* task) {
-        printf("Worker id=%ld got %ld\n", get_my_id(), (long)task);
+        //printf("Worker id=%ld got %ld\n", get_my_id(), (long)task);
         ff_send_out_to(task, 1);  // to the next stage 
         ff_send_out_to(task, 0);  // send the "ready msg" to the emitter 
         return GO_ON;
     }
 
     void svc_end() {
-        printf("Worker2 id=%ld going to sleep\n", get_my_id());
+        //printf("Worker2 id=%ld going to sleep\n", get_my_id());
     }
 
 };
@@ -217,7 +216,7 @@ struct Worker: ff_monode_t<long> {
 // multi-input stage
 struct Collector: ff_minode_t<long> {
     long* svc(long* task) {
-        printf("Collector received task = %ld, sending it back to the Emitter\n", (long)(task));
+        //printf("Collector received task = %ld, sending it back to the Emitter\n", (long)(task));
         return task;
     }
 };
@@ -237,7 +236,10 @@ struct Manager: ff_node_t<Command_t> {
         Command_t *cmd2 = new Command_t(1, REMOVE);
         channel.ff_send_out(cmd2);
 
-        nanosleep(&req, NULL);
+        {
+            struct timespec req = {0, static_cast<long>(5*1000L)};
+            nanosleep(&req, NULL);
+        }
 
         Command_t *cmd3 = new Command_t(1, ADD);
         channel.ff_send_out(cmd3);
@@ -245,8 +247,11 @@ struct Manager: ff_node_t<Command_t> {
         Command_t *cmd4 = new Command_t(0, ADD);
         channel.ff_send_out(cmd4);
 
-        nanosleep(&req, NULL);
-
+        {
+            struct timespec req = {0, static_cast<long>(5*1000L)};
+            nanosleep(&req, NULL);
+        }
+                
         channel.ff_send_out(EOS);
 
         return GO_OUT;
@@ -257,8 +262,8 @@ struct Manager: ff_node_t<Command_t> {
     }
 
 
-    int run() { return ff_node_t<Command_t>::run(); }
-    int wait() { return ff_node_t<Command_t>::wait(); }
+    int run(bool=false) { return ff_node_t<Command_t>::run(); }
+    int wait()          { return ff_node_t<Command_t>::wait(); }
 
 
     ff_buffernode * const getChannel() { return &channel;}

@@ -31,8 +31,7 @@
  *                  \--------------         
  *
  */
-#include <ff/pipeline.hpp>
-#include <ff/farm.hpp> 
+#include <ff/ff.hpp>
 
 using namespace ff;
 long const int NUMTASKS=100;
@@ -46,10 +45,8 @@ struct Stage1: ff_node {
 };
 struct Stage2: ff_minode {
     void *svc(void *task) {
-        printf("Stage2 got task from %zd\n", get_channel_id());
-        
-        if (get_channel_id()==-1)
-            return task; 
+        printf("Stage2 got task from %zd\n", get_channel_id());        
+        if (fromInput()) return task; 
         return GO_ON;
     }
     void eosnotify(ssize_t) {

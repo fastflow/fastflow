@@ -32,10 +32,7 @@
  */
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
-#include <ff/node.hpp>
-  
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 // generic worker

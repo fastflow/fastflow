@@ -46,14 +46,9 @@
 /* Author: Massimo Torquati
  *
  */
-               
+
 #include <iostream>
-
-#include <ff/config.hpp>
-#include <ff/all2all.hpp>
-#include <ff/combine.hpp>
-
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 // NOTE: the Filter1 can be defined either as ff_node or as ff_minode

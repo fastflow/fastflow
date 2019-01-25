@@ -82,12 +82,7 @@
 
 #include <iostream>
 
-#include <ff/config.hpp>
-#include <ff/all2all.hpp>
-#include <ff/combine.hpp>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-
+#include <ff/ff.hpp>
 using namespace ff;
 
 // used to manage termination!!!!!
@@ -110,7 +105,7 @@ struct Emitter: ff_monode_t<long> {
 
 struct Gatherer: ff_minode_t<long> {
     long* svc(long* in) {
-        if (get_channel_id() != -1) {
+        if (!fromInput()) {
             long n=ntasks.fetch_sub(1);
             if (n == 1){
                 return EOS;
@@ -146,13 +141,13 @@ struct MultiInputHelper: ff_minode_t<long> {
 
 struct Worker: ff_monode_t<long> {
     long* svc(long* in) {
-        std::cout << "Worker" << get_my_id() << " got " << *in << "\n";
+        //std::cout << "Worker" << get_my_id() << " got " << *in << "\n";
 
         // Here we know that we have only one output channel
-        // and we have 'get_num_backchannels()' feedback channels.
+        // and we have 'get_num_feedbackchannels()' feedback channels.
         // Since the numbering of the channels is: first the feedback ones
         // and then the output ones .....
-        ff_send_out_to(in, get_num_backchannels() ); // to Last
+        ff_send_out_to(in, get_num_feedbackchannels() ); // to Last
 
         ff_send_out((long*)0x1); // sends it back
 
@@ -161,7 +156,7 @@ struct Worker: ff_monode_t<long> {
 
     void eosnotify(ssize_t id) {
         broadcast_task(EOS);
-        ff_send_out_to(EOS, get_num_backchannels());
+        ff_send_out_to(EOS, get_num_feedbackchannels());
     }
 };
 

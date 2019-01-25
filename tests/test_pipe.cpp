@@ -28,11 +28,7 @@
  *
  */
 
-#include <ff/config.hpp>
-#if !defined( HAS_CXX11_VARIADIC_TEMPLATES )
-#define HAS_CXX11_VARIADIC_TEMPLATES 1
-#endif
-#include <ff/pipeline.hpp>
+#include <ff/ff.hpp>
   
 using namespace ff;
 

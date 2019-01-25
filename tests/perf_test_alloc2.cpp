@@ -44,7 +44,7 @@
 
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 #include <ff/allocator.hpp>
 #include <ff/cycle.h>
 #if defined(USE_PROC_AFFINITY)
@@ -91,7 +91,6 @@ static tbb::cache_aligned_allocator<char> * tbballocator=0;
 #define MALLOC(size)   (FFAllocator::instance()->malloc(size))
 
 #if defined(DONT_USE_FFA)
-#define MAX_NUM_THREADS  64
 static ff_allocator* MYALLOC[MAX_NUM_THREADS]={0};
 #define FREE(ptr,id)  (MYALLOC[id]->free(ptr))
 #else
@@ -108,7 +107,7 @@ static ff_allocator* MYALLOC[MAX_NUM_THREADS]={0};
 class Worker: public ff_node {
 private:
       void do_work(ff_task_t * task, int size, long long nticks) {
-        for(register int i=0;i<size;++i)
+        for(int i=0;i<size;++i)
             task[i]=i;
         
         ticks_wait(nticks);
@@ -144,7 +143,7 @@ private:
 class Worker: public ff_node  {
 private:
       void do_work(ff_task_t * task, int size, long long nticks) {
-        for(register int i=0;i<size;++i)
+        for(int i=0;i<size;++i)
             task[i]=i;
         
         ticks_wait(nticks);

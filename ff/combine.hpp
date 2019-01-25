@@ -45,6 +45,16 @@
 
 namespace ff {
 
+
+// forward declaration    
+class ff_comb;
+static const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2);
+template<typename T1, typename T2>    
+static const ff_comb combine_nodes(T1& n1, T2& n2);
+template<typename T1, typename T2>    
+static std::unique_ptr<ff_node> unique_combine_nodes(T1& n1, T2& n2);
+
+    
 class ff_comb: public ff_minode {
     //
     // NOTE: the ff_comb appears either as a standard ff_node or as ff_minode depending on
@@ -207,14 +217,6 @@ protected:
             error("COMBINE, input nodes cannot be farm, all-2-all or pipeline building-blocks\n");
             return false;
         }        
-        if (n1->isMultiInput() && n2->isMultiInput() ) {
-            error("COMBINE, both nodes cannot be multi-input nodes\n");
-            return false;
-        }
-        if (n1->isMultiOutput() && n2->isMultiOutput() ) {
-            error("COMP, both nodes cannot be multi-output nodes\n");
-            return false;
-        }
         return true;
     }
     template<typename T1, typename T2>
@@ -235,7 +237,7 @@ protected:
         cleanup_stages.push_back(node1);
         comp_nodes.push_back(node1);
         comp_nodes.push_back(n2);
-    }    
+    }
     template<typename T1, typename T2>
     void add_node(T1& n1, T2& n2) {
         if (!check(&n1, &n2)) return;
@@ -272,7 +274,10 @@ protected:
         ff_node::skipfirstpop(sk);
     }
 
-    
+    bool  put(void * ptr) { 
+        return ff_node::put(ptr);
+    }
+       
     void registerCallback(bool (*cb)(void *,unsigned long,unsigned long,void *), void * arg) {
         comp_nodes[1]->registerCallback(cb,arg);
     }
@@ -527,13 +532,13 @@ protected:
     }
    
     void eosnotify(ssize_t id=-1) {
-        ++neos;
-        getFirst()->eosnotify(id);
+        comp_nodes[0]->eosnotify();
+        //getFirst()->eosnotify(id);
 
-        // the eosnotify might produce some data in output so we have to call the svc
-        // of the next stage
+        // the eosnotify might produce some data in output 
         void *ret = svc_comp_node1(nullptr, GO_ON);
 
+        ++neos;
         // if the first node is multi-input or is a comp passed as filter to a farm collector,
         // then we have to call eosnotify only if we have received all EOSs
         if (comp_nodes[0]->isMultiInput() || comp_multi_input) {
@@ -578,15 +583,22 @@ protected:
     }
 
     int create_input_buffer(int nentries, bool fixedsize=true) {
-        if (isMultiInput())
-            return ff_minode::create_input_buffer(nentries,fixedsize);
+        if (isMultiInput()) {
+            int r= ff_minode::create_input_buffer(nentries,fixedsize);
+            if (r<0) return r;
+            svector<ff_node*> w(1);
+            ff_minode::get_in_nodes(w);
+            assert(w.size()==1);
+            r=ff_node::set_input_buffer(w[0]->get_in_buffer());
+            return r;
+        }
         return ff_node::create_input_buffer(nentries,fixedsize);
     }
     int create_output_buffer(int nentries, bool fixedsize=true) {
         return comp_nodes[1]->create_output_buffer(nentries,fixedsize);
     }
     FFBUFFER * get_in_buffer() const {
-        if (getFirst()->isMultiInput()) return nullptr;
+        //if (getFirst()->isMultiInput()) return nullptr;
         return ff_node::get_in_buffer();
     }
 
@@ -690,10 +702,6 @@ private:
  *                             helper functions                                *
  *                                                                             *
  * *************************************************************************** */
-
-// forward declaration    
-static const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm2);
-
     
 /**
  *  combines either basic nodes or ff_comb(s)

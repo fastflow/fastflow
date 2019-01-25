@@ -32,13 +32,13 @@
  *
  */
 
+#ifndef __APPLE__
 #include <ff/platforms/platform.h>
-#include <vector>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
-#include <ff/node.hpp>
-#include <ff/allocator.hpp>
+#endif
 #include <iostream>
+#include <ff/ff.hpp>
+#include <ff/allocator.hpp>
+
 
 using namespace ff;
 

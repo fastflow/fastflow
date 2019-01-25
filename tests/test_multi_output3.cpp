@@ -54,9 +54,7 @@
  */
 
 #include <iostream>
-#include <ff/pipeline.hpp>
-#include <ff/all2all.hpp>
-#include <ff/combine.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 
@@ -91,17 +89,16 @@ struct multiOutputHelper: ff_monode_t<mypair, long> {
 
 struct multiInputHelper: ff_minode_t<long, mypair> {
     mypair* svc(long *in) {
-        long id = get_channel_id();
         mypair *p = new mypair;
         p->first  = (long)in;
-        p->second = id;
+        p->second = (fromInput()?-1:0);
         return p;
     }
     void eosnotify(ssize_t id) {
         // NOTE: we have to send EOS explicitly to the next stage
         // because for multi-input node the EOS is propagated only
         // it has been received from all input channels
-        if (id != -1) ff_send_out(EOS);
+        ff_send_out(EOS);
     }
 };
 // this node must be multi-output even if  it is connected only to 

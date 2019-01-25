@@ -35,7 +35,7 @@
 #include <iostream>
 #include <ff/platforms/platform.h>
 #include <ff/ubuffer.hpp>
-#include <ff/farm.hpp>
+#include <ff/ff.hpp>
 //#include <ff/staticlinkedlist.hpp>
 
 

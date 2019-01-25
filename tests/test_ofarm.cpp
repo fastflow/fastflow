@@ -45,8 +45,7 @@
 
 #include <vector>
 #include <iostream>
-#include <ff/farm.hpp>
-#include <ff/pipeline.hpp>
+#include <ff/ff.hpp>
 
 using namespace ff;
 
