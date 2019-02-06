@@ -58,6 +58,19 @@ protected:
     }
 
     inline int prepare() {
+        if (workers1[0]->isFarm() || workers1[0]->isAll2All()) {
+            error("A2A, nodes of the first set cannot be farm or all-to-all\n");
+            return -1;
+        }
+        if (workers1[0]->isPipe() && !workers1[0]->isMultiOutput()) {
+            error("A2A, workers of the first set can be pipelines but only if they are multi-output (automatic transformation not yet supported)\n");
+            return -1;
+        }
+        if (workers2[0]->isFarm() || workers2[0]->isAll2All()) {
+            error("A2A, nodes of the second set cannot be farm or all-to-all\n");
+            return -1;
+        }
+
         // checking L-Workers
         if (!workers1[0]->isMultiOutput()) {  // supposing all others to be the same
             // the nodes in the first set cannot be multi-input nodes without being
@@ -233,14 +246,6 @@ public:
             error("A2A, try to add zero workers to the first set!\n");
             return -1; 
         }        
-        if (w[0]->isFarm() || w[0]->isAll2All()) {
-            error("A2A, try to add invalid nodes to the first set\n");
-            return -1;
-        }
-        if (w[0]->isPipe() && !w[0]->isMultiOutput()) {
-            error("A2A, workers of the first set can be pipelines but only if they are multi-output (automatic transformation not yet supported)\n");
-            return -1;
-        }
         for(size_t i=0;i<w.size();++i) workers1.push_back(w[i]);
         workers1_to_free = cleanup;
         ondemand_chunk   = ondemand;
@@ -260,11 +265,6 @@ public:
             error("A2A, try to add zero workers to the second set!\n");
             return -1; 
         }        
-        if (w[0]->isFarm() || w[0]->isAll2All()) {
-            error("A2A, try to add invalid nodes to the second set \n");
-            return -1;
-        }
-
         for(size_t i=0;i<w.size();++i) workers2.push_back(w[i]);
         workers2_to_free = cleanup;
         return 0;
