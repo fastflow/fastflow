@@ -161,7 +161,7 @@ protected:
                             error("PIPE, cannot connect stage %d with stage %d\n", i-1, i);
                             return -1;
                         }
-                        nodes_list[i-1]->set_output(w);
+                        nodes_list[i-1]->set_output(nodes_list[i]);
                     } else {
                         assert(prev_single_multioutput);
                         nodes_list[i-1]->set_output(nodes_list[i]);
@@ -600,7 +600,8 @@ public:
         }
         return add_stage(newstage, true);
     }
-    
+
+    /* remove one stage of the pipeline. The node is not deleted if cleanup is set. */
     void remove_stage(int pos) {
         if (prepared) {
             error("PIPE, remove_stage, stage %d cannot be removed because the PIPE has already been prepared\n");

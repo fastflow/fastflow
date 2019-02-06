@@ -166,7 +166,7 @@ public:
         --onthefly;
         //printf("Emitter got %ld back from COLLECTOR data.size=%ld, onthefly=%d\n", (long)t, data.size(), onthefly);
         if (eos_received && (nready + sleeping) == ready.size() && onthefly<=0) {
-            //printf("Emitter exiting\n");
+            printf("Emitter EXITING\n");
             return EOS;
         }
         return GO_ON;
@@ -180,10 +180,10 @@ public:
             eos_received++; 
             //printf("EOS received eos_received = %u nready = %u\n", eos_received, nready);
             if ((nready + sleeping) == ready.size() && data.size() == 0 && onthefly<=0) {
-                //printf("EMITTER2 BROADCASTING EOS\n");
+                printf("EMITTER2 BROADCASTING EOS\n");
                 lb->broadcast_task(EOS);
             }
-        }
+        } 
     }
 private:
     unsigned eos_received = 0;
@@ -207,6 +207,10 @@ struct Worker: ff_monode_t<long> {
         return GO_ON;
     }
 
+    void eosnotify(ssize_t) {
+        printf("Worker2 id=%ld received EOS\n", get_my_id());
+    }
+    
     void svc_end() {
         //printf("Worker2 id=%ld going to sleep\n", get_my_id());
     }
@@ -219,6 +223,10 @@ struct Collector: ff_minode_t<long> {
         //printf("Collector received task = %ld, sending it back to the Emitter\n", (long)(task));
         return task;
     }
+    void eosnotify(ssize_t) {
+        printf("Collector received EOS\n");
+    }
+    
 };
 
 
@@ -227,6 +235,7 @@ struct Manager: ff_node_t<Command_t> {
         channel(100, true, MANAGERID) {}
 
     Command_t* svc(Command_t *) {
+
         struct timespec req = {0, static_cast<long>(5*1000L)};
         nanosleep(&req, NULL);
 
@@ -235,7 +244,7 @@ struct Manager: ff_node_t<Command_t> {
 
         Command_t *cmd2 = new Command_t(1, REMOVE);
         channel.ff_send_out(cmd2);
-
+#if 0        
         {
             struct timespec req = {0, static_cast<long>(5*1000L)};
             nanosleep(&req, NULL);
@@ -251,7 +260,7 @@ struct Manager: ff_node_t<Command_t> {
             struct timespec req = {0, static_cast<long>(5*1000L)};
             nanosleep(&req, NULL);
         }
-                
+#endif                
         channel.ff_send_out(EOS);
 
         return GO_OUT;
