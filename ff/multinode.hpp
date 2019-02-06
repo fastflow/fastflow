@@ -62,12 +62,11 @@ class ff_minode: public ff_node {
     friend class ff_farm;
     friend class ff_comb;
 protected:
-
     /**
      * \brief Gets the number of input channels
      */
     inline int cardinality(BARRIER_T * const barrier)  { 
-        gt->set_barrier(barrier);
+        this->set_barrier(barrier);
         return 1;
     }
 
@@ -95,9 +94,7 @@ protected:
         assert(inputNodes.size() == 1);
         return inputNodes[0]->put(ptr);
     }
-    
-
-    
+        
     int dryrun() {
         if (prepared) return 0;
         for(size_t i=0;i<inputNodesFeedback.size();++i)
@@ -256,6 +253,11 @@ public:
     }
 
     
+    inline void set_barrier(BARRIER_T * const barrier) {
+        gt->set_barrier(barrier);
+    }
+    inline BARRIER_T* get_barrier() const { return gt->get_barrier(); }
+    
     /**
      * \brief Assembly input channels
      *
@@ -288,7 +290,10 @@ public:
      *
      * Set up spontaneous start
      */
-    inline void skipfirstpop(bool sk)   { ff_node::skipfirstpop(sk);}
+    inline void skipfirstpop(bool sk)   {
+        gt->skipfirstpop(sk);
+        ff_node::skipfirstpop(sk);
+    }
 
     /**
      * \brief run
@@ -417,7 +422,7 @@ protected:
      * \return 1 is always returned.
      */
     inline int   cardinality(BARRIER_T * const barrier)  { 
-        lb->set_barrier(barrier);
+        this->set_barrier(barrier);
         return 1;
     }
 
@@ -575,6 +580,12 @@ public:
     int set_filter(ff_node *filter) {
         return lb->set_filter(filter);
     }
+
+    inline void set_barrier(BARRIER_T * const barrier) {
+        lb->set_barrier(barrier);
+    }
+    inline BARRIER_T* get_barrier() const { return lb->get_barrier(); }
+
     
     /**
      * \brief Assembly the output channels

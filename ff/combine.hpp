@@ -533,16 +533,16 @@ protected:
    
     void eosnotify(ssize_t id=-1) {
         comp_nodes[0]->eosnotify();
-        //getFirst()->eosnotify(id);
-
+        
         // the eosnotify might produce some data in output 
         void *ret = svc_comp_node1(nullptr, GO_ON);
-
+        
         ++neos;
         // if the first node is multi-input or is a comp passed as filter to a farm collector,
         // then we have to call eosnotify only if we have received all EOSs
         if (comp_nodes[0]->isMultiInput() || comp_multi_input) {
-            if (neos >= comp_nodes[0]->get_neos() &&
+            const ssize_t n=getFirst()->get_neos();
+            if ((neos >= n) &&
                 (ret != FF_GO_OUT) /*this means that svc_comp_node1 has already called eosnotify */
                 )
                 comp_nodes[1]->eosnotify(id);                
