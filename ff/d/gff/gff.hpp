@@ -32,6 +32,8 @@
 #ifndef FF_D_GFF_GFF_HPP_
 #define FF_D_GFF_GFF_HPP_
 
+#include <ff/ff.hpp>
+
 #include <gam.hpp>
 
 #include "communicators/builtin.hpp"
