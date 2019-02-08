@@ -543,7 +543,7 @@ public:
      *
      * \return Always \true is returned.
      */
-    void skipfirstpop() { skip1pop=true; }
+    void skipfirstpop(bool sk=true) { skip1pop=sk; }
 
     /**
      * \brief Gets the ouput buffer

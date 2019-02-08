@@ -58,7 +58,69 @@ protected:
     }
 
     inline int prepare() {
+        if (workers1[0]->isFarm() || workers1[0]->isAll2All()) {
+            error("A2A, nodes of the first set cannot be farm or all-to-all\n");
+            return -1;
+        }
+        if (workers1[0]->isPipe() && !workers1[0]->isMultiOutput()) {
+            error("A2A, workers of the first set can be pipelines but only if they are multi-output (automatic transformation not yet supported)\n");
+            return -1;
+        }
+        if (workers2[0]->isFarm() || workers2[0]->isAll2All()) {
+            error("A2A, nodes of the second set cannot be farm or all-to-all\n");
+            return -1;
+        }
 
+        // checking L-Workers
+        if (!workers1[0]->isMultiOutput()) {  // supposing all others to be the same
+            // the nodes in the first set cannot be multi-input nodes without being
+            // also multi-output
+            if (workers1[0]->isMultiInput()) {
+                error("A2A, the nodes of the first set cannot be multi-input nodes without being also multi-output (i.e., a composition of nodes). The node must be either standard node or multi-output node or compositions where the second stage is a multi-output node\n");
+                return -1;
+            }
+            // it is a standard node or a pipeline with a standard node as last stage, so we transform it to a multi-output node
+            for(size_t i=0;i<workers1.size();++i) {
+                ff_monode *mo = new mo_transformer(workers1[i], workers1_to_free);
+                if (!mo) {
+                    error("A2A, FATAL ERROR not enough memory\n");
+                    return -1;
+                }
+                BARRIER_T *bar =workers1[i]->get_barrier();
+                if (bar) mo->set_barrier(bar);
+                workers1[i] = mo; // replacing old node
+            }
+            workers1_to_free = true;
+        }
+        for(size_t i=0;i<workers1.size();++i) {
+            if (ondemand_chunk && (workers1[i]->ondemand_buffer()==0))
+                workers1[i]->set_scheduling_ondemand(ondemand_chunk);
+            workers1[i]->set_id(int(i));
+        }
+        // checking R-Workers
+        if (!workers2[0]->isMultiInput()) { // we suppose that all others are the same        
+            if (workers2[0]->isMultiOutput()) {
+                error("A2A, the nodes of the second set cannot be multi-output nodes without being also multi-input (i.e., a composition of nodes). The node must be either standard node or multi-input node or compositions where the first stage is a multi-input node\n");
+                return -1;
+            }
+
+            // here we have to transform the standard node into a multi-input node
+            for(size_t i=0;i<workers2.size();++i) {
+                ff_minode *mi = new mi_transformer(workers2[i], workers2_to_free);
+                if (!mi) {
+                    error("A2A, FATAL ERROR not enough memory\n");
+                    return -1;
+                }
+                BARRIER_T *bar =workers2[i]->get_barrier();
+                if (bar) mi->set_barrier(bar);
+                workers2[i] = mi; // replacing old node
+            }
+            workers2_to_free = true;
+        }
+        for(size_t i=0;i<workers2.size();++i) {
+            workers2[i]->set_id(int(i));
+        }
+        
         size_t nworkers1 = workers1.size();
         size_t nworkers2 = workers2.size();
 
@@ -176,62 +238,18 @@ public:
      * 
      */
     int add_firstset(const std::vector<ff_node *> & w, int ondemand=0, bool cleanup=false) {
+        if (workers1.size()>0) {
+            error("A2A, add_firstset cannot be called multiple times\n");
+            return -1;
+        }
         if (w.size()==0) {
             error("A2A, try to add zero workers to the first set!\n");
             return -1; 
         }        
-        if (w[0]->isFarm() || w[0]->isAll2All()) {
-            error("A2A, try to add invalid nodes to the first set\n");
-            return -1;
-        }
-        if (w[0]->isPipe() && !w[0]->isMultiOutput()) {
-            error("A2A, workers of the first set can be pipelines but only if they are multi-output (automatic transformation not yet supported)\n");
-            return -1;
-        }
-        if (w[0]->isMultiOutput()) {  // supposing all others to be the same
-            for(size_t i=0;i<w.size();++i) {
-                if (ondemand && (w[i]->ondemand_buffer()==0))
-                    w[i]->set_scheduling_ondemand(ondemand);
-                workers1.push_back(w[i]);
-                (workers1.back())->set_id(int(i));
-            }
-            workers1_to_free = cleanup;
-            return 0;
-        }
-        // the nodes in the first set cannot be multi-input nodes without being
-        // also multi-output
-        if (w[0]->isMultiInput()) {
-            error("A2A, the nodes of the first set cannot be multi-input nodes without being also multi-output (i.e., a composition of nodes). The node must be either standard node or multi-output node or compositions where the second stage is a multi-output node\n");
-            return -1;
-        }
-        // it is a standard node or a pipeline with a standard node last stage, so we transform it to a multi-output node
-        for(size_t i=0;i<w.size();++i) {
-#if 0            
-            if (w[i]->isPipe()) {
-                w[i]->flatten();
-                ff_node* last = pipe.get_lastnode();
-                assert(last);
-                
-                if (last->isAll2All()) {
-                    error("add_firstset, last stage of the L-Worker pipeline cannot be an all-to-all building block (case not yet supported)\n");
-                    return -1;
-                }
-                
-            } else
-#endif                
-                {
-                ff_monode *mo = new mo_transformer(w[i], cleanup);
-                if (!mo) {
-                    error("A2A, FATAL ERROR not enough memory\n");
-                    return -1;
-                }
-                mo->set_id(int(i));
-                mo->set_scheduling_ondemand(ondemand);
-                workers1.push_back(mo);
-            }
-        }
-        workers1_to_free = true;
-        return 0;
+        for(size_t i=0;i<w.size();++i) workers1.push_back(w[i]);
+        workers1_to_free = cleanup;
+        ondemand_chunk   = ondemand;
+        return 0;        
     }
     
     /**
@@ -239,38 +257,16 @@ public:
      * 
      */
     int add_secondset(const std::vector<ff_node *> & w, bool cleanup=false) {
+        if (workers2.size()>0) {
+            error("A2A, add_secondset cannot be called multiple times\n");
+            return -1;
+        }
         if (w.size()==0) {
             error("A2A, try to add zero workers to the second set!\n");
             return -1; 
         }        
-        if (w[0]->isFarm() || w[0]->isAll2All()) {
-            error("A2A, try to add invalid nodes to the second set \n");
-            return -1;
-        }
-        if (w[0]->isMultiInput()) { // we suppose that all others are the same
-            for(size_t i=0;i<w.size();++i) {
-                workers2.push_back(w[i]);
-                (workers2.back())->set_id(int(i));
-            }
-            workers2_to_free = cleanup;
-        } else {
-            if (w[0]->isMultiOutput()) {
-                error("A2A, the nodes of the second set cannot be multi-output nodes without being also multi-input (i.e., a composition of nodes). The node must be either standard node or multi-input node or compositions where the first stage is a multi-input node\n");
-                return -1;
-            }
-
-            // here we have to transform the standard node into a multi-input node
-            for(size_t i=0;i<w.size();++i) {
-                ff_minode *mi = new mi_transformer(w[i], cleanup);
-                if (!mi) {
-                    error("A2A, FATAL ERROR not enough memory\n");
-                    return -1;
-                }
-                mi->set_id(int(i));
-                workers2.push_back(mi);
-            }
-            workers2_to_free = true;
-        }
+        for(size_t i=0;i<w.size();++i) workers2.push_back(w[i]);
+        workers2_to_free = cleanup;
         return 0;
     }
 
@@ -638,7 +634,7 @@ protected:
     bool workers1_to_free=false;
     bool workers2_to_free=false;
     bool prepared, fixedsize,reduce_channels;
-    int in_buffer_entries;
+    int in_buffer_entries, ondemand_chunk=0;
     svector<ff_node*>  workers1;  // first set, nodes must be multi-output
     svector<ff_node*>  workers2;  // second set, nodes must be multi-input
     svector<ff_node*>  outputNodes;
