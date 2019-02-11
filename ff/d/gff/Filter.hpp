@@ -167,6 +167,13 @@ private:
 		/* propagate eos token */
 		out_comm.internals.broadcast(global_eos<out_t>());
 
+		/* poll for outstanding eos */
+		while(received_eos < in_comm.internals.in_cardinality()) {
+			in = in_comm.internals.template get<in_t>();
+			assert(is_eos(in));
+			received_eos++;
+		}
+
 		/* write profiling */
 		GFF_PROFLN("FLT get      = %f s", d_get.count());
 		GFF_PROFLN("FLT get MAX  = %f s", d_get_max.count());
