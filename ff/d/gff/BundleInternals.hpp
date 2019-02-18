@@ -26,14 +26,21 @@ struct BundleInternals {
 			communicator->internals.destination(d);
 	}
 
-	gam::executor_id in_cardinality() {
+	gam::executor_id in_cardinality() const {
 		gam::executor_id count = 0;
-		for (auto communicator : commBundle)
+		for (auto &communicator : commBundle)
 			count += communicator->internals.in_cardinality();
 		return count;
 	}
 
-	template<typename T, typename ... PolicyArgs>
+    gam::executor_id out_cardinality() const {
+      gam::executor_id count = 0;
+      for (auto &communicator : commBundle)
+        count += communicator->internals.out_cardinality();
+      return count;
+    }
+
+    template<typename T, typename ... PolicyArgs>
 	void put(const gam::public_ptr<T> &p, PolicyArgs&&... __a) {
 		for (auto communicator : commBundle) {
 			GFF_LOGLN_OS("COM put public=" << p);

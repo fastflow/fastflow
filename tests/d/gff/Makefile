@@ -61,7 +61,7 @@ LIBS                 = -lpthread `pkg-config --libs libfabric`
 ARCH                 = -march=$(shell uname -m)
 
 INCLUDES             = -I. $(INCS)
-TARGET               = gff_bb_pipeline gff_bb_farm gff_bb_ofarm gff_bb_multifarm
+TARGET               = gff_bb_pipeline gff_bb_farm gff_bb_ofarm gff_bb_multifarm gff_torus
 
 .PHONY: all clean distclean
 .SUFFIXES: .cpp .o
@@ -77,19 +77,22 @@ gff_bb_pipeline: gff_bb_pipeline.o
 gff_bb_farm: gff_bb_farm.o
 gff_bb_ofarm: gff_bb_ofarm.o
 gff_bb_multifarm: gff_bb_multifarm.o
+gff_torus: gff_torus.o
 
 test: all
 	$(GAM_CMD) $(VERBOSE) -n 4 -f $(GAM_CONF) $(PWD)/gff_bb_pipeline
 	$(GAM_CMD) $(VERBOSE) -n 6 -f $(GAM_CONF) $(PWD)/gff_bb_farm
 	$(GAM_CMD) $(VERBOSE) -n 6 -f $(GAM_CONF) $(PWD)/gff_bb_ofarm
 	$(GAM_CMD) $(VERBOSE) -n 4 -f $(GAM_CONF) $(PWD)/gff_bb_multifarm
+	$(GAM_CMD) $(VERBOSE) -n 8 -f $(GAM_CONF) $(PWD)/gff_torus
 
 test-local: all
 	$(GAM_CMD_LOCAL) $(VERBOSE) -n 4 -l $(GAM_LOCALHOST) $(PWD)/gff_bb_pipeline
 	$(GAM_CMD_LOCAL) $(VERBOSE) -n 6 -l $(GAM_LOCALHOST) $(PWD)/gff_bb_farm
 	$(GAM_CMD_LOCAL) $(VERBOSE) -n 6 -l $(GAM_LOCALHOST) $(PWD)/gff_bb_ofarm
 	$(GAM_CMD_LOCAL) $(VERBOSE) -n 4 -l $(GAM_LOCALHOST) $(PWD)/gff_bb_multifarm
-	
+	$(GAM_CMD_LOCAL) $(VERBOSE) -n 8 -l $(GAM_LOCALHOST) $(PWD)/gff_torus
+
 kill:
 	killall $(TARGET)
 
