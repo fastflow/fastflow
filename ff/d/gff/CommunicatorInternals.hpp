@@ -54,8 +54,12 @@ public:
 		std::sort(output.begin(), output.end());
 	}
 
-	gam::executor_id in_cardinality() {
+	gam::executor_id in_cardinality() const {
 		return input.size();
+	}
+
+	gam::executor_id out_cardinality() const {
+		return output.size();
 	}
 
 	template<typename T, typename ... PolicyArgs>
