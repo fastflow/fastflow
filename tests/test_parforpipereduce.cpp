@@ -28,6 +28,7 @@
  * Date  : July 2014
  */
 
+#include <ff/ff.hpp>
 #include <ff/parallel_for.hpp>
 
 

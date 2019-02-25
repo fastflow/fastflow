@@ -29,7 +29,7 @@
 #include <vector>
 #include <cstdlib>
 
-#include <ff/node.hpp>
+#include <ff/ff.hpp>
 #include <ff/parallel_for.hpp>
 #include <ff/poolEvolution.hpp>
 

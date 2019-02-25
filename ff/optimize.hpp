@@ -159,7 +159,8 @@ static inline int combine_with_collector(ff_farm& farm, ff_node*node, bool clean
  * The node is added at the left-hand side of the first pipeline node.
  * This transformation is logically equivalent to the following pipeline: ff_Pipe<> pipe2(node, pipe);
  */
-static inline int combine_with_firststage(ff_pipeline& pipe, ff_node*node, bool cleanup_node=false) {
+template<typename T>
+static inline int combine_with_firststage(ff_pipeline& pipe, T* node, bool cleanup_node) {
     pipe.flatten();
     ff_node* node0 = pipe.get_node(0); // cannot be a pipeline
     if (!node0) {
@@ -184,12 +185,90 @@ static inline int combine_with_firststage(ff_pipeline& pipe, ff_node*node, bool 
     return 0;
 }
 
+
+template<typename T> 
+static inline int combine_right_with_farm(ff_farm& farm, T* node, bool cleanup_node) {
+    if (farm.hasCollector())
+        return combine_with_collector(farm, node, cleanup_node);
+
+    // farm with no collector
+    const svector<ff_node*>& w= farm.getWorkers();
+    assert(w.size()>0);
+
+    if (w[0]->isPipe()) { // NOTE: we suppose that all workers are homogeneous
+        if (combine_with_laststage(*reinterpret_cast<ff_pipeline*>(w[0]), node, cleanup_node)<0) return -1;
+        int r=0;
+        for(size_t i=1;i<w.size();++i) {
+            ff_pipeline* pipe = reinterpret_cast<ff_pipeline*>(w[i]);
+            r+=combine_with_laststage(*pipe, new T(*node), true);
+        }        
+        return (r>0?-1:0);
+    }
+    if (w[0]->isFarm()) {
+        if (combine_right_with_farm(*reinterpret_cast<ff_farm*>(w[0]), node, cleanup_node)<0) return -1;
+        int r=0;
+        for(size_t i=1;i<w.size();++i) {
+            ff_farm* farm = reinterpret_cast<ff_farm*>(w[i]);
+            r+=combine_right_with_farm(*farm, new T(*node), true);
+        }        
+        return (r>0?-1:0);
+    }
+    if (w[0]->isAll2All()) {
+        if (combine_right_with_a2a(*reinterpret_cast<ff_a2a*>(w[0]), node, cleanup_node)<0) return -1;
+        int r=0;
+        for(size_t i=1;i<w.size();++i) {
+            ff_a2a* a2a = reinterpret_cast<ff_a2a*>(w[i]);
+            r+=combine_right_with_a2a(*a2a, new T(*node), true);
+        }        
+        return (r>0?-1:0);
+    }
+    bool workers_cleanup = farm.isset_cleanup_workers();
+    std::vector<ff_node*> new_workers;
+    
+    ff_comb* comb = new ff_comb(w[0], node, workers_cleanup, cleanup_node);
+    assert(comb);
+    new_workers.push_back(comb);
+    for(size_t i=1;i<w.size();++i) {
+        ff_comb* c = new ff_comb(w[i], new T(*node), workers_cleanup, true);
+        assert(c);
+        new_workers.push_back(c);
+    }
+    farm.change_workers(new_workers);    
+    return 0;
+}
+template<typename T> 
+static inline int combine_right_with_a2a(ff_a2a& a2a, T* node, bool cleanup_node) {
+    const svector<ff_node*>& w= a2a.getSecondSet();
+    if (w[0]->isPipe()) { // NOTE: we suppose that all workers are homogeneous
+        if (combine_with_laststage(*reinterpret_cast<ff_pipeline*>(w[0]), node, cleanup_node)<0) return -1;
+        int r=0;
+        for(size_t i=1;i<w.size();++i) {
+            ff_pipeline* pipe = reinterpret_cast<ff_pipeline*>(w[i]);
+            r+=combine_with_laststage(*pipe, new T(*node), true);
+        }        
+        return (r>0?-1:0); 
+    }
+    bool rset_cleanup = a2a.isset_cleanup_secondset();
+    std::vector<ff_node*> new_secondset;
+    
+    ff_comb* comb = new ff_comb(w[0], node, rset_cleanup, cleanup_node);
+    assert(comb);
+    new_secondset.push_back(comb);
+    for(size_t i=1;i<w.size();++i) {
+        ff_comb* c = new ff_comb(w[i], new T(*node), rset_cleanup, true);
+        assert(c);
+        new_secondset.push_back(c);
+    }
+    a2a.change_secondset(new_secondset); 
+    return 0;
+}    
 /*
  * It combines the node passed as second parameter with the last stage of the pipeline. 
  * The node is added at the right-hand side of the last pipeline stage.
  * This transformation is logically equivalent to the following pipeline: ff_Pipe<> pipe2(pipe, node);
- */    
-static inline int combine_with_laststage(ff_pipeline& pipe, ff_node*node, bool cleanup_node=false) {    
+ */
+template<typename T>
+static inline int combine_with_laststage(ff_pipeline& pipe, T* node, bool cleanup_node) {    
     pipe.flatten();
     ff_node* last = pipe.get_lastnode(); // it cannot be a pipeline
     if (!last) {
@@ -197,26 +276,16 @@ static inline int combine_with_laststage(ff_pipeline& pipe, ff_node*node, bool c
         return -1;
     }
     if (last->isAll2All()) {
-        error("combine_with_laststage: last stage is an all-to-all node, combine not yet supported\n");
-        return -1;
+        return combine_right_with_a2a(*reinterpret_cast<ff_a2a*>(last), node, cleanup_node);
     }
-    const bool last_isfarm_nocollector = (last->isFarm() && !last->isOFarm() && ((ff_farm*)last)->getCollector() == nullptr);    
-    if (last_isfarm_nocollector) {
-        error("combine_with_laststage: last stage is a farm without collector, combine not yet supported\n");
-        return -1;
-    }
-    int nstages=static_cast<int>(pipe.nodes_list.size());    
     if (last->isFarm()) {
-        ff_farm &farm=*(ff_farm*)last;
-        if (combine_with_collector(farm, node, cleanup_node)<0) return -1;
-        pipe.remove_stage(nstages-1);
-        pipe.insert_stage((nstages-1)>0?(nstages-1):0, last);        
-    } else {
-        ff_comb* comb = new ff_comb(last, node, false , cleanup_node);
-        pipe.remove_stage(nstages-1);
-        pipe.insert_stage((nstages-1)>0?(nstages-1):0, comb, true);        
+        return combine_right_with_farm(*reinterpret_cast<ff_farm*>(last), node, cleanup_node);
     }
-    
+    bool node_cleanup = pipe.isset_cleanup_nodes();
+    int nstages=static_cast<int>(pipe.nodes_list.size());    
+    ff_comb* comb = new ff_comb(last, node, node_cleanup , cleanup_node);
+    pipe.remove_stage(nstages-1);
+    pipe.insert_stage((nstages-1)>0?(nstages-1):0, comb, true);        
     return 0;
 }
     

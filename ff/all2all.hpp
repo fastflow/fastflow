@@ -36,7 +36,10 @@
 #include <ff/multinode.hpp>
 
 namespace ff {
-        
+
+// forward declarations
+static ff_node* ispipe_getlast(ff_node*);
+    
 class ff_a2a: public ff_node {
     friend class ff_farm;
     friend class ff_pipeline;    
@@ -50,21 +53,37 @@ protected:
         
         return card;
     }
-    inline int cardinality() const { 
-        int card=0;
-        for(size_t i=0;i<workers1.size();++i) card += workers1[i]->cardinality();
-        for(size_t i=0;i<workers2.size();++i) card += workers2[i]->cardinality();
-        return card;
-    }
 
     inline int prepare() {
         if (workers1[0]->isFarm() || workers1[0]->isAll2All()) {
             error("A2A, nodes of the first set cannot be farm or all-to-all\n");
             return -1;
         }
-        if (workers1[0]->isPipe() && !workers1[0]->isMultiOutput()) {
-            error("A2A, workers of the first set can be pipelines but only if they are multi-output (automatic transformation not yet supported)\n");
-            return -1;
+        if (workers1[0]->isPipe()) {
+            if (!workers1[0]->isMultiOutput()) {
+                error("A2A, workers of the first set can be pipelines but only if they are multi-output (automatic transformation not yet supported)\n");
+                return -1;
+            }
+            ff_node* last = ispipe_getlast(workers1[0]); // NOTE: we suppose homogeneous first set
+            assert(last);
+            if (last->isFarm() && !last->isOFarm()) { // standard farm ...
+                if (!isfarm_withcollector(last)) { // ... with no collector
+                    svector<ff_node*> w1;
+                    last->get_out_nodes(w1);
+                    if (!w1[0]->isMultiOutput()) { // NOTE: we suppose homogeneous workers
+                        error("A2A, workers of the first set are pipelines but their last stage are not multi-output (automatic transformation not yet supported)\n");
+                        return -1;
+                    }
+                }
+            }
+            if (last->isAll2All()) {
+                svector<ff_node*> w1;
+                last->get_out_nodes(w1);
+                if (!w1[0]->isMultiOutput()) { // NOTE: we suppose homogeneous second set
+                    error("A2A, workers of the first set are pipelines but their last stage are not multi-output (automatic transformation not yet supported)\n");                    
+                    return -1;
+                }
+            }
         }
         if (workers2[0]->isFarm() || workers2[0]->isAll2All()) {
             error("A2A, nodes of the second set cannot be farm or all-to-all\n");
@@ -72,10 +91,10 @@ protected:
         }
 
         // checking L-Workers
-        if (!workers1[0]->isMultiOutput()) {  // supposing all others to be the same
+        if (!workers1[0]->isMultiOutput()) {  // NOTE: we suppose all others to be the same
             // the nodes in the first set cannot be multi-input nodes without being
             // also multi-output
-            if (workers1[0]->isMultiInput()) {
+            if (workers1[0]->isMultiInput()) { // NOTE: we suppose all others to be the same
                 error("A2A, the nodes of the first set cannot be multi-input nodes without being also multi-output (i.e., a composition of nodes). The node must be either standard node or multi-output node or compositions where the second stage is a multi-output node\n");
                 return -1;
             }
@@ -91,7 +110,7 @@ protected:
                 workers1[i] = mo; // replacing old node
             }
             workers1_to_free = true;
-        }
+        } 
         for(size_t i=0;i<workers1.size();++i) {
             if (ondemand_chunk && (workers1[i]->ondemand_buffer()==0))
                 workers1[i]->set_scheduling_ondemand(ondemand_chunk);
@@ -251,7 +270,10 @@ public:
         ondemand_chunk   = ondemand;
         return 0;        
     }
-    
+    int change_firstset(const std::vector<ff_node*>& w, int ondemand=0, bool cleanup=false) {
+        error("A2A, change_firstset not yet implemented\n");
+        return -1;
+    }
     /**
      * The nodes of the second set must be either standard ff_node or a node that is multi-input.
      * 
@@ -269,7 +291,11 @@ public:
         workers2_to_free = cleanup;
         return 0;
     }
-
+    int change_secondset(const std::vector<ff_node*>& w, bool cleanup=false) {
+        workers2.clear();
+        return add_secondset(w, cleanup);
+    }
+    
     bool reduceChannel() const { return reduce_channels;}
     
     void skipfirstpop(bool sk)   { 
@@ -288,6 +314,13 @@ public:
     
     void no_barrier() {
         initial_barrier=false;
+    }
+
+    int cardinality() const { 
+        int card=0;
+        for(size_t i=0;i<workers1.size();++i) card += workers1[i]->cardinality();
+        for(size_t i=0;i<workers2.size();++i) card += workers2[i]->cardinality();
+        return card;
     }
     
     int run(bool skip_init=false) {
@@ -361,6 +394,16 @@ public:
     const svector<ff_node*>& getFirstSet()  const { return workers1; }
     const svector<ff_node*>& getSecondSet() const { return workers2; }
 
+    bool isset_cleanup_firstset()  const { return workers1_to_free; }
+    bool isset_cleanup_secondset() const { return workers2_to_free;}
+    
+    void cleanup_firstset(bool onoff=true) {
+        workers1_to_free = onoff;
+    }
+    void cleanup_secondset(bool onoff=true) {
+        workers2_to_free = onoff;
+    }
+    
     int numThreads() const { return cardinality(); }
 
     int set_output(const svector<ff_node *> & w) {
@@ -555,7 +598,7 @@ protected:
     bool isMultiOutput() const { return true;}
     bool isAll2All()     const { return true; }    
 
-    int create_input_buffer(int nentries, bool fixedsize) {
+    int create_input_buffer(int nentries, bool fixedsize=false) {
         size_t nworkers1 = workers1.size();
         for(size_t i=0;i<nworkers1; ++i)
             if (workers1[i]->create_input_buffer(nentries,fixedsize)==-1) return -1;
@@ -640,6 +683,7 @@ protected:
     svector<ff_node*>  outputNodes;
     svector<ff_node*>  internalSupportNodes;
 };
+    
+} // namespace ff
 
-} // namespace ff 
 #endif /* FF_A2A_HPP */

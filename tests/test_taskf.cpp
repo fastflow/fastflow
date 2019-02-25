@@ -30,7 +30,7 @@
  *         
  */
 // simple test for the ff_taskf pattern
-
+#include <ff/ff.hpp>
 #include <ff/taskf.hpp>
 #include <ff/parallel_for.hpp>
 using namespace ff;

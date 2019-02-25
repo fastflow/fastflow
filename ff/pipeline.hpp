@@ -34,8 +34,6 @@
 #include <functional>
 #include <ff/svector.hpp>
 #include <ff/node.hpp>
-#include <ff/all2all.hpp>
-#include <ff/farm.hpp>
 #ifdef FF_OPENCL
 #include <ff/ocl/clEnvironment.hpp>
 #endif
@@ -46,11 +44,19 @@
 
 namespace ff {
 
+// forward declarations
 class ff_pipeline;
 static inline int optimize_static(ff_pipeline&, const OptLevel&);
-static inline int combine_with_firststage(ff_pipeline&,ff_node*,bool);
-static inline int combine_with_laststage(ff_pipeline&,ff_node*,bool);        
+template<typename T>    
+static inline int combine_with_firststage(ff_pipeline&,T*,bool=false);
+template<typename T>    
+static inline int combine_with_laststage(ff_pipeline&,T*,bool=false);        
 
+static bool isfarm_withcollector(ff_node*);
+static bool isfarm_multimultioutput(ff_node*);
+static const svector<ff_node*>& isa2a_getfirstset(ff_node*);
+static const svector<ff_node*>& isa2a_getsecondset(ff_node*);
+    
 /**
  * \class ff_pipeline
  * \ingroup core_patterns
@@ -61,8 +67,10 @@ static inline int combine_with_laststage(ff_pipeline&,ff_node*,bool);
 class ff_pipeline: public ff_node {
 
     friend inline int optimize_static(ff_pipeline&, const OptLevel&);
-    friend inline int combine_with_firststage(ff_pipeline&,ff_node*,bool);
-    friend inline int combine_with_laststage(ff_pipeline&,ff_node*,bool);        
+    template<typename T> 
+    friend inline int combine_with_firststage(ff_pipeline&,T*,bool);
+    template<typename T>
+    friend inline int combine_with_laststage(ff_pipeline&,T*,bool);        
     
 protected:
     inline int prepare() {
@@ -96,26 +104,23 @@ protected:
             // the farm is considered single_multiinput
             const bool curr_single_multiinput   = (!isa2a_curr && nodes_list[i]->isMultiInput());
             const bool curr_multi_standard      = [&]() {
-                if (isa2a_curr) {
-                    ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[i]);
-                    const svector<ff_node*>& w1=a2a->getFirstSet();
-                    if (w1[0]->isMultiInput()) return false;
-                    return true;
-                }
-                return false;
+                if (!isa2a_curr) return false;
+                const svector<ff_node*>& w1=isa2a_getfirstset(get_node(i));
+                assert(w1.size()>0);
+                if (w1[0]->isMultiInput()) return false; // NOTE: we suppose homogeneous first set
+                return true;
             }();
             const bool curr_multi_multiinput    = [&]() {
-                if (isa2a_curr) {
-                    ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[i]);
-                    const svector<ff_node*>& w1=a2a->getFirstSet();
-                if (w1[0]->isMultiInput()) return true;
-                }
+                if (!isa2a_curr) return false;
+                const svector<ff_node*>& w1=isa2a_getfirstset(get_node(i));
+                assert(w1.size()>0);
+                if (w1[0]->isMultiInput()) return true; // NOTE: we suppose homogeneous first set
                 return false;
             } ();
             const bool isa2a_prev   = get_node_last(i-1)->isAll2All();
             const bool isfarm_prev  = get_node_last(i-1)->isFarm();
-            const bool prev_isfarm_nocollector   = (isfarm_prev && !get_node_last(i-1)->isOFarm() && !((ff_farm*)get_node_last(i-1))->hasCollector());
-            const bool prev_isfarm_withcollector = (isfarm_prev && ((ff_farm*)get_node_last(i-1))->hasCollector());        
+            const bool prev_isfarm_nocollector   = (isfarm_prev && !get_node_last(i-1)->isOFarm() && !(isfarm_withcollector(get_node_last(i-1))));
+            const bool prev_isfarm_withcollector = isfarm_withcollector(get_node_last(i-1));
             
             
             const bool prev_single_standard      = (!get_node_last(i-1)->isMultiOutput());
@@ -125,11 +130,11 @@ protected:
                 if (prev_isfarm_nocollector) {
                     svector<ff_node*> w1;
                     nodes_list[i-1]->get_out_nodes(w1);
-                    if (!w1[0]->isMultiOutput()) return true;                    
+                    if (!w1[0]->isMultiOutput()) return true;  // NOTE: we suppose homogeneous workers
                 } if (isa2a_prev) {
-                    ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[i-1]);
-                    const svector<ff_node*>& firstSet=a2a->getSecondSet();
-                    if (!firstSet[0]->isMultiOutput()) return true;
+                    const svector<ff_node*>& w1=isa2a_getsecondset(nodes_list[i-1]);
+                    assert(w1.size()>0);
+                    if (!w1[0]->isMultiOutput()) return true; // NOTE: we suppose homogeneous workers
                 }
                 return false;
             } ();
@@ -137,11 +142,11 @@ protected:
                 if (prev_isfarm_nocollector) {
                     svector<ff_node*> w1;
                     nodes_list[i-1]->get_out_nodes(w1);
-                    if (w1[0]->isMultiOutput()) return true;
+                    if (w1[0]->isMultiOutput()) return true; // NOTE: we suppose homogeneous workers
                 } if (isa2a_prev) {
-                    ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[i-1]);
-                    const svector<ff_node*>& w1=a2a->getSecondSet();
-                    if (w1[0]->isMultiOutput()) return true;
+                    const svector<ff_node*>& w1=isa2a_getsecondset(nodes_list[i-1]);
+                    assert(w1.size()>0);
+                    if (w1[0]->isMultiOutput()) return true;  // NOTE: we suppose homogeneous workers
                 }
                 return false;
             } ();
@@ -245,9 +250,10 @@ protected:
                 }
             }
             if (curr_multi_standard) {
-                ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[i]);
-                const svector<ff_node*>& W1 = a2a->getFirstSet();
-
+                ff_node* a2a = nodes_list[i];
+                const svector<ff_node*>& W1 = isa2a_getfirstset(a2a);
+                assert(W1.size()>0);
+                
                 if (prev_single_standard) {
                     if (W1.size()>1) {
                         error("PIPE, cannot connect stage %d with stage %d because of different cardinality\n", i-1, i);
@@ -319,8 +325,9 @@ protected:
                 }
             }
             if (curr_multi_multiinput) {
-                ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[i]);
-                const svector<ff_node*>& W1 = a2a->getFirstSet();
+                ff_node* a2a = nodes_list[i];
+                const svector<ff_node*>& W1 = isa2a_getfirstset(a2a);
+                assert(W1.size()>0);
 
                 if (prev_single_standard) {
                     if (W1.size()>1) {
@@ -693,52 +700,47 @@ public:
         //          - its' all2all with multi-input nodes                                        [first_multi_multiinput]
         //
 
-        bool last_isfarm_nocollector   = (get_lastnode()->isFarm() && !((ff_farm*)nodes_list[last])->hasCollector());
-        bool last_isfarm_withcollector = (get_lastnode()->isFarm() && ((ff_farm*)nodes_list[last])->hasCollector());        
+        bool last_isfarm_nocollector   = get_lastnode()->isFarm() && !isfarm_withcollector(get_lastnode()); 
+        bool last_isfarm_withcollector = get_lastnode()->isFarm() && !last_isfarm_nocollector;
 
         bool first_single_standard     = (!nodes_list[0]->isMultiInput());
         // the farm is considered single_multiinput
         bool first_single_multiinput   = (nodes_list[0]->isMultiInput() && !isa2a_first);
         bool first_multi_standard      = [&]() {
-            if (isa2a_first) {
-                ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[0]);
-                const svector<ff_node*>& w1=a2a->getFirstSet();
-                if (w1[0]->isMultiInput()) return false;
-                return true;
-            }
-            return false;
+            if (!isa2a_first) return false;
+            const svector<ff_node*>& w1=isa2a_getfirstset(get_node(0));
+            assert(w1.size()>0);
+            if (w1[0]->isMultiInput()) return false; // NOTE: we suppose homogeneous first set
+            return true;
         }();
         bool first_multi_multiinput    = [&]() {
-            if (isa2a_first) {
-                ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[0]);
-                const svector<ff_node*>& w1=a2a->getFirstSet();
-                if (w1[0]->isMultiInput()) return true;
-            }
+            if (!isa2a_first) return false;
+            const svector<ff_node*>& w1=isa2a_getfirstset(get_node(0));
+            assert(w1.size()>0);
+            if (w1[0]->isMultiInput()) return true; // NOTE: we suppose homogeneous first set
             return false;
         } ();
 
         bool last_single_standard      = (!nodes_list[last]->isMultiOutput());
         bool last_single_multioutput   = ((nodes_list[last]->isMultiOutput() && !isa2a_last && !isfarm_last) ||
                                           (last_isfarm_withcollector && nodes_list[last]->isMultiOutput()));        
-        bool last_multi_standard       = [&]() {
+        bool last_multi_standard       = [&]() {            
             if (last_isfarm_nocollector) {
-                const svector<ff_node*>& w1 = ((ff_farm*)nodes_list[last])->getWorkers();
-                if (!w1[0]->isMultiOutput()) return true;
-            } if (isa2a_last) {
-                ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[last]);
-                const svector<ff_node*>& firstSet=a2a->getSecondSet();
-                if (!firstSet[0]->isMultiOutput()) return true;
+                return !isfarm_multimultioutput(get_lastnode());
+            } if (isa2a_last) {                
+                const svector<ff_node*>& w1=isa2a_getsecondset(nodes_list[last]);
+                assert(w1.size()>0);
+                if (!w1[0]->isMultiOutput()) return true; // NOTE: we suppose homogeneous second set
             }
             return false;
         } ();
         bool last_multi_multioutput    = [&]() {
             if (last_isfarm_nocollector) {
-                const svector<ff_node*>& w1 = ((ff_farm*)nodes_list[last])->getWorkers();
-                if (w1[0]->isMultiOutput()) return true;
+                return isfarm_multimultioutput(get_lastnode());
             } if (isa2a_last) {
-                ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[last]);
-                const svector<ff_node*>& w1=a2a->getSecondSet();
-                if (w1[0]->isMultiOutput()) return true;
+                const svector<ff_node*>& w1=isa2a_getsecondset(nodes_list[last]);
+                assert(w1.size()>0);
+                if (w1[0]->isMultiOutput()) return true; // NOTE: we suppose homogeneous second set
             }
             return false;
         } ();      
@@ -805,9 +807,9 @@ public:
         // first stage: multi standard
         if (first_multi_standard) {  // all-to-all
             assert(get_node(0)->isAll2All());
-
-            ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[0]);
-            const svector<ff_node*>& firstSet=a2a->getFirstSet();
+            ff_node* a2a = nodes_list[0];
+            const svector<ff_node*>& firstSet=isa2a_getfirstset(a2a);
+            assert(firstSet.size()>0);
              
             if (last_single_standard) {
                 error("PIPE, wrap_around, cannot connect last with first stage\n");
@@ -841,8 +843,9 @@ public:
         // first stage: multi multi-input
         if (first_multi_multiinput) { 
             assert(get_node(0)->isAll2All());
-            ff_a2a *a2a = reinterpret_cast<ff_a2a*>(nodes_list[0]);
-            const svector<ff_node*>& firstSet=a2a->getFirstSet();
+            const svector<ff_node*>& firstSet=isa2a_getfirstset(nodes_list[0]);
+            assert(firstSet.size()>0);
+            
             if (last_single_standard) {
                 error("PIPE, wrap_around, cannot connect last with first stage\n");
                 return -1;
@@ -966,8 +969,10 @@ public:
 
         return 0;
     }
-   
-    inline void cleanup_nodes() { node_cleanup = true; }
+    
+    bool isset_cleanup_nodes() const { return node_cleanup; }
+    
+    inline void cleanup_nodes(bool onoff=true) { node_cleanup = onoff; }
 
     /**
      * returns the stages added to the pipeline

@@ -36,6 +36,7 @@
 #include <omp.h>
 #endif
 
+#include <ff/ff.hpp>
 #include <ff/parallel_for.hpp>
 
 #if defined(USE_TBB)
