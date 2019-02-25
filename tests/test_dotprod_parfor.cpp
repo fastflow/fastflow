@@ -40,9 +40,10 @@
   #define HAS_CXX11_VARIADIC_TEMPLATES 1
  #endif
 #endif
+#include <ff/ff.hpp>
 #include <ff/parallel_for.hpp>
 
-#if defined(USE_TBB) 
+#if defined(USE_TBB)
 #include <numeric>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>

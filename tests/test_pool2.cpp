@@ -36,7 +36,7 @@
 #include <cstdio>
 #include <vector>
 #include <cstdlib>
-#include <ff/pipeline.hpp>
+#include <ff/ff.hpp>
 #include <ff/poolEvolution.hpp>
 
 using namespace ff;

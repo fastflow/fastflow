@@ -33,7 +33,7 @@
  *
  */
 
-
+#include <ff/ff.hpp>
 #include <ff/parallel_for.hpp>
 
 using namespace ff;

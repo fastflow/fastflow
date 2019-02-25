@@ -53,6 +53,7 @@
  *                                                        res
  */
 
+#include <ff/ff.hpp>
 #include <ff/mdf.hpp>
 #include <ff/parallel_for.hpp>
 

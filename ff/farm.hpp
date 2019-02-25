@@ -1013,6 +1013,14 @@ public:
 
         return 0;
     }
+    /**
+     * replace the workers node. Note, that no cleanup of previous workers will be done.
+     */
+    int change_workers(const std::vector<ff_node*>& w) {
+        workers.clear();
+        return add_workers(w);
+    }
+
     
     /**
      *  \brief Adds the collector

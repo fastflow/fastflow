@@ -31,5 +31,6 @@
 #include <ff/combine.hpp>
 #include <ff/optimize.hpp>
 #include<ff/ordering_policies.hpp>
+#include<ff/graph_utils.hpp>
 
 #endif /* FF_FF_HPP */

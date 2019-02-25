@@ -29,15 +29,15 @@
 /*  pipe(Generator, A2A, Sink)
  *
  *
- * |<- multi-output ->|      |<---- all-to-all ---->|   |<- multi-input ->|
+ * |<- multi-output ->|  |<-------- all-to-all --------->| |<- multi-input ->|
  * 
- *                      ------> Router-->
- *                     |                |---> Even ---->
- *                     |                |               |
- *     Generator ------|-----> Router-->|               | ---> Sink
- *                     |                |               |
- *                     |                |--->  Odd ---->
- *                      ------> Router-->
+ *                      | -----> Router-->|
+ *                      |                 |---> Even --->
+ *                      |                 |              |
+ *     Generator ------>| -----> Router-->|              | --------> Sink
+ *                      |                 |              |
+ *                      |                 |--->  Odd --->
+ *                      | -----> Router-->|
  *
  */
 /* Author: Massimo Torquati

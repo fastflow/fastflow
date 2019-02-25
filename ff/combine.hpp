@@ -962,11 +962,11 @@ static inline const ff_farm combine_farms_nf(ff_farm& farm1, ff_farm& farm2) {
     const svector<ff_node *> & w1= farm1.getWorkers();
     const svector<ff_node *> & w2= farm2.getWorkers();
     
-    if (w1[0]->isMultiOutput() || w2[0]->isMultiInput()) {
+    if (w1[0]->isMultiOutput() || w2[0]->isMultiInput()) { // NOTE: we suppose homogeneous workers
         error("combine_farms_nf, cannot combine farms whose workers are either multi-output or multi-input nodes\n");
         return newfarm;
     }
-    if (w1[0]->isPipe() || w2[0]->isPipe()) {
+    if (w1[0]->isPipe() || w2[0]->isPipe()) { // NOTE: we suppose homogeneous workers
         error("combine_farms_nf, cannot combine farms whose workers are pipeline nodes\n");
         return newfarm;
     }
