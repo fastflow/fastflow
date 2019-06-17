@@ -131,8 +131,8 @@ test: all
 	@echo "*****************************************************"
 	@./runtests.sh
 
-test_scheduling2:test_scheduling2.cpp
-	$(CXX) -DLB_CALLBACK $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+#test_scheduling2:test_scheduling2.cpp
+#	$(CXX) -DLB_CALLBACK $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_mpmc:test_mpmc.cpp
 	$(CXX) -DUNBOUNDED_MPMC -Wno-strict-aliasing $(INCLUDES) $(CXXFLAGS) $(OPTIMIZE_FLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 test_mpmc2:test_mpmc2.o

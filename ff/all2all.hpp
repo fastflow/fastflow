@@ -219,7 +219,9 @@ protected:
 
     
 public:
-    enum {DEF_IN_BUFF_ENTRIES=2048};
+    enum { DEF_IN_BUFF_ENTRIES=DEFAULT_BUFFER_CAPACITY,
+           DEF_IN_OUT_DIFF=DEFAULT_IN_OUT_CAPACITY_DIFFERENCE,
+           DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+DEF_IN_OUT_DIFF)};
 
     /**
      *
@@ -227,10 +229,13 @@ public:
      * by making use of multi-producer input queues.
      *
      */
-    ff_a2a(bool reduce_channels=false, int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
+    ff_a2a(bool reduce_channels=false,
+           int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
+           int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
            bool fixedsize=false):prepared(false),fixedsize(fixedsize),
                                  reduce_channels(reduce_channels), 
-                                 in_buffer_entries(in_buffer_entries)
+                                 in_buffer_entries(in_buffer_entries),
+                                 out_buffer_entries(out_buffer_entries)
     {}
     
     virtual ~ff_a2a() {
@@ -271,8 +276,8 @@ public:
         return 0;        
     }
     int change_firstset(const std::vector<ff_node*>& w, int ondemand=0, bool cleanup=false) {
-        error("A2A, change_firstset not yet implemented\n");
-        return -1;
+        workers1.clear();
+        return add_firstset(w, ondemand, cleanup);
     }
     /**
      * The nodes of the second set must be either standard ff_node or a node that is multi-input.
@@ -354,7 +359,7 @@ public:
         }
         for(size_t i=0;i<nworkers2; ++i) {
             workers2[i]->blocking_mode(blocking_in);
-            if (!default_mapping) workers1[i]->no_mapping();
+            if (!default_mapping) workers2[i]->no_mapping();
             if (workers2[i]->run(true)<0) {
                 error("ERROR: A2A, running worker (second set) %d\n", i);
                 return -1;
@@ -396,6 +401,8 @@ public:
 
     bool isset_cleanup_firstset()  const { return workers1_to_free; }
     bool isset_cleanup_secondset() const { return workers2_to_free;}
+
+    int ondemand_buffer() const { return ondemand_chunk; }
     
     void cleanup_firstset(bool onoff=true) {
         workers1_to_free = onoff;
@@ -487,7 +494,7 @@ public:
                 
             } else {
                 
-                if (create_output_buffer(in_buffer_entries, false) <0) {
+                if (create_output_buffer(out_buffer_entries, false) <0) {
                     error("A2A, error creating output buffers\n");
                     return -1;
                 }
@@ -677,7 +684,8 @@ protected:
     bool workers1_to_free=false;
     bool workers2_to_free=false;
     bool prepared, fixedsize,reduce_channels;
-    int in_buffer_entries, ondemand_chunk=0;
+    int in_buffer_entries, out_buffer_entries;
+    int ondemand_chunk=0;
     svector<ff_node*>  workers1;  // first set, nodes must be multi-output
     svector<ff_node*>  workers2;  // second set, nodes must be multi-input
     svector<ff_node*>  outputNodes;

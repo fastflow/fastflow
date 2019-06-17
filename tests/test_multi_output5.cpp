@@ -121,8 +121,14 @@ public:
                     printf("EMITTER1 (i=%ld), SENDING %s to WORKER %d\n", i, cmd->op==ADD?"ADD":"REMOVE", cmd->id);
 
                     switch(cmd->op) {
-                    case ADD:     lb->thaw(cmd->id, true);             break;
-                    case REMOVE:  lb->ff_send_out_to(GO_OUT, cmd->id); break;
+                    case ADD:     {
+                        lb->thaw(cmd->id, true);
+                        ready[cmd->id] = true;
+                    } break;
+                    case REMOVE:  {
+                        lb->ff_send_out_to(GO_OUT, cmd->id);
+                        ready[cmd->id] = false;
+                    } break;
                     default: abort();
                     }
                     delete cmd;
@@ -133,6 +139,13 @@ public:
         return EOS;
     }
 
+    void svc_end() {
+        for(size_t i=0; i<ready.size(); ++i)
+            if (!ready[i]) lb->thaw(i, false);
+
+    }
+
+    
     long ntasks;
     ff_loadbalancer *lb;
     unsigned last;
@@ -284,9 +297,6 @@ struct Manager: ff_node_t<Command_t> {
         channel2(100, true, MAX_NUM_THREADS+200) {}
 
     Command_t* svc(Command_t *) {
-
-#if 0
-        
         Command_t *cmd1 = new Command_t(0, REMOVE);
         channel1.ff_send_out(cmd1);
         Command_t *cmd2 = new Command_t(1, REMOVE);
@@ -306,7 +316,7 @@ struct Manager: ff_node_t<Command_t> {
         channel1.ff_send_out(cmd7);
         Command_t *cmd8 = new Command_t(0, ADD);
         channel2.ff_send_out(cmd8);
-#endif
+
         channel1.ff_send_out(EOS);
         channel2.ff_send_out(EOS);
 

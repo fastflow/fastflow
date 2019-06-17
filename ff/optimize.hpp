@@ -162,14 +162,13 @@ static inline int combine_with_collector(ff_farm& farm, ff_node*node, bool clean
 template<typename T>
 static inline int combine_with_firststage(ff_pipeline& pipe, T* node, bool cleanup_node) {
     pipe.flatten();
-    ff_node* node0 = pipe.get_node(0); // cannot be a pipeline
+    ff_node* node0 = pipe.get_node(0); // it cannot be a pipeline
     if (!node0) {
         error("combine_with_firststage: empty pipeline\n");
         return -1;
     }
-    if (node0->isAll2All()) {
-        error("combine_with_firststage: first stage is an all-to-all node, combine not yet supported\n");
-        return -1;
+    if (node0->isAll2All()) {  
+        return combine_left_with_a2a(*reinterpret_cast<ff_a2a*>(node0), node, cleanup_node);
     }
     if (node0->isFarm()) {
         ff_farm &farm=*(ff_farm*)node0;
@@ -261,7 +260,36 @@ static inline int combine_right_with_a2a(ff_a2a& a2a, T* node, bool cleanup_node
     }
     a2a.change_secondset(new_secondset); 
     return 0;
-}    
+}
+template<typename T> 
+static inline int combine_left_with_a2a(ff_a2a& a2a, T* node, bool cleanup_node) {
+    const svector<ff_node*>& w= a2a.getFirstSet();
+    if (w[0]->isPipe()) { // NOTE: we suppose that all workers are homogeneous
+
+        if (combine_with_firststage(*reinterpret_cast<ff_pipeline*>(w[0]), node, cleanup_node)<0)
+            return -1;
+        int r=0;
+        for(size_t i=1;i<w.size();++i) {
+            ff_pipeline* pipe = reinterpret_cast<ff_pipeline*>(w[i]);
+            r+=combine_with_firststage(*pipe, new T(*node), true);
+        }        
+        return (r>0?-1:0); 
+    }
+    bool lset_cleanup = a2a.isset_cleanup_firstset();
+    std::vector<ff_node*> new_firstset;    
+    
+    ff_comb* comb = new ff_comb(node, w[0], cleanup_node, lset_cleanup);
+    assert(comb);
+    new_firstset.push_back(comb);
+    for(size_t i=1;i<w.size();++i) {
+        ff_comb* c = new ff_comb(new T(*node), w[i], true, lset_cleanup);
+        assert(c);
+        new_firstset.push_back(c);
+    }
+    a2a.change_firstset(new_firstset, a2a.ondemand_buffer(), true); 
+    return 0;
+}
+    
 /*
  * It combines the node passed as second parameter with the last stage of the pipeline. 
  * The node is added at the right-hand side of the last pipeline stage.

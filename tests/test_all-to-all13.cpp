@@ -43,7 +43,7 @@
  *      |------ farm -----|     |--------------- A2A --------------|
  *
  *
- *  NOTE: Since Worker2 workers arestandard node, there are point-to-point
+ *  NOTE: Since Worker2 workers are standard node, there are point-to-point
  *        connections between Worker1 and Worker2 (the cardinality must
  *        be the same).
  */

@@ -34,13 +34,14 @@
  *    D = D + A + C;    
  */
 
+#include <ff/ff.hpp>
 #include <ff/mdf.hpp>
 #include <ff/parallel_for.hpp>
 
 using namespace ff;
 
 const bool check = false;    // true to check the result
-const long MYSIZE = (1 << 20);
+const long MYSIZE = 16;
 
 // X = X + Y
 void sum2(long *X, long *Y, const long size) {
@@ -57,7 +58,6 @@ void sum3(long *X, long *Y, long *Z, const long size) {
 template<typename T>
 struct Parameters {
     long *A,*B,*C,*D;
-    long res;
     T* mdf;
 };
 
@@ -72,16 +72,34 @@ void taskGen(Parameters<ff_mdf > *const P){
     auto mdf = P->mdf;
 
     // A = A + B;
-    mdf::task_t *task1 = mdf->AddTask(sum2, A,B,MYSIZE);
+    {
+	const param_info _1={(uintptr_t)A,ff::INPUT};
+	const param_info _2={(uintptr_t)B,ff::INPUT};
+	const param_info _3={(uintptr_t)A,ff::OUTPUT};
+	Param.push_back(_1); Param.push_back(_2); Param.push_back(_3);
+	mdf->AddTask(Param, sum2, A,B,MYSIZE);
+    }
 
     // C = C + B;
-    mdf::task_t *task2 = mdf->AddTask(sum2, C,B,MYSIZE);
+    {
+	Param.clear();
+	const param_info _1={(uintptr_t)C,ff::INPUT};
+	const param_info _2={(uintptr_t)B,ff::INPUT};
+	const param_info _3={(uintptr_t)C,ff::OUTPUT};
+	Param.push_back(_1); Param.push_back(_2); Param.push_back(_3);
+	mdf->AddTask(Param, sum2, C,B,MYSIZE);
+    }
 
-    // D = D + B;
-    const param_info _1={(uintptr_t)task1, ff::INPUT};
-    const param_info _2={(uintptr_t)task2, ff::INPUT};
-    Param.push_back(_1); Param.push_back(_2);
-    mdf->AddTask(Param, sum3, D,A,C,MYSIZE);
+    // D = D + C + D;
+    { 
+	Param.clear();
+	const param_info _1={(uintptr_t)A,ff::INPUT};
+	const param_info _2 = { (uintptr_t)C, ff::INPUT };
+	const param_info _3 = { (uintptr_t)D, ff::INPUT };
+	const param_info _4={(uintptr_t)D,ff::OUTPUT};
+	Param.push_back(_1); Param.push_back(_2); Param.push_back(_3); Param.push_back(_4);
+	mdf->AddTask(Param, sum3, D,A,C,MYSIZE);
+    }
 
 }
 
@@ -101,12 +119,17 @@ int main() {
     
     Parameters<ff_mdf > P;
     ff_mdf dag(taskGen, &P, 16, 3);
-    P.A=A,P.B=B,P.C=C,P.D=D,P.mdf=&dag;P.res=0;
+    P.A=A,P.B=B,P.C=C,P.D=D,P.mdf=&dag;
     
     dag.run_and_wait_end();
 
     // printing result
-    printf("result = %ld\n", P.res);
+    printf("result = \n");
+    
+    for(long i=0;i<MYSIZE;++i) {
+        printf("D[%ld]=%ld\n", i, D[i]);
+    }
+
     
     if (check) {
         // re-init data
@@ -114,17 +137,15 @@ int main() {
             A[i] = 0; B[i] = i;
             C[i] = 1; D[i] = i+1;
         }
-        long res=0;
-        
 		sum2(A, B, MYSIZE);
 		sum2(C, B, MYSIZE);
-		sum2(D, B, MYSIZE);
 		sum3(D, A, C, MYSIZE);
-		sum2(A, D, MYSIZE);
-		sum2(B, D, MYSIZE);
-		sum2(C, D, MYSIZE);
-		reduce(&res, A, B, C, D, MYSIZE);
-        printf("result = %ld\n",res);
+
+        printf("check= \n");
+        for(long i=0;i<MYSIZE;++i) {
+            printf("D[%ld]=%ld\n", i, D[i]);
+        }
+
     }
     return 0;
 

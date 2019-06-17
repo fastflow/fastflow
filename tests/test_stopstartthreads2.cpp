@@ -97,6 +97,11 @@ private:
 
 class Worker:public ff_node {
 public:
+
+    int svc_init() {
+        printf("worker %ld started\n", get_my_id());
+        return 0;
+    }
     void *svc(void *t) {
         printf("worker %ld received %d\n", get_my_id(), *(int*)t);
         return GO_ON;
