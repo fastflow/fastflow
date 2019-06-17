@@ -59,36 +59,35 @@
 
 using namespace ff;
 
-// if the emitter is just a ff_node (and not a ff_monode) then we have to pass
-// to the constructor the internal load-balancer of the farm
-//#define EMITTER_FF_NODE 1
-
+// this is an id greater than all ids
 const int MANAGERID = MAX_NUM_THREADS+100;
 
-typedef enum { ADD, REMOVE } reconf_op_t;
 
+typedef enum { ADD, REMOVE } reconf_op_t;
 struct Command_t {
     Command_t(int id, reconf_op_t op): id(id), op(op) {}
     int         id;
     reconf_op_t op;
 };
 
+// first stage
 struct Seq: ff_node_t<long> {
     long ntasks=0;
     Seq(long ntasks):ntasks(ntasks) {}
 
     long *svc(long *) {
-        for(long i=1;i<=ntasks; ++i)
+        for(long i=1;i<=ntasks; ++i) {
             ff_send_out((long*)i);
+
+            struct timespec req = {0, static_cast<long>(5*1000L)};
+            nanosleep(&req, NULL);
+        }
         return EOS;
     }
 };
 
-#if defined(EMITTER_FF_NODE)
-class Emitter: public ff_node_t<long> {
-#else
+// scheduler 
 class Emitter: public ff_monode_t<long> {
-#endif
 protected:
     int selectReadyWorker() {
         for (unsigned i=last+1;i<ready.size();++i) {
@@ -106,29 +105,49 @@ protected:
         return -1;
     }
 public:
-    #if defined(EMITTER_FF_NODE)
-    Emitter(ff_loadbalancer *lb):lb(lb) {}
-#endif
-
     int svc_init() {
-#if !defined(EMITTER_FF_NODE)
-        lb = ff_monode_t<long>::getlb();
-        assert(lb != nullptr);
-#endif        
-        last = lb->getNWorkers();
-        ready.resize(lb->getNWorkers());
-        for(size_t i=0; i<ready.size(); ++i) ready[i] = true;
+        last = get_num_outchannels();  // at the beginning, this is the number of workers
+        ready.resize(last); 
+        sleeping.resize(last);
+        for(size_t i=0; i<ready.size(); ++i) {
+            ready[i]    = true;
+            sleeping[i] = false;
+        }
         nready=ready.size();
         return 0;
     }
-    long* svc(long* t) {
-        int wid = lb->get_channel_id();
+    long* svc(long* t) {       
+        int wid = get_channel_id();
+        
+        // the id of the manager channel is greater than the maximum id of the workers
+        if ((size_t)wid == MANAGERID) {  
+            Command_t *cmd = reinterpret_cast<Command_t*>(t);
+            printf("EMITTER2 SENDING %s to WORKER %d\n", cmd->op==ADD?"ADD":"REMOVE", cmd->id);
+            switch(cmd->op) {
+            case ADD:     {
+                ff_monode::getlb()->thaw(cmd->id, true);
+                assert(sleeping[cmd->id]);
+                sleeping[cmd->id] = false;
+                frozen--;
+            } break;
+            case REMOVE:  {
+                ff_send_out_to(GO_OUT, cmd->id);
+                assert(!sleeping[cmd->id]);
+                sleeping[cmd->id] = true;
+                frozen++;
+            } break;
+            default: abort();
+            }
+            delete cmd;            
+            return GO_ON;
+        }
+
         if (wid == -1) { // task coming from seq
             //printf("Emitter: TASK FROM INPUT %ld \n", (long)t);
             int victim = selectReadyWorker();
             if (victim < 0) data.push_back(t);
             else {
-                lb->ff_send_out_to(t, victim);
+                ff_send_out_to(t, victim);
                 ready[victim]=false;
                 --nready;
                 onthefly++;
@@ -136,26 +155,13 @@ public:
             return GO_ON;
         }
         
-        // the id of the manager channel is greater than the maximum id of the workers
-        if ((size_t)wid == MANAGERID) {  
-            Command_t *cmd = reinterpret_cast<Command_t*>(t);
-            //printf("EMITTER2 SENDING %s to WORKER %d\n", cmd->op==ADD?"ADD":"REMOVE", cmd->id);
-            switch(cmd->op) {
-            case ADD:     lb->thaw(cmd->id, true);             break;
-            case REMOVE:  lb->ff_send_out_to(GO_OUT, cmd->id); break;
-            default: abort();
-            }
-            delete cmd;            
-            return GO_ON;
-        }
-
-        if ((size_t)wid < lb->getNWorkers()) { // ack coming from the workers
+        if ((size_t)wid < get_num_outchannels()) { // ack coming from the workers
             //printf("Emitter got %ld back from %d data.size=%ld, onthefly=%d\n", (long)t, wid, data.size(), onthefly);
             assert(ready[wid] == false);
             ready[wid] = true;
             ++nready;
             if (data.size()>0) {
-                lb->ff_send_out_to(data.back(), wid);
+                ff_send_out_to(data.back(), wid);
                 onthefly++;
                 data.pop_back();
                 ready[wid]=false;
@@ -163,9 +169,11 @@ public:
             } 
             return GO_ON;
         }
+
+        // task coming from the Collector
         --onthefly;
         //printf("Emitter got %ld back from COLLECTOR data.size=%ld, onthefly=%d\n", (long)t, data.size(), onthefly);
-        if (eos_received && (nready + sleeping) == ready.size() && onthefly<=0) {
+        if (eos_received && ((nready + frozen) == ready.size()) && (onthefly<=0)) {
             printf("Emitter EXITING\n");
             return EOS;
         }
@@ -177,21 +185,25 @@ public:
     }
     void eosnotify(ssize_t id) {
         if (id == -1) { // we have to receive all EOS from the previous stage            
-            eos_received++; 
+            eos_received = true;
             //printf("EOS received eos_received = %u nready = %u\n", eos_received, nready);
-            if ((nready + sleeping) == ready.size() && data.size() == 0 && onthefly<=0) {
+            if (((nready+frozen) == ready.size()) && (data.size() == 0) && onthefly<=0) {
+
+                if (frozen>0) {
+                    for(size_t i=0;i<sleeping.size();++i)
+                        if (sleeping[i]) ff_monode::getlb()->thaw(i, false); 
+                }
                 printf("EMITTER2 BROADCASTING EOS\n");
-                lb->broadcast_task(EOS);
+                broadcast_task(EOS);
             }
         } 
     }
 private:
-    unsigned eos_received = 0;
-    unsigned last, nready, onthefly=0;
-    std::vector<bool> ready;
-    std::vector<long*> data;
-    ff_loadbalancer *lb = nullptr;    
-    int sleeping=0;
+    bool eos_received = 0;
+    unsigned last, nready, frozen=0, onthefly=0;
+    std::vector<bool>  ready;         // which workers are ready
+    std::vector<bool>  sleeping;      // which workers are sleeping
+    std::vector<long*> data;          // local storage
 };
 
 struct Worker: ff_monode_t<long> {
@@ -233,9 +245,9 @@ struct Collector: ff_minode_t<long> {
 struct Manager: ff_node_t<Command_t> {
     Manager(): 
         channel(100, true, MANAGERID) {}
-
+    
     Command_t* svc(Command_t *) {
-
+        
         struct timespec req = {0, static_cast<long>(5*1000L)};
         nanosleep(&req, NULL);
 
@@ -244,7 +256,7 @@ struct Manager: ff_node_t<Command_t> {
 
         Command_t *cmd2 = new Command_t(1, REMOVE);
         channel.ff_send_out(cmd2);
-#if 0        
+
         {
             struct timespec req = {0, static_cast<long>(5*1000L)};
             nanosleep(&req, NULL);
@@ -260,7 +272,7 @@ struct Manager: ff_node_t<Command_t> {
             struct timespec req = {0, static_cast<long>(5*1000L)};
             nanosleep(&req, NULL);
         }
-#endif                
+
         channel.ff_send_out(EOS);
 
         return GO_OUT;
@@ -302,40 +314,36 @@ int main(int argc, char* argv[]) {
     }
 
     Seq seq(ntasks);
-
     Manager manager;
 
-    ff_Farm<long>   farm(  [&]() { 
-            std::vector<std::unique_ptr<ff_node> > W;
-            for(size_t i=0;i<nworkers;++i)  {
-                W.push_back(make_unique<Worker>());
-            }
-            return W;
-        } () );
-
+    std::vector<ff_node* > W;
+    for(size_t i=0;i<nworkers;++i)  
+        W.push_back(new Worker);
+    ff_farm farm(W);
+    farm.cleanup_workers();
+    
     // registering the manager channel as one extra input channel for the load balancer
     farm.getlb()->addManagerChannel(manager.getChannel());
     
-    #if defined(EMITTER_FF_NODE)
-    Emitter E(farm.getlb());
-#else
     Emitter E;
-#endif
 
     farm.remove_collector();
-    farm.add_emitter(E); 
+    farm.add_emitter(&E); 
     farm.wrap_around();
     // here the order of instruction is important. The collector must be
     // added after the wrap_around otherwise the feedback channel will be
     // between the Collector and the Emitter
     Collector C;
-    farm.add_collector(C);
+    farm.add_collector(&C);
     farm.wrap_around();
 
     ff_Pipe<> pipe(seq, farm);
-    
+
+    if (pipe.run_then_freeze()<0) {
+        error("running pipe\n");
+        return -1;
+    }            
     manager.run();
-    pipe.run_then_freeze();
     pipe.wait_freezing();
     pipe.wait();
     manager.wait();

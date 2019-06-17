@@ -299,28 +299,63 @@ protected:
 
         for(size_t i=0;i<nworkers;++i) {
 
+            ff_a2a* a2a_first = nullptr;        // the Emitter sees this all-to-all
+            ff_a2a* a2a_last  = nullptr;        // the Collector sees this all-to-all
             if (workers[i]->isAll2All()) {
-                // all-to-all building block
-
-                ff_a2a *a2a = reinterpret_cast<ff_a2a*>(workers[i]);
-
-                // this might fail, so we ignore the return value
-                if (a2a->prepare()<0) {
-                    error("FARM, error preparing A2A worker of farm worker %d\n", i);
+                a2a_first = reinterpret_cast<ff_a2a*>(workers[i]);
+                a2a_last  = a2a_first; 
+            } else {  // TODO: farm with workers A2A or pipeline ending with A2A
+                if (workers[i]->isPipe()) {
+                    ff_pipeline* pipe=reinterpret_cast<ff_pipeline*>(workers[i]);
+                    ff_node* node0 = pipe->get_node(0);
+                    ff_node* nodeN = pipe->get_lastnode();
+                    if (node0->isAll2All()) {
+                        a2a_first = reinterpret_cast<ff_a2a*>(node0);
+                    }
+                    if (nodeN->isAll2All()) {
+                        a2a_last  = reinterpret_cast<ff_a2a*>(nodeN);
+                    }
+                }
+            }
+            
+            if (a2a_first) {  
+                //NOTE: if the worker is an A2A or a pipe starting with an A2A, the L-Workers
+                //      are transformed by the prepare, that's why the prepare must be done
+                //      before adding workers to the emitter
+                if (a2a_first->prepare()<0) {
+                    error("FARM, preparing worker A2A %d\n", i);
                     return -1;
                 }
+
+
                 
-                if (a2a->create_input_buffer((int) (ondemand ? ondemand: (in_buffer_entries/nworkers + 1)), 
+                if (a2a_first->create_input_buffer((int) (ondemand ? ondemand: (in_buffer_entries/nworkers + 1)), 
                                              (ondemand ? true: fixedsize))<0) return -1;
                 
-
-                const svector<ff_node*>& W1 = a2a->getFirstSet();
-                const svector<ff_node*>& W2 = a2a->getSecondSet();
-                
+                const svector<ff_node*>& W1 = a2a_first->getFirstSet();
                 for(size_t i=0;i<W1.size();++i) {
                     lb->register_worker(W1[i]);
                 }
-                               
+            } else {
+                if (workers[i]->create_input_buffer((int) (ondemand ? ondemand: (in_buffer_entries/nworkers + 1)), 
+                                                    (ondemand ? true: fixedsize))<0) return -1;
+
+                lb->register_worker(workers[i]);
+            }
+
+            if (a2a_last) { // the worker is the All-to-All
+
+                if (a2a_first != a2a_last) {
+                    //NOTE: if the worker is an A2A or a pipe ending with an A2A, the R-Workers
+                    //      are transformed by the prepare, that's why the prepare must be done
+                    //      before adding workers to the collector
+                    if (a2a_last->prepare()<0) {
+                        error("FARM, preparing worker A2A %d (collector side)\n", i);
+                        return -1;
+                    }
+                }
+                                    
+                const svector<ff_node*>& W2 = a2a_last->getSecondSet();                
 
                 // TODO: If the internal A2A has feedbacks toward the Emitter (i.e. master-worker) and there is also the collector
                 //       then this case is not properly handled because R-Workers are not connected to the collector
@@ -329,7 +364,7 @@ protected:
                         
                         // NOTE: the following call might fail because the buffers were already created for example by
                         // the pipeline that contains this stage
-                        a2a->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
+                        a2a_last->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
                                                   (lb->masterworker()?false:fixedsize));
                         
                         for(size_t i=0;i<W2.size();++i) {
@@ -347,33 +382,30 @@ protected:
                     if (outputNodes.size()) { 
                         assert(W2.size() == outputNodes.size());
                         for(size_t i=0;i<W2.size();++i) {
-                            if (W2[i]->set_output(outputNodes[i])<0) return -1;  //(**)
+                            if (W2[i]->set_output(outputNodes[i])<0) return -1;
                                                                                      }
                     } else {
                         // NOTE: the following call might fail because the buffers were already created for example by
-                        // the pipeline that contains this stage or here (**)
-                        if (a2a->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
+                        // the pipeline that contains this stage
+                        if (a2a_last->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
                                                       (lb->masterworker()?false:fixedsize))<0) {
                             if (lb->masterworker()) return -1; // something went wrong
                         }
                         if (lb->masterworker()) {
-                            svector<ff_node*> w(1);
-                            a2a->get_out_nodes(w);
-                            assert(w.size()>0);
-                            for(size_t j=0;j<w.size();++j)
-                                lb->set_input_feedback(w[j]);
+                            for(size_t i=0;i<W2.size();++i) {
+                                svector<ff_node*> w(1);
+                                W2[i]->get_out_nodes(w);
+                                assert(w.size()>0);
+                                for(size_t j=0;j<w.size();++j)
+                                    lb->set_input_feedback(w[j]);
+                            }
                         }
                     }
-                }                
-                
+                }
+
                 continue;
             }
-
-
-            if (workers[i]->create_input_buffer((int) (ondemand ? ondemand: (in_buffer_entries/nworkers + 1)), 
-                                                (ondemand ? true: fixedsize))<0) return -1;
-            
-            
+                        
             if (collector && !collector_removed) {   // there is a collector
                 if (workers[i]->get_out_buffer()==NULL) {
                     if (workers[i]->isMultiOutput()) {   // the worker is multi-output
@@ -475,7 +507,6 @@ protected:
                     }
                 }
             }
-            lb->register_worker(workers[i]);
         }
         
         // preparing emitter
@@ -651,7 +682,8 @@ protected:
     virtual inline std::atomic_ulong &get_prod_counter()  { return *(gt->prod_counter);}
 
 public:
-    enum { DEF_IN_BUFF_ENTRIES=2048, DEF_IN_OUT_DIFF=128, 
+    enum { DEF_IN_BUFF_ENTRIES=DEFAULT_BUFFER_CAPACITY,
+           DEF_IN_OUT_DIFF=DEFAULT_IN_OUT_CAPACITY_DIFFERENCE,
            DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+DEF_IN_OUT_DIFF)};
 
     using lb_t = ff_loadbalancer;
@@ -1222,30 +1254,42 @@ public:
         }
         
         if (!prepared) if (prepare()<0) return -1;
-        
-        if (lb->run(true)<0) {
+
+        // starting the emitter node
+        if (lb->runlb()<0) {
             error("FARM, running load-balancer module\n");
             return -1;        
         }
 
-        // if workers are all-to-all building block we have to start the second set of workers
-        for(size_t i=0;i<workers.size();++i) {
-            if (workers[i]->isAll2All()) {
-                ff_a2a *a2a = reinterpret_cast<ff_a2a*>(workers[i]);
-                 const svector<ff_node*>& W2   = a2a->getSecondSet();
-
-                 for(size_t j=0; j<W2.size(); ++j) {
-                     if (W2[j]->getTid() == (size_t)-1) {
-                         W2[j]->blocking_mode(blocking_in);
-                         if (!default_mapping) W2[j]->no_mapping();
-                         if (W2[j]->run(true)<0) {
-                             error("FARM, running A2A workers\n");                                
-                             return -1;
-                         }
-                     }
-                 }
+        // starting the workers
+        if (isfrozen()) {
+            for(size_t i=0;i<workers.size();++i) {
+                /* set the initial blocking mode
+                 */
+                assert(blocking_in==blocking_out);
+                workers[i]->blocking_mode(blocking_in);
+                if (!default_mapping) workers[i]->no_mapping();
+                workers[i]->skipfirstpop(false);
+                 if (workers[i]->freeze_and_run(true)<0) {
+                    error("FARM, spawning worker thread\n");
+                    return -1;
+                }      
+            }
+        } else {
+            for(size_t i=0;i<workers.size();++i) {
+                /* set the initial blocking mode
+                 */
+                assert(blocking_in==blocking_out);
+                workers[i]->blocking_mode(blocking_in);
+                if (!default_mapping) workers[i]->no_mapping();
+                workers[i]->skipfirstpop(false);
+                 if (workers[i]->run(true)<0) {
+                    error("FARM, spawning worker thread\n");
+                    return -1;
+                }                      
             }
         }
+        // starting the collector node
         if (!collector_removed)
             if (collector && gt->run(true)<0) {
                 error("FARM, running gather module\n");

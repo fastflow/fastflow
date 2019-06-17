@@ -82,6 +82,9 @@ struct Sink: ff_node_t<long> {
 
 struct Router: ff_monode_t<long> {
     long *svc(long *in) {
+
+        printf("Router%ld received %ld\n", get_my_id(), *in);
+
         if ((*in % 2) == 0) {
             ff_send_out_to(in, 0);
         } else
@@ -118,6 +121,12 @@ struct Odd: ff_node_t<long> {
     long sum=0;
 };
 
+struct doNothing: ff_node_t<long> {
+    long *svc(long *in) {
+        return in;
+    }
+};
+
 
 int main() {
 
@@ -140,13 +149,22 @@ int main() {
     ff_a2a a2a;
     a2a.add_firstset(W1);
     a2a.add_secondset(W2);
-        
+
+    std::vector<ff_node* > W;
+    
+#if 1
+    // to test combine_with_firststage
+    ff_pipeline fakepipe;
+    fakepipe.add_stage(&a2a);
+    combine_with_firststage(fakepipe, new doNothing, true);
+    
+    W.push_back(&fakepipe);    
+#else
+    W.push_back(&a2a);
+#endif
+
     Generator gen;
     Sink      sink;
-        
-    std::vector<ff_node* > W;
-    W.push_back(&a2a);
-        
     ff_farm farm(W, &gen, &sink);        
     if (farm.run_and_wait_end()<0) {
         error("running farm\n");

@@ -51,6 +51,8 @@ using namespace ff;
 
 struct Generator: ff_monode_t<long> { 
     long *svc(long*) {
+        assert(get_num_outchannels() == 3);
+        
         // sum: odd 271 even 344
         ff_send_out_to(new long(13),  0);
         ff_send_out_to(new long(17),  0);
