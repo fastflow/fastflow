@@ -221,9 +221,7 @@ public:
                 
         // this is a dirty part, we modify a const object.....
         ff_minode *dirty= const_cast<ff_minode*>(&n);
-        for (size_t i=0;i<dirty->internalSupportNodes.size();++i) {
-            dirty->internalSupportNodes[i]=nullptr;
-        }
+        dirty->internalSupportNodes.resize(0);
     }
     
     /**
@@ -554,9 +552,7 @@ public:
                 
         // this is a dirty part, we modify a const object.....
         ff_monode *dirty= const_cast<ff_monode*>(&n);
-        for (size_t i=0;i<dirty->internalSupportNodes.size();++i) {
-            dirty->internalSupportNodes[i]=nullptr;
-        }
+        dirty->internalSupportNodes.resize(0);
     }
 
     

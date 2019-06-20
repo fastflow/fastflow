@@ -1347,31 +1347,16 @@ public:
      */
     int wait() {
         int ret=0;
-        if (lb->wait()<0) ret=-1;
+        if (lb->waitWorkers()<0) ret = -1;
+        if (lb->waitlb()<0) ret=-1;
         if (!collector_removed && collector) if (gt->wait()<0) ret=-1;
-
-        // if workers are all-to-all building block we have to wait the second set of workers
-        for(size_t i=0;i<workers.size();++i) {
-            if (workers[i]->isAll2All()) {
-                ff_a2a *a2a = reinterpret_cast<ff_a2a*>(workers[i]);
-                 const svector<ff_node*>& W2   = a2a->getSecondSet();
-
-                 for(size_t j=0; j<W2.size(); ++j) {
-                     if (W2[j]->wait()<0) {
-                         error("FARM, waiting A2A workers\n");                                
-                         return -1;
-                     }
-                 }
-            }
-        }
-        
         return ret;
     }
     int wait_collector() {
         int ret=-1;
         if (!collector_removed && collector) {
             if (gt->wait()<0) ret=-1;
-            ret = 0;
+            else ret = 0;
         }
         return ret;
     }
@@ -1385,24 +1370,9 @@ public:
      */
     inline int wait_freezing(/* timeval */ ) {
         int ret=0;
-        if (lb->wait_freezing()<0) ret=-1;
+        if (lb->wait_freezingWorkers()<0) ret = -1;
+        if (lb->wait_lb_freezing()<0) ret=-1;
         if (!collector_removed && collector) if (gt->wait_freezing()<0) ret=-1;
-
-        // if workers are all-to-all building block we have to wait the second set of workers
-        for(size_t i=0;i<workers.size();++i) {
-            if (workers[i]->isMultiInput() && workers[i]->isMultiOutput()) {
-                ff_a2a *a2a = reinterpret_cast<ff_a2a*>(workers[i]);
-                 const svector<ff_node*>& W2   = a2a->getSecondSet();
-
-                 for(size_t j=0; j<W2.size(); ++j) {
-                     if (W2[j]->wait_freezing()<0) {
-                         error("FARM, waiting A2A workers\n");                                
-                         return -1;
-                     }
-                 }
-            }
-        }
-
         return ret; 
     } 
 
