@@ -251,7 +251,7 @@ public:
     }
   
     void setNumWorkers(ssize_t nw) { 
-        if (nw > ff_numCores())
+        if (nw > ff_numCores())   // TODO: use the mapper to get the number of cores
             error("ff_mdf: setNumWorkers: too much workers, setting num worker to %d\n", 
                   ff_numCores());         
         farmworkers=(std::min)(ff_numCores(),nw); 

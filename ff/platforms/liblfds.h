@@ -116,7 +116,7 @@ typedef unsigned long long int  atom_t;
 typedef unsigned long int     atom_t;
 #define ALIGN_SINGLE_POINTER  4
 #define ALIGN_DOUBLE_POINTER  8
-#elif ((defined __GNUC__ || defined __llvm__) && defined __unix__ && defined __arm__) // need to distinghuish 32 and 64 bit
+#elif ((defined __GNUC__ || defined __llvm__) && defined __unix__ && (defined __arm__ || defined __aarch64__)) // need to distinghuish 32 and 64 bit
 typedef unsigned long int     atom_t;
 #define ALIGN_SINGLE_POINTER  4
 #define ALIGN_DOUBLE_POINTER  8

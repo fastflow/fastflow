@@ -35,22 +35,31 @@ LDFLAGS  = -L ${TBB_HOME}/build/release/
 LIBS    +=  -ltbbmalloc -ltbb 
 endif
 
-#########################################################################
-# some possible options to tests:
-#  -DFF_ESAVER             only for Linux, the run-time will use nanosleep
-#                          in busy-waiting loops
-#  -DNO_DEFAULT_MAPPING    no default thread pinning 
+#############################################################################
+# Some possible options:
+# ^^^^^^^^^^^^^^^^^^^^^^
 #
-#  -DBLOCKING_MODE         enable blocking behavior (experimental)
+# -DFF_ESAVER           Only for Linux, the run-time will use nanosleep
+#                       in busy-waiting loops
+# -DNO_DEFAULT_MAPPING  It disables the default thread pinning 
 #
-#  -DTRACE_FASTFLOW        to enable statistics
-#  -DMAMMUT                it requires to define MAMMUT_HOME and for collecting
-#                          energy consumption metrics -DTRACE_FASTFLOW has to be
-#                          defined
-#                          if MAMMUT is defined, it will be also used for thread
-#                          pinning
+# -DBLOCKING_MODE       It enables the blocking behavior (experimental)
 #
-###############################à#########################################
+# -DTRACE_FASTFLOW      It enable statistics. Typically this has an inpact
+#                       on the application performance of about 2-4%
+#
+# -DMAMMUT              It requires to define MAMMUT_HOME and for collecting
+#                       energy consumption metrics -DTRACE_FASTFLOW has to be
+#                       defined
+#                       if MAMMUT is defined, it will be also used for thread
+#                       pinning
+#
+# -DMAPPING_STRING      It allows to manually set the mapping string used
+#                       to pin threads to core contexts. To obtain the
+#                       string, please use the 'mapping_string.sh' script
+#                       contained in the ff directory.
+#
+###############################à#############################################
 CC                   = gcc 
 CXX 		     = g++ -std=c++17 #-DBLOCKING_MODE
 #CC		     = icc  -mmic
@@ -59,7 +68,7 @@ CXX 		     = g++ -std=c++17 #-DBLOCKING_MODE
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O3 -finline-functions -DNDEBUG
-CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall
+CXXFLAGS             = -DNO_CMAKE_CONFIG -DMAPPING_STRING=\"\" -Wall
 CFLAGS               =
 LDFLAGS              = 
 INCS                 = -I.. 

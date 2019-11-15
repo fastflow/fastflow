@@ -409,8 +409,8 @@ int main(int argc, char* argv[]) {
     
 #endif
 
-    manager.run();
     pipe.run_then_freeze();
+    manager.run();
     pipe.wait_freezing();
     pipe.wait();
     manager.wait();

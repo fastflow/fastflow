@@ -30,6 +30,7 @@
  */
 
 #include <stdlib.h>
+#include <ff/config.hpp>
 #include <ff/svector.hpp>
 #include <ff/utils.hpp>
 #include <ff/mapping_utils.hpp>
@@ -99,6 +100,7 @@ public:
 	 */
 	threadMapper() :
 			rrcnt(-1), mask(0) {
+        unsigned int size = -1;
 #if defined(MAMMUT)
         mammut::Mammut m;
         std::vector<mammut::topology::Cpu*> cpus = m.getInstanceTopology()->getCpus();
@@ -117,40 +119,49 @@ public:
             }
         }
         int nc;
-        nc = num_cores = CList.size();
-
-		unsigned int size = num_cores;
+        size = nc = num_cores = CList.size();
 		// usually num_cores is a power of two....!
-		if (!isPowerOf2(size)) 
+		if (!isPowerOf2(size)) {
 			size = nextPowerOf2(size);
-		mask = size - 1;
-
+            for(size_t i =CList.size(), j = 0; i< size; ++i, j++)
+                CList.push_back(CList[j]);            
+        }        
 #else
-		int nc = ff_numCores();
-		if (nc <= 0) {
-			error("threadMapper: invalid num_cores\n");
-			return;
-		}
-		num_cores = nc;
+        const std::string ff_mapping_string = FF_MAPPING_STRING;
+        if (ff_mapping_string.length()) {
+            num_cores = setMappingList(ff_mapping_string.c_str());
+            assert(isPowerOf2(CList.size()));
+            size = CList.size();
+        } else {
+            int nc = ff_numCores();
+            if (nc <= 0) {
+                error("threadMapper: invalid num_cores\n");
+                return;
+            }
+            size = num_cores = nc;
+            CList.reserve(size);
+            for (int i = 0; i < nc; ++i)
+                CList.push_back(i);
 
-		unsigned int size = num_cores;
-		// usually num_cores is a power of two....!
-		if (!isPowerOf2(size))
-			size = nextPowerOf2(size);
-		CList.reserve(size);
-
-		mask = size - 1;
-
-		for (int i = 0; i < nc; ++i)
-			CList.push_back(i);
+            // usually num_cores is a power of two....!
+            if (!isPowerOf2(size)) {
+                size = nextPowerOf2(size);
+                for(size_t i =CList.size(), j = 0; i< size; ++i, j++)
+                    CList.push_back(CList[j]);       
+            }
+        }
 #endif /* MAMMUT */
-		for (unsigned int i = nc, j = 0; i < size; ++i, j++)
-			CList.push_back(j);
 
-		//std::cout << "MASK [" << mask << "][" << CList.size() << "\n";
-		//std::cout.flush();
-
+        mask = size - 1;
 		rrcnt = 0;
+        /*
+          printf("CList:\n");
+          for(size_t i =0 ; i < CList.size(); ++i) {
+          printf("%ld ", CList[i]);
+          }
+          printf("\n");
+        */
+
 
 #if 0
 		const int max_supported_platforms = 10;
@@ -198,28 +209,26 @@ public:
 	 * CPU 1, the fourth to CPU 2, the fifth to CPU 3. Then it follows the same
 	 * rule for the subsequent threads.
 	 *
-	 * \return TODO
-	 */
-
-    
-	void setMappingList(const char* str) {
+	 * \return -1 for errors, otherwise it returns the number of elements in str
+     *
+	 */    
+	int setMappingList(const char* str) {
 		rrcnt = 0;        // reset rrcnt
 
-		if (str == NULL)
-			return; // use the previous mapping list
+		if (str == NULL) return -1; // use the previous mapping list
 		char* _str = const_cast<char*>(str), *_str_end;
-		svector<int> List(mask + 1);
+		svector<int> List(64);
 		do {
 			while (*_str == ' ' || *_str == '\t' || *_str == ',')
 				++_str;
 			unsigned cpuid = strtoul(_str, &_str_end, 0);
 			if (_str == _str_end) {
 				error("setMapping, invalid mapping string\n");
-				return;
+				return -1;
 			}
 			if (cpuid > (num_cores - 1)) {
 				error("setMapping, invalid cpu id in the mapping string\n");
-				return;
+				return -1;
 			}
 			_str = _str_end;
 			List.push_back(cpuid);
@@ -229,6 +238,7 @@ public:
 		} while (1);
 
 		unsigned int size = (unsigned int) List.size();
+        int ret = size;
 		if (!isPowerOf2(size)) {
 			size = nextPowerOf2(size);
 			List.reserve(size);
@@ -237,6 +247,7 @@ public:
 		for (size_t i = List.size(), j = 0; i < size; ++i, j++)
 			List.push_back(List[j]);
 		CList = List;
+        return ret;
 	}
 
     void setMappingList(const std::vector<size_t> &mapping) {

@@ -780,12 +780,14 @@ public:
         emitter_cleanup = f.emitter_cleanup;
         collector_cleanup = f.collector_cleanup;
         max_nworkers = f.max_nworkers;
+        internalSupportNodes= f.internalSupportNodes;
         fixedsize = f.fixedsize;
         myownlb = f.myownlb;
         myowngt = f.myowngt;
         workers = f.workers;
         emitter = nullptr;
         collector = nullptr;
+
         //lb = new lb_t(max_nworkers);
         //gt = new gt_t(max_nworkers);
         lb=nullptr;setlb(f.lb); myownlb = f.myownlb;
@@ -800,9 +802,10 @@ public:
         ordering_Memory          = std::move(dirty->ordering_Memory);
         dirty->worker_cleanup    = false;
         dirty->emitter_cleanup   = false;
-        dirty->collector_cleanup = false;
+        dirty->collector_cleanup = false;        
         dirty->myownlb           = false;
         dirty->myowngt           = false;
+        dirty->internalSupportNodes.resize(0);
     }
     
     /* move constructor */
