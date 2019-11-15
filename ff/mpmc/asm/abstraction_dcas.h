@@ -3,6 +3,7 @@
 
 /* 
  *  Marco Aldinucci, Oct 2015: Housekeeping for C++11 FF port
+ *  Massimo Torquati, Nov 2019: adding support to 64bit ARMs (thanks to Zerodivision)
  *
  */
 
@@ -250,7 +251,7 @@
 
 
 /****************************************************************************/
-#elif ((defined __i686__ || defined __arm__) && __GNUC__ >= 4 && __GNUC_MINOR__ >= 1 && __GNUC_PATCHLEVEL__ >= 0)
+#elif ((defined __i686__ || defined __arm__ || defined __aarch64__) && __GNUC__ >= 4 && __GNUC_MINOR__ >= 1 && __GNUC_PATCHLEVEL__ >= 0)
 
   /* TRD : any OS on x86 or ARM with GCC 4.1.0 or better
 
@@ -312,7 +313,7 @@ static INLINE unsigned char abstraction_dcas( volatile atom_t *destination, atom
 
 
 /****************************************************************************/
-#if (!defined __arm__ && __GNUC__ >= 4 && __GNUC_MINOR__ >= 1 && __GNUC_PATCHLEVEL__ >= 0) && !defined(_ACAS_)
+#if (!defined __arm__ && !defined __aarch64__ && __GNUC__ >= 4 && __GNUC_MINOR__ >= 1 && __GNUC_PATCHLEVEL__ >= 0) && !defined(_ACAS_)
 
   /* TRD : any OS on any CPU except ARM with GCC 4.1.0 or better
 
@@ -336,7 +337,7 @@ static INLINE unsigned char abstraction_dcas( volatile atom_t *destination, atom
 
 
 /****************************************************************************/
-#if (defined __arm__ && __GNUC__ >= 4 && __GNUC_MINOR__ >= 1 && __GNUC_PATCHLEVEL__ >= 0)
+#if ((defined __arm__ || defined __aarch64__) && __GNUC__ >= 4 && __GNUC_MINOR__ >= 1 && __GNUC_PATCHLEVEL__ >= 0)
 static INLINE atom_t abstraction_cas( volatile atom_t *destination, atom_t exchange, atom_t compare )
   {
     atom_t

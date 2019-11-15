@@ -82,7 +82,7 @@
 #define FF_CYCLE_H
 
 // Mauro Mulatero: ARM
-#if defined(__linux__) && defined(__arm__)
+#if defined(__linux__) && (defined(__arm__) || defined(__aarch64__) )
   #define TIME_WITH_SYS_TIME 1
 #endif
 
@@ -199,7 +199,7 @@ INLINE_ELAPSED(__inline__)
 /*
  * ARM cycle counter (Mauro Mulatero)
  */
-#if (defined(__GNUC__) || defined(__ICC)) && defined(__linux__) && defined(__arm__) && !defined(HAVE_TICK_COUNTER)
+#if (defined(__GNUC__) || defined(__ICC)) && defined(__linux__) && (defined(__arm__) || defined(__aarch64__)) && !defined(HAVE_TICK_COUNTER)
 
 typedef unsigned long ticks;
 

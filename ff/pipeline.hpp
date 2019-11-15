@@ -610,8 +610,13 @@ public:
         return add_stage(newstage, true);
     }
 
-    /* remove one stage of the pipeline. The node is not deleted if cleanup is set. */
-    void remove_stage(int pos) {
+    /* remove one stage already inserted into the pipeline. 
+     * NOTE: The node is not deleted if the pipeline cleanup flag is set.
+     * NOTE: If remove_from_cleanuplist is true the node is removed (if it is present)
+     *       from the list of internalSupportNodes. 
+     *
+     */
+    void remove_stage(int pos, bool remove_from_cleanuplist=false) {
         if (prepared) {
             error("PIPE, remove_stage, stage %d cannot be removed because the PIPE has already been prepared\n");
             return;
@@ -622,6 +627,13 @@ public:
         }
         svector<ff_node*>::iterator it=nodes_list.begin();
         assert(it+pos < nodes_list.end());
+        if (remove_from_cleanuplist) {
+            ff_node* node = nodes_list[pos];
+            int pos2=-1;
+            for(size_t i=0;i<internalSupportNodes.size();++i)
+                if (internalSupportNodes[i] == node) { pos2 = i; break; }
+            if (pos2>=0) internalSupportNodes.erase(internalSupportNodes.begin()+pos2);            
+        }        
         nodes_list.erase(it+pos);
     }
     void insert_stage(int pos, ff_node* node, bool cleanup=false) {

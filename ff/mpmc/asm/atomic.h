@@ -26,6 +26,9 @@
 #elif __arm__
 #include "atomic-arm.h"
 #define BITS_PER_LONG 32
+#elif __aarch64__
+#include "atomic-arm.h"
+#define BITS_PER_LONG 64
 ///
 #elif __x86_64__
 #include "atomic-x86_64.h"

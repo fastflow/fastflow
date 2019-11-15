@@ -78,7 +78,7 @@ struct OptLevel {
 };
 struct OptLevel1: OptLevel {
     OptLevel1() {
-        max_nb_threads=ff_numCores();
+        max_nb_threads=ff_numCores();   // TODO: use the mapper
         blocking_mode=true;
         no_initial_barrier=true;
         remove_collector=true;
@@ -86,7 +86,7 @@ struct OptLevel1: OptLevel {
 };
 struct OptLevel2: OptLevel {
     OptLevel2() {
-        max_nb_threads=ff_numCores();
+        max_nb_threads=ff_numCores();   // TODO: use the mapper
         blocking_mode=true;
         no_initial_barrier=true;
         merge_with_emitter=true;

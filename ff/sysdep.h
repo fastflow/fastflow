@@ -114,7 +114,7 @@ static inline int xchg(volatile int *ptr, int x)
 /*------------------------
    ARM (Mauro Mulatero)
  ------------------------*/
-#ifdef __arm__
+#if defined(__arm__) || defined(__aarch64__)
 
 #define isb() __asm__ __volatile__ ("isb" : : : "memory")
 #define dsb() __asm__ __volatile__ ("dsb" : : : "memory")

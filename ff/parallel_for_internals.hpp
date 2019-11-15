@@ -1032,7 +1032,7 @@ public:
     // NOTE:
     // Sometimes may be usefull (in terms of performance) to explicitly disable 
     // the scheduler thread when #numworkers > ff_realNumCores() on systems where
-    // ff_numCores() > ff_realNumCores() (i.e. HT or HMT is enabled)
+    // ff_numCores() > ff_realNumCores() (i.e. HT or SMT is enabled)
     inline void disableScheduler(bool onoff=true) { removeSched=onoff; }
 
     inline int run_then_freeze(ssize_t nw_=-1) {
