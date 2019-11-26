@@ -68,7 +68,7 @@ CXX 		     = g++ -std=c++17 #-DBLOCKING_MODE
 LINK_OPT             = 
 VERSION              = 
 OPTIMIZE_FLAGS       = -O3 -finline-functions -DNDEBUG
-CXXFLAGS             = -DNO_CMAKE_CONFIG -DMAPPING_STRING=\"\" -Wall
+CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall
 CFLAGS               =
 LDFLAGS              = 
 INCS                 = -I.. 
