@@ -907,8 +907,10 @@ public:
         F=_F, aggressive=a;
     }
 
-
+    // The following methods are custom for this node which is not multi-output. FIX
+    bool isMultiOutput() const { return true; }
     void get_out_nodes(svector<ff_node*> &w) { w.push_back(&res); }
+    void get_out_nodes_feedback(svector<ff_node*> &w) { w.push_back(this); }
 };
 
 

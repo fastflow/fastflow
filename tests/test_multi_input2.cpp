@@ -95,8 +95,8 @@ struct Worker2: ff_node {
 
 
 int main(int argc, char* argv[]) {
-    int nworkers = 3;
-    int ntasks = 1000;
+    int nworkers = 1; // 3;
+    int ntasks = 10; //00;
     if (argc>1) {
         if (argc < 3) {
             std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";

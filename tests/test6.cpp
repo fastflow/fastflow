@@ -144,12 +144,10 @@ int main(int argc, char * argv[]) {
     farm.add_collector(&c);
     
 
-    ff_farm farm1;
-    farm1.add_collector(NULL); // just a pass by filter
-    ff_farm farm2;
-    farm2.add_collector(NULL); // just a pass by filter
-    ff_farm farm3;
-    farm3.add_collector(NULL); // just a pass by filter
+    ff_farm farm1, farm2, farm3;
+    farm1.add_collector(NULL); 
+    farm2.add_collector(NULL); 
+    farm3.add_collector(NULL); 
 
     std::vector<ff_node *> w;
     w.push_back(new Worker1);

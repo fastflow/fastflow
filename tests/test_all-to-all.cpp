@@ -27,7 +27,14 @@
  *
  */
 
-// basic test
+/*
+ *    first _    _ second
+ *           |  |
+ *    first _| -|- second
+ *           |  |
+ *    first -    - second
+ *
+ */ 
     
 /* Author: Massimo Torquati
  *
@@ -46,7 +53,7 @@ struct firstStage: ff_node_t<long> {
         std::cout << "firstStage ending (" << get_my_id() << ")\n";
     }
     long *svc(long*) {
-        for(long i=0;i<10;++i) {
+        for(long i=0;i<10000;++i) {
             ff_send_out(new long(i));
         }	
         return EOS; // End-Of-Stream

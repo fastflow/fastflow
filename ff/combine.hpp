@@ -315,7 +315,8 @@ protected:
 
         // checking if the first node is a multi-input node
         ff_node *n1 = getFirst();
-        if (n1->isMultiInput()) {            
+        if (n1->isMultiInput()) {
+            // here we substitute the gt
             ((ff_minode*)n1)->setgt(ff_minode::getgt());
 
             if (ff_minode::prepare()<0) return -1;
@@ -485,7 +486,9 @@ protected:
         return comp_nodes[1]->set_output_feedback(n);
     }
     int set_input(const svector<ff_node *> & w) {
-        if (comp_nodes[0]->isComp()) return comp_nodes[0]->set_input(w);
+
+        //if (comp_nodes[0]->isComp()) return comp_nodes[0]->set_input(w); // WARNING: <--------
+
         //assert(comp_nodes[0]->isMultiInput());
         if (comp_nodes[0]->set_input(w)<0) return -1;
         // if the first node of the comp is a multi-input node
@@ -494,7 +497,9 @@ protected:
         return ff_minode::set_input(w);        
     }
     int set_input(ff_node *n) {
-        if (comp_nodes[0]->isComp()) return comp_nodes[0]->set_input(n);
+        //if (comp_nodes[0]->isComp()) return comp_nodes[0]->set_input(n); // WARNING: <-------
+
+
         //assert(comp_nodes[0]->isMultiInput());
         if (comp_nodes[0]->set_input(n)<0) return -1;
         // if the first node of the comp is a multi-input node
@@ -503,8 +508,9 @@ protected:
         return ff_minode::set_input(n);        
     }
     int set_input_feedback(ff_node *n) {
-        if (comp_nodes[0]->isComp()) return comp_nodes[0]->set_input_feedback(n);
-        assert(comp_nodes[0]->isMultiInput());
+        //if (comp_nodes[0]->isComp()) return comp_nodes[0]->set_input_feedback(n); // WARNING: <-----
+
+        //assert(comp_nodes[0]->isMultiInput());
         if (comp_nodes[0]->set_input_feedback(n)<0) return -1;
         // if the first node of the comp is a multi-input node
         // we have to set the input of the current ff_minode that
@@ -564,7 +570,7 @@ protected:
         else
             comp_nodes[1]->ff_send_out(task);
     }
-    
+
     void get_out_nodes(svector<ff_node*>&w) {
         size_t len=w.size();
         comp_nodes[1]->get_out_nodes(w);
@@ -577,12 +583,12 @@ protected:
         if (len == w.size() && !comp_nodes[0]->isComp())
             w.push_back(comp_nodes[0]);
     }
-
+    
     void get_in_nodes_feedback(svector<ff_node*>&w) {
         comp_nodes[0]->get_in_nodes_feedback(w);
     }
 
-    int create_input_buffer(int nentries, bool fixedsize=true) {
+    int create_input_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         if (isMultiInput()) {
             int r= ff_minode::create_input_buffer(nentries,fixedsize);
             if (r<0) return r;
@@ -594,7 +600,7 @@ protected:
         }
         return ff_node::create_input_buffer(nentries,fixedsize);
     }
-    int create_output_buffer(int nentries, bool fixedsize=true) {
+    int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         return comp_nodes[1]->create_output_buffer(nentries,fixedsize);
     }
     FFBUFFER * get_in_buffer() const {
@@ -619,33 +625,31 @@ protected:
     // consumer
     bool init_input_blocking(pthread_mutex_t   *&m,
                              pthread_cond_t    *&c,
-                             std::atomic_ulong *&counter) {        
+                             bool feedback=true) {
         ff_node *n = getFirst();
         if (n->isMultiInput()) {
-            return ff_minode::init_input_blocking(m,c,counter);
+            // inits local gt, which is used for gathering tasks....
+            bool r= ff_minode::init_input_blocking(m,c);
+            if (!r) return false;
+            // ... then, sets all p_cons_* on all input channels
+            svector<ff_node*> w(1);
+            n->get_in_nodes(w);
+            n->get_in_nodes_feedback(w);
+            for(size_t i=0;i<w.size(); ++i) 
+                w[i]->set_output_blocking(m,c);
+            return true;
         }
-        return ff_node::init_input_blocking(m,c,counter);
+        return ff_node::init_input_blocking(m,c);
     }
-    void set_input_blocking(pthread_mutex_t   *&m,
-                            pthread_cond_t    *&c,
-                            std::atomic_ulong *&counter) {
-        if (this->isMultiInput()) {
-            ff_minode::set_input_blocking(m,c,counter);
-            return;
-        }
-        return ff_node::set_input_blocking(m,c,counter);        
-    }    
-
     // producer
     bool init_output_blocking(pthread_mutex_t   *&m,
                               pthread_cond_t    *&c,
-                              std::atomic_ulong *&counter) {
-        return comp_nodes[1]->init_output_blocking(m,c,counter);
+                              bool feedback=true) {
+        return comp_nodes[1]->init_output_blocking(m,c);
     }
     void set_output_blocking(pthread_mutex_t   *&m,
-                             pthread_cond_t    *&c,
-                             std::atomic_ulong *&counter) {
-        comp_nodes[1]->set_output_blocking(m,c,counter);
+                             pthread_cond_t    *&c) {
+        comp_nodes[1]->set_output_blocking(m,c);
     }
 
     // the following calls are needed because a composition
@@ -654,7 +658,18 @@ protected:
     inline bool  get(void **ptr)                 { return comp_nodes[1]->get(ptr);}
     inline pthread_mutex_t   &get_prod_m()       { return comp_nodes[1]->get_prod_m();}
     inline pthread_cond_t    &get_prod_c()       { return comp_nodes[1]->get_prod_c();}
-    inline std::atomic_ulong &get_prod_counter() { return comp_nodes[1]->get_prod_counter();}
+
+    inline pthread_mutex_t   &get_cons_m()  {
+        ff_node *n = getFirst();
+        if (n->isMultiInput()) return ff_minode::get_cons_m();
+        return ff_node::get_cons_m();
+    }
+    inline pthread_cond_t    &get_cons_c()  {
+        ff_node *n = getFirst();
+        if (n->isMultiInput()) return ff_minode::get_cons_c();
+        return ff_node::get_cons_c();
+    }
+    
     FFBUFFER *get_out_buffer() const {
         if (getLast()->isMultiOutput()) return nullptr;
         return comp_nodes[1]->get_out_buffer();
@@ -902,7 +917,7 @@ static inline const ff_farm combine_farms_a2a(ff_farm &farm1, const E_t& node, f
             //const auto emitter_mo = mo_transformer(node);
             //auto c = combine_nodes(*W1[i], emitter_mo);
             //auto pc = new decltype(c)(c);
-            auto mo = new mo_transformer(node);
+            auto mo = new internal_mo_transformer(node);
             assert(mo);
             auto pc = new ff_comb(W1[i], mo,
                                   farm1.isset_cleanup_workers() , true);    
@@ -1301,7 +1316,7 @@ static inline const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
                 //const auto collector_mo = mo_transformer(*node1);
                 //auto c = combine_nodes(*W1[i], collector_mo);
                 //auto pc = new decltype(c)(c);
-                auto mo = new mo_transformer(*node1);
+                auto mo = new internal_mo_transformer(*node1);
                 assert(mo);
                 auto pc = new ff_comb(W1[i], mo,
                                       farm1.isset_cleanup_workers() , true);
@@ -1383,7 +1398,7 @@ static inline const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
             //const auto collector_mo = mo_transformer(*node1);
             //auto c = combine_nodes(*W1[i], collector_mo);
             //auto pc = new decltype(c)(c);
-            auto mo = new mo_transformer(*node1);
+            auto mo = new internal_mo_transformer(*node1);
             assert(mo);
             auto pc = new ff_comb(W1[i], mo, 
                                   farm1.isset_cleanup_workers() , true);
@@ -1407,7 +1422,7 @@ static inline const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
             //const auto emitter_mi = mi_transformer(*node2);
             //auto c = combine_nodes(emitter_mi, *W2[i]);
             //auto pc = new decltype(c)(c);
-            auto mi = new mi_transformer(*node2);
+            auto mi = new internal_mi_transformer(*node2);
             assert(mi);
             auto pc = new ff_comb(mi,W2[i],
                                   true, farm2.isset_cleanup_workers());

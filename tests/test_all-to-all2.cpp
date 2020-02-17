@@ -135,6 +135,7 @@ int main() {
     W1.push_back(&w1);
     W1.push_back(&w2);
     W1.push_back(&w3);
+
     std::vector<ff_node*> W2;
     Even even;
     Odd  odd;
@@ -150,8 +151,7 @@ int main() {
     a2a.add_firstset(W1);
     a2a.add_secondset(W2);
 
-    std::vector<ff_node* > W;
-    
+    std::vector<ff_node* > W;    
 #if 1
     // to test combine_with_firststage
     ff_pipeline fakepipe;

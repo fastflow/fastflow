@@ -14,7 +14,7 @@
  *                        |             |
  *                        |      |--> Worker -->|
  *                        v      |              |
- *     Generator --> Scheduler-->|              |--> Collector --> Gatherer
+ *     Generator --> Scheduler-->|              |--> Gatherer
  *                        ^      |              |
  *                        |      |--> Worker -->|
  *                        |             |
@@ -181,7 +181,7 @@ int main(int argc, char* argv[]) {
     Generator Gen(niter);
     Gatherer  Gat;
 
-    const size_t nworkers = 3;
+    const size_t nworkers = 1; // 3
 
     ff_farm farm;
     std::vector<ff_node*> W;    

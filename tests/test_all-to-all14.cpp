@@ -29,16 +29,18 @@
  * combine_with_firststage.
  *
  *                                              
- *                          | --> Emitter1 -->| 
- *                          |                 |                  | --> First -->|
- *     Gen--> DefEmitter -->|                 | ---> EmitterX -->|              | ----> Gat
- *                          |                 |                  | --> First -->|   
- *                          | --> Emitter2 -->| 
+ *                        | --> Emitter(1) -->| 
+ *                        |                   |                     |-> First -->|
+ *   Gen--> DefEmitter -->|                   | ------> EmitterX -->|            | --> Gat
+ *                        |                   |                     |-> First -->|   
+ *                        | --> Emitter(2) -->|   (ProxyNode)
  * 
- *                                               |<-mi emitter->|
- *                                               |<--- farm with no collector -->|
- *                          |<------------------- all-to-all ---------------------->|
- *             |<------------------------- farm with no collector ----------------->|
+ *                                                 |<-mi emitter->|
+ *                                                 |<--- farm with no collector -->|
+ *                                              |<---- pipeline ------------------>|
+ *                        |<------------------- all-to-all ----------------------->|
+ *                        |<------------------- pipeline ------------------------->|
+ *        |<---------------------------- farm with no collector ------------------>|
  *
  *
  */
@@ -52,12 +54,14 @@
 using namespace ff;
 
 struct Generator: ff_node_t<long> {
+    Generator(long streamlen):streamlen(streamlen) {}
     long* svc(long* in) {
-	for(long i=1;i<=1000;++i) {
+	for(long i=1;i<=streamlen;++i) {
 	    ff_send_out((long*)i);
 	}
 	return EOS;
     }
+    long streamlen;
 };
 struct Gatherer: ff_minode_t<long> {
     long* svc(long* in) {
@@ -67,77 +71,80 @@ struct Gatherer: ff_minode_t<long> {
 
 struct FarmA2A: ff_pipeline {
     struct Emitter:ff_node_t<long> {  
-	long* svc(long* in) {
-	    return in;
-	}    
+        long* svc(long* in) {
+            return in;
+        }    
     };
-    struct Emitter1:ff_minode_t<long> {
-	long* svc(long* in) {
-	    ssize_t id = get_channel_id();
-	    if (id <0 || id>1) abort();
-	    printf("Emitter1 received task from L-Worker %ld\n", id);
-	    return in;
-	}    
+    struct ProxyNode:ff_minode_t<long> {
+        long* svc(long* in) {
+            ssize_t id = get_channel_id();
+            if (id <0 || id>1) abort();
+            //printf("ProxyNode received task from L-Worker %ld\n", id);
+            return in;
+        }    
     };   
-    struct Emitter2:ff_node_t<long> {
-	long* svc(long* in) {
-	    return in;
-	}    
+    struct EmitterX:ff_node_t<long> {
+        long* svc(long* in) {
+            return in;
+        }    
     };
     
     struct First: ff_node_t<long> {
-	long* svc(long* in) {
-	    return in;
-	}    
+        long* svc(long* in) {
+            return in;
+        }    
     };
-        
+    
     FarmA2A() {
-	
-	ff_a2a* a2a = new ff_a2a;
-	std::vector<ff_node*> W1;
-	Emitter *e1 = new Emitter;
-	Emitter *e2 = new Emitter;
-	W1.push_back(e1);
-	W1.push_back(e2);
-	a2a->add_firstset(W1, 0, true);
+        
+        ff_a2a* a2a = new ff_a2a;
+        std::vector<ff_node*> W1;
+        Emitter *e1 = new Emitter;
+        Emitter *e2 = new Emitter;
+        W1.push_back(e1);
+        W1.push_back(e2); 
+        a2a->add_firstset(W1, 0, true);
+        
+        
+        ff_pipeline* pipe = new ff_pipeline;
+        ff_farm *farm1 = new ff_farm();
+        EmitterX *E=new EmitterX;
+        farm1->add_emitter(E);
+        First* first1 = new First;
+        First* first2 = new First;
+        std::vector<ff_node*> w;
+        w.push_back(first1);
+        w.push_back(first2);
+        farm1->cleanup_all();
+        farm1->add_workers(w);
+        //farm1->add_collector(nullptr);
+        
+        pipe->add_stage(farm1, true);
+        
+        std::vector<ff_node*> W2;
+        W2.push_back(pipe);
+        a2a->add_secondset(W2,true);
+        
+        ff_farm *farm = new ff_farm();
+        std::vector<ff_node*> W;
+        W.push_back(a2a);
+        farm->add_workers(W);
+        farm->cleanup_all();	
+        
+        add_stage(farm, true);
 
-
-	ff_pipeline* pipe = new ff_pipeline;
-	ff_farm *farm1 = new ff_farm();
-	Emitter2 *E=new Emitter2;
-	farm1->add_emitter(E);
-	First* first1 = new First;
-	First* first2 = new First;
-	std::vector<ff_node*> w;
-	w.push_back(first1);
-	w.push_back(first2);
-	farm1->cleanup_all();
-	farm1->add_workers(w);
-	//farm1->add_collector(nullptr);
-	
-	pipe->add_stage(farm1, true);
-	
-	std::vector<ff_node*> W2;
-	W2.push_back(pipe);
-	a2a->add_secondset(W2,true);
-	
-	ff_farm *farm = new ff_farm();
-	std::vector<ff_node*> W;
-	W.push_back(a2a);
-	farm->add_workers(W);
-	//farm->add_collector(nullptr);
-	farm->cleanup_all();	
-	
-	add_stage(farm, true);
-	
-	Emitter1* e = new Emitter1;
-	combine_with_firststage(*pipe, e, true);	
+        ProxyNode* pn = new ProxyNode;
+        combine_with_firststage(*pipe, pn, true);
     }
 };
 
 
-int main() {
-    Generator gen;
+int main(int argc, char* argv[]) {
+    long streamlen = 1000;
+    if (argc>1) {
+        streamlen = std::stol(argv[1]);
+    }
+    Generator gen(streamlen);
     Gatherer gat;
     FarmA2A  farma2a;
     ff_Pipe<> pipe(gen, farma2a, gat);

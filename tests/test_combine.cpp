@@ -38,6 +38,7 @@ using namespace ff;
 long ntasks = 100000;
 long worktime = 1*2400; // usecs
 
+#if 0 // two different ways to implement the first stage
 struct firstStage: ff_node_t<long> {
     long *svc(long*) {
         for(long i=1;i<=ntasks;++i) {
@@ -46,6 +47,16 @@ struct firstStage: ff_node_t<long> {
         return EOS; // End-Of-Stream
     }
 };
+#else
+struct firstStage: ff_node_t<long> {
+    long *svc(long*) {
+        if (myntasks<=0) return EOS;
+        long t = myntasks--;
+        return (long*)t;
+    }
+    long myntasks=ntasks;
+};
+#endif
 struct secondStage: ff_node_t<long> { // 2nd stage
     long *svc(long *t) {
         ticks_wait(worktime);
@@ -87,12 +98,11 @@ int main() {
     }
     unsigned long fine=getusec();
     std::cout << "TEST  FOR  Time = " << (fine-inizio) / 1000.0 << " ms\n";
-
     ff_Pipe<> pipe(_1,_2,_3,_4,_5);
     pipe.run_and_wait_end();
     std::cout << "TEST  PIPE Time = " << pipe.ffwTime() << " ms\n";
-    
     {    
+
         // we declared them const because we want to re-use the same nodes in multiple tests
         const firstStage    _1;
         const secondStage   _2;
@@ -104,7 +114,6 @@ int main() {
             if (comb.run_and_wait_end()<0)
                 error("running comb\n");
             std::cout << "TEST0 DONE Time = " << comb.ffwTime() << " ms\n";
-
         }
         usleep(500000);
         {

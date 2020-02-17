@@ -41,7 +41,7 @@
 #include <ff/ff.hpp>
 
 using namespace ff;
-long const int NUMTASKS=10;
+long const int NUMTASKS=1000;
 
 struct Stage0: ff_minode_t<long> {
     int svc_init() { counter=0; return 0;}
@@ -61,6 +61,8 @@ struct Stage0: ff_minode_t<long> {
 
 struct Stage1: ff_monode_t<long> {
     long *svc(long *task) {
+        return task;
+
         if ((long)task & 0x1) {
             printf("Stage1 sending back=%ld\n", (long)task);
             //ff_send_out_to(task, 0); // sends odd tasks back
@@ -111,13 +113,13 @@ int main() {
     pipe.add_stage(&s3);
     pipe.wrap_around();
 #else
-    ff_Pipe<long,long> pipe1(s0, s1);
+    ff_Pipe pipe1(s0, s1);
     pipe1.wrap_around();
-
-    ff_Pipe<long,long> pipe2(pipe1, s2);
+    
+    ff_Pipe pipe2(pipe1, s2);
     pipe2.wrap_around();
  
-    ff_Pipe<> pipe(pipe2, s3);
+    ff_Pipe pipe(pipe2, s3);
     pipe.wrap_around();
 #endif
     if (pipe.run_and_wait_end()<0) {

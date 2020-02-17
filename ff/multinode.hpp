@@ -78,7 +78,7 @@ protected:
      *
      * \return >=0 if successful, otherwise -1 is returned.
      */
-    int create_input_buffer(int nentries, bool fixedsize=true) {
+    int create_input_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         assert(inputNodes.size() == 0);
 
         ff_node* t = new ff_buffernode(nentries,fixedsize); 
@@ -94,7 +94,13 @@ protected:
         assert(inputNodes.size() == 1);
         return inputNodes[0]->put(ptr);
     }
-        
+    inline FFBUFFER *get_in_buffer() const {
+        if (inputNodes.size() == 0) return nullptr;
+        assert(inputNodes.size() == 1);
+        return inputNodes[0]->get_in_buffer();
+    }
+
+    
     int dryrun() {
         if (prepared) return 0;
         for(size_t i=0;i<inputNodesFeedback.size();++i)
@@ -133,40 +139,53 @@ protected:
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
-                                            std::atomic_ulong *&counter) {
-        bool r = gt->init_input_blocking(m,c,counter);
+                                            bool feedback=true) {
+        bool r = gt->init_input_blocking(m,c, feedback);
         if (!r) return false;
-        // for all registered input node (or buffernode) we have to set the gt 
-        // blocking stuff
+        // NOTE: for all registered input node (or buffernode) we have to set the  
+        // blocking stuff both for input nodes as well as "feedback nodes"
         for(size_t i=0;i<inputNodes.size(); ++i) 
-            inputNodes[i]->set_output_blocking(m,c,counter);
-        for(size_t i=0;i<inputNodesFeedback.size(); ++i) 
-            inputNodesFeedback[i]->set_output_blocking(m,c,counter);
-        return true;        
+            inputNodes[i]->set_output_blocking(m,c);
+        if (feedback) {
+            for(size_t i=0;i<inputNodesFeedback.size(); ++i) 
+                inputNodesFeedback[i]->set_output_blocking(m,c);
+        }
+        return true;
     }
-    virtual inline void set_input_blocking(pthread_mutex_t   *&m,
-                                           pthread_cond_t    *&c,
-                                           std::atomic_ulong *&counter) {
-        ff_node::set_input_blocking(m,c,counter);
-    }    
-
     // producer
     virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
                                              pthread_cond_t    *&c,
-                                             std::atomic_ulong *&counter) {
-        return gt->init_output_blocking(m,c,counter);
+                                             bool feedback=true) {
+        // This is a multi-input node, so it has only one output channel
+        // unless it is a combine node whose right part is a multi-output
+        // node. If this is not the case, we have to initialize the
+        // local-node output blocking
+        ff_node* filter = gt->get_filter();
+        if (filter &&
+            ( (filter->get_out_buffer()!=nullptr) || filter->isMultiOutput() ) )  { // see gt.hpp
+            return filter->init_output_blocking(m, c, feedback);
+        }
+        return ff_node::init_output_blocking(m,c, feedback);
+        //return gt->init_output_blocking(m,c);
     }
     virtual inline void set_output_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c,
-                                            std::atomic_ulong *&counter) {
-        gt->set_output_blocking(m,c,counter);
-        ff_node::set_output_blocking(m,c,counter);
+                                            pthread_cond_t    *&c) {
+
+        ff_node* filter = gt->get_filter();
+        if (filter &&
+            ( (filter->get_out_buffer()!=nullptr) || filter->isMultiOutput() ) )  { // see gt.hpp
+           filter->set_output_blocking(m, c);
+        }
+        //gt->set_output_blocking(m,c);
+        ff_node::set_output_blocking(m,c);
     }
 
-    virtual inline pthread_mutex_t   &get_prod_m()        { return gt->get_prod_m(); }
-    virtual inline pthread_cond_t    &get_prod_c()        { return gt->get_prod_c(); }
-    virtual inline std::atomic_ulong &get_prod_counter()  { return gt->get_prod_counter();}
+    inline pthread_mutex_t   &get_prod_m()  { return gt->get_prod_m(); }
+    inline pthread_cond_t    &get_prod_c()  { return gt->get_prod_c(); }
+    inline pthread_mutex_t   &get_cons_m()  { return gt->get_cons_m(); }
+    inline pthread_cond_t    &get_cons_c()  { return gt->get_cons_c(); }
 
+    
     void set_input_channelid(ssize_t id, bool fromin=true) {
         gt->set_input_channelid(id, fromin);
     }
@@ -424,7 +443,7 @@ protected:
         return 1;
     }
 
-    int create_output_buffer(int nentries, bool fixedsize=false) {
+    int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
 
         // this is needed for example when a worker of a farm is a multi-output node
         // (even without a feedback channel)
@@ -474,45 +493,25 @@ protected:
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
-                                            std::atomic_ulong *&counter) {
-        return lb->init_input_blocking(m,c,counter);
+                                            bool feedback=true) {
+        return lb->init_input_blocking(m,c, feedback);
     }
-    virtual inline void set_input_blocking(pthread_mutex_t   *&m,
-                                           pthread_cond_t    *&c,
-                                           std::atomic_ulong *&counter) {
-        lb->set_input_blocking(m,c,counter);
-        ff_node::set_input_blocking(m,c,counter);
-    }    
-
     // producer
     virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
                                              pthread_cond_t    *&c,
-                                             std::atomic_ulong *&counter) {
-        bool r = lb->init_output_blocking(m,c,counter);
-        if (!r) return false;
-        // for all registered output node (or buffernode) we have to set the lb 
-        // blocking stuff
-        for(size_t i=0;i<outputNodes.size(); ++i) 
-            outputNodes[i]->set_input_blocking(m,c,counter);
-        for(size_t i=0;i<outputNodesFeedback.size(); ++i) 
-            outputNodesFeedback[i]->set_input_blocking(m,c,counter);
-        return true;
+                                             bool feedback=true) {
+        return lb->init_output_blocking(m,c, feedback);
     }
     virtual inline void set_output_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c,
-                                            std::atomic_ulong *&counter) {
-        // here we don't want to call the set_output_blocking for each outputNodes
-        // because it may create inconsistencies.
-        ff_node::set_output_blocking(m,c,counter);
+                                            pthread_cond_t    *&c) {
+        ff_node::set_output_blocking(m,c);   // <---- CHECK: ci vuole??????
     }
 
     virtual inline pthread_mutex_t   &get_prod_m()        { return lb->get_prod_m();}
     virtual inline pthread_cond_t    &get_prod_c()        { return lb->get_prod_c();}
-    virtual inline std::atomic_ulong &get_prod_counter()  { return lb->get_prod_counter();}
 
     virtual inline pthread_mutex_t   &get_cons_m()        { return lb->get_cons_m();}
     virtual inline pthread_cond_t    &get_cons_c()        { return lb->get_cons_c();}
-    virtual inline std::atomic_ulong &get_cons_counter()  { return lb->get_cons_counter();}
 
 public:
     /**
@@ -619,8 +618,11 @@ public:
     virtual inline void get_out_nodes(svector<ff_node*>&w) {
         // it is possible that the multi-output node is register
         // as emitter of farm
-        if (outputNodes.size() == 0 && lb->getNWorkers()>0) {
-            w += lb->getWorkers();
+        if (outputNodes.size() == 0) {
+            if (lb->getNWorkers()>0) w += lb->getWorkers();
+            else
+                w.push_back(this);
+            return;
         }
         w += outputNodes;
     }
@@ -635,7 +637,8 @@ public:
      * Set up spontaneous start
      */
     inline void skipfirstpop(bool sk)   {
-        if (sk) lb->skipfirstpop(sk);
+        lb->skipfirstpop(sk);
+        ff_node::skipfirstpop(sk);
     }
 
     /**
@@ -646,7 +649,7 @@ public:
     inline bool ff_send_out_to(void *task, int id, unsigned long retry=((unsigned long)-1),
                                unsigned long ticks=(ff_node::TICKS2WAIT)) {
         // NOTE: this callback should be set only if the multi-output node is part of
-        // a composition that it isn't the last stage 
+        // a composition and the node is not the last stage
         if (callback) return  callback(task,retry,ticks, callback_arg);
         return lb->ff_send_out_to(task,id,retry,ticks);
     }
@@ -825,35 +828,33 @@ struct ff_monode_t: ff_monode {
     inline  void *svc(void *task) { return svc(reinterpret_cast<IN_t*>(task)); };
 };
 
-    // TODO: implement ff_minode_F<> and ff_monode_F<>
 
-    
 /**
  *   Transforms a standard node into a multi-output node 
  */
-struct mo_transformer: ff_monode {
-    mo_transformer(ff_node* n, bool cleanup=false):
+struct internal_mo_transformer: ff_monode {
+    internal_mo_transformer(ff_node* n, bool cleanup=false):
         ff_monode(n),cleanup(cleanup),n(n) {
     }
 
     template<typename T>
-    mo_transformer(const T& _n) {
+    internal_mo_transformer(const T& _n) {
         T *t = new T(_n);
         assert(t);
         n = t;
         cleanup=true;
         ff_monode::set_filter(n);
     }
-    mo_transformer(const mo_transformer& t) {
+    internal_mo_transformer(const internal_mo_transformer& t) {
         cleanup=t.cleanup;
         n = t.n;
         ff_monode::set_filter(n);
 
         // this is a dirty part, we modify a const object.....
-        mo_transformer *dirty= const_cast<mo_transformer*>(&t);
+        internal_mo_transformer *dirty= const_cast<internal_mo_transformer*>(&t);
         dirty->cleanup=false;
     }
-    ~mo_transformer() {
+    ~internal_mo_transformer() {
         if (cleanup && n) {
             delete n;
             n=nullptr;
@@ -862,8 +863,8 @@ struct mo_transformer: ff_monode {
     inline void* svc(void* task) { return n->svc(task);}
 
     inline void eosnotify(ssize_t id) { n->eosnotify(id); }
-    
-    int create_input_buffer(int nentries, bool fixedsize=true) {
+
+    int create_input_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         int r= ff_monode::create_input_buffer(nentries,fixedsize);
         if (r<0) return -1;
         ff_monode::getlb()->get_filter()->set_input_buffer(ff_monode::get_in_buffer());
@@ -899,11 +900,11 @@ struct mo_transformer: ff_monode {
  *   NOTE: it is importat to call the eosnotify method only if 
  *         all input EOSs have been received and not at each EOS.
  */
-struct mi_transformer: ff_minode {
-    mi_transformer(ff_node* n, bool cleanup=false):ff_minode(n),cleanup(cleanup),n(n) {}
+struct internal_mi_transformer: ff_minode {
+    internal_mi_transformer(ff_node* n, bool cleanup=false):ff_minode(n),cleanup(cleanup),n(n) {}
 
     template<typename T>
-    mi_transformer(const T& _n) {
+    internal_mi_transformer(const T& _n) {
         T *t = new T(_n);
         assert(t);
         n = t;
@@ -911,18 +912,18 @@ struct mi_transformer: ff_minode {
         ff_minode::set_filter(n);
     }
     
-    mi_transformer(const mi_transformer& t) {
+    internal_mi_transformer(const internal_mi_transformer& t) {
         cleanup=t.cleanup;
         n = t.n;
         ff_minode::set_filter(n);
 
         // this is a dirty part, we modify a const object.....
-        mi_transformer *dirty= const_cast<mi_transformer*>(&t);
+        internal_mi_transformer *dirty= const_cast<internal_mi_transformer*>(&t);
         dirty->cleanup=false;
         dirty->n = nullptr;
     }
 
-    ~mi_transformer() {
+    ~internal_mi_transformer() {
         if (cleanup && n)
             delete n;
     }
@@ -941,7 +942,7 @@ struct mi_transformer: ff_minode {
         return ff_minode::set_output(node);
     }
     
-    int create_output_buffer(int nentries, bool fixedsize=true) {
+    int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         if (ff_minode::getgt()->get_out_buffer()) return -1;
         int r= ff_minode::create_output_buffer(nentries,fixedsize);
         if (r<0) return -1;
@@ -984,7 +985,6 @@ struct mi_transformer: ff_minode {
     ff_node *n=nullptr;
 };
 
-    
     
 } // namespace
 

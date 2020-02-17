@@ -149,7 +149,7 @@ struct PipeInternal: ff_pipeline {
     };
     
     PipeInternal() {
-        const size_t nworkers=2;   
+        const size_t nworkers=3;   
         ff_farm* farm = new ff_farm;
         ff_comb* comb = new ff_comb(new Emitter(nworkers), new EmitterHelper, true, true);
         farm->add_emitter(comb);

@@ -27,6 +27,7 @@
 
 /*  pipe( feedback(pipe(A,B)), C)
  *
+ *   single(*)      multi-out         single
  *    -----            ------            ------ 
  *   |  A  |--------> |  B   |--------> |  C   |
  *   |     |          |      |          |      |
@@ -35,6 +36,8 @@
  *         \             |           
  *          -------------            
  *
+ * (*) can also be multi-input and multi-output
+ * 
  */
 
 /* Author: Massimo Torquati
@@ -50,9 +53,7 @@ using namespace ff;
 #define NUMTASKS 10
 
 /* --------------------------------------- */
-// NOTE: multi-input node!!!!!!
-//       That is because node B is multi-output!
-class A: public ff_minode_t<long> {    
+class A: public ff_node_t<long> { // ff_minode_t<long> {
 public:
     long *svc(long *task) {
         static long k=1;
@@ -71,7 +72,7 @@ class B: public ff_monode_t<long> {
 public:
     long *svc(long *task) {
         const long& t = (long)task;
-        printf("B got %ld from A\n", t);
+        printf("B %ld from A\n", t);
         if (t & 0x1) {
             printf("B sending %ld to C\n", t);
             ff_send_out_to(task, 1);  // sending forward 
@@ -86,7 +87,7 @@ public:
 class C: public ff_node_t<long> {
 public:
     long *svc(long *t) { 
-        printf("C got %ld\n", (long)t);
+        printf("C %ld\n", (long)t);
         return GO_ON;
     }
 };
@@ -95,18 +96,28 @@ public:
 int main() {
     A a;  B b;  C c;
 
+#if 0    
     ff_Pipe<long,long> pipe1(a, b);
     if (pipe1.wrap_around()<0) {
         error("creating feedback channel between b and a\n");
         return -1;
     }
-
+    
     ff_Pipe<> pipe(pipe1, c);
 
     if (pipe.run_and_wait_end()<0) {
         error("running pipe\n");
         return -1;
     }
+#else
+    ff_Pipe pipe1(a, b);
+    pipe1.wrap_around();
+    ff_Pipe pipe(pipe1, c);
+    if (pipe.run_and_wait_end()<0) {
+        error("running pipe\n");
+        return -1;
+    }
+#endif    
     printf("DONE\n");    
     return 0;
 }

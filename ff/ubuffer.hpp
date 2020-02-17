@@ -296,12 +296,9 @@ public:
      *
      * \return \p true if empty, \p false otherwise
      */
-    inline bool empty() {
-        //return buf_r->empty();
-        if (buf_r->empty()) { // current buffer is empty
-            if (buf_r == buf_w) return true;
-        }
-        return false;
+    inline bool empty() {        
+        if (buf_r != buf_w) return false;
+        return buf_r->empty();
     }
     
     inline bool available()   { 

@@ -694,7 +694,7 @@ static inline int optimize_static(ff_pipeline& pipe, const OptLevel& opt=OptLeve
                                // the next stage is a standard node
                                ff_node *next = pipe.nodes_list[first_farm+1];
                                pipe.remove_stage(first_farm+1);
-                               ff_minode *mi = new mi_transformer(next);
+                               ff_minode *mi = new internal_mi_transformer(next);
                                assert(mi);
                                pipe.insert_stage(first_farm+1, mi, true);
                                opt_report(opt.verbose_level, OPT_NORMAL, "OPT (pipe): REMOVE_COLLECTOR: Transformed next stage to multi-input node\n");

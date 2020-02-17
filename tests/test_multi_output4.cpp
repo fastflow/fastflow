@@ -64,7 +64,7 @@ public:
         ntasks = ntasks / 2;
 	    return GO_ON;
 	}
-	printf("Emitter got back %ld\n", (long)t);
+	printf("Emitter %ld\n", (long)t);
 	assert((long)t % 2);	
 	if (--ntasks <= 0) {
         printf("sending EOS to workers\n");
@@ -80,11 +80,12 @@ private:
 // multi-output worker 
 struct Worker: ff_monode_t<long> {
     long* svc(long* task) {
-        printf("Worker got task %ld\n", (long)task);
-        if (((long)task %2) == 0) { 
+        printf("Worker task=%ld\n", (long)task);
+        if (((long)task %2) == 0) {
+            printf("Worker task sending forward %ld\n", (long)task);
             ff_send_out_to(task, 1); // to the next stage 
         } else {
-            printf("Worker task sent back %ld\n", (long)task);
+            printf("Worker sending back %ld\n", (long)task);
             ff_send_out_to(task, 0);  // channel 0 is the one that goes back to the emitter
         }
         return GO_ON;
@@ -109,6 +110,10 @@ int main(int argc, char* argv[]) {
         }
         nworkers  =atoi(argv[1]);
         ntasks    =atol(argv[2]);
+        if (ntasks<2) {
+            std::cerr << "ntasks must be greater than 2\n";
+            return -1;
+        }
     }   
     ff_Farm<long>   farm(  [&]() { 
             std::vector<std::unique_ptr<ff_node> > W;

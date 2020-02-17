@@ -78,71 +78,48 @@ public:
 protected:
 
     inline void put_done(int id) {
-        ++(*prod_counter);
-        ++((workers[id]->get_cons_counter()));        
         pthread_cond_signal(&workers[id]->get_cons_c());
-    }
-
-    inline void pop_done(ff_node *node) {
-        if (!node) {
-            pthread_cond_signal(p_prod_c);
-            --(*p_prod_counter);
-        } else {
-            pthread_cond_signal(&node->get_prod_c());
-            --(node->get_prod_counter());
-        }
-        --(*cons_counter);                         
     }
     
     inline bool init_input_blocking(pthread_mutex_t   *&m,
                                     pthread_cond_t    *&c,
-                                    std::atomic_ulong *&counter) {
-        if (cons_counter->load() == (size_t)-1) {
+                                    bool feedback=true) {
+        if (cons_m == nullptr) {
+            assert(cons_c == nullptr);
             cons_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
             cons_c = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
             assert(cons_m); assert(cons_c);
             if (pthread_mutex_init(cons_m, NULL) != 0) return false;
             if (pthread_cond_init(cons_c, NULL) != 0)  return false;
-            cons_counter->store(0);
         } 
-        m = cons_m,  c = cons_c, counter = cons_counter;
+        m = cons_m,  c = cons_c;
         return true;
     }
-    inline void set_input_blocking(pthread_mutex_t   *&m,
-                                   pthread_cond_t    *&c,
-                                   std::atomic_ulong *&counter) {
-        p_prod_m = m,  p_prod_c = c,  p_prod_counter = counter;
-    }    
-    
     // producer
     inline bool init_output_blocking(pthread_mutex_t   *&m,
                                      pthread_cond_t    *&c,
-                                     std::atomic_ulong *&counter) {
-        //if (prod_counter.load() == (size_t)-1) {
-        if (prod_counter->load() == (size_t)-1) {
+                                     bool feedback=true) {
+        if (prod_m == nullptr) {
+            assert(prod_c == nullptr);
             prod_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
             prod_c = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
             assert(prod_m); assert(prod_c);
             if (pthread_mutex_init(prod_m, NULL) != 0) return false;
             if (pthread_cond_init(prod_c, NULL) != 0)  return false;
-            prod_counter->store(0);
         } 
-        m = prod_m, c = prod_c, counter = prod_counter;
+        m = prod_m, c = prod_c;
         return true;
     }
     inline void set_output_blocking(pthread_mutex_t   *&m,
-                                    pthread_cond_t    *&c,
-                                    std::atomic_ulong *&counter) {
+                                    pthread_cond_t    *&c) {
         assert(1==0);
     }
 
     virtual inline pthread_mutex_t   &get_prod_m()       { return *prod_m;}
     virtual inline pthread_cond_t    &get_prod_c()       { return *prod_c;}
-    virtual inline std::atomic_ulong &get_prod_counter() { return *prod_counter;}
     
     virtual inline pthread_mutex_t   &get_cons_m()       { return *cons_m;}
     virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
-    virtual inline std::atomic_ulong &get_cons_counter() { return *cons_counter;}
     
     /**
      * \brief Pushes EOS to the worker
@@ -268,21 +245,20 @@ protected:
 #if defined(LB_CALLBACK)
                     task = callback(nextw, task);
 #endif
+                    bool empty=workers[nextw]->get_in_buffer()->empty();
                     if(workers[nextw]->put(task)) {
                         FFTRACE(++taskcnt);
-                        put_done(nextw);
+                        if (empty) put_done(nextw);
                         return true;
                     } 
                     ++cnt;
                     if (cnt == ntentative()) break; 
                 } while(1);
                 
+                struct timespec tv;
+                timedwait_timeout(tv);                
                 pthread_mutex_lock(prod_m);
-                if (prod_counter->load() >= (running*workers[0]->get_in_buffer()->buffersize())) {
-                    struct timespec tv;
-                    timedwait_timeout(tv);
-                    pthread_cond_timedwait(prod_c, prod_m, &tv);
-                }
+                pthread_cond_timedwait(prod_c, prod_m, &tv);
                 pthread_mutex_unlock(prod_m);
             } while(1);
             return true;
@@ -351,7 +327,6 @@ protected:
                             if (filter) filter->set_input_channelid((ssize_t)idx, false);
                     }
                     
-                    if (blocking_in) pop_done(*start);
 
                     return start;
                 }
@@ -360,7 +335,6 @@ protected:
                     if (++cnt == nw) {
                         if (filter && !filter->in_active) { *task=NULL; channelid=-2; return ite;}
                         if (buffer && buffer->pop(task)) {
-                            if (blocking_in) pop_done(NULL);
                             channelid = -1;
                             return ite;
                         }
@@ -369,12 +343,10 @@ protected:
                 }
             } while(1);
             if (blocking_in) {
+                struct timespec tv;
+                timedwait_timeout(tv);                    
                 pthread_mutex_lock(cons_m);
-                if (cons_counter->load()==0) {
-                    struct timespec tv;
-                    timedwait_timeout(tv);                    
-                    pthread_cond_timedwait(cons_c, cons_m, &tv);
-                }
+                pthread_cond_timedwait(cons_c, cons_m, &tv);
                 pthread_mutex_unlock(cons_m);
             } else losetime_in();
         } while(1);
@@ -395,26 +367,32 @@ protected:
         if (blocking_in) {
             if (!filter) {
                 while (! buffer->pop(task)) {
+                    struct timespec tv;
+                    timedwait_timeout(tv);
                     pthread_mutex_lock(cons_m);
-                    if (cons_counter->load() == 0) {
-                        struct timespec tv;
-                        timedwait_timeout(tv);
-                        pthread_cond_timedwait(cons_c, cons_m, &tv);
-                    }
+                    pthread_cond_timedwait(cons_c, cons_m, &tv);
                     pthread_mutex_unlock(cons_m);
                 } // while
-            } else 
-                while (! filter->pop(task)) {
-                    pthread_mutex_lock(cons_m);
-                    if (cons_counter->load() ==0) {
+            } else  {                
+                if (cons_m) {                
+                    while (! filter->pop(task)) {
                         struct timespec tv;
                         timedwait_timeout(tv);
+                        pthread_mutex_lock(cons_m);
                         pthread_cond_timedwait(cons_c, cons_m, &tv);
-                    }
-                    pthread_mutex_unlock(cons_m);
-                } //while 
-            
-            pop_done(NULL);
+                        pthread_mutex_unlock(cons_m);
+                    } //while 
+                } else {
+                    // NOTE:
+                    // it may happen that the filter has been transformed
+                    // into a multi-output node (e.g., by using internal_mo_transformer,
+                    // see the all-to-all) and so the blocking stuff could have been
+                    // initialized for the filter and not for the multi-output node
+                    // because the transformation has been postponed until the very last
+                    // moment (e.g., in the prepare method of the all-to-all)
+                    filter->Pop(task);  
+                }
+            }
             return true;
         }
         if (!filter) 
@@ -456,17 +434,6 @@ protected:
         return ((ff_loadbalancer*)obj)->all_gather(task,V);
     }
 
-#if 0    
-    int set_internal_multi_input(svector<ff_node*> &mi) {
-        if (mi.size() == 0) {
-            error("LB, invalid internal multi-input vector size\n");
-            return -1;
-        }
-        int_multi_input = mi;
-        return 0;
-    }
-#endif
-    
     // removes all dangling EOSs
     void absorb_eos(svector<ff_node*>& W, size_t size) {
         void *task;
@@ -499,13 +466,6 @@ public:
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
-        p_prod_m = NULL, p_prod_c = NULL, p_prod_counter = NULL;
-        // these two are allocated on the head because they have to be copiable
-        prod_counter = new std::atomic_ulong;
-        cons_counter = new std::atomic_ulong;
-        assert(prod_counter);assert(cons_counter);
-        prod_counter->store(-1);
-        cons_counter->store(-1);
 
         blocking_in = blocking_out = FF_RUNTIME_MODE;
 
@@ -519,15 +479,8 @@ public:
         inputNodesFeedback= lbin.inputNodesFeedback;
         cons_m       = lbin.cons_m;
         cons_c       = lbin.cons_c;
-        if (cons_counter) delete cons_counter;
-        cons_counter = lbin.cons_counter;
         prod_m       = lbin.prod_m;
         prod_c       = lbin.prod_c;
-        if (prod_counter) delete prod_counter;
-        prod_counter =  lbin.prod_counter;
-        p_prod_m       = lbin.p_prod_m;
-        p_prod_c       = lbin.p_prod_c;
-        p_prod_counter = lbin.p_prod_counter;
         buffer         = lbin.buffer;
         blocking_in    = lbin.blocking_in;
         blocking_out   = lbin.blocking_out;
@@ -538,10 +491,8 @@ public:
         
         lbin.cons_m = nullptr;
         lbin.cons_c = nullptr;
-        lbin.cons_counter = nullptr;
         lbin.prod_m = nullptr;
         lbin.prod_c = nullptr;
-        lbin.prod_counter = nullptr;
         lbin.set_barrier(nullptr);
         return *this;
     }
@@ -562,10 +513,6 @@ public:
             free(cons_c);
             cons_c = nullptr;
         }
-        if (cons_counter) {
-            delete cons_counter;
-            cons_counter = nullptr;
-        }
         if (prod_m) {
             pthread_mutex_destroy(prod_m);
             free(prod_m);
@@ -575,10 +522,6 @@ public:
             pthread_cond_destroy(prod_c);
             free(prod_c);
             prod_c = nullptr;
-        }
-        if (prod_counter) {
-            delete prod_counter;
-            prod_counter = nullptr;
         }
     }
 
@@ -754,16 +697,15 @@ public:
                                unsigned long ticks=(TICKS2WAIT)) {        
         if (blocking_out) {
         _retry:
+            bool empty=workers[id]->get_in_buffer()->empty();
             if (workers[id]->put(task)) {
                 FFTRACE(++taskcnt);
-                put_done(id);
+                if (empty) put_done(id);
             } else {
+                struct timespec tv;
+                timedwait_timeout(tv);
                 pthread_mutex_lock(prod_m);
-                if (prod_counter->load() >= workers[id]->get_in_buffer()->buffersize()) {
-                    struct timespec tv;
-                    timedwait_timeout(tv);
-                    pthread_cond_timedwait(prod_c, prod_m, &tv);
-                }
+                pthread_cond_timedwait(prod_c, prod_m, &tv);
                 pthread_mutex_unlock(prod_m);     
                 goto _retry;
             }
@@ -794,21 +736,21 @@ public:
        std::vector<size_t> retry;
        if (blocking_out) {
            for(ssize_t i=0;i<running;++i) {
+               bool empty=workers[i]->get_in_buffer()->empty();
                if(!workers[i]->put(task))
                    retry.push_back(i);
-               else put_done(i);
+               else if (empty) put_done(i);
            }
            while(retry.size()) {
+               bool empty=workers[retry.back()]->get_in_buffer()->empty();
                if(workers[retry.back()]->put(task)) {
-                   put_done(retry.back());
+                   if (empty) put_done(retry.back());
                    retry.pop_back();
                } else {
+                   struct timespec tv;
+                   timedwait_timeout(tv);
                    pthread_mutex_lock(prod_m);
-                   if (prod_counter->load() >= (retry.size()*workers[0]->get_in_buffer()->buffersize())) {
-                       struct timespec tv;
-                       timedwait_timeout(tv);
-                       pthread_cond_timedwait(prod_c, prod_m, &tv);
-                   }
+                   pthread_cond_timedwait(prod_c, prod_m, &tv);
                    pthread_mutex_unlock(prod_m); 
                }
            }           
@@ -848,24 +790,20 @@ public:
             if(i!=(size_t)input_channelid) {
                 if (_workers[i]) {
                     if (!_workers[i]->get(&V[i])) retry.push_back(i);
-                    else if (blocking_in) pop_done(_workers[i]);
                 }
             }
         }
         while(retry.size()) {
             input_channelid = retry.back();
             if(_workers[input_channelid]->get(&V[input_channelid])) {
-                if (blocking_in) pop_done(_workers[input_channelid]);
                 retry.pop_back();
             }
             else {
                 if (blocking_in) {
+                    struct timespec tv;
+                    timedwait_timeout(tv);
                     pthread_mutex_lock(cons_m);
-                    if (cons_counter->load() == 0) {
-                        struct timespec tv;
-                        timedwait_timeout(tv);
-                        pthread_cond_timedwait(cons_c, cons_m, &tv);
-                    }
+                    pthread_cond_timedwait(cons_c, cons_m, &tv);
                     pthread_mutex_unlock(cons_m);
                 } else losetime_in();
             }
@@ -1511,19 +1449,10 @@ private:
     // for the input queue
     pthread_mutex_t    *cons_m = nullptr;
     pthread_cond_t     *cons_c = nullptr;
-    std::atomic_ulong  *cons_counter = nullptr;
-    //std::atomic_ulong  cons_counter;
-
-    // for synchronizing with the previous multi-output stage
-    pthread_mutex_t   *p_prod_m = nullptr;
-    pthread_cond_t    *p_prod_c = nullptr;
-    std::atomic_ulong *p_prod_counter = nullptr;
 
     // for the output queue
     pthread_mutex_t    *prod_m = nullptr;
     pthread_cond_t     *prod_c = nullptr;
-    std::atomic_ulong  *prod_counter = nullptr;
-    //std::atomic_ulong  prod_counter;
 
     bool               blocking_in;
     bool               blocking_out;

@@ -100,7 +100,7 @@ protected:
             }
             // it is a standard node or a pipeline with a standard node as last stage, so we transform it to a multi-output node
             for(size_t i=0;i<workers1.size();++i) {
-                ff_monode *mo = new mo_transformer(workers1[i], workers1_to_free);
+                internal_mo_transformer *mo = new internal_mo_transformer(workers1[i], workers1_to_free);
                 if (!mo) {
                     error("A2A, FATAL ERROR not enough memory\n");
                     return -1;
@@ -125,7 +125,7 @@ protected:
 
             // here we have to transform the standard node into a multi-input node
             for(size_t i=0;i<workers2.size();++i) {
-                ff_minode *mi = new mi_transformer(workers2[i], workers2_to_free);
+                internal_mi_transformer *mi = new internal_mi_transformer(workers2[i], workers2_to_free);
                 if (!mi) {
                     error("A2A, FATAL ERROR not enough memory\n");
                     return -1;
@@ -197,20 +197,19 @@ protected:
                 return -1;
         }
 
-
-        // blocking stuff
+     
+        // blocking stuff --------------------------------------------
         pthread_mutex_t   *m        = NULL;
         pthread_cond_t    *c        = NULL;
-        std::atomic_ulong *counter  = NULL;
         for(size_t i=0;i<nworkers2;++i) {
             // initialize worker2 local cons_* stuff and sets all p_cons_*
-            if (!workers2[i]->init_input_blocking(m,c,counter)) return -1;
+            if (!workers2[i]->init_input_blocking(m,c)) return -1;
         }
         for(size_t i=0;i<nworkers1;++i) {
             // initialize worker1 local prod_* stuff and sets all p_prod_*
-            if (!workers1[i]->init_output_blocking(m,c,counter)) return -1;
+            if (!workers1[i]->init_output_blocking(m,c)) return -1;
         }
-            
+        // ------------------------------------------------------------            
         prepared = true;
         return 0;
     }
@@ -232,7 +231,7 @@ public:
     ff_a2a(bool reduce_channels=false,
            int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
            int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
-           bool fixedsize=false):prepared(false),fixedsize(fixedsize),
+           bool fixedsize=FF_FIXED_SIZE):prepared(false),fixedsize(fixedsize),
                                  reduce_channels(reduce_channels), 
                                  in_buffer_entries(in_buffer_entries),
                                  out_buffer_entries(out_buffer_entries)
@@ -448,8 +447,8 @@ public:
      */
     int wrap_around() {
 
-        if (workers2[0]->isMultiOutput()) { // we suppose that all others are the same
-            if (workers1[0]->isMultiInput()) { // we suppose that all others are the same
+        if (workers2[0]->isMultiOutput()) { // NOTE: we suppose that all others are the same
+            if (workers1[0]->isMultiInput()) { // NOTE: we suppose that all others are the same
                 for(size_t i=0;i<workers2.size(); ++i) {
                     for(size_t j=0;j<workers1.size();++j) {
                         ff_node* t = new ff_buffernode(in_buffer_entries,false);
@@ -482,7 +481,6 @@ public:
                 error("A2A, wrap_around, the workers of the second set are not multi-output nodes so the cardinatlity of the first and second set must be the same\n");
                 return -1;
             }
-
             if (!workers1[0]->isMultiInput()) {  // we suppose that all others are the same
                 if (create_input_buffer(in_buffer_entries, false) <0) {
                     error("A2A, error creating input buffers\n");
@@ -493,7 +491,6 @@ public:
                     workers2[i]->set_output_buffer(workers1[i]->get_in_buffer());
                 
             } else {
-                
                 if (create_output_buffer(out_buffer_entries, false) <0) {
                     error("A2A, error creating output buffers\n");
                     return -1;
@@ -507,33 +504,27 @@ public:
             }
         }
 
-        // blocking stuff....
+        // blocking stuff --------------------------------------------
         pthread_mutex_t   *m        = NULL;
         pthread_cond_t    *c        = NULL;
-        std::atomic_ulong *counter  = NULL;
-        if (workers2[0]->isMultiOutput()) {
-            for(size_t i=0;i<workers2.size(); ++i) {
-                if (!workers2[i]->init_output_blocking(m,c,counter)) return -1;
-            }
-        } else {
+        for(size_t i=0;i<workers2.size(); ++i) {
+            if (!workers2[i]->init_output_blocking(m,c)) return -1;
+        }
+        if (!workers2[0]->isMultiOutput()) {
             assert(workers1.size() == workers2.size());
-            for(size_t i=0;i<workers2.size(); ++i) {
-                if (!workers2[i]->init_output_blocking(m,c,counter)) return -1;
-                workers1[i]->set_input_blocking(m,c,counter);
-            }
         }
         if (workers1[0]->isMultiInput()) {
             for(size_t i=0;i<workers1.size();++i) {
-                if (!workers1[i]->init_input_blocking(m,c,counter)) return -1;
+                if (!workers1[i]->init_input_blocking(m,c)) return -1;
             }
         } else {
             assert(workers1.size() == workers2.size());
             for(size_t i=0;i<workers1.size();++i) {
-                if (!workers1[i]->init_input_blocking(m,c,counter)) return -1;
-                workers2[i]->set_output_blocking(m,c,counter);
+                if (!workers1[i]->init_input_blocking(m,c)) return -1;
+                workers2[i]->set_output_blocking(m,c);
             }
         }
-        
+        // -----------------------------------------------------------
         return 0;
     }
 
@@ -605,7 +596,7 @@ protected:
     bool isMultiOutput() const { return true;}
     bool isAll2All()     const { return true; }    
 
-    int create_input_buffer(int nentries, bool fixedsize=false) {
+    int create_input_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         size_t nworkers1 = workers1.size();
         for(size_t i=0;i<nworkers1; ++i)
             if (workers1[i]->create_input_buffer(nentries,fixedsize)==-1) return -1;
@@ -620,7 +611,7 @@ protected:
         return 0;
     }
 
-    int create_output_buffer(int nentries, bool fixedsize=false) {
+    int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         size_t nworkers2 = workers2.size();
         for(size_t i=0;i<nworkers2; ++i) {
             if (workers2[i]->isMultiOutput()) {
@@ -641,42 +632,31 @@ protected:
     
     bool init_input_blocking(pthread_mutex_t   *&m,
                              pthread_cond_t    *&c,
-                             std::atomic_ulong *&counter) {
+                             bool feedback=true) {
         size_t nworkers1 = workers1.size();
         for(size_t i=0;i<nworkers1; ++i) {
             pthread_mutex_t   *m        = NULL;
             pthread_cond_t    *c        = NULL;
-            std::atomic_ulong *counter  = NULL;
-            if (!workers1[i]->init_input_blocking(m,c,counter)) return false;
+            if (!workers1[i]->init_input_blocking(m,c)) return false;
         }
         return true;
     }
     bool init_output_blocking(pthread_mutex_t   *&m,
                               pthread_cond_t    *&c,
-                              std::atomic_ulong *&counter) {
+                              bool feedback=true) {
         size_t nworkers2 = workers2.size();
         for(size_t i=0;i<nworkers2; ++i) {
             pthread_mutex_t   *m        = NULL;
             pthread_cond_t    *c        = NULL;
-            std::atomic_ulong *counter  = NULL;
-            if (!workers2[i]->init_output_blocking(m,c,counter)) return false;
+            if (!workers2[i]->init_output_blocking(m,c)) return false;
         }
         return true;
     }
-    void set_input_blocking(pthread_mutex_t   *&m,
-                            pthread_cond_t    *&c,
-                            std::atomic_ulong *&counter) {
-        size_t nworkers1 = workers1.size();
-        for(size_t i=0;i<nworkers1; ++i) {
-            workers1[i]->set_input_blocking(m,c,counter);
-        }
-    }    
     void set_output_blocking(pthread_mutex_t   *&m,
-                             pthread_cond_t    *&c,
-                             std::atomic_ulong *&counter) {
+                             pthread_cond_t    *&c) {
         size_t nworkers2 = workers2.size();
         for(size_t i=0;i<nworkers2; ++i) {
-            workers2[i]->init_output_blocking(m,c,counter);
+            workers2[i]->set_output_blocking(m,c);
         }
     }
    

@@ -35,9 +35,10 @@
  *  |                |    |-->mi-> Worker1->mo -->|
  *  | --> Source2 -->|
  * 
- *                        |<--- all-to-all -------->|
  *                        |<--- pipeline ---------->|
- *  |<-------------- all-to-all ------------------->|
+ *                        |<------- all-to-all ----------->|
+ *  |<---------------- all-to-all ------------------------>|
+ *  |<---------------- pipeline -------------------------->|
  *
  *
  */
@@ -50,23 +51,23 @@
 
 using namespace ff;
 
-const long ntasks=1000;
-struct Source: ff_node_t<long> {
+const long ntasks=100000;
+struct Source: ff_monode_t<long> {
     long* svc(long* in) {
-	for(long i=1;i<=ntasks;++i) {
-	    ff_send_out((long*)i);
-	}
-	return EOS;
+        for(long i=1;i<=ntasks;++i) {
+            ff_send_out((long*)i);
+        }
+        return EOS;
     }
 };
 
 struct PipeA2A: ff_pipeline {
-    struct Sink: ff_minode_t<long> {
-	long* svc(long* in) {
-	    ++cnt;
-	    return GO_ON;
-	}
-	long cnt=0;
+    struct Sink: ff_minode_t<long> {        
+        long* svc(long* in) {
+            ++cnt;
+            return GO_ON;
+        }
+        long cnt=0;
     };
     struct miHelper:ff_minode_t<long> {
         long* svc(long* in) {
@@ -78,6 +79,7 @@ struct PipeA2A: ff_pipeline {
     };   
     struct Worker:ff_node_t<long> {
         long* svc(long* in) {
+            printf("Worker%ld received task %ld\n", get_my_id(), (long)in);
             return in;
         }
         void eosnotify(ssize_t) {
@@ -94,7 +96,7 @@ struct PipeA2A: ff_pipeline {
     };
 
     PipeA2A(int nsources) {
-        const long nworkers=1;
+        const long nworkers=2;
 
         ff_a2a* a2a = new ff_a2a;
         std::vector<ff_node*> W1;
@@ -121,7 +123,7 @@ int main() {
     ff_a2a a2a;
     std::vector<ff_node*> W1;
     for(long i=0;i<nsources;++i)
-	W1.push_back(new Source);
+        W1.push_back(new Source);
     a2a.add_firstset(W1,0,true);
     std::vector<ff_node*> W2;
     PipeA2A a2aI(nsources);
@@ -129,14 +131,14 @@ int main() {
     a2a.add_secondset(W2,false);
     
     ff_Pipe<> pipe(a2a);
-
+    
     if (pipe.run_and_wait_end()<0) {
-	error("running pipe\n");
-	return -1;
+        error("running pipe\n");
+        return -1;
     }
     if (a2aI.sink->cnt != nsources*ntasks) {
-	printf("TEST FAILED\n");
-	return -1;
+        printf("TEST FAILED\n");
+        return -1;
     } printf("TEST OK\n");
     return 0;
 }
