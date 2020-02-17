@@ -83,11 +83,11 @@ int main() {
     farm2.add_emitter(&E2);
     std::vector<ff_node*> W1;
     W1.push_back(new Worker);
-    W1.push_back(new Worker);
+    //W1.push_back(new Worker);
     farm1.add_workers(W1);
     W1.clear();
     W1.push_back(new Worker);
-    W1.push_back(new Worker);
+    //W1.push_back(new Worker);
     farm2.add_workers(W1);
 
 
@@ -96,7 +96,7 @@ int main() {
     farm.add_emitter(&sched);
     std::vector<ff_node*> W;
     W.push_back(&farm1);
-    //W.push_back(&farm2);
+    W.push_back(&farm2);
     farm.add_workers(W);
     farm.wrap_around();
         

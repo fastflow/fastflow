@@ -102,7 +102,7 @@ public:
         }
         t = new fftask_t(0,-1);
         while (!ff_send_out(t, 1)) ff_relax(1);
-        return NULL;
+        return EOS;
     }
 private:
     long numtasks;
@@ -152,7 +152,7 @@ public:
                 printf("ENDING PHASE\n");
                 if (numtask == 0) { // is it really the end ?
                     printf("END\n");
-                    return NULL;
+                    return EOS;
                 }
                 return GO_ON;
             } 
@@ -169,7 +169,7 @@ public:
         FREE(task);
         if (numtask==0 && finished) {
             printf("END\n");
-            return NULL;
+            return EOS;
         }
         return GO_ON;
     }

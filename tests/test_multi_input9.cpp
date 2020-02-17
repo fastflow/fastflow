@@ -72,8 +72,8 @@ struct PipeWorker: ff_pipeline {
         int svc_init() {
             return 0;
         }
-          long* svc(long* in) {
-              if (fromInput()) {
+        long* svc(long* in) {
+            if (fromInput()) {
                 ++ntasks;
                 return in;
             }
@@ -85,7 +85,7 @@ struct PipeWorker: ff_pipeline {
             ++ntasks;
             return (long*)tmp;
         }
-
+        
         void eosnotify(ssize_t) {
             eosreceived=true;
             if (ntasks==0) ff_send_out(EOS);
@@ -114,9 +114,9 @@ struct PipeWorker: ff_pipeline {
 };
 
 
-int main() {
-    const size_t nworkers=1;
-    ff_Farm<long>   farm(  []() { 
+int main(int argc, char* argv[]) {
+    const size_t nworkers=(argc>1)?std::stol(argv[1]):3;
+    ff_Farm<long>   farm(  [nworkers]() { 
             std::vector<std::unique_ptr<ff_node> > W;
             for(size_t i=0;i<nworkers;++i)  {
                 W.push_back(make_unique<PipeWorker>());

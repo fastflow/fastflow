@@ -26,14 +26,15 @@
  */
 
 /*  
+ *  pipe(feedback(farm(pipe(stage1,stage2))), Gatherer)
  *
  *                    ---------------------------       
  *                   |                           |
- *                   |     --> (stage1->stage2)--   
- *       (farm)      v    |              
- *              Emitter --  
- *                   ^    |               
- *                   |     --> (stage1->stage2)--
+ *                   |     --> (stage1->stage2)-- -  
+ *       (farm)      v    |                        |
+ *              Emitter --                         |--> Gatherer
+ *                   ^    |                        |    (multi-input
+ *                   |     --> (stage1->stage2)-- -
  *                   |                           |
  *                   ---------------------------- 
  */
@@ -45,32 +46,45 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-class Stage1: public ff_node_t<long> {
+class Stage1: public ff_monode_t<long> {
 public:
     long * svc(long * t) {
         std::cout << "Stage1 got task " << *t << "\n";
-        (*t)--;
         return t;
     }
 };
 
-class Stage2: public ff_node_t<long> {   
+class Stage2: public ff_monode_t<long> {   
 public:
     long * svc(long * t) {
         std::cout << "Stage2 got task " << *t << "\n";
-        (*t)--;
-        return t;
+        bool odd = *t & 0x1;
+        if (!odd) {
+            long * nt = new long(*t);
+            ff_send_out_to(nt, 1); // sends it forward
+        }
+        ff_send_out_to(t, 0); // sends it back        
+        return GO_ON;
     }
 }; 
 
-class Emitter: public ff_node_t<long> {
+struct Gatherer: ff_minode_t<long> {
+    long* svc(long* t) {
+        std::cout << "Gatherer, collected " << *t << " from " << get_channel_id() << "\n";
+        delete t;
+        return GO_ON;
+    }
+};
+
+class Emitter: public ff_monode_t<long> {
 public:
     long * svc(long * task) { 
         if (!task)  return new long(1000);
 
-        std::cout << "Emitter task came back " << *task << "\n";
+        std::cout << "Emitter task came back " << *task << " from " << get_channel_id() << "\n";
+        (*task)--;
         
-        if (*task<=0) { delete task; return nullptr;}
+        if (*task<=0) { delete task; return EOS;}
         return task;
     }
 };
@@ -85,7 +99,7 @@ int main(int argc, char * argv[]) {
         }
         nworkers  =atoi(argv[1]);
     }
-
+    
     ff_farm farm;
     Emitter E;
     farm.add_emitter(&E); 
@@ -102,10 +116,14 @@ int main(int argc, char * argv[]) {
     farm.wrap_around();
     farm.cleanup_workers();
 
-    farm.run();
+    ff_pipeline pipe;
+    pipe.add_stage(&farm);
+    pipe.add_stage(new Gatherer, true);
+    
+    pipe.run();
     // wait all threads join
-    if (farm.wait()<0) {
-        error("waiting farm freezing\n");
+    if (pipe.wait()<0) {
+        error("waiting pipeline\n");
         return -1;
     }
 

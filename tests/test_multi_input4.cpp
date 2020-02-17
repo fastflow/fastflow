@@ -34,7 +34,7 @@
 #include <ff/ff.hpp>
 
 using namespace ff;
-long const int NUMTASKS=100;
+long const int NUMTASKS=1000;
 
 struct Stage1: ff_node {
     void *svc(void*) {
@@ -62,7 +62,7 @@ struct Stage3: ff_node {
 };
 int main() {
     Stage1 s1; Stage2 s2; Stage3 s3;
-
+#if 0    
     ff_pipeline pipe2;
     pipe2.add_stage(&s2);
     pipe2.add_stage(&s3);
@@ -75,7 +75,15 @@ int main() {
     pipe.add_stage(&s1);
     pipe.add_stage(&pipe2);
     pipe.run_and_wait_end();
-
+#else
+    ff_Pipe pipeI(s2,s3);
+    pipeI.wrap_around();
+    ff_Pipe pipe(s1,pipeI);
+    if (pipe.run_and_wait_end()<0) {
+        error("running pipe\n");
+        return -1;
+    }
+#endif    
     printf("DONE\n");
     return 0;
 }

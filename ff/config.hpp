@@ -77,16 +77,16 @@
 #define FF_MAPPING_STRING MAPPING_STRING
 #endif
 
-/* Which queue type to use.
- * NOTE: by default FF_BOUNDED_BUFFER is not defined
- * because the uSWSR_Ptr_Buffer may act as a bounded queue.
- */
+
 #if defined(FF_BOUNDED_BUFFER)
-#define FFBUFFER SWSR_Ptr_Buffer
-#else  // unbounded buffer
-#define FFBUFFER uSWSR_Ptr_Buffer
+#define FF_FIXED_SIZE true
+#else  // NOTE: by default the queues are unbounded!!!!
+#define FF_FIXED_SIZE false
 #endif
 
+// WARNING: Do not change the following with SWSR_Ptr_Buffer unless
+// you know what your are doing....
+#define FFBUFFER uSWSR_Ptr_Buffer
 
 /*
  * This is the default buffer capacity and the default difference between the input

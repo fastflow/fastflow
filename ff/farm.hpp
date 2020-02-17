@@ -271,30 +271,29 @@ protected:
                 error("FARM, creating input buffer\n");
                 return -1;
             }
-            if (!init_input_blocking(p_cons_m,p_cons_c,p_cons_counter)) {
+            if (!init_input_blocking(p_cons_m,p_cons_c)) {
                 error("FARM, init input blocking mode for accelerator\n");
                 return -1;
             }
+            // blocking stuff -------------
             pthread_mutex_t   *m       = NULL;
             pthread_cond_t    *c       = NULL;
-            std::atomic_ulong *counter = NULL;;
-            if (!ff_node::init_output_blocking(m,c,counter)) {
+            if (!ff_node::init_output_blocking(m,c)) {
                 error("FARM, init output blocking mode for accelerator\n");
                 return -1;
             }           
-            set_input_blocking(m,c,counter);
-            
             // NOTE: the queue is forced to be unbounded
             if (create_output_buffer(out_buffer_entries, false)<0) return -1;
 
-            if (!ff_node::init_input_blocking(m,c,counter)) {
+            if (!ff_node::init_input_blocking(m,c)) {
                 error("FARM, add_collector, init output blocking mode for accelerator\n");
                 return -1;
             }
-            set_output_blocking(m,c,counter);
-            if (!init_output_blocking(p_prod_m,p_prod_c,p_prod_counter)) {
+            set_output_blocking(m,c);
+            if (!init_output_blocking(m,c)) {
                 error("FARM, add_collector, init input blocking mode for accelerator\n");
             }
+            // ----------------------------
         }
 
         for(size_t i=0;i<nworkers;++i) {
@@ -343,7 +342,7 @@ protected:
                 lb->register_worker(workers[i]);
             }
 
-            if (a2a_last) { // the worker is the All-to-All
+            if (a2a_last) {
 
                 if (a2a_first != a2a_last) {
                     //NOTE: if the worker is an A2A or a pipe ending with an A2A, the R-Workers
@@ -375,7 +374,7 @@ protected:
                                 gt->register_worker(w[j]);
                         }
                     } else {
-                        error("FARM feature not yet supported\n");
+                        error("FARM feature not yet supported (1)\n");
                         abort(); // <---- FIX
                     }
                 } else { // there is no collector
@@ -405,20 +404,39 @@ protected:
 
                 continue;
             }
-                        
-            if (collector && !collector_removed) {   // there is a collector
+
+
+            // helper function
+            auto create_feedback_buffers = [&]() {
+                static int idx=0;
+                svector<ff_node*> w(1);
+                workers[i]->get_out_nodes(w);
+                for(size_t j=0;j<w.size();++j) {
+                    ff_buffernode* t = new ff_buffernode(out_buffer_entries, false, idx++);
+                    assert(t);
+                    internalSupportNodes.push_back(t);
+                    workers[i]->set_output_feedback(t);
+                    
+                    // REMEMBER: if the worker is not parallel (i.e., farm, a2a, pipeline) then
+                    // the lb adds the workers to the 'availworkers' array directly,
+                    // so set_input_feedback must be avoided to don't have duplicates.
+                    if (lb->parallel_workers) {                                    
+                        lb->set_input_feedback(t);
+                    } else {
+                        workers[i]->set_output_buffer(t->get_out_buffer());
+                    }
+                }                                        
+            };
+            
+            
+            if (collector && !collector_removed) {   // there is a collector         
                 if (workers[i]->get_out_buffer()==NULL) {
                     if (workers[i]->isMultiOutput()) {   // the worker is multi-output
-                        ff_node *t = nullptr;
-                        if (lb->masterworker()) {   // there is a feedback        
-                            t = new ff_buffernode(out_buffer_entries, false); // NOTE: force unbounded size
-                            if (!t) return -1;
-                            t->set_id(i);
-                            internalSupportNodes.push_back(t);
-                            workers[i]->set_output_feedback(t);
-                            // this is needed because we don't call create_output_buffer for the worker
-                            workers[i]->set_output_buffer(t->get_out_buffer());
+                        if (lb->masterworker()) {   // there is a feedback
+                            create_feedback_buffers();
                         }
+                        
+                        
                         svector<ff_node*> w(MAX_NUM_THREADS);
                         workers[i]->get_out_nodes(w);
                         if (w.size()>0) {                            
@@ -432,7 +450,7 @@ protected:
                                 gt->register_worker(t);
                             }                            
                         } else  { // single node multi-output
-                            t = new ff_buffernode(out_buffer_entries,fixedsize, i); 
+                            ff_node* t = new ff_buffernode(out_buffer_entries,fixedsize, i); 
                             internalSupportNodes.push_back(t);
                             workers[i]->set_output(t);
                             if (!lb->masterworker()) workers[i]->set_output_buffer(t->get_out_buffer());
@@ -445,6 +463,7 @@ protected:
                         assert(!lb->masterworker());
                         gt->register_worker(workers[i]);
                     }
+                    
                 }
 
                 // this is possible only if the collector filter is a multi-output node
@@ -456,31 +475,15 @@ protected:
             } else { // there is not a collector
                 if (workers[i]->get_out_buffer()==NULL) {
                     if (workers[i]->isMultiOutput()) {
-                        if (lb->masterworker()) {
-                            static int idx=0;
-
-                            svector<ff_node*> w(1);
-                            workers[i]->get_out_nodes(w);
-                            for(size_t j=0;j<w.size();++j) {
-                                ff_node* t = new ff_buffernode(out_buffer_entries,false, idx++);
-                                assert(t);
-                                internalSupportNodes.push_back(t);
-                                workers[i]->set_output_feedback(t);
-                                if (lb->parallel_workers)
-                                    this->set_input(t);
-
-                                if (!lb->parallel_workers) {
-                                    // this is needed because we don't call create_output_buffer for the worker
-                                    workers[i]->set_output_buffer(t->get_out_buffer());
-                                }
-                            }
+                        if (lb->masterworker()) {    // feedback channels from workers
+                            create_feedback_buffers();
                         }
                                                 
                         if (outputNodes.size()) { 
                             workers[i]->set_output(outputNodes); 
                         }
                         
-                    } else {
+                    } else {  // the worker is not multi-output
                         if (outputNodes.size()) {
                             assert(outputNodesFeedback.size()==0);
                             assert(!lb->masterworker());    // no master-worker 
@@ -494,14 +497,8 @@ protected:
                                 workers[i]->set_output_buffer(outputNodesFeedback[i]->get_in_buffer());
                             } else {
                                 if (lb->masterworker()) {
-                                    // NOTE: this call could fail because the buffer has already been created (e.g. in the pipeline)
-                                    workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), false);
-                                }                                                                
-                                if (lb->masterworker() && lb->parallel_workers) {    
-                                    svector<ff_node*> w(1);
-                                    workers[i]->get_out_nodes(w);
-                                    this->set_input(w);
-                                }
+                                    create_feedback_buffers();
+                                } 
                             }
                         }
                     }
@@ -558,16 +555,15 @@ protected:
         }
 
         
-        // blocking stuff
+        // blocking stuff --------------------------------
         for(size_t i=0;i<nworkers;++i) {
             pthread_mutex_t   *m        = NULL;
             pthread_cond_t    *c        = NULL;
-            std::atomic_ulong *counter  = NULL;
-            if (!workers[i]->init_input_blocking(m,c,counter)) {
+            if (!workers[i]->init_input_blocking(m,c)) {
                 error("FARM, init input blocking mode for worker %d\n", i);
                 return -1;
             }
-            if (!workers[i]->init_output_blocking(m,c,counter)) {
+            if (!workers[i]->init_output_blocking(m,c)) {
                 error("FARM, init output blocking mode for worker %d\n", i);
                 return -1;
             }
@@ -579,48 +575,52 @@ protected:
         //       the same gt of the farm.
         pthread_mutex_t   *m        = NULL;
         pthread_cond_t    *c        = NULL;
-        std::atomic_ulong *counter  = NULL;
-        if (!lb->init_output_blocking(m,c,counter)) {
+        if (!lb->init_output_blocking(m,c)) {
             error("FARM, init output blocking mode for LB\n");
             return -1;
         }
-        for(size_t i=0;i<nworkers;++i)
-            workers[i]->set_input_blocking(m,c,counter);
-
         if (collector && !collector_removed) {
-            if (!gt->init_input_blocking(m,c,counter)) {
+            if (!gt->init_input_blocking(m,c)) {
                 error("FARM, init output blocking mode for GT\n");
                 return -1;
             }
-            for(size_t i=0;i<nworkers;++i) {
-                if (workers[i]->isMultiOutput()) {
-                    svector<ff_node*> w;
-                    workers[i]->get_out_nodes(w);
-                    for(size_t i=0;i<w.size(); ++i) 
-                        w[i]->set_output_blocking(m,c,counter);
-                } else 
-                    workers[i]->set_output_blocking(m,c,counter);
-            }                       
+            for(size_t j=0;j<nworkers;++j) {
+                svector<ff_node*> w;
+                workers[j]->get_out_nodes(w);
+                assert(w.size()>0);
+                for(size_t i=0;i<w.size(); ++i) 
+                    w[i]->set_output_blocking(m,c);
+            }
         }
 
         if (lb->masterworker()) {
+            bool last_multioutput = [&]() {
+              // WARNING: we consider homogeneous workers!
+              if (lb->parallel_workers) {
+                  svector<ff_node*> w;
+                  workers[0]->get_out_nodes(w);
+                  if (w[0]->isMultiOutput()) return true;
+                  return false;
+              }
+              if (workers[0]->isMultiOutput()) return true;
+              return false;
+            } ();
+            
             pthread_mutex_t   *m        = NULL;
             pthread_cond_t    *c        = NULL;
-            std::atomic_ulong *counter  = NULL;
-            if (!init_input_blocking(m,c,counter)) {
+            if (!init_input_blocking(m,c)) {
                 error("FARM, init input blocking mode for master-worker\n");
                 return -1;
             }
-            for(size_t i=0;i<nworkers;++i) {
-                if (workers[i]->isMultiOutput()) {
-                    // NOTE: in this case only the first channel (0) has to be set, 
-                    // the other channels go toward the next stage                    
-                    svector<ff_node*> w;
-                    workers[i]->get_out_nodes_feedback(w);
-                    for(size_t i=0;i<w.size();++i)
-                        w[i]->set_output_blocking(m,c,counter);
-                } else 
-                    workers[i]->set_output_blocking(m,c,counter);
+            for(size_t j=0;j<nworkers;++j) {
+                svector<ff_node*> w;
+                if (last_multioutput)
+                    workers[j]->get_out_nodes_feedback(w);
+                else 
+                    workers[j]->get_out_nodes(w);                    
+                assert(w.size()>0);
+                for(size_t i=0;i<w.size(); ++i) 
+                    w[i]->set_output_blocking(m,c);
             }
         }    
         prepared=true;
@@ -642,44 +642,57 @@ protected:
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
-                                            std::atomic_ulong *&counter) {
-        return lb->init_input_blocking(m,c,counter);
+                                            bool feedback=true) {
+        bool r = lb->init_input_blocking(m,c);
+        if (!r) return false;
+        // NOTE: for all registered input node (or buffernode) we have to set the 
+        // blocking stuff (see also ff_minode::init_input_blocking)
+        svector<ff_node*> w;
+        lb->get_in_nodes(w);
+        lb->get_in_nodes_feedback(w);
+        for(size_t i=0;i<w.size();++i)
+            w[i]->set_output_blocking(m,c);
+        return true;        
     }
-    virtual inline void set_input_blocking(pthread_mutex_t   *&m,
-                                           pthread_cond_t    *&c,
-                                           std::atomic_ulong *&counter) {
-        lb->set_input_blocking(m,c,counter);
-    }    
-
     // producer
     virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
                                              pthread_cond_t    *&c,
-                                             std::atomic_ulong *&counter) {
-        if (collector && !collector_removed)
-            return gt->init_output_blocking(m,c,counter);
-        else
-            for(size_t i=0;i<workers.size();++i)
-                if (!workers[i]->init_output_blocking(m,c,counter)) return false;
+                                             bool feedback=true) {
+        if (collector && !collector_removed) {
+            if (collector == (ff_node*)gt)
+                return gt->init_output_blocking(m,c);
+            return collector->init_output_blocking(m,c);
+        }
+        for(size_t i=0;i<workers.size();++i)
+            if (!workers[i]->init_output_blocking(m,c)) return false;
+
         return true;
     }
     virtual inline void set_output_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c,
-                                            std::atomic_ulong *&counter) {
-        if (collector && !collector_removed)
-            gt->set_output_blocking(m,c,counter);
+                                            pthread_cond_t    *&c) {
+        if (collector && !collector_removed) {
+            if (collector == (ff_node*)gt)
+                gt->set_output_blocking(m,c);
+            else
+                collector->set_output_blocking(m,c);
+        }
         else {
             for(size_t i=0;i<workers.size();++i)
-                workers[i]->set_output_blocking(m,c,counter);
+                workers[i]->set_output_blocking(m,c);
         }
     }
 
     virtual inline pthread_mutex_t   &get_cons_m()        { return *(lb->cons_m);}
     virtual inline pthread_cond_t    &get_cons_c()        { return *(lb->cons_c);}
-    virtual inline std::atomic_ulong &get_cons_counter()  { return *(lb->cons_counter);}
 
-    virtual inline pthread_mutex_t   &get_prod_m()        { return *(gt->prod_m); }
-    virtual inline pthread_cond_t    &get_prod_c()        { return *(gt->prod_c); }
-    virtual inline std::atomic_ulong &get_prod_counter()  { return *(gt->prod_counter);}
+    virtual inline pthread_mutex_t   &get_prod_m()        {
+        assert(collector && !collector_removed);
+        return *((collector==(ff_node*)gt) ? gt->prod_m:collector->prod_m);
+    }
+    virtual inline pthread_cond_t    &get_prod_c()        {
+        assert(collector && !collector_removed);
+        return *((collector==(ff_node*)gt) ? gt->prod_c:collector->prod_c);
+    }
 
 public:
     enum { DEF_IN_BUFF_ENTRIES=DEFAULT_BUFFER_CAPACITY,
@@ -702,7 +715,7 @@ public:
      * @param input_ch \p true for enabling the input stream
      */
     ff_farm(const std::vector<ff_node*>& W, ff_node *const Emitter=NULL, ff_node *const Collector=NULL, bool input_ch=false):
-        has_input_channel(input_ch),collector_removed(false),ordered(false),fixedsize(false),
+        has_input_channel(input_ch),collector_removed(false),ordered(false),fixedsize(FF_FIXED_SIZE),
         myownlb(true),myowngt(true),worker_cleanup(false),emitter_cleanup(false),
         collector_cleanup(false),ondemand(0),
         in_buffer_entries(DEF_IN_BUFF_ENTRIES),
@@ -750,7 +763,7 @@ public:
                      int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
                      bool worker_cleanup=false, // NOTE: by default no cleanup at exit is done !
                      size_t max_num_workers=DEF_MAX_NUM_WORKERS,
-                     bool fixedsize=false):  // NOTE: by default all the internal farm queues are unbounded !
+                     bool fixedsize=FF_FIXED_SIZE): 
         has_input_channel(input_ch),collector_removed(false), ordered(false), fixedsize(fixedsize),
         myownlb(true),myowngt(true),worker_cleanup(worker_cleanup),emitter_cleanup(false),
         collector_cleanup(false), ondemand(0),
@@ -1083,7 +1096,7 @@ public:
 
         // NOTE: if a comp is set as a filter in the collector of a farm,
         // it is a multiinput node even if the first stage of the composition
-        // is not a multi-output.
+        // is not a multi-input.
         if (c && c->isComp()) c->set_multiinput();
         if (c) {
             collector = c;
@@ -1112,26 +1125,23 @@ public:
             return 0;
         }
 
-        // blocking stuff        
+        // blocking stuff --------------------------------------------
         pthread_mutex_t   *m        = NULL;
         pthread_cond_t    *c        = NULL;
-        std::atomic_ulong *counter  = NULL;
-        if (!init_input_blocking(m,c,counter)) {
+        if (!init_input_blocking(m,c)) {
             error("FARM, wrap_around, init input blocking mode for emitter\n");
             return -1;
         }
-        set_output_blocking(m,c,counter);
-        m=NULL,c=NULL,counter=NULL;
-        if (!init_output_blocking(m,c,counter)) {
+        set_output_blocking(m,c);
+        m=NULL,c=NULL;
+        if (!init_output_blocking(m,c)) {
             error("FARM, wrap_around, init output blocking mode for collector\n");
             return -1;
         }
-        set_input_blocking(m,c,counter);             
-        /* ------ */
+        // ------------------------------------------------------------
         
         ff_buffernode *tmpbuffer = new ff_buffernode(out_buffer_entries, false);
         assert(tmpbuffer);
-        tmpbuffer->set_input_blocking(m,c,counter);
         internalSupportNodes.push_back(tmpbuffer);
         if (set_output_buffer(tmpbuffer->get_in_buffer())<0) {
             error("FARM, setting output buffer for multi-input configuration\n");
@@ -1434,18 +1444,15 @@ public:
         if (inbuffer) {
             if (blocking_out) {
             _retry:
+                const bool empty=inbuffer->empty();
                 if (inbuffer->push(task)) {
-                    ++(*p_cons_counter);
-                    ++prod_counter;
-                    pthread_cond_signal(p_cons_c);
+                    if (empty) pthread_cond_signal(p_cons_c);
                     return true;
                 }
+                struct timespec tv;
+                timedwait_timeout(tv);                
                 pthread_mutex_lock(prod_m);
-                if (prod_counter.load() >= (inbuffer->buffersize())) {
-                    struct timespec tv;
-                    timedwait_timeout(tv);
-                    pthread_cond_timedwait(prod_c, prod_m, &tv);
-                }
+                pthread_cond_timedwait(prod_c, prod_m, &tv);
                 pthread_mutex_unlock(prod_m);
                 goto _retry;
             }
@@ -1484,18 +1491,14 @@ public:
             if (gt->pop_nb(task)) {
                 // NOTE: the queue between collector and the main thread is forced to be unbounded
                 // therefore the collector cannot be blocked for the condition buffer full ! 
-                --(gt->get_prod_counter());
-                --cons_counter;
                 
                 if ((*task != (void *)FF_EOS)) return true;
                 else return false;
             }
+            struct timespec tv;
+            timedwait_timeout(tv);
             pthread_mutex_lock(cons_m);
-            if (cons_counter.load() == 0) {
-                struct timespec tv;
-                timedwait_timeout(tv);
-                pthread_cond_timedwait(cons_c, cons_m,&tv);
-            }
+            pthread_cond_timedwait(cons_c, cons_m,&tv);
             pthread_mutex_unlock(cons_m);
             goto _retry;
         }
@@ -1614,10 +1617,9 @@ public:
     inline void get_out_nodes(svector<ff_node*>&w) {
         if (collector && !collector_removed) {
             if ((ff_node*)gt == collector) {
-                ff_node *outnode = new ff_buffernode(-1, NULL,gt->get_out_buffer());
-                assert(outnode);
-                internalSupportNodes.push_back(outnode);
-                w.push_back(outnode);
+                assert(gt->get_out_buffer());
+                assert(gt->get_out_buffer() ==  this->get_out_buffer());
+                w.push_back(this);                
             } else {
                 collector->get_out_nodes(w);
                 if (w.size()==0) w.push_back(collector);
@@ -1631,6 +1633,11 @@ public:
         else w += wtmp;
     }
 
+    inline void get_out_nodes_feedback(svector<ff_node*>&w) {
+        w += outputNodesFeedback;
+    }
+
+    
     inline void get_in_nodes(svector<ff_node*>&w) {
         w.push_back(this);
     }
@@ -1869,7 +1876,7 @@ protected:
 
                 // We can be here because we are in a pipeline and the next stage
                 // is a multi-input stage. If the farm is a masterworker or if the node 
-                // has multiple output than we are a multi-output node and thus all channels
+                // has multiple output then we are a multi-output node and thus all channels
                 // have to be registered as output channels for the worker.
 
                 for(size_t i=0;i<nworkers;++i) {
@@ -1880,9 +1887,10 @@ protected:
         }
         
         if (ff_node::create_output_buffer(nentries, fixedsize)<0) return -1;        
-        if (gt->set_output_buffer(out)<0) return -1;
+        if (gt->set_output_buffer(this->get_out_buffer())<0) return -1;
         if (collector && !collector_removed) {
-            if (collector != (ff_node*)gt) collector->set_output_buffer(out);
+            if (collector != (ff_node*)gt)
+                collector->set_output_buffer(this->get_out_buffer());
         }
 
         return 0;
@@ -1898,17 +1906,14 @@ protected:
      * \return The status of \p set_input(x) otherwise -1 is returned.
      */
     inline int set_input(const svector<ff_node *> & w) { 
-        assert(isMultiInput());
         return lb->set_input(w);
     }
 
     inline int set_input(ff_node *node) { 
-        assert(isMultiInput());
         return lb->set_input(node);
     }
 
     inline int set_input_feedback(ff_node *node) { 
-        assert(isMultiInput());
         return lb->set_input_feedback(node);
     }
 

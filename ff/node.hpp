@@ -443,7 +443,6 @@ static void * proxy_thread_routine(void * arg) {
 // forward declaration    
 class ff_loadbalancer;
 class ff_gatherer;
-    
 
 /*!
  *  \class ff_node
@@ -494,8 +493,8 @@ private:
     friend class ff_monode;
     friend class ff_a2a;
     friend class ff_comb;
-    friend struct mo_transformer;
-    friend struct mi_transformer;
+    friend struct internal_mo_transformer;
+    friend struct internal_mi_transformer;
     
 private:
     FFBUFFER        * in;           ///< Input buffer, built upon SWSR lock-free (wait-free) 
@@ -538,18 +537,15 @@ protected:
     virtual inline bool Push(void *ptr, unsigned long retry=((unsigned long)-1), unsigned long ticks=(TICKS2WAIT)) {
         if (blocking_out) {
         retry:
+            bool empty=out->empty();
             bool r = push(ptr);
             if (r) { // OK
-                ++(*p_cons_counter);
-                ++prod_counter;
-                pthread_cond_signal(p_cons_c);
+                if (empty) pthread_cond_signal(p_cons_c);
             } else { // FULL
+                struct timespec tv;
+                timedwait_timeout(tv);
                 pthread_mutex_lock(prod_m);
-                if (prod_counter.load() >= out->buffersize()) {
-                    struct timespec tv;
-                    timedwait_timeout(tv);
-                    pthread_cond_timedwait(prod_c,prod_m,&tv);
-                }
+                pthread_cond_timedwait(prod_c,prod_m,&tv);
                 pthread_mutex_unlock(prod_m);
                 goto retry;
             }
@@ -567,17 +563,11 @@ protected:
             if (!in_active) { *ptr=NULL; return false; }
         retry:
             bool r = in->pop(ptr);
-            if (r) { // OK
-                --(*p_prod_counter);
-                --cons_counter;
-                pthread_cond_signal(p_prod_c);
-            } else { // EMPTY
+            if (!r) { // EMPTY                
+                struct timespec tv;
+                timedwait_timeout(tv);
                 pthread_mutex_lock(cons_m);
-                if (cons_counter.load() == 0) {
-                    struct timespec tv;
-                    timedwait_timeout(tv);
-                    pthread_cond_timedwait(cons_c, cons_m,&tv);
-                }
+                pthread_cond_timedwait(cons_c, cons_m,&tv);
                 pthread_mutex_unlock(cons_m);
                 goto retry;
             }
@@ -595,52 +585,44 @@ protected:
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
-                                            std::atomic_ulong *&counter) {
-        if (cons_counter.load() == (unsigned long)-1) {
+                                            bool feedback=true) {
+        if (cons_m == nullptr) {
+            assert(cons_c==nullptr);
             cons_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
             cons_c = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
             assert(cons_m); assert(cons_c);
             if (pthread_mutex_init(cons_m, NULL) != 0) return false;
             if (pthread_cond_init(cons_c, NULL) != 0)  return false;
-            cons_counter.store(0);
         } 
-        m = cons_m,  c = cons_c, counter = &cons_counter;
+        m = cons_m,  c = cons_c;
         return true;
     }
-    virtual inline void set_input_blocking(pthread_mutex_t   *&m,
-                                           pthread_cond_t    *&c,
-                                           std::atomic_ulong *&counter) {
-        p_prod_m = m,  p_prod_c = c,  p_prod_counter = counter;
-    }    
-
     // producer
     virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
                                              pthread_cond_t    *&c,
-                                             std::atomic_ulong *&counter) {
-        if (prod_counter.load() == (unsigned long)-1) {
+                                             bool feedback=true) {
+        if (prod_m == nullptr) {
+            assert(prod_c==nullptr);
             prod_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
             prod_c = (pthread_cond_t*)malloc(sizeof(pthread_cond_t));
             assert(prod_m); assert(prod_c);
             if (pthread_mutex_init(prod_m, NULL) != 0) return false;
             if (pthread_cond_init(prod_c, NULL) != 0)  return false;
-            prod_counter.store(0);
         } 
-        m = prod_m, c = prod_c, counter = &prod_counter;
+        m = prod_m, c = prod_c;
         return true;
     }
     virtual inline void set_output_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c,
-                                            std::atomic_ulong *&counter) {
-        p_cons_m = m, p_cons_c = c, p_cons_counter = counter;
+                                            pthread_cond_t    *&c) {
+        assert(p_cons_m == nullptr || (p_cons_m == m && p_cons_c == c));
+        p_cons_m = m, p_cons_c = c;
     }
 
     virtual inline pthread_mutex_t   &get_cons_m()       { return *cons_m;}
     virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
-    virtual inline std::atomic_ulong &get_cons_counter() { return cons_counter;}
 
     virtual inline pthread_mutex_t   &get_prod_m()       { return *prod_m;}
     virtual inline pthread_cond_t    &get_prod_c()       { return *prod_c;}
-    virtual inline std::atomic_ulong &get_prod_counter() { return prod_counter;}
 
     /**
      * \brief Set the ff_node to start with no input task
@@ -676,9 +658,8 @@ protected:
      *
      *  \return 0 if successful, -1 otherwise
      */
-    virtual int create_input_buffer(int nentries, bool fixedsize=true) {
+    virtual int create_input_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         if (in) return -1;
-        // MA: here probably better to use p = posix_memalign to 64 bits; new (p) FFBUFFER
         in = new FFBUFFER(nentries,fixedsize);
         if (!in) return -1;
         myinbuffer=true;
@@ -686,7 +667,7 @@ protected:
         return 0;
     }
 
-    virtual int create_input_buffer_mp(int nentries, bool fixedsize=true, int neos=1) {
+    virtual int create_input_buffer_mp(int nentries, bool fixedsize=FF_FIXED_SIZE, int neos=1) {
         if (create_input_buffer(nentries,fixedsize)<0) return -1;
         // setting multi-producer push
         in->pushPMF = &FFBUFFER::mp_push;
@@ -703,7 +684,7 @@ protected:
      *
      *  \return 0 if successful, -1 otherwise
      */
-    virtual int create_output_buffer(int nentries, bool fixedsize=false) {
+    virtual int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         if (out) return -1;
         out = new FFBUFFER(nentries,fixedsize); 
         if (!out) return -1;
@@ -757,7 +738,7 @@ protected:
     
     virtual inline void get_out_nodes(svector<ff_node*>&w) { w.push_back(this); }
     virtual inline void get_out_nodes_feedback(svector<ff_node*>&w) {}
-    virtual inline void get_in_nodes(svector<ff_node*>&w) {}
+    virtual inline void get_in_nodes(svector<ff_node*>&w) { w.push_back(this); }
     virtual inline void get_in_nodes_feedback(svector<ff_node*>&w) {}
     
     virtual int prepare() { prepared=true; return 0; }
@@ -1246,10 +1227,7 @@ protected:
         wttime=0;
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
         
-        cons_counter.store(-1);
-        prod_counter.store(-1);
-        p_prod_m = NULL, p_prod_c = NULL, p_prod_counter = NULL;
-        p_cons_m = NULL, p_cons_c = NULL, p_cons_counter = NULL;
+        p_cons_m = NULL, p_cons_c = NULL;
 
         blocking_in = blocking_out = FF_RUNTIME_MODE;
     };
@@ -1262,10 +1240,7 @@ protected:
         wtstart = n.wtstart;
         wtstop = n.wtstop;
         wttime = n.wttime;
-        cons_counter.store(n.cons_counter.load());
-        prod_counter.store(n.prod_counter.load());
-        p_prod_m = n.p_prod_m, p_prod_c = n.p_prod_c, p_prod_counter = n.p_prod_counter;
-        p_cons_m = n.p_cons_m, p_cons_c = n.p_cons_c, p_cons_counter = n.p_cons_counter;
+        p_cons_m = n.p_cons_m, p_cons_c = n.p_cons_c;
         blocking_in = n.blocking_in;
         blocking_out = n.blocking_out;
         default_mapping = n.default_mapping;
@@ -1486,23 +1461,15 @@ protected:
     // for the input queue
     pthread_mutex_t    *cons_m = nullptr;
     pthread_cond_t     *cons_c = nullptr;
-    std::atomic_ulong   cons_counter;
-
-    // for synchronizing with the previous multi-output stage
-    pthread_mutex_t    *p_prod_m = nullptr;
-    pthread_cond_t     *p_prod_c = nullptr;
-    std::atomic_ulong  *p_prod_counter = nullptr;
 
 
     // for the output queue
     pthread_mutex_t    *prod_m = nullptr;
     pthread_cond_t     *prod_c = nullptr;
-    std::atomic_ulong   prod_counter;
 
     // for synchronizing with the next multi-input stage
     pthread_mutex_t    *p_cons_m = nullptr;
     pthread_cond_t     *p_cons_c = nullptr;
-    std::atomic_ulong  *p_cons_counter = nullptr;
 
     bool               FF_MEM_ALIGN(blocking_in,32); 
     bool               FF_MEM_ALIGN(blocking_out,32);
@@ -1582,14 +1549,14 @@ struct ff_node_F: public ff_node_t<TIN,TOUT> {
 
 
 /* ------------------------ internal node implementations, should not be used -------- */
-    
+
 /* just a node interface for the input and output buffers 
  * This is used in the internal implementation but can be used also
  * at the user level. In this second case
  */
 struct ff_buffernode: ff_node {
     ff_buffernode() {}
-    ff_buffernode(int nentries, bool fixedsize=true, int id=-1, int multi_producer_eos=-1) {
+    ff_buffernode(int nentries, bool fixedsize=FF_FIXED_SIZE, int id=-1, int multi_producer_eos=-1) {
         set(nentries,fixedsize,id, multi_producer_eos);
     }
     // NOTE: this constructor is supposed to be used only for implementing 
@@ -1599,7 +1566,7 @@ struct ff_buffernode: ff_node {
         set_input_buffer(in);
         set_output_buffer(out);
     }
-    void set(int nentries, bool fixedsize=true, int id=-1, int multi_producer_eos=-1) {
+    void set(int nentries, bool fixedsize=FF_FIXED_SIZE, int id=-1, int multi_producer_eos=-1) {
         set_id(id);
         if (multi_producer_eos<0) {
             if (create_input_buffer(nentries,fixedsize) < 0) {
@@ -1620,17 +1587,14 @@ struct ff_buffernode: ff_node {
         // blocking stuff
         pthread_mutex_t   *m        = NULL;
         pthread_cond_t    *c        = NULL;
-        std::atomic_ulong *counter  = NULL;            
-        if (!ff_node::init_output_blocking(m,c,counter)) {
+        if (!ff_node::init_output_blocking(m,c)) {
             error("buffernode, FATAL ERROR, init input blocking mode for accelerator\n");
             return -1;
         }
-        ff_node::set_input_blocking(m,c,counter);            
-        if (!ff_node::init_input_blocking(m,c,counter)) {
+        if (!ff_node::init_input_blocking(m,c)) {
             error("buffernode, FATAL ERROR, init input blocking mode for accelerator\n");
             return -1;
         }
-        ff_node::set_output_blocking(m,c,counter);
         return 0;
     }
     
@@ -1654,12 +1618,7 @@ protected:
 
     pthread_mutex_t   &get_cons_m()       { return *p_cons_m;}
     pthread_cond_t    &get_cons_c()       { return *p_cons_c;}
-    std::atomic_ulong &get_cons_counter() { return *p_cons_counter;}
 
-    pthread_mutex_t   &get_prod_m()       { return *p_prod_m;}
-    pthread_cond_t    &get_prod_c()       { return *p_prod_c;}
-    std::atomic_ulong &get_prod_counter() { return *p_prod_counter;}
-    
 
     // REMEMBER: 
     // init_output_blocking initializes prod_*

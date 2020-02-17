@@ -137,15 +137,13 @@ int main(int argc,  char * argv[]) {
     E emitter(streamlen);
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new W);
-    ff_farm farm(w,&emitter); // this constructor add the default collector !!!
+    ff_farm farm(w,&emitter); // this constructor adds the default collector !!!
     farm.remove_collector();
     farm.wrap_around();
 
-    ff_pipeline pipe;
-    pipe.add_stage(&farm);
     N multi_input(streamlen);
-    pipe.add_stage(&multi_input);
-       
+    ff_Pipe pipe(farm, multi_input);
+
     if (pipe.run_and_wait_end()<0) return -1;
     printf("DONE\n");
     return 0;
