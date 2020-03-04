@@ -66,10 +66,11 @@ The following preprocessor directives /D_SECURE_SCL=0;
 however that they cannot be used if the application links libraries compiled
 with different options (e.g. Boost).
 
-## FastFlow Team
-- Massimo Torquati <torquati@di.unipi.it> (maintainer)
-- Marco Aldinucci  <aldinuc@di.unito.it> (co-maintainer)
-- Maurizio Drocco <maurizio.drocco@gmail.com> (co-maintainer)
+## FastFlow Maintainer
+- Massimo Torquati <torquati@di.unipi.it> (University of Pisa)
+
+## FastFlow History
+*TBC*
 
 ## How to cite FastFlow
 Aldinucci, M. , Danelutto, M. , Kilpatrick, P. and Torquati, M. (2017). Fastflow: High‐Level and Efficient Streaming on Multicore. In Programming multi‐core and many‐core computing systems (eds S. Pllana and F. Xhafa).
