@@ -70,7 +70,11 @@ with different options (e.g. Boost).
 - Massimo Torquati <torquati@di.unipi.it> (University of Pisa)
 
 ## FastFlow History
-*TBC*
+The FastFlow project started in the 2010 by Massimo Torquati (University of Pisa) and 
+Marco Aldinucci (University of Turin). 
+Over the years several other people (mainly from the Parallel Computing Groups of the University of Pisa and Turin) contributed with ideas and code to the development of the project. FastFlow has been used as 
+run-time system in three EU founded research projects: ParaPhrase, REPARA and RePhrase.
+
 
 ## How to cite FastFlow
 Aldinucci, M. , Danelutto, M. , Kilpatrick, P. and Torquati, M. (2017). Fastflow: High‐Level and Efficient Streaming on Multicore. In Programming multi‐core and many‐core computing systems (eds S. Pllana and F. Xhafa).
