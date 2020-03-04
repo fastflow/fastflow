@@ -3,47 +3,56 @@
 [![GitHub tag](https://img.shields.io/github/tag/fastflow/fastflow.svg)](http://github.com/fastflow/fastflow/releases)
 [![GitHub Issues](https://img.shields.io/github/issues/fastflow/fastflow.svg)](http://github.com/fastflow/fastflow/issues)
 
-# FastFlow: high-performance parallel patterns in C++
+# FastFlow: high-performance parallel patterns and building blocks in C++
 
-FastFlow is a multi-core programming framework implemented as a C++ template 
-library that offers a set of mechanisms to support low-latency and 
-high-bandwidth data flows in a network of threads running on
-a cache-coherent multi-core architectures. On these architectures, one of the 
-key performance issues concern memory fences, which are required to keep the 
-various caches coherent. 
-FastFlow provides the programmer with two basic mechanisms:
-  1. efficient point-to-pint communication channels;
-  2. a memory allocator.
+FastFlow is a programming library implemented in modern C++ and targeting
+multi/many-cores (there exists an experimental version based on ZeroMQ targeting
+distributed systems). It offers both a set of high-level ready-to-use parallel
+patterns and a set of mechanisms and composable components
+(called building blocks) to support low-latency and high-throughput data-flow
+streaming networks.
 
-Communication channels, as typical is in streaming applications, are 
-unidirectional and asynchronous. They are implemented via fence-free FIFO
-queues. The memory allocator is built on top of these queues, thus taking 
-advantage of their efficiency.
-On top of these basic machnisms FastFlow provides a library of explicitly 
-parallel constructs (a.k.a. skeletons) such as pipeline and farm.
-The farm skeleton, exploits functional replication and abstracts the 
-parallel filtering of successive independent items of the stream under the 
-control of a scheduler.
+FastFlow simplifies the development of parallel applications modelled as a
+structured directed graph of processing nodes.
+The graph of concurrent nodes is constructed by the assembly of sequential
+and parallel building blocks as well as higher-level easy-to-use components
+(i.e. parallel patterns) modelling typical schemas of parallel computations
+(e.g., pipeline, task-farm, parallel-for, etc.).
+FastFlow efficiency stems from the optimized implementation of the base communication
+and synchronization mechanisms and from its layered software design.
 
+## Building Blocks
 
-## Building
+FastFlow nodes represent sequential computations executed by a dedicated thread.
+A node can have zero, one or more input channels and zero, one or more output channels.
+As typical is in streaming applications, communication channels are unidirectional and
+asynchronous. They are implemented through Single-Producer Single-Consumer
+(SPSC) FIFO queues carrying memory pointers. Operations on such queues (that can have either
+bounded or unbounded capacity) are based on  non-blocking lock-free synchronization protocol.
+To promote power-efficiency vs responsiveness of the nodes, a blocking concurrency
+control operation mode is also available.
 
+The semantics of sending data references over a communication channel is that of transferring
+the ownership of the data pointed by the reference from the sender node (producer) to the
+receiver node (consumer) according to the producer-consumer model.
+The data reference is de facto a capability, i.e. a logical token that grants access to a given
+data or to a portion of a larger data structure. Based on this reference-passing semantics,
+the receiver is expected to have exclusive access to the data reference received from one of
+the input channels, while the producer is expected not to use the reference anymore.
+
+The set of FastFlow building blocks is:
+*TBC*
+
+## Parallel Patterns
+*TBC*
+
+## Building the library
 FastFlow is header-only, no need for building.
 
 See the [BUILD.ME](BUILD.ME) file for instructions about building unit tests and examples.
 
 ## Supported Platforms
-
-FastFlow is currently actively supported for:
-
-- Linux with gcc >4.8 x86_64
-- Windows >=7 with MSVS >=2013
-- Mac OS >=10.9 with gcc >4.8 or clang >=5
-
-Although not officially supported (yet), FastFlow has been tested on:
-- Linux/PPC with gcc
-- Linux/ARM with gcc
-
+FastFlow is currently actively supported for Linux with gcc >4.8, x86_64 and ARM
 Since version 2.0.4, FastFlow is expected to work on any platform with a C++11 compiler. 
 
 ### Windows Issues
