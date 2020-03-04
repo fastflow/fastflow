@@ -21,7 +21,7 @@ and parallel building blocks as well as higher-level easy-to-use components
 FastFlow efficiency stems from the optimized implementation of the base communication
 and synchronization mechanisms and from its layered software design.
 
-## Building Blocks
+## FastFlow's Building Blocks
 
 FastFlow nodes represent sequential computations executed by a dedicated thread.
 A node can have zero, one or more input channels and zero, one or more output channels.
@@ -54,8 +54,21 @@ A generic node performs a loop that: i) gets a data item (through a memory refer
 **All-to-All** The All-to-All (briefly **A2A**) building block defines two distinct sets of Workers connected as in a full crossbar. This means that each Worker in the first set (called L-Worker) is connected to all the Workers in the second set (called R-Workers). Although the topological shape is a full crossbar, the user can implement any custom distribution in the L-Workers (e.g., sending each data item to a specific R-Worker, shuffling o broadcasting).
 
 
-## Parallel Patterns
-*TBC*
+## Available Parallel Patterns
+
+**Pipeline**
+
+**Task-Farm**
+
+**ParallelFor**
+
+**PoolEvolution**
+
+**Macro Data-Flow**
+
+**Iterative StencilReuce**
+
+**Divide&Conquer**
 
 ## Building the library
 FastFlow is header-only, no need for building.
