@@ -41,7 +41,18 @@ the receiver is expected to have exclusive access to the data reference received
 the input channels, while the producer is expected not to use the reference anymore.
 
 The set of FastFlow building blocks is:
-*TBC*
+
+**node**. This is the basic abstraction of the building blocks. It defines the unit of sequential execution in the FastFlow library. A node encapsulates either user’s code (i.e. business logic) or RTS code. User’s code can also be wrapped by a FastFlow node executing RTS code to manipulate and filter input and output data before and after the execution of the business logic code. Based on the number of input/output channels it is possible to distinguish three different kinds of sequential nodes: *standard node* with one input and one output channel, *multi-input* with many inputs and one output channel, and finally *multi-output* with one input and many outputs. 
+A generic node performs a loop that: i) gets a data item (through a memory reference to a data structure) from one of its input queues; ii) executes a functional code working on the data item and possibly on a state maintained by the node itself by calling its service method svc(); iii) puts a memory reference to the resulting item(s) into one or multiple output queues selected according to a predefined or user-defined policy.
+
+**node combiner**. It allows the user to combine two nodes into one single sequential node. Conceptually, the operation of combining sequential nodes is similar to the composition of two functions. In this case, the functions are the service functions of the two nodes (e.g., the *svc* method). This building block promotes code reuse through fusion of already implemented nodes and it can also be used to reduce the threads used to run the data-flow network by executing the functions of multiple nodes by a single thread.
+
+**pipeline**. The pipeline allows building blocks to be connected in a linear chain. It is used both as a container of building blocks as well as an application topology builder. At execution time, the pipeline building block models the data-flow execution of its building blocks on data elements flowing in a streamed fashion.
+
+**farm**. It models functional replication of building blocks coordinated by a master node called Emitter. The simplest form is composed of two computing entities executed in parallel: a multi-output master node (the Emitter), and a pool of pipeline building blocks called Workers. The Emitter node schedules the data elements received in input to the Workers using either a default policy (i.e. round-robin or on-demand) or according to the algorithm implemented by the user code defined in its service method. In this second scenario, the stream elements scheduling is controlled by the user through a custom policy.
+
+**All-to-All** The All-to-All (briefly **A2A**) building block defines two distinct sets of Workers connected as in a full crossbar. This means that each Worker in the first set (called L-Worker) is connected to all the Workers in the second set (called R-Workers). Although the topological shape is a full crossbar, the user can implement any custom distribution in the L-Workers (e.g., sending each data item to a specific R-Worker, shuffling o broadcasting).
+
 
 ## Parallel Patterns
 *TBC*
