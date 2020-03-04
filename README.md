@@ -55,26 +55,14 @@ See the [BUILD.ME](BUILD.ME) file for instructions about building unit tests and
 FastFlow is currently actively supported for Linux with gcc >4.8, x86_64 and ARM
 Since version 2.0.4, FastFlow is expected to work on any platform with a C++11 compiler. 
 
-### Windows Issues
-Windows platform can be particuarly slow in debug mode due to iterator
-debugging and secure crt layers. Release mode appers to be not affected by the
-issue. See http://blogs.warwick.ac.uk/ahazelden/entry/visual_studio_stl/
-
-The following preprocessor directives /D_SECURE_SCL=0;
-/D_HAS_ITERATOR_DEBUGGING=0 (i.e. ADD_DEFINITIONS(-D_SECURE_SCL=0
--D_HAS_ITERATOR_DEBUGGING=0) in cmake) might ameliorate the problem. Consider
-however that they cannot be used if the application links libraries compiled
-with different options (e.g. Boost).
-
 ## FastFlow Maintainer
 - Massimo Torquati <torquati@di.unipi.it> (University of Pisa)
 
 ## FastFlow History
-The FastFlow project started in the 2010 by Massimo Torquati (University of Pisa) and 
+The FastFlow project started in the beginning of 2010 by Massimo Torquati (University of Pisa) and 
 Marco Aldinucci (University of Turin). 
 Over the years several other people (mainly from the Parallel Computing Groups of the University of Pisa and Turin) contributed with ideas and code to the development of the project. FastFlow has been used as 
 run-time system in three EU founded research projects: ParaPhrase, REPARA and RePhrase.
-
 
 ## How to cite FastFlow
 Aldinucci, M. , Danelutto, M. , Kilpatrick, P. and Torquati, M. (2017). Fastflow: High‐Level and Efficient Streaming on Multicore. In Programming multi‐core and many‐core computing systems (eds S. Pllana and F. Xhafa).
