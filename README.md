@@ -53,7 +53,7 @@ A generic node performs a loop that: i) gets a data item (through a memory refer
 
 **All-to-All** The All-to-All (briefly **A2A**) building block defines two distinct sets of Workers connected accordig to the *shuffle communication pattern*. This means that each Worker in the first set (called *L-Worker*) is connected to all the Workers in the second set (called *R-Workers*). The user may implement any custom distribution policy in the L-Workers (e.g., sending each data item to a specific worker of the R-Worker set, broadcasting data elements, executing a *by-key* routing, etc). The default distribution policy is *round-robin*.
 
-A brief description of the FastFlow building block software layer can be found [here]().
+A brief description of the FastFlow building block software layer can be found [here](https://docs.google.com/presentation/d/1mCJ9Bf4zo3MX2DFGG0zfbJ2URdCIJoECt87-Rkt2swc/edit?usp=sharing).
 
 ## Available Parallel Patterns
 
