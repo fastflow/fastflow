@@ -109,6 +109,7 @@ int main() {
         const secondStage2  _3; 
         const secondStage3  _4;
         const thirdStage    _5;
+#if 0
         {
             auto comb = combine_nodes(_1, combine_nodes(_2, combine_nodes(_3, combine_nodes(_4, _5))));
             if (comb.run_and_wait_end()<0)
@@ -203,11 +204,15 @@ int main() {
             std::cout << "TEST10 DONE Time = " << pipe.ffwTime() << " ms\n";
         }
         usleep(500000);
+#endif
         {
             // testing multi-input + multi-output combined
 
             struct miStage:ff_minode_t<long> {
-                long* svc(long* in) { return in;}
+                long* svc(long* in) {
+                    printf("MULTI INPUT input channels %ld\n", get_num_inchannels());
+                    return in;
+                }
                 void eosnotify(ssize_t) {
                     printf("MULTI INPUT %ld, eosnotify\n", get_my_id());
                 }
@@ -234,7 +239,6 @@ int main() {
                 error("running pipe\n");
             std::cout << "TEST11 DONE\n";
         }
-
     }
   
     return 0;

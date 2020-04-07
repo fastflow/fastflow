@@ -978,7 +978,7 @@ public:
         if (ff_farm::prepare() < 0) 
             error("running base forall farm(2)\n");
         
-        // NOTE: the warmup phase has to be done, if not now latern on. 
+        // NOTE: the warmup phase has to be done, if not now later on. 
         // The run_then_freeze method will fail if skipwarmup is true.
         if (!skipwarmup) {
             auto r=-1;

@@ -59,15 +59,22 @@
  * 'mapping_string.sh', which returns a suitable string that can be 
  * copy-paste in the FF_MAPPING_STRING preprocessor variable. 
  * Note that, if you wish (and trust it) the script can modify the 
- * config.hpp file for you.  Example: 
+ * config.hpp file for you.  The script also sets the FF_NUM_CORES and 
+ * FF_NUM_REAL_CORES variables. 
+ * Example: 
  *  > ./mapping_string.sh
- *  > "0,2,1,3"
+ *  > FF_MAPPING_STRING="0,2,1,3"
+ *  > FF_NUM_CORES=4
+ *  > FF_NUM_REAL_CORES=2
  *  > Do you want that I change the ./config.hpp file for you? (y/N) y
  *  > This is the new FF_MAPPING_STRING variable in the ./config.hpp file:
  *  > #if !defined MAPPING_STRING
  *  > #define FF_MAPPING_STRING "0,2,1,3"
  *  > #else
+ *  > ...
  *
+ */
+/*
  * NOTE: if FF_MAPPING_STRING is "" (default), FastFlow executes a linear
  *       mapping of threads. 
  */
@@ -75,6 +82,26 @@
 #define FF_MAPPING_STRING ""
 #else
 #define FF_MAPPING_STRING MAPPING_STRING
+#endif
+/* 
+ * It is the number of the logical cores of the machine.
+ * NOTE: if FF_NUM_CORES is -1 (default), FastFlow will use ff_numCores()
+ *       (which is a costly function).
+ */
+#if !defined NUM_CORES
+#define FF_NUM_CORES -1
+#else
+#define FF_NUM_CORES NUM_CORES
+#endif
+/* 
+ * It is the number of the physical cores of the machine.
+ * NOTE: if FF_NUM_REAL_CORES is -1 (default), FastFlow will use 
+ *       ff_realNumCores() (which is a costly function)
+ */
+#if !defined NUM_REAL_CORES
+#define FF_NUM_REAL_CORES -1
+#else
+#define FF_NUM_REAL_CORES NUM_REAL_CORES
 #endif
 
 

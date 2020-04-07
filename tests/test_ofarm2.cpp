@@ -135,7 +135,7 @@ int main(int argc, char * argv[]) {
     std::vector<ff_node *> w;
     for(int i=0;i<nworkers;++i) w.push_back(new Worker1);
     ff_farm ofarm(w, new Start(streamlen), new Stop(streamlen));
-    ofarm.set_ordered();               // ordered farm 
+    ofarm.set_ordered();               // ordered farm
     ofarm.set_scheduling_ondemand();   // auto-scheduling policy 
     ofarm.cleanup_all();
 
