@@ -143,6 +143,7 @@ static inline unsigned long ff_getCpuFreq() {
  *  \return An integer value showing the number of cores.
  */
 static inline ssize_t ff_numCores() {
+    if (FF_NUM_CORES != -1) return FF_NUM_CORES;
     ssize_t  n=-1;
 #if defined(__linux__)    
 #if defined(MAMMUT)
@@ -210,6 +211,7 @@ static inline ssize_t ff_numCores() {
  *  \return An integer value showing the number of cores.
  */
 static inline ssize_t ff_realNumCores() {
+    if (FF_NUM_REAL_CORES != -1) return FF_NUM_REAL_CORES;
     ssize_t  n=-1;
 #if defined(_WIN32)
 	n = 2; // Not yet implemented

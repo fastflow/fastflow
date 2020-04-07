@@ -8,6 +8,9 @@
 # machine that are topologically contiguous, i.e the first context of the
 # first core, the first context of the second core, and so on up to the
 # last context of the last core.
+# It also can set two variables:
+# FF_NUM_CORES
+# FF_NUM_REAL_CORES
 #
 # Example: Given the following OS numbering for the logical cores
 #
@@ -20,6 +23,8 @@
 #
 # the string produced is:
 # "0,4,2,6,1,5,3,7,8,12,10,14,9,13,11,15".
+# FF_NUM_CORES=16
+# FF_NUM_REAL_CORES=8
 #
 
 topocmd=lstopo # or lstopo-no-graphics or hwloc-ls
@@ -49,8 +54,9 @@ for((j=0;j<$nway;++j)); do
      str+=${V[j]}
 done
 string=${str::-1} # remove the last comma
-echo "The string is:"
-echo \"$string\"
+echo "FF_MAPPING_STRING=\"$string\""
+echo "FF_NUM_CORES=$logical"
+echo "FF_NUM_REAL_CORES=$physical"
 
 read -p "Do you want that I change the ./config.hpp file for you? (y/N) " -n 1 -r
 echo
@@ -59,11 +65,27 @@ then
     sed -i -e "s/#define FF_MAPPING_STRING \"\"/#define FF_MAPPING_STRING \"$string\"/1" ./config.hpp
     if [ $? -eq 0 ]; then
 	echo "This is the new FF_MAPPING_STRING variable in the ./config.hpp file:"
-	grep -1 "^#define FF_MAPPING_STRING \"" config.hpp
+	echo -e "\e[1m $(grep -m1 "^#define FF_MAPPING_STRING \"" config.hpp) \e[0m"
     else
-	echo "something went wrong...."
+	echo "something went wrong when replacing the variable FF_MAPPING_STRING...."
 	exit 1
     fi
+    sed -i -e "s/#define FF_NUM_CORES -1/#define FF_NUM_CORES $logical/1" ./config.hpp
+    if [ $? -eq 0 ]; then	      
+    	echo "This is the new FF_NUM_CORES variable in the ./config.hpp file:"
+	echo -e "\e[1m $(grep -m1 "^#define FF_NUM_CORES " config.hpp) \e[0m"
+    else
+	echo "something went wrong when replacing the variable FF_NUM_CORES...."
+	exit 1
+    fi
+    sed -i -e "s/#define FF_NUM_REAL_CORES -1/#define FF_NUM_REAL_CORES $physical/1" ./config.hpp
+    if [ $? -eq 0 ]; then
+	echo "This is the new FF_NUM_REAL_CORES variable in the ./config.hpp file:"
+	echo -e "\e[1m $(grep -m1 "^#define FF_NUM_REAL_CORES " config.hpp) \e[0m"	
+    else
+	echo "something went wrong when replacing the variable FF_NUM_REAL_CORES...."
+	exit 1
+    fi    
 else
     echo "Ok, nothing has been changed"
 fi
