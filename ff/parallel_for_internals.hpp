@@ -137,10 +137,10 @@ namespace ff {
      * This can be useful if you have to perform some actions before starting
      * the loop.
      */
-#define FF_PARFOR2_BEGIN(name, idx, begin, end, step, chunk, nw)                  \
+#define FF_PARFOR_BEGIN_IDX(name, idx, begin, end, step, chunk, nw)               \
     ff_forall_farm<forallreduce_W<int> > name(nw,false,true);                     \
     name.setloop(begin,end,step,chunk, nw);                                       \
-    auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,     \
+    auto F_##name = [&] (const long ff_start_idx, const long ff_stop_idx,         \
                          const int _ff_thread_id, const int) {                    \
     /* here you have to define the for loop using ff_start/stop_idx  */
 
@@ -156,6 +156,7 @@ namespace ff {
       } else F_##name(name.startIdx(),name.stopIdx(),0,0);                        \
     }
 
+    
     /* ---------------------------------------------- */
 
     /**
@@ -180,6 +181,14 @@ namespace ff {
         PRAGMA_IVDEP;                                                             \
         for(long idx=start;idx<stop;idx+=step)
 
+#define FF_PARFORREDUCE_BEGIN_IDX(name, var,identity, idx,begin,end,step, chunk, nw)           \
+    ff_forall_farm<forallreduce_W<decltype(var)> > name(nw,false,true);                        \
+    name.setloop(begin,end,step,chunk,nw);                                                     \
+    auto idtt_##name =identity;                                                                \
+    auto F_##name =[&](const long ff_start_idx,const long ff_stop_idx,const int _ff_thread_id, \
+                       decltype(var) &var) {
+
+    
 #define FF_PARFORREDUCE_END(name, var, op)                                        \
         };                                                                        \
         if (name.getnw()>1) {                                                     \
@@ -316,6 +325,13 @@ namespace ff {
                        const int _ff_thread_id, decltype(var) &var) {                    \
         PRAGMA_IVDEP                                                                     \
         for(long idx=ff_start_##idx;idx<ff_stop_##idx;idx+=step) 
+
+#define FF_PARFORREDUCE_START_IDX(name, var,identity, idx,begin,end,step, chunk, nw)     \
+    name->setloop(begin,end,step,chunk,nw);                                              \
+    auto idtt_##name =identity;                                                          \
+    auto F_##name =[&](const long ff_start_idx, const long ff_stop_idx,                  \
+                       const int _ff_thread_id, decltype(var) &var) {
+
 
 #define FF_PARFORREDUCE_START_STATIC(name, var,identity, idx,begin,end,step, chunk, nw)  \
     assert(chunk<=0);                                                                    \
@@ -1168,6 +1184,10 @@ public:
      *                   in a round-robin fashion.
      */
     inline void setloop(long begin,long end,long step,long chunk,long nw) {
+        if (nw>(ssize_t)getNWorkers()) {
+            error("The number of threads specified is greater than the number set in the ParallelFor* constructor, it will be downsized\n");
+            nw = getNWorkers();
+        }
         assert(nw<=(ssize_t)getNWorkers());
         forall_Scheduler *sched = (forall_Scheduler*)getEmitter();
         sched->setloop(begin,end,step,chunk,(nw<=0)?getNWorkers():(size_t)nw);

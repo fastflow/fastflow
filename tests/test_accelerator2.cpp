@@ -96,16 +96,9 @@ int main(int argc, char * argv[]) {
     }
     
     ff_farm farm(true /* accelerator set */);
-    
-    // Using standard emitter
-    /*
-      Emitter E(streamlen);
-      farm.add_emitter(&E);
-    */
-
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
-    farm.add_workers(w);
+    std::vector<ff_node *> W;
+    for(int i=0;i<nworkers;++i) W.push_back(new Worker);
+    farm.add_workers(W);
 
     Collector C;
     farm.add_collector(&C);   
@@ -118,7 +111,7 @@ int main(int argc, char * argv[]) {
     for (int i=0;i<streamlen;i++) {
         int * ii = new int(i);
         std::cout << "[Main] Offloading " << i << "\n"; 
-        // Here offloading computation onto the farm
+        // Here offloading computation into the farm
         farm.offload(ii); 
     }
     std::cout << "[Main] EOS arrived\n";

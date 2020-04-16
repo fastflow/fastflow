@@ -111,7 +111,8 @@ protected:
         return true;
     }
     inline void set_output_blocking(pthread_mutex_t   *&m,
-                                    pthread_cond_t    *&c) {
+                                    pthread_cond_t    *&c,
+                                    bool canoverwrite=false) {
         assert(1==0);
     }
 
@@ -344,7 +345,7 @@ protected:
             } while(1);
             if (blocking_in) {
                 struct timespec tv;
-                timedwait_timeout(tv);                    
+                timedwait_timeout(tv);
                 pthread_mutex_lock(cons_m);
                 pthread_cond_timedwait(cons_c, cons_m, &tv);
                 pthread_mutex_unlock(cons_m);

@@ -264,38 +264,21 @@ protected:
                 setgt(_gt, true);
             }        
         }
-        
+
         // accelerator
         if (has_input_channel) { 
             if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
                 error("FARM, creating input buffer\n");
                 return -1;
             }
-            if (!init_input_blocking(p_cons_m,p_cons_c)) {
-                error("FARM, init input blocking mode for accelerator\n");
-                return -1;
+            if (hasCollector()) {
+                // NOTE: the queue is forced to be unbounded
+                if (create_output_buffer(out_buffer_entries, false)<0) return -1;
             }
-            // blocking stuff -------------
-            pthread_mutex_t   *m       = NULL;
-            pthread_cond_t    *c       = NULL;
-            if (!ff_node::init_output_blocking(m,c)) {
-                error("FARM, init output blocking mode for accelerator\n");
-                return -1;
-            }           
-            // NOTE: the queue is forced to be unbounded
-            if (create_output_buffer(out_buffer_entries, false)<0) return -1;
-
-            if (!ff_node::init_input_blocking(m,c)) {
-                error("FARM, add_collector, init output blocking mode for accelerator\n");
-                return -1;
-            }
-            set_output_blocking(m,c);
-            if (!init_output_blocking(m,c)) {
-                error("FARM, add_collector, init input blocking mode for accelerator\n");
-            }
-            // ----------------------------
         }
 
+
+        
         for(size_t i=0;i<nworkers;++i) {
 
             ff_a2a* a2a_first = nullptr;        // the Emitter sees this all-to-all
@@ -595,15 +578,15 @@ protected:
 
         if (lb->masterworker()) {
             bool last_multioutput = [&]() {
-              // WARNING: we consider homogeneous workers!
-              if (lb->parallel_workers) {
-                  svector<ff_node*> w;
-                  workers[0]->get_out_nodes(w);
-                  if (w[0]->isMultiOutput()) return true;
-                  return false;
-              }
-              if (workers[0]->isMultiOutput()) return true;
-              return false;
+                // WARNING: we consider homogeneous workers!
+                if (lb->parallel_workers) {
+                    svector<ff_node*> w;
+                    workers[0]->get_out_nodes(w);
+                    if (w[0]->isMultiOutput()) return true;
+                    return false;
+                }
+                if (workers[0]->isMultiOutput()) return true;
+                return false;
             } ();
             
             pthread_mutex_t   *m        = NULL;
@@ -614,15 +597,58 @@ protected:
             }
             for(size_t j=0;j<nworkers;++j) {
                 svector<ff_node*> w;
-                if (last_multioutput)
+                if (last_multioutput) {
                     workers[j]->get_out_nodes_feedback(w);
-                else 
+                    if (w.size() == 0)
+                        workers[j]->get_out_nodes(w);
+                } else 
                     workers[j]->get_out_nodes(w);                    
                 assert(w.size()>0);
+                // NOTE: it is possible that we have to overwrite the 
+                //       p_cons_* variables that could have been set in the
+                //       wrap_around method. This can happen when the last
+                //       stage is multi-output and it has a feedback channel
+                //       and one (or more) forward channels to the next stage.
                 for(size_t i=0;i<w.size(); ++i) 
-                    w[i]->set_output_blocking(m,c);
+                    w[i]->set_output_blocking(m,c, true);  
             }
-        }    
+        }
+
+        if (has_input_channel) {
+            pthread_mutex_t   *m        = NULL;
+            pthread_cond_t    *c        = NULL;
+            if (!init_input_blocking(m,c)) {
+                error("FARM, init input blocking\n");
+                return -1;
+            }
+            // this is to notify the Emitter when the queue
+            // is not anymore empty 
+            ff_node::set_output_blocking(m,c);
+            // this is to setup the condition variable where
+            // the thread (main?) that is using the accelerator
+            // will sleep if the queue fill up
+            if (!ff_node::init_output_blocking(m,c)) {
+                error("FARM, init output blocking\n");
+                return -1;
+            } 
+            
+            if (hasCollector()) {
+                m=NULL,c=NULL;
+                if (!init_output_blocking(m,c)) {
+                    error("FARM, init output blocking\n");
+                    return -1;
+                } 
+                
+                m=NULL,c=NULL;
+                if (!ff_node::init_input_blocking(m,c)) {
+                    error("FARM, init input blocking\n");
+                    return -1;
+                } 
+                set_output_blocking(m,c);
+            }
+        }
+        
+        
         prepared=true;
         return 0;
     }
@@ -669,16 +695,17 @@ protected:
         return true;
     }
     virtual inline void set_output_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c) {
+                                            pthread_cond_t    *&c,
+                                            bool canoverwrite=false) {
         if (collector && !collector_removed) {
             if (collector == (ff_node*)gt)
-                gt->set_output_blocking(m,c);
+                gt->set_output_blocking(m,c, canoverwrite);
             else
-                collector->set_output_blocking(m,c);
+                collector->set_output_blocking(m,c, canoverwrite);
         }
         else {
             for(size_t i=0;i<workers.size();++i)
-                workers[i]->set_output_blocking(m,c);
+                workers[i]->set_output_blocking(m,c, canoverwrite);
         }
     }
 
@@ -1124,8 +1151,23 @@ public:
             if (!has_input_channel) lb->skipfirstpop(true);
             return 0;
         }
-
-        // blocking stuff --------------------------------------------
+        if (has_input_channel) {
+            error("FARM: wrap_around: cannot create feedback if accelerator mode is set, and the collector is present!\n");
+            return -1;
+        }
+        ff_buffernode *tmpbuffer = new ff_buffernode(out_buffer_entries, false);
+        assert(tmpbuffer);
+        internalSupportNodes.push_back(tmpbuffer);
+        if (set_output_buffer(tmpbuffer->get_in_buffer())<0) {
+            error("FARM, setting output buffer for multi-input configuration\n");
+            return -1;
+        }
+        if (getCollector() && collector->isMultiOutput())
+            collector->set_output_feedback(tmpbuffer);
+        
+        lb->set_input_feedback(tmpbuffer);
+        
+        // blocking stuff ------------------------
         pthread_mutex_t   *m        = NULL;
         pthread_cond_t    *c        = NULL;
         if (!init_input_blocking(m,c)) {
@@ -1138,19 +1180,8 @@ public:
             error("FARM, wrap_around, init output blocking mode for collector\n");
             return -1;
         }
-        // ------------------------------------------------------------
+        // ---------------------------------------
         
-        ff_buffernode *tmpbuffer = new ff_buffernode(out_buffer_entries, false);
-        assert(tmpbuffer);
-        internalSupportNodes.push_back(tmpbuffer);
-        if (set_output_buffer(tmpbuffer->get_in_buffer())<0) {
-            error("FARM, setting output buffer for multi-input configuration\n");
-            return -1;
-        }
-        if (getCollector() && collector->isMultiOutput())
-            collector->set_output_feedback(tmpbuffer);
-        
-        lb->set_input_feedback(tmpbuffer);
         lb->skipfirstpop(true);
         return 0;
     }
@@ -1484,7 +1515,10 @@ public:
     inline bool load_result(void ** task,
                             unsigned long retry=((unsigned long)-1),
                             unsigned long ticks=ff_gatherer::TICKS2WAIT) {
-        if (!collector) return false;
+        if (!collector) {
+            error("FARM: load_result: no collector present!!");
+            return false;
+        }
 
         if (blocking_in) {
         _retry:
@@ -1523,7 +1557,10 @@ public:
      *
      */
     inline bool load_result_nb(void ** task) {
-        if (!collector) return false;
+        if (!collector) {
+            error("FARM: load_result_nb: no collector present!!");
+            return false;
+        }
         return gt->pop_nb(task);
     }
     
@@ -1618,7 +1655,6 @@ public:
         if (collector && !collector_removed) {
             if ((ff_node*)gt == collector) {
                 assert(gt->get_out_buffer());
-                assert(gt->get_out_buffer() ==  this->get_out_buffer());
                 w.push_back(this);                
             } else {
                 collector->get_out_nodes(w);
@@ -1982,7 +2018,7 @@ protected:
     }
 
 protected:
-    bool has_input_channel; // for accelerator
+    bool has_input_channel; // for the accelerator mode
     bool collector_removed;
     bool ordered;          
     bool fixedsize;

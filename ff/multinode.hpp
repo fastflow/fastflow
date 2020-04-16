@@ -169,15 +169,16 @@ protected:
         //return gt->init_output_blocking(m,c);
     }
     virtual inline void set_output_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c) {
+                                            pthread_cond_t    *&c,
+                                            bool canoverwrite=false) {
 
         ff_node* filter = gt->get_filter();
         if (filter &&
             ( (filter->get_out_buffer()!=nullptr) || filter->isMultiOutput() ) )  { // see gt.hpp
-           filter->set_output_blocking(m, c);
+            filter->set_output_blocking(m, c, canoverwrite);
         }
         //gt->set_output_blocking(m,c);
-        ff_node::set_output_blocking(m,c);
+        ff_node::set_output_blocking(m,c, canoverwrite);
     }
 
     inline pthread_mutex_t   &get_prod_m()  { return gt->get_prod_m(); }
@@ -503,8 +504,9 @@ protected:
         return lb->init_output_blocking(m,c, feedback);
     }
     virtual inline void set_output_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c) {
-        ff_node::set_output_blocking(m,c);   // <---- CHECK: ci vuole??????
+                                            pthread_cond_t    *&c,
+                                            bool canoverwrite=false) {
+        ff_node::set_output_blocking(m,c, canoverwrite);
     }
 
     virtual inline pthread_mutex_t   &get_prod_m()        { return lb->get_prod_m();}
