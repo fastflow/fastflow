@@ -653,10 +653,11 @@ protected:
         return true;
     }
     void set_output_blocking(pthread_mutex_t   *&m,
-                             pthread_cond_t    *&c) {
+                             pthread_cond_t    *&c,
+                             bool canoverwrite=false) {
         size_t nworkers2 = workers2.size();
         for(size_t i=0;i<nworkers2; ++i) {
-            workers2[i]->set_output_blocking(m,c);
+            workers2[i]->set_output_blocking(m,c, canoverwrite);
         }
     }
    

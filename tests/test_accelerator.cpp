@@ -45,7 +45,6 @@ public:
     }
 };
 
-
 int main(int argc, char * argv[]) {
     int nworkers = 3;
     int streamlen= 1000;
@@ -87,6 +86,7 @@ int main(int argc, char * argv[]) {
     void * result=NULL;
     for (int i=0;i<streamlen;i++) {
         int * ii = new int(i);
+
         std::cout << "[Main] Offloading " << i << "\n"; 
         // Here offloading computation onto the farm
         farm.offload(ii); 
@@ -100,7 +100,7 @@ int main(int argc, char * argv[]) {
     std::cout << "[Main] EOS arrived\n";
     farm.offload((void *)FF_EOS);
     
-#if 0
+#if 1
     // get all remaining results syncronously. 
     while(farm.load_result(&result)) {
         std::cerr << "result= " << *((int*)result) << "\n";

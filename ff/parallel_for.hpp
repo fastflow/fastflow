@@ -4,11 +4,8 @@
  *  \file parallel_for.hpp
  *  \ingroup high_level_patterns
  *
- *  \brief This file describes the parallel_for/parallel_reduce skeletons.
+ *  \brief It describes the ParallelFor/ParallelForReduce/ParallelForPipeReduce patterns.
  *  
- *  Realize a parallel for loop. Different iterations should be
- *  independent (data-races management is not autimatically provided
- *  but can be introduced by programmers via mutex).
  *
  */
  
@@ -37,22 +34,18 @@
  *  This file contains the ParallelFor and the ParallelForReduce classes 
  *  (and also some static functions).
  * 
- *  Iterations scheduling options:
- *
- *      1 - default static scheduling
- *      2 - static scheduling with grain size greater than 0
- *      3 - dynamic scheduling with grain size greater than 0
+ *  Iterations scheduling:
  * 
  *  As a general rule, the scheduling strategy is selected according to the chunk value:
  *      - chunk == 0 means default static scheduling, that is, ~(#iteration_space/num_workers) 
- *                   iterations per thread)
- *      - chunk >  0 means dynamic scheduling with grain equal to chunk, that is,
- *                   no more than chunk iterations at a time is computed by one thread, the 
- *                   chunk is assigned to worker threads dynamically
- *      - chunk <  0 means static scheduling with grain equal to chunk, that is,
+ *                   iterations per thread assigned in one single shot at the beginning.
+ *      - chunk >  0 means dynamic scheduling with grain equal to the chunk size, that is,
+ *                   no more than chunk iterations at a time is assigned to one Worker, the 
+ *                   chunk is assigned to Workers dynamically
+ *      - chunk <  0 means static scheduling with grain equal to the chunk size, that is,
  *                   the iteration space is divided into chunks each one of no more 
- *                   than chunk iterations. Then chunks are assigned to the workers threads 
- *                   statically and in a round-robin fashion.
+ *                   than chunk iterations. Then chunks are assigned to the Workers statically 
+ *                   and in a round-robin fashion.
  *
  *  If you want to use the static scheduling policy (either default or with a given grain),
  *  please use the **parallel_for_static** method.
@@ -78,9 +71,24 @@
  *       A[i]=f(i);                         A[i]=f(i);
  *    long sum=0;               --->    });
  *    for(long i=0; i<N;++i)            long sum=0;
- *       sum+=g(A[i]);                  pfr.parallel_reduce(sum,0, 0,N,[&](const long i,long &sum) {
+ *       sum+=g(A[i]);                  pfr.parallel_reduce(sum,0,0,N,[&](const long i,long &sum) {
  *                                         sum+=g(A[i]);
  *                                      }, [](long &v, const long elem) {v+=elem;});
+ *
+ * 
+ * 
+ * For just a single parallel loop, it is better to use the one-shot version (see at the end of 
+ * this file).  Useful when there is just 
+     * a single parallel loop.
+     * This version should not be used if the parallel loop is called many 
+     * times (e.g., within a sequential loop)  or if there are several loops 
+     * that can be parallelized by using the same ParallelFor* object. 
+     * If this is the case, the version with the object instance is more 
+     * efficient because the Worker threads are created once and then 
+     * re-used many times.
+     * On the contrary, the one-shot version has a lower setup overhead but 
+     * Worker threads are destroyed at the end of the loop.
+
  *
  */
 
@@ -272,7 +280,7 @@ public:
      * they are not automatically walked. Each chunk can be traversed within the
      * parallel_for body (e.g. with a for loop within <b>f</b> with the same step). 
      *
-     * \note Useful in few cases only - requires some expertise.
+     * \note It requires some expertise.
      *
      * @param first first value of the iteration variable
      * @param last last value of the iteration variable
@@ -640,6 +648,16 @@ public:
         } FF_PARFORREDUCE_F_STOP(this, var, finalreduce);
     }
 
+    template <typename Function, typename FReduction>
+    inline void parallel_reduce_idx(T& var, const T& identity,
+                                    long first, long last, long step, long grain,
+                                    const Function& body, const FReduction& finalreduce,
+                                    const long nw=FF_AUTO) {
+        FF_PARFORREDUCE_START_IDX(this, var, identity, idx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+            body(ff_start_idx, ff_stop_idx, var, _ff_thread_id);
+        } FF_PARFORREDUCE_F_STOP(this, var, finalreduce);
+    }
+
     /**
      * \brief Parallel reduce region (step) - static
      *
@@ -680,7 +698,7 @@ public:
 
 //! ParallelForPipeReduce class
 /**
- * \brief Parallel pipelined for-reduce
+ * \brief Parallel pipelined map+reduce
  *
  */
 template<typename task_t>
@@ -791,10 +809,12 @@ public:
 };
 //#endif //VS12
 
-//
-//---- static functions, useful for one-shot parallel for execution or when no extra settings are needed
-//
+/// ---------------------------------------------------------------------------------
+///  These are the one-shot versions. It is not needed to create an object instance.
+///  They are useful (and more efficient) for a one-shot parallel loop execution
+///  or when no extra settings are needed.
 
+// ----------------- parallel_for ----------------------    
 //! Parallel loop over a range of indexes (step=1)
 template <typename Function>
 static void parallel_for(long first, long last, const Function& body, 
@@ -820,17 +840,43 @@ static void parallel_for(long first, long last, long step, long grain,
     } FF_PARFOR_END(pfor);
 }
 
+// advanced version    
+template <typename Function>
+inline void parallel_for_idx(long first, long last, long step, long grain, 
+                             const Function& f, const long nw=FF_AUTO) {
+    FF_PARFOR_BEGIN_IDX(pfor,parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+        f(ff_start_idx, ff_stop_idx,_ff_thread_id);            
+    } FF_PARFOR_END(pfor);
+}
+
+
+
+// -------------- parallel_reduce -------------------    
 template <typename Function, typename Value_t, typename FReduction>
 void parallel_reduce(Value_t& var, const Value_t& identity, 
-                     long first, long last, 
+                     long first, long last, long step, long grain,
                      const Function& body, const FReduction& finalreduce,
                      const long nw=FF_AUTO) {
     Value_t _var = var;
-    FF_PARFORREDUCE_BEGIN(pfr, _var, identity, parforidx, first, last, 1, PARFOR_STATIC(0), nw) {
+    FF_PARFORREDUCE_BEGIN(pfr, _var, identity, parforidx, first, last, step, PARFOR_DYNAMIC(grain), nw) {
         body(parforidx, _var);            
     } FF_PARFORREDUCE_F_END(pfr, _var, finalreduce);
     var=_var;
 }
+
+// advanced version
+template <typename Function, typename Value_t, typename FReduction>
+void parallel_reduce_idx(Value_t& var, const Value_t& identity, 
+                         long first, long last, long step, long grain,
+                         const Function& body, const FReduction& finalreduce,
+                         const long nw=FF_AUTO) {
+    Value_t _var = var;
+    FF_PARFORREDUCE_BEGIN_IDX(pfr, _var, identity, idx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+        body(ff_start_idx, ff_stop_idx, _var, _ff_thread_id);
+    } FF_PARFORREDUCE_F_END(pfr, _var, finalreduce);
+    var=_var;
+}
+    
     
 } // namespace ff
 

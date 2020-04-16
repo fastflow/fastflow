@@ -648,8 +648,9 @@ protected:
         return comp_nodes[1]->init_output_blocking(m,c);
     }
     void set_output_blocking(pthread_mutex_t   *&m,
-                             pthread_cond_t    *&c) {
-        comp_nodes[1]->set_output_blocking(m,c);
+                             pthread_cond_t    *&c,
+                             bool canoverwrite=false) {
+        comp_nodes[1]->set_output_blocking(m,c, canoverwrite);
     }
 
     // the following calls are needed because a composition

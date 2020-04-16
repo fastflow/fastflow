@@ -613,8 +613,11 @@ protected:
         return true;
     }
     virtual inline void set_output_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c) {
-        assert(p_cons_m == nullptr || (p_cons_m == m && p_cons_c == c));
+                                            pthread_cond_t    *&c,
+                                            bool canoverwrite=false) {
+        assert(canoverwrite ||
+               (p_cons_m == nullptr && p_cons_c == nullptr) ||
+               (p_cons_m == m && p_cons_c == c));
         p_cons_m = m, p_cons_c = c;
     }
 
@@ -1620,14 +1623,20 @@ protected:
     pthread_cond_t    &get_cons_c()       { return *p_cons_c;}
 
 
-    // REMEMBER: 
+    // New Blocking protocol (both for bounded and unbounded buffer):
     // init_output_blocking initializes prod_*
     // set_output_blocking sets p_cons_*
     // init_input_blocking initializes cons_*
-    // set_input_blocking  sets p_prod_*
 
-    // send   : if ok then 'p_cons_m' else 'prod_m'
-    // receive: if ok then 'p_prod_m' else 'cons_m'
+    // sender:
+    //   empty=channel.empty();
+    //   r=channel.send()
+    //   if (!r) timewait(prod_c);
+    //   if empty then signal(p_cons_c) // the channel was empty
+
+    // receive:
+    //  r=channel.receive()
+    //  if (!r) timewait(cons_c);       // channel empty
 };
 
 

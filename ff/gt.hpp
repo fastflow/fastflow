@@ -108,12 +108,13 @@ protected:
         return true;
     }
     inline void set_output_blocking(pthread_mutex_t   *&m,
-                                    pthread_cond_t    *&c) {
+                                    pthread_cond_t    *&c,
+                                    bool canoverwrite=false) {
         p_cons_m = m, p_cons_c = c;
 
         if (filter && (filter->get_out_buffer()!=nullptr)) { // CHECK: asimmetry with test here (*)
             if (filter->isMultiInput() && !filter->isComp()) return;  // to avoid recursive calls to set_output_blocking
-            filter->set_output_blocking(m,c);
+            filter->set_output_blocking(m,c, canoverwrite);
         }
     }
 

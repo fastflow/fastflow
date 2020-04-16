@@ -97,7 +97,6 @@ protected:
         //          - it's a single node (comp or pipeline) with the last stage multi-output     [prev_single_multioutput]
         //
         //
-        //
         for(int i=1;i<nstages;++i) {            
             const bool isa2a_curr                = get_node(i)->isAll2All();
             const bool curr_single_standard      = (!nodes_list[i]->isMultiInput());
@@ -154,10 +153,14 @@ protected:
             pthread_mutex_t   *m        = NULL;
             pthread_cond_t    *c        = NULL;
             if (curr_single_standard) {
+                bool skip_set_output_blocking = false;
                 if (nodes_list[i]->create_input_buffer(in_buffer_entries, fixedsize)<0)  return -1;
                 if (prev_single_standard) {
                     if (nodes_list[i-1]->set_output_buffer(nodes_list[i]->get_in_buffer())<0) return -1;
                 } else {
+                    skip_set_output_blocking = true;
+                    // WARNING: here we add as output node of the previous stage the
+                    //          current node and not a buffer-node.                      
                     if (prev_multi_standard || prev_multi_multioutput) {                        
                         svector<ff_node*> w(1);
                         nodes_list[i-1]->get_out_nodes(w);
@@ -175,8 +178,9 @@ protected:
                 if (!nodes_list[i]->init_input_blocking(m,c)) {
                     error("PIPE, init input blocking mode for node %d\n", i);
                     return -1;
-                }
-                nodes_list[i-1]->set_output_blocking(m,c);
+                }                
+                if (!skip_set_output_blocking) // we do not wait to overwrite previous setting
+                    nodes_list[i-1]->set_output_blocking(m,c); 
                 if (!nodes_list[i-1]->init_output_blocking(m,c,false)) {
                     error("PIPE, init output blocking mode for node %d\n", i-1);
                     return -1;
@@ -691,7 +695,7 @@ public:
         //
         // the last stage is a multi-output node:
         //          - it's a farm with a multi-output collector                                  [last_single_multioutput]
-        //          - it's a farm without collecto and workers are standard node                 [last_multi_standard]
+        //          - it's a farm without collector and workers are standard nodes                 [last_multi_standard]
         //          - it's a farm without collector with multi-output workers                    [last_multi_multioutput]
         //          - it's a all2all with standard nodes                                         [last_multi_standard]
         //          - it's a all2all with multi-output nodes                                     [last_multi_multioutput]
@@ -1433,6 +1437,13 @@ protected:
         nodes_list[last]->get_out_nodes(w);
     }
 
+    inline void get_out_nodes_feedback(svector<ff_node*>&w) {
+        assert(nodes_list.size()>0);
+        int last = static_cast<int>(nodes_list.size())-1;
+        nodes_list[last]->get_out_nodes_feedback(w);
+    }
+
+    
     inline void get_in_nodes(svector<ff_node*>&w) {
         assert(nodes_list.size()>0);
         nodes_list[0]->get_in_nodes(w);
@@ -1488,10 +1499,11 @@ protected:
         return nodes_list[last]->init_output_blocking(m,c);
     }
     virtual inline void set_output_blocking(pthread_mutex_t   *&m,
-                                            pthread_cond_t    *&c) {
+                                            pthread_cond_t    *&c,
+                                            bool canoverwrite=false) {
         const int last = static_cast<int>(nodes_list.size())-1;
         if (last<0) return;
-        nodes_list[last]->set_output_blocking(m,c);
+        nodes_list[last]->set_output_blocking(m,c, canoverwrite);
     }
 
     virtual inline pthread_mutex_t   &get_cons_m()        { return nodes_list[0]->get_cons_m();}

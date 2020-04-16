@@ -33,7 +33,7 @@
  *                   |     --> (stage1->stage2)-- -  
  *       (farm)      v    |                        |
  *              Emitter --                         |--> Gatherer
- *                   ^    |                        |    (multi-input
+ *                   ^    |                        |    (multi-input)
  *                   |     --> (stage1->stage2)-- -
  *                   |                           |
  *                   ---------------------------- 
