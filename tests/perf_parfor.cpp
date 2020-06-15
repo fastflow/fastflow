@@ -91,7 +91,8 @@ static inline void compute(long id, int nticks) {
         simSRandom(id + 1L);
     }
     long val = simRandomRange(1,nticks);
-    for(volatile long k=0;k<val;++k) ;
+    ticks_wait(val);
+    //for(volatile long k=0;k<val;++k) ;
 }
 
 int main(int argc, char *argv[]) {

@@ -74,8 +74,9 @@ void selection(ParallelForReduce<long> & pfr, std::vector<long> &P, std::vector<
     env.avg = fitness(pfr, P, nwS);
 
     auto S = [&](const long start, const long stop, const int thread_id) {
-        
-        for(volatile long j=0;j<(stop-start);++j);   // lose time
+
+        // losing time
+        ticks_wait(stop-start); //for(volatile long j=0;j<(stop-start);++j);  
 
         for(long j=start; j<stop; ++j) {
             if (P[j] > env.avg) bufferPool[thread_id].push_back(P[j]);
@@ -90,7 +91,8 @@ void selection(ParallelForReduce<long> & pfr, std::vector<long> &P, std::vector<
 }
 
 const long &evolution(long &element, const Env_t&,const int) {
-    for(volatile long j=0;j<element%5000;++j);   // lose time
+    ticks_wait(element%5000);
+    //for(volatile long j=0;j<element%5000;++j);   // lose time
     
     if (element & 0x1) element += 1;
     else element -=1;
@@ -102,8 +104,9 @@ void filter(ParallelForReduce<long> & pfr, std::vector<long> &P, std::vector<lon
     env.iter +=1;
 
     pfr.parallel_for(0L, (long)(buffer.size()),1L, 8, // dynamic scheduling with grain 8
-                     [&](const long i) { 
-                         for(volatile long j=0;j<buffer[i]%5000;++j);   // lose time
+                     [&](const long i) {
+                         ticks_wait(buffer[i]%5000);
+                         //for(volatile long j=0;j<buffer[i]%5000;++j);   // lose time
                      }, nwF );
     
 }

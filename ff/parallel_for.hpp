@@ -843,8 +843,9 @@ static void parallel_for(long first, long last, long step, long grain,
 // advanced version    
 template <typename Function>
 inline void parallel_for_idx(long first, long last, long step, long grain, 
-                             const Function& f, const long nw=FF_AUTO) {
-    FF_PARFOR_BEGIN_IDX(pfor,parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+                             const Function& f, const long nw=FF_AUTO,
+                             const bool noActiveScheduler=false) {
+    FF_PARFOR_BEGIN_IDX(pfor,parforidx,first,last,step,PARFOR_DYNAMIC(grain),nw,noActiveScheduler){
         f(ff_start_idx, ff_stop_idx,_ff_thread_id);            
     } FF_PARFOR_END(pfor);
 }
@@ -869,9 +870,9 @@ template <typename Function, typename Value_t, typename FReduction>
 void parallel_reduce_idx(Value_t& var, const Value_t& identity, 
                          long first, long last, long step, long grain,
                          const Function& body, const FReduction& finalreduce,
-                         const long nw=FF_AUTO) {
+                         const long nw=FF_AUTO, const bool noActiveScheduler=false) {
     Value_t _var = var;
-    FF_PARFORREDUCE_BEGIN_IDX(pfr, _var, identity, idx,first,last,step,PARFOR_DYNAMIC(grain),nw) {
+    FF_PARFORREDUCE_BEGIN_IDX(pfr, _var, identity, idx,first,last,step,PARFOR_DYNAMIC(grain),nw,noActiveScheduler) {
         body(ff_start_idx, ff_stop_idx, _var, _ff_thread_id);
     } FF_PARFORREDUCE_F_END(pfr, _var, finalreduce);
     var=_var;

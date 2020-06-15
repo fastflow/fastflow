@@ -67,7 +67,7 @@ inline static void SRandom(unsigned long seed) {
 }
 
 inline static void compute(long end) {
-  for(volatile long j=0;j<end;++j);
+    ticks_wait(end); //for(volatile long j=0;j<end;++j);
 }
 
 int main(int argc, char *argv[]) {

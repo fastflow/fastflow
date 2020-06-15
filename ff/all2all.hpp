@@ -395,6 +395,20 @@ public:
         return 0;
     }
 
+    /**
+     * \brief checks if the node is running 
+     *
+     */
+    bool done() const { 
+        const size_t nworkers1 = workers1.size();
+        const size_t nworkers2 = workers2.size();
+        for(size_t i=0;i<nworkers1;++i) 
+            if (!workers1[i]->done()) return false;
+        for(size_t i=0;i<nworkers2;++i) 
+            if (!workers2[i]->done()) return false;
+        return true;
+    }
+
     const svector<ff_node*>& getFirstSet()  const { return workers1; }
     const svector<ff_node*>& getSecondSet() const { return workers2; }
 

@@ -84,8 +84,8 @@ public:
         }
         
         printf("[%ld] I'm working\n", get_my_id());
-        for(volatile unsigned i=0;i<task->iter;++i);
-        
+        ticks_wait(task->iter);
+
         return t;
     }
 

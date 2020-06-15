@@ -76,7 +76,7 @@ struct W: ff_monode_t<long> {
 struct N: ff_minode_t<long> {
     N(const long numtasks):numtasks(numtasks) {}
     long *svc(long *task){
-        for(volatile long i=0;i<10000; ++i);
+        ticks_wait(10000); //for(volatile long i=0;i<10000; ++i);
         printf("N got task %ld\n",(long)task);
         ++received;
         return GO_ON;
