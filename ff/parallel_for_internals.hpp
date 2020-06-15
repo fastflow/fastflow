@@ -135,11 +135,14 @@ namespace ff {
     /* This is equivalent to the above one except that the user has to define
      * the for loop in the range (ff_start_idx,ff_stop_idx(
      * This can be useful if you have to perform some actions before starting
-     * the loop.
+     * the local loop and/or some actions after the local loop finishes.
+     * The onoff parameter allow to disable/enable the scheduler thread 
+     * (by default the scheduler is active.
      */
-#define FF_PARFOR_BEGIN_IDX(name, idx, begin, end, step, chunk, nw)               \
+#define FF_PARFOR_BEGIN_IDX(name, idx, begin, end, step, chunk, nw, onoff)        \
     ff_forall_farm<forallreduce_W<int> > name(nw,false,true);                     \
     name.setloop(begin,end,step,chunk, nw);                                       \
+    name.disableScheduler(onoff);                                                 \
     auto F_##name = [&] (const long ff_start_idx, const long ff_stop_idx,         \
                          const int _ff_thread_id, const int) {                    \
     /* here you have to define the for loop using ff_start/stop_idx  */
@@ -181,9 +184,10 @@ namespace ff {
         PRAGMA_IVDEP;                                                             \
         for(long idx=start;idx<stop;idx+=step)
 
-#define FF_PARFORREDUCE_BEGIN_IDX(name, var,identity, idx,begin,end,step, chunk, nw)           \
+#define FF_PARFORREDUCE_BEGIN_IDX(name, var,identity, idx,begin,end,step, chunk, nw, onoff)    \
     ff_forall_farm<forallreduce_W<decltype(var)> > name(nw,false,true);                        \
     name.setloop(begin,end,step,chunk,nw);                                                     \
+    name.disableScheduler(onoff);                                                              \
     auto idtt_##name =identity;                                                                \
     auto F_##name =[&](const long ff_start_idx,const long ff_stop_idx,const int _ff_thread_id, \
                        decltype(var) &var) {

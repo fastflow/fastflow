@@ -75,7 +75,7 @@ int main(int argc, char * argv[]) {
             C->reserve(stop-start);
             for(long i=start;i<stop;++i)  {
                 // waste some time to simulate a more complex computation
-                for(volatile long m=0;m<50;++m); 
+                ticks_wait(1000); //for(volatile long m=0;m<50;++m); 
                 C->push_back(A[i]*B[i]);
             }
             node.ff_send_out(C);

@@ -830,8 +830,11 @@ protected:
         return thread->isfrozen();
     }
 
-
-    virtual bool done() const { 
+    /**
+     * \brief checks if the node is running 
+     *
+     */
+    virtual bool done() const  {
         if (!thread) return true;
         return thread->done();
     }

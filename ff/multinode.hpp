@@ -119,12 +119,7 @@ protected:
         prepared=true;
         return 0;
     }
-    
-    int  wait(/* timeout */) { 
-        if (gt->wait()<0) return -1;
-        return 0;
-    }
-    
+        
     void blocking_mode(bool blk=true) {
         blocking_in = blocking_out = blk;
         gt->blocking_mode(blk);
@@ -348,8 +343,22 @@ public:
         return run();
     }
 
+    int  wait(/* timeout */) { 
+        if (gt->wait()<0) return -1;
+        return 0;
+    }
+    
     int wait_freezing() { return gt->wait_freezing(); }
 
+
+    /**
+     * \brief checks if the node is running 
+     *
+     */
+    bool done() const { 
+        return gt->done();
+    }
+    
     bool fromInput() const { return gt->fromInput(); }
     
     /**
@@ -480,12 +489,7 @@ protected:
         if (lb->getnworkers() == 0) ff_send_out(task);
         lb->propagateEOS(task);
     }
-    
-    int  wait(/* timeout */) { 
-        if (lb->waitlb()<0) return -1;
-        return 0;
-    }
-    
+        
     void blocking_mode(bool blk=true) {
         blocking_in = blocking_out = blk;
         lb->blocking_mode(blk);
@@ -698,6 +702,19 @@ public:
         return run(true);
     }
 
+    int  wait(/* timeout */) { 
+        if (lb->waitlb()<0) return -1;
+        return 0;
+    }
+
+    /**
+     * \brief checks if the node is running 
+     *
+     */
+    bool done() const { 
+        return lb->done();
+    }
+    
     /**
      * \internal
      * \brief Gets the internal lb (Emitter)

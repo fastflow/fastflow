@@ -1236,6 +1236,10 @@ public:
         for(unsigned int i=0;i<nodes_list.size();++i) nodes_list[i]->freeze();
     }
 
+    /**
+     * \brief checks if the pipeline is still running or not
+     *
+     */
     inline bool done() const { 
         int nstages=static_cast<int>(nodes_list.size());
         for(int i=0;i<nstages;++i) 

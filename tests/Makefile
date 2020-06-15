@@ -62,7 +62,7 @@ endif
 #                       contained in the ff directory.
 #
 ###############################à#############################################
-CC                   = gcc 
+CC                   = gcc
 CXX 		     = g++ -std=c++17 #-DBLOCKING_MODE -DDEFAULT_BUFFER_CAPACITY=32768 -DFF_BOUNDED_BUFFER
 #CC		     = icc  -mmic
 #CXX 		     = icpc -mmic 

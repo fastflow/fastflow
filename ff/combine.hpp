@@ -75,18 +75,7 @@ class ff_comb: public ff_minode {
     // used if the last stage has no output channel
     static bool devnull(void*,unsigned long, unsigned long, void*) {return true;}
 
-private:
-    ff_node* getFirst() const {
-        if (comp_nodes[0]->isComp())
-            return ((ff_comb*)comp_nodes[0])->getFirst();
-        return comp_nodes[0];
-    }
-    ff_node* getLast() const {
-        if (comp_nodes[1]->isComp())
-            return ((ff_comb*)comp_nodes[1])->getLast();
-        return comp_nodes[1];
-    }
-    
+private:    
     void registerAllGatherCallback(int (*cb)(void *,void **, void*), void * arg) {
         assert(isMultiInput());
         // NOTE: the gt of the first node will be replaced by the ff_comb gt.
@@ -174,6 +163,17 @@ public:
         if (wait()<0) return -1;
         return 0;
     }
+
+    /**
+     * \brief checks if the node is running 
+     *
+     */
+    bool done() const { 
+        if (comp_nodes[0]->isMultiInput())
+            return ff_minode::done();
+        return ff_node::done();
+    }
+    
     // NOTE: it is multi-input only if the first node is multi-input
     bool isMultiInput() const {
         if (getFirst()->isMultiInput()) return true;
@@ -186,6 +186,19 @@ public:
     }        
     inline bool isComp() const        { return true; }
 
+    // returns the first node on the left-hand side
+    ff_node* getFirst() const {
+        if (comp_nodes[0]->isComp())
+            return ((ff_comb*)comp_nodes[0])->getFirst();
+        return comp_nodes[0];
+    }
+    // returns the last node on the right-hand side
+    ff_node* getLast() const {
+        if (comp_nodes[1]->isComp())
+            return ((ff_comb*)comp_nodes[1])->getLast();
+        return comp_nodes[1];
+    }
+    
     double ffTime() {
         return diffmsec(getstoptime(),getstarttime());
     }

@@ -55,8 +55,11 @@ using namespace ff;
 struct Worker: ff_node_t<long> {
   long *svc(long *in) {
 
-      for(volatile size_t i=0; i<1000; ++i)
-	  __asm__("nop");
+      volatile size_t i=0;
+      while(i<1000) {
+          __asm__("nop");
+          i = i +1;
+      }
       
       return in;
   }
