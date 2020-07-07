@@ -45,7 +45,7 @@ endif
 #
 # -DBLOCKING_MODE       It enables passive waiting communication protocol,
 #                       This option makes the nodes less reactive, but
-#		        more energy friendly.
+#                       more energy friendly.
 #
 # -DTRACE_FASTFLOW      It enable statistics. Typically this has an inpact
 #                       on the application performance of about 2-4%
@@ -62,24 +62,45 @@ endif
 #                       contained in the ff directory.
 #
 ###############################à#############################################
-CC                   = gcc
-CXX 		     = g++ -std=c++17 #-DBLOCKING_MODE -DDEFAULT_BUFFER_CAPACITY=32768 -DFF_BOUNDED_BUFFER
-#CC		     = icc  -mmic
-#CXX 		     = icpc -mmic 
-#CXX		     = clang++
-LINK_OPT             = 
-VERSION              = 
-OPTIMIZE_FLAGS       = -O3 -finline-functions -DNDEBUG
-CXXFLAGS             = -DNO_CMAKE_CONFIG -Wall
-CFLAGS               =
-LDFLAGS              = 
+#CC                 ?= gcc
+#CXX                ?= g++ -std=c++17 #-DBLOCKING_MODE -DDEFAULT_BUFFER_CAPACITY=32768 -DFF_BOUNDED_BUFFER
+#CC                 ?= icc  -mmic
+#CXX                ?= icpc -mmic 
+#CXX                ?= clang++
+#LINK_OPT            = 
+#VERSION             = 
+#CFLAGS              =
+#LDFLAGS             = 
+CXXFLAGS            += -std=c++17
+ifdef DEBUG
+    OPTIMIZE_FLAGS  += -g -fno-inline-functions
+else
+    OPTIMIZE_FLAGS  += -O3 -finline-functions -DNDEBUG
+endif
+
+ifdef FF_ESAVER
+    CXXFLAGS        += -DFF_ESAVER
+endif
+ifdef NO_DEFAULT_MAPPING
+    CXXFLAGS        += -DNO_DEFAULT_MAPPING
+endif
+ifdef BLOCKING_MODE
+    CXXFLAGS        += -DBLOCKING_MODE
+endif
+ifdef TRACE_FASTFLOW
+    CXXFLAGS        += -DTRACE_FASTFLOW
+endif
+ifdef DEFAULT_BUFFER_CAPACITY
+    CXXFLAGS        += -DDEFAULT_BUFFER_CAPACITY=${DEFAULT_BUFFER_CAPACITY}
+endif
+CXXFLAGS            += -DNO_CMAKE_CONFIG -Wall
 INCS                 = -I.. 
 LIBS                 = -pthread
-#MAMMUT_HOME          = ../mammut
+#MAMMUT_HOME         = ../mammut
 ifdef MAMMUT_HOME
-CXX                 += -DMAMMUT
-INCS                += -I $(MAMMUT_HOME)
-LIBS                +=  $(MAMMUT_HOME)/mammut/libmammut.a
+    CXX             += -DMAMMUT
+    INCS            += -I $(MAMMUT_HOME)
+    LIBS            +=  $(MAMMUT_HOME)/mammut/libmammut.a
 endif
 ARCH                 = -march=$(shell uname -m)
 
@@ -87,10 +108,10 @@ ARCH                 = -march=$(shell uname -m)
 # FIXME: quick and dirty fix for ARM platform
 ifneq ($(findstring $(shell uname -m),armv7l),)
         ARCH = -mcpu=cortex-a9 -march=armv7-a
-        LIBS += -lrt
+        LIBS += -lrt -latomic
 endif
 
-OS   		     = $(shell uname)
+OS                   = $(shell uname)
 ifeq ($(ARCH),-march=x86_64)
   ARCH = -march=core2
 endif
@@ -103,7 +124,8 @@ ifeq ($(strip $(OS)),Darwin)
   endif
 endif
 
-INCLUDES             = -I. $(INCS) 
+#INCLUDES            = -I. $(INCS)
+INCLUDES             = $(INCS)
 TARGET               = simplest test1 test1b test2 test3 test3b test3_farm test4 test5 test6 test7 test8 perf_test1 test_accelerator test_accelerator2 test_accelerator3 test_accelerator_farm+pipe test_accelerator_pipe test_ofarm test_ofarm2 test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing test_accelerator_pipe+farm test_farm+pipe test_farm+pipe2 test_freeze test_masterworker bench_masterworker test_multi_masterworker test_pipe+masterworker test_scheduling test_dt test_torus test_torus2 perf_test_alloc1 perf_test_alloc2 perf_test_alloc3 perf_test_noalloc test_uBuffer test_sendq test_spinBarrier test_multi_input test_multi_input2 test_multi_input3 test_multi_input4 test_multi_input5 test_multi_input6 test_multi_input7 test_multi_input8 test_multi_input9 test_multi_input10 test_multi_input11 test_accelerator+pinning test_dataflow test_dataflow2 test_noinput_pipe test_stopstartthreads test_stopstartthreads2 test_stopstartthreads3 test_stopstartall test_MISD test_parfor test_parfor2 test_parforpipereduce test_dotprod_parfor test_parfor_unbalanced test_parfor_multireduce test_parfor_multireduce2 test_lb_affinity test_farm test_farm2 test_pipe test_pipe2 perf_parfor perf_parfor2 test_graphsearch test_multi_output test_multi_output2 test_multi_output3 test_multi_output4 test_multi_output5 test_multi_output6 test_pool1 test_pool2 test_pool3 test_devicequery test_map test_mdf test_taskf latptr11 test_taskcallbacks test_eosw test_nodeselector test_stats test_dc test_combine test_combine1 test_combine2 test_combine3 test_combine4 test_combine5 test_combine6 test_combine7 test_combine8 test_combine9 test_combine10 test_combine11 test_combine12 test_combine13 test_combine14 test_all-to-all test_all-to-all2 test_all-to-all3 test_all-to-all4 test_all-to-all5 test_all-to-all6 test_all-to-all7 test_all-to-all8 test_all-to-all9 test_all-to-all10 test_all-to-all11 test_all-to-all12 test_all-to-all13 test_all-to-all14 test_all-to-all15 test_all-to-all16 test_optimize test_optimize2 test_optimize3 test_optimize4 test_optimize5 test_all-or-none test_farm+farm test_farm+A2A test_farm+A2A2
 
 
