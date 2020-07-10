@@ -83,7 +83,7 @@ struct Collector1: ff_node_t<long> {
     long cnt=1;
 };
 struct Collector2: ff_node_t<long> {
-    long *svc(long *in) {
+    long *svc(long *) {
         return GO_ON;
     }
 };

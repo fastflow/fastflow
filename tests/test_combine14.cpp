@@ -91,7 +91,7 @@ struct Collector: ff_monode_t<long> {
 };
 
 struct Sink: ff_minode_t<long> {
-    long* svc(long* in) {
+    long* svc(long*) {
 	return GO_ON;
     }
 };

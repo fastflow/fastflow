@@ -55,7 +55,7 @@ using namespace ff;
 
 struct Generator: ff_node_t<long> {
     Generator(long streamlen):streamlen(streamlen) {}
-    long* svc(long* in) {
+    long* svc(long*) {
 	for(long i=1;i<=streamlen;++i) {
 	    ff_send_out((long*)i);
 	}
@@ -64,7 +64,7 @@ struct Generator: ff_node_t<long> {
     long streamlen;
 };
 struct Gatherer: ff_minode_t<long> {
-    long* svc(long* in) {
+    long* svc(long*) {
 	return GO_ON;
     }
 };

@@ -54,7 +54,7 @@
 using namespace ff;
 
 struct First: ff_node_t<long> {
-    long* svc(long*in) {
+    long* svc(long*) {
 	for(long i=1;i<=1000;++i)
 	    ff_send_out((long*)i);
 	return EOS;

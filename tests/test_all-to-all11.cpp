@@ -154,7 +154,7 @@ struct Worker: ff_monode_t<long> {
         return GO_ON;
     }
 
-    void eosnotify(ssize_t id) {
+    void eosnotify(ssize_t) {
         broadcast_task(EOS);
         ff_send_out_to(EOS, get_num_feedbackchannels());
     }

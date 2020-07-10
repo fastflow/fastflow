@@ -240,5 +240,7 @@
 // OpenCL additional code needed to compile kernels
 #define FF_OPENCL_DATATYPES_FILE "ff_opencl_datatypes.cl"
 
+// Convenience macros.
+#define FF_IGNORE_UNUSED(x) static_cast<void>(x)
 
 #endif /* FF_CONFIG_HPP */

@@ -644,9 +644,9 @@ protected:
         return 0;        
     }
     
-    bool init_input_blocking(pthread_mutex_t   *&m,
-                             pthread_cond_t    *&c,
-                             bool feedback=true) {
+    bool init_input_blocking(pthread_mutex_t   *&,
+                             pthread_cond_t    *&,
+                             bool /*feedback*/=true) {
         size_t nworkers1 = workers1.size();
         for(size_t i=0;i<nworkers1; ++i) {
             pthread_mutex_t   *m        = NULL;
@@ -655,9 +655,9 @@ protected:
         }
         return true;
     }
-    bool init_output_blocking(pthread_mutex_t   *&m,
-                              pthread_cond_t    *&c,
-                              bool feedback=true) {
+    bool init_output_blocking(pthread_mutex_t   *&,
+                              pthread_cond_t    *&,
+                              bool /*feedback*/=true) {
         size_t nworkers2 = workers2.size();
         for(size_t i=0;i<nworkers2; ++i) {
             pthread_mutex_t   *m        = NULL;

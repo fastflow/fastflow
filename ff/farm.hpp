@@ -668,7 +668,7 @@ protected:
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
-                                            bool feedback=true) {
+                                            bool /*feedback*/=true) {
         bool r = lb->init_input_blocking(m,c);
         if (!r) return false;
         // NOTE: for all registered input node (or buffernode) we have to set the 
@@ -683,7 +683,7 @@ protected:
     // producer
     virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
                                              pthread_cond_t    *&c,
-                                             bool feedback=true) {
+                                             bool /*feedback*/=true) {
         if (collector && !collector_removed) {
             if (collector == (ff_node*)gt)
                 return gt->init_output_blocking(m,c);
@@ -804,7 +804,7 @@ public:
         for(size_t i=0;i<max_num_workers;++i) workers[i]=NULL;        
     }
 
-    ff_farm(const ff_farm& f) { 
+    ff_farm(const ff_farm& f) : ff_node(f) { 
         if (f.prepared) {
             error("ff_farm, copy constructor, the input farm is already prepared\n");
             return;
@@ -1054,7 +1054,7 @@ public:
     void ordered_resize_memory(const size_t size) {
         ordering_Memory.resize(size);
     }
-    ordering_pair_t* const ordered_get_memory() { return ordering_Memory.begin(); }
+    ordering_pair_t* ordered_get_memory() { return ordering_Memory.begin(); }
     
     int ondemand_buffer() const { return ondemand; }
     ssize_t ordering_memory_size() const { return ordering_memsize; }
@@ -1806,7 +1806,7 @@ protected:
     /**
      * \brief svc method
      */
-    void* svc(void * task) { return NULL; }
+    void* svc(void *) { return NULL; }
 
     /**
      * \brief The svc_init method

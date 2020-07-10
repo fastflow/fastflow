@@ -523,7 +523,7 @@ public:
         out_buffer_entries(out_buffer_entries) {            
     }
 
-    ff_pipeline(const ff_pipeline& p) {
+    ff_pipeline(const ff_pipeline& p) : ff_node(p) {
         if (p.prepared) {
             error("ff_pipeline, copy constructor, the input pipeline is already prepared\n");
             return;
@@ -1467,7 +1467,7 @@ protected:
     // returns the pipeline starting time
     const struct timeval startTime() { return nodes_list[0]->getstarttime(); }
 
-    void* svc(void * task) { return NULL; }    
+    void* svc(void *) { return NULL; }    
     int   svc_init() { return -1; };    
     void  svc_end()  {}
 
@@ -1491,13 +1491,13 @@ protected:
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
-                                            bool feedback=true) {
+                                            bool /*feedback*/=true) {
         return nodes_list[0]->init_input_blocking(m,c);
     }
     // producer
     virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
                                              pthread_cond_t    *&c,
-                                             bool feedback=true) {
+                                             bool /*feedback*/=true) {
         const int last = static_cast<int>(nodes_list.size())-1;
         if (last<0) return false;
         return nodes_list[last]->init_output_blocking(m,c);

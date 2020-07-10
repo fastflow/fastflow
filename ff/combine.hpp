@@ -101,7 +101,7 @@ public:
         }
     }
 
-    ff_comb(const ff_comb& c) {
+    ff_comb(const ff_comb& c) : ff_minode(c) {
         for (auto s: c.comp_nodes) {
             if (s->isComp()) {
                 comp_nodes.push_back(new ff_comb(*(ff_comb*)s));
@@ -638,7 +638,7 @@ protected:
     // consumer
     bool init_input_blocking(pthread_mutex_t   *&m,
                              pthread_cond_t    *&c,
-                             bool feedback=true) {
+                             bool /*feedback*/=true) {
         ff_node *n = getFirst();
         if (n->isMultiInput()) {
             // inits local gt, which is used for gathering tasks....
@@ -657,7 +657,7 @@ protected:
     // producer
     bool init_output_blocking(pthread_mutex_t   *&m,
                               pthread_cond_t    *&c,
-                              bool feedback=true) {
+                              bool /*feedback*/=true) {
         return comp_nodes[1]->init_output_blocking(m,c);
     }
     void set_output_blocking(pthread_mutex_t   *&m,

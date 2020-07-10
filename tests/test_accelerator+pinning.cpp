@@ -35,7 +35,7 @@ public:
   nsims(nsims)
   {}
 
-  void * svc(void* task) {
+  void * svc(void*) {
     //prepare sim. tasks and send them out
     vector<input_task_t *> *tasks = new vector<input_task_t *>(nsims);
     for(int i=0; i<nsims; i++) {
