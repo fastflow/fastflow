@@ -94,7 +94,7 @@ private:
 
 class Collector: public ff_minode_t<long> {
 public:
-    Collector(long streamlen): error(false) {}
+    Collector(long): error(false) {}
 
     long* svc(long *task) {
         const long &t = *task;

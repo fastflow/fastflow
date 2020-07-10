@@ -219,7 +219,7 @@ public:
         }
         gt->set_filter(filter);
     }
-    ff_minode(const ff_minode& n) {
+    ff_minode(const ff_minode& n) : ff_node(n) {
         // here we re-initialize a new gatherer
         gt = new ff_gatherer(n.gt->max_nworkers);
         if (!gt) {
@@ -540,7 +540,7 @@ public:
         lb->set_filter(filter);
     }
 
-    ff_monode(const ff_monode& n) {
+    ff_monode(const ff_monode& n) : ff_node(n) {
         // here we re-initialize a new gatherer
         lb = new ff_loadbalancer(n.lb->max_nworkers);
         if (!lb) {
@@ -681,7 +681,7 @@ public:
      *
      * \return 0 if successful, otherwise -1 is returned.
      */
-    int run(bool skip_init=false) {
+    int run(bool /*skip_init*/=false) {
         if (!lb) return -1;
         if (lb->get_filter() == nullptr)
             lb->set_filter(this);
@@ -864,7 +864,7 @@ struct internal_mo_transformer: ff_monode {
         cleanup=true;
         ff_monode::set_filter(n);
     }
-    internal_mo_transformer(const internal_mo_transformer& t) {
+    internal_mo_transformer(const internal_mo_transformer& t) : ff_monode(t) {
         cleanup=t.cleanup;
         n = t.n;
         ff_monode::set_filter(n);
@@ -931,7 +931,7 @@ struct internal_mi_transformer: ff_minode {
         ff_minode::set_filter(n);
     }
     
-    internal_mi_transformer(const internal_mi_transformer& t) {
+    internal_mi_transformer(const internal_mi_transformer& t) : ff_minode(t) {
         cleanup=t.cleanup;
         n = t.n;
         ff_minode::set_filter(n);

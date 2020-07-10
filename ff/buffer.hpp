@@ -375,12 +375,12 @@ public:
     }
 
     // Not yet implemented 
-    inline bool mp_push(void *const data) {
+    inline bool mp_push(void *const) {
         abort();
         return false;
     }
     // Not yet implemented 
-    inline bool mc_pop(void ** data) {
+    inline bool mc_pop(void **) {
         abort();
         return false;
     }

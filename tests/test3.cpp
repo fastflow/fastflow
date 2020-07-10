@@ -71,7 +71,7 @@ private:
 };
 
 
-int main(int argc, char * argv[]) {
+int main() {
     int streamlen = 1000;
     // bild a 2-stage pipeline
     ff_pipeline pipe;

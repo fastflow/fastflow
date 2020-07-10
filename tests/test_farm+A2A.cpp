@@ -90,7 +90,7 @@ struct Second: ff_monode_t<long> {
     long* svc(long* in) { return in;}
 };
 struct Collector: ff_minode_t<long> {
-    long* svc(long* in) {
+    long* svc(long*) {
 	printf("Collector, received from pipe%ld\n", get_channel_id());
 	return GO_ON;
     }

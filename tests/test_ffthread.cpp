@@ -36,7 +36,7 @@ public:
 	freeze();
     }
     
-    void* svc(void* task)
+    void* svc(void*)
     {
 	if (!running)
 	    {

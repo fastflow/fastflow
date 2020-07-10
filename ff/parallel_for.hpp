@@ -381,7 +381,7 @@ public:
      * small kernels), \p false blocking support
      * @param skipWarmup Skip warmup phase (autotuning)
      */
-    ParallelForReduce(const long maxnw, bool spinWait, bool skipWarmup, bool spinbarrier): 
+    ParallelForReduce(const long maxnw, bool /*spinWait*/, bool /*skipWarmup*/, bool /*spinbarrier*/): 
         ff_forall_farm<forallreduce_W<T> >(maxnw,false, true, false) {}
 
 
@@ -719,7 +719,7 @@ protected:
     } reduce;
 
 public:
-    explicit ParallelForPipeReduce(const long maxnw=FF_AUTO, bool spinwait=false, bool spinbarrier=false):
+    explicit ParallelForPipeReduce(const long maxnw=FF_AUTO, bool spinwait=false, bool /*spinbarrier*/=false):
         pfr(maxnw,false,true,false) // skip loop warmup and disable spinwait/spinbarrier
     {
         ff_pipeline::add_stage(&pfr);

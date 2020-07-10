@@ -141,7 +141,7 @@ public:
         return devices.size()-1;
     }
 
-    const size_t numNodes() const { return devices.size(); }
+    size_t numNodes() const { return devices.size(); }
 
     int run(bool = false) { return ff_node::run();  }
 

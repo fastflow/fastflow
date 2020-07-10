@@ -271,13 +271,13 @@ static inline ssize_t ff_realNumCores() {
                 if (!found) S.insert(i);                
                 if (--cnt==0) {
                     n=0;
-                    std::for_each(S.begin(), S.end(), [&n](int const& i) { ++n;});
+                    std::for_each(S.begin(), S.end(), [&n](int const&) { ++n;});
                     return n;
                 }
             }
         }
         n=0;
-        std::for_each(S.begin(), S.end(), [&n](int const& i) { ++n;});
+        std::for_each(S.begin(), S.end(), [&n](int const&) { ++n;});
         return n;
     } while(0);
 #endif // HAVE_PTHREAD_SETAFFINITY_NP

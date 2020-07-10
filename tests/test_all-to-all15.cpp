@@ -53,7 +53,7 @@ using namespace ff;
 
 const long ntasks=100000;
 struct Source: ff_monode_t<long> {
-    long* svc(long* in) {
+    long* svc(long*) {
         for(long i=1;i<=ntasks;++i) {
             ff_send_out((long*)i);
         }
@@ -63,7 +63,7 @@ struct Source: ff_monode_t<long> {
 
 struct PipeA2A: ff_pipeline {
     struct Sink: ff_minode_t<long> {        
-        long* svc(long* in) {
+        long* svc(long*) {
             ++cnt;
             return GO_ON;
         }
@@ -95,7 +95,7 @@ struct PipeA2A: ff_pipeline {
         }
     };
 
-    PipeA2A(int nsources) {
+    PipeA2A(int /*nsources*/) {
         const long nworkers=2;
 
         ff_a2a* a2a = new ff_a2a;

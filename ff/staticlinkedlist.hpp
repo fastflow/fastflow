@@ -130,7 +130,7 @@ public:
      */
     enum {DEFAULT_CACHE_SIZE=1024};
 
-    staticlinkedlist(int cachesize=DEFAULT_CACHE_SIZE, bool fillcache=false){
+    staticlinkedlist(int cachesize=DEFAULT_CACHE_SIZE, bool /*fillcache*/=false){
         // avoid unused field warning for padding
         if (longxCacheLine>1)
             padding1[0]=padding2[0];

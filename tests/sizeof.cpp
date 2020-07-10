@@ -39,7 +39,7 @@
 typedef SSIZE_T ssize_t;
 #endif
 
-int main(int argc, char * argv[]) {
+int main() {
 
 	std::cout << "char " << sizeof(char) << "\n";
 	std::cout << "short " << sizeof(short) << "\n";
