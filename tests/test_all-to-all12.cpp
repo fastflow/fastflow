@@ -89,7 +89,7 @@ struct Worker1: ff_monode_t<long> {
 
 struct MultiInputHelper2: ff_minode_t<long> {
 	long *svc(long *in) { return in; }
-    void eosnotify(ssize_t id) {
+    void eosnotify(ssize_t) {
         if (++neos == get_num_inchannels())
             ff_send_out(EOS);        
     }
@@ -104,7 +104,7 @@ struct Worker2: ff_monode_t<long> {
         return GO_ON;
     }
 
-    void eosnotify(ssize_t id) {
+    void eosnotify(ssize_t) {
         ff_send_out_to(last, get_num_feedbackchannels() ); 
         ff_send_out_to(EOS, get_num_feedbackchannels());
     }

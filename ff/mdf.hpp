@@ -70,7 +70,7 @@ protected:
         virtual inline void setMaxTasks(size_t) {}
         virtual inline void activate(bool) {}
         virtual inline void alloc_and_send(std::vector<param_info> &, base_f_t *) {}
-        virtual inline void thaw(bool freeze=false,ssize_t=-1) {};
+        virtual inline void thaw(bool /*freeze*/=false,ssize_t=-1) {};
         virtual inline int  wait_freezing() { return 0; };
     };
     template<typename T>
@@ -171,7 +171,7 @@ protected:
             return baseSched::GO_ON;
         }
 
-        void eosnotify(ssize_t id=-1) { lb->broadcast_task(FF_EOS); }
+        void eosnotify(ssize_t /*id*/=-1) { lb->broadcast_task(FF_EOS); }
         int wait_freezing()           { return lb->wait_lb_freezing(); }
 
     private:
@@ -256,7 +256,7 @@ public:
                   ff_numCores());         
         farmworkers=(std::min)(ff_numCores(),nw); 
     }	
-    void setThreshold(size_t th=0) {} // FIX: 
+    void setThreshold(size_t /*th*/=0) {} // FIX: 
 	
 
     // FIX: TODO

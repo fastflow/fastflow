@@ -87,7 +87,7 @@ struct Worker1: ff_node_t<long> {
 
 struct Collector: ff_minode_t<long> {
     Collector(long ntasks):ntasks(ntasks) {}
-    long *svc(long *in) {
+    long *svc(long *) {
         --ntasks;
         //        std::cout << "received input from " << get_channel_id() << "\n";
         return GO_ON;

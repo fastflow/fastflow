@@ -83,7 +83,7 @@ protected:
     
     inline bool init_input_blocking(pthread_mutex_t   *&m,
                                     pthread_cond_t    *&c,
-                                    bool feedback=true) {
+                                    bool /*feedback*/=true) {
         if (cons_m == nullptr) {
             assert(cons_c == nullptr);
             cons_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
@@ -98,7 +98,7 @@ protected:
     // producer
     inline bool init_output_blocking(pthread_mutex_t   *&m,
                                      pthread_cond_t    *&c,
-                                     bool feedback=true) {
+                                     bool /*feedback*/=true) {
         if (prod_m == nullptr) {
             assert(prod_c == nullptr);
             prod_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
@@ -110,9 +110,9 @@ protected:
         m = prod_m, c = prod_c;
         return true;
     }
-    inline void set_output_blocking(pthread_mutex_t   *&m,
-                                    pthread_cond_t    *&c,
-                                    bool canoverwrite=false) {
+    inline void set_output_blocking(pthread_mutex_t   *&,
+                                    pthread_cond_t    *&,
+                                    bool /*canoverwrite*/=false) {
         assert(1==0);
     }
 
@@ -165,7 +165,7 @@ protected:
      *
      * \parm n TODO
      */
-    virtual inline void callback(int n) { }
+    virtual inline void callback(int /*n*/) { }
     
     /**
      * \brief Defines callback
@@ -177,7 +177,7 @@ protected:
      *
      * \return \p NULL pointer is returned.
      */
-    virtual inline void * callback(int n, void *task) { return NULL;}
+    virtual inline void * callback(int /*n*/, void * /*task*/) { return NULL;}
 #endif
 
     /**
@@ -235,7 +235,7 @@ protected:
      */
     virtual inline bool schedule_task(void * task, 
                                       unsigned long retry=((unsigned long)-1), 
-                                      unsigned long ticks=0) {
+                                      unsigned long /*ticks*/=0) {
         unsigned long cnt;
         if (blocking_out) {
             do {
@@ -439,7 +439,7 @@ protected:
     void absorb_eos(svector<ff_node*>& W, size_t size) {
         void *task;
         for(size_t i=0;i<size;++i) {
-            do ; while(!W[i]->get(&task));
+            do {} while(!W[i]->get(&task));
             assert((task == FF_EOS) || (task == FF_EOS_NOFREEZE));
         }
     }

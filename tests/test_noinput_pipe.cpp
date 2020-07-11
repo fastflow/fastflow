@@ -77,7 +77,7 @@ private:
 
 class Stage3: public ff_node {
 public:   
-    void * svc(void * task) {
+    void * svc(void *) {
         printf("got task\n");
         return GO_ON;
     }

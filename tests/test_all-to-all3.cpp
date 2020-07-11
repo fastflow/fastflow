@@ -96,7 +96,7 @@ struct Even: ff_node_t<long> {
         delete in;
 	    return GO_ON;
     }
-    void eosnotify(ssize_t id=-1) {
+    void eosnotify(ssize_t=-1) {
         printf("Even received EOS\n");
         ff_send_out(new long(sum));
     }
@@ -109,7 +109,7 @@ struct Odd: ff_node_t<long> {
         delete in;
 	    return GO_ON;
     }
-    void eosnotify(ssize_t id=-1) {
+    void eosnotify(ssize_t=-1) {
         printf("Odd received EOS\n");
         ff_send_out(new long(sum));
     }

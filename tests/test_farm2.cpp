@@ -69,7 +69,7 @@ struct Worker: ff_node_t<long> {
 };
 struct Collector: ff_minode_t<long> {
     Collector(long ntasks):ntasks(ntasks) {}
-    long *svc(long *in) {
+    long *svc(long *) {
         --ntasks;
         return GO_ON;
     }

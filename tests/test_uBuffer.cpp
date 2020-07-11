@@ -156,13 +156,13 @@ static inline void PUSH(const int i) {
 
 #if !defined(USE_DEQUE)
  #if defined(TWO_LOCK)
-       do ; while(!(b->mp_push(p)));
+       do {} while(!(b->mp_push(p)));
  #else
 
   #if defined(MULTIPUSH)
-        do ; while(!(b->mpush(p)));
+        do {} while(!(b->mpush(p)));
   #else 
-	    do ; while(!(b->push(p)));
+	    do {} while(!(b->push(p)));
   #endif
  #endif // TWO_LOCK
 #else // USE_DEQUE

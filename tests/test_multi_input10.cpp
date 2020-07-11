@@ -53,7 +53,7 @@
 using namespace ff;
 
 struct Generator: ff_node_t<long> {
-    long* svc(long* in) {
+    long* svc(long*) {
         for(long i=1;i<=10;++i) {
             ff_send_out((long*)i);
         }

@@ -69,7 +69,7 @@ int main(int argc, char * argv[]) {
         ParallelForPipeReduce<std::vector<long>* > pfr(nworkers,true); // spinwait is set to true
         pfr.disableScheduler();
         
-        auto Map = [&](const long start, const long stop, const int thid, ff_buffernode &node) {
+        auto Map = [&](const long start, const long stop, const int /*thid*/, ff_buffernode &node) {
             if (start == stop) return;
             std::vector<long>*  C = new std::vector<long>;
             C->reserve(stop-start);

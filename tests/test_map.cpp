@@ -56,7 +56,7 @@ typedef  std::vector<long> ff_task_t;
 #endif
 
 struct mapWorker : ff_Map<ff_task_t> {
-    ff_task_t *svc(ff_task_t *in) {
+    ff_task_t *svc(ff_task_t *) {
         ff_task_t *A = new ff_task_t(MYSIZE);
        
         // this is the parallel_for provided by the ff_Map class

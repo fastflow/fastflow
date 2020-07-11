@@ -41,7 +41,7 @@ using namespace ff;
 
 
 struct Generator: ff_node_t<long> {
-    long* svc(long* in) {
+    long* svc(long*) {
         for(long i=1;i<=10;++i) {
             ff_send_out((long*)i);
         }
@@ -53,12 +53,12 @@ struct Collector: ff_minode_t<long> {
     int svc_init() {
 	return 0;
     }
-    long* svc(long* in) {
+    long* svc(long*) {
 	return GO_ON;
     }
 };
 struct Worker: ff_node_t<long> {
-    long* svc(long* in) {
+    long* svc(long*) {
 	return GO_ON;
     }
 };
@@ -106,7 +106,7 @@ struct PipeWorker: ff_pipeline {
     }
 
 
-    long* svc(long* in) { abort();}
+    long* svc(long*) { abort();}
 };
 
 

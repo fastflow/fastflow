@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
                               subops.push_back(op-2);
                           },
                           [](vector<Result>& res, Result &ret){ ret=res[0]+res[1]; },
-                          [](const Problem &op, Result &res)  { res=1; },
+                          [](const Problem &, Result &res)  { res=1; },
                           [](const Problem &op){ return (op<=2); },
                           Problem(start),  res,  nwork
                           );

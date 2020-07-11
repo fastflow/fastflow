@@ -51,6 +51,9 @@ void * operator new(size_t size) {
 void operator delete(void* p) noexcept {
     return ff_free(p);
 }
+void operator delete(void* p, size_t) noexcept {
+    return ff_free(p);
+}
 
 typedef std::vector<float> Task;
 struct firstStage: ff_node_t<Task> {

@@ -99,7 +99,7 @@ const long &evolution(long &element, const Env_t&,const int) {
     return element;
 }
 
-void filter(ParallelForReduce<long> & pfr, std::vector<long> &P, std::vector<long> &buffer,Env_t &env) {
+void filter(ParallelForReduce<long> & pfr, std::vector<long> &, std::vector<long> &buffer,Env_t &env) {
     env.avg = fitness(pfr, buffer, nwF);
     env.iter +=1;
 

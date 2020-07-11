@@ -99,7 +99,7 @@ struct Collector2: ff_minode_t<long> {
     long ntasks;
 };
 
-int main(int argc, char* argv[]) {
+int main() {
     int nworkers1 = 2;
     int nworkers2 = 3;
     int ntasks   = 150;

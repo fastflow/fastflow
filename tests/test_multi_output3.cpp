@@ -94,7 +94,7 @@ struct multiInputHelper: ff_minode_t<long, mypair> {
         p->second = (fromInput()?-1:0);
         return p;
     }
-    void eosnotify(ssize_t id) {
+    void eosnotify(ssize_t) {
         // NOTE: we have to send EOS explicitly to the next stage
         // because for multi-input node the EOS is propagated only
         // it has been received from all input channels
@@ -124,7 +124,7 @@ struct Worker: ff_monode_t<mypair, long> {
         }            
         return GO_ON;       
     }
-    void eosnotify(ssize_t id) {
+    void eosnotify(ssize_t) {
         eosarrived=true;
         if (eosarrived && ntasks==0)
             ff_send_out(EOS);

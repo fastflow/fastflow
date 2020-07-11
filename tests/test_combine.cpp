@@ -76,7 +76,7 @@ struct secondStage3: ff_node_t<long> { // 2nd stage
     }
 };
 struct thirdStage: ff_node_t<long> {  // 3rd stage
-    long *svc(long *task) {
+    long *svc(long *) {
         ticks_wait(worktime);
         return GO_ON; 
     }

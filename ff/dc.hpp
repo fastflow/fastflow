@@ -133,7 +133,7 @@ protected:
      * @param res combine result
      * @param subops suboperands for this recursion step. They are deleted after the Combine
      */    
-    static void CombineFunction(void *w,const std::function<void(std::vector<ResultType>&,ResultType&)>& combine_fn, std::vector<ResultType>* ress, ResultType* res, std::vector<OperandType> *subops)
+    static void CombineFunction(void * /*w*/,const std::function<void(std::vector<ResultType>&,ResultType&)>& combine_fn, std::vector<ResultType>* ress, ResultType* res, std::vector<OperandType> *subops)
     {
         combine_fn(*ress,*res);
         
@@ -506,7 +506,7 @@ protected:
             }
         }
 
-        void eosnotify(ssize_t id=-1) { lb->broadcast_task(FF_EOS); }
+        void eosnotify(ssize_t /*id*/=-1) { lb->broadcast_task(FF_EOS); }
         int wait_freezing()           { return lb->wait_lb_freezing(); }
 
     private:
@@ -556,7 +556,7 @@ public:
     ff_DC(const divide_f_t& divide_fn, const combine_f_t& combine_fn,
           const seq_f_t& seq_fn, const cond_f_t& cond_fn, 
           const OperandType& op, ResultType& res,
-          int numw, size_t outstandingTasks=DEFAULT_OUTSTANDING_TASKS,
+          int numw, size_t /*outstandingTasks*/=DEFAULT_OUTSTANDING_TASKS,
           int maxnw=ff_numCores(), void (*schedRelaxF)(unsigned long)=NULL):
         _divide_fn(divide_fn), _combine_fn(combine_fn), _seq_fn(seq_fn), _condition_fn(cond_fn) {
         
