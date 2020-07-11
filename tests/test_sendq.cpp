@@ -81,7 +81,7 @@ public:
         void * recv_data= (void*)q;
         for(unsigned i=0;i<ntask;++i) {
             ff_send_out((void*)recv_data);
-            do ; while(!q->pop(&recv_data));
+            do {} while(!q->pop(&recv_data));
             assert(recv_data == (void*)q);
         }
         return NULL;

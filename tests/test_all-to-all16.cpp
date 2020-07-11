@@ -90,7 +90,7 @@ struct SourcePipe: ff_pipeline {
 	    if (get_my_id() == 0) ff::ffTime(ff::START_TIME);
 	    return 0;
 	}	
-	long* svc(long* in) {
+	long* svc(long*) {
 	    if (ntasks<=0) return EOS;	
 	    long *x = new long;
 	    F(*x);

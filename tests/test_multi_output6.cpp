@@ -287,7 +287,7 @@ struct Manager: ff_node_t<Command_t> {
     int wait()          { return ff_node_t<Command_t>::wait(); }
 
 
-    ff_buffernode * const getChannel() { return &channel;}
+    ff_buffernode * getChannel() { return &channel;}
 
     ff_buffernode  channel;
 };

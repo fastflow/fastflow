@@ -297,8 +297,8 @@ protected:
 
 
 #if defined(FF_TASK_CALLBACK)
-    virtual void callbackIn(void  *t=NULL) {  }
-    virtual void callbackOut(void *t=NULL) {  }
+    virtual void callbackIn(void  * =NULL) { }
+    virtual void callbackOut(void * =NULL) { }
 #endif
     
 public:
@@ -585,7 +585,7 @@ protected:
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
                                             pthread_cond_t    *&c,
-                                            bool feedback=true) {
+                                            bool /*feedback*/=true) {
         if (cons_m == nullptr) {
             assert(cons_c==nullptr);
             cons_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
@@ -600,7 +600,7 @@ protected:
     // producer
     virtual inline bool init_output_blocking(pthread_mutex_t   *&m,
                                              pthread_cond_t    *&c,
-                                             bool feedback=true) {
+                                             bool /*feedback*/=true) {
         if (prod_m == nullptr) {
             assert(prod_c==nullptr);
             prod_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
@@ -618,6 +618,7 @@ protected:
         assert(canoverwrite ||
                (p_cons_m == nullptr && p_cons_c == nullptr) ||
                (p_cons_m == m && p_cons_c == c));
+        FF_IGNORE_UNUSED(canoverwrite);
         p_cons_m = m, p_cons_c = c;
     }
 
@@ -729,10 +730,10 @@ protected:
         return 0;
     }
 
-    virtual inline int set_input(const svector<ff_node *> & w) { return -1;}
+    virtual inline int set_input(const svector<ff_node *> &) { return -1;}
     virtual inline int set_input(ff_node *) { return -1;}
     virtual inline int set_input_feedback(ff_node *) { return -1;}
-    virtual inline int set_output(const svector<ff_node *> & w) { return -1;}
+    virtual inline int set_output(const svector<ff_node *> &) { return -1;}
     virtual inline int set_output(ff_node *n) {
         return set_output_buffer(n->get_in_buffer());
     }
@@ -740,14 +741,14 @@ protected:
     virtual inline void set_input_channelid(ssize_t, bool=true) {}
     
     virtual inline void get_out_nodes(svector<ff_node*>&w) { w.push_back(this); }
-    virtual inline void get_out_nodes_feedback(svector<ff_node*>&w) {}
+    virtual inline void get_out_nodes_feedback(svector<ff_node*>&) {}
     virtual inline void get_in_nodes(svector<ff_node*>&w) { w.push_back(this); }
-    virtual inline void get_in_nodes_feedback(svector<ff_node*>&w) {}
+    virtual inline void get_in_nodes_feedback(svector<ff_node*>&) {}
     
     virtual int prepare() { prepared=true; return 0; }
     virtual int dryrun() { if (!prepared) return prepare(); return 0; }
 
-    virtual void set_scheduling_ondemand(const int inbufferentries=1) {} 
+    virtual void set_scheduling_ondemand(const int /*inbufferentries*/=1) {} 
     virtual int ondemand_buffer() const { return 0;} 
 
     
@@ -883,7 +884,7 @@ public:
     void *const EOSW         = FF_EOSW;
 
     
-    ff_node(const ff_node& node):ff_node() {}
+    ff_node(const ff_node&):ff_node() {}
  
     /** 
      *  \brief Destructor, polymorphic deletion through base pointer is allowed.
@@ -972,7 +973,7 @@ public:
      * (this is not possible in the svc_end method).
      * The parameter \param id is the ID of the channel that received the EOS. 
      */
-    virtual void eosnotify(ssize_t id=-1) {}
+    virtual void eosnotify(ssize_t /*id*/=-1) {}
 
     /**
      * \brief Returns the number of EOS the node has to receive before terminating.
@@ -994,8 +995,8 @@ public:
 
 
 #if defined(FF_TASK_CALLBACK)
-    virtual void callbackIn(void *t=NULL)  { }
-    virtual void callbackOut(void *t=NULL) { }
+    virtual void callbackIn(void * =NULL)  { }
+    virtual void callbackOut(void * =NULL) { }
 #endif
 
     /**
@@ -1207,7 +1208,7 @@ protected:
     /** 
      *  used for composition (see ff_comb)
      */
-    static inline bool ff_send_out_comp(void * task,unsigned long retry,unsigned long ticks, void *obj) {
+    static inline bool ff_send_out_comp(void * task,unsigned long /*retry*/,unsigned long /*ticks*/, void *obj) {
         return ((ff_node *)obj)->push_comp_local(task);
     }
 
@@ -1284,7 +1285,7 @@ protected:
         callback=cb;
         callback_arg=arg;
     }
-    virtual void registerAllGatherCallback(int (*cb)(void *,void **, void*), void * arg) {}
+    virtual void registerAllGatherCallback(int (* /*cb*/)(void *,void **, void*), void * /*arg*/) {}
 
     /* WARNING: these method must be called before the run() method */
     virtual void blocking_mode(bool blk=true) {

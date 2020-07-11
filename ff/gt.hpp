@@ -75,7 +75,7 @@ protected:
 
     inline bool init_input_blocking(pthread_mutex_t   *&m,
                                     pthread_cond_t    *&c,
-                                    bool feedback=true) {
+                                    bool /*feedback*/=true) {
         if (cons_m == nullptr) {
             assert(cons_c==nullptr);
             cons_m = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
@@ -157,7 +157,7 @@ protected:
      *
      * It is a virtual function and is used to notify EOS
      */
-    virtual inline void notifyeos(int id) {}
+    virtual inline void notifyeos(int /*id*/) {}
 
     /**
      * \brief Gets the number of tentatives.

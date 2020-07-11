@@ -129,6 +129,7 @@ namespace ff {
     name.setloop(begin,end,step,chunk,nw);                                        \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,     \
                          const int _ff_thread_id, const int) {                    \
+        FF_IGNORE_UNUSED(_ff_thread_id);                                          \
         PRAGMA_IVDEP;                                                             \
         for(long idx=ff_start_##idx;idx<ff_stop_##idx;idx+=step) 
 
@@ -181,6 +182,7 @@ namespace ff {
     auto idtt_##name =identity;                                                   \
     auto F_##name =[&](const long start,const long stop,const int _ff_thread_id,  \
                        decltype(var) &var) {                                      \
+        FF_IGNORE_UNUSED(_ff_thread_id);                                          \
         PRAGMA_IVDEP;                                                             \
         for(long idx=start;idx<stop;idx+=step)
 
@@ -190,7 +192,9 @@ namespace ff {
     name.disableScheduler(onoff);                                                              \
     auto idtt_##name =identity;                                                                \
     auto F_##name =[&](const long ff_start_idx,const long ff_stop_idx,const int _ff_thread_id, \
-                       decltype(var) &var) {
+                       decltype(var) &var) {                                                   \
+        FF_IGNORE_UNUSED(_ff_thread_id);
+
 
     
 #define FF_PARFORREDUCE_END(name, var, op)                                        \
@@ -256,6 +260,7 @@ namespace ff {
     name->setloop(begin,end,step,chunk,nw);                                              \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,            \
                          const int _ff_thread_id, const int) {                           \
+        FF_IGNORE_UNUSED(_ff_thread_id);                                                 \
         PRAGMA_IVDEP;                                                                    \
         for(long idx=ff_start_##idx;idx<ff_stop_##idx;idx+=step) 
 
@@ -263,6 +268,7 @@ namespace ff {
     name->setloop(begin,end,step,chunk,nw);                                              \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,            \
                          const int _ff_thread_id, const int) {                           \
+        FF_IGNORE_UNUSED(_ff_thread_id);
     /* here you have to define the for loop using ff_start/stop_##idx  */
 
 /* this is equivalent to FF_PARFOR2_START but the start/stop indexes have a fixed name */
@@ -270,6 +276,7 @@ namespace ff {
     name->setloop(begin,end,step,chunk,nw);                                              \
     auto F_##name = [&] (const long ff_start_idx, const long ff_stop_idx,                \
                          const int _ff_thread_id, const int) {                           \
+        FF_IGNORE_UNUSED(_ff_thread_id);
     /* here you have to define the for loop using ff_start/stop_idx  */
 
 
@@ -278,6 +285,7 @@ namespace ff {
     name->setloop(begin,end,step,chunk,nw);                                              \
     auto F_##name = [&] (const long ff_start_##idx, const long ff_stop_##idx,            \
                          const int _ff_thread_id, const type&) {                         \
+        FF_IGNORE_UNUSED(_ff_thread_id);                                                 \
         PRAGMA_IVDEP;                                                                    \
         for(long idx=ff_start_##idx;idx<ff_stop_##idx;idx+=step) 
 
@@ -290,6 +298,7 @@ namespace ff {
                          const int _ff_thread_id, const type&) {                         \
         const long _ff_jump0=(name->getnw())*(-chunk*step);                              \
         const long _ff_jump1=(-chunk*step);                                              \
+        FF_IGNORE_UNUSED(_ff_thread_id);                                                 \
         PRAGMA_IVDEP;                                                                    \
         for(long _ff_##idx=ff_start_##idx;_ff_##idx<ff_stop_##idx;_ff_##idx+=_ff_jump0)  \
            for(long idx=_ff_##idx,_ff_end_##idx=std::min(ff_stop_##idx,_ff_##idx +_ff_jump1); \
@@ -300,6 +309,7 @@ namespace ff {
     name->setloop(begin,end,step,chunk,nw);                                              \
     auto F_##name = [&] (const long ff_start_idx, const long ff_stop_idx,                \
                          const int _ff_thread_id, const type&) {                         \
+        FF_IGNORE_UNUSED(_ff_thread_id);
     /* here you have to use the fixed indexes ff_idx_start, ff_idx_stop */
 
 #define FF_PARFOR_STOP(name)                                                             \
@@ -327,6 +337,7 @@ namespace ff {
     auto idtt_##name =identity;                                                          \
     auto F_##name =[&](const long ff_start_##idx, const long ff_stop_##idx,              \
                        const int _ff_thread_id, decltype(var) &var) {                    \
+        FF_IGNORE_UNUSED(_ff_thread_id);                                                 \
         PRAGMA_IVDEP                                                                     \
         for(long idx=ff_start_##idx;idx<ff_stop_##idx;idx+=step) 
 
@@ -334,7 +345,9 @@ namespace ff {
     name->setloop(begin,end,step,chunk,nw);                                              \
     auto idtt_##name =identity;                                                          \
     auto F_##name =[&](const long ff_start_idx, const long ff_stop_idx,                  \
-                       const int _ff_thread_id, decltype(var) &var) {
+                       const int _ff_thread_id, decltype(var) &var) {                    \
+        FF_IGNORE_UNUSED(_ff_thread_id);
+
 
 
 #define FF_PARFORREDUCE_START_STATIC(name, var,identity, idx,begin,end,step, chunk, nw)  \
@@ -617,6 +630,8 @@ public:
         task->set(r, r + _step);
         return true;
 #else
+        FF_IGNORE_UNUSED(task);
+        FF_IGNORE_UNUSED(wid);
         error("To use nextTaskConcurrentNoStealing you need to define macro FF_PARFOR_PASSIVE_NOSTEALING\n");
         return false;
 #endif
@@ -783,7 +798,7 @@ public:
             }
             return GO_OUT;
         }
-        if (nextTask((forall_task_t*)t, (const int) wid)) lb->ff_send_out_to(t, int(wid));            
+        if (nextTask((forall_task_t*)t, (int) wid)) lb->ff_send_out_to(t, int(wid));            
         else  {
             if (!eossent[wid]) {
                 lb->ff_send_out_to((workersspinwait?EOS_NOFREEZE:GO_OUT), int(wid));

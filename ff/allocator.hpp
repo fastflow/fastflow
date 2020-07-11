@@ -357,7 +357,7 @@ namespace ff {
     struct xThreadData {
         enum { LEAK_CHUNK=4096 };
     
-        xThreadData(const bool allocator, size_t nslabs, const pthread_t key)
+        xThreadData(const bool /*allocator*/, size_t /*nslabs*/, const pthread_t key)
             : leak(0), key(key) {
             //leak = (uSWSR_Ptr_Buffer*)::malloc(sizeof(uSWSR_Ptr_Buffer));
             leak = (uSWSR_Ptr_Buffer*)getAlignedMemory(128,sizeof(uSWSR_Ptr_Buffer));
@@ -947,7 +947,7 @@ namespace ff {
         // FIX: we have to implement max_size !!!!
         /// Default Constructor
 
-        ff_allocator(size_t max_size=0, const int delayedReclaim=0) :
+        ff_allocator(size_t /*max_size*/=0, const int delayedReclaim=0) :
             alloc(0), /* max_size(max_size), */ delayedReclaim(delayedReclaim) { 
         }
 
@@ -1374,7 +1374,7 @@ namespace ff {
         }
 
 
-        inline void   free(void * ptr) {  abort();  }
+        inline void   free(void *) {  abort();  }
 
 
         inline void * realloc(void * ptr, size_t newsize) {

@@ -61,7 +61,7 @@ using namespace ff;
 
 struct First: ff_node_t<long> {
     First(const int ntasks):ntasks(ntasks) {}
-    long* svc(long*in) {
+    long* svc(long*) {
         for(long i=1;i<=ntasks;++i) {
             struct timespec req;
             req.tv_sec = 0;
@@ -141,7 +141,7 @@ struct Stage6: ff_node_t<long> {
     }    
 };
 struct Last: ff_node_t<long> {
-    long* svc(long*in) {
+    long* svc(long*) {
         //printf("received %ld\n", (long)in);
         ++counter;
         return GO_ON;

@@ -52,7 +52,7 @@ namespace ff {
      */
 struct ffBarrier {
     virtual ~ffBarrier() {}
-    virtual inline int  barrierSetup(size_t init) { return 0;}
+    virtual inline int  barrierSetup(size_t) { return 0;}
     virtual inline void doBarrier(size_t) { };
 };
 

@@ -78,7 +78,7 @@ struct Collector: ff_node {
         ntasks=0;
         return 0;
     }
-    void *svc(void *t) {
+    void *svc(void *) {
         ++ntasks;
         return GO_ON;
     }

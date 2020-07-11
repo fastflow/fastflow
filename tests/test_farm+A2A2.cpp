@@ -104,7 +104,7 @@ struct miHelper: ff_minode_t<long> {
     }
 };
 struct Collector: ff_minode_t<long> {
-    long* svc(long* in) {
+    long* svc(long*) {
 	printf("Collector, received from %ld\n", get_channel_id());
 	return GO_ON;
     }

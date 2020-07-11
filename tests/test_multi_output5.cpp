@@ -332,8 +332,8 @@ struct Manager: ff_node_t<Command_t> {
     int wait() { return ff_node_t<Command_t>::wait(); }
 
 
-    ff_buffernode * const getChannel1() { return &channel1;}
-    ff_buffernode * const getChannel2() { return &channel2;}
+    ff_buffernode * getChannel1() { return &channel1;}
+    ff_buffernode * getChannel2() { return &channel2;}
 
 
     ff_buffernode  channel1;

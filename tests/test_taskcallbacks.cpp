@@ -46,7 +46,7 @@ struct Worker1: ff_node_t<long> {
         printf("Worker%ld callbackIn\n", get_my_id());
     }
     
-    void callbackOut(void *p) {
+    void callbackOut(void *) {
         printf("Worker%ld callbackOut\n", get_my_id());
 
     }
@@ -59,11 +59,11 @@ struct Worker1: ff_node_t<long> {
 
 struct Worker2: ff_node_t<long> {
 
-    void callbackIn(void *p) {
+    void callbackIn(void *) {
         printf("Worker%ld callbackIn\n", get_my_id());
     }
 
-    void callbackOut(void *p) {
+    void callbackOut(void *) {
         printf("Worker%ld callbackOut\n", get_my_id());
     }
     long *svc(long *in) { 
@@ -79,11 +79,13 @@ struct Emitter: ff_node_t<long> {
 
     void callbackIn(void *p) {
         assert(reinterpret_cast<ff_loadbalancer*>(p) == lb);
+        FF_IGNORE_UNUSED(p);
         printf("Emitter callbackIn\n");
     }
     
     void callbackOut(void *p) {
         assert(reinterpret_cast<ff_loadbalancer*>(p) == lb);
+        FF_IGNORE_UNUSED(p);
         printf("Emitter callbackOut\n");
     }
     
