@@ -47,24 +47,20 @@
 #include <tbb/task_scheduler_init.h>
 #endif
 
-
-
 /*
  * This random generators are implementing 
  * by following POSIX.1-2001 directives.
  */
 
-#define SIM_RAND_MAX         32767
+#define SIM_RAND_MAX 32767
 __thread unsigned long next = 0;
 
 inline static long simRandom(void) {
-    next = next * 1103515245 + 12345;
-    return((unsigned)(next/65536) % 32768);
+  next = next * 1103515245 + 12345;
+  return ((unsigned)(next / 65536) % 32768);
 }
 
-inline static void simSRandom(unsigned long seed) {
-    next = seed;
-}
+inline static void simSRandom(unsigned long seed) { next = seed; }
 
 /*
  * In Numerical Recipes in C: The Art of Scientific Computing 
@@ -72,9 +68,8 @@ inline static void simSRandom(unsigned long seed) {
  *  New York: Cambridge University Press, 1992 (2nd ed., p. 277))
  */
 inline static long simRandomRange(long low, long high) {
-    return low + (long) ( ((double) high)* (simRandom() / (SIM_RAND_MAX + 1.0)));
+  return low + (long)(((double)high) * (simRandom() / (SIM_RAND_MAX + 1.0)));
 }
-
 
 // #if defined (__MIC__)
 //         _mm_delay_32(nticks);
@@ -82,71 +77,72 @@ inline static long simRandomRange(long low, long high) {
 //         ticks_wait(nticks);
 // #endif
 
-
 using namespace ff;
 
-
 static inline void compute(long id, int nticks) {
-    if (next == 0UL) {
-        simSRandom(id + 1L);
-    }
-    long val = simRandomRange(1,nticks);
-    ticks_wait(val);
-    //for(volatile long k=0;k<val;++k) ;
+  if (next == 0UL) {
+    simSRandom(id + 1L);
+  }
+  long val = simRandomRange(1, nticks);
+  ticks_wait(val);
+  //for(volatile long k=0;k<val;++k) ;
 }
 
 int main(int argc, char *argv[]) {
-    long numtasks = 1000000;
-    int  nworkers = 3;
-    int  nticks   = 1000;
-    int  chunk    = -1;
-    
-    if (argc>1) {
-        if (argc<4) {
-            printf("use: %s numtasks nworkers ticks [chunk=(numtasks/nworkers)]\n", argv[0]);
-            return -1;
-        }
-        numtasks = atol(argv[1]);
-        nworkers = atoi(argv[2]);
-        nticks   = atoi(argv[3]);
-        if (argc == 5) 
-            chunk = atoi(argv[4]);
+  long numtasks = 1000000;
+  int nworkers = 3;
+  int nticks = 1000;
+  int chunk = -1;
+
+  if (argc > 1) {
+    if (argc < 4) {
+      printf("use: %s numtasks nworkers ticks [chunk=(numtasks/nworkers)]\n",
+          argv[0]);
+      return -1;
     }
+    numtasks = atol(argv[1]);
+    nworkers = atoi(argv[2]);
+    nticks = atoi(argv[3]);
+    if (argc == 5) chunk = atoi(argv[4]);
+  }
 #if defined(USE_OPENMP)
-    ffTime(START_TIME);
+  ffTime(START_TIME);
 #pragma omp parallel for schedule(runtime) num_threads(nworkers)
-    for(long j=0;j<numtasks;++j) {
-        compute(omp_get_thread_num(),nticks);
-    }
-    ffTime(STOP_TIME);
-    printf("%d Time  = %g (ms)\n", nworkers, ffTime(GET_TIME));
+  for (long j = 0; j < numtasks; ++j) {
+    compute(omp_get_thread_num(), nticks);
+  }
+  ffTime(STOP_TIME);
+  printf("%d Time  = %g (ms)\n", nworkers, ffTime(GET_TIME));
 #elif defined(USE_TBB)
-    tbb::task_scheduler_init init(nworkers);
-    tbb::affinity_partitioner ap;
-    
-    ffTime(START_TIME);
-    tbb::parallel_for(tbb::blocked_range<long>(0, numtasks, chunk),
-                      [&] (const tbb::blocked_range<long>& r) {
-                          for (long j=r.begin();j!=r.end();++j) {
-                              tbb::tbb_thread::id tid = tbb::this_tbb_thread::get_id();
-                              compute(*(long*)&tid,nticks);
-                          }
-                      }, ap);
-    ffTime(STOP_TIME);
-    printf("%d Time  = %g (ms)\n", nworkers, ffTime(GET_TIME));
+  tbb::task_scheduler_init init(nworkers);
+  tbb::affinity_partitioner ap;
+
+  ffTime(START_TIME);
+  tbb::parallel_for(
+      tbb::blocked_range<long>(0, numtasks, chunk),
+      [&](const tbb::blocked_range<long> &r) {
+        for (long j = r.begin(); j != r.end(); ++j) {
+          tbb::tbb_thread::id tid = tbb::this_tbb_thread::get_id();
+          compute(*(long *)&tid, nticks);
+        }
+      },
+      ap);
+  ffTime(STOP_TIME);
+  printf("%d Time  = %g (ms)\n", nworkers, ffTime(GET_TIME));
 
 #else
 
-    FF_PARFOR_INIT(pf, nworkers);
+  FF_PARFOR_INIT(pf, nworkers);
 
-    ffTime(START_TIME);
-    FF_PARFOR_START(pf, j,0,numtasks,1, chunk, nworkers) {
-        compute(_ff_thread_id,nticks);
-    } FF_PARFOR_STOP(pf);
-    ffTime(STOP_TIME);
-    printf("%d Time  = %g (ms)\n", nworkers, ffTime(GET_TIME));
+  ffTime(START_TIME);
+  FF_PARFOR_START(pf, j, 0, numtasks, 1, chunk, nworkers) {
+    compute(_ff_thread_id, nticks);
+  }
+  FF_PARFOR_STOP(pf);
+  ffTime(STOP_TIME);
+  printf("%d Time  = %g (ms)\n", nworkers, ffTime(GET_TIME));
 
-    FF_PARFOR_DONE(pf);
+  FF_PARFOR_DONE(pf);
 #endif
-    return 0;
+  return 0;
 }

@@ -44,71 +44,68 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-class Emitter1: public ff_node {
+class Emitter1 : public ff_node {
 public:
-    Emitter1(int ntasks):ntasks(ntasks) {}
-    void* svc(void*) {
-        for(long i=0;i<ntasks;++i)
-            ff_send_out((void*)(i+10));
-        return NULL;
-    }
+  Emitter1(int ntasks) : ntasks(ntasks) {}
+  void *svc(void *) {
+    for (long i = 0; i < ntasks; ++i) ff_send_out((void *)(i + 10));
+    return NULL;
+  }
+
 private:
-    int ntasks;
+  int ntasks;
 };
 
-struct Worker1: ff_node {
-    void* svc(void* task) { return task; }
+struct Worker1 : ff_node {
+  void *svc(void *task) { return task; }
 };
 
-struct Worker2: ff_node {
-    void* svc(void* task) { 
-        printf("Worker2: %ld got %ld\n", get_my_id(), (long)task);
-        return GO_ON; 
-    }
-    void svc_end() {
-        printf("Worker2 %ld got EOS\n", get_my_id());
-    }
+struct Worker2 : ff_node {
+  void *svc(void *task) {
+    printf("Worker2: %ld got %ld\n", get_my_id(), (long)task);
+    return GO_ON;
+  }
+  void svc_end() { printf("Worker2 %ld got EOS\n", get_my_id()); }
 };
 
-
-int main(int argc, char* argv[]) {
-    int nworkers=3;
-    int ntasks=1000;
-    if (argc>1) {
-        if (argc < 3) {
-            std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";
-            return -1;
-        }
-        nworkers  =atoi(argv[1]);
-        ntasks    =atoi(argv[2]);
+int main(int argc, char *argv[]) {
+  int nworkers = 3;
+  int ntasks = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use:\n"
+                << " " << argv[0] << " numworkers ntasks\n";
+      return -1;
     }
-    ff_pipeline pipe;
-    ff_farm farm1;
-    ff_farm farm2;
-    pipe.add_stage(&farm1);
-    pipe.add_stage(&farm2);
-    farm1.add_emitter(new Emitter1(ntasks));
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) {
-        w.push_back(new Worker1);
-    }
-    farm1.add_workers(w);
-    farm1.remove_collector();
+    nworkers = atoi(argv[1]);
+    ntasks = atoi(argv[2]);
+  }
+  ff_pipeline pipe;
+  ff_farm farm1;
+  ff_farm farm2;
+  pipe.add_stage(&farm1);
+  pipe.add_stage(&farm2);
+  farm1.add_emitter(new Emitter1(ntasks));
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) {
+    w.push_back(new Worker1);
+  }
+  farm1.add_workers(w);
+  farm1.remove_collector();
 
-    w.clear();
-    for(int i=0;i<nworkers;++i) 
-        w.push_back(new Worker2);
+  w.clear();
+  for (int i = 0; i < nworkers; ++i) w.push_back(new Worker2);
 
-    farm2.add_workers(w);
-    // set_multi_input is no longer supported, 
-    //farm2.set_multi_input(farm1.getWorkers());
-    //farm2.setMultiInput();  // not needed anymore
-    
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipe\n");
-        return -1;
-    }
+  farm2.add_workers(w);
+  // set_multi_input is no longer supported,
+  //farm2.set_multi_input(farm1.getWorkers());
+  //farm2.setMultiInput();  // not needed anymore
 
-    printf("Time= %.2f (ms)\n", pipe.ffwTime());
-    return 0;
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+
+  printf("Time= %.2f (ms)\n", pipe.ffwTime());
+  return 0;
 }

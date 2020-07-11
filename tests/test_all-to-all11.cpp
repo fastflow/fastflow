@@ -88,129 +88,123 @@ using namespace ff;
 // used to manage termination!!!!!
 std::atomic<long> ntasks;
 
-struct First: ff_node_t<long> {
-    long* svc(long*) {
-        long n = ntasks.load();
-        for(long i=0;i<n;++i)  
-            ff_send_out(new long(i));
+struct First : ff_node_t<long> {
+  long *svc(long *) {
+    long n = ntasks.load();
+    for (long i = 0; i < n; ++i) ff_send_out(new long(i));
+    return EOS;
+  }
+};
+
+struct Emitter : ff_monode_t<long> {
+  long *svc(long *in) { return in; }
+};
+
+struct Gatherer : ff_minode_t<long> {
+  long *svc(long *in) {
+    if (!fromInput()) {
+      long n = ntasks.fetch_sub(1);
+      if (n == 1) {
         return EOS;
+      }
+      return GO_ON;
     }
+    return in;
+  }
 };
 
-struct Emitter: ff_monode_t<long> {
-    long* svc(long* in) {
-        return in;
-    }  
+struct Emitter2 : ff_monode_t<long> {
+  long *svc(long *in) { return in; }
+
+  void eosnotify(ssize_t) {
+    // WARNING: this is needed because Emitter2 is part of a composition that
+    //          is a multi-input node and so the EOS is not propagated
+    //          until all EOSs from all input channels are received
+    broadcast_task(EOS);
+  }
 };
 
-struct Gatherer: ff_minode_t<long> {
-    long* svc(long* in) {
-        if (!fromInput()) {
-            long n=ntasks.fetch_sub(1);
-            if (n == 1){
-                return EOS;
-            }
-            return GO_ON;
-        }
-        return in;
-    }
+struct MultiInputHelper : ff_minode_t<long> {
+  long *svc(long *in) { return in; }
+  void eosnotify(ssize_t) {
+    // propagate EOS
+    ff_send_out(EOS);
+  }
 };
 
-struct Emitter2: ff_monode_t<long> {
-    long* svc(long* in) {
-        return in;
-    }
+struct Worker : ff_monode_t<long> {
+  long *svc(long *in) {
+    //std::cout << "Worker" << get_my_id() << " got " << *in << "\n";
 
-    void eosnotify(ssize_t) {
-        // WARNING: this is needed because Emitter2 is part of a composition that
-        //          is a multi-input node and so the EOS is not propagated
-        //          until all EOSs from all input channels are received 
-        broadcast_task(EOS);
-    }
+    // Here we know that we have only one output channel
+    // and we have 'get_num_feedbackchannels()' feedback channels.
+    // Since the numbering of the channels is: first the feedback ones
+    // and then the output ones .....
+    ff_send_out_to(in, get_num_feedbackchannels()); // to Last
+
+    ff_send_out((long *)0x1); // sends it back
+
+    return GO_ON;
+  }
+
+  void eosnotify(ssize_t) {
+    broadcast_task(EOS);
+    ff_send_out_to(EOS, get_num_feedbackchannels());
+  }
 };
 
-struct MultiInputHelper: ff_minode_t<long> {
-	long *svc(long *in) {
-        return in;
-    }
-    void eosnotify(ssize_t) {
-        // propagate EOS
-        ff_send_out(EOS);
-    }
-};
-
-struct Worker: ff_monode_t<long> {
-    long* svc(long* in) {
-        //std::cout << "Worker" << get_my_id() << " got " << *in << "\n";
-
-        // Here we know that we have only one output channel
-        // and we have 'get_num_feedbackchannels()' feedback channels.
-        // Since the numbering of the channels is: first the feedback ones
-        // and then the output ones .....
-        ff_send_out_to(in, get_num_feedbackchannels() ); // to Last
-
-        ff_send_out((long*)0x1); // sends it back
-
-        return GO_ON;
-    }
-
-    void eosnotify(ssize_t) {
-        broadcast_task(EOS);
-        ff_send_out_to(EOS, get_num_feedbackchannels());
-    }
-};
-
-struct Last: ff_minode_t<long> {
-    long* svc(long* in) {
-        std::cout << "Last: received " << *in << " from " << get_channel_id() << "\n";
-        delete in;
-        return GO_ON;
-    }
+struct Last : ff_minode_t<long> {
+  long *svc(long *in) {
+    std::cout << "Last: received " << *in << " from " << get_channel_id()
+              << "\n";
+    delete in;
+    return GO_ON;
+  }
 };
 
 int main() {
-    int nworkers = 2;
-    ntasks.store(100);
+  int nworkers = 2;
+  ntasks.store(100);
 
-    // ---- first stage
-    First first;
+  // ---- first stage
+  First first;
 
-    // ---- second stage
-    Emitter E;
-    
-    // ----- building all-to-all
-    std::vector<ff_node*> firstSet;  
-    Gatherer gt1;
-    Emitter2 e1;
-    auto comb1 = combine_nodes(gt1, e1);
-    firstSet.push_back(&comb1);
-    Gatherer gt2;
-    Emitter2 e2;
-    auto comb2 = combine_nodes(gt2, e2);
-    firstSet.push_back(&comb2);
+  // ---- second stage
+  Emitter E;
 
-    const MultiInputHelper helper;
-    const Worker           worker;
-    std::vector<ff_node*> secondSet;          
-    for(int i=0;i<nworkers;++i)
-        secondSet.push_back(new ff_comb(helper,worker));
-    
-    ff_a2a a2a;
-    a2a.add_firstset(firstSet);
-    a2a.add_secondset(secondSet, true);
-    a2a.wrap_around();
+  // ----- building all-to-all
+  std::vector<ff_node *> firstSet;
+  Gatherer gt1;
+  Emitter2 e1;
+  auto comb1 = combine_nodes(gt1, e1);
+  firstSet.push_back(&comb1);
+  Gatherer gt2;
+  Emitter2 e2;
+  auto comb2 = combine_nodes(gt2, e2);
+  firstSet.push_back(&comb2);
 
-    // ---- last stage
-    Last last;
+  const MultiInputHelper helper;
+  const Worker worker;
+  std::vector<ff_node *> secondSet;
+  for (int i = 0; i < nworkers; ++i)
+    secondSet.push_back(new ff_comb(helper, worker));
 
-    // ---- building the topology
-    ff_Pipe<> pipe(first, E, a2a, last);
+  ff_a2a a2a;
+  a2a.add_firstset(firstSet);
+  a2a.add_secondset(secondSet, true);
+  a2a.wrap_around();
 
-    //******** 
-    
-    if (pipe.run_and_wait_end() <0) {
-        error("running pipe\n");
-        return -1;
-    }
-    return 0;
+  // ---- last stage
+  Last last;
+
+  // ---- building the topology
+  ff_Pipe<> pipe(first, E, a2a, last);
+
+  //********
+
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+  return 0;
 }

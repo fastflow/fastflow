@@ -32,79 +32,85 @@
 using namespace ff;
 
 // some globals
-const long NUMTASKS=1048576;
-const long bigbatchSize=1024;
-const long smallbatchSize=256; // 64
-unsigned int nticks=0;
+const long NUMTASKS = 1048576;
+const long bigbatchSize = 1024;
+const long smallbatchSize = 256; // 64
+unsigned int nticks = 0;
 long numBatch;
 
-struct masterStage: public ff_node {
-    int svc_init() { eossent=false; return 0;}
-    void * svc(void * task) {
-        if (task==NULL) {
-            for(long i=0;i<bigbatchSize;++i)
-                if (!ff_send_out((void*)(i+1))) abort();
-            //if (numBatch>0) --numBatch;
-            return GO_ON;
-        }
-        
-        if (numBatch) {
-            for(long i=0;i<smallbatchSize;++i)
-                if (!ff_send_out((void*)(i+1))) abort();
-            --numBatch;
-        } else if (!eossent) {
-            ff_send_out(EOS);
-            eossent=true;
-        }
-        ticks_wait(nticks);
-        return GO_ON;
-    };
-    bool eossent;
+struct masterStage : public ff_node {
+  int svc_init() {
+    eossent = false;
+    return 0;
+  }
+  void *svc(void *task) {
+    if (task == NULL) {
+      for (long i = 0; i < bigbatchSize; ++i)
+        if (!ff_send_out((void *)(i + 1))) abort();
+      //if (numBatch>0) --numBatch;
+      return GO_ON;
+    }
+
+    if (numBatch) {
+      for (long i = 0; i < smallbatchSize; ++i)
+        if (!ff_send_out((void *)(i + 1))) abort();
+      --numBatch;
+    } else if (!eossent) {
+      ff_send_out(EOS);
+      eossent = true;
+    }
+    ticks_wait(nticks);
+    return GO_ON;
+  };
+  bool eossent;
 };
 
 // all other stages
-struct Stage: public ff_node {
-    void * svc(void * task) {  ticks_wait(nticks); return task; }
+struct Stage : public ff_node {
+  void *svc(void *task) {
+    ticks_wait(nticks);
+    return task;
+  }
 };
 
 //
-void usage(char * name) {
-    std::cerr << "usage: \n";
-    std::cerr << "      " << name << " num-stages nticks\n";
+void usage(char *name) {
+  std::cerr << "usage: \n";
+  std::cerr << "      " << name << " num-stages nticks\n";
 }
 
-int main(int argc, char * argv[]) {
-    unsigned int nstages = 7;
-    nticks = 1000;
-    if (argc>1) {
-        if (argc!=3) {
-            usage(argv[0]);
-            return -1;
-        }
-        
-        nstages  = atoi(argv[1]);
-        nticks   = atoi(argv[2]);
+int main(int argc, char *argv[]) {
+  unsigned int nstages = 7;
+  nticks = 1000;
+  if (argc > 1) {
+    if (argc != 3) {
+      usage(argv[0]);
+      return -1;
     }
 
-    numBatch=((NUMTASKS-bigbatchSize)/smallbatchSize);
-    
-    if (nstages<2) {
-        std::cerr << "invalid number of stages\n";
-        return -1;
-    }
-    
-    ff_pipeline pipe(false,512,512,true);
-    
-    pipe.add_stage(new masterStage);
-    for(unsigned i=1;i<nstages;++i)
-        pipe.add_stage(new Stage);
-    pipe.wrap_around();
-    
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipeline\n");
-        return -1;
-    }
-    double time= pipe.ffTime();
-    printf("Time: %g (ms)  Throughput: %f msg/s\n", time,(NUMTASKS*nstages*1000.0)/time);
-    return 0;
+    nstages = atoi(argv[1]);
+    nticks = atoi(argv[2]);
+  }
+
+  numBatch = ((NUMTASKS - bigbatchSize) / smallbatchSize);
+
+  if (nstages < 2) {
+    std::cerr << "invalid number of stages\n";
+    return -1;
+  }
+
+  ff_pipeline pipe(false, 512, 512, true);
+
+  pipe.add_stage(new masterStage);
+  for (unsigned i = 1; i < nstages; ++i) pipe.add_stage(new Stage);
+  pipe.wrap_around();
+
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipeline\n");
+    return -1;
+  }
+  double time = pipe.ffTime();
+  printf("Time: %g (ms)  Throughput: %f msg/s\n", time,
+      (NUMTASKS * nstages * 1000.0) / time);
+  return 0;
 }

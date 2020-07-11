@@ -35,92 +35,87 @@
 
 using namespace ff;
 
-struct First: ff_node_t<long> {   
-    long *svc(long *) {
-	for(size_t i=0;i<10;++i) 
-	    ff_send_out((long*)(i+1));
+struct First : ff_node_t<long> {
+  long *svc(long *) {
+    for (size_t i = 0; i < 10; ++i) ff_send_out((long *)(i + 1));
 
-	return EOS;
-    }
-    void svc_end() {
-	printf("First svc_end() called\n");
-    }
+    return EOS;
+  }
+  void svc_end() { printf("First svc_end() called\n"); }
 };
 
-struct Last: ff_node_t<long> {
-    long *svc(long *task) {
-	printf("Last received %ld\n", reinterpret_cast<long>(task));
-	return GO_ON;
-    }
-    void svc_end() {
-	printf("Last svc_end() called\n");
-    }
+struct Last : ff_node_t<long> {
+  long *svc(long *task) {
+    printf("Last received %ld\n", reinterpret_cast<long>(task));
+    return GO_ON;
+  }
+  void svc_end() { printf("Last svc_end() called\n"); }
 };
 
-struct Emitter: ff_node_t<long> {
-    int svc_init() {
-        printf("Emitter started\n");
-        return 0;
-    }
+struct Emitter : ff_node_t<long> {
+  int svc_init() {
+    printf("Emitter started\n");
+    return 0;
+  }
 
-    long *svc(long *task) { 
-        const long &t = reinterpret_cast<long>(task);
-        printf("Emitter, OS threadId=%ld  received %ld\n", getOSThreadId(), t);
-        if (t == 5) return EOSW; // this is propagated to the workers
-        return task; 
-    }
-    void svc_end() {
-        printf("Emitter svc_end() called\n");
-    }
+  long *svc(long *task) {
+    const long &t = reinterpret_cast<long>(task);
+    printf("Emitter, OS threadId=%ld  received %ld\n", getOSThreadId(), t);
+    if (t == 5) return EOSW; // this is propagated to the workers
+    return task;
+  }
+  void svc_end() { printf("Emitter svc_end() called\n"); }
 };
 
-
-struct Worker: ff_node_t<long> {
-    long *svc(long *task) { 
-	printf("Worker%ld, received %ld\n", get_my_id(), reinterpret_cast<long>(task));
-	return task; 
-    }
-    void svc_end() {
-	printf("Worker%ld, OS threadId=%ld svc_end() called\n", get_my_id(), getOSThreadId());
-    }
+struct Worker : ff_node_t<long> {
+  long *svc(long *task) {
+    printf(
+        "Worker%ld, received %ld\n", get_my_id(), reinterpret_cast<long>(task));
+    return task;
+  }
+  void svc_end() {
+    printf("Worker%ld, OS threadId=%ld svc_end() called\n", get_my_id(),
+        getOSThreadId());
+  }
 };
 
-struct Collector: ff_node_t<long> {
-    Collector(const size_t nworkers):nworkers(nworkers),neos(0) {}
-    long *svc(long *task) { 
-        printf("Collector, OS threadId=%ld, received %ld\n", getOSThreadId(), reinterpret_cast<long>(task));
-	return task; 
-    }
+struct Collector : ff_node_t<long> {
+  Collector(const size_t nworkers) : nworkers(nworkers), neos(0) {}
+  long *svc(long *task) {
+    printf("Collector, OS threadId=%ld, received %ld\n", getOSThreadId(),
+        reinterpret_cast<long>(task));
+    return task;
+  }
 
-    // EOSW is not propagated outside the farm so we need to explicitly send 
-    // the EOS to the next stage to let him to terminate
-    void eosnotify(ssize_t) {
-	if (++neos >= nworkers) ff_send_out(EOS);
-    }
-  
-    void svc_end() {
-	printf("Collector svc_end() called\n");
-    }
+  // EOSW is not propagated outside the farm so we need to explicitly send
+  // the EOS to the next stage to let him to terminate
+  void eosnotify(ssize_t) {
+    if (++neos >= nworkers) ff_send_out(EOS);
+  }
 
-    size_t nworkers;
-    size_t neos;
+  void svc_end() { printf("Collector svc_end() called\n"); }
+
+  size_t nworkers;
+  size_t neos;
 };
-
 
 int main() {
-    const size_t nworkers = 2;
-    First first;
-    Last  last;
-    Emitter E;
-    Collector C(nworkers);
-    ff_Farm<long,long> farm(  []() { 
-	    std::vector<std::unique_ptr<ff_node> > W;
-	    for(size_t i=0;i<nworkers;++i)  W.push_back(make_unique<Worker>());
-	    return W;
-	} () , E, C);
-    ff_Pipe<> pipe(first,farm,last);
-    pipe.run_then_freeze();
-    pipe.wait();
+  const size_t nworkers = 2;
+  First first;
+  Last last;
+  Emitter E;
+  Collector C(nworkers);
+  ff_Farm<long, long> farm(
+      []() {
+        std::vector<std::unique_ptr<ff_node>> W;
+        for (size_t i = 0; i < nworkers; ++i)
+          W.push_back(make_unique<Worker>());
+        return W;
+      }(),
+      E, C);
+  ff_Pipe<> pipe(first, farm, last);
+  pipe.run_then_freeze();
+  pipe.wait();
 
-    return 0;
+  return 0;
 }

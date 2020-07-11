@@ -50,81 +50,75 @@
 
 using namespace ff;
 
-struct Emitter: ff_monode_t<long> { 
-    long *svc(long*) {
-        for(long i=1;i<=100;++i) 
-            ff_send_out_to((long*)i, i % 3);
-        return EOS;
-    }
+struct Emitter : ff_monode_t<long> {
+  long *svc(long *) {
+    for (long i = 1; i <= 100; ++i) ff_send_out_to((long *)i, i % 3);
+    return EOS;
+  }
 };
-struct Worker1: ff_node_t<long> {
-    long *svc(long *in) {
-        return in;
-    }
+struct Worker1 : ff_node_t<long> {
+  long *svc(long *in) { return in; }
 };
-struct Filter1: ff_minode_t<long> {  
-    long *svc(long *in) {
-        std::cout << "Filter1: received " << (long)in << " from " << get_channel_id() << "\n";
-        return in;
-    }
+struct Filter1 : ff_minode_t<long> {
+  long *svc(long *in) {
+    std::cout << "Filter1: received " << (long)in << " from "
+              << get_channel_id() << "\n";
+    return in;
+  }
 };
 
-struct Filter2: ff_monode_t<long> {
-	long *svc(long *in) {
-        ff_send_out_to(in, (long)in % 2);
-        return GO_ON;
-    }
+struct Filter2 : ff_monode_t<long> {
+  long *svc(long *in) {
+    ff_send_out_to(in, (long)in % 2);
+    return GO_ON;
+  }
 };
-struct Worker2: ff_node_t<long> {
-    long *svc(long *in) {
-        return in;
-    }
+struct Worker2 : ff_node_t<long> {
+  long *svc(long *in) { return in; }
 };
-struct Filter3: ff_node_t<long> {
-	long *svc(long *in) {
-        std::cout << "Filter3: received " << (long)in << "\n";
-        return GO_ON;
-    }
+struct Filter3 : ff_node_t<long> {
+  long *svc(long *in) {
+    std::cout << "Filter3: received " << (long)in << "\n";
+    return GO_ON;
+  }
 };
-
 
 int main() {
 
-    Emitter E;
+  Emitter E;
 
-    std::vector<std::unique_ptr<ff_node>> W;
-    W.push_back(make_unique<Worker1>());
-    W.push_back(make_unique<Worker1>());
-    W.push_back(make_unique<Worker1>());
-    
-    ff_Farm<> farm(std::move(W), E);
-    farm.remove_collector();
+  std::vector<std::unique_ptr<ff_node>> W;
+  W.push_back(make_unique<Worker1>());
+  W.push_back(make_unique<Worker1>());
+  W.push_back(make_unique<Worker1>());
 
-    Filter1 f1;
-    Filter2 f2;
+  ff_Farm<> farm(std::move(W), E);
+  farm.remove_collector();
 
-    auto comp = combine_nodes(f1,f2);
+  Filter1 f1;
+  Filter2 f2;
 
-    std::vector<ff_node*> W1;  
-    Worker2 w1, w2;
-    W1.push_back(&w1);
-    W1.push_back(&w2);
-    std::vector<ff_node*> W2;
-    Filter3 f3;
-    W2.push_back(&f3);
+  auto comp = combine_nodes(f1, f2);
 
-    //ff_a2a a2a(true); // to test reduce_channels flag
-    ff_a2a a2a;
-    a2a.add_firstset(W1);
-    a2a.add_secondset(W2);
-    
-    ff_Pipe<> pipe(farm, comp, a2a);
-        
-    if (pipe.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
-    }
-    
-    return 0;
+  std::vector<ff_node *> W1;
+  Worker2 w1, w2;
+  W1.push_back(&w1);
+  W1.push_back(&w2);
+  std::vector<ff_node *> W2;
+  Filter3 f3;
+  W2.push_back(&f3);
+
+  //ff_a2a a2a(true); // to test reduce_channels flag
+  ff_a2a a2a;
+  a2a.add_firstset(W1);
+  a2a.add_secondset(W2);
+
+  ff_Pipe<> pipe(farm, comp, a2a);
+
+  if (pipe.run_and_wait_end() < 0) {
+    error("running farm\n");
+    return -1;
+  }
+
+  return 0;
 }
-

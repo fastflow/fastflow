@@ -34,64 +34,61 @@
  *           |  |
  *    first -    - second
  *
- */ 
-    
+ */
+
 /* Author: Massimo Torquati
  *
  */
-    
+
 #include <iostream>
 #include <ff/ff.hpp>
 using namespace ff;
 
-struct firstStage: ff_node_t<long> { 
-    int svc_init() {
-        std::cout << "firstStage started (" << get_my_id() << ")\n";
-        return 0;
-    }
-    void svc_end() {
-        std::cout << "firstStage ending (" << get_my_id() << ")\n";
-    }
-    long *svc(long*) {
-        for(long i=0;i<10000;++i) {
-            ff_send_out(new long(i));
-        }	
-        return EOS; // End-Of-Stream
-    }
-};
-struct secondStage: ff_node_t<long> {  
-    long *svc(long *task) {
-        std::cout << "secondStage received " << *task << "\n";
-        delete task;
-        return GO_ON; 
-    }
-    void eosnotify(ssize_t) {
-        std::cout << "EOS received by secondStage (" << get_my_id() << ")\n";
-    }
-
-}; 
-int main() {
-    firstStage    _1_1, _1_2, _1_3;
-    secondStage   _2_1, _2_2, _2_3;
-    
-    std::vector<ff_node*> W1;
-    W1.push_back(&_1_1);
-    W1.push_back(&_1_2);
-    W1.push_back(&_1_3);
-    std::vector<ff_node*> W2;
-    W2.push_back(&_2_1);
-    W2.push_back(&_2_2);
-    W2.push_back(&_2_3);
-    
-    ff_a2a a2a;
-    
-    a2a.add_firstset(W1);
-    a2a.add_secondset(W2);
-    
-    if (a2a.run_and_wait_end()<0) {
-        error("running A2A");
-        return -1;
-    }
-    
+struct firstStage : ff_node_t<long> {
+  int svc_init() {
+    std::cout << "firstStage started (" << get_my_id() << ")\n";
     return 0;
+  }
+  void svc_end() { std::cout << "firstStage ending (" << get_my_id() << ")\n"; }
+  long *svc(long *) {
+    for (long i = 0; i < 10000; ++i) {
+      ff_send_out(new long(i));
+    }
+    return EOS; // End-Of-Stream
+  }
+};
+struct secondStage : ff_node_t<long> {
+  long *svc(long *task) {
+    std::cout << "secondStage received " << *task << "\n";
+    delete task;
+    return GO_ON;
+  }
+  void eosnotify(ssize_t) {
+    std::cout << "EOS received by secondStage (" << get_my_id() << ")\n";
+  }
+};
+int main() {
+  firstStage _1_1, _1_2, _1_3;
+  secondStage _2_1, _2_2, _2_3;
+
+  std::vector<ff_node *> W1;
+  W1.push_back(&_1_1);
+  W1.push_back(&_1_2);
+  W1.push_back(&_1_3);
+  std::vector<ff_node *> W2;
+  W2.push_back(&_2_1);
+  W2.push_back(&_2_2);
+  W2.push_back(&_2_3);
+
+  ff_a2a a2a;
+
+  a2a.add_firstset(W1);
+  a2a.add_secondset(W2);
+
+  if (a2a.run_and_wait_end() < 0) {
+    error("running A2A");
+    return -1;
+  }
+
+  return 0;
 }

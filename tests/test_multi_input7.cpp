@@ -27,7 +27,7 @@
 /* Author: Massimo
  * Date  : January 2014
  *
- */                                    
+ */
 /*
  *                              -------------------------
  *        -----                |               -----     |
@@ -51,86 +51,83 @@
 
 #include <ff/ff.hpp>
 using namespace ff;
-const long   NUMTASKS=10;
-const int  FARM1WORKERS=2; 
+const long NUMTASKS = 10;
+const int FARM1WORKERS = 2;
 
-
-struct W1: ff_node {
-    void *svc(void*) {
-        for(long i=(get_my_id()+1); i<=NUMTASKS; ++i) {
-            ff_send_out((void*)i);
-        }
-        return NULL;
+struct W1 : ff_node {
+  void *svc(void *) {
+    for (long i = (get_my_id() + 1); i <= NUMTASKS; ++i) {
+      ff_send_out((void *)i);
     }
+    return NULL;
+  }
 };
 
-struct W2: ff_node {
-    void *svc(void *task) {
-        long t = (long)task;
-        assert(t>1);
-        --t;
-        return (void*)t;
-    }
+struct W2 : ff_node {
+  void *svc(void *task) {
+    long t = (long)task;
+    assert(t > 1);
+    --t;
+    return (void *)t;
+  }
 };
 
-class E: public ff_node {
+class E : public ff_node {
 public:
-    E(ff_loadbalancer *const lb):neos(0),numtasks(0),lb(lb) {}
+  E(ff_loadbalancer *const lb) : neos(0), numtasks(0), lb(lb) {}
 
-    void *svc(void *task) {
-        long t = (long)task;
-        if (lb->get_channel_id() == -1) {
-            if (t == 1) return GO_ON;            
-            ++numtasks;
-            printf("INPUT: sending %ld to worker\n", t);
-            return task;
-        }
-        printf("BACK: got  %ld from %zd (numtasks=%ld)\n", t,lb->get_channel_id(),numtasks);
-        if ((t != 1) && (t & 0x1)) return task;
-        --numtasks;
-        if (numtasks == 0 && neos==FARM1WORKERS) return EOS;
-        return GO_ON;
+  void *svc(void *task) {
+    long t = (long)task;
+    if (lb->get_channel_id() == -1) {
+      if (t == 1) return GO_ON;
+      ++numtasks;
+      printf("INPUT: sending %ld to worker\n", t);
+      return task;
     }
+    printf("BACK: got  %ld from %zd (numtasks=%ld)\n", t, lb->get_channel_id(),
+        numtasks);
+    if ((t != 1) && (t & 0x1)) return task;
+    --numtasks;
+    if (numtasks == 0 && neos == FARM1WORKERS) return EOS;
+    return GO_ON;
+  }
 
-    void eosnotify(ssize_t id) {
-        if (id != -1) return; 
-        ++neos;
-        if ((neos == FARM1WORKERS) && (numtasks==0))
-            lb->broadcast_task(EOS);
-    }
+  void eosnotify(ssize_t id) {
+    if (id != -1) return;
+    ++neos;
+    if ((neos == FARM1WORKERS) && (numtasks == 0)) lb->broadcast_task(EOS);
+  }
 
 protected:
-    int neos;
-    long numtasks;
-    ff_loadbalancer *const lb;
+  int neos;
+  long numtasks;
+  ff_loadbalancer *const lb;
 };
 
-
 int main() {
-    ff_farm farm1;
-    std::vector<ff_node*> w;
-    for(int i=0;i<FARM1WORKERS;++i)
-        w.push_back(new W1);
-    farm1.add_workers(w);
-    farm1.remove_collector();
+  ff_farm farm1;
+  std::vector<ff_node *> w;
+  for (int i = 0; i < FARM1WORKERS; ++i) w.push_back(new W1);
+  farm1.add_workers(w);
+  farm1.remove_collector();
 
-    ff_farm farm2;
-    w.clear();
-    w.push_back(new W2);
-    w.push_back(new W2);
-    farm2.add_workers(w);
-    farm2.add_emitter(new E(farm2.getlb()));
-    farm2.wrap_around();
+  ff_farm farm2;
+  w.clear();
+  w.push_back(new W2);
+  w.push_back(new W2);
+  farm2.add_workers(w);
+  farm2.add_emitter(new E(farm2.getlb()));
+  farm2.wrap_around();
 
-    ff_pipeline pipe;
-    pipe.add_stage(&farm1);
-    pipe.add_stage(&farm2);
+  ff_pipeline pipe;
+  pipe.add_stage(&farm1);
+  pipe.add_stage(&farm2);
 
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipe\n");
-        return -1;
-    }
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
 
-    printf("DONE\n");
-    return 0;
+  printf("DONE\n");
+  return 0;
 }

@@ -40,93 +40,81 @@ using namespace ff;
 
 const int NTASKS = 2;
 
-struct Worker1: ff_node_t<long> {
+struct Worker1 : ff_node_t<long> {
 
-    void callbackIn(void *) {
-        printf("Worker%ld callbackIn\n", get_my_id());
-    }
-    
-    void callbackOut(void *) {
-        printf("Worker%ld callbackOut\n", get_my_id());
+  void callbackIn(void *) { printf("Worker%ld callbackIn\n", get_my_id()); }
 
-    }
-    long *svc(long *in) { 
-        printf("Worker%ld got %ld\n", get_my_id(), *in);
-        if (*in>0) --*in; 
-        return in; 
-    }
+  void callbackOut(void *) { printf("Worker%ld callbackOut\n", get_my_id()); }
+  long *svc(long *in) {
+    printf("Worker%ld got %ld\n", get_my_id(), *in);
+    if (*in > 0) --*in;
+    return in;
+  }
 };
 
-struct Worker2: ff_node_t<long> {
+struct Worker2 : ff_node_t<long> {
 
-    void callbackIn(void *) {
-        printf("Worker%ld callbackIn\n", get_my_id());
-    }
+  void callbackIn(void *) { printf("Worker%ld callbackIn\n", get_my_id()); }
 
-    void callbackOut(void *) {
-        printf("Worker%ld callbackOut\n", get_my_id());
-    }
-    long *svc(long *in) { 
-        printf("Worker%ld got %ld\n", get_my_id(), *in);
-        return in; 
-    }
+  void callbackOut(void *) { printf("Worker%ld callbackOut\n", get_my_id()); }
+  long *svc(long *in) {
+    printf("Worker%ld got %ld\n", get_my_id(), *in);
+    return in;
+  }
 };
 
+struct Emitter : ff_node_t<long> {
 
-struct Emitter: ff_node_t<long> {
+  Emitter(ff_loadbalancer *const lb) : lb(lb) {}
 
-    Emitter(ff_loadbalancer *const lb):lb(lb) {}
+  void callbackIn(void *p) {
+    assert(reinterpret_cast<ff_loadbalancer *>(p) == lb);
+    FF_IGNORE_UNUSED(p);
+    printf("Emitter callbackIn\n");
+  }
 
-    void callbackIn(void *p) {
-        assert(reinterpret_cast<ff_loadbalancer*>(p) == lb);
-        FF_IGNORE_UNUSED(p);
-        printf("Emitter callbackIn\n");
-    }
-    
-    void callbackOut(void *p) {
-        assert(reinterpret_cast<ff_loadbalancer*>(p) == lb);
-        FF_IGNORE_UNUSED(p);
-        printf("Emitter callbackOut\n");
-    }
-    
-    long *svc(long *in) {
-        if (in == nullptr) {
-            for(size_t i=0;i<NTASKS; ++i)
-                lb->ff_send_out_to(new long(i), i % 2);
-            return GO_ON;
-        }
-        
-        const long &task = *in;
-        if (task == 0) {
-            ++zeros;
-            if (zeros == NTASKS) return EOS;
-        } else {
-            lb->ff_send_out_to(in, next);
-            next  = (next + 1) % 2;
-        }
-        return GO_ON;
+  void callbackOut(void *p) {
+    assert(reinterpret_cast<ff_loadbalancer *>(p) == lb);
+    FF_IGNORE_UNUSED(p);
+    printf("Emitter callbackOut\n");
+  }
+
+  long *svc(long *in) {
+    if (in == nullptr) {
+      for (size_t i = 0; i < NTASKS; ++i)
+        lb->ff_send_out_to(new long(i), i % 2);
+      return GO_ON;
     }
 
-    
-    int zeros = 0;
-    int next  = 0;
-    ff_loadbalancer *lb;
+    const long &task = *in;
+    if (task == 0) {
+      ++zeros;
+      if (zeros == NTASKS) return EOS;
+    } else {
+      lb->ff_send_out_to(in, next);
+      next = (next + 1) % 2;
+    }
+    return GO_ON;
+  }
+
+  int zeros = 0;
+  int next = 0;
+  ff_loadbalancer *lb;
 };
-
 
 int main() {
 
-    std::vector<std::unique_ptr<ff_node> > W;
-    W.push_back(make_unique<Worker1>());
-    W.push_back(make_unique<Worker2>());
-    
-    ff_Farm<> farm(std::move(W));
-    Emitter E(farm.getlb());
-    farm.add_emitter(E);
-    farm.remove_collector();
-    farm.wrap_around();
+  std::vector<std::unique_ptr<ff_node>> W;
+  W.push_back(make_unique<Worker1>());
+  W.push_back(make_unique<Worker2>());
 
-    farm.run_and_wait_end();
-    
-    return 0;
+  ff_Farm<> farm(std::move(W));
+  Emitter E(farm.getlb());
+  farm.add_emitter(E);
+  farm.remove_collector();
+  farm.wrap_around();
+
+  farm.run_and_wait_end();
+
+  return 0;
 }

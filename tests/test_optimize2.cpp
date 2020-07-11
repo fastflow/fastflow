@@ -53,71 +53,69 @@
 
 using namespace ff;
 
-struct First: ff_node_t<long> {
-    long* svc(long*) {
-	for(long i=1;i<=1000;++i)
-	    ff_send_out((long*)i);
-	return EOS;
-    }
+struct First : ff_node_t<long> {
+  long *svc(long *) {
+    for (long i = 1; i <= 1000; ++i) ff_send_out((long *)i);
+    return EOS;
+  }
 };
-struct Worker: ff_node_t<long> {
-    long* svc(long*in) {
-        if (get_my_id()==0 || get_my_id() == 1) usleep(1000);
-        printf("Worker%ld received %ld\n", get_my_id(), (long)in);
-        return in;
-    }
+struct Worker : ff_node_t<long> {
+  long *svc(long *in) {
+    if (get_my_id() == 0 || get_my_id() == 1) usleep(1000);
+    printf("Worker%ld received %ld\n", get_my_id(), (long)in);
+    return in;
+  }
 };
-struct Last: ff_node_t<long> { 
-    long* svc(long*in) {
-        //printf("Last received %ld from %ld\n", (long)in, get_channel_id());  // <<< to print the input channel you need ff_minode-t
-        printf("Last received %ld\n", (long)in);
-        return GO_ON;
-    }
+struct Last : ff_node_t<long> {
+  long *svc(long *in) {
+    //printf("Last received %ld from %ld\n", (long)in, get_channel_id());  // <<< to print the input channel you need ff_minode-t
+    printf("Last received %ld\n", (long)in);
+    return GO_ON;
+  }
 };
-
 
 int main() {
-    First first;
-    Last last;
-    size_t nworkers1 = 3;  // n. of workers of the first 4 farms
-    size_t nworkers2 = 2;  // n. of workers of farm5 and farm6
+  First first;
+  Last last;
+  size_t nworkers1 = 3; // n. of workers of the first 4 farms
+  size_t nworkers2 = 2; // n. of workers of farm5 and farm6
 
-
-    ff_Farm<long,long> farm([&]() {
-            std::vector<std::unique_ptr<ff_node> > V;
-            for(size_t i=0;i<nworkers1;++i) {
-                std::vector<std::unique_ptr<ff_node> > W;
-                for(size_t j=0;j<nworkers2;++j) {
-                    W.push_back(make_unique<Worker>());
-                }
-                auto F = make_unique<ff_Farm<long,long> >(std::move(W));
-                V.push_back(std::move(F));
-            }
-            return V;
-        } ());
-    
-    // original network
-    ff_Pipe<> pipe(first, farm, last);
-
-    // optimization that I would like to apply, if possible
-    OptLevel opt;
-    opt.verbose_level=1;
-    opt.max_nb_threads=ff_realNumCores();
-    opt.blocking_mode=true;      // enabling blocking if #threads > max_nb_threads
-    opt.merge_with_emitter=true; // merging previous pipeline stage with farm emitter 
-    opt.remove_collector=true;   // remove farm collector
-
-    // this call tries to apply all previous optimizations modifying the pipe passed
-    // as parameter 
-    if (optimize_static(pipe,opt)<0) {
-        error("optimize_static\n");
-        return -1;
+  ff_Farm<long, long> farm([&]() {
+    std::vector<std::unique_ptr<ff_node>> V;
+    for (size_t i = 0; i < nworkers1; ++i) {
+      std::vector<std::unique_ptr<ff_node>> W;
+      for (size_t j = 0; j < nworkers2; ++j) {
+        W.push_back(make_unique<Worker>());
+      }
+      auto F = make_unique<ff_Farm<long, long>>(std::move(W));
+      V.push_back(std::move(F));
     }
-    // running the optimized pipe
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipeline\n");
-        return -1;
-    }
-    printf("test DONE\n");
-    return 0;
+    return V;
+  }());
+
+  // original network
+  ff_Pipe<> pipe(first, farm, last);
+
+  // optimization that I would like to apply, if possible
+  OptLevel opt;
+  opt.verbose_level = 1;
+  opt.max_nb_threads = ff_realNumCores();
+  opt.blocking_mode = true; // enabling blocking if #threads > max_nb_threads
+  opt.merge_with_emitter =
+      true; // merging previous pipeline stage with farm emitter
+  opt.remove_collector = true; // remove farm collector
+
+  // this call tries to apply all previous optimizations modifying the pipe passed
+  // as parameter
+  if (optimize_static(pipe, opt) < 0) {
+    error("optimize_static\n");
+    return -1;
+  }
+  // running the optimized pipe
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipeline\n");
+    return -1;
+  }
+  printf("test DONE\n");
+  return 0;
 }

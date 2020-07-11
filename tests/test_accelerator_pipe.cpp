@@ -31,96 +31,92 @@
  */
 #include <vector>
 #include <iostream>
-#include <ff/ff.hpp>  
+#include <ff/ff.hpp>
 using namespace ff;
 
 // generic worker
-class Stage: public ff_node {
+class Stage : public ff_node {
 public:
-    void * svc(void * task) {
-        int * t = (int *)task;
-        std::cout << "Stage " << ff_node::get_my_id() 
-                  << " received task " << *t << "\n";
-        return task;
-    }
+  void *svc(void *task) {
+    int *t = (int *)task;
+    std::cout << "Stage " << ff_node::get_my_id() << " received task " << *t
+              << "\n";
+    return task;
+  }
 };
 
-
-int main(int argc, char * argv[]) {
-    int nstages = 3;
-    int streamlen=1000;
-    if (argc>1) {
-        if (argc<3) {
-            std::cerr << "use: " 
-                      << argv[0] 
-                      << " nstages streamlen\n";
-            return -1;
-        }
-        
-        nstages=atoi(argv[1]);
-        streamlen=atoi(argv[2]);
+int main(int argc, char *argv[]) {
+  int nstages = 3;
+  int streamlen = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use: " << argv[0] << " nstages streamlen\n";
+      return -1;
     }
-    if (nstages<=0 || streamlen<=0) {
-        std::cerr << "Wrong parameters values\n";
+
+    nstages = atoi(argv[1]);
+    streamlen = atoi(argv[2]);
+  }
+  if (nstages <= 0 || streamlen <= 0) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
+
+  ff_pipeline pipe(true /* accelerator flag */);
+  for (int i = 0; i < nstages; ++i) {
+    pipe.add_stage(new Stage);
+  }
+
+  ffTime(START_TIME);
+
+  for (int j = 0; j < 3; ++j) { // just 3 iterations to check if all is working
+
+    // Now run the accelator asynchronusly
+    pipe.run_then_freeze(); //  pipe.run() can also be used here
+
+    void *result = NULL;
+    for (int i = 0; i < streamlen; i++) {
+      std::cout << "[Main] Offloading " << i << "\n";
+      // Here offloading computation into the pipeline
+      if (!pipe.offload(new int(i))) {
+        error("offloading task\n");
         return -1;
-    }
-    
-    ff_pipeline pipe(true /* accelerator flag */);
-    for(int i=0;i<nstages;++i) {
-        pipe.add_stage(new Stage);
-    }
+      }
 
-    ffTime(START_TIME);
-
-
-    for(int j=0;j<3;++j) { // just 3 iterations to check if all is working 
-
-        // Now run the accelator asynchronusly
-        pipe.run_then_freeze(); //  pipe.run() can also be used here
-        
-        void * result=NULL;
-        for (int i=0;i<streamlen;i++) {
-            std::cout << "[Main] Offloading " << i << "\n"; 
-            // Here offloading computation into the pipeline
-            if (!pipe.offload(new int(i))) {
-                error("offloading task\n");
-                return -1;
-            }
-            
-            // try to get results, if there are any
-            if (pipe.load_result_nb(&result)) {
-                std::cerr << "result= " << *((int*)result) << "\n";
-                delete ((int*)result);
-            }
-        }
-
-        std::cout << "[Main] send EOS\n";
-        pipe.offload((void *)FF_EOS);
-    
-        // get all remaining results syncronously. 
-        while(pipe.load_result(&result)) {
-            std::cerr << "result= " << *((int*)result) << "\n";
-            delete ((int*)result);
-        }
-
-        std::cout << "[Main] got all results iteration= " << j << "\n";
-    
-        // wait EOS
-        if (pipe.wait_freezing()<0) {
-            error("freezing error\n");
-            return -1;
-        }
+      // try to get results, if there are any
+      if (pipe.load_result_nb(&result)) {
+        std::cerr << "result= " << *((int *)result) << "\n";
+        delete ((int *)result);
+      }
     }
 
-    // join all threads
-    if (pipe.wait()<0) {
-        error("error waiting pipe\n");
-        return -1;
+    std::cout << "[Main] send EOS\n";
+    pipe.offload((void *)FF_EOS);
+
+    // get all remaining results syncronously.
+    while (pipe.load_result(&result)) {
+      std::cerr << "result= " << *((int *)result) << "\n";
+      delete ((int *)result);
     }
-    std::cout << "[Main] Pipe accelerator stopped\n";
-    ffTime(STOP_TIME);
-    std::cerr << "[Main] DONE, pipe time= " << pipe.ffTime() << " (ms)\n";
-    std::cerr << "[Main] DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
-    
-    return 0;
+
+    std::cout << "[Main] got all results iteration= " << j << "\n";
+
+    // wait EOS
+    if (pipe.wait_freezing() < 0) {
+      error("freezing error\n");
+      return -1;
+    }
+  }
+
+  // join all threads
+  if (pipe.wait() < 0) {
+    error("error waiting pipe\n");
+    return -1;
+  }
+  std::cout << "[Main] Pipe accelerator stopped\n";
+  ffTime(STOP_TIME);
+  std::cerr << "[Main] DONE, pipe time= " << pipe.ffTime() << " (ms)\n";
+  std::cerr << "[Main] DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
+
+  return 0;
 }

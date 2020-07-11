@@ -44,7 +44,6 @@
  *
  */
 
-
 #include <ff/node.hpp>
 #include <ff/ff.hpp>
 
@@ -53,48 +52,50 @@ using namespace ff;
 #define NUMTASKS 10
 
 /* --------------------------------------- */
-class A: public ff_node_t<long> { // ff_minode_t<long> {
+class A : public ff_node_t<long> { // ff_minode_t<long> {
 public:
-    long *svc(long *task) {
-        static long k=1;
-        if (task==NULL) {
-            ff_send_out((long*)k);
-            return GO_ON;
-        }
-        printf("A received %ld back from B\n", (long)task);
-        if (k++==NUMTASKS) return NULL;
-        return (long*)k;
+  long *svc(long *task) {
+    static long k = 1;
+    if (task == NULL) {
+      ff_send_out((long *)k);
+      return GO_ON;
     }
+    printf("A received %ld back from B\n", (long)task);
+    if (k++ == NUMTASKS) return NULL;
+    return (long *)k;
+  }
 };
 /* --------------------------------------- */
 
-class B: public ff_monode_t<long> {
+class B : public ff_monode_t<long> {
 public:
-    long *svc(long *task) {
-        const long& t = (long)task;
-        printf("B %ld from A\n", t);
-        if (t & 0x1) {
-            printf("B sending %ld to C\n", t);
-            ff_send_out_to(task, 1);  // sending forward 
-        }
-        printf("B sending %ld back\n", t);
-        ff_send_out_to(task, 0);  // sending back
-        return GO_ON;
+  long *svc(long *task) {
+    const long &t = (long)task;
+    printf("B %ld from A\n", t);
+    if (t & 0x1) {
+      printf("B sending %ld to C\n", t);
+      ff_send_out_to(task, 1); // sending forward
     }
+    printf("B sending %ld back\n", t);
+    ff_send_out_to(task, 0); // sending back
+    return GO_ON;
+  }
 };
 /* --------------------------------------- */
 
-class C: public ff_node_t<long> {
+class C : public ff_node_t<long> {
 public:
-    long *svc(long *t) { 
-        printf("C %ld\n", (long)t);
-        return GO_ON;
-    }
+  long *svc(long *t) {
+    printf("C %ld\n", (long)t);
+    return GO_ON;
+  }
 };
 /* --------------------------------------- */
 
 int main() {
-    A a;  B b;  C c;
+  A a;
+  B b;
+  C c;
 
 #if 0    
     ff_Pipe<long,long> pipe1(a, b);
@@ -110,15 +111,14 @@ int main() {
         return -1;
     }
 #else
-    ff_Pipe pipe1(a, b);
-    pipe1.wrap_around();
-    ff_Pipe pipe(pipe1, c);
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipe\n");
-        return -1;
-    }
-#endif    
-    printf("DONE\n");    
-    return 0;
+  ff_Pipe pipe1(a, b);
+  pipe1.wrap_around();
+  ff_Pipe pipe(pipe1, c);
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+#endif
+  printf("DONE\n");
+  return 0;
 }
-

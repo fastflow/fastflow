@@ -28,7 +28,7 @@
 /* Author: Massimo
  * Date  : May 2015
  *
- */                                    
+ */
 
 /*
  *   pipe(farm, collector)
@@ -51,84 +51,83 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-
-
-class Emitter: public ff_node_t<long> {
+class Emitter : public ff_node_t<long> {
 public:
-    Emitter(long ntasks):ntasks(ntasks) {}
-    long* svc(long *t) {
-	if (t == NULL) {
-	    for(long i=0;i<ntasks;++i)
-            ff_send_out((long*)(i+10));
+  Emitter(long ntasks) : ntasks(ntasks) {}
+  long *svc(long *t) {
+    if (t == NULL) {
+      for (long i = 0; i < ntasks; ++i) ff_send_out((long *)(i + 10));
 
-        ntasks = ntasks / 2;
-	    return GO_ON;
-	}
-	printf("Emitter %ld\n", (long)t);
-	assert((long)t % 2);	
-	if (--ntasks <= 0) {
-        printf("sending EOS to workers\n");
-        return EOS;
+      ntasks = ntasks / 2;
+      return GO_ON;
+    }
+    printf("Emitter %ld\n", (long)t);
+    assert((long)t % 2);
+    if (--ntasks <= 0) {
+      printf("sending EOS to workers\n");
+      return EOS;
+    }
+    return (long *)((long)t + 1);
+  }
 
-    }
-	return (long*)((long)t +1);
-    }
 private:
-    long      ntasks;
+  long ntasks;
 };
 
-// multi-output worker 
-struct Worker: ff_monode_t<long> {
-    long* svc(long* task) {
-        printf("Worker task=%ld\n", (long)task);
-        if (((long)task %2) == 0) {
-            printf("Worker task sending forward %ld\n", (long)task);
-            ff_send_out_to(task, 1); // to the next stage 
-        } else {
-            printf("Worker sending back %ld\n", (long)task);
-            ff_send_out_to(task, 0);  // channel 0 is the one that goes back to the emitter
-        }
-        return GO_ON;
+// multi-output worker
+struct Worker : ff_monode_t<long> {
+  long *svc(long *task) {
+    printf("Worker task=%ld\n", (long)task);
+    if (((long)task % 2) == 0) {
+      printf("Worker task sending forward %ld\n", (long)task);
+      ff_send_out_to(task, 1); // to the next stage
+    } else {
+      printf("Worker sending back %ld\n", (long)task);
+      ff_send_out_to(
+          task, 0); // channel 0 is the one that goes back to the emitter
     }
+    return GO_ON;
+  }
 };
 
 // multi-input stage
-struct Collector: ff_minode_t<long> {
-    long* svc(long* task) {
-        printf("Collector received task = %ld\n", (long)(task));
-        return GO_ON;
-    }
+struct Collector : ff_minode_t<long> {
+  long *svc(long *task) {
+    printf("Collector received task = %ld\n", (long)(task));
+    return GO_ON;
+  }
 };
 
-int main(int argc, char* argv[]) {
-    unsigned nworkers = 3;
-    long     ntasks = 1000;
-    if (argc>1) {
-        if (argc < 3) {
-            std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";
-            return -1;
-        }
-        nworkers  =atoi(argv[1]);
-        ntasks    =atol(argv[2]);
-        if (ntasks<2) {
-            std::cerr << "ntasks must be greater than 2\n";
-            return -1;
-        }
-    }   
-    ff_Farm<long>   farm(  [&]() { 
-            std::vector<std::unique_ptr<ff_node> > W;
-            for(size_t i=0;i<nworkers;++i)  {
-		W.push_back(make_unique<Worker>());
-	    }
-	    return W;
-	} () );
-    Emitter E(ntasks);
-    farm.remove_collector();
-    farm.add_emitter(E);  
-    farm.wrap_around();
+int main(int argc, char *argv[]) {
+  unsigned nworkers = 3;
+  long ntasks = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use:\n"
+                << " " << argv[0] << " numworkers ntasks\n";
+      return -1;
+    }
+    nworkers = atoi(argv[1]);
+    ntasks = atol(argv[2]);
+    if (ntasks < 2) {
+      std::cerr << "ntasks must be greater than 2\n";
+      return -1;
+    }
+  }
+  ff_Farm<long> farm([&]() {
+    std::vector<std::unique_ptr<ff_node>> W;
+    for (size_t i = 0; i < nworkers; ++i) {
+      W.push_back(make_unique<Worker>());
+    }
+    return W;
+  }());
+  Emitter E(ntasks);
+  farm.remove_collector();
+  farm.add_emitter(E);
+  farm.wrap_around();
 
-    Collector C;
-    ff_Pipe<> pipe(farm, C);
-    pipe.run_and_wait_end();
-    return 0;
+  Collector C;
+  ff_Pipe<> pipe(farm, C);
+  pipe.run_and_wait_end();
+  return 0;
 }

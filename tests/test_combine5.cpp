@@ -55,91 +55,85 @@
 
 using namespace ff;
 
-struct Emitter: ff_monode_t<long> { 
-    Emitter(int nworkers, long ntasks):nworkers(nworkers),ntasks(ntasks) {}
-    long *svc(long*) {
-        for(long i=1;i<=ntasks;++i) 
-            ff_send_out_to((long*)i, i % nworkers);
-        return EOS;
-    }
-    int nworkers;
-    long ntasks;
+struct Emitter : ff_monode_t<long> {
+  Emitter(int nworkers, long ntasks) : nworkers(nworkers), ntasks(ntasks) {}
+  long *svc(long *) {
+    for (long i = 1; i <= ntasks; ++i) ff_send_out_to((long *)i, i % nworkers);
+    return EOS;
+  }
+  int nworkers;
+  long ntasks;
 };
-struct Worker: ff_node_t<long> {
-    long *svc(long *in) {
-        return in;
-    }
+struct Worker : ff_node_t<long> {
+  long *svc(long *in) { return in; }
 };
 // NOTE: Emitter2 can also be a multi-output node
-struct Emitter2: ff_node_t<long> {
-    long *svc(long* in) {
-        ff_send_out(in);
-        return GO_ON;
-    }
+struct Emitter2 : ff_node_t<long> {
+  long *svc(long *in) {
+    ff_send_out(in);
+    return GO_ON;
+  }
 };
-struct Worker1: ff_node_t<long> {
-    long *svc(long *in) {
-        return in;
-    }
+struct Worker1 : ff_node_t<long> {
+  long *svc(long *in) { return in; }
 };
 
-struct Collector: ff_minode_t<long> {
-    Collector(long ntasks):ntasks(ntasks) {}
-    long *svc(long *) {
-        --ntasks;
-        //std::cout << "Collector received input from " << get_channel_id() << "\n";
-        return GO_ON;
+struct Collector : ff_minode_t<long> {
+  Collector(long ntasks) : ntasks(ntasks) {}
+  long *svc(long *) {
+    --ntasks;
+    //std::cout << "Collector received input from " << get_channel_id() << "\n";
+    return GO_ON;
+  }
+  void svc_end() {
+    if (ntasks != 0) {
+      std::cerr << "ERROR in the test\n"
+                << "\n";
+      std::cerr << "svc_end ntasks= " << ntasks << "\n";
+      abort();
     }
-    void svc_end() {
-        if (ntasks != 0) {
-            std::cerr << "ERROR in the test\n" << "\n";
-            std::cerr << "svc_end ntasks= " << ntasks << "\n";
-            abort();
-        }
-    }
-    long ntasks;
+  }
+  long ntasks;
 };
 
-int main(int argc, char* argv[]) {
-    int nworkers1 = 1;
-    int nworkers2 = 2;
-    int ntasks   = 100;
-    if (argc>1) {
-        if (argc!=4) {
-            std::cerr << "use: " << argv[0] << " [nworkers1 nworkers2 ntasks]\n";
-            return -1;
-        }
-        nworkers1= atol(argv[1]);
-        nworkers2= atol(argv[2]);
-        ntasks   = atol(argv[3]);
+int main(int argc, char *argv[]) {
+  int nworkers1 = 1;
+  int nworkers2 = 2;
+  int ntasks = 100;
+  if (argc > 1) {
+    if (argc != 4) {
+      std::cerr << "use: " << argv[0] << " [nworkers1 nworkers2 ntasks]\n";
+      return -1;
     }
+    nworkers1 = atol(argv[1]);
+    nworkers2 = atol(argv[2]);
+    ntasks = atol(argv[3]);
+  }
 
-    Emitter E(nworkers1,ntasks);
+  Emitter E(nworkers1, ntasks);
 
-    std::vector<std::unique_ptr<ff_node>> W1;
-    for(int i=0;i<nworkers1;++i) 
-        W1.push_back(make_unique<Worker>());
-    
-    ff_Farm<> farm1(std::move(W1), E);  // default collector
+  std::vector<std::unique_ptr<ff_node>> W1;
+  for (int i = 0; i < nworkers1; ++i) W1.push_back(make_unique<Worker>());
 
-    W1.clear();
-    for(int i=0;i<nworkers2;++i) 
-        W1.push_back(make_unique<Worker1>());
+  ff_Farm<> farm1(std::move(W1), E); // default collector
 
-    Emitter2 E2;
-    ff_Farm<> farm2(std::move(W1), E2);
-    Collector C(ntasks);
-    farm2.add_collector(C);
+  W1.clear();
+  for (int i = 0; i < nworkers2; ++i) W1.push_back(make_unique<Worker1>());
 
-    auto farm = combine_farms_a2a(farm1, E2, farm2);
-    unsigned long start = getusec();
-    if (farm.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
-    }
-    unsigned long stop = getusec();
-    printf("Farm time = %g (ms). Total Time = %g (ms)\n", farm.ffTime(), (stop-start)/1000.0);
-    printf("DONE\n");
-    return 0;
+  Emitter2 E2;
+  ff_Farm<> farm2(std::move(W1), E2);
+  Collector C(ntasks);
+  farm2.add_collector(C);
+
+  auto farm = combine_farms_a2a(farm1, E2, farm2);
+  unsigned long start = getusec();
+  if (farm.run_and_wait_end() < 0) {
+    error("running farm\n");
+    return -1;
+  }
+  unsigned long stop = getusec();
+  printf("Farm time = %g (ms). Total Time = %g (ms)\n", farm.ffTime(),
+      (stop - start) / 1000.0);
+  printf("DONE\n");
+  return 0;
 }
-

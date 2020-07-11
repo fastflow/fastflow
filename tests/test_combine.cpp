@@ -36,7 +36,7 @@
 using namespace ff;
 
 long ntasks = 100000;
-long worktime = 1*2400; // usecs
+long worktime = 1 * 2400; // usecs
 
 #if 0 // two different ways to implement the first stage
 struct firstStage: ff_node_t<long> {
@@ -48,67 +48,67 @@ struct firstStage: ff_node_t<long> {
     }
 };
 #else
-struct firstStage: ff_node_t<long> {
-    long *svc(long*) {
-        if (myntasks<=0) return EOS;
-        long t = myntasks--;
-        return (long*)t;
-    }
-    long myntasks=ntasks;
+struct firstStage : ff_node_t<long> {
+  long *svc(long *) {
+    if (myntasks <= 0) return EOS;
+    long t = myntasks--;
+    return (long *)t;
+  }
+  long myntasks = ntasks;
 };
 #endif
-struct secondStage: ff_node_t<long> { // 2nd stage
-    long *svc(long *t) {
-        ticks_wait(worktime);
-        return t;
-    }
+struct secondStage : ff_node_t<long> { // 2nd stage
+  long *svc(long *t) {
+    ticks_wait(worktime);
+    return t;
+  }
 };
-struct secondStage2: ff_node_t<long> { // 2nd stage
-    long *svc(long *t) {
-        ticks_wait(worktime);
-        return t;
-    }
+struct secondStage2 : ff_node_t<long> { // 2nd stage
+  long *svc(long *t) {
+    ticks_wait(worktime);
+    return t;
+  }
 };
-struct secondStage3: ff_node_t<long> { // 2nd stage
-    long *svc(long *t) {
-        ticks_wait(worktime);
-        return t;
-    }
+struct secondStage3 : ff_node_t<long> { // 2nd stage
+  long *svc(long *t) {
+    ticks_wait(worktime);
+    return t;
+  }
 };
-struct thirdStage: ff_node_t<long> {  // 3rd stage
-    long *svc(long *) {
-        ticks_wait(worktime);
-        return GO_ON; 
-    }
-}; 
+struct thirdStage : ff_node_t<long> { // 3rd stage
+  long *svc(long *) {
+    ticks_wait(worktime);
+    return GO_ON;
+  }
+};
 int main() {
-    firstStage    _1;
-    secondStage   _2;
-    secondStage2  _3; 
-    secondStage3  _4;
-    thirdStage    _5;
-    
-    unsigned long inizio=getusec();
-    long *r;
-    for(long i=1;i<=ntasks;++i) {
-        r = _2.svc((long*)i);
-        r = _3.svc(r);
-        r = _4.svc(r);
-        r = _5.svc(r);
-    }
-    unsigned long fine=getusec();
-    std::cout << "TEST  FOR  Time = " << (fine-inizio) / 1000.0 << " ms\n";
-    ff_Pipe<> pipe(_1,_2,_3,_4,_5);
-    pipe.run_and_wait_end();
-    std::cout << "TEST  PIPE Time = " << pipe.ffwTime() << " ms\n";
-    {    
+  firstStage _1;
+  secondStage _2;
+  secondStage2 _3;
+  secondStage3 _4;
+  thirdStage _5;
 
-        // we declared them const because we want to re-use the same nodes in multiple tests
-        const firstStage    _1;
-        const secondStage   _2;
-        const secondStage2  _3; 
-        const secondStage3  _4;
-        const thirdStage    _5;
+  unsigned long inizio = getusec();
+  long *r;
+  for (long i = 1; i <= ntasks; ++i) {
+    r = _2.svc((long *)i);
+    r = _3.svc(r);
+    r = _4.svc(r);
+    r = _5.svc(r);
+  }
+  unsigned long fine = getusec();
+  std::cout << "TEST  FOR  Time = " << (fine - inizio) / 1000.0 << " ms\n";
+  ff_Pipe<> pipe(_1, _2, _3, _4, _5);
+  pipe.run_and_wait_end();
+  std::cout << "TEST  PIPE Time = " << pipe.ffwTime() << " ms\n";
+  {
+
+    // we declared them const because we want to re-use the same nodes in multiple tests
+    const firstStage _1;
+    const secondStage _2;
+    const secondStage2 _3;
+    const secondStage3 _4;
+    const thirdStage _5;
 #if 0
         {
             auto comb = combine_nodes(_1, combine_nodes(_2, combine_nodes(_3, combine_nodes(_4, _5))));
@@ -205,41 +205,37 @@ int main() {
         }
         usleep(500000);
 #endif
-        {
-            // testing multi-input + multi-output combined
+    {
+      // testing multi-input + multi-output combined
 
-            struct miStage:ff_minode_t<long> {
-                long* svc(long* in) {
-                    printf("MULTI INPUT input channels %ld\n", get_num_inchannels());
-                    return in;
-                }
-                void eosnotify(ssize_t) {
-                    printf("MULTI INPUT %ld, eosnotify\n", get_my_id());
-                }
-            };
-            struct moStage:ff_monode_t<long> {
-                long* svc(long* in) {
-                    return in;
-                }
-                void eosnotify(ssize_t) {
-                    printf("MULTI OUTPUT %ld, eosnotify\n", get_my_id());
-                }
-                
-            };
-            const miStage mi;
-            const moStage mo;
-            const ff_comb comb0(mi, mi);
-            const ff_comb comb1(mo, mo);
-
-            ff_comb comb(comb1, comb0);
-            
-            ff_Pipe<> pipe(_1, comb, _5);
-            // starts the pipeline
-            if (pipe.run_and_wait_end()<0)
-                error("running pipe\n");
-            std::cout << "TEST11 DONE\n";
+      struct miStage : ff_minode_t<long> {
+        long *svc(long *in) {
+          printf("MULTI INPUT input channels %ld\n", get_num_inchannels());
+          return in;
         }
+        void eosnotify(ssize_t) {
+          printf("MULTI INPUT %ld, eosnotify\n", get_my_id());
+        }
+      };
+      struct moStage : ff_monode_t<long> {
+        long *svc(long *in) { return in; }
+        void eosnotify(ssize_t) {
+          printf("MULTI OUTPUT %ld, eosnotify\n", get_my_id());
+        }
+      };
+      const miStage mi;
+      const moStage mo;
+      const ff_comb comb0(mi, mi);
+      const ff_comb comb1(mo, mo);
+
+      ff_comb comb(comb1, comb0);
+
+      ff_Pipe<> pipe(_1, comb, _5);
+      // starts the pipeline
+      if (pipe.run_and_wait_end() < 0) error("running pipe\n");
+      std::cout << "TEST11 DONE\n";
     }
-  
-    return 0;
+  }
+
+  return 0;
 }

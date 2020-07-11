@@ -33,97 +33,92 @@
 #include <iostream>
 #include <ff/ff.hpp>
 
-
 using namespace ff;
 
 // generic worker
-class Worker: public ff_node {
+class Worker : public ff_node {
 public:
-    
-    void svc_end() {
-        int * task = new int(-3);
-        if (!ff_send_out(task)) abort();
-    }
+  void svc_end() {
+    int *task = new int(-3);
+    if (!ff_send_out(task)) abort();
+  }
 
-    void * svc(void * task) {
-        int * t = (int *)task;
-        std::cout << "Worker " << ff_node::get_my_id() 
-                  << " received task " << *t << "\n";
-        int * task2 = new int(-2);
-        if (!ff_send_out(task2)) abort();
-        return GO_ON; //task;
-    }
-    // I don't need the following functions for this test
-    //int   svc_init() { return 0; }
-    //void  svc_end() {}
-
+  void *svc(void *task) {
+    int *t = (int *)task;
+    std::cout << "Worker " << ff_node::get_my_id() << " received task " << *t
+              << "\n";
+    int *task2 = new int(-2);
+    if (!ff_send_out(task2)) abort();
+    return GO_ON; //task;
+  }
+  // I don't need the following functions for this test
+  //int   svc_init() { return 0; }
+  //void  svc_end() {}
 };
 
 // the gatherer filter
-class Collector: public ff_node {
+class Collector : public ff_node {
 public:
-    void * svc(void * task) {
-        int * t = (int *)task;
-        std::cout << "Collector received " << *t << "\n";
-        if (*t == -1) return NULL;
-        return task;
-    }
+  void *svc(void *task) {
+    int *t = (int *)task;
+    std::cout << "Collector received " << *t << "\n";
+    if (*t == -1) return NULL;
+    return task;
+  }
 };
 
 // the load-balancer filter
-class Emitter: public ff_node {
+class Emitter : public ff_node {
 public:
-    Emitter(int max_task):ntask(max_task) {};
+  Emitter(int max_task) : ntask(max_task){};
 
-    void * svc(void *) {	
-        int * task = new int(ntask);
-        --ntask;
-        if (ntask<0) return NULL;
-        return task;
-    }
+  void *svc(void *) {
+    int *task = new int(ntask);
+    --ntask;
+    if (ntask < 0) return NULL;
+    return task;
+  }
+
 private:
-    int ntask;
+  int ntask;
 };
 
+int main(int argc, char *argv[]) {
+  int nworkers = 2;
+  int streamlen = 10;
 
-int main(int argc, char * argv[]) {
-    int nworkers = 2;
-    int streamlen = 10;
-
-    if (argc>1) {
-        if (argc!=3) {
-            std::cerr << "use: "
-                      << argv[0]
-                      << " nworkers streamlen\n";
-            return -1;
-        }
-        nworkers=atoi(argv[1]);
-        streamlen=atoi(argv[2]);
+  if (argc > 1) {
+    if (argc != 3) {
+      std::cerr << "use: " << argv[0] << " nworkers streamlen\n";
+      return -1;
     }
+    nworkers = atoi(argv[1]);
+    streamlen = atoi(argv[2]);
+  }
 
-    if (!nworkers || !streamlen) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
-    }
-    
-    ff_farm farm; // farm object
-    
-    Emitter E(streamlen);
-    farm.add_emitter(&E);
+  if (!nworkers || !streamlen) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
 
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
-    farm.add_workers(w); // add all workers to the farm
+  ff_farm farm; // farm object
 
-    Collector C;
-    farm.add_collector(&C);
-    
-    if (farm.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
-    }
-    std::cerr << "DONE, time= " << farm.ffTime() << " (ms)\n";
-    farm.ffStats(std::cerr);
+  Emitter E(streamlen);
+  farm.add_emitter(&E);
 
-    return 0;
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) w.push_back(new Worker);
+  farm.add_workers(w); // add all workers to the farm
+
+  Collector C;
+  farm.add_collector(&C);
+
+  if (farm.run_and_wait_end() < 0) {
+    error("running farm\n");
+    return -1;
+  }
+  std::cerr << "DONE, time= " << farm.ffTime() << " (ms)\n";
+  farm.ffStats(std::cerr);
+
+  return 0;
 }

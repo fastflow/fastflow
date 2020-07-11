@@ -39,8 +39,7 @@
 #include <mammut/mammut.hpp>
 #endif
 
-
-#if defined(FF_CUDA) 
+#if defined(FF_CUDA)
 #include <cuda.h>
 #endif
 
@@ -51,10 +50,6 @@
 #include <CL/opencl.h>
 #include <ff/ocl/clEnvironment.hpp>
 #endif
-
-
-
-
 
 #endif
 
@@ -85,83 +80,84 @@ namespace ff {
  */
 class threadMapper {
 public:
-	/**
+  /**
 	 * Get a static instance of the threadMapper object
 	 *
 	 * \return TODO
 	 */
-	static inline threadMapper* instance() {
-		static threadMapper thm;
-		return &thm;
-	}
+  static inline threadMapper *instance() {
+    static threadMapper thm;
+    return &thm;
+  }
 
-	/**
+  /**
 	 * Default constructor.
 	 */
-	threadMapper() :
-			rrcnt(-1), mask(0) {
-        unsigned int size = -1;
+  threadMapper() : rrcnt(-1), mask(0) {
+    unsigned int size = -1;
 #if defined(MAMMUT)
-        mammut::Mammut m;
-        std::vector<mammut::topology::Cpu*> cpus = m.getInstanceTopology()->getCpus();
-		if (cpus.size()<=0 || cpus[0]->getPhysicalCores().size() <=0) {
-            error("threadMapper: invalid number of cores\n");
-            return ;
+    mammut::Mammut m;
+    std::vector<mammut::topology::Cpu *> cpus =
+        m.getInstanceTopology()->getCpus();
+    if (cpus.size() <= 0 || cpus[0]->getPhysicalCores().size() <= 0) {
+      error("threadMapper: invalid number of cores\n");
+      return;
+    }
+    size_t virtualPerPhysical =
+        cpus[0]->getPhysicalCores()[0]->getVirtualCores().size();
+    for (size_t k = 0; k < virtualPerPhysical; k++) {
+      for (size_t i = 0; i < cpus.size(); i++) {
+        std::vector<mammut::topology::PhysicalCore *> phyCores =
+            cpus.at(i)->getPhysicalCores();
+        for (size_t j = 0; j < phyCores.size(); j++) {
+          std::vector<mammut::topology::VirtualCore *> virtCores =
+              phyCores.at(j)->getVirtualCores();
+          CList.push_back(virtCores[k]->getVirtualCoreId());
         }
-        size_t virtualPerPhysical = cpus[0]->getPhysicalCores()[0]->getVirtualCores().size();
-        for(size_t k = 0; k < virtualPerPhysical; k++){
-            for(size_t i = 0; i < cpus.size(); i++){
-                std::vector<mammut::topology::PhysicalCore*> phyCores = cpus.at(i)->getPhysicalCores();
-                for(size_t j = 0; j < phyCores.size(); j++){
-                    std::vector<mammut::topology::VirtualCore*> virtCores = phyCores.at(j)->getVirtualCores();
-                    CList.push_back(virtCores[k]->getVirtualCoreId());
-                }
-            }
-        }
-        int nc;
-        size = nc = num_cores = CList.size();
-		// usually num_cores is a power of two....!
-		if (!isPowerOf2(size)) {
-			size = nextPowerOf2(size);
-            for(size_t i =CList.size(), j = 0; i< size; ++i, j++)
-                CList.push_back(CList[j]);            
-        }        
+      }
+    }
+    int nc;
+    size = nc = num_cores = CList.size();
+    // usually num_cores is a power of two....!
+    if (!isPowerOf2(size)) {
+      size = nextPowerOf2(size);
+      for (size_t i = CList.size(), j = 0; i < size; ++i, j++)
+        CList.push_back(CList[j]);
+    }
 #else
-        const std::string ff_mapping_string = FF_MAPPING_STRING;
-        if (ff_mapping_string.length()) {
-            num_cores = setMappingList(ff_mapping_string.c_str());
-            assert(isPowerOf2(CList.size()));
-            size = CList.size();
-        } else {
-            int nc = ff_numCores();
-            if (nc <= 0) {
-                error("threadMapper: invalid num_cores\n");
-                return;
-            }
-            size = num_cores = nc;
-            CList.reserve(size);
-            for (int i = 0; i < nc; ++i)
-                CList.push_back(i);
+    const std::string ff_mapping_string = FF_MAPPING_STRING;
+    if (ff_mapping_string.length()) {
+      num_cores = setMappingList(ff_mapping_string.c_str());
+      assert(isPowerOf2(CList.size()));
+      size = CList.size();
+    } else {
+      int nc = ff_numCores();
+      if (nc <= 0) {
+        error("threadMapper: invalid num_cores\n");
+        return;
+      }
+      size = num_cores = nc;
+      CList.reserve(size);
+      for (int i = 0; i < nc; ++i) CList.push_back(i);
 
-            // usually num_cores is a power of two....!
-            if (!isPowerOf2(size)) {
-                size = nextPowerOf2(size);
-                for(size_t i =CList.size(), j = 0; i< size; ++i, j++)
-                    CList.push_back(CList[j]);       
-            }
-        }
+      // usually num_cores is a power of two....!
+      if (!isPowerOf2(size)) {
+        size = nextPowerOf2(size);
+        for (size_t i = CList.size(), j = 0; i < size; ++i, j++)
+          CList.push_back(CList[j]);
+      }
+    }
 #endif /* MAMMUT */
 
-        mask = size - 1;
-		rrcnt = 0;
-        /*
+    mask = size - 1;
+    rrcnt = 0;
+    /*
           printf("CList:\n");
           for(size_t i =0 ; i < CList.size(); ++i) {
           printf("%ld ", CList[i]);
           }
           printf("\n");
         */
-
 
 #if 0
 		const int max_supported_platforms = 10;
@@ -198,9 +194,9 @@ public:
 		}
 		ocl_cpu_id = ocl_gpu_id = ocl_accelerator_id = 0;
 #endif
-	}
+  }
 
-	/**
+  /**
 	 * It allows to set a new list of CPU ids.
 	 *
 	 * The str variable should contain a space-separated or a comma-separated
@@ -211,136 +207,129 @@ public:
 	 *
 	 * \return -1 for errors, otherwise it returns the number of elements in str
      *
-	 */    
-	int setMappingList(const char* str) {
-		rrcnt = 0;        // reset rrcnt
+	 */
+  int setMappingList(const char *str) {
+    rrcnt = 0; // reset rrcnt
 
-		if (str == NULL) return -1; // use the previous mapping list
-		char* _str = const_cast<char*>(str), *_str_end;
-		svector<int> List(64);
-		do {
-			while (*_str == ' ' || *_str == '\t' || *_str == ',')
-				++_str;
-			unsigned cpuid = strtoul(_str, &_str_end, 0);
-			if (_str == _str_end) {
-				error("setMapping, invalid mapping string\n");
-				return -1;
-			}
-			if (cpuid > (num_cores - 1)) {
-				error("setMapping, invalid cpu id in the mapping string\n");
-				return -1;
-			}
-			_str = _str_end;
-			List.push_back(cpuid);
+    if (str == NULL) return -1; // use the previous mapping list
+    char *_str = const_cast<char *>(str), *_str_end;
+    svector<int> List(64);
+    do {
+      while (*_str == ' ' || *_str == '\t' || *_str == ',') ++_str;
+      unsigned cpuid = strtoul(_str, &_str_end, 0);
+      if (_str == _str_end) {
+        error("setMapping, invalid mapping string\n");
+        return -1;
+      }
+      if (cpuid > (num_cores - 1)) {
+        error("setMapping, invalid cpu id in the mapping string\n");
+        return -1;
+      }
+      _str = _str_end;
+      List.push_back(cpuid);
 
-			if (*_str == '\0')
-				break;
-		} while (1);
+      if (*_str == '\0') break;
+    } while (1);
 
-		unsigned int size = (unsigned int) List.size();
-        int ret = size;
-		if (!isPowerOf2(size)) {
-			size = nextPowerOf2(size);
-			List.reserve(size);
-		}
-		mask = size - 1;
-		for (size_t i = List.size(), j = 0; i < size; ++i, j++)
-			List.push_back(List[j]);
-		CList = List;
-        return ret;
-	}
+    unsigned int size = (unsigned int)List.size();
+    int ret = size;
+    if (!isPowerOf2(size)) {
+      size = nextPowerOf2(size);
+      List.reserve(size);
+    }
+    mask = size - 1;
+    for (size_t i = List.size(), j = 0; i < size; ++i, j++)
+      List.push_back(List[j]);
+    CList = List;
+    return ret;
+  }
 
-    void setMappingList(const std::vector<size_t> &mapping) {
-		rrcnt = 0;        // reset rrcnt
+  void setMappingList(const std::vector<size_t> &mapping) {
+    rrcnt = 0; // reset rrcnt
 
-		if ((mapping.size() > (mask+1)) || (mapping.size()==0)) {
-            error("Invalid pinng vector: ignoring it\n");
-			return; // use the previous mapping list
-        }
-		svector<int> List(mask + 1);
-        for (size_t i=0; i<mapping.size(); ++i) {
-			auto cpuid = mapping[i];
-            if (cpuid > (num_cores - 1)) {
-				error("setMapping, invalid cpu id in the mapping string\n");
-				return;
-            }
-            List.push_back(cpuid);
-        }  
-        
-		unsigned int size = (unsigned int) List.size();
-		if (!isPowerOf2(size)) {
-			size = nextPowerOf2(size);
-			List.reserve(size);
-		}
-		mask = size - 1;
-		for (size_t i = List.size(), j = 0; i < size; ++i, j++)
-			List.push_back(List[j]);
-		CList = List;
-	}
+    if ((mapping.size() > (mask + 1)) || (mapping.size() == 0)) {
+      error("Invalid pinng vector: ignoring it\n");
+      return; // use the previous mapping list
+    }
+    svector<int> List(mask + 1);
+    for (size_t i = 0; i < mapping.size(); ++i) {
+      auto cpuid = mapping[i];
+      if (cpuid > (num_cores - 1)) {
+        error("setMapping, invalid cpu id in the mapping string\n");
+        return;
+      }
+      List.push_back(cpuid);
+    }
 
-    
-	/**
+    unsigned int size = (unsigned int)List.size();
+    if (!isPowerOf2(size)) {
+      size = nextPowerOf2(size);
+      List.reserve(size);
+    }
+    mask = size - 1;
+    for (size_t i = List.size(), j = 0; i < size; ++i, j++)
+      List.push_back(List[j]);
+    CList = List;
+  }
+
+  /**
 	 *  Returns the next CPU id using a round-robin mapping access on the mapping list. 
 	 *
 	 *  \return The identifier of the core.
 	 */
-	int getCoreId() {
-		assert(rrcnt >= 0);
-		int id = CList[rrcnt++];
-		rrcnt &= mask;
-		return id;
-	}
+  int getCoreId() {
+    assert(rrcnt >= 0);
+    int id = CList[rrcnt++];
+    rrcnt &= mask;
+    return id;
+  }
 
-	/**
+  /**
 	 * It is used for debugging.
 	 *
 	 * \return TODO
 	 */
-	unsigned int getMask() {
-		return mask;
-	}
+  unsigned int getMask() { return mask; }
 
-	/**
+  /**
 	 * It is used for debugging.
 	 *
 	 * \return TODO
 	 */
-	unsigned int getCListSize() {
-		return (unsigned int) CList.size();
-	}
+  unsigned int getCListSize() { return (unsigned int)CList.size(); }
 
-	/**
+  /**
 	 * It is used to get the identifier of the core.
 	 *
 	 * \return The identifier of the core.
 	 */
-	ssize_t getCoreId(unsigned int tid) {
-		ssize_t id = CList[tid & mask];
-		//std::cerr << "Mask is " << mask << "\n";
-		//int id = CList[tid % (mask+1)];
-		return id;
-	}
+  ssize_t getCoreId(unsigned int tid) {
+    ssize_t id = CList[tid & mask];
+    //std::cerr << "Mask is " << mask << "\n";
+    //int id = CList[tid % (mask+1)];
+    return id;
+  }
 
-	/**
+  /**
 	 * It checks whether the taken core is within the range of the cores
 	 * available on the machine.
 	 *
 	 * \return It will return either \p true of \p false.
 	 */
-	inline bool checkCPUId(const int cpuId) const {
-		return ((unsigned) cpuId < num_cores);
-	}
+  inline bool checkCPUId(const int cpuId) const {
+    return ((unsigned)cpuId < num_cores);
+  }
 
-#if defined(FF_CUDA) 
-	inline int getNumCUDADevices() const {
-		int deviceCount = 0;
-		cudaError_t error_id = cudaGetDeviceCount(&deviceCount);
-		if (error_id != cudaSuccess) {
-			error("getNumCUDADevices: cannot get the number of cuda devices\n");
-			return -1;
-		}
-		return deviceCount;
-	}
+#if defined(FF_CUDA)
+  inline int getNumCUDADevices() const {
+    int deviceCount = 0;
+    cudaError_t error_id = cudaGetDeviceCount(&deviceCount);
+    if (error_id != cudaSuccess) {
+      error("getNumCUDADevices: cannot get the number of cuda devices\n");
+      return -1;
+    }
+    return deviceCount;
+  }
 #endif
 
 #if 0
@@ -370,10 +359,10 @@ public:
 #endif
 
 protected:
-	long rrcnt;
-	unsigned int mask;
-	unsigned int num_cores;
-	svector<int> CList;
+  long rrcnt;
+  unsigned int mask;
+  unsigned int num_cores;
+  svector<int> CList;
 #if 0
 	svector<cl_device_id> ocl_cpus, ocl_gpus, ocl_accelerators;
 	std::atomic<unsigned int> ocl_cpu_id, ocl_gpu_id, ocl_accelerator_id;

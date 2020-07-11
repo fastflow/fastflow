@@ -35,95 +35,93 @@
 using namespace ff;
 
 // generic worker
-class Worker: public ff_node {
+class Worker : public ff_node {
 public:
-    void * svc(void * task) {
-        int * t = (int *)task;
-        std::cout << "[Worker] " << ff_node::get_my_id() 
-                  << " received task " << *t << "\n";
-        return task;
-    }
+  void *svc(void *task) {
+    int *t = (int *)task;
+    std::cout << "[Worker] " << ff_node::get_my_id() << " received task " << *t
+              << "\n";
+    return task;
+  }
 };
 
-int main(int argc, char * argv[]) {
-    int nworkers = 3;
-    int streamlen= 1000;
-    if (argc>1) {
-        if (argc<3) {
-            std::cerr << "use: " 
-                      << argv[0] 
-                      << " nworkers streamlen\n";
-            return -1;
-        }
-        
-        nworkers=atoi(argv[1]);
-        streamlen=atoi(argv[2]);
+int main(int argc, char *argv[]) {
+  int nworkers = 3;
+  int streamlen = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use: " << argv[0] << " nworkers streamlen\n";
+      return -1;
     }
 
-    if (nworkers<=0 || streamlen<=0) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
-    }
-    
-    ff_farm farm(true /* accelerator set */);
-    
-    // Using standard emitter
-    /*
+    nworkers = atoi(argv[1]);
+    streamlen = atoi(argv[2]);
+  }
+
+  if (nworkers <= 0 || streamlen <= 0) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
+
+  ff_farm farm(true /* accelerator set */);
+
+  // Using standard emitter
+  /*
       Emitter E(streamlen);
       farm.add_emitter(&E);
     */
 
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
-    farm.add_workers(w);
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) w.push_back(new Worker);
+  farm.add_workers(w);
 
-    farm.add_collector(NULL);
+  farm.add_collector(NULL);
 
-    ffTime(START_TIME);
-    // Now run the accelator asynchronusly
-    farm.run_then_freeze(); //  farm.run() can also be used here
+  ffTime(START_TIME);
+  // Now run the accelator asynchronusly
+  farm.run_then_freeze(); //  farm.run() can also be used here
 
-    void * result=NULL;
-    for (int i=0;i<streamlen;i++) {
-        int * ii = new int(i);
+  void *result = NULL;
+  for (int i = 0; i < streamlen; i++) {
+    int *ii = new int(i);
 
-        std::cout << "[Main] Offloading " << i << "\n"; 
-        // Here offloading computation onto the farm
-        farm.offload(ii); 
+    std::cout << "[Main] Offloading " << i << "\n";
+    // Here offloading computation onto the farm
+    farm.offload(ii);
 
-        // try to get results, if there are any
-        if (farm.load_result_nb(&result)) {
-            std::cerr << "result= " << *((int*)result) << "\n";
-            delete ((int*)result);
-        }
+    // try to get results, if there are any
+    if (farm.load_result_nb(&result)) {
+      std::cerr << "result= " << *((int *)result) << "\n";
+      delete ((int *)result);
     }
-    std::cout << "[Main] EOS arrived\n";
-    farm.offload((void *)FF_EOS);
-    
+  }
+  std::cout << "[Main] EOS arrived\n";
+  farm.offload((void *)FF_EOS);
+
 #if 1
-    // get all remaining results syncronously. 
-    while(farm.load_result(&result)) {
-        std::cerr << "result= " << *((int*)result) << "\n";
-        delete ((int*)result);
-    }
+  // get all remaining results syncronously.
+  while (farm.load_result(&result)) {
+    std::cerr << "result= " << *((int *)result) << "\n";
+    delete ((int *)result);
+  }
 #else
-    // asynchronously wait results
-    do {
-        if (farm.load_result_nb(&result)) {
-            if (result==(void*)FF_EOS) break;
-            std::cerr << "result= " << *((int*)result) << "\n";
-            delete ((int*)result);
-        } 
-    } while(1);
+  // asynchronously wait results
+  do {
+    if (farm.load_result_nb(&result)) {
+      if (result == (void *)FF_EOS) break;
+      std::cerr << "result= " << *((int *)result) << "\n";
+      delete ((int *)result);
+    }
+  } while (1);
 #endif
-    
-    // Here join
-    farm.wait();  
-    std::cout << "[Main] Farm accelerator stopped\n";
 
-    ffTime(STOP_TIME);
-    std::cerr << "[Main] DONE, farm time= " << farm.ffTime() << " (ms)\n";
-    std::cerr << "[Main] DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
-    
-    return 0;
+  // Here join
+  farm.wait();
+  std::cout << "[Main] Farm accelerator stopped\n";
+
+  ffTime(STOP_TIME);
+  std::cerr << "[Main] DONE, farm time= " << farm.ffTime() << " (ms)\n";
+  std::cerr << "[Main] DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
+
+  return 0;
 }

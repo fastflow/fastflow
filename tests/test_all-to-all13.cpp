@@ -58,92 +58,83 @@
 
 using namespace ff;
 
-struct Emitter: ff_monode_t<long> {
-    Emitter(int nworkers, size_t ntasks):nworkers1(nworkers),ntasks(ntasks) {}
-    long* svc(long* in) {
-        if (in==nullptr) {
-            for(int i=0;i<nworkers1 && ntasks>0;++i) {
-                ff_send_out_to((long*)ntasks--, i % nworkers1);
-            }
-            return GO_ON;
-        }
-        assert(get_channel_id() >= 0 && get_channel_id() < nworkers1);
-        ff_send_out_to((long*)ntasks--, get_channel_id());
-        if (ntasks==0) {
-            return EOS;
-        }
-        return GO_ON;
+struct Emitter : ff_monode_t<long> {
+  Emitter(int nworkers, size_t ntasks) : nworkers1(nworkers), ntasks(ntasks) {}
+  long *svc(long *in) {
+    if (in == nullptr) {
+      for (int i = 0; i < nworkers1 && ntasks > 0; ++i) {
+        ff_send_out_to((long *)ntasks--, i % nworkers1);
+      }
+      return GO_ON;
     }
-    int nworkers1;
-    size_t ntasks;
+    assert(get_channel_id() >= 0 && get_channel_id() < nworkers1);
+    ff_send_out_to((long *)ntasks--, get_channel_id());
+    if (ntasks == 0) {
+      return EOS;
+    }
+    return GO_ON;
+  }
+  int nworkers1;
+  size_t ntasks;
 };
 
-
-struct Worker1: ff_monode_t<long> {
-    long *svc(long *in) {
-        ff_send_out_to(in, 1);     // forward
-        ff_send_out_to(in, 0);     // backward 
-        return GO_ON;
-    }
+struct Worker1 : ff_monode_t<long> {
+  long *svc(long *in) {
+    ff_send_out_to(in, 1); // forward
+    ff_send_out_to(in, 0); // backward
+    return GO_ON;
+  }
 };
 
-struct Worker2: ff_node_t<long> {    
-    long* svc(long* in) {
-        return in;
-    }    
+struct Worker2 : ff_node_t<long> {
+  long *svc(long *in) { return in; }
 };
 
-struct Worker3: ff_node_t<long> {    
-    long* svc(long* in) {
-        return in;
-    }
+struct Worker3 : ff_node_t<long> {
+  long *svc(long *in) { return in; }
 };
 
-
-struct Last: ff_minode_t<long> {
-    long* svc(long* in) {
-        std::cout << "Last: received " << (long)in << "\n";
-        return GO_ON;
-    }
+struct Last : ff_minode_t<long> {
+  long *svc(long *in) {
+    std::cout << "Last: received " << (long)in << "\n";
+    return GO_ON;
+  }
 };
 
 int main() {
-    const int nworkers1=3;
-    const int nworkers3=2;
-    const size_t ntasks=1000;
+  const int nworkers1 = 3;
+  const int nworkers3 = 2;
+  const size_t ntasks = 1000;
 
-    // ---- farm without collector
-    Emitter E(nworkers1, ntasks);
-    std::vector<ff_node*> W;
-    for(int i=0;i<nworkers1;++i)
-        W.push_back(new Worker1);
-    ff_farm farm;
-    farm.add_workers(W);
-    farm.add_emitter(&E);
-    farm.cleanup_workers();
-    farm.wrap_around();
+  // ---- farm without collector
+  Emitter E(nworkers1, ntasks);
+  std::vector<ff_node *> W;
+  for (int i = 0; i < nworkers1; ++i) W.push_back(new Worker1);
+  ff_farm farm;
+  farm.add_workers(W);
+  farm.add_emitter(&E);
+  farm.cleanup_workers();
+  farm.wrap_around();
 
-    // ----- building all-to-all
-    std::vector<ff_node*> firstSet;
-    for(int i=0;i<nworkers1;++i)
-        firstSet.push_back(new Worker2);
-    std::vector<ff_node*> secondSet;
-    for(int i=0;i<nworkers3;++i)
-        secondSet.push_back(new Worker3);
-    
-    ff_a2a a2a;
-    a2a.add_firstset(firstSet,0, true);
-    a2a.add_secondset(secondSet, true);
+  // ----- building all-to-all
+  std::vector<ff_node *> firstSet;
+  for (int i = 0; i < nworkers1; ++i) firstSet.push_back(new Worker2);
+  std::vector<ff_node *> secondSet;
+  for (int i = 0; i < nworkers3; ++i) secondSet.push_back(new Worker3);
 
-    // ---- last stage
-    Last last;
+  ff_a2a a2a;
+  a2a.add_firstset(firstSet, 0, true);
+  a2a.add_secondset(secondSet, true);
 
-    // ---- building the topology
-    ff_Pipe<> pipe(farm, a2a, last);
+  // ---- last stage
+  Last last;
 
-    if (pipe.run_and_wait_end() <0) {
-        error("running pipe\n");
-        return -1;
-    }
-    return 0;
+  // ---- building the topology
+  ff_Pipe<> pipe(farm, a2a, last);
+
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+  return 0;
 }

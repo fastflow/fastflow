@@ -36,60 +36,61 @@
 using namespace ff;
 
 struct ff_task_t {
-    ff_task_t() {}
-    int payload;
+  ff_task_t() {}
+  int payload;
 };
 
 // generic stage
-class Stage: public ff_node {
+class Stage : public ff_node {
 public:
-    Stage(unsigned int streamlen):streamlen(streamlen),sum(0)  {}
+  Stage(unsigned int streamlen) : streamlen(streamlen), sum(0) {}
 
-    void * svc(void * task) {
-        unsigned int * t = (unsigned int *)task;
-        
-        if (!t) {
-            t = (unsigned int*)malloc(sizeof(int));
-            if (!t) abort();
-            
-            *t=0;
-            task = t;
-        } else { sum+=*t; *t+=1;}
+  void *svc(void *task) {
+    unsigned int *t = (unsigned int *)task;
 
-        if (*t == streamlen) return NULL;
-        task = t;
-        return task;
+    if (!t) {
+      t = (unsigned int *)malloc(sizeof(int));
+      if (!t) abort();
+
+      *t = 0;
+      task = t;
+    } else {
+      sum += *t;
+      *t += 1;
     }
-    void  svc_end() {
-        if (ff_node::get_my_id()) 
-            std::cout << "Sum: " << sum << "\n";
-    }
+
+    if (*t == streamlen) return NULL;
+    task = t;
+    return task;
+  }
+  void svc_end() {
+    if (ff_node::get_my_id()) std::cout << "Sum: " << sum << "\n";
+  }
 
 private:
-    unsigned int streamlen;
-    unsigned int sum;
+  unsigned int streamlen;
+  unsigned int sum;
 };
 
-
 int main() {
-    int streamlen = 1000;
-    // bild a 2-stage pipeline
-    ff_pipeline pipe;
-    pipe.add_stage(new Stage(streamlen));
-    pipe.add_stage(new Stage(streamlen));
+  int streamlen = 1000;
+  // bild a 2-stage pipeline
+  ff_pipeline pipe;
+  pipe.add_stage(new Stage(streamlen));
+  pipe.add_stage(new Stage(streamlen));
 
-    pipe.wrap_around();
-    pipe.cleanup_nodes();
+  pipe.wrap_around();
+  pipe.cleanup_nodes();
 
-    ffTime(START_TIME);
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipeline\n");
-        return -1;
-    }
-    ffTime(STOP_TIME);
+  ffTime(START_TIME);
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipeline\n");
+    return -1;
+  }
+  ffTime(STOP_TIME);
 
-    std::cerr << "DONE, pipe  time= " << pipe.ffTime() << " (ms)\n";
-    std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
-    pipe.ffStats(std::cerr);
-    return 0;
+  std::cerr << "DONE, pipe  time= " << pipe.ffTime() << " (ms)\n";
+  std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
+  pipe.ffStats(std::cerr);
+  return 0;
 }

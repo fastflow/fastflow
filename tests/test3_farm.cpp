@@ -37,73 +37,67 @@ using namespace ff;
 #include <vector>
 using namespace std;
 
-
 // generic stage
-struct Stage: ff_node {
-    void * svc(void * task) {
-        return task;
-    }
+struct Stage : ff_node {
+  void *svc(void *task) { return task; }
 };
 
-struct Emitter   : ff_node {
-    Emitter(unsigned streamlen):streamlen(streamlen){}
-    void *svc(void *in) {
-        if (in== nullptr) {
-            for(unsigned i=0;i<streamlen;++i)
-                ff_send_out(new unsigned int(i));
-            return EOS;
-        }
-        return GO_ON;
+struct Emitter : ff_node {
+  Emitter(unsigned streamlen) : streamlen(streamlen) {}
+  void *svc(void *in) {
+    if (in == nullptr) {
+      for (unsigned i = 0; i < streamlen; ++i) ff_send_out(new unsigned int(i));
+      return EOS;
     }
-    unsigned int streamlen;
+    return GO_ON;
+  }
+  unsigned int streamlen;
 };
 
 struct Collector : ff_node {
-    void * svc(void *task) {
-        ff_send_out(task);
-        return GO_ON;
-    }
+  void *svc(void *task) {
+    ff_send_out(task);
+    return GO_ON;
+  }
 };
 
-
-
-int main(int argc, char * argv[]) {
-    int streamlen = 1000;
-    if (argc>1) {
-        if (argc!=2) {
-            std::cerr << "use: "  << argv[0] << " streamlen\n";
-            return -1;
-        }
-        streamlen = atoi(argv[1]);
+int main(int argc, char *argv[]) {
+  int streamlen = 1000;
+  if (argc > 1) {
+    if (argc != 2) {
+      std::cerr << "use: " << argv[0] << " streamlen\n";
+      return -1;
     }
-    
-    // build a 2-stage pipeline
-    ff_pipeline pipe;
-    ff_farm f1, f2;
-    vector<ff_node *> w1(1, new Stage);
-    vector<ff_node *> w2(1, new Stage);
-    f1.add_emitter(new Emitter(streamlen));
-    f1.add_workers(w1);
-    f1.add_collector(new Collector());
-    f2.add_workers(w2);
-    f2.add_collector(new Collector());
-    pipe.add_stage(&f1);
-    pipe.add_stage(&f2);
+    streamlen = atoi(argv[1]);
+  }
 
-    if (pipe.wrap_around()<0) {
-        error("wrap_around\n");
-        return -1;
-    }
-    
-    ffTime(START_TIME);
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipeline\n");
-        return -1;
-    }
-    ffTime(STOP_TIME);
+  // build a 2-stage pipeline
+  ff_pipeline pipe;
+  ff_farm f1, f2;
+  vector<ff_node *> w1(1, new Stage);
+  vector<ff_node *> w2(1, new Stage);
+  f1.add_emitter(new Emitter(streamlen));
+  f1.add_workers(w1);
+  f1.add_collector(new Collector());
+  f2.add_workers(w2);
+  f2.add_collector(new Collector());
+  pipe.add_stage(&f1);
+  pipe.add_stage(&f2);
 
-    std::cerr << "DONE, pipe  time= " << pipe.ffTime() << " (ms)\n";
-    std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
-    pipe.ffStats(std::cerr);
-    return 0;
+  if (pipe.wrap_around() < 0) {
+    error("wrap_around\n");
+    return -1;
+  }
+
+  ffTime(START_TIME);
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipeline\n");
+    return -1;
+  }
+  ffTime(STOP_TIME);
+
+  std::cerr << "DONE, pipe  time= " << pipe.ffTime() << " (ms)\n";
+  std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
+  pipe.ffStats(std::cerr);
+  return 0;
 }

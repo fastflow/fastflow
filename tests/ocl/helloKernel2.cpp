@@ -50,150 +50,149 @@ using namespace ff;
 #endif
 
 //#define SYNCHRONOUS_EXECUTION
-const size_t DEFAULT_ARRAYSIZE=1024;
+const size_t DEFAULT_ARRAYSIZE = 1024;
 
-
-FF_OCL_MAP_ELEMFUNC(mapf, float, useless, i,
-                    (void)useless;
-                    return (i + 1/(i+1));
-                    );
-
+FF_OCL_MAP_ELEMFUNC(mapf, float, useless, i, (void)useless;
+                    return (i + 1 / (i + 1)););
 
 // this is the task
 struct myTask {
-    myTask(std::vector<float> &A):A(A) {}
-    std::vector<float> &A;
+  myTask(std::vector<float> &A) : A(A) {}
+  std::vector<float> &A;
 };
 
 // oclTask is used to transfer the input task to/from the OpenCL device
 // - myTask is the type of the input task
 // - float* is the type of OpenCL input array
 // - float* is the type of OpenCL output array
-struct oclTask: baseOCLTask<myTask, float, float> {
-    void setTask(myTask *task) { 
+struct oclTask : baseOCLTask<myTask, float, float> {
+  void setTask(myTask *task) {
 
-        std::cout << "running on GPU\n";
+    std::cout << "running on GPU\n";
 
-        float *Aptr         = const_cast<float*>(task->A.data());
-        const size_t Asize  = task->A.size();
+    float *Aptr = const_cast<float *>(task->A.data());
+    const size_t Asize = task->A.size();
 
-        // A is not copied in input (only allocated), it will be deleted at the end
-        setInPtr(Aptr, Asize, 
-                 CopyFlags::DONTCOPY,
-                 ReuseFlags::DONTREUSE,
-                 ReleaseFlags::RELEASE);
-        
-        // A is copied back at the end, it will be deleted at the end
-        setOutPtr(Aptr, Asize, 
-                  CopyFlags::COPY,
-                  ReuseFlags::DONTREUSE,
-                  ReleaseFlags::RELEASE);
-    }
+    // A is not copied in input (only allocated), it will be deleted at the end
+    setInPtr(Aptr, Asize, CopyFlags::DONTCOPY, ReuseFlags::DONTREUSE,
+        ReleaseFlags::RELEASE);
+
+    // A is copied back at the end, it will be deleted at the end
+    setOutPtr(Aptr, Asize, CopyFlags::COPY, ReuseFlags::DONTREUSE,
+        ReleaseFlags::RELEASE);
+  }
 };
 
 // CPU map
-struct cpuMap: ff_Map<myTask> {
-    myTask *svc(myTask *in) {
-        std::vector<float> &A = in->A;
+struct cpuMap : ff_Map<myTask> {
+  myTask *svc(myTask *in) {
+    std::vector<float> &A = in->A;
 
-        std::cout << "running on CPU\n";
-        
-        ff_Map::parallel_for(0,A.size(),[&A](const long i) {
-                A[i] = (i + 1/(i+1));
-            });    
-        return in;
-    }
+    std::cout << "running on CPU\n";
+
+    ff_Map::parallel_for(
+        0, A.size(), [&A](const long i) { A[i] = (i + 1 / (i + 1)); });
+    return in;
+  }
 };
 
 // OpenCL map
-struct oclMap: ff_mapOCL_1D<myTask, oclTask> {
-    oclMap(const std::string &path, const std::string &kname): ff_mapOCL_1D<myTask, oclTask>(path, kname,nullptr,NACC) {}
-    oclMap(): ff_mapOCL_1D<myTask, oclTask>(mapf,nullptr,NACC) {}
+struct oclMap : ff_mapOCL_1D<myTask, oclTask> {
+  oclMap(const std::string &path, const std::string &kname)
+      : ff_mapOCL_1D<myTask, oclTask>(path, kname, nullptr, NACC) {}
+  oclMap() : ff_mapOCL_1D<myTask, oclTask>(mapf, nullptr, NACC) {}
 };
 
 // selector, it decides whether to execute the CPU or OpenCL map
-struct rprKernel: ff_nodeSelector<myTask> {
-    rprKernel(int kernelId):kernelId(kernelId) {} 
+struct rprKernel : ff_nodeSelector<myTask> {
+  rprKernel(int kernelId) : kernelId(kernelId) {}
 
-    myTask *svc(myTask *in) {
-	
-        // make the decision 
-        int selectedDevice = kernelId; 
+  myTask *svc(myTask *in) {
 
-        selectNode(selectedDevice);
-        return ff_nodeSelector<myTask>::svc(in);
-    }
+    // make the decision
+    int selectedDevice = kernelId;
 
-    int kernelId;
+    selectNode(selectedDevice);
+    return ff_nodeSelector<myTask>::svc(in);
+  }
+
+  int kernelId;
 };
 
-
 int main(int argc, char *argv[]) {
-    size_t size = DEFAULT_ARRAYSIZE;
-    if (argc > 1) size = atol(argv[1]);
-    
-    std::vector<float> A0(size), A1(size);
-    
-    // creates the instances of the CPU map
-    cpuMap cpumap0, cpumap1;
-    // creates the instances of the GPU map
-    oclMap oclmap0, oclmap1;
+  size_t size = DEFAULT_ARRAYSIZE;
+  if (argc > 1) size = atol(argv[1]);
 
-    // defines the 2 kernels providing the unique kernel id
-    rprKernel kernel0(0); 
-    rprKernel kernel1(1); 
+  std::vector<float> A0(size), A1(size);
 
-    // adds the CPU and GPU instances to the kernel 0
-    kernel0.addNode(cpumap0);
-    kernel0.addNode(oclmap0);
+  // creates the instances of the CPU map
+  cpuMap cpumap0, cpumap1;
+  // creates the instances of the GPU map
+  oclMap oclmap0, oclmap1;
 
-    // adds the CPU and GPU instances to the kernel 1
-    kernel1.addNode(cpumap1);
-    kernel1.addNode(oclmap1);
+  // defines the 2 kernels providing the unique kernel id
+  rprKernel kernel0(0);
+  rprKernel kernel1(1);
 
-    // executes initialization of each kernels
-    if (kernel0.nodeInit()<0) {
-        error("cannot initialize kernel0\n");
-        return -1;
-    }
-    if (kernel1.nodeInit()<0) {
-        error("cannot initialize kernel1\n");
-        return -1;
-    }
-    
-    // defines 2 lambdas that run the kernels
-    auto F1 = [&]() { myTask task(A0); kernel0.svc(&task); };
-    auto F2 = [&]() { myTask task(A1); kernel1.svc(&task); };
+  // adds the CPU and GPU instances to the kernel 0
+  kernel0.addNode(cpumap0);
+  kernel0.addNode(oclmap0);
 
-    // creates the asynchronous patterns with 2 executors
-    ff_taskf taskf(2); 
+  // adds the CPU and GPU instances to the kernel 1
+  kernel1.addNode(cpumap1);
+  kernel1.addNode(oclmap1);
 
-    // adds the lambdas to the scheduler
-    taskf.AddTask(F1); 
-    taskf.AddTask(F2);
+  // executes initialization of each kernels
+  if (kernel0.nodeInit() < 0) {
+    error("cannot initialize kernel0\n");
+    return -1;
+  }
+  if (kernel1.nodeInit() < 0) {
+    error("cannot initialize kernel1\n");
+    return -1;
+  }
 
-    // starts the execution of the scheduler waiting for the termination
-    if (taskf.run_and_wait_end()<0) {
-        error("error running taskf\n");
-        return -1;
-    }
-        
+  // defines 2 lambdas that run the kernels
+  auto F1 = [&]() {
+    myTask task(A0);
+    kernel0.svc(&task);
+  };
+  auto F2 = [&]() {
+    myTask task(A1);
+    kernel1.svc(&task);
+  };
+
+  // creates the asynchronous patterns with 2 executors
+  ff_taskf taskf(2);
+
+  // adds the lambdas to the scheduler
+  taskf.AddTask(F1);
+  taskf.AddTask(F2);
+
+  // starts the execution of the scheduler waiting for the termination
+  if (taskf.run_and_wait_end() < 0) {
+    error("error running taskf\n");
+    return -1;
+  }
 
 #if defined(CHECK)
-    bool wrong = false;
-    for(size_t i=0;i<A0.size(); ++i) {
-        if (A0[i] != (i + 1/(i+1))) {
-            std::cerr << "Wrong result, A0[" << i <<"], expected " << (i+1/(i+1)) << " obtained "<< A0[i] << "\n";
-            wrong = true;
-        }
-        if (A1[i] != (i + 1/(i+1))) {
-            std::cerr << "Wrong result, A1[" << i <<"], expected " << (i+1/(i+1)) << " obtained "<< A1[i] << "\n";
-            wrong = true;
-        }
-
+  bool wrong = false;
+  for (size_t i = 0; i < A0.size(); ++i) {
+    if (A0[i] != (i + 1 / (i + 1))) {
+      std::cerr << "Wrong result, A0[" << i << "], expected "
+                << (i + 1 / (i + 1)) << " obtained " << A0[i] << "\n";
+      wrong = true;
     }
-    if (!wrong) std::cerr << "The result is OK\n";
-    else exit(1); //ctest
+    if (A1[i] != (i + 1 / (i + 1))) {
+      std::cerr << "Wrong result, A1[" << i << "], expected "
+                << (i + 1 / (i + 1)) << " obtained " << A1[i] << "\n";
+      wrong = true;
+    }
+  }
+  if (!wrong)
+    std::cerr << "The result is OK\n";
+  else
+    exit(1); //ctest
 #endif
-    return 0;
+  return 0;
 }

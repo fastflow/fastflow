@@ -37,73 +37,67 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-struct First: ff_node_t<long> {   
-    long *svc(long *) {
+struct First : ff_node_t<long> {
+  long *svc(long *) {
 
-        // enforces nonblocking mode since the beginning
-        // regardless the compilation setting
-        ff_send_out(NBLK); 
+    // enforces nonblocking mode since the beginning
+    // regardless the compilation setting
+    ff_send_out(NBLK);
 
-        for(size_t i=0;i<1000;++i) 
-            ff_send_out((long*)(i+1));
-        
-        ff_send_out(BLK);
+    for (size_t i = 0; i < 1000; ++i) ff_send_out((long *)(i + 1));
 
-        for(size_t i=1000;i<2000;++i) 
-            ff_send_out((long*)(i+1));
+    ff_send_out(BLK);
 
-        ff_send_out(NBLK);
+    for (size_t i = 1000; i < 2000; ++i) ff_send_out((long *)(i + 1));
 
-        for(size_t i=2000;i<3000;++i) 
-            ff_send_out((long*)(i+1));
-        
-        ff_send_out(BLK);
-        
-        for(size_t i=3000;i<4000;++i) 
-            ff_send_out((long*)(i+1));
+    ff_send_out(NBLK);
 
-        return EOS;
-    }
+    for (size_t i = 2000; i < 3000; ++i) ff_send_out((long *)(i + 1));
+
+    ff_send_out(BLK);
+
+    for (size_t i = 3000; i < 4000; ++i) ff_send_out((long *)(i + 1));
+
+    return EOS;
+  }
 };
 
-struct Last: ff_node_t<long> {
-    long *svc(long *task) {
-        printf("Last received %ld\n", reinterpret_cast<long>(task));
-        return GO_ON;
-    }
+struct Last : ff_node_t<long> {
+  long *svc(long *task) {
+    printf("Last received %ld\n", reinterpret_cast<long>(task));
+    return GO_ON;
+  }
 };
 
-
-struct Worker: ff_node_t<long> {
-    long *svc(long *task) { 
-        printf("Worker%ld, received %ld\n", get_my_id(), reinterpret_cast<long>(task));
-        usleep(get_my_id()*1000);
-        return task; 
-    }
+struct Worker : ff_node_t<long> {
+  long *svc(long *task) {
+    printf(
+        "Worker%ld, received %ld\n", get_my_id(), reinterpret_cast<long>(task));
+    usleep(get_my_id() * 1000);
+    return task;
+  }
 };
-
-
 
 int main() {
-    const size_t nworkers = 4;
-    First first;
-    Last  last;
+  const size_t nworkers = 4;
+  First first;
+  Last last;
 
-    ff_Farm<long,long> farm(  [nworkers]() { 
-	    std::vector<std::unique_ptr<ff_node> > W;
-	    for(size_t i=0;i<nworkers;++i)  W.push_back(make_unique<Worker>());
-	    return W;
-	} () );
-    
-    farm.setFixedSize(true);
-    farm.setInputQueueLength(nworkers*1);
-    farm.setOutputQueueLength(nworkers*1);
-    ff_Pipe<> pipe(first,farm,last);
-    pipe.setFixedSize(true);
-    pipe.setXNodeInputQueueLength(1);
-    pipe.setXNodeOutputQueueLength(1);
-    pipe.run_then_freeze();
-    pipe.wait();
+  ff_Farm<long, long> farm([nworkers]() {
+    std::vector<std::unique_ptr<ff_node>> W;
+    for (size_t i = 0; i < nworkers; ++i) W.push_back(make_unique<Worker>());
+    return W;
+  }());
 
-    return 0;
+  farm.setFixedSize(true);
+  farm.setInputQueueLength(nworkers * 1);
+  farm.setOutputQueueLength(nworkers * 1);
+  ff_Pipe<> pipe(first, farm, last);
+  pipe.setFixedSize(true);
+  pipe.setXNodeInputQueueLength(1);
+  pipe.setXNodeOutputQueueLength(1);
+  pipe.run_then_freeze();
+  pipe.wait();
+
+  return 0;
 }

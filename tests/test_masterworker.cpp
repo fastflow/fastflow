@@ -45,109 +45,108 @@
  *                 ------------------------    
  *
  *
- */      
+ */
 #include <vector>
 #include <iostream>
 #include <ff/ff.hpp>
-  
 
 using namespace ff;
 
-struct W: ff_node {
-    void *svc(void *task){
-        std::cout << "W(" << get_my_id() << ") got task " << (*(ssize_t*) task) << "\n";
-        return task;
-    }
+struct W : ff_node {
+  void *svc(void *task) {
+    std::cout << "W(" << get_my_id() << ") got task " << (*(ssize_t *)task)
+              << "\n";
+    return task;
+  }
 };
 
-class E: public ff_node {
+class E : public ff_node {
 public:
-    E(ff_loadbalancer *const lb):lb(lb) {}
-    int svc_init() {
-        eosreceived=false, numtasks=0;
-        return 0;
+  E(ff_loadbalancer *const lb) : lb(lb) {}
+  int svc_init() {
+    eosreceived = false, numtasks = 0;
+    return 0;
+  }
+  void *svc(void *task) {
+    if (lb->get_channel_id() == -1) {
+      ++numtasks;
+      return task;
     }
-    void *svc(void *task) {	
-        if (lb->get_channel_id() == -1) {
-            ++numtasks;
-            return task;
-        }        
-        if (--numtasks == 0 && eosreceived) return FF_EOS;
-        return GO_ON;	
+    if (--numtasks == 0 && eosreceived) return FF_EOS;
+    return GO_ON;
+  }
+  void eosnotify(ssize_t id) {
+    if (id == -1) {
+      eosreceived = true;
+      if (numtasks == 0) {
+        printf("BROADCAST\n");
+        fflush(stdout);
+        lb->broadcast_task(FF_EOS);
+      }
     }
-    void eosnotify(ssize_t id) {
-        if (id == -1)  {
-            eosreceived = true;
-            if (numtasks == 0) {
-                printf("BROADCAST\n");
-                fflush(stdout);
-                lb->broadcast_task(FF_EOS);
-            }
-        }
-    }
+  }
+
 private:
-    bool eosreceived;
-    long numtasks;
+  bool eosreceived;
+  long numtasks;
+
 protected:
-    ff_loadbalancer *const lb;
+  ff_loadbalancer *const lb;
 };
 
-
-
-int main(int argc,  char * argv[]) {
-    int nworkers=3;
-    int streamlen=1000;
-    int iterations=3;
-    if (argc>1) {
-        if (argc<4) {
-            std::cerr << "use: " 
-                      << argv[0] 
-                      << " nworkers streamlen iterations\n";
-            return -1;
-        }        
-        nworkers=atoi(argv[1]);
-        streamlen=atoi(argv[2]);
-        iterations=atoi(argv[3]);
+int main(int argc, char *argv[]) {
+  int nworkers = 3;
+  int streamlen = 1000;
+  int iterations = 3;
+  if (argc > 1) {
+    if (argc < 4) {
+      std::cerr << "use: " << argv[0] << " nworkers streamlen iterations\n";
+      return -1;
     }
-    if (nworkers<=0 || streamlen<=0) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
+    nworkers = atoi(argv[1]);
+    streamlen = atoi(argv[2]);
+    iterations = atoi(argv[3]);
+  }
+  if (nworkers <= 0 || streamlen <= 0) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
+
+  ff_farm farm(true /* accelerator set */);
+  E emitter(farm.getlb());
+  farm.add_emitter(&emitter);
+
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) w.push_back(new W);
+  farm.add_workers(w);
+
+  // set master_worker mode
+  farm.wrap_around();
+
+  for (int i = 0; i < iterations; ++i) {
+    // Now run the accelator asynchronusly
+    // and freeze it as soon as EOS is received
+    farm.run_then_freeze();
+    std::cout << "[Main] Farm accelerator started\n";
+
+    for (ssize_t j = 0; j < streamlen; j++) {
+      ssize_t *ii = new ssize_t(j);
+      // Here offloading computation onto the farm
+      std::cout << "[Main] Offloading " << *ii << "\n";
+      farm.offload(ii);
     }
+    farm.offload(FF_EOS);
+    // Here join
+    farm.wait_freezing();
+    std::cout << "[Main] Farm accelerator frozen, time= " << farm.ffTime()
+              << " (ms)\n";
+  }
 
-    ff_farm farm(true /* accelerator set */);
-    E emitter(farm.getlb());
-    farm.add_emitter(&emitter);
+  std::cout << "[Main] Farm accelerator iterations completed\n";
+  farm.wait();
+  std::cout << "[Main] Farm accelerator stopped\n";
 
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new W);
-    farm.add_workers(w);
-
-    // set master_worker mode 
-    farm.wrap_around();
-
-    for(int i=0;i<iterations;++i) {        
-        // Now run the accelator asynchronusly 
-        // and freeze it as soon as EOS is received
-        farm.run_then_freeze();  
-        std::cout << "[Main] Farm accelerator started\n";
-    
-        for (ssize_t j=0;j<streamlen;j++) {
-            ssize_t * ii = new ssize_t(j);
-            // Here offloading computation onto the farm
-			std::cout << "[Main] Offloading " << *ii << "\n";
-            farm.offload(ii); 
-        }
-        farm.offload(FF_EOS);    
-        // Here join
-        farm.wait_freezing();          
-        std::cout << "[Main] Farm accelerator frozen, time= " << farm.ffTime() << " (ms)\n";
-    }
-    
-    std::cout << "[Main] Farm accelerator iterations completed\n";
-    farm.wait();
-    std::cout << "[Main] Farm accelerator stopped\n";
-
-    std::cerr << "[Main] DONE\n";
-    farm.ffStats(std::cerr);
-    return 0;
+  std::cerr << "[Main] DONE\n";
+  farm.ffStats(std::cerr);
+  return 0;
 }

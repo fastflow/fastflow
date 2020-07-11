@@ -42,108 +42,116 @@
 using namespace ff;
 
 struct Task1 {
-    Task1(std::vector<float> &A):A(A) {}
-    std::vector<float> &A;
+  Task1(std::vector<float> &A) : A(A) {}
+  std::vector<float> &A;
 };
 struct Task2 {
-    Task2(std::vector<float> &A, std::vector<float> &S):A(A),S(S) {}
-    std::vector<float> &A;
-    std::vector<float> &S;
+  Task2(std::vector<float> &A, std::vector<float> &S) : A(A), S(S) {}
+  std::vector<float> &A;
+  std::vector<float> &S;
 };
 
 /* ---------i---- OpenCL task types --------------------- */
-struct oclTask1: public baseOCLTask<Task1, float> {
-    oclTask1() {}
-    void setTask(Task1 *t) { 
-        assert(t);
-        MemoryFlags mfin(CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
-        MemoryFlags mfenv(CopyFlags::DONTCOPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
-        MemoryFlags mfout(CopyFlags::DONTCOPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
-        
-        setInPtr(t->A.data(), t->A.size(), mfin);  // copied
-        setEnvPtr(t->A.data(), t->A.size(), mfenv); 
-        setOutPtr(t->A.data(), t->A.size(), mfout); // not copied back 
-    }
+struct oclTask1 : public baseOCLTask<Task1, float> {
+  oclTask1() {}
+  void setTask(Task1 *t) {
+    assert(t);
+    MemoryFlags mfin(
+        CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
+    MemoryFlags mfenv(
+        CopyFlags::DONTCOPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
+    MemoryFlags mfout(
+        CopyFlags::DONTCOPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
+
+    setInPtr(t->A.data(), t->A.size(), mfin); // copied
+    setEnvPtr(t->A.data(), t->A.size(), mfenv);
+    setOutPtr(t->A.data(), t->A.size(), mfout); // not copied back
+  }
 };
 
-struct oclTask2: public baseOCLTask<Task2, float> {
-    oclTask2() {}
-    void setTask(Task2 *t) { 
-        assert(t);
-        MemoryFlags mfin(CopyFlags::DONTCOPY, ReuseFlags::REUSE, ReleaseFlags::DONTRELEASE);
-        MemoryFlags mfout(CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
+struct oclTask2 : public baseOCLTask<Task2, float> {
+  oclTask2() {}
+  void setTask(Task2 *t) {
+    assert(t);
+    MemoryFlags mfin(
+        CopyFlags::DONTCOPY, ReuseFlags::REUSE, ReleaseFlags::DONTRELEASE);
+    MemoryFlags mfout(
+        CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
 
-        setInPtr(t->A.data(), t->A.size(),  mfin);  // not copied, reusing data
-        setEnvPtr(t->S.data(), t->S.size(), mfout); // copied 
-        setOutPtr(t->S.data(), t->S.size(), mfout); // copied back 
-    }
+    setInPtr(t->A.data(), t->A.size(), mfin);   // not copied, reusing data
+    setEnvPtr(t->S.data(), t->S.size(), mfout); // copied
+    setOutPtr(t->S.data(), t->S.size(), mfout); // copied back
+  }
 };
-
 
 // utility function
 static void initInput(std::vector<float> &A, std::vector<float> &S) {
-    for(size_t i=0; i<A.size(); ++i) {
-        A[i] = i;
-        S[i] = 0.0f;
-    }
+  for (size_t i = 0; i < A.size(); ++i) {
+    A[i] = i;
+    S[i] = 0.0f;
+  }
 }
 
-int main(int argc, char * argv[]) {
-    const size_t max_size   = 10;
+int main(int argc, char *argv[]) {
+  const size_t max_size = 10;
 
-    std::vector<float> S(max_size);
-    std::vector<float> A(max_size);
-    
-    initInput(A,S);
+  std::vector<float> S(max_size);
+  std::vector<float> A(max_size);
 
-    // OpenCL device shared allocator
-    ff_oclallocator alloc;
+  initInput(A, S);
 
-    // instances of the first and second task
-    Task1 t1(A);    
-    Task2 t2(A,S);
+  // OpenCL device shared allocator
+  ff_oclallocator alloc;
+
+  // instances of the first and second task
+  Task1 t1(A);
+  Task2 t2(A, S);
 
 #if !defined(BINARY_OCL_CODE)
-    //FF_OCL_MAP_ELEMFUNC_1D(mapf1, float, a, return a / (a*a + a + 1); );    
-    FF_OCL_STENCIL_ELEMFUNC_ENV(mapf1, float, useless1, i, A, float, useless2, return A[i] / (A[i]*A[i] + A[i] + 1);  );
-    ff_mapOCL_1D<Task1, oclTask1> oclMap1(t1, mapf1, &alloc); 
+  //FF_OCL_MAP_ELEMFUNC_1D(mapf1, float, a, return a / (a*a + a + 1); );
+  FF_OCL_STENCIL_ELEMFUNC_ENV(mapf1, float, useless1, i, A, float, useless2,
+                              return A[i] / (A[i] * A[i] + A[i] + 1););
+  ff_mapOCL_1D<Task1, oclTask1> oclMap1(t1, mapf1, &alloc);
 #else
-    ff_mapOCL_1D<Task1, oclTask1> oclMap1(t1, "cl_code/reusek1.cl", &alloc); 
+  ff_mapOCL_1D<Task1, oclTask1> oclMap1(t1, "cl_code/reusek1.cl", &alloc);
 #endif
-    SET_DEVICE_TYPE(oclMap1); 
-    oclMap1.saveBinaryFile();  // save the compiled version in cl_code/oclMap.cl.bin
-    oclMap1.reuseBinaryFile(); // if the binary file is present it is used
+  SET_DEVICE_TYPE(oclMap1);
+  oclMap1
+      .saveBinaryFile(); // save the compiled version in cl_code/oclMap.cl.bin
+  oclMap1.reuseBinaryFile(); // if the binary file is present it is used
 
-    if (oclMap1.run_and_wait_end()<0) {
-        error("running oclMap1\n");
-        return -1;
-    }
-    
+  if (oclMap1.run_and_wait_end() < 0) {
+    error("running oclMap1\n");
+    return -1;
+  }
+
 #if !defined(BINARY_OCL_CODE)
-    //FF_OCL_MAP_ELEMFUNC_1D_ENV(mapf2, float, a, float, s, return s+a; );
-    FF_OCL_STENCIL_ELEMFUNC_ENV(mapf2, float, useless, i, A, float, S, return S[i]+A[i]; );
-    ff_mapOCL_1D<Task2, oclTask2> oclMap2(t2, mapf2, &alloc); 
+  //FF_OCL_MAP_ELEMFUNC_1D_ENV(mapf2, float, a, float, s, return s+a; );
+  FF_OCL_STENCIL_ELEMFUNC_ENV(
+      mapf2, float, useless, i, A, float, S, return S[i] + A[i];);
+  ff_mapOCL_1D<Task2, oclTask2> oclMap2(t2, mapf2, &alloc);
 #else
-    ff_mapOCL_1D<Task2, oclTask2> oclMap2(t2, "cl_code/reusek2.cl", &alloc); 
+  ff_mapOCL_1D<Task2, oclTask2> oclMap2(t2, "cl_code/reusek2.cl", &alloc);
 #endif
-    SET_DEVICE_TYPE(oclMap2); 
-    oclMap2.saveBinaryFile();  // save the compiled version in cl_code/oclMap.cl.bin
-    oclMap2.reuseBinaryFile(); // if the binary file is present it is used
+  SET_DEVICE_TYPE(oclMap2);
+  oclMap2
+      .saveBinaryFile(); // save the compiled version in cl_code/oclMap.cl.bin
+  oclMap2.reuseBinaryFile(); // if the binary file is present it is used
 
-    if (oclMap2.run_and_wait_end()<0) {
-        error("running oclMap2\n");
-        return -1;
-    }
-    
+  if (oclMap2.run_and_wait_end() < 0) {
+    error("running oclMap2\n");
+    return -1;
+  }
+
 #if defined(CHECK)
-    for(size_t i=0; i<max_size; ++i) {
-        if (S[i] != i/(float)(i*i+i+1)) {
-            printf("Error %g != %g (i=%ld)\n", S[i], i/(float)(i*i+i+1), i);
-            exit(1); //ctest
-        }
+  for (size_t i = 0; i < max_size; ++i) {
+    if (S[i] != i / (float)(i * i + i + 1)) {
+      printf("Error %g != %g (i=%ld)\n", S[i], i / (float)(i * i + i + 1), i);
+      exit(1); //ctest
     }
-    printf("Result correct\n");   
+  }
+  printf("Result correct\n");
 #endif
 
-    return 0;
+  return 0;
 }

@@ -41,15 +41,13 @@ namespace ff {
  */
 class ff_cuda_managed {
 public:
-	void *operator new(size_t len) {
-		void *ptr;
-		cudaMallocManaged(&ptr, len);
-		return ptr;
-	}
+  void *operator new(size_t len) {
+    void *ptr;
+    cudaMallocManaged(&ptr, len);
+    return ptr;
+  }
 
-	void operator delete(void *ptr) {
-		cudaFree(ptr);
-	}
+  void operator delete(void *ptr) { cudaFree(ptr); }
 };
 
 /**
@@ -57,47 +55,47 @@ public:
  */
 class baseCUDATaskManaged {
 public:
-	baseCUDATaskManaged(): envPtr(NULL), inPtr(NULL), outPtr(NULL) {};
-	baseCUDATaskManaged(void * env, void * in, void * out) : envPtr(env), inPtr(in), outPtr(out) {}
+  baseCUDATaskManaged() : envPtr(NULL), inPtr(NULL), outPtr(NULL){};
+  baseCUDATaskManaged(void *env, void *in, void *out)
+      : envPtr(env), inPtr(in), outPtr(out) {}
 
-	//user may override this code - BEGIN
-	virtual void setTask(void * in) { if (in) inPtr=in;}
-	virtual void*  getEnvPtr()     { return envPtr;}
-	virtual void*  getInPtr()     { return inPtr;}
+  //user may override this code - BEGIN
+  virtual void setTask(void *in) {
+    if (in) inPtr = in;
+  }
+  virtual void *getEnvPtr() { return envPtr; }
+  virtual void *getInPtr() { return inPtr; }
 
-	// by default the map works in-place
-	virtual void*  newOutPtr()    { return outPtr; }
-	virtual void   deleteOutPtr() {}
+  // by default the map works in-place
+  virtual void *newOutPtr() { return outPtr; }
+  virtual void deleteOutPtr() {}
 
-	virtual void beforeMR() {}
-	virtual void afterMR() {}
+  virtual void beforeMR() {}
+  virtual void afterMR() {}
 
-	//user may override this code - END
+  //user may override this code - END
 
-	virtual ~baseCUDATaskManaged() {
-	}
+  virtual ~baseCUDATaskManaged() {}
 
 protected:
-	void *envPtr;
-	void *inPtr;
-	void *outPtr;
+  void *envPtr;
+  void *inPtr;
+  void *outPtr;
 };
 
-template<typename Tenv, typename Tinout, typename kernelF>
-__global__ void mapCUDAKernelManaged(kernelF K, Tenv * env, Tinout * in, Tinout* out, size_t size) {
+template <typename Tenv, typename Tinout, typename kernelF>
+__global__ void mapCUDAKernelManaged(
+    kernelF K, Tenv *env, Tinout *in, Tinout *out, size_t size) {
 
-	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-	unsigned int gridSize = blockDim.x*gridDim.x;
-	if(i<size)
-		out[i]= K.K(env, in[i]);
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  unsigned int gridSize = blockDim.x * gridDim.x;
+  if (i < size) out[i] = K.K(env, in[i]);
 }
 
-#define FFMAPFUNCMANAGED(name, basictype, Tenv, env, Tinout, in, code )  \
-		struct name {                                                                 \
-	__device__ basictype K(Tenv env, Tinout in) {                    \
-			code ;                                                                   \
-		}                                                                            \
-}
+#define FFMAPFUNCMANAGED(name, basictype, Tenv, env, Tinout, in, code)         \
+  struct name {                                                                \
+    __device__ basictype K(Tenv env, Tinout in) { code; }                      \
+  }
 
 /*!
  * \class ff_mapCUDAManaged
@@ -108,100 +106,104 @@ __global__ void mapCUDAKernelManaged(kernelF K, Tenv * env, Tinout * in, Tinout*
  * The map skeleton using CUDA
  *
  */
-template<typename T, typename kernelF>
-class ff_mapCUDAManaged: public ff_node {
+template <typename T, typename kernelF>
+class ff_mapCUDAManaged : public ff_node {
 public:
+  ff_mapCUDAManaged(kernelF *mapF, void *env, void *in, void *out, size_t s)
+      : oneshot(true),
+        Task((typename T::env_type *)env, (typename T::inout_type *)in,
+            (typename T::inout_type *)out, s),
+        kernel(mapF) {
+    assert(in);
+    ff_node::skipfirstpop(true);
+    maxThreads = maxBlocks = 0;
+    oldSize = 0;
+    inPtr = outPtr = NULL;
+    envPtr = NULL;
+  }
 
-	ff_mapCUDAManaged(kernelF *mapF, void * env, void * in, void * out, size_t s):
-		oneshot(true),
-		Task( (typename T::env_type *)env, (typename T::inout_type *)in, (typename T::inout_type *)out, s ),
-		kernel(mapF) {
-		assert(in);
-		ff_node::skipfirstpop(true);
-		maxThreads=maxBlocks=0;
-		oldSize=0;
-		inPtr = outPtr = NULL;
-		envPtr = NULL;
-	}
+  int run(bool = false) { return ff_node::run(); }
+  int wait() { return ff_node::wait(); }
 
-	int  run(bool=false) { return  ff_node::run(); }
-	int  wait() { return ff_node::wait(); }
+  int run_and_wait_end() {
+    if (run() < 0) return -1;
+    if (wait() < 0) return -1;
+    return 0;
+  }
 
-	int run_and_wait_end() {
-		if (run()<0) return -1;
-		if (wait()<0) return -1;
-		return 0;
-	}
+  double ffTime() { return ff_node::ffTime(); }
+  double ffwTime() { return ff_node::wffTime(); }
 
-	double ffTime()  { return ff_node::ffTime();  }
-	double ffwTime() { return ff_node::wffTime(); }
+  const T *getTask() const { return &Task; }
 
-	const T* getTask() const { return &Task; }
-
-	void cleanup() { if (kernel) delete kernel; }
+  void cleanup() {
+    if (kernel) delete kernel;
+  }
 
 protected:
+  int svc_init() {
+    int deviceID = 0; // FIX:  we have to manage multiple devices
+    cudaDeviceProp deviceProp;
 
-	int svc_init() {
-		int deviceID = 0;         // FIX:  we have to manage multiple devices
-		cudaDeviceProp deviceProp;
+    cudaSetDevice(deviceID);
+    if (cudaGetDeviceProperties(&deviceProp, deviceID) != cudaSuccess)
+      error("mapCUDA, error getting device properties\n");
 
-		cudaSetDevice(deviceID);
-		if (cudaGetDeviceProperties(&deviceProp, deviceID) != cudaSuccess)
-			error("mapCUDA, error getting device properties\n");
+    if (deviceProp.major == 1 && deviceProp.minor < 2)
+      maxThreads = 256;
+    else
+      maxThreads = deviceProp.maxThreadsPerBlock;
+    maxBlocks = deviceProp.maxGridSize[0];
 
-		if(deviceProp.major == 1 && deviceProp.minor < 2)
-			maxThreads = 256;
-		else
-			maxThreads = deviceProp.maxThreadsPerBlock;
-		maxBlocks = deviceProp.maxGridSize[0];
+    if (cudaStreamCreate(&stream) != cudaSuccess)
+      error("mapCUDA, error creating stream\n");
 
-		if(cudaStreamCreate(&stream) != cudaSuccess)
-			error("mapCUDA, error creating stream\n");
+    return 0;
+  }
 
-		return 0;
-	}
+  void *svc(void *task) {
+    Task.setTask(task);
+    size_t size = Task.size();
+    inPtr = (typename T::inout_type *)Task.getInPtr();
+    outPtr = (typename T::inout_type *)Task.newOutPtr();
+    envPtr = (typename T::env_type *)Task.getEnvPtr();
 
-	void * svc(void* task) {
-		Task.setTask(task);
-		size_t size = Task.size();
-		inPtr  = (typename T::inout_type*) Task.getInPtr();
-		outPtr = (typename T::inout_type*) Task.newOutPtr();
-		envPtr = (typename T::env_type*) Task.getEnvPtr();
+    size_t thxblock = std::min(maxThreads, size);
+    size_t blockcnt =
+        std::min(size / thxblock + (size % thxblock == 0 ? 0 : 1), maxBlocks);
 
-		size_t thxblock = std::min(maxThreads, size);
-		size_t blockcnt = std::min(size/thxblock + (size%thxblock == 0 ?0:1), maxBlocks);
+    mapCUDAKernelManaged<typename T::env_type, typename T::inout_type, kernelF>
+        <<<blockcnt, thxblock, 0, stream>>>(
+            *kernel, envPtr, inPtr, outPtr, size);
 
-		mapCUDAKernelManaged<typename T::env_type, typename T::inout_type, kernelF>
-		<<<blockcnt,thxblock,0,stream>>>(*kernel, envPtr, inPtr, outPtr, size);
+    cudaStreamSynchronize(stream);
 
-		cudaStreamSynchronize(stream);
+    //        return (NULL);
+    return (oneshot ? NULL : outPtr);
+  }
 
-		//        return (NULL);
-		return (oneshot?NULL:outPtr);
-	}
+  void svc_end() {
 
-	void svc_end() {
+    if (cudaStreamDestroy(stream) != cudaSuccess)
+      error("mapCUDA, error destroying stream\n");
+  }
 
-		if(cudaStreamDestroy(stream) != cudaSuccess)
-			error("mapCUDA, error destroying stream\n");
-	}
 private:
-	const bool   oneshot;
-	T            Task;
-	kernelF     *kernel;     // user function
-	cudaStream_t stream;
-	size_t       maxThreads;
-	size_t       maxBlocks;
-	size_t       oldSize;
-	typename T::inout_type* inPtr;
-	typename T::inout_type* outPtr;
-	typename T::env_type* envPtr;
+  const bool oneshot;
+  T Task;
+  kernelF *kernel; // user function
+  cudaStream_t stream;
+  size_t maxThreads;
+  size_t maxBlocks;
+  size_t oldSize;
+  typename T::inout_type *inPtr;
+  typename T::inout_type *outPtr;
+  typename T::env_type *envPtr;
 };
 
-#define NEWMAPMANAGED(name, task_t, f, env, input, output, size)           \
-		ff_mapCUDAManaged<task_t, mapf> *name =                            \
-		new ff_mapCUDAManaged<task_t, f>( new f, env, input, output, size)
+#define NEWMAPMANAGED(name, task_t, f, env, input, output, size)               \
+  ff_mapCUDAManaged<task_t, mapf> *name =                                      \
+      new ff_mapCUDAManaged<task_t, f>(new f, env, input, output, size)
 
 /*!
  *  @}

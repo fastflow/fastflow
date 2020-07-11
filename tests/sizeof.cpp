@@ -41,16 +41,16 @@ typedef SSIZE_T ssize_t;
 
 int main() {
 
-	std::cout << "char " << sizeof(char) << "\n";
-	std::cout << "short " << sizeof(short) << "\n";
-	std::cout << "int " << sizeof(int) << "\n";
-	std::cout << "long " << sizeof(long) << "\n";
-	std::cout << "long long " << sizeof(long long) << "\n";
-	std::cout << "float " << sizeof(float) << "\n";
-	std::cout << "double " << sizeof(double) << "\n";
-	std::cout << "void * " << sizeof(void *) << "\n";
-	std::cout << "size_t " << sizeof(size_t) << "\n";
-	std::cout << "ssize_t " << sizeof(ssize_t) << "\n";
-    
-    return 0;
+  std::cout << "char " << sizeof(char) << "\n";
+  std::cout << "short " << sizeof(short) << "\n";
+  std::cout << "int " << sizeof(int) << "\n";
+  std::cout << "long " << sizeof(long) << "\n";
+  std::cout << "long long " << sizeof(long long) << "\n";
+  std::cout << "float " << sizeof(float) << "\n";
+  std::cout << "double " << sizeof(double) << "\n";
+  std::cout << "void * " << sizeof(void *) << "\n";
+  std::cout << "size_t " << sizeof(size_t) << "\n";
+  std::cout << "ssize_t " << sizeof(ssize_t) << "\n";
+
+  return 0;
 }

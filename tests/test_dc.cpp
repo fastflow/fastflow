@@ -40,40 +40,38 @@ using namespace std;
  * Operand and Result are just integers
  */
 using Problem = long;
-using Result  = long;
+using Result = long;
 
 int main(int argc, char *argv[]) {
-    long start = 20;
-    long nwork = 4;
-    if (argc>1) {
-        if(argc<3){
-            fprintf(stderr,"Usage: %s <N> <pardegree>\n",argv[0]);
-            return -1;
-        }
-        start=atoi(argv[1]);
-        nwork=atoi(argv[2]);
+  long start = 20;
+  long nwork = 4;
+  if (argc > 1) {
+    if (argc < 3) {
+      fprintf(stderr, "Usage: %s <N> <pardegree>\n", argv[0]);
+      return -1;
     }
-    
-	long res;
-	//lambda version 
-	ff_DC<long, long> dac(
-                          [](const Problem &op,std::vector<Problem> &subops){
-                              subops.push_back(op-1);
-                              subops.push_back(op-2);
-                          },
-                          [](vector<Result>& res, Result &ret){ ret=res[0]+res[1]; },
-                          [](const Problem &, Result &res)  { res=1; },
-                          [](const Problem &op){ return (op<=2); },
-                          Problem(start),  res,  nwork
-                          );
-	ffTime(START_TIME);
-	//compute
-	if (dac.run_and_wait_end()<0) { 
-        error("running dac");
-        return -1;
-    }
-	ffTime(STOP_TIME);
-	printf("Result: %ld\n",res);
-	printf("Time (usecs): %g\n",ffTime(GET_TIME));
-    return 0;
+    start = atoi(argv[1]);
+    nwork = atoi(argv[2]);
+  }
+
+  long res;
+  //lambda version
+  ff_DC<long, long> dac(
+      [](const Problem &op, std::vector<Problem> &subops) {
+        subops.push_back(op - 1);
+        subops.push_back(op - 2);
+      },
+      [](vector<Result> &res, Result &ret) { ret = res[0] + res[1]; },
+      [](const Problem &, Result &res) { res = 1; },
+      [](const Problem &op) { return (op <= 2); }, Problem(start), res, nwork);
+  ffTime(START_TIME);
+  //compute
+  if (dac.run_and_wait_end() < 0) {
+    error("running dac");
+    return -1;
+  }
+  ffTime(STOP_TIME);
+  printf("Result: %ld\n", res);
+  printf("Time (usecs): %g\n", ffTime(GET_TIME));
+  return 0;
 }

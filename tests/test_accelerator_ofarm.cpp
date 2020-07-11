@@ -31,89 +31,83 @@
  */
 #include <vector>
 #include <iostream>
-#include <ff/ff.hpp>  
+#include <ff/ff.hpp>
 using namespace ff;
 
 // generic worker
-class Worker: public ff_node {
+class Worker : public ff_node {
 public:
-    void * svc(void * task) {
-        int * t = (int *)task;
-        std::cout << "[Worker] " << ff_node::get_my_id() 
-                  << " received task " << *t << "\n";
-        return task;
-    }
+  void *svc(void *task) {
+    int *t = (int *)task;
+    std::cout << "[Worker] " << ff_node::get_my_id() << " received task " << *t
+              << "\n";
+    return task;
+  }
 };
 
 // the gatherer filter
-class Collector: public ff_node {
+class Collector : public ff_node {
 public:
-    void * svc(void * task) {        
-        return task;  
-    }
+  void *svc(void *task) { return task; }
 };
 
-
-int main(int argc, char * argv[]) {
-    int nworkers=3;
-    int streamlen=1000;
-    if (argc>1) {
-        if (argc<3) {
-            std::cerr << "use: " 
-                      << argv[0] 
-                      << " nworkers streamlen\n";
-            return -1;
-        }
-        
-        nworkers=atoi(argv[1]);
-        streamlen=atoi(argv[2]);
+int main(int argc, char *argv[]) {
+  int nworkers = 3;
+  int streamlen = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use: " << argv[0] << " nworkers streamlen\n";
+      return -1;
     }
-    if (nworkers<=0 || streamlen<=0) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
+
+    nworkers = atoi(argv[1]);
+    streamlen = atoi(argv[2]);
+  }
+  if (nworkers <= 0 || streamlen <= 0) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
+
+  ff_farm farm(true);
+  farm.set_ordered();
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) w.push_back(new Worker);
+  farm.add_workers(w);
+
+  ffTime(START_TIME);
+  farm.run();
+  void *result = NULL;
+  int expected = 0;
+  for (int i = 0; i < streamlen; i++) {
+    int *ii = new int(i);
+    std::cout << "[Main] Offloading " << i << "\n";
+    // Here offloading computation onto the farm
+    farm.offload(ii);
+
+    // try to get results, if there are any
+    if (farm.load_result_nb(&result)) {
+      std::cerr << "result= " << *((int *)result) << "\n";
+      assert(*(int *)result == expected);
+      ++expected;
+      delete ((int *)result);
     }
-    
-    ff_farm farm(true);
-    farm.set_ordered();
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
-    farm.add_workers(w);
+  }
+  std::cout << "[Main] EOS arrived\n";
+  farm.offload((void *)FF_EOS);
 
-    ffTime(START_TIME);
-    farm.run();
-    void * result=NULL;
-    int expected=0;
-    for (int i=0;i<streamlen;i++) {
-        int * ii = new int(i);
-        std::cout << "[Main] Offloading " << i << "\n"; 
-        // Here offloading computation onto the farm
-        farm.offload(ii); 
+  // get all remaining results syncronously.
+  while (farm.load_result(&result)) {
+    std::cerr << "result= " << *((int *)result) << "\n";
+    assert(*(int *)result == expected);
+    ++expected;
+    delete ((int *)result);
+  }
+  // Here join
+  farm.wait();
 
-        // try to get results, if there are any
-        if (farm.load_result_nb(&result)) {
-            std::cerr << "result= " << *((int*)result) << "\n";
-            assert(*(int*)result == expected);
-            ++expected;
-            delete ((int*)result);
-        }
-    }
-    std::cout << "[Main] EOS arrived\n";
-    farm.offload((void *)FF_EOS);
-    
+  ffTime(STOP_TIME);
+  std::cerr << "[Main] DONE, farm time= " << farm.ffTime() << " (ms)\n";
+  std::cerr << "[Main] DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
 
-    // get all remaining results syncronously. 
-    while(farm.load_result(&result)) {
-        std::cerr << "result= " << *((int*)result) << "\n";
-        assert(*(int*)result == expected);
-        ++expected;
-        delete ((int*)result);
-    }
-    // Here join
-    farm.wait();  
-
-    ffTime(STOP_TIME);
-    std::cerr << "[Main] DONE, farm time= " << farm.ffTime() << " (ms)\n";
-    std::cerr << "[Main] DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
-    
-    return 0;
+  return 0;
 }

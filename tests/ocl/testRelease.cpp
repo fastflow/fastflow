@@ -34,7 +34,6 @@
  * 
  */
 
-
 #if !defined(FF_OPENCL)
 #define FF_OPENCL
 #endif
@@ -55,118 +54,116 @@ using namespace ff;
 #define NACC 1
 #endif
 
-
-FF_OCL_MAP_ELEMFUNC(mapf, float, elem, idx,  return elem + idx );
+FF_OCL_MAP_ELEMFUNC(mapf, float, elem, idx, return elem + idx);
 
 // default parameters
-const size_t N            = 20;
-const size_t M            = 30;
+const size_t N = 20;
+const size_t M = 30;
 const size_t streamLength = 10;
 
 struct myTask {
-    myTask(const size_t N, const size_t M, 
-           std::vector<std::vector<float> > &A):N(N),M(M),A(A) {}
-    myTask(const size_t N, const size_t M):N(N),M(M) {}
+  myTask(const size_t N, const size_t M, std::vector<std::vector<float>> &A)
+      : N(N), M(M), A(A) {}
+  myTask(const size_t N, const size_t M) : N(N), M(M) {}
 
-    const size_t N;
-    const size_t M;
-    std::vector<std::vector<float> > A;  // non-contigous memory layout
+  const size_t N;
+  const size_t M;
+  std::vector<std::vector<float>> A; // non-contigous memory layout
 
-    // std::string command;
+  // std::string command;
 };
 
+struct oclTask : baseOCLTask<myTask, float> {
+  void setTask(myTask *task) {
+    const size_t N = task->N;
+    const size_t M = task->M;
+    const size_t size = N * M;
 
-struct oclTask: baseOCLTask<myTask, float> {
-    void setTask(myTask *task) { 
-        const size_t N = task->N;
-        const size_t M = task->M;
-        const size_t size = N * M;
+    // allocate a local buffer of correct size
+    buffer = new float[size];
+    // copy the data into the buffer
+    for (size_t i = 0; i < N; ++i)
+      for (size_t j = 0; j < M; ++j) buffer[i * M + j] = task->A[i][j];
 
-        // allocate a local buffer of correct size
-        buffer = new float[size];
-        // copy the data into the buffer
-        for(size_t i=0;i<N;++i)
-            for(size_t j=0;j<M;++j)
-                buffer[i*M+j] = task->A[i][j];
-     
-        // set host input and output pointers to the OpenCL device
-        setInPtr(buffer, size);
-        setOutPtr(buffer, size);
-    }
+    // set host input and output pointers to the OpenCL device
+    setInPtr(buffer, size);
+    setOutPtr(buffer, size);
+  }
 
-    // this method is called when the device computation is finished
-    void releaseTask(myTask *task) {
-        const size_t N = task->N;
-        const size_t M = task->M;
-        std::vector<std::vector<float> > &A = task->A;
+  // this method is called when the device computation is finished
+  void releaseTask(myTask *task) {
+    const size_t N = task->N;
+    const size_t M = task->M;
+    std::vector<std::vector<float>> &A = task->A;
 
-        // copy back the device output data into A
-        for(size_t i=0;i<N;++i)
-            for(size_t j=0;j<M;++j)
-                A[i][j] = buffer[i*M+j];
+    // copy back the device output data into A
+    for (size_t i = 0; i < N; ++i)
+      for (size_t j = 0; j < M; ++j) A[i][j] = buffer[i * M + j];
 
-        // remove the local buffer
-        delete [] buffer;
-    }
+    // remove the local buffer
+    delete[] buffer;
+  }
 
-    float *buffer;
+  float *buffer;
 };
 
 // first stage of the pipeline. It generates 'slen' myTask objects
-struct First: ff_node_t<myTask> {
-    First(const size_t N, const size_t M, const size_t slen):N(N),M(M),slen(slen) {}
-    myTask *svc(myTask*) {
-        for(size_t k=0;k<slen;++k) {
-            myTask *t = new myTask(N,M);
-            t->A.resize(N);
-            for(size_t i=0;i<N;++i) {
-                t->A[i].resize(M);
-                for(size_t j=0;j<M;++j)
-                    t->A[i][j] = k+i+j;
-            }
-            ff_send_out(t);
-        }
-        return EOS;
+struct First : ff_node_t<myTask> {
+  First(const size_t N, const size_t M, const size_t slen)
+      : N(N), M(M), slen(slen) {}
+  myTask *svc(myTask *) {
+    for (size_t k = 0; k < slen; ++k) {
+      myTask *t = new myTask(N, M);
+      t->A.resize(N);
+      for (size_t i = 0; i < N; ++i) {
+        t->A[i].resize(M);
+        for (size_t j = 0; j < M; ++j) t->A[i][j] = k + i + j;
+      }
+      ff_send_out(t);
     }
+    return EOS;
+  }
 
-    const size_t N,M,slen;
+  const size_t N, M, slen;
 };
 
 // last stage of the pipeline. It simply gathers the stream elements and checks correctness.
-struct Last: ff_node_t<myTask> {
-    myTask *svc(myTask *task) {
+struct Last : ff_node_t<myTask> {
+  myTask *svc(myTask *task) {
 #if defined(CHECK)
-        static size_t counter = 0;
-        bool wrong = false;
-        const size_t N = task->N;
-        const size_t M = task->M;
-        const std::vector<std::vector<float> > &A = task->A;
-        for(size_t i=0;i<N;++i) {
-            for(size_t j=0;j<M;++j)
-                if (A[i][j] != counter + (i+j + i*M+j)) {
-                    std::cerr << "Wrong value (" << i << ","<<j<<"), expected " << (i+j + i*M+j) << " obtained " << A[i][j] << "\n";
-                    wrong = true;
-                }
+    static size_t counter = 0;
+    bool wrong = false;
+    const size_t N = task->N;
+    const size_t M = task->M;
+    const std::vector<std::vector<float>> &A = task->A;
+    for (size_t i = 0; i < N; ++i) {
+      for (size_t j = 0; j < M; ++j)
+        if (A[i][j] != counter + (i + j + i * M + j)) {
+          std::cerr << "Wrong value (" << i << "," << j << "), expected "
+                    << (i + j + i * M + j) << " obtained " << A[i][j] << "\n";
+          wrong = true;
         }
-        if (!wrong) std::cerr << "OK!\n";
-        else exit(1); //ctest
-        ++counter;
-#endif
-        return GO_ON;
     }
+    if (!wrong)
+      std::cerr << "OK!\n";
+    else
+      exit(1); //ctest
+    ++counter;
+#endif
+    return GO_ON;
+  }
 };
 
+int main(int argc, char *argv[]) {
 
-int main(int argc, char * argv[]) {
+  First first(N, M, streamLength);
+  ff_mapOCL_1D<myTask, oclTask> mapocl(mapf);
+  Last last;
+  ff_Pipe<> pipe(first, mapocl, last);
+  if (pipe.run_and_wait_end() < 0) {
+    error("pipeline");
+    return -1;
+  }
 
-    First first(N,M, streamLength);
-    ff_mapOCL_1D<myTask, oclTask> mapocl(mapf);
-    Last last;
-    ff_Pipe<> pipe(first, mapocl, last);
-    if (pipe.run_and_wait_end()<0) {
-        error("pipeline");
-        return -1;
-    }
-
-    return 0;
+  return 0;
 }

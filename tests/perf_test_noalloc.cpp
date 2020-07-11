@@ -25,7 +25,6 @@
  ****************************************************************************
  */
 
-
 //#include <unistd.h>
 #include <stdlib.h>
 #include <iostream>
@@ -50,77 +49,77 @@ static inline unsigned long getCpuFreq() {
 }
 
 */
-class Worker: public ff_node {
+class Worker : public ff_node {
 public:
-    Worker(long long nticks):nticks(nticks) {};
+  Worker(long long nticks) : nticks(nticks){};
 
-    void * svc(void *) {
-	ticks_wait(nticks);
-        return GO_ON;
-    }
+  void *svc(void *) {
+    ticks_wait(nticks);
+    return GO_ON;
+  }
+
 private:
-    long long nticks;
+  long long nticks;
 };
 
-class Emitter: public ff_node {
+class Emitter : public ff_node {
 public:
-    Emitter(unsigned int numtasks):numtasks(numtasks) {};
+  Emitter(unsigned int numtasks) : numtasks(numtasks){};
 
-    void * svc(void * ) {	
-	for(unsigned int i=0;i<numtasks;++i)
-	    ff_send_out(&i);
-	
-	return NULL;       
-    }
+  void *svc(void *) {
+    for (unsigned int i = 0; i < numtasks; ++i) ff_send_out(&i);
+
+    return NULL;
+  }
+
 private:
-    unsigned int numtasks;
+  unsigned int numtasks;
 };
 
-void usage(char * name) {
-    std::cerr << "usage: \n";
-    std::cerr << "      " << name << " num-buffer-entries streamlen nworkers nticks\n";
+void usage(char *name) {
+  std::cerr << "usage: \n";
+  std::cerr << "      " << name
+            << " num-buffer-entries streamlen nworkers nticks\n";
 }
 
-int main(int argc, char * argv[]) {
-    unsigned int buffer_entries = 512;
-    unsigned int numtasks       = 10000000;
-    unsigned int nworkers       = 3;
-    long long nticks            = 1000;
-    if (argc>1) {
-        if (argc!=5) {	
-            usage(argv[0]);
-            return -1;
-        }
-        
-        buffer_entries = atoi(argv[1]);
-        numtasks       = atoi(argv[2]); 
-        nworkers       = atoi(argv[3]);
-        nticks         = atoi(argv[4]);
+int main(int argc, char *argv[]) {
+  unsigned int buffer_entries = 512;
+  unsigned int numtasks = 10000000;
+  unsigned int nworkers = 3;
+  long long nticks = 1000;
+  if (argc > 1) {
+    if (argc != 5) {
+      usage(argv[0]);
+      return -1;
     }
 
-    ff_farm farm(false, nworkers*buffer_entries);    
-    Emitter E(numtasks);
-    farm.add_emitter(&E);
-    std::vector<ff_node *> w;
-    for(unsigned int i=0;i<nworkers;++i) w.push_back(new Worker(nticks));
-    farm.add_workers(w);
-    if (farm.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
-    }
+    buffer_entries = atoi(argv[1]);
+    numtasks = atoi(argv[2]);
+    nworkers = atoi(argv[3]);
+    nticks = atoi(argv[4]);
+  }
 
-    printf("Time: %g (ms)\n", farm.ffTime());
+  ff_farm farm(false, nworkers * buffer_entries);
+  Emitter E(numtasks);
+  farm.add_emitter(&E);
+  std::vector<ff_node *> w;
+  for (unsigned int i = 0; i < nworkers; ++i) w.push_back(new Worker(nticks));
+  farm.add_workers(w);
+  if (farm.run_and_wait_end() < 0) {
+    error("running farm\n");
+    return -1;
+  }
 
-    printf("SEQ:\n");
-    
-    ff::ffTime(ff::START_TIME);
-    for(unsigned int i=0;i<numtasks;++i) 
-	ticks_wait(nticks);
-    ff::ffTime(ff::STOP_TIME);
-    printf("Time: %g (ms)\n", ff::ffTime(ff::GET_TIME));
-    printf("Ticks =~ %f (usec)\n",(nticks / (1.0*(ff_getCpuFreq()/1000000.0))));
+  printf("Time: %g (ms)\n", farm.ffTime());
 
+  printf("SEQ:\n");
 
+  ff::ffTime(ff::START_TIME);
+  for (unsigned int i = 0; i < numtasks; ++i) ticks_wait(nticks);
+  ff::ffTime(ff::STOP_TIME);
+  printf("Time: %g (ms)\n", ff::ffTime(ff::GET_TIME));
+  printf(
+      "Ticks =~ %f (usec)\n", (nticks / (1.0 * (ff_getCpuFreq() / 1000000.0))));
 
-    return 0;
+  return 0;
 }

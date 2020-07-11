@@ -44,91 +44,88 @@
 
 using namespace ff;
 
-struct Emitter1: ff_monode_t<long> { 
-    Emitter1(int nworkers, long ntasks):nworkers(nworkers),ntasks(ntasks) {}
-    long *svc(long*) {
-        for(long i=1;i<=ntasks;++i) 
-            ff_send_out_to((long*)i, i % nworkers);
-        return EOS;
-    }
-    int nworkers;
-    long ntasks;
+struct Emitter1 : ff_monode_t<long> {
+  Emitter1(int nworkers, long ntasks) : nworkers(nworkers), ntasks(ntasks) {}
+  long *svc(long *) {
+    for (long i = 1; i <= ntasks; ++i) ff_send_out_to((long *)i, i % nworkers);
+    return EOS;
+  }
+  int nworkers;
+  long ntasks;
 };
-struct Worker1: ff_node_t<long> {
-    long *svc(long *in) {
-        //printf("Worker1 (%ld) received %ld\n", get_my_id(), (long)in);
-        return in;
-    }
+struct Worker1 : ff_node_t<long> {
+  long *svc(long *in) {
+    //printf("Worker1 (%ld) received %ld\n", get_my_id(), (long)in);
+    return in;
+  }
 };
-struct Worker2: ff_node_t<long> {
-    long *svc(long *in) {
-        printf("Worker2 received %ld\n", (long)in);
-        return in;
-    }
+struct Worker2 : ff_node_t<long> {
+  long *svc(long *in) {
+    printf("Worker2 received %ld\n", (long)in);
+    return in;
+  }
 };
 // it can be also an ff_minode_t
-struct Collector1: ff_minode_t<long> {
-    long *svc(long *in) {
-        //printf("Collector1 receved %ld\n", (long)in);
-        return in;
-    }    
+struct Collector1 : ff_minode_t<long> {
+  long *svc(long *in) {
+    //printf("Collector1 receved %ld\n", (long)in);
+    return in;
+  }
 };
 // it can be also an ff_monode_t
-struct Emitter2: ff_node_t<long> {
-    long *svc(long *in) {
-        //printf("Emitter2 received %ld\n", (long)in);
-        return in;
-    }    
+struct Emitter2 : ff_node_t<long> {
+  long *svc(long *in) {
+    //printf("Emitter2 received %ld\n", (long)in);
+    return in;
+  }
 };
 
-struct Collector2: ff_minode_t<long> {
-    Collector2(long ntasks):ntasks(ntasks) {}
-    
-    long *svc(long *in) {
-        --ntasks;
-        std::cout << "Collector received " << (long)in << " from " << get_channel_id() << "\n";
-        return GO_ON;
+struct Collector2 : ff_minode_t<long> {
+  Collector2(long ntasks) : ntasks(ntasks) {}
+
+  long *svc(long *in) {
+    --ntasks;
+    std::cout << "Collector received " << (long)in << " from "
+              << get_channel_id() << "\n";
+    return GO_ON;
+  }
+  void svc_end() {
+    if (ntasks != 0) {
+      std::cerr << "ERROR in the test\n"
+                << "\n";
+      std::cerr << "svc_end ntasks= " << ntasks << "\n";
+      abort();
     }
-    void svc_end() {
-        if (ntasks != 0) {
-            std::cerr << "ERROR in the test\n" << "\n";
-            std::cerr << "svc_end ntasks= " << ntasks << "\n";
-            abort();
-        }
-    }
-    long ntasks;
+  }
+  long ntasks;
 };
 
 int main() {
-    int nworkers1 = 2;
-    int nworkers2 = 3;
-    int ntasks   = 150;
+  int nworkers1 = 2;
+  int nworkers2 = 3;
+  int ntasks = 150;
 
+  std::vector<std::unique_ptr<ff_node>> W1;
+  for (int i = 0; i < nworkers1; ++i) W1.push_back(make_unique<Worker1>());
 
-    std::vector<std::unique_ptr<ff_node> > W1;
-    for(int i=0;i<nworkers1;++i) 
-        W1.push_back(make_unique<Worker1>());
+  Emitter1 E(nworkers1, ntasks);
+  Collector1 C1;
+  ff_Farm<> farm1(std::move(W1), E, C1);
 
-    Emitter1 E(nworkers1,ntasks);
-    Collector1 C1;
-    ff_Farm<> farm1(std::move(W1), E, C1); 
+  std::vector<std::unique_ptr<ff_node>> W2;
+  for (int i = 0; i < nworkers2; ++i) W2.push_back(make_unique<Worker2>());
 
-    std::vector<std::unique_ptr<ff_node> > W2;
-    for(int i=0;i<nworkers2;++i) 
-        W2.push_back(make_unique<Worker2>());
+  Emitter2 E2;
+  Collector2 C2(ntasks);
 
-    Emitter2 E2;
-    Collector2 C2(ntasks);
-    
-    ff_Farm<> farm2(std::move(W2), E2, C2);
+  ff_Farm<> farm2(std::move(W2), E2, C2);
 
-    auto pipe = combine_farms(farm1, &C1, farm2,&E2, true);
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipe\n");
-        return -1;
-    }
-    
-    printf("DONE\n");
-    return 0;
+  auto pipe = combine_farms(farm1, &C1, farm2, &E2, true);
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+
+  printf("DONE\n");
+  return 0;
 }
-

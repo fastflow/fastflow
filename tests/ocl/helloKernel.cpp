@@ -50,177 +50,175 @@ using namespace ff;
 #endif
 
 //#define SYNCHRONOUS_EXECUTION
-const size_t DEFAULT_ARRAYSIZE=1024;
-
+const size_t DEFAULT_ARRAYSIZE = 1024;
 
 #if defined(BUILD_WITH_SOURCE)
 const std::string kernel_path("cl_code/helloKernel.cl");
 
-#else 
+#else
 
-FF_OCL_MAP_ELEMFUNC(mapf, float, useless, i,
-		    (void)useless;
-		    return i + 1/(i+1);
-		    );
+FF_OCL_MAP_ELEMFUNC(mapf, float, useless, i, (void)useless;
+                    return i + 1 / (i + 1););
 
 #endif // BUILD_WITH_SOURCE
 
-
 // this is the task
 struct myTask {
-    myTask(std::vector<float> A, const std::string &command):A(A),command(command) {}
+  myTask(std::vector<float> A, const std::string &command)
+      : A(A), command(command) {}
 
-    std::vector<float> A;
-    const std::string command;
+  std::vector<float> A;
+  const std::string command;
 };
-
 
 /* ---------------- helping function (naive implementation ------------------ */
 
 typedef enum { IN, OUT } enum_t;
-static std::tuple<CopyFlags, ReuseFlags, ReleaseFlags> 
-parseCmd(int kernelid, enum_t direction, const std::string &cmd) {
-    // here on the base of the command string, kernelid and direction we have to generate the proper tuple
+static std::tuple<CopyFlags, ReuseFlags, ReleaseFlags> parseCmd(
+    int kernelid, enum_t direction, const std::string &cmd) {
+  // here on the base of the command string, kernelid and direction we have to generate the proper tuple
 
-    if (direction==IN) return std::make_tuple(CopyFlags::DONTCOPY,
-                                              ReuseFlags::DONTREUSE,
-                                              ReleaseFlags::RELEASE);
-    return std::make_tuple(CopyFlags::COPY,
-                           ReuseFlags::DONTREUSE,
-                           ReleaseFlags::RELEASE);
+  if (direction == IN)
+    return std::make_tuple(
+        CopyFlags::DONTCOPY, ReuseFlags::DONTREUSE, ReleaseFlags::RELEASE);
+  return std::make_tuple(
+      CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::RELEASE);
 }
 static int parseCmd(int kernelId, const std::string &cmd) {
-    return 1; // this is the oclMap
+  return 1; // this is the oclMap
 }
 /* -------------------------------------------------------------------------- */
-
 
 // oclTask is used to transfer the input task to/from the OpenCL device
 // - myTask is the type of the input task
 // - float* is the type of OpenCL input array
 // - float* is the type of OpenCL output array
-struct oclTask: baseOCLTask<myTask, float, float> {
-    void setTask(myTask *task) { 
-        float *Aptr         = const_cast<float*>(task->A.data());
-        const size_t Asize  = task->A.size();
-        const std::string &cmd(task->command);
-        
-        // define the parameter policy
-        std::tuple<CopyFlags,ReuseFlags,ReleaseFlags> in   = parseCmd(0, IN, cmd); 
-        std::tuple<CopyFlags,ReuseFlags,ReleaseFlags> out  = parseCmd(0, OUT, cmd);
-        
-        // A is not copied in input (false), nor the address is re-used (false), it will be deleted at the end (true) 
-        setInPtr(Aptr, Asize, std::get<0>(in),std::get<1>(in), std::get<2>(in));
-        
-        // A is copied back at the end (true), the address is not re-used (false), it will be deleted at the end (true)
-        setOutPtr(Aptr, Asize, std::get<0>(out), std::get<1>(out), std::get<2>(out));
-    }
+struct oclTask : baseOCLTask<myTask, float, float> {
+  void setTask(myTask *task) {
+    float *Aptr = const_cast<float *>(task->A.data());
+    const size_t Asize = task->A.size();
+    const std::string &cmd(task->command);
+
+    // define the parameter policy
+    std::tuple<CopyFlags, ReuseFlags, ReleaseFlags> in = parseCmd(0, IN, cmd);
+    std::tuple<CopyFlags, ReuseFlags, ReleaseFlags> out = parseCmd(0, OUT, cmd);
+
+    // A is not copied in input (false), nor the address is re-used (false), it will be deleted at the end (true)
+    setInPtr(Aptr, Asize, std::get<0>(in), std::get<1>(in), std::get<2>(in));
+
+    // A is copied back at the end (true), the address is not re-used (false), it will be deleted at the end (true)
+    setOutPtr(
+        Aptr, Asize, std::get<0>(out), std::get<1>(out), std::get<2>(out));
+  }
 };
 
 // CPU map
-struct cpuMap: ff_Map<myTask> {
-    myTask *svc(myTask *in) {
-	std::vector<float> &A = in->A;
+struct cpuMap : ff_Map<myTask> {
+  myTask *svc(myTask *in) {
+    std::vector<float> &A = in->A;
 
-	ff_Map::parallel_for(0,A.size(),[&A](const long i) {
-		A[i] = i + 1/(i+1);
-	    });
+    ff_Map::parallel_for(
+        0, A.size(), [&A](const long i) { A[i] = i + 1 / (i + 1); });
 
-	return in;
-    }
+    return in;
+  }
 };
 
 // OpenCL map
-struct oclMap: ff_mapOCL_1D<myTask, oclTask> {
-    oclMap(const std::string &path, const std::string &kname): ff_mapOCL_1D<myTask, oclTask>(path, kname,nullptr,NACC) {}
-    oclMap(): ff_mapOCL_1D<myTask, oclTask>(mapf,nullptr,NACC) {}
+struct oclMap : ff_mapOCL_1D<myTask, oclTask> {
+  oclMap(const std::string &path, const std::string &kname)
+      : ff_mapOCL_1D<myTask, oclTask>(path, kname, nullptr, NACC) {}
+  oclMap() : ff_mapOCL_1D<myTask, oclTask>(mapf, nullptr, NACC) {}
 };
 
 // selector, it decides whether to execute the CPU or OpenCL map
-struct rprKernel: ff_nodeSelector<myTask> {
-    rprKernel(int kernelId):kernelId(kernelId) {} 
+struct rprKernel : ff_nodeSelector<myTask> {
+  rprKernel(int kernelId) : kernelId(kernelId) {}
 
-    myTask *svc(myTask *in) {
-	
-        // make the decision 
-        int selectedDevice = parseCmd(kernelId, in->command);
-        
-        in = reinterpret_cast<myTask*>(getNode(selectedDevice)->svc(in));
-        return in;
-    }
+  myTask *svc(myTask *in) {
 
-    int kernelId;
+    // make the decision
+    int selectedDevice = parseCmd(kernelId, in->command);
+
+    in = reinterpret_cast<myTask *>(getNode(selectedDevice)->svc(in));
+    return in;
+  }
+
+  int kernelId;
 };
 
-
 int main(int argc, char *argv[]) {
-    size_t size = DEFAULT_ARRAYSIZE;
-    if (argc > 1) size = atol(argv[1]);
+  size_t size = DEFAULT_ARRAYSIZE;
+  if (argc > 1) size = atol(argv[1]);
 
-    const std::string &command = "<kernel 0>; <platform:0:device:0>, <0:>; <0:RF>";
+  const std::string &command =
+      "<kernel 0>; <platform:0:device:0>, <0:>; <0:RF>";
 
-    std::vector<float> A(size);  // input and output array, in-place computation
+  std::vector<float> A(size); // input and output array, in-place computation
 
-    myTask task(std::move(A), command);
+  myTask task(std::move(A), command);
 
-    cpuMap cpumap;
-    oclMap oclmap;
-    rprKernel kernel(0);  // 0 is the kernel id !!
+  cpuMap cpumap;
+  oclMap oclmap;
+  rprKernel kernel(0); // 0 is the kernel id !!
 
-    // on the base of the command, we have to select the device to use for the oclmap
-    // oclmap.setDevices(....);
+  // on the base of the command, we have to select the device to use for the oclmap
+  // oclmap.setDevices(....);
 
-    kernel.addNode(cpumap);
-    kernel.addNode(oclmap);
+  kernel.addNode(cpumap);
+  kernel.addNode(oclmap);
 
-#if defined(SYNCHRONOUS_EXECUTION)    
-    if (kernel.nodeInit()<0) {
-	error("cannot initialize kernel\n");
-	return -1;
-    }
+#if defined(SYNCHRONOUS_EXECUTION)
+  if (kernel.nodeInit() < 0) {
+    error("cannot initialize kernel\n");
+    return -1;
+  }
 
-    kernel.svc(&task);
+  kernel.svc(&task);
 #else
 
 #if 1
-    if (kernel.nodeInit()<0) {
-        error("cannot initialize kernel\n");
-        return -1;
-    }
-    
-    // this way to run the kernel asynchronously is convinient if we have multiple kernels
-    // and a single sincronization point (a barrier)
-    auto F = [&]() { kernel.svc(&task); };
-    ff_taskf taskf(1); // just 1 thread in this case 
-    taskf.AddTask(F);
-    taskf.run();
-    
-    // let's do something else here
+  if (kernel.nodeInit() < 0) {
+    error("cannot initialize kernel\n");
+    return -1;
+  }
 
-    taskf.wait(); // sync
+  // this way to run the kernel asynchronously is convinient if we have multiple kernels
+  // and a single sincronization point (a barrier)
+  auto F = [&]() { kernel.svc(&task); };
+  ff_taskf taskf(1); // just 1 thread in this case
+  taskf.AddTask(F);
+  taskf.run();
+
+  // let's do something else here
+
+  taskf.wait(); // sync
 
 #else
-    // a simpler way 
+  // a simpler way
 
-    kernel.setTask(task);
-    kernel.run(); 
+  kernel.setTask(task);
+  kernel.run();
 
-    // let's do something else here
+  // let's do something else here
 
-    kernel.wait();
+  kernel.wait();
 
 #endif // if 0
 #endif // SYNCHRONOUS_EXECUTION
 
 #if defined(CHECK)
-    bool wrong = false;
-    for(size_t i=0;i<A.size(); ++i) 
-	if (A[i] != (i + 1/(i+1))) {
-	    std::cerr << "Wrong result, A[" << i <<"], expected " << (i+1/(i+1)) << " obtained "<< A[i] << "\n";
-	    wrong = true;
-	}
-    if (!wrong) std::cerr << "The result is OK\n";
-    else exit(1); //ctest
+  bool wrong = false;
+  for (size_t i = 0; i < A.size(); ++i)
+    if (A[i] != (i + 1 / (i + 1))) {
+      std::cerr << "Wrong result, A[" << i << "], expected "
+                << (i + 1 / (i + 1)) << " obtained " << A[i] << "\n";
+      wrong = true;
+    }
+  if (!wrong)
+    std::cerr << "The result is OK\n";
+  else
+    exit(1); //ctest
 #endif
-    return 0;
+  return 0;
 }

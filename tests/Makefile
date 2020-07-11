@@ -71,7 +71,7 @@ endif
 #VERSION             = 
 #CFLAGS              =
 #LDFLAGS             = 
-CXXFLAGS            += -std=c++17
+CXXFLAGS            += -std=c++17 -Wall -Wextra
 ifdef DEBUG
     OPTIMIZE_FLAGS  += -g -fno-inline-functions
 else

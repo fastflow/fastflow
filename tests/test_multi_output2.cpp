@@ -54,97 +54,89 @@
  *
  *  W: is a multi-output node
  *  N: is a multi-input node
- */      
-
-
+ */
 
 #include <vector>
 #include <iostream>
 #include <ff/ff.hpp>
 using namespace ff;
 
-struct W: ff_monode_t<long> {
-    long *svc(long *task){
-        printf("W(%ld) got task %ld\n", get_my_id(), (long)task);
-        ff_send_out_to(task, 0); // to the Emitter
-        ff_send_out_to(task, 1); // to the next stage
-        return GO_ON;
-    }
+struct W : ff_monode_t<long> {
+  long *svc(long *task) {
+    printf("W(%ld) got task %ld\n", get_my_id(), (long)task);
+    ff_send_out_to(task, 0); // to the Emitter
+    ff_send_out_to(task, 1); // to the next stage
+    return GO_ON;
+  }
 };
 
 // multi input node
-struct N: ff_minode_t<long> {
-    N(const long numtasks):numtasks(numtasks) {}
-    long *svc(long *task){
-        ticks_wait(10000); //for(volatile long i=0;i<10000; ++i);
-        printf("N got task %ld\n",(long)task);
-        ++received;
-        return GO_ON;
-    }
-    void svc_end() {
-        if (received != numtasks) abort();
-    }
-    
-    long numtasks;
-    long received = 0;
+struct N : ff_minode_t<long> {
+  N(const long numtasks) : numtasks(numtasks) {}
+  long *svc(long *task) {
+    ticks_wait(10000); //for(volatile long i=0;i<10000; ++i);
+    printf("N got task %ld\n", (long)task);
+    ++received;
+    return GO_ON;
+  }
+  void svc_end() {
+    if (received != numtasks) abort();
+  }
+
+  long numtasks;
+  long received = 0;
 };
 
-class E: public ff_node_t<long> {
+class E : public ff_node_t<long> {
 public:
-    E(long numtasks):numtasks(numtasks) {}
+  E(long numtasks) : numtasks(numtasks) {}
 
-    int svc_init() {
-        return 0;
-    }    
-    
-    long *svc(long *task) {	
-        if (task == NULL) {
-            for(long i=1;i<=numtasks;++i)
-                ff_send_out((long*)i);            
-            return GO_ON;
-        }
-        printf("E: got back %ld numtasks=%ld\n", (long)task, numtasks);
-        if (--numtasks <= 0) {
-            printf("E sending EOS\n");
-            return EOS;
-        }
-        return GO_ON;	
+  int svc_init() { return 0; }
+
+  long *svc(long *task) {
+    if (task == NULL) {
+      for (long i = 1; i <= numtasks; ++i) ff_send_out((long *)i);
+      return GO_ON;
     }
+    printf("E: got back %ld numtasks=%ld\n", (long)task, numtasks);
+    if (--numtasks <= 0) {
+      printf("E sending EOS\n");
+      return EOS;
+    }
+    return GO_ON;
+  }
+
 private:
-    long numtasks;
+  long numtasks;
 };
 
-
-
-int main(int argc,  char * argv[]) {
-    int nworkers=3;
-    int streamlen=1000;
-    if (argc>1) {
-        if (argc<3) {
-            std::cerr << "use: " 
-                      << argv[0] 
-                      << " nworkers streamlen\n";
-            return -1;
-        }        
-        nworkers=atoi(argv[1]);
-        streamlen=atoi(argv[2]);
+int main(int argc, char *argv[]) {
+  int nworkers = 3;
+  int streamlen = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use: " << argv[0] << " nworkers streamlen\n";
+      return -1;
     }
-    if (nworkers<=0 || streamlen<=0) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
-    }
+    nworkers = atoi(argv[1]);
+    streamlen = atoi(argv[2]);
+  }
+  if (nworkers <= 0 || streamlen <= 0) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
 
-    E emitter(streamlen);
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new W);
-    ff_farm farm(w,&emitter); // this constructor adds the default collector !!!
-    farm.remove_collector();
-    farm.wrap_around();
+  E emitter(streamlen);
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) w.push_back(new W);
+  ff_farm farm(w, &emitter); // this constructor adds the default collector !!!
+  farm.remove_collector();
+  farm.wrap_around();
 
-    N multi_input(streamlen);
-    ff_Pipe pipe(farm, multi_input);
+  N multi_input(streamlen);
+  ff_Pipe pipe(farm, multi_input);
 
-    if (pipe.run_and_wait_end()<0) return -1;
-    printf("DONE\n");
-    return 0;
+  if (pipe.run_and_wait_end() < 0) return -1;
+  printf("DONE\n");
+  return 0;
 }

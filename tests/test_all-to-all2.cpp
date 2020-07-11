@@ -52,124 +52,121 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-struct Generator: ff_node_t<long> { 
-    long *svc(long*) {
-        // sum: odd 271 even 344
-        ff_send_out(new long(13));
-        ff_send_out(new long(17));
-        ff_send_out(new long(14));       
-        ff_send_out(new long(27));
-        ff_send_out(new long(31));
-        ff_send_out(new long(6));
-        ff_send_out(new long(8));
-        ff_send_out(new long(4));
-        ff_send_out(new long(26));
-        ff_send_out(new long(31));
-        ff_send_out(new long(105));
-        ff_send_out(new long(238));
-        ff_send_out(new long(47));
-        ff_send_out(new long(48));
-        return EOS; // End-Of-Stream
-    }
+struct Generator : ff_node_t<long> {
+  long *svc(long *) {
+    // sum: odd 271 even 344
+    ff_send_out(new long(13));
+    ff_send_out(new long(17));
+    ff_send_out(new long(14));
+    ff_send_out(new long(27));
+    ff_send_out(new long(31));
+    ff_send_out(new long(6));
+    ff_send_out(new long(8));
+    ff_send_out(new long(4));
+    ff_send_out(new long(26));
+    ff_send_out(new long(31));
+    ff_send_out(new long(105));
+    ff_send_out(new long(238));
+    ff_send_out(new long(47));
+    ff_send_out(new long(48));
+    return EOS; // End-Of-Stream
+  }
 };
-struct Sink: ff_node_t<long> {  
-    long *svc(long *task) {
-        std::cout <<  *task << "\n";
-        delete task;
-        return GO_ON; 
-    }
-}; 
-
-struct Router: ff_monode_t<long> {
-    long *svc(long *in) {
-
-        printf("Router%ld received %ld\n", get_my_id(), *in);
-
-        if ((*in % 2) == 0) {
-            ff_send_out_to(in, 0);
-        } else
-            ff_send_out_to(in, 1);
-
-        return GO_ON;
-    }
+struct Sink : ff_node_t<long> {
+  long *svc(long *task) {
+    std::cout << *task << "\n";
+    delete task;
+    return GO_ON;
+  }
 };
 
-struct Even: ff_node_t<long> {
-	long *svc(long *in) {
-        sum+=*in;
-        delete in;
-	    return GO_ON;
-    }
-    void eosnotify(ssize_t=-1) {
-        printf("Even EOS received\n");
-        ff_send_out(new long(sum));
-    }
+struct Router : ff_monode_t<long> {
+  long *svc(long *in) {
 
-    long sum=0;
-};
-struct Odd: ff_node_t<long> {
-	long *svc(long *in) {
-        sum+=*in;
-        delete in;
-	    return GO_ON;
-    }
-    void eosnotify(ssize_t=-1) {
-        printf("Odd EOS received\n");
-        ff_send_out(new long(sum));
-    }
+    printf("Router%ld received %ld\n", get_my_id(), *in);
 
-    long sum=0;
+    if ((*in % 2) == 0) {
+      ff_send_out_to(in, 0);
+    } else
+      ff_send_out_to(in, 1);
+
+    return GO_ON;
+  }
 };
 
-struct doNothing: ff_node_t<long> {
-    long *svc(long *in) {
-        return in;
-    }
+struct Even : ff_node_t<long> {
+  long *svc(long *in) {
+    sum += *in;
+    delete in;
+    return GO_ON;
+  }
+  void eosnotify(ssize_t = -1) {
+    printf("Even EOS received\n");
+    ff_send_out(new long(sum));
+  }
+
+  long sum = 0;
+};
+struct Odd : ff_node_t<long> {
+  long *svc(long *in) {
+    sum += *in;
+    delete in;
+    return GO_ON;
+  }
+  void eosnotify(ssize_t = -1) {
+    printf("Odd EOS received\n");
+    ff_send_out(new long(sum));
+  }
+
+  long sum = 0;
 };
 
+struct doNothing : ff_node_t<long> {
+  long *svc(long *in) { return in; }
+};
 
 int main() {
 
-    std::vector<ff_node*> W1;  
-    Router w1, w2, w3;
-    W1.push_back(&w1);
-    W1.push_back(&w2);
-    W1.push_back(&w3);
+  std::vector<ff_node *> W1;
+  Router w1, w2, w3;
+  W1.push_back(&w1);
+  W1.push_back(&w2);
+  W1.push_back(&w3);
 
-    std::vector<ff_node*> W2;
-    Even even;
-    Odd  odd;
-    W2.push_back(&even);
-    W2.push_back(&odd);
+  std::vector<ff_node *> W2;
+  Even even;
+  Odd odd;
+  W2.push_back(&even);
+  W2.push_back(&odd);
 
-    /* NOTE: if we want to reduce the number of 
+  /* NOTE: if we want to reduce the number of 
      *       channels in the all-to-all building block
      *       we have to set 'true' as first parameter 
      *       of the constructor.
      */
-    ff_a2a a2a;
-    a2a.add_firstset(W1);
-    a2a.add_secondset(W2);
+  ff_a2a a2a;
+  a2a.add_firstset(W1);
+  a2a.add_secondset(W2);
 
-    std::vector<ff_node* > W;    
+  std::vector<ff_node *> W;
 #if 1
-    // to test combine_with_firststage
-    ff_pipeline fakepipe;
-    fakepipe.add_stage(&a2a);
-    combine_with_firststage(fakepipe, new doNothing, true);
-    
-    W.push_back(&fakepipe);    
+  // to test combine_with_firststage
+  ff_pipeline fakepipe;
+  fakepipe.add_stage(&a2a);
+  combine_with_firststage(fakepipe, new doNothing, true);
+
+  W.push_back(&fakepipe);
 #else
-    W.push_back(&a2a);
+  W.push_back(&a2a);
 #endif
 
-    Generator gen;
-    Sink      sink;
-    ff_farm farm(W, &gen, &sink);        
-    if (farm.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
-    }
-    
-    return 0;
+  Generator gen;
+  Sink sink;
+  ff_farm farm(W, &gen, &sink);
+  if (farm.run_and_wait_end() < 0) {
+    error("running farm\n");
+    return -1;
+  }
+
+  return 0;
 }

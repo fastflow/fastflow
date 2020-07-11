@@ -44,109 +44,105 @@ typedef int ff_task_t;
 
 static ff_allocator ffalloc;
 
-enum { MIN_TASK_SIZE=32, MAX_TASK_SIZE=16384 };
-
+enum { MIN_TASK_SIZE = 32, MAX_TASK_SIZE = 16384 };
 
 // generic worker
-class Worker: public ff_node {
+class Worker : public ff_node {
 public:
-    // called just one time at the very beginning
-    int svc_init() {
-        std::cout << "Worker << " << get_my_id() << " (thread id " << ff_getThreadID() << ") svc_init called\n";
-        if (ffalloc.register4free()<0) {
-            error("Worker, register4free fails\n");
-            return -1;
-        }
-        return 0;
+  // called just one time at the very beginning
+  int svc_init() {
+    std::cout << "Worker << " << get_my_id() << " (thread id "
+              << ff_getThreadID() << ") svc_init called\n";
+    if (ffalloc.register4free() < 0) {
+      error("Worker, register4free fails\n");
+      return -1;
     }
+    return 0;
+  }
 
-    void * svc(void * task) {
-        ffalloc.free(task);
-        std::cout << "Worker " << get_my_id() << " freed task\n";
-        // we don't have the collector so we have any task to send out
-        return GO_ON; 
-    }
-    // I don't need the following 
-    //void  svc_end()  {}
+  void *svc(void *task) {
+    ffalloc.free(task);
+    std::cout << "Worker " << get_my_id() << " freed task\n";
+    // we don't have the collector so we have any task to send out
+    return GO_ON;
+  }
+  // I don't need the following
+  //void  svc_end()  {}
 };
-
 
 // the load-balancer filter
-class Emitter: public ff_node {
+class Emitter : public ff_node {
 public:
-    Emitter(int max_task):ntask(max_task) {
-        srandom(::getpid()+(getusec()%4999));
-        ffalloc.init();
-    };
+  Emitter(int max_task) : ntask(max_task) {
+    srandom(::getpid() + (getusec() % 4999));
+    ffalloc.init();
+  };
 
-    // called just one time at the very beginning
-    int svc_init() {
-        std::cout << "Emitter svc_init called\n";
-        if (ffalloc.registerAllocator()<0) {
-            error("Emitter, registerAllocator fails\n");
-            return -1;
-        }
-        return 0;
+  // called just one time at the very beginning
+  int svc_init() {
+    std::cout << "Emitter svc_init called\n";
+    if (ffalloc.registerAllocator() < 0) {
+      error("Emitter, registerAllocator fails\n");
+      return -1;
     }
+    return 0;
+  }
 
-    void * svc(void *) {
-        size_t size = random() % MAX_TASK_SIZE;
-        if (!size) size=MIN_TASK_SIZE;
-        ff_task_t * task = (ff_task_t*)ffalloc.malloc(size);
-        if (!task) abort();
-        std::cout << "Emitter allocated task size= " << size << "\n";
+  void *svc(void *) {
+    size_t size = random() % MAX_TASK_SIZE;
+    if (!size) size = MIN_TASK_SIZE;
+    ff_task_t *task = (ff_task_t *)ffalloc.malloc(size);
+    if (!task) abort();
+    std::cout << "Emitter allocated task size= " << size << "\n";
 
-        --ntask;
-        if (ntask<0) return NULL;
-        return task;
-    }
+    --ntask;
+    if (ntask < 0) return NULL;
+    return task;
+  }
 
-    // I don't need the following 
-    //void  svc_end()  {}
+  // I don't need the following
+  //void  svc_end()  {}
 private:
-    int ntask;
+  int ntask;
 };
 
+int main(int argc, char *argv[]) {
+  int nworkers = 3;
+  int streamlen = 1000;
 
-int main(int argc, char * argv[]) {
-    int nworkers = 3;
-    int streamlen = 1000;
-    
-    if (argc>1) {
-        if (argc<3) {
-            std::cerr << "use: " 
-                      << argv[0] 
-                      << " nworkers streamlen\n";
-            return -1;
-        }
-    
-        nworkers=atoi(argv[1]);
-        streamlen=atoi(argv[2]);
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use: " << argv[0] << " nworkers streamlen\n";
+      return -1;
     }
-    
-    if (!nworkers || !streamlen) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
-    }
-    
-	std::cout << "Detected num of cores " << ff_numCores() << "\n"; 
 
-    ff_farm farm;
+    nworkers = atoi(argv[1]);
+    streamlen = atoi(argv[2]);
+  }
 
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
-    farm.add_workers(w);
-    
-    Emitter E(streamlen);
-    farm.add_emitter(&E);
+  if (!nworkers || !streamlen) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
 
-    ffTime(START_TIME);
-    if (farm.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
-    }
-    ffTime(STOP_TIME);
-    std::cerr << "DONE, farm  time= " << farm.ffTime() << " (ms)\n";
-    std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
-    return 0;
+  std::cout << "Detected num of cores " << ff_numCores() << "\n";
+
+  ff_farm farm;
+
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) w.push_back(new Worker);
+  farm.add_workers(w);
+
+  Emitter E(streamlen);
+  farm.add_emitter(&E);
+
+  ffTime(START_TIME);
+  if (farm.run_and_wait_end() < 0) {
+    error("running farm\n");
+    return -1;
+  }
+  ffTime(STOP_TIME);
+  std::cerr << "DONE, farm  time= " << farm.ffTime() << " (ms)\n";
+  std::cerr << "DONE, total time= " << ffTime(GET_TIME) << " (ms)\n";
+  return 0;
 }

@@ -44,7 +44,6 @@
 
 #include <string>
 
-
 namespace repara {
 namespace rprkernels {
 
@@ -53,15 +52,15 @@ namespace rprkernels {
  *
  */
 struct baseKernelTask {
-    baseKernelTask():task_index{0} {}
-    baseKernelTask(size_t idx, const std::string &cmd):
-        task_index{idx}, cmd{cmd} {}
+  baseKernelTask() : task_index{0} {}
+  baseKernelTask(size_t idx, const std::string &cmd)
+      : task_index{idx}, cmd{cmd} {}
 
-    size_t task_index;
-    size_t kernel_id;
-    std::string cmd;
+  size_t task_index;
+  size_t kernel_id;
+  std::string cmd;
 };
 
-};
-};
+};     // namespace rprkernels
+};     // namespace repara
 #endif /* REPARA_BASE_KERNEL_TASK_HPP */

@@ -43,89 +43,86 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-class Emitter1: public ff_node_t<long> {
+class Emitter1 : public ff_node_t<long> {
 public:
-    Emitter1(int ntasks):ntasks(ntasks) {}
-    long* svc(long*) {
-        for(long i=0;i<ntasks;++i)
-            ff_send_out((long*)(i+10));
-        return nullptr;
-    }
+  Emitter1(int ntasks) : ntasks(ntasks) {}
+  long *svc(long *) {
+    for (long i = 0; i < ntasks; ++i) ff_send_out((long *)(i + 10));
+    return nullptr;
+  }
+
 private:
-    int ntasks;
+  int ntasks;
 };
 
-class Emitter2: public ff_monode_t<long> {
+class Emitter2 : public ff_monode_t<long> {
 public:
-    long* svc(long* t) {
-        if (get_channel_id() == -1) {
-            printf("TASK FROM INPUT %ld\n", (long)(t));
-            // task coming from previous stage
-            return t;
-        }
-        printf("got back a task from Collector\n");
-        return GO_ON;
+  long *svc(long *t) {
+    if (get_channel_id() == -1) {
+      printf("TASK FROM INPUT %ld\n", (long)(t));
+      // task coming from previous stage
+      return t;
     }
-    void eosnotify(ssize_t) {
-        broadcast_task(EOS);
-    }
+    printf("got back a task from Collector\n");
+    return GO_ON;
+  }
+  void eosnotify(ssize_t) { broadcast_task(EOS); }
 };
 
-class Worker1: public ff_node_t<long> {
+class Worker1 : public ff_node_t<long> {
 public:
-    long* svc(long* task) {
-        return task;
-    }
+  long *svc(long *task) { return task; }
 };
 
-class Worker2: public ff_node_t<long> {
+class Worker2 : public ff_node_t<long> {
 public:
-    long* svc(long* task) {
-        printf("Worker2(%ld): TASK COMPUTED\n", get_my_id());
-        return task;
-    }
+  long *svc(long *task) {
+    printf("Worker2(%ld): TASK COMPUTED\n", get_my_id());
+    return task;
+  }
 };
 
-int main(int argc, char* argv[]) {
-    int nworkers = 3;
-    int ntasks = 1000;
-    if (argc>1) {
-        if (argc < 3) {
-            std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";
-            return -1;
-        }
-        nworkers  =atoi(argv[1]);
-        ntasks    =atoi(argv[2]);
+int main(int argc, char *argv[]) {
+  int nworkers = 3;
+  int ntasks = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use:\n"
+                << " " << argv[0] << " numworkers ntasks\n";
+      return -1;
     }
-    ff_pipeline pipe;
-    ff_farm farm1;
-    ff_farm farm2;
-    pipe.add_stage(&farm1);
-    pipe.add_stage(&farm2);
-    farm1.add_emitter(new Emitter1(ntasks));
-    farm1.add_collector(nullptr); // default collector
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) {
-        w.push_back(new Worker1);
-    }
-    farm1.add_workers(w);
-    farm1.cleanup_all();
+    nworkers = atoi(argv[1]);
+    ntasks = atoi(argv[2]);
+  }
+  ff_pipeline pipe;
+  ff_farm farm1;
+  ff_farm farm2;
+  pipe.add_stage(&farm1);
+  pipe.add_stage(&farm2);
+  farm1.add_emitter(new Emitter1(ntasks));
+  farm1.add_collector(nullptr); // default collector
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) {
+    w.push_back(new Worker1);
+  }
+  farm1.add_workers(w);
+  farm1.cleanup_all();
 
-    w.clear();
-    for(int i=0;i<nworkers;++i) {
-        w.push_back(new Worker2);
-    }
-    farm2.add_emitter(new Emitter2);
-    farm2.add_collector(nullptr); // default collector
-    farm2.add_workers(w);
-    farm2.wrap_around();
-    farm2.cleanup_all();
+  w.clear();
+  for (int i = 0; i < nworkers; ++i) {
+    w.push_back(new Worker2);
+  }
+  farm2.add_emitter(new Emitter2);
+  farm2.add_collector(nullptr); // default collector
+  farm2.add_workers(w);
+  farm2.wrap_around();
+  farm2.cleanup_all();
 
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipe\n");
-        return -1;
-    }
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
 
-    printf("Time= %.2f (ms)\n", pipe.ffwTime());
-    return 0;
+  printf("Time= %.2f (ms)\n", pipe.ffwTime());
+  return 0;
 }

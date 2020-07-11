@@ -39,117 +39,114 @@
  *                                      -----------------------
  */
 
-
-
 #include <vector>
 #include <iostream>
 #include <ff/ff.hpp>
 using namespace ff;
 
-struct  Worker1: ff_node {
-    void * svc(void * task) {
-        usleep(10000);
-        return task;
-    }
+struct Worker1 : ff_node {
+  void *svc(void *task) {
+    usleep(10000);
+    return task;
+  }
 };
 
-struct Worker2: ff_node {
-    void * svc(void * task) {
-        printf("W2(%ld) got %ld\n", get_my_id(), *(long*)task);
-        usleep(500);
-        return task;
-    }
+struct Worker2 : ff_node {
+  void *svc(void *task) {
+    printf("W2(%ld) got %ld\n", get_my_id(), *(long *)task);
+    usleep(500);
+    return task;
+  }
 };
 
-class Emitter: public ff_node {
+class Emitter : public ff_node {
 public:
-    Emitter(ff_loadbalancer *const lb):eosarrived(false),numtasks(0),lb(lb) {}
-    void * svc(void * task) {
-        long * t = (long *)task;
-        if (*t % 2)  {
-            if (lb->get_channel_id()>=0) { // received from workers
-                if (--numtasks == 0 && eosarrived) return NULL;
-            }
-            return GO_ON;
-        }
-        ++(*t), ++numtasks;
-        return task;
+  Emitter(ff_loadbalancer *const lb) : eosarrived(false), numtasks(0), lb(lb) {}
+  void *svc(void *task) {
+    long *t = (long *)task;
+    if (*t % 2) {
+      if (lb->get_channel_id() >= 0) { // received from workers
+        if (--numtasks == 0 && eosarrived) return NULL;
+      }
+      return GO_ON;
     }
-    void eosnotify(ssize_t id) {
-        if (id == -1) {
-            eosarrived= true;
-            if (numtasks==0) lb->broadcast_task(EOS);
-        }
+    ++(*t), ++numtasks;
+    return task;
+  }
+  void eosnotify(ssize_t id) {
+    if (id == -1) {
+      eosarrived = true;
+      if (numtasks == 0) lb->broadcast_task(EOS);
     }
+  }
+
 protected:
-    bool eosarrived;
-    long numtasks;
-    ff_loadbalancer *const lb;
+  bool eosarrived;
+  long numtasks;
+  ff_loadbalancer *const lb;
 };
 
-class Start: public ff_node {
+class Start : public ff_node {
 public:
-    Start(int streamlen):streamlen(streamlen) {}
-    void* svc(void*) {    
-        for (long j=0;j<streamlen;j++) {
-            long * ii = new long(j);
-            ff_send_out(ii);            
-        }
-        return NULL;
+  Start(int streamlen) : streamlen(streamlen) {}
+  void *svc(void *) {
+    for (long j = 0; j < streamlen; j++) {
+      long *ii = new long(j);
+      ff_send_out(ii);
     }
+    return NULL;
+  }
+
 private:
-    int streamlen;
+  int streamlen;
 };
 
-
-int main(int argc, char * argv[]) {
-    int nworkers1= 3;
-    int nworkers2= 3;
-    int streamlen=1000;
-    if (argc>1) {
-        if (argc<4) {
-            std::cerr << "use: " 
-                      << argv[0] 
-                      << " nworkers1 nworkers2 streamlen\n";
-            return -1;
-        }
-        nworkers1=atoi(argv[1]);
-        nworkers2=atoi(argv[2]);
-        streamlen=atoi(argv[3]);
+int main(int argc, char *argv[]) {
+  int nworkers1 = 3;
+  int nworkers2 = 3;
+  int streamlen = 1000;
+  if (argc > 1) {
+    if (argc < 4) {
+      std::cerr << "use: " << argv[0] << " nworkers1 nworkers2 streamlen\n";
+      return -1;
     }
-    if (nworkers1<=0 || nworkers2<=0 || streamlen<=0) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
-    }
+    nworkers1 = atoi(argv[1]);
+    nworkers2 = atoi(argv[2]);
+    streamlen = atoi(argv[3]);
+  }
+  if (nworkers1 <= 0 || nworkers2 <= 0 || streamlen <= 0) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
 
-    ff_pipeline pipe;
-    
-    Start start(streamlen);
-    pipe.add_stage(&start);
+  ff_pipeline pipe;
 
-    ff_farm farm1;
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers1;++i) w.push_back(new Worker1);
-    farm1.add_workers(w);
-    farm1.add_collector(NULL);
+  Start start(streamlen);
+  pipe.add_stage(&start);
 
-    pipe.add_stage(&farm1);
+  ff_farm farm1;
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers1; ++i) w.push_back(new Worker1);
+  farm1.add_workers(w);
+  farm1.add_collector(NULL);
 
-    ff_farm farm2;
-    Emitter emitter(farm2.getlb());
-    farm2.add_emitter(&emitter);
+  pipe.add_stage(&farm1);
 
-    w.clear();
-    for(int i=0;i<nworkers2;++i) w.push_back(new Worker2);
-    farm2.add_workers(w);
+  ff_farm farm2;
+  Emitter emitter(farm2.getlb());
+  farm2.add_emitter(&emitter);
 
-    // set master_worker mode 
-    farm2.wrap_around();
+  w.clear();
+  for (int i = 0; i < nworkers2; ++i) w.push_back(new Worker2);
+  farm2.add_workers(w);
 
-    pipe.add_stage(&farm2);
-    pipe.run_and_wait_end();
+  // set master_worker mode
+  farm2.wrap_around();
 
-    std::cerr << "DONE\n";
-    pipe.ffStats(std::cerr);
-    return 0;
+  pipe.add_stage(&farm2);
+  pipe.run_and_wait_end();
+
+  std::cerr << "DONE\n";
+  pipe.ffStats(std::cerr);
+  return 0;
 }

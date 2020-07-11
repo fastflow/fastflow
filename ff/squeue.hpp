@@ -36,7 +36,6 @@
 
 #include <stdlib.h>
 
-
 namespace ff {
 
 /**
@@ -48,140 +47,128 @@ namespace ff {
 template <typename T>
 class squeue {
 private:
-    struct data_type {
-        data_type():h(-1),t(-1),entry(0) {};
-        data_type(int h, int t, T * entry):h(h),t(t),entry(entry) {}
-        data_type(const data_type & de):h(de.h),t(de.t),entry(de.entry) {}
-        int     h;
-        int     t;
-        T     * entry;
-    };
+  struct data_type {
+    data_type() : h(-1), t(-1), entry(0){};
+    data_type(int h, int t, T *entry) : h(h), t(t), entry(entry) {}
+    data_type(const data_type &de) : h(de.h), t(de.t), entry(de.entry) {}
+    int h;
+    int t;
+    T *entry;
+  };
 
-    typedef T          elem_type;
-    
+  typedef T elem_type;
+
 protected:
-    enum {DATA_CHUNK=1024, SQUEUE_CHUNK=4096};
+  enum { DATA_CHUNK = 1024, SQUEUE_CHUNK = 4096 };
 
-    inline T * newchunk() {
-        T * v =(T *)malloc(chunk*sizeof(T));
-        return v;
-    }
-    
+  inline T *newchunk() {
+    T *v = (T *)malloc(chunk * sizeof(T));
+    return v;
+  }
 
-    inline void deletechunk(int idx) { 
-        free(data[idx].entry);   
-        data[idx].entry = NULL;
-    }
+  inline void deletechunk(int idx) {
+    free(data[idx].entry);
+    data[idx].entry = NULL;
+  }
 
 public:
+  squeue(size_t chunk = SQUEUE_CHUNK)
+      : data(0), datacap(DATA_CHUNK), nelements(0), head(0), tail(0),
+        chunk(chunk) {
+    data = (data_type *)malloc(datacap * sizeof(data_type));
+    data[0] = data_type(0, -1, newchunk());
+  }
 
-    squeue(size_t chunk=SQUEUE_CHUNK):data(0),datacap(DATA_CHUNK),
-                                      nelements(0),
-                                      head(0),tail(0),chunk(chunk)  {
-        data = (data_type *)malloc(datacap*sizeof(data_type));
-        data[0] = data_type(0, -1, newchunk());
+  ~squeue() {
+    if (!data) return;
+    for (unsigned int i = 0; i <= tail; ++i)
+      if (data[i].entry) free(data[i].entry);
+    free(data);
+  }
+
+  inline void push_back(const elem_type &elem) {
+    T *current = data[tail].entry;
+    int current_tail = data[tail].t++;
+    if ((unsigned)current_tail == (chunk - 1)) {
+      if (tail == (datacap - 1)) {
+        datacap += DATA_CHUNK;
+        data = (data_type *)realloc(data, datacap * sizeof(data_type));
+      }
+
+      T *v = newchunk();
+      data[++tail] = data_type(0, 0, v);
+      current = v;
+      current_tail = -1;
     }
-    
+    current[current_tail + 1] = elem;
+    ++nelements;
+  }
 
-    ~squeue() {
-        if (!data) return;
-        for(unsigned int i=0;i<=tail;++i)
-            if (data[i].entry) free(data[i].entry);
-        free(data);
+  inline void pop_back() {
+    if (!nelements) return;
+
+    T *current = data[tail].entry;
+    int current_tail = data[tail].t--;
+
+    current[current_tail].~T();
+
+    --nelements;
+    if (!current_tail && (tail > 0)) {
+      deletechunk(tail);
+      --tail;
+      data[tail].t = chunk - 1;
     }
-    
+  }
 
-    inline void push_back(const elem_type & elem) {
-        T * current       = data[tail].entry;
-        int current_tail  = data[tail].t++;
-        if ((unsigned)current_tail == (chunk-1)) {
-            if (tail == (datacap-1)) {
-                datacap += DATA_CHUNK;
-                data = (data_type *)realloc(data, datacap*sizeof(data_type));
-           }
+  inline elem_type &back() {
+    if (!nelements) return *(elem_type *)0;
 
-            T * v = newchunk();
-            data[++tail] = data_type(0,0,v);
-            current = v;
-            current_tail=-1;
-        }
-        current[current_tail+1] = elem;
-        ++nelements;
+    T *current = data[tail].entry;
+    int current_tail = data[tail].t;
+    return current[current_tail];
+  }
+
+  inline void pop_front() {
+    if (!nelements) return;
+
+    T *current = data[head].entry;
+    int current_head = data[head].h++;
+
+    current[current_head].~T();
+
+    --nelements;
+    if (((unsigned)current_head == (chunk - 1)) && (tail > head)) {
+      deletechunk(head);
+      ++head;
     }
+  }
 
+  inline elem_type &front() {
+    if (!nelements) return *(elem_type *)0;
 
-    inline void pop_back() { 
-        if (!nelements) return;
-        
-        T * current        = data[tail].entry;
-        int current_tail   = data[tail].t--;
-        
-        current[current_tail].~T();
-                         
-        --nelements;
-        if (!current_tail && (tail>0)) {
-            deletechunk(tail);
-            --tail;
-            data[tail].t = chunk-1;
-        }
-        
-    }
-    
-    inline elem_type& back() { 
-        if (!nelements) return *(elem_type*)0;
+    T *current = data[head].entry;
+    int current_head = data[head].h;
+    return current[current_head];
+  }
 
-        T * current       = data[tail].entry;
-        int current_tail  = data[tail].t;
-        return current[current_tail];
-    }
+  inline elem_type &at(size_t idx) {
+    if (!nelements || idx > nelements) return *(elem_type *)0;
 
+    T *current = data[head].entry;
+    int current_head = data[head].h + idx;
+    return current[current_head];
+  }
 
-    inline void pop_front() { 
-        if (!nelements) return;
+  inline size_t size() const { return nelements; }
 
-        T * current      = data[head].entry;
-        int current_head = data[head].h++;
-        
-        current[current_head].~T();
-
-        --nelements;
-        if (((unsigned)current_head==(chunk-1)) && (tail>head)) {
-            deletechunk(head);
-            ++head;
-        }        
-    }
-    
-
-    inline elem_type& front() { 
-        if (!nelements) return *(elem_type*)0;
-
-        T * current       = data[head].entry;
-        int current_head  = data[head].h;
-        return current[current_head];
-    }
-
-
-    inline elem_type& at(size_t idx) {
-        if (!nelements || idx > nelements) return *(elem_type*)0;
-        
-        T * current       = data[head].entry;
-        int current_head  = data[head].h+idx;
-        return current[current_head];
-    } 
-    
-
-    inline size_t size() const { return nelements; }
-    
-    
 private:
-    data_type    * data;
-    size_t         datacap;  
-    size_t         nelements;
-    unsigned int   head;  
-    unsigned int   tail;
-    size_t         chunk;    
+  data_type *data;
+  size_t datacap;
+  size_t nelements;
+  unsigned int head;
+  unsigned int tail;
+  size_t chunk;
 };
-
 
 } // namespace ff
 

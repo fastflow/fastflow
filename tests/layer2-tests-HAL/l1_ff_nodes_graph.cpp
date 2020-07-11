@@ -48,141 +48,131 @@
 
 using namespace ff;
 
-class A: public ff_monode {
+class A : public ff_monode {
 public:
+  A(svector<ff_node *> &w, long ntasks) : ntasks(ntasks) { set_output(w); }
 
-    A(svector<ff_node*>& w,long ntasks):ntasks(ntasks) {
-        set_output(w);
-    }
+  int svc_init() {
+    printf("A initialised: sending %ld tasks\n", ntasks);
+    return 0;
+  }
 
-    int svc_init() {
-        printf("A initialised: sending %ld tasks\n",ntasks);
-        return 0;
-    }
+  void *svc(void *) {
+    for (long i = 1; i <= ntasks; ++i) ff_send_out((void *)i);
 
-    void* svc(void *) {
-        for(long i=1;i<=ntasks;++i) 
-            ff_send_out((void*)i);
+    return NULL;
+  }
 
-        return NULL;
-    }
-
-    int wait() { 
-        return ff_monode::wait();
-    }
+  int wait() { return ff_monode::wait(); }
 
 private:
-    long ntasks;
+  long ntasks;
 };
 
-
-class B: public ff_monode {
+class B : public ff_monode {
 public:
-    B(svector<ff_node*>& w) { 
-        set_output(w);
-    }
+  B(svector<ff_node *> &w) { set_output(w); }
 
-    int svc_init() {
-        printf("B initialised: should receive half of the tasks (+/-1)\n");
-        return 0;
-    }
+  int svc_init() {
+    printf("B initialised: should receive half of the tasks (+/-1)\n");
+    return 0;
+  }
 
-    void* svc(void *t) {
-        long data = (long) t;
-        printf("B received one task: %ld\n",data);
-        return t;                
-    }
+  void *svc(void *t) {
+    long data = (long)t;
+    printf("B received one task: %ld\n", data);
+    return t;
+  }
 
-    int wait() { return ff_monode::wait(); }
+  int wait() { return ff_monode::wait(); }
 
-    int create_input_buffer(int nentries, bool fixedsize=true) {
-        return ff_node::create_input_buffer(nentries, fixedsize);
-    }
+  int create_input_buffer(int nentries, bool fixedsize = true) {
+    return ff_node::create_input_buffer(nentries, fixedsize);
+  }
 };
 
-class C: public ff_node {
+class C : public ff_node {
 public:
-    int svc_init() {
-        init_unlocked(lock);
-        received = 0;
-        printf("C initialised: it will terminate at the first null");
-        return 0;
-    }
-    
-    void svc_end() {
-        printf("C received %ld tasks\n",received);
-    }
+  int svc_init() {
+    init_unlocked(lock);
+    received = 0;
+    printf("C initialised: it will terminate at the first null");
+    return 0;
+  }
 
-    void* svc(void *t) {
-        long data = (long) t;
-        printf("C received one task: %ld\n",data);
-        ++received;
-        return GO_ON;
-    }
-    
-    inline bool  put(void * ptr) {
-        spin_lock(lock);
-        bool r = ff_node::put(ptr);
-        spin_unlock(lock);
-        return r;
-        return false;
-    }
-    
-    virtual int run(bool=false)   { return ff_node::run(); }
-    int wait()  { return ff_node::wait(); }
-    int create_input_buffer(int nentries, bool fixedsize=true) {
-        return ff_node::create_input_buffer(nentries, fixedsize);
-    }
+  void svc_end() { printf("C received %ld tasks\n", received); }
+
+  void *svc(void *t) {
+    long data = (long)t;
+    printf("C received one task: %ld\n", data);
+    ++received;
+    return GO_ON;
+  }
+
+  inline bool put(void *ptr) {
+    spin_lock(lock);
+    bool r = ff_node::put(ptr);
+    spin_unlock(lock);
+    return r;
+    return false;
+  }
+
+  virtual int run(bool = false) { return ff_node::run(); }
+  int wait() { return ff_node::wait(); }
+  int create_input_buffer(int nentries, bool fixedsize = true) {
+    return ff_node::create_input_buffer(nentries, fixedsize);
+  }
 
 protected:
-    lock_t lock;
+  lock_t lock;
+
 private:
-    long received;
+  long received;
 };
 
-class D: public ff_node {
+class D : public ff_node {
 public:
-    void* svc(void *t) {
-        long data = (long) t;
-        printf("D received one task: %ld\n",data);
-        return GO_ON;
-    }
+  void *svc(void *t) {
+    long data = (long)t;
+    printf("D received one task: %ld\n", data);
+    return GO_ON;
+  }
 
-    virtual int run(bool=false)  { return ff_node::run(); }
-    int wait() { return ff_node::wait(); }
-    int create_input_buffer(int nentries, bool fixedsize=true) {
-        return ff_node::create_input_buffer(nentries, fixedsize);
-    }
+  virtual int run(bool = false) { return ff_node::run(); }
+  int wait() { return ff_node::wait(); }
+  int create_input_buffer(int nentries, bool fixedsize = true) {
+    return ff_node::create_input_buffer(nentries, fixedsize);
+  }
 };
 
 int main() {
-    long ntasks = 20;
-    C c;
-    c.create_input_buffer(100);
+  long ntasks = 20;
+  C c;
+  c.create_input_buffer(100);
 
-    D d;
-    d.create_input_buffer(100);
+  D d;
+  d.create_input_buffer(100);
 
-    svector<ff_node*> wB;
-    wB.push_back(&d);
-    wB.push_back(&c);
-    B b(wB);
-    b.create_input_buffer(100);
-    svector<ff_node*> wA;
-    wA.push_back(&b);
-    wA.push_back(&c);
-    A a(wA,ntasks);
-    a.skipfirstpop(true);
+  svector<ff_node *> wB;
+  wB.push_back(&d);
+  wB.push_back(&c);
+  B b(wB);
+  b.create_input_buffer(100);
+  svector<ff_node *> wA;
+  wA.push_back(&b);
+  wA.push_back(&c);
+  A a(wA, ntasks);
+  a.skipfirstpop(true);
 
-    d.run();
-    c.run();
-    b.run();
-    a.run();
+  d.run();
+  c.run();
+  b.run();
+  a.run();
 
-    a.wait();
-    b.wait();
-    c.wait();
-    d.wait();
+  a.wait();
+  b.wait();
+  c.wait();
+  d.wait();
 
-    return 0;
+  return 0;
 }

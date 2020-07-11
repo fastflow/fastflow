@@ -60,74 +60,71 @@
 using namespace ff;
 
 // this is a simple scheduling policy, for a more complex implementation
-// take a look at test_multi_output5.cpp test. 
-struct Scheduler: ff_minode_t<long> {
-    long* svc(long* in) {
-	if (in == nullptr) {
-	    for(long i=1;i<=ntasks;++i)
-		ff_send_out((long*)i);
-	    return GO_ON;
-	}
-	if (++cnt>=ntasks) return EOS;
-	return GO_ON;
+// take a look at test_multi_output5.cpp test.
+struct Scheduler : ff_minode_t<long> {
+  long *svc(long *in) {
+    if (in == nullptr) {
+      for (long i = 1; i <= ntasks; ++i) ff_send_out((long *)i);
+      return GO_ON;
     }
-    long cnt=0;
-    const long ntasks= 1000;
-}; 
-struct Worker: ff_monode_t<long> {
-    long* svc(long* in) {
-	ff_send_out_to(in, 0); // back
-	ff_send_out_to(in, 1); // forward
-	return GO_ON;
-    }
+    if (++cnt >= ntasks) return EOS;
+    return GO_ON;
+  }
+  long cnt = 0;
+  const long ntasks = 1000;
 };
-struct First: ff_node_t<long> {
-    long* svc(long* in) { return in;}
+struct Worker : ff_monode_t<long> {
+  long *svc(long *in) {
+    ff_send_out_to(in, 0); // back
+    ff_send_out_to(in, 1); // forward
+    return GO_ON;
+  }
+};
+struct First : ff_node_t<long> {
+  long *svc(long *in) { return in; }
 };
 // The last stage of the pipeline must be multi-output
 // if it is used as L-Worker.
-struct Second: ff_monode_t<long> {
-    long* svc(long* in) { return in;}
+struct Second : ff_monode_t<long> {
+  long *svc(long *in) { return in; }
 };
-struct Collector: ff_minode_t<long> {
-    long* svc(long*) {
-	printf("Collector, received from pipe%ld\n", get_channel_id());
-	return GO_ON;
-    }
+struct Collector : ff_minode_t<long> {
+  long *svc(long *) {
+    printf("Collector, received from pipe%ld\n", get_channel_id());
+    return GO_ON;
+  }
 };
 
 int main() {
-    const int nworkers=3;
-    // preparing the master-worker farm
-    Scheduler sched;
-    std::vector<ff_node*> W;
-    for(int i=0;i<nworkers;++i) 
-        W.push_back(new Worker);
-    ff_farm farm(W,&sched);
-    farm.remove_collector();
-    farm.cleanup_workers();
-    farm.wrap_around();
-    
-    // preparing the all-to-all
-    ff_a2a a2a;
-    std::vector<ff_node*> W1;
-    for(int i=0;i<nworkers;++i) {
-        ff_pipeline *pipe = new ff_pipeline;
-        pipe->add_stage(new First,  true);
-        pipe->add_stage(new Second, true);
-        W1.push_back(pipe);
-    }
-    a2a.add_firstset(W1, 0, true);
-    Collector col;
-    std::vector<ff_node*> W2;
-    W2.push_back(&col);
-    a2a.add_secondset(W2);
-    
+  const int nworkers = 3;
+  // preparing the master-worker farm
+  Scheduler sched;
+  std::vector<ff_node *> W;
+  for (int i = 0; i < nworkers; ++i) W.push_back(new Worker);
+  ff_farm farm(W, &sched);
+  farm.remove_collector();
+  farm.cleanup_workers();
+  farm.wrap_around();
 
-    ff_Pipe<> pipe(farm, a2a);
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipe\n");
-        return -1;
-    }
-    return 0;
+  // preparing the all-to-all
+  ff_a2a a2a;
+  std::vector<ff_node *> W1;
+  for (int i = 0; i < nworkers; ++i) {
+    ff_pipeline *pipe = new ff_pipeline;
+    pipe->add_stage(new First, true);
+    pipe->add_stage(new Second, true);
+    W1.push_back(pipe);
+  }
+  a2a.add_firstset(W1, 0, true);
+  Collector col;
+  std::vector<ff_node *> W2;
+  W2.push_back(&col);
+  a2a.add_secondset(W2);
+
+  ff_Pipe<> pipe(farm, a2a);
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+  return 0;
 }

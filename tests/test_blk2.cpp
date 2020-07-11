@@ -35,58 +35,60 @@
 
 using namespace ff;
 
-struct Scheduler: ff_node_t<long> {   
-    Scheduler(ff_loadbalancer *lb):lb(lb) {}
-    long *svc(long *in) {
-        static size_t rounds = 0;
-        
-        if (in == nullptr) {
-            // enforces nonblocking mode since the beginning
-            // regardless the compilation setting
-            lb->broadcast_task(NBLK);
+struct Scheduler : ff_node_t<long> {
+  Scheduler(ff_loadbalancer *lb) : lb(lb) {}
+  long *svc(long *in) {
+    static size_t rounds = 0;
 
-            for(size_t i=0;i<1000;++i) 
-                ff_send_out((long*)(i+1));
-            ++rounds;
-            return BLK;
-        }
+    if (in == nullptr) {
+      // enforces nonblocking mode since the beginning
+      // regardless the compilation setting
+      lb->broadcast_task(NBLK);
 
-        for(size_t i=rounds*1000;i<(rounds*1000+1000);++i) 
-            ff_send_out((long*)(i+1));
-        ++rounds;
-        switch(rounds) {
-        case 2: return NBLK;
-        case 3: return BLK;
-        case 4: return NBLK;
-        };
-        return EOS;
+      for (size_t i = 0; i < 1000; ++i) ff_send_out((long *)(i + 1));
+      ++rounds;
+      return BLK;
     }
-    ff_loadbalancer *const lb;
+
+    for (size_t i = rounds * 1000; i < (rounds * 1000 + 1000); ++i)
+      ff_send_out((long *)(i + 1));
+    ++rounds;
+    switch (rounds) {
+    case 2:
+      return NBLK;
+    case 3:
+      return BLK;
+    case 4:
+      return NBLK;
+    };
+    return EOS;
+  }
+  ff_loadbalancer *const lb;
 };
 
-struct Worker: ff_node_t<long> {
-    long *svc(long *task) { 
-        printf("Worker%ld, received %ld\n", get_my_id(), reinterpret_cast<long>(task));
-        usleep(get_my_id()*50000);
-        return task; 
-    }
+struct Worker : ff_node_t<long> {
+  long *svc(long *task) {
+    printf(
+        "Worker%ld, received %ld\n", get_my_id(), reinterpret_cast<long>(task));
+    usleep(get_my_id() * 50000);
+    return task;
+  }
 };
-
 
 int main() {
-    const size_t nworkers = 3;
-    ff_Farm<> farm(  [nworkers]() { 
-	    std::vector<std::unique_ptr<ff_node> > W;
-	    for(size_t i=0;i<nworkers;++i)  W.push_back(make_unique<Worker>());
-	    return W;
-	} () );
-    Scheduler sched(farm.getlb());
-    farm.add_emitter(sched);
-    farm.remove_collector();
-    farm.setFixedSize(true);
-    farm.setInputQueueLength(1);
-    farm.setOutputQueueLength(1);
-    farm.wrap_around();
-    farm.run_and_wait_end();
-    return 0;
+  const size_t nworkers = 3;
+  ff_Farm<> farm([nworkers]() {
+    std::vector<std::unique_ptr<ff_node>> W;
+    for (size_t i = 0; i < nworkers; ++i) W.push_back(make_unique<Worker>());
+    return W;
+  }());
+  Scheduler sched(farm.getlb());
+  farm.add_emitter(sched);
+  farm.remove_collector();
+  farm.setFixedSize(true);
+  farm.setInputQueueLength(1);
+  farm.setOutputQueueLength(1);
+  farm.wrap_around();
+  farm.run_and_wait_end();
+  return 0;
 }

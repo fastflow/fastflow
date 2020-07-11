@@ -37,131 +37,139 @@
 #include <sstream>
 #define DEBUG
 #ifdef DEBUG
-#define DPRINT(s) \
-{ \
-    std::ostringstream ss; \
-    ss << "[" << pthread_self() << "]: " << s << std::endl; \
-    std::clog << ss.str(); \
-}
+#define DPRINT(s)                                                              \
+  {                                                                            \
+    std::ostringstream ss;                                                     \
+    ss << "[" << pthread_self() << "]: " << s << std::endl;                    \
+    std::clog << ss.str();                                                     \
+  }
 #else
-    #define DPRINT(s)
+#define DPRINT(s)
 #endif
-
 
 using namespace ff;
 
 // generic worker
-class Worker: public ff_node {
+class Worker : public ff_node {
 public:
-    void * svc(void * task) {
-        
-        int * t = (int *)task;
+  void *svc(void *task) {
 
-        ff_mapThreadToCpu(2, 0);
-        
-        DPRINT( "Worker [" << ff_node::get_my_id() << "] : received task " << *t );
+    int *t = (int *)task;
 
-        DPRINT( "Worker ["<< ff_node::get_my_id() <<"] is mapped to the POSIX thread ID as : " << ff_getThreadID() );
+    ff_mapThreadToCpu(2, 0);
 
-        DPRINT( "Worker ["<< ff_node::get_my_id() <<"] is mapped to the core ID : " << ff_getMyCore() );
+    DPRINT("Worker [" << ff_node::get_my_id() << "] : received task " << *t);
 
-        return task;
-    }
-    // I don't need the following functions for this test
-    //int   svc_init() { return 0; }
-    //void  svc_end() {}
+    DPRINT("Worker [" << ff_node::get_my_id()
+                      << "] is mapped to the POSIX thread ID as : "
+                      << ff_getThreadID());
 
+    DPRINT("Worker [" << ff_node::get_my_id()
+                      << "] is mapped to the core ID : " << ff_getMyCore());
+
+    return task;
+  }
+  // I don't need the following functions for this test
+  //int   svc_init() { return 0; }
+  //void  svc_end() {}
 };
 
 // the gatherer filter
-class Collector: public ff_node {
+class Collector : public ff_node {
 public:
-    void * svc(void * task) {
-        int * t = (int *)task;
-        if (*t == -1) return NULL;
+  void *svc(void *task) {
+    int *t = (int *)task;
+    if (*t == -1) return NULL;
 
-        ff_mapThreadToCpu(3, 0);
-        
-        DPRINT( "Collector [" << ff_node::get_my_id() << "] is mapped to the POSIX thread ID as : " << ff_getThreadID() );
-        
-        DPRINT( "Collector [" << ff_node::get_my_id() << "] is mapped to the core ID : " << ff_getMyCore() );
-        
-        return task;
-    }
+    ff_mapThreadToCpu(3, 0);
+
+    DPRINT("Collector [" << ff_node::get_my_id()
+                         << "] is mapped to the POSIX thread ID as : "
+                         << ff_getThreadID());
+
+    DPRINT("Collector [" << ff_node::get_my_id()
+                         << "] is mapped to the core ID : " << ff_getMyCore());
+
+    return task;
+  }
 };
 
 // the load-balancer filter
-class Emitter: public ff_node {
+class Emitter : public ff_node {
 public:
-    Emitter(int max_task):ntask(max_task) {};
+  Emitter(int max_task) : ntask(max_task){};
 
-    void * svc(void *) {
-        int * task = new int(ntask);
-        --ntask;
-        if (ntask<0) return NULL;
-        
-        ff_mapThreadToCpu(1, 0);
+  void *svc(void *) {
+    int *task = new int(ntask);
+    --ntask;
+    if (ntask < 0) return NULL;
 
-        DPRINT( "Emitter [" << ff_node::get_my_id() << "] is mapped to the POSIX thread ID as : " << ff_getThreadID() );
-        
-        DPRINT( "Emitter [" << ff_node::get_my_id() <<"] is mapped to the core ID : " << ff_getMyCore() );
-        
-        return task;
-    }
+    ff_mapThreadToCpu(1, 0);
+
+    DPRINT("Emitter [" << ff_node::get_my_id()
+                       << "] is mapped to the POSIX thread ID as : "
+                       << ff_getThreadID());
+
+    DPRINT("Emitter [" << ff_node::get_my_id()
+                       << "] is mapped to the core ID : " << ff_getMyCore());
+
+    return task;
+  }
+
 private:
-    int ntask;
+  int ntask;
 };
 
+int main(int argc, char *argv[]) {
 
-int main(int argc, char * argv[]) {
+  if (argc < 3) {
+    std::cerr << "use: " << argv[0] << " nworkers streamlen\n";
+    return -1;
+  }
+  std::cout << "*********************************************"
+            << "\n";
 
-    if (argc<3) {
-        std::cerr << "use: " 
-                  << argv[0] 
-                  << " nworkers streamlen\n";
-        return -1;
-    }
-    std::cout << "*********************************************" << "\n";
-    
-    std::cout << "The number of cores on the host machine are : "
-              << ff_numCores() << "\n";
+  std::cout << "The number of cores on the host machine are : " << ff_numCores()
+            << "\n";
 
-    std::cout << "The frequency of the core where the main function is running : "
-              << ff_getCpuFreq() << "\n";
+  std::cout << "The frequency of the core where the main function is running : "
+            << ff_getCpuFreq() << "\n";
 
-    std::cout << "The core ID where the main function is running : "
-              << ff_getMyCore() << "\n";
+  std::cout << "The core ID where the main function is running : "
+            << ff_getMyCore() << "\n";
 
-    std::cout << "The cache line size of the core : " << cache_line_size() << "\n";
+  std::cout << "The cache line size of the core : " << cache_line_size()
+            << "\n";
 
-    std::cout << "*********************************************" << "\n";
+  std::cout << "*********************************************"
+            << "\n";
 
-    int nworkers=atoi(argv[1]);
-    int streamlen=atoi(argv[2]);
+  int nworkers = atoi(argv[1]);
+  int streamlen = atoi(argv[2]);
 
-    if (!nworkers || !streamlen) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
-    }
-    
-    ff_farm<> farm; // farm object
-    
-    Emitter E(streamlen);
-    farm.add_emitter(&E);
+  if (!nworkers || !streamlen) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
 
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
-    farm.add_workers(w); // add all workers to the farm
+  ff_farm<> farm; // farm object
 
-    Collector C;
-    farm.add_collector(&C);
-    
-    if (farm.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
-    }
-    std::cerr << "DONE, time= " << farm.ffTime() << " (ms)\n";
-    farm.ffStats(std::cerr);
+  Emitter E(streamlen);
+  farm.add_emitter(&E);
 
-    return 0;
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) w.push_back(new Worker);
+  farm.add_workers(w); // add all workers to the farm
+
+  Collector C;
+  farm.add_collector(&C);
+
+  if (farm.run_and_wait_end() < 0) {
+    error("running farm\n");
+    return -1;
+  }
+  std::cerr << "DONE, time= " << farm.ffTime() << " (ms)\n";
+  farm.ffStats(std::cerr);
+
+  return 0;
 }

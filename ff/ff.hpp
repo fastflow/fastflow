@@ -1,6 +1,5 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-
 /* ***************************************************************************
  *
  *  This program is free software; you can redistribute it and/or modify it
@@ -30,7 +29,7 @@
 #include <ff/all2all.hpp>
 #include <ff/combine.hpp>
 #include <ff/optimize.hpp>
-#include<ff/ordering_policies.hpp>
-#include<ff/graph_utils.hpp>
+#include <ff/ordering_policies.hpp>
+#include <ff/graph_utils.hpp>
 
 #endif /* FF_FF_HPP */

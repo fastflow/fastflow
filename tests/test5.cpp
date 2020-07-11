@@ -46,153 +46,144 @@ using namespace ff;
 #include <ff/allocator.hpp>
 static ff_allocator ffalloc;
 #define MALLOC(X) ffalloc.malloc(X)
-#define FREE(X)   ffalloc.free(X)
+#define FREE(X) ffalloc.free(X)
 #else
 #define MALLOC(X) ::malloc(X)
-#define FREE(X)   ::free(X)
+#define FREE(X) ::free(X)
 #endif
 
-class Stage1: public ff_node {
+class Stage1 : public ff_node {
 public:
-    Stage1(unsigned int streamlen):streamlen(streamlen),cnt(0){}
+  Stage1(unsigned int streamlen) : streamlen(streamlen), cnt(0) {}
 
-    void * svc(void *) {
-        int * t;
-        t = (int*)MALLOC(sizeof(int));
-        if (!t) abort();
-        
-        *t=cnt++;
-        if (cnt > streamlen) {
-            FREE(t);
-            t = NULL; // EOS
-        }
-        return t;
+  void *svc(void *) {
+    int *t;
+    t = (int *)MALLOC(sizeof(int));
+    if (!t) abort();
+
+    *t = cnt++;
+    if (cnt > streamlen) {
+      FREE(t);
+      t = NULL; // EOS
     }
+    return t;
+  }
 #if defined(USE_FF_ALLOCATOR)
-    int   svc_init() { 
-        if (ffalloc.registerAllocator()<0) {
-            error("registerAllocator fails\n");
-            return -1;
-        }
-        return 0; 
+  int svc_init() {
+    if (ffalloc.registerAllocator() < 0) {
+      error("registerAllocator fails\n");
+      return -1;
     }
+    return 0;
+  }
 #endif
 
 private:
-    unsigned int streamlen;
-    unsigned int cnt;
+  unsigned int streamlen;
+  unsigned int cnt;
 };
 
-
-class Stage2_1: public ff_node {
+class Stage2_1 : public ff_node {
 public:
-    void * svc(void * task) {
-        return task;
-    }
+  void *svc(void *task) { return task; }
 };
 
-class Stage2_2: public ff_node {
+class Stage2_2 : public ff_node {
 public:
-    void * svc(void * task) {
-        return task;
-    }
+  void *svc(void *task) { return task; }
 };
 
-class Stage3: public ff_node {
+class Stage3 : public ff_node {
 public:
-    Stage3():sum(0){}
+  Stage3() : sum(0) {}
 
-    void * svc(void * task) {
-        int * t = (int *)task;
-        if (!t)  abort();
-        sum +=*t;
-        FREE(task);
-        task = GO_ON; // we want to be sure to continue
-        return task;
-    }
+  void *svc(void *task) {
+    int *t = (int *)task;
+    if (!t) abort();
+    sum += *t;
+    FREE(task);
+    task = GO_ON; // we want to be sure to continue
+    return task;
+  }
 #if defined(USE_FF_ALLOCATOR)
-    int   svc_init() { 
-        if (ffalloc.register4free()<0) {
-            error("register4free fails\n");
-            return -1;
-        }
-        
-        return 0; 
+  int svc_init() {
+    if (ffalloc.register4free() < 0) {
+      error("register4free fails\n");
+      return -1;
     }
-#endif
-    void  svc_end() {
-        std::cout << "Sum: " << sum << "\n";
-    }
-
-private:
-    unsigned int sum;
-};
-
-
-
-int main(int argc, char * argv[]) {
-    int streamlen=1000;
-    if (argc>1) {
-        if (argc!=2) {
-            std::cerr << "use: "  << argv[0] << " streamlen\n";
-            return -1;
-        }
-        streamlen = atoi(argv[1]);
-    }
-
-#if defined(USE_FF_ALLOCATOR)
-    // init allocator
-    ffalloc.init();
-#endif
-
-#if 1 // first version using cleanup_nodes 
-    ff_pipeline pipe;
-    pipe.add_stage(new Stage1(streamlen));
-
-    ff_pipeline *pipe2=new ff_pipeline;
-    pipe2->cleanup_nodes();  // cleanup at exit
-    pipe2->add_stage(new Stage2_1);
-    pipe2->add_stage(new Stage2_2);
-
-    // add the farm module as a second pipeline stage
-    pipe.add_stage(pipe2);
-
-    // add last stage to the main pipeline
-    pipe.add_stage(new Stage3);
-
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipeline\n");
-        return -1;
-    }
-    pipe.cleanup_nodes(); // cleanup at exit
-#else // second version allocating stages on the stack 
-
-    // build main pipeline
-    ff_pipeline pipe2; // must be before pipe, because of destruction sequence
-    ff_pipeline pipe;
-
-    Stage1 s1(streamlen);
-    pipe.add_stage(&s1);
-
-    Stage2_1 s21;
-    Stage2_2 s22;
-    pipe2.add_stage(&s21);
-    pipe2.add_stage(&s22);
-
-    // add the farm module as a second pipeline stage
-    pipe.add_stage(&pipe2);
-
-    // add last stage to the main pipeline
-    Stage3 s3;
-    pipe.add_stage(&s3);
-
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipeline\n");
-        return -1;
-    }
-    // no cleanup needed here
-#endif
-    pipe.ffStats(std::cout);
 
     return 0;
+  }
+#endif
+  void svc_end() { std::cout << "Sum: " << sum << "\n"; }
+
+private:
+  unsigned int sum;
+};
+
+int main(int argc, char *argv[]) {
+  int streamlen = 1000;
+  if (argc > 1) {
+    if (argc != 2) {
+      std::cerr << "use: " << argv[0] << " streamlen\n";
+      return -1;
+    }
+    streamlen = atoi(argv[1]);
+  }
+
+#if defined(USE_FF_ALLOCATOR)
+  // init allocator
+  ffalloc.init();
+#endif
+
+#if 1 // first version using cleanup_nodes
+  ff_pipeline pipe;
+  pipe.add_stage(new Stage1(streamlen));
+
+  ff_pipeline *pipe2 = new ff_pipeline;
+  pipe2->cleanup_nodes(); // cleanup at exit
+  pipe2->add_stage(new Stage2_1);
+  pipe2->add_stage(new Stage2_2);
+
+  // add the farm module as a second pipeline stage
+  pipe.add_stage(pipe2);
+
+  // add last stage to the main pipeline
+  pipe.add_stage(new Stage3);
+
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipeline\n");
+    return -1;
+  }
+  pipe.cleanup_nodes(); // cleanup at exit
+#else                   // second version allocating stages on the stack
+
+  // build main pipeline
+  ff_pipeline pipe2; // must be before pipe, because of destruction sequence
+  ff_pipeline pipe;
+
+  Stage1 s1(streamlen);
+  pipe.add_stage(&s1);
+
+  Stage2_1 s21;
+  Stage2_2 s22;
+  pipe2.add_stage(&s21);
+  pipe2.add_stage(&s22);
+
+  // add the farm module as a second pipeline stage
+  pipe.add_stage(&pipe2);
+
+  // add last stage to the main pipeline
+  Stage3 s3;
+  pipe.add_stage(&s3);
+
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipeline\n");
+    return -1;
+  }
+  // no cleanup needed here
+#endif
+  pipe.ffStats(std::cout);
+
+  return 0;
 }

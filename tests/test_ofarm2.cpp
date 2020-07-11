@@ -38,112 +38,109 @@
  *  ordered farm!               
  */
 
-
 #include <vector>
 #include <iostream>
 #include <ff/ff.hpp>
 using namespace ff;
 
-class Start: public ff_monode_t<long> {
+class Start : public ff_monode_t<long> {
 public:
-    Start(long streamlen):streamlen(streamlen) {}
-    long* svc(long*) {    
-        if (--streamlen) {
+  Start(long streamlen) : streamlen(streamlen) {}
+  long *svc(long *) {
+    if (--streamlen) {
 #if !defined(TEST_BROADCAST)
-            ff_send_out((long*)streamlen);
-#else            
-            broadcast_task((long*)streamlen);
-#endif            
-            return GO_ON;
-        }
-        return EOS;
-    }
-private:
-    long streamlen;
-};
-
-
-class Worker1: public ff_node_t<long> {
-public:
-    long * svc(long * task) {
-        printf("Worker received task %ld\n", (long)task);
-        if (get_my_id() == 0) usleep(random() % 20000);
-        return task;
-    }
-};
-
-
-class Stop: public ff_minode_t<long> {
-public:
-    Stop(long streamlen):
-        expected(streamlen),error(false) {}
-
-    long* svc(long* task) {    
-        long t = (long)task;
-        printf("received %ld from %ld\n", t, get_channel_id());
-
-#if !defined(TEST_BROADCAST)        
-        if (t != --expected) {
-            printf("ERROR: task received out of order, received %ld expected %ld\n", t, expected);
-            error = true;
-        }
+      ff_send_out((long *)streamlen);
 #else
-        --expected;
-        std::vector<long*> V;
-        all_gather(task,V);
-        for(size_t i=0;i<V.size();++i) {
-            auto t = (long)V[i];
-            if (t != expected) {
-                printf("ERROR: task received out of order, received %ld expected %ld\n", t, expected);
-                error = true;
-            }
-        }
+      broadcast_task((long *)streamlen);
+#endif
+      return GO_ON;
+    }
+    return EOS;
+  }
+
+private:
+  long streamlen;
+};
+
+class Worker1 : public ff_node_t<long> {
+public:
+  long *svc(long *task) {
+    printf("Worker received task %ld\n", (long)task);
+    if (get_my_id() == 0) usleep(random() % 20000);
+    return task;
+  }
+};
+
+class Stop : public ff_minode_t<long> {
+public:
+  Stop(long streamlen) : expected(streamlen), error(false) {}
+
+  long *svc(long *task) {
+    long t = (long)task;
+    printf("received %ld from %ld\n", t, get_channel_id());
+
+#if !defined(TEST_BROADCAST)
+    if (t != --expected) {
+      printf("ERROR: task received out of order, received %ld expected %ld\n",
+          t, expected);
+      error = true;
+    }
+#else
+    --expected;
+    std::vector<long *> V;
+    all_gather(task, V);
+    for (size_t i = 0; i < V.size(); ++i) {
+      auto t = (long)V[i];
+      if (t != expected) {
+        printf("ERROR: task received out of order, received %ld expected %ld\n",
+            t, expected);
+        error = true;
+      }
+    }
 
 #endif
-        return GO_ON;
-    }
-    void svc_end() {
-        if (error) abort();
-    }
+    return GO_ON;
+  }
+  void svc_end() {
+    if (error) abort();
+  }
+
 private:
-    long expected;
-    bool error;
+  long expected;
+  bool error;
 };
 
-
-int main(int argc, char * argv[]) {
-    int nworkers = 3;
-    long streamlen = 1000;
-    if (argc>1) {
-        if (argc<3) {
-            std::cerr << "use: " 
-                      << argv[0] 
-                      << " nworkers streamlen\n";
-            return -1;
-        }
-               
-        nworkers=atoi(argv[1]);
-        streamlen=atol(argv[2]);
+int main(int argc, char *argv[]) {
+  int nworkers = 3;
+  long streamlen = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use: " << argv[0] << " nworkers streamlen\n";
+      return -1;
     }
 
-    if (nworkers<=0 || streamlen<=0) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
-    }
-    srandom(131071);
-        
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker1);
-    ff_farm ofarm(w, new Start(streamlen), new Stop(streamlen));
-    ofarm.set_ordered();               // ordered farm
-    ofarm.set_scheduling_ondemand();   // auto-scheduling policy 
-    ofarm.cleanup_all();
+    nworkers = atoi(argv[1]);
+    streamlen = atol(argv[2]);
+  }
 
-    if (ofarm.run_and_wait_end()<0) {
-        error("running ofarm\n");
-        return -1;
-    }
+  if (nworkers <= 0 || streamlen <= 0) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
+  srandom(131071);
 
-    std::cerr << "DONE\n";
-    return 0;
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) w.push_back(new Worker1);
+  ff_farm ofarm(w, new Start(streamlen), new Stop(streamlen));
+  ofarm.set_ordered();             // ordered farm
+  ofarm.set_scheduling_ondemand(); // auto-scheduling policy
+  ofarm.cleanup_all();
+
+  if (ofarm.run_and_wait_end() < 0) {
+    error("running ofarm\n");
+    return -1;
+  }
+
+  std::cerr << "DONE\n";
+  return 0;
 }

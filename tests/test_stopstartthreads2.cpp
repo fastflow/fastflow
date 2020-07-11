@@ -40,101 +40,95 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-class Emitter: public ff_node {
+class Emitter : public ff_node {
 protected:
-    void stop_workers() {
-        size_t nw = lb->getnworkers();
-        for(size_t i=0; i<nw;++i)  {
-            lb->ff_send_out_to(GO_OUT, i);
-        }
-        for(size_t i=0;i<nw;++i) {
-            lb->wait_freezing(i);
-        }
+  void stop_workers() {
+    size_t nw = lb->getnworkers();
+    for (size_t i = 0; i < nw; ++i) {
+      lb->ff_send_out_to(GO_OUT, i);
     }
-    void wakeup_workers(bool freeze=true) {
-        for(size_t i=0;i<lb->getnworkers();++i)
-            lb->thaw(i,freeze);
+    for (size_t i = 0; i < nw; ++i) {
+      lb->wait_freezing(i);
     }
+  }
+  void wakeup_workers(bool freeze = true) {
+    for (size_t i = 0; i < lb->getnworkers(); ++i) lb->thaw(i, freeze);
+  }
+
 public:
-    Emitter(ff_loadbalancer *const lb):lb(lb) {}
-    
-    int svc_init() {
-        // set freezing flag to all workers
-        for(size_t i=0;i<lb->getnworkers();++i)
-            lb->freeze(i);
-        stop_workers();
+  Emitter(ff_loadbalancer *const lb) : lb(lb) {}
 
-        return 0;
-    }
-    void *svc(void *) {
-        
-        for(int i=0;i<10; ++i) {
-            printf("iter %d\n", i);
-            usleep(i*10000);
+  int svc_init() {
+    // set freezing flag to all workers
+    for (size_t i = 0; i < lb->getnworkers(); ++i) lb->freeze(i);
+    stop_workers();
 
-            // restart all workers
-            wakeup_workers();
-            
-            // do something here
-            for(size_t j=0;j<lb->getnworkers();++j)
-                lb->ff_send_out_to(new int(j), j);
-            
-            // put workers to sleep
-            stop_workers();
-        }
-        // restart workers before sending EOS
-        wakeup_workers(false);
-        return EOS;
+    return 0;
+  }
+  void *svc(void *) {
+
+    for (int i = 0; i < 10; ++i) {
+      printf("iter %d\n", i);
+      usleep(i * 10000);
+
+      // restart all workers
+      wakeup_workers();
+
+      // do something here
+      for (size_t j = 0; j < lb->getnworkers(); ++j)
+        lb->ff_send_out_to(new int(j), j);
+
+      // put workers to sleep
+      stop_workers();
     }
-    
-    void svc_end() {
-        printf("Emitter exiting\n");
-    }
+    // restart workers before sending EOS
+    wakeup_workers(false);
+    return EOS;
+  }
+
+  void svc_end() { printf("Emitter exiting\n"); }
+
 private:
-    ff_loadbalancer *const lb;
+  ff_loadbalancer *const lb;
 };
 
-
-class Worker:public ff_node {
+class Worker : public ff_node {
 public:
-
-    int svc_init() {
-        printf("worker %ld started\n", get_my_id());
-        return 0;
-    }
-    void *svc(void *t) {
-        printf("worker %ld received %d\n", get_my_id(), *(int*)t);
-        return GO_ON;
-    }
-    void svc_end() {
-        printf("worker %ld going to sleep\n", get_my_id());
-    }
+  int svc_init() {
+    printf("worker %ld started\n", get_my_id());
+    return 0;
+  }
+  void *svc(void *t) {
+    printf("worker %ld received %d\n", get_my_id(), *(int *)t);
+    return GO_ON;
+  }
+  void svc_end() { printf("worker %ld going to sleep\n", get_my_id()); }
 };
 
 int main(int argc, char *argv[]) {
 #if defined(BLOCKING_MODE)
-    printf("TODO: mixing dynamic behavior and blocking mode has not been tested yet!!!!!\n");
-    return 0;
+  printf("TODO: mixing dynamic behavior and blocking mode has not been tested "
+         "yet!!!!!\n");
+  return 0;
 #endif
 
-    int nworkers = 3;
-    if (argc>1) {
-        if (argc!=2) {
-            printf("use: %s nworkers\n",argv[0]);
-            return -1;
-        }
-        
-        nworkers = atoi(argv[1]);
+  int nworkers = 3;
+  if (argc > 1) {
+    if (argc != 2) {
+      printf("use: %s nworkers\n", argv[0]);
+      return -1;
     }
-    ff_farm farm;
-    std::vector<ff_node*> w;
-    for(int i=0;i<nworkers;++i)
-        w.push_back(new Worker);
-    farm.add_workers(w);
-    farm.add_emitter(new Emitter(farm.getlb()));
-    
-    farm.run();
-    farm.getlb()->waitlb();
 
-    return 0;
+    nworkers = atoi(argv[1]);
+  }
+  ff_farm farm;
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) w.push_back(new Worker);
+  farm.add_workers(w);
+  farm.add_emitter(new Emitter(farm.getlb()));
+
+  farm.run();
+  farm.getlb()->waitlb();
+
+  return 0;
 }

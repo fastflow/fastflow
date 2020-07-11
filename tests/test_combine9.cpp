@@ -44,57 +44,53 @@
 
 using namespace ff;
 
-struct Emitter: ff_monode_t<long> { 
-    long *svc(long*) {
-        size_t n = get_num_outchannels();
-        for(long i=1;i<=10;++i) 
-            ff_send_out_to((long*)i, i % n);
-        return EOS;
-    }
+struct Emitter : ff_monode_t<long> {
+  long *svc(long *) {
+    size_t n = get_num_outchannels();
+    for (long i = 1; i <= 10; ++i) ff_send_out_to((long *)i, i % n);
+    return EOS;
+  }
 };
-struct Worker: ff_node_t<long> {
-    long *svc(long *in) {
-        return in;
-    }
+struct Worker : ff_node_t<long> {
+  long *svc(long *in) { return in; }
 };
-struct Filter1: ff_node_t<long> {
-    long *svc(long *in) {
-        printf("Filter1: %ld\n", (long)in);
-        return in;
-    }
+struct Filter1 : ff_node_t<long> {
+  long *svc(long *in) {
+    printf("Filter1: %ld\n", (long)in);
+    return in;
+  }
 };
-struct Filter2: ff_node_t<long> {
-    long *svc(long *in) {
-        printf("Filter2: %ld\n", (long)in);
-        return in;
-    }
+struct Filter2 : ff_node_t<long> {
+  long *svc(long *in) {
+    printf("Filter2: %ld\n", (long)in);
+    return in;
+  }
 };
-struct Gatherer: ff_node_t<long> {
-    long *svc(long *in) {
-	printf("Gatherer: %ld\n", (long)in);
-	return GO_ON;
-    }
+struct Gatherer : ff_node_t<long> {
+  long *svc(long *in) {
+    printf("Gatherer: %ld\n", (long)in);
+    return GO_ON;
+  }
 };
 
 int main() {
-    Emitter E;
-    Gatherer G;
-    
-    std::vector<std::unique_ptr<ff_node>> W;
-    W.push_back(make_unique<Worker>());
-    //W.push_back(make_unique<Worker>());
+  Emitter E;
+  Gatherer G;
 
-    ff_Farm<> farm(std::move(W), E);
-    Filter1 f1;
-    Filter2 f2;
-    auto comb = combine_nodes(f1, f2);
-    farm.add_collector(comb);
+  std::vector<std::unique_ptr<ff_node>> W;
+  W.push_back(make_unique<Worker>());
+  //W.push_back(make_unique<Worker>());
 
-    ff_Pipe<>  pipe(farm, G);
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipe\n");
-        return -1;
-    }
-    return 0;
+  ff_Farm<> farm(std::move(W), E);
+  Filter1 f1;
+  Filter2 f2;
+  auto comb = combine_nodes(f1, f2);
+  farm.add_collector(comb);
+
+  ff_Pipe<> pipe(farm, G);
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+  return 0;
 }
-

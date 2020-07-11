@@ -48,74 +48,72 @@ using namespace ff;
 /*
  * NOTE: this is a multi-input node
  */
-class MU: public ff_minode {
+class MU : public ff_minode {
 public:
-    MU(int numtasks):
-        numtasks(numtasks), k(0) {}
+  MU(int numtasks) : numtasks(numtasks), k(0) {}
 
-    void* svc(void* task) {
-        if (task==NULL) {
-            printf("MU starting producing tasks\n");
-            for(long i=1;i<=numtasks;++i)
-                ff_send_out((void*)i);
-            return GO_ON;
-        }
-
-        long t = (long)task;
-        if (--t > 0) ff_send_out((void*)t);
-        else if (++k == numtasks) return EOS;
-        return GO_ON;
+  void *svc(void *task) {
+    if (task == NULL) {
+      printf("MU starting producing tasks\n");
+      for (long i = 1; i <= numtasks; ++i) ff_send_out((void *)i);
+      return GO_ON;
     }
+
+    long t = (long)task;
+    if (--t > 0)
+      ff_send_out((void *)t);
+    else if (++k == numtasks)
+      return EOS;
+    return GO_ON;
+  }
+
 private:
-    long numtasks;
-    long k;
+  long numtasks;
+  long k;
 };
 
-struct Scheduler: public ff_node {
-    void* svc(void* task) {        
-        return task;
-    }
+struct Scheduler : public ff_node {
+  void *svc(void *task) { return task; }
 };
 
-struct FU: public ff_node {
-    void* svc(void* task) {
-        printf("FU (%ld) got one task (%ld)\n", get_my_id(), (long)task);
-        return task;
-    }
+struct FU : public ff_node {
+  void *svc(void *task) {
+    printf("FU (%ld) got one task (%ld)\n", get_my_id(), (long)task);
+    return task;
+  }
 };
 
-
-int main(int argc, char* argv[]) {
-    int nw=3;
-    int numtasks=1000;
-    if (argc>1) {
-        if (argc < 3) {
-            std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";
-            return -1;
-        }
-        nw=atoi(argv[1]);
-        numtasks=atoi(argv[2]); 
+int main(int argc, char *argv[]) {
+  int nw = 3;
+  int numtasks = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use:\n"
+                << " " << argv[0] << " numworkers ntasks\n";
+      return -1;
     }
+    nw = atoi(argv[1]);
+    numtasks = atoi(argv[2]);
+  }
 
-    ff_pipeline pipe;
-    ff_farm     farm;
+  ff_pipeline pipe;
+  ff_farm farm;
 
-    std::vector<ff_node *> w;
-    for(int i=0;i<nw;++i) 
-        w.push_back(new FU);
-    farm.add_emitter(new Scheduler);
-    farm.add_workers(w);
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nw; ++i) w.push_back(new FU);
+  farm.add_emitter(new Scheduler);
+  farm.add_workers(w);
 
-    pipe.add_stage(new MU(numtasks));
-    pipe.add_stage(&farm);
-    
-    /* this is needed to allow the creation of output buffer in the 
+  pipe.add_stage(new MU(numtasks));
+  pipe.add_stage(&farm);
+
+  /* this is needed to allow the creation of output buffer in the 
      * farm workers 
      */
-    farm.remove_collector();
+  farm.remove_collector();
 
-    pipe.wrap_around();    
-    pipe.run_and_wait_end();
+  pipe.wrap_around();
+  pipe.run_and_wait_end();
 
-    return 0;
+  return 0;
 }

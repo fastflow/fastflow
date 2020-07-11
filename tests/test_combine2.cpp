@@ -50,65 +50,60 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-struct Emitter: ff_monode_t<long> { 
-    long *svc(long*) {
-        size_t n = get_num_outchannels();
-        for(long i=1;i<=100;++i) 
-            ff_send_out_to((long*)i, i % n);
-        return EOS;
-    }
+struct Emitter : ff_monode_t<long> {
+  long *svc(long *) {
+    size_t n = get_num_outchannels();
+    for (long i = 1; i <= 100; ++i) ff_send_out_to((long *)i, i % n);
+    return EOS;
+  }
 };
-struct Worker1: ff_node_t<long> {
-    long *svc(long *in) {
-        return in;
-    }
+struct Worker1 : ff_node_t<long> {
+  long *svc(long *in) { return in; }
 };
-struct Worker2: ff_node_t<long> {
-    long *svc(long *in) {
-        printf("Worker2 (id=%ld) in=%ld\n", get_my_id(), (long)in);
-        return in;
-    }
+struct Worker2 : ff_node_t<long> {
+  long *svc(long *in) {
+    printf("Worker2 (id=%ld) in=%ld\n", get_my_id(), (long)in);
+    return in;
+  }
 };
-struct Filter1: ff_minode_t<long> {  
-    long *svc(long *in) {
-        std::cout << "received input from " << get_channel_id() << "\n";
-        return in;
-    }
+struct Filter1 : ff_minode_t<long> {
+  long *svc(long *in) {
+    std::cout << "received input from " << get_channel_id() << "\n";
+    return in;
+  }
 };
 
-struct Filter2: ff_node_t<long> {
-	long *svc(long *in) {
-        std::cout << get_my_id() << ": " << (long)in << "\n";
-        return GO_ON;
-    }
+struct Filter2 : ff_node_t<long> {
+  long *svc(long *in) {
+    std::cout << get_my_id() << ": " << (long)in << "\n";
+    return GO_ON;
+  }
 };
 
 int main() {
 
-    Emitter E;
+  Emitter E;
 
-    Worker1 w11, w12, w13;
-    Worker2 w21, w22, w23;
-    std::vector<std::unique_ptr<ff_node>> W;
-    
-    W.push_back(unique_combine_nodes(w11,w21));
-    W.push_back(unique_combine_nodes(w12,w22));
-    W.push_back(unique_combine_nodes(w13,w23));
+  Worker1 w11, w12, w13;
+  Worker2 w21, w22, w23;
+  std::vector<std::unique_ptr<ff_node>> W;
 
-    
-    ff_Farm<> farm(std::move(W), E);
-    farm.remove_collector();
+  W.push_back(unique_combine_nodes(w11, w21));
+  W.push_back(unique_combine_nodes(w12, w22));
+  W.push_back(unique_combine_nodes(w13, w23));
 
-    Filter1 f1;
-    Filter2 f2;
-    
-    ff_Pipe<> pipe(farm, combine_nodes(f1,f2));
+  ff_Farm<> farm(std::move(W), E);
+  farm.remove_collector();
 
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipe\n");
-        return -1;
-    }
-    
-    return 0;
+  Filter1 f1;
+  Filter2 f2;
+
+  ff_Pipe<> pipe(farm, combine_nodes(f1, f2));
+
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+
+  return 0;
 }
-
