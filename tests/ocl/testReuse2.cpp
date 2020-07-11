@@ -29,7 +29,7 @@
  *  
  */
 
-// REPARA code:    
+// REPARA code:
 //
 //     initInput(A,S);
 //
@@ -56,172 +56,167 @@
 #include <ff/stencilReduceOCL.hpp>
 using namespace ff;
 
-enum class Device { CPU=0, GPU=1}; 
-static Device kernel1_device=Device::GPU, kernel2_device=Device::GPU;
+enum class Device { CPU = 0, GPU = 1 };
+static Device kernel1_device = Device::GPU, kernel2_device = Device::GPU;
 
 /* -------------- First and second task types ----------- */
 struct Task1 {
-    Task1(std::vector<float> &A):A(A) {}
-    std::vector<float> &A;
+  Task1(std::vector<float> &A) : A(A) {}
+  std::vector<float> &A;
 };
 struct Task2 {
-    Task2(std::vector<float> &A, std::vector<float> &S):A(A),S(S) {}
-    std::vector<float> &A;
-    std::vector<float> &S;
+  Task2(std::vector<float> &A, std::vector<float> &S) : A(A), S(S) {}
+  std::vector<float> &A;
+  std::vector<float> &S;
 };
 
 /* --------- OpenCL interface object task types --------- */
-struct oclTask1: public baseOCLTask<Task1, float> {
-    oclTask1() {}
-    void setTask(Task1 *t) { 
+struct oclTask1 : public baseOCLTask<Task1, float> {
+  oclTask1() {}
+  void setTask(Task1 *t) {
 
-        MemoryFlags mfin(CopyFlags::COPY,  ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
-        MemoryFlags mfout(CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
+    MemoryFlags mfin(
+        CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
+    MemoryFlags mfout(
+        CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
 
-        if (kernel1_device == Device::GPU && kernel2_device == kernel1_device) 
-            mfout.copy=CopyFlags::DONTCOPY;
+    if (kernel1_device == Device::GPU && kernel2_device == kernel1_device)
+      mfout.copy = CopyFlags::DONTCOPY;
 
-        setInPtr(t->A.data(), t->A.size(),  mfin);  // set host input pointer
-        setOutPtr(t->A.data(), t->A.size(), mfout); // set host output pointer
-    }
+    setInPtr(t->A.data(), t->A.size(), mfin);   // set host input pointer
+    setOutPtr(t->A.data(), t->A.size(), mfout); // set host output pointer
+  }
 };
 
-struct oclTask2: public baseOCLTask<Task2, float> {
-    oclTask2() {}
-    void setTask(Task2 *t) { 
-        MemoryFlags mfin(CopyFlags::COPY,  ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
-        MemoryFlags mfout(CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
-        
-        if (kernel1_device == Device::GPU && kernel2_device == kernel1_device) {
-            mfin.copy=CopyFlags::DONTCOPY, mfin.reuse=ReuseFlags::REUSE;
-        }
+struct oclTask2 : public baseOCLTask<Task2, float> {
+  oclTask2() {}
+  void setTask(Task2 *t) {
+    MemoryFlags mfin(
+        CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
+    MemoryFlags mfout(
+        CopyFlags::COPY, ReuseFlags::DONTREUSE, ReleaseFlags::DONTRELEASE);
 
-        setInPtr(t->A.data(), t->A.size(),  mfin);  // set host input pointer
-        setEnvPtr(t->S.data(), t->S.size(), mfout); // set host env pointer
-        setOutPtr(t->S.data(), t->S.size(), mfout); // set host output pointer
+    if (kernel1_device == Device::GPU && kernel2_device == kernel1_device) {
+      mfin.copy = CopyFlags::DONTCOPY, mfin.reuse = ReuseFlags::REUSE;
     }
+
+    setInPtr(t->A.data(), t->A.size(), mfin);   // set host input pointer
+    setEnvPtr(t->S.data(), t->S.size(), mfout); // set host env pointer
+    setOutPtr(t->S.data(), t->S.size(), mfout); // set host output pointer
+  }
 };
 
 /* ------------ CPU-based first and second map --------- */
-struct Map1: ff_Map<Task1> {
-    using map = ff_Map<Task1>;
-    Map1():ff_Map<Task1>(ff_realNumCores()) {}
+struct Map1 : ff_Map<Task1> {
+  using map = ff_Map<Task1>;
+  Map1() : ff_Map<Task1>(ff_realNumCores()) {}
 
-    Task1 *svc(Task1 *in) {
-	std::vector<float> &A = in->A;
-	map::parallel_for(0,A.size(),[&](const long i) {
-		A[i] /= (A[i]*A[i] + A[i] + 1);
-	    });
-	
-	return in;
-    }
+  Task1 *svc(Task1 *in) {
+    std::vector<float> &A = in->A;
+    map::parallel_for(
+        0, A.size(), [&](const long i) { A[i] /= (A[i] * A[i] + A[i] + 1); });
+
+    return in;
+  }
 };
-struct Map2: ff_Map<Task2> {
-    using map = ff_Map<Task2>;
-    Map2():ff_Map<Task2>(ff_realNumCores()) {}
+struct Map2 : ff_Map<Task2> {
+  using map = ff_Map<Task2>;
+  Map2() : ff_Map<Task2>(ff_realNumCores()) {}
 
-    Task2 *svc(Task2 *in) {
-	std::vector<float> &A = in->A;
-	std::vector<float> &S = in->S;
-	map::parallel_for(0, S.size(), [&](const long i) {
-		S[i] += A[i];
-	    });	
-	return in;
-    }
+  Task2 *svc(Task2 *in) {
+    std::vector<float> &A = in->A;
+    std::vector<float> &S = in->S;
+    map::parallel_for(0, S.size(), [&](const long i) { S[i] += A[i]; });
+    return in;
+  }
 };
 
 // utility function
 static void initInput(std::vector<float> &A, std::vector<float> &S) {
-    for(size_t i=0; i<A.size(); ++i) {
-	A[i] = i;
-	S[i] = 0.0f;
-    }
+  for (size_t i = 0; i < A.size(); ++i) {
+    A[i] = i;
+    S[i] = 0.0f;
+  }
 }
 
-int main(int argc, char * argv[]) {
-    if (argc != 3) {
-        std::cerr << "use: " << argv[0] 
-                  << " 0|1 0|1\n";
-        std::cerr << " 0: execution on CPU cores\n";
-        std::cerr << " 1: execution on the local GPU\n";
-        return -1;
-    }
-    kernel1_device = (std::stoi(argv[1])==0 ? Device::CPU:Device::GPU);
-    kernel2_device = (std::stoi(argv[2])==0 ? Device::CPU:Device::GPU);
+int main(int argc, char *argv[]) {
+  if (argc != 3) {
+    std::cerr << "use: " << argv[0] << " 0|1 0|1\n";
+    std::cerr << " 0: execution on CPU cores\n";
+    std::cerr << " 1: execution on the local GPU\n";
+    return -1;
+  }
+  kernel1_device = (std::stoi(argv[1]) == 0 ? Device::CPU : Device::GPU);
+  kernel2_device = (std::stoi(argv[2]) == 0 ? Device::CPU : Device::GPU);
 
-    const size_t max_size   = 1000;
+  const size_t max_size = 1000;
 
-    std::vector<float> S(max_size);
-    std::vector<float> A(max_size);
-    
-    // init data
-    initInput(A,S);
-    
-    // OpenCL device shared allocator
-    ff_oclallocator alloc;
+  std::vector<float> S(max_size);
+  std::vector<float> A(max_size);
 
-    // instances of the first and second task
-    Task1 t1(A);    
-    Task2 t2(A,S);
+  // init data
+  initInput(A, S);
 
-    // ------ OpenCL map1 instance 
-    FF_OCL_MAP_ELEMFUNC_1D(mapf1, float, a, 
-			   return a / (a*a + a + 1);
-			   );    
-    ff_mapOCL_1D<Task1, oclTask1> oclMap1(mapf1, &alloc); 
-    SET_DEVICE_TYPE(oclMap1);  
-    //oclMap1.pickGPU();
+  // OpenCL device shared allocator
+  ff_oclallocator alloc;
 
-    // ------ CPU map1
-    Map1  map1;
+  // instances of the first and second task
+  Task1 t1(A);
+  Task2 t2(A, S);
 
-    // ------ selector1 instance
-    ff_nodeSelector<Task1> selector1(t1);
-    selector1.addNode(map1);
-    selector1.addNode(oclMap1);
+  // ------ OpenCL map1 instance
+  FF_OCL_MAP_ELEMFUNC_1D(mapf1, float, a, return a / (a * a + a + 1););
+  ff_mapOCL_1D<Task1, oclTask1> oclMap1(mapf1, &alloc);
+  SET_DEVICE_TYPE(oclMap1);
+  //oclMap1.pickGPU();
 
-    // ------ selecting where to execute the kernel (CPU)
-    selector1.selectNode(kernel1_device == Device::GPU ? 1:0);
-    
-    if (selector1.run_and_wait_end()<0) {
-	error("running selector1\n");
-	return -1;
-    }
+  // ------ CPU map1
+  Map1 map1;
 
-    // ------ OpenCL map2 instance 
-    FF_OCL_MAP_ELEMFUNC_1D_ENV(mapf2, float, a, float, s,
-			       return s+a;
-			       );
-    ff_mapOCL_1D<Task2, oclTask2> oclMap2(mapf2, &alloc); 
-    SET_DEVICE_TYPE(oclMap2); 
-    //oclMap2.pickGPU();
+  // ------ selector1 instance
+  ff_nodeSelector<Task1> selector1(t1);
+  selector1.addNode(map1);
+  selector1.addNode(oclMap1);
 
-    // ------ CPU map2 instance
-    Map2 map2;
+  // ------ selecting where to execute the kernel (CPU)
+  selector1.selectNode(kernel1_device == Device::GPU ? 1 : 0);
 
-    // ------ selector2  instance 
-    ff_nodeSelector<Task2> selector2(t2);
-    selector2.addNode(map2);
-    selector2.addNode(oclMap2);
+  if (selector1.run_and_wait_end() < 0) {
+    error("running selector1\n");
+    return -1;
+  }
 
-    // ------ selecting where to execute the kernel (GPU)
-    selector2.selectNode(kernel2_device == Device::GPU ? 1:0);
+  // ------ OpenCL map2 instance
+  FF_OCL_MAP_ELEMFUNC_1D_ENV(mapf2, float, a, float, s, return s + a;);
+  ff_mapOCL_1D<Task2, oclTask2> oclMap2(mapf2, &alloc);
+  SET_DEVICE_TYPE(oclMap2);
+  //oclMap2.pickGPU();
 
-    if (selector2.run_and_wait_end()<0) {
-	error("running selector1\n");
-	return -1;
-    }
+  // ------ CPU map2 instance
+  Map2 map2;
 
+  // ------ selector2  instance
+  ff_nodeSelector<Task2> selector2(t2);
+  selector2.addNode(map2);
+  selector2.addNode(oclMap2);
+
+  // ------ selecting where to execute the kernel (GPU)
+  selector2.selectNode(kernel2_device == Device::GPU ? 1 : 0);
+
+  if (selector2.run_and_wait_end() < 0) {
+    error("running selector1\n");
+    return -1;
+  }
 
 #if defined(CHECK)
-    for(size_t i=0; i<max_size; ++i) {
-	if (S[i] != i/(float)(i*i+i+1)) {
-	    printf("Error %g != %g (i=%ld)\n", S[i], i/(float)(i*i+i+1), i);
-	    exit(1); //ctest
-        }
+  for (size_t i = 0; i < max_size; ++i) {
+    if (S[i] != i / (float)(i * i + i + 1)) {
+      printf("Error %g != %g (i=%ld)\n", S[i], i / (float)(i * i + i + 1), i);
+      exit(1); //ctest
     }
-    printf("Result correct\n");
+  }
+  printf("Result correct\n");
 #endif
 
-    return 0;
+  return 0;
 }

@@ -46,96 +46,93 @@
 
 using namespace ff;
 
-class Emitter1: public ff_node {
+class Emitter1 : public ff_node {
 public:
-    Emitter1(int ntasks):ntasks(ntasks) {}
-    void* svc(void*) {
-        for(long i=0;i<ntasks;++i)
-            ff_send_out((void*)(i+10));
-        return NULL;
-    }
+  Emitter1(int ntasks) : ntasks(ntasks) {}
+  void *svc(void *) {
+    for (long i = 0; i < ntasks; ++i) ff_send_out((void *)(i + 10));
+    return NULL;
+  }
+
 private:
-    int ntasks;
+  int ntasks;
 };
 
-class Emitter2: public ff_node {
+class Emitter2 : public ff_node {
 public:
-    Emitter2(ff_loadbalancer *lb, long nworkers):neos(0),nworkers(nworkers), lb(lb) {}
-    void* svc(void* t) {
-        int wid = lb->get_channel_id();
-        if (wid == -1) {
-            printf("TASK FROM INPUT %ld\n", (long)(t));
-            // task caming from farm1's workers
-            return t;
-        }
-        printf("got back task %ld from Worker2(%d)\n", (long)t, wid);
-        return GO_ON;
+  Emitter2(ff_loadbalancer *lb, long nworkers)
+      : neos(0), nworkers(nworkers), lb(lb) {}
+  void *svc(void *t) {
+    int wid = lb->get_channel_id();
+    if (wid == -1) {
+      printf("TASK FROM INPUT %ld\n", (long)(t));
+      // task caming from farm1's workers
+      return t;
     }
-    void eosnotify(ssize_t id) {
-        if (id != -1) return;
-        if (++neos == nworkers) lb->broadcast_task(EOS);        
-    }
+    printf("got back task %ld from Worker2(%d)\n", (long)t, wid);
+    return GO_ON;
+  }
+  void eosnotify(ssize_t id) {
+    if (id != -1) return;
+    if (++neos == nworkers) lb->broadcast_task(EOS);
+  }
+
 private:
-    int  neos;
-    long nworkers;
-    ff_loadbalancer *lb;    
+  int neos;
+  long nworkers;
+  ff_loadbalancer *lb;
 };
 
-struct Worker1: ff_node {
-    void* svc(void* task) {
-        return task;
-    }
+struct Worker1 : ff_node {
+  void *svc(void *task) { return task; }
 };
 
-struct Worker2: ff_node {
-    void* svc(void* task) {
-        return task;
-    }
+struct Worker2 : ff_node {
+  void *svc(void *task) { return task; }
 };
 
-
-int main(int argc, char* argv[]) {
-    int nworkers = 1; // 3;
-    int ntasks = 10; //00;
-    if (argc>1) {
-        if (argc < 3) {
-            std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";
-            return -1;
-        }
-        nworkers  =atoi(argv[1]);
-        ntasks    =atoi(argv[2]);
+int main(int argc, char *argv[]) {
+  int nworkers = 1; // 3;
+  int ntasks = 10;  //00;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use:\n"
+                << " " << argv[0] << " numworkers ntasks\n";
+      return -1;
     }
-    ff_pipeline pipe;
-    ff_farm farm1;
-    ff_farm farm2;
-    pipe.add_stage(&farm1);
-    pipe.add_stage(&farm2);
-    farm1.add_emitter(new Emitter1(ntasks));
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) {
-        w.push_back(new Worker1);
-    }
-    farm1.add_workers(w);
-    farm1.remove_collector();
+    nworkers = atoi(argv[1]);
+    ntasks = atoi(argv[2]);
+  }
+  ff_pipeline pipe;
+  ff_farm farm1;
+  ff_farm farm2;
+  pipe.add_stage(&farm1);
+  pipe.add_stage(&farm2);
+  farm1.add_emitter(new Emitter1(ntasks));
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) {
+    w.push_back(new Worker1);
+  }
+  farm1.add_workers(w);
+  farm1.remove_collector();
 
-    w.clear();
-    for(int i=0;i<nworkers;++i)
-        w.push_back(new Worker2);
-    
-    farm2.add_emitter(new Emitter2(farm2.getlb(),nworkers));
-    farm2.remove_collector();
-    farm2.add_workers(w);
-    farm2.wrap_around();
+  w.clear();
+  for (int i = 0; i < nworkers; ++i) w.push_back(new Worker2);
 
-    // set_multi_input is no longer supported, 
-    //farm2.set_multi_input(farm1.getWorkers());
-    //farm2.setMultiInput();  // not needed anymore
+  farm2.add_emitter(new Emitter2(farm2.getlb(), nworkers));
+  farm2.remove_collector();
+  farm2.add_workers(w);
+  farm2.wrap_around();
 
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipe\n");
-        return -1;
-    }
+  // set_multi_input is no longer supported,
+  //farm2.set_multi_input(farm1.getWorkers());
+  //farm2.setMultiInput();  // not needed anymore
 
-    printf("Time= %.2f (ms)\n", pipe.ffwTime());
-    return 0;
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+
+  printf("Time= %.2f (ms)\n", pipe.ffwTime());
+  return 0;
 }

@@ -49,24 +49,21 @@
 #include <ff/ff.hpp>
 
 using namespace ff;
-long const int NUMTASKS=10;
+long const int NUMTASKS = 10;
 
-
-struct W: ff_node {
-    void *svc(void*) {
-        for(long i=(get_my_id()+1); i<=NUMTASKS; ++i)
-            ff_send_out((void*)i);
-        return NULL;
-    }
+struct W : ff_node {
+  void *svc(void *) {
+    for (long i = (get_my_id() + 1); i <= NUMTASKS; ++i) ff_send_out((void *)i);
+    return NULL;
+  }
 };
 
-struct Stage: ff_minode {
-    void *svc(void *task) { 
-        printf("received %ld from %zd\n", (long)task, get_channel_id());
-        return GO_ON;
-    }
+struct Stage : ff_minode {
+  void *svc(void *task) {
+    printf("received %ld from %zd\n", (long)task, get_channel_id());
+    return GO_ON;
+  }
 };
-
 
 int main() {
 #if 0
@@ -81,22 +78,22 @@ int main() {
     pipe.run_and_wait_end();
 
 #else
-    Stage S;
-    ff_farm farm;
-    std::vector<ff_node*> w;
-    w.push_back(new W);
-    w.push_back(new W);
-    w.push_back(new W);
-    farm.add_workers(w);
-    farm.remove_collector();
+  Stage S;
+  ff_farm farm;
+  std::vector<ff_node *> w;
+  w.push_back(new W);
+  w.push_back(new W);
+  w.push_back(new W);
+  farm.add_workers(w);
+  farm.remove_collector();
 
-    ff_pipeline pipe;
-    pipe.add_stage(&farm);
-    pipe.add_stage(&S);
+  ff_pipeline pipe;
+  pipe.add_stage(&farm);
+  pipe.add_stage(&S);
 
-    pipe.run_and_wait_end();
+  pipe.run_and_wait_end();
 #endif
 
-    printf("DONE\n");
-    return 0;
+  printf("DONE\n");
+  return 0;
 }

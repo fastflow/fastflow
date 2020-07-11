@@ -49,69 +49,64 @@
 /* Author: Massimo Torquati
  *
  */
-               
+
 #include <iostream>
 
 #include <ff/ff.hpp>
 using namespace ff;
 
-struct Emitter: ff_monode_t<long> { 
-    long *svc(long*) {
-        for(long i=1;i<=100;++i) 
-            ff_send_out_to((long*)i, i % 3);
-        return EOS;
-    }
+struct Emitter : ff_monode_t<long> {
+  long *svc(long *) {
+    for (long i = 1; i <= 100; ++i) ff_send_out_to((long *)i, i % 3);
+    return EOS;
+  }
 };
-struct Worker: ff_node_t<long> {
-    long *svc(long *in) {
-        return in;
-    }
+struct Worker : ff_node_t<long> {
+  long *svc(long *in) { return in; }
 };
-struct Filter1: ff_monode_t<long> {  
-    long *svc(long *in) {
-        return in;
-    }
+struct Filter1 : ff_monode_t<long> {
+  long *svc(long *in) { return in; }
 };
 
-struct Filter2: ff_node_t<long> {
-	long *svc(long *in) {
-        std::cout << get_my_id() << ": " << (long)in << "\n";
-        return GO_ON;
-    }
+struct Filter2 : ff_node_t<long> {
+  long *svc(long *in) {
+    std::cout << get_my_id() << ": " << (long)in << "\n";
+    return GO_ON;
+  }
 };
 
 int main() {
 
-    Emitter E;
+  Emitter E;
 
-    std::vector<std::unique_ptr<ff_node>> W;
-    W.push_back(make_unique<Worker>());
-    W.push_back(make_unique<Worker>());
-    W.push_back(make_unique<Worker>());
-    
-    ff_Farm<> farm(std::move(W), E);
-    farm.remove_collector();
+  std::vector<std::unique_ptr<ff_node>> W;
+  W.push_back(make_unique<Worker>());
+  W.push_back(make_unique<Worker>());
+  W.push_back(make_unique<Worker>());
 
-    std::vector<ff_node*> W1;  
-    Filter1 f11, f12, f13;
-    W1.push_back(&f11);
-    W1.push_back(&f12);
-    W1.push_back(&f13);
-    std::vector<ff_node*> W2;          
-    Filter2 f21,f22;
-    W2.push_back(&f21);
-    W2.push_back(&f22);
-    
-    ff_a2a a2a;
-    a2a.add_firstset(W1);
-    a2a.add_secondset(W2);
-    
-    ff_Pipe<> pipe(farm, a2a);
-        
-    if (pipe.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
-    }
-    
-    return 0;
+  ff_Farm<> farm(std::move(W), E);
+  farm.remove_collector();
+
+  std::vector<ff_node *> W1;
+  Filter1 f11, f12, f13;
+  W1.push_back(&f11);
+  W1.push_back(&f12);
+  W1.push_back(&f13);
+  std::vector<ff_node *> W2;
+  Filter2 f21, f22;
+  W2.push_back(&f21);
+  W2.push_back(&f22);
+
+  ff_a2a a2a;
+  a2a.add_firstset(W1);
+  a2a.add_secondset(W2);
+
+  ff_Pipe<> pipe(farm, a2a);
+
+  if (pipe.run_and_wait_end() < 0) {
+    error("running farm\n");
+    return -1;
+  }
+
+  return 0;
 }

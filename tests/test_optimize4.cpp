@@ -54,134 +54,136 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-struct First: ff_node_t<long> {
-    First(const int ntasks):ntasks(ntasks) {}
-    long* svc(long*) {
-        for(long i=1;i<=ntasks;++i) {
-            struct timespec req;
-            req.tv_sec = 0;
-            req.tv_nsec = 3000;
-            nanosleep(&req, (struct timespec *)NULL);
+struct First : ff_node_t<long> {
+  First(const int ntasks) : ntasks(ntasks) {}
+  long *svc(long *) {
+    for (long i = 1; i <= ntasks; ++i) {
+      struct timespec req;
+      req.tv_sec = 0;
+      req.tv_nsec = 3000;
+      nanosleep(&req, (struct timespec *)NULL);
 
-            ff_send_out((long*)i);
-        }
-        return EOS;
+      ff_send_out((long *)i);
     }
-    const int ntasks;
+    return EOS;
+  }
+  const int ntasks;
 };
 
-struct Worker1: ff_node_t<long> {
-    long* svc(long*in) {
-        switch(get_my_id()) {
-        case 0: {
-            struct timespec req;
-            req.tv_sec = 0;
-            req.tv_nsec = 50000;
-            nanosleep(&req, (struct timespec *)NULL);
-        } break;
-        case 2: {
-            struct timespec req;
-            req.tv_sec = 0;
-            req.tv_nsec = 20000;
-            nanosleep(&req, (struct timespec *)NULL);
-        } break;
-        default: ; // zero work for the others
-        }
-        return in;
+struct Worker1 : ff_node_t<long> {
+  long *svc(long *in) {
+    switch (get_my_id()) {
+    case 0: {
+      struct timespec req;
+      req.tv_sec = 0;
+      req.tv_nsec = 50000;
+      nanosleep(&req, (struct timespec *)NULL);
+    } break;
+    case 2: {
+      struct timespec req;
+      req.tv_sec = 0;
+      req.tv_nsec = 20000;
+      nanosleep(&req, (struct timespec *)NULL);
+    } break;
+    default:; // zero work for the others
     }
+    return in;
+  }
 };
-struct Worker2: ff_node_t<long> {
-    long* svc(long*in) {
-        return in;
-    }
+struct Worker2 : ff_node_t<long> {
+  long *svc(long *in) { return in; }
 };
 
-struct Last: ff_node_t<long> {
-    long* svc(long* in) {
-        printf("Last received %ld\n", (long)in);
-        return GO_ON;
-    }
+struct Last : ff_node_t<long> {
+  long *svc(long *in) {
+    printf("Last received %ld\n", (long)in);
+    return GO_ON;
+  }
 };
 
-int main(int argc, char* argv[]) {
-    // default arguments
-    size_t ntasks    = 10000;
-    bool   optimize  = true;
-    size_t nworkers  = 4;   // external workers
-    size_t inworkers1= 2;   // internal workers of the first farm
-    size_t inworkers2= 3;   // internal workers of the second farm
+int main(int argc, char *argv[]) {
+  // default arguments
+  size_t ntasks = 10000;
+  bool optimize = true;
+  size_t nworkers = 4;   // external workers
+  size_t inworkers1 = 2; // internal workers of the first farm
+  size_t inworkers2 = 3; // internal workers of the second farm
 
-    if (argc>1) {
-        if (argc!=6) {
-            error("use: %s ntasks nworkers inworkers1 inworkers2 optimize\n",argv[0]);
-            return -1;
-        }
-        ntasks    = std::stol(argv[1]);
-        nworkers  = std::stol(argv[2]);
-        inworkers1= std::stol(argv[3]);
-        inworkers2= std::stol(argv[4]);
-        optimize  = (std::stol(argv[5])!=0);
+  if (argc > 1) {
+    if (argc != 6) {
+      error(
+          "use: %s ntasks nworkers inworkers1 inworkers2 optimize\n", argv[0]);
+      return -1;
     }
+    ntasks = std::stol(argv[1]);
+    nworkers = std::stol(argv[2]);
+    inworkers1 = std::stol(argv[3]);
+    inworkers2 = std::stol(argv[4]);
+    optimize = (std::stol(argv[5]) != 0);
+  }
 
-    First first(ntasks);
-    Last last;
+  First first(ntasks);
+  Last last;
 
-    /* all the following farms have nworkers1 workers */
-    ff_Farm<long,long> farm([&]() {	    
-	    std::vector<std::unique_ptr<ff_node> > V;
-	    for(size_t i=0;i<nworkers;++i) {
-            // first internal farm
-            std::vector<std::unique_ptr<ff_node> > W1;
-            for(size_t j=0;j<inworkers1;++j)		    
-                W1.push_back(make_unique<Worker1>());		
-            auto ifarm1 = make_unique<ff_Farm<long,long>>(std::move(W1));
+  /* all the following farms have nworkers1 workers */
+  ff_Farm<long, long> farm([&]() {
+    std::vector<std::unique_ptr<ff_node>> V;
+    for (size_t i = 0; i < nworkers; ++i) {
+      // first internal farm
+      std::vector<std::unique_ptr<ff_node>> W1;
+      for (size_t j = 0; j < inworkers1; ++j)
+        W1.push_back(make_unique<Worker1>());
+      auto ifarm1 = make_unique<ff_Farm<long, long>>(std::move(W1));
 
-            // second internal farm
-            std::vector<std::unique_ptr<ff_node> > W2;
-            for(size_t j=0;j<inworkers2;++j)		    
-                W2.push_back(make_unique<Worker2>());		
-            auto ifarm2 = make_unique<ff_Farm<long,long>>(std::move(W2));
+      // second internal farm
+      std::vector<std::unique_ptr<ff_node>> W2;
+      for (size_t j = 0; j < inworkers2; ++j)
+        W2.push_back(make_unique<Worker2>());
+      auto ifarm2 = make_unique<ff_Farm<long, long>>(std::move(W2));
 
-            auto ipipe = make_unique<ff_Pipe<long,long>>(std::move(ifarm1), std::move(ifarm2));
-            V.push_back(std::move(ipipe));
-
-	    }
-	    return V;
-        } ());
-
-    // original network
-    ff_Pipe<> pipe(first, farm, last);
-    
-    // optimization that I would like to apply, if possible
-    if (optimize) {
-        OptLevel opt;
-        opt.max_nb_threads=ff_realNumCores();
-        opt.max_mapped_threads=opt.max_nb_threads;
-        opt.verbose_level=2;
-        opt.no_initial_barrier=true;
-        opt.no_default_mapping=true; // disable mapping if #threads > max_mapped_threads
-        opt.blocking_mode     =true;   // enabling blocking if #threads > max_nb_threads
-        opt.merge_farms=true;
-        opt.merge_with_emitter=true;   // merging previous pipeline stage with farm emitter 
-        opt.remove_collector  =true;   // remove farm collector
-        opt.introduce_a2a=true;      // introduce all-2-all between two farms, if possible
-
-        // this call tries to apply all previous optimizations modifying the pipe passed
-        // as parameter
-        if (optimize_static(pipe,opt)<0) {
-            //if (optimize_static(farm,opt)<0) {
-            error("optimize_static\n");
-            return -1;
-         }
+      auto ipipe = make_unique<ff_Pipe<long, long>>(
+          std::move(ifarm1), std::move(ifarm2));
+      V.push_back(std::move(ipipe));
     }
+    return V;
+  }());
 
-    printf("Pipe cardinality: %d\n", pipe.cardinality());
-    
-    // running the optimized pipe
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipeline\n");
-        return -1;
+  // original network
+  ff_Pipe<> pipe(first, farm, last);
+
+  // optimization that I would like to apply, if possible
+  if (optimize) {
+    OptLevel opt;
+    opt.max_nb_threads = ff_realNumCores();
+    opt.max_mapped_threads = opt.max_nb_threads;
+    opt.verbose_level = 2;
+    opt.no_initial_barrier = true;
+    opt.no_default_mapping =
+        true; // disable mapping if #threads > max_mapped_threads
+    opt.blocking_mode = true; // enabling blocking if #threads > max_nb_threads
+    opt.merge_farms = true;
+    opt.merge_with_emitter =
+        true; // merging previous pipeline stage with farm emitter
+    opt.remove_collector = true; // remove farm collector
+    opt.introduce_a2a =
+        true; // introduce all-2-all between two farms, if possible
+
+    // this call tries to apply all previous optimizations modifying the pipe passed
+    // as parameter
+    if (optimize_static(pipe, opt) < 0) {
+      //if (optimize_static(farm,opt)<0) {
+      error("optimize_static\n");
+      return -1;
     }
-    printf("test DONE\n");
-    return 0;
+  }
+
+  printf("Pipe cardinality: %d\n", pipe.cardinality());
+
+  // running the optimized pipe
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipeline\n");
+    return -1;
+  }
+  printf("test DONE\n");
+  return 0;
 }

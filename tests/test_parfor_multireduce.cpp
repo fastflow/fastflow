@@ -34,61 +34,62 @@
 using namespace ff;
 
 struct ReductionVars {
-    ReductionVars():sum(0.0),diff(0.0) {}
-    ReductionVars(double s, double d):sum(s),diff(d) {}
+  ReductionVars() : sum(0.0), diff(0.0) {}
+  ReductionVars(double s, double d) : sum(s), diff(d) {}
 
-    ReductionVars& operator+=(const ReductionVars& v) {
-        sum  += v.sum;
-        diff += v.diff;  // NOTE is += and not -= because v.diff can be < 0
-        return *this;
-    }
-    
-    double sum;
-    double diff;
+  ReductionVars &operator+=(const ReductionVars &v) {
+    sum += v.sum;
+    diff += v.diff; // NOTE is += and not -= because v.diff can be < 0
+    return *this;
+  }
+
+  double sum;
+  double diff;
 };
 
-
 int main(int argc, char *argv[]) {
-    int arraySize= 10000000;
-    int nworkers = 3;
-    if (argc>1) {
-        if (argc<3) {
-            printf("use: %s arraysize nworkers\n", argv[0]);
-            return -1;
-        }
-        arraySize= atoi(argv[1]);
-        nworkers = atoi(argv[2]);
+  int arraySize = 10000000;
+  int nworkers = 3;
+  if (argc > 1) {
+    if (argc < 3) {
+      printf("use: %s arraysize nworkers\n", argv[0]);
+      return -1;
     }
+    arraySize = atoi(argv[1]);
+    nworkers = atoi(argv[2]);
+  }
 
-    if (nworkers<=0) {
-        printf("Wrong parameters values\n");
-        return -1;
-    }
-    
-    // creates the array
-    double *A = new double[arraySize];
-    double *B = new double[arraySize];
+  if (nworkers <= 0) {
+    printf("Wrong parameters values\n");
+    return -1;
+  }
 
-    ReductionVars R(1000.0, -1000.0), Rzero;
+  // creates the array
+  double *A = new double[arraySize];
+  double *B = new double[arraySize];
 
-    ParallelForReduce<ReductionVars> pfr(nworkers);
+  ReductionVars R(1000.0, -1000.0), Rzero;
 
-    // init data
-    for(int j=0; j<arraySize; ++j) {
-        A[j]=j*3.14; B[j]=2.1*j;
-    }
-  
-    auto reduceF = [](ReductionVars &R, const ReductionVars &r) { 
-        R += r;
-    };
-  
-    pfr.parallel_reduce(R, Rzero, 0, arraySize, 1, 0, [&](const long i, ReductionVars &R) {
-            auto tmp = A[i]*B[i];
-            R.sum  += tmp;
-            R.diff -= tmp;
-        }, reduceF, nworkers);
-    
-    printf("R sum=%g diff=%g\n", R.sum, R.diff);
-    
-    return 0;
+  ParallelForReduce<ReductionVars> pfr(nworkers);
+
+  // init data
+  for (int j = 0; j < arraySize; ++j) {
+    A[j] = j * 3.14;
+    B[j] = 2.1 * j;
+  }
+
+  auto reduceF = [](ReductionVars &R, const ReductionVars &r) { R += r; };
+
+  pfr.parallel_reduce(
+      R, Rzero, 0, arraySize, 1, 0,
+      [&](const long i, ReductionVars &R) {
+        auto tmp = A[i] * B[i];
+        R.sum += tmp;
+        R.diff -= tmp;
+      },
+      reduceF, nworkers);
+
+  printf("R sum=%g diff=%g\n", R.sum, R.diff);
+
+  return 0;
 }

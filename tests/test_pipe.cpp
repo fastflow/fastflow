@@ -29,60 +29,60 @@
  */
 
 #include <ff/ff.hpp>
-  
+
 using namespace ff;
 
-static inline long F(long i) { return i+1; }
-static inline long G(long i) { return i*2; }
+static inline long F(long i) { return i + 1; }
+static inline long G(long i) { return i * 2; }
 
 #if !defined(SEQUENTIAL)
 struct fftask_t {
-    fftask_t(long r):r(r) {}
-    long r;
+  fftask_t(long r) : r(r) {}
+  long r;
 };
-static inline fftask_t* wrapF(fftask_t* in, ff_node*const) { 
-    long r = F(in->r);
-    in->r=r;
-    return in;
+static inline fftask_t *wrapF(fftask_t *in, ff_node *const) {
+  long r = F(in->r);
+  in->r = r;
+  return in;
 }
-static inline fftask_t* wrapG(fftask_t *in, ff_node*const) { 
-    long r = G(in->r);
-    in->r=r;
-    return in;
+static inline fftask_t *wrapG(fftask_t *in, ff_node *const) {
+  long r = G(in->r);
+  in->r = r;
+  return in;
 }
 #endif
 
-int main(int argc, char * argv[]) {
-    long streamlen=1000;
-    if (argc>1) {
-        if (argc!=2) {
-            printf("use: %s streamlen\n",argv[0]);
-            return -1;
-        }
-        streamlen  =atol(argv[1]);
+int main(int argc, char *argv[]) {
+  long streamlen = 1000;
+  if (argc > 1) {
+    if (argc != 2) {
+      printf("use: %s streamlen\n", argv[0]);
+      return -1;
     }
+    streamlen = atol(argv[1]);
+  }
 
 #if defined(SEQUENTIAL)
-    for(long i=0;i<streamlen;++i)
-        printf("%ld ", G(F(i)));
+  for (long i = 0; i < streamlen; ++i) printf("%ld ", G(F(i)));
 #else
-    ff_node_F<fftask_t> wrapf(wrapF), wrapg(wrapG);
-    ff_Pipe<fftask_t, fftask_t> pipe(true, wrapf,wrapg); // accelerator mode turned on
-    pipe.run_then_freeze();
-    for(long i=0;i<streamlen;++i) {
-        fftask_t *task = new fftask_t(i);
-        pipe.offload(task);
-    }
-    pipe.offload(pipe.EOS);
-    for(long i=0;i<streamlen;++i) {
-        fftask_t *task = nullptr;
-        pipe.load_result(task);
-        assert(task != pipe.EOS);
-        printf("result %ld\n", task->r);
-        delete task;
-    }
-    pipe.wait();
+  ff_node_F<fftask_t> wrapf(wrapF), wrapg(wrapG);
+  ff_Pipe<fftask_t, fftask_t> pipe(
+      true, wrapf, wrapg); // accelerator mode turned on
+  pipe.run_then_freeze();
+  for (long i = 0; i < streamlen; ++i) {
+    fftask_t *task = new fftask_t(i);
+    pipe.offload(task);
+  }
+  pipe.offload(pipe.EOS);
+  for (long i = 0; i < streamlen; ++i) {
+    fftask_t *task = nullptr;
+    pipe.load_result(task);
+    assert(task != pipe.EOS);
+    printf("result %ld\n", task->r);
+    delete task;
+  }
+  pipe.wait();
 #endif
-    printf("\n");
-    return 0;
+  printf("\n");
+  return 0;
 }

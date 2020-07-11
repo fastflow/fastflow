@@ -8,7 +8,7 @@
  *  \brief Communication patten interface (distributed)
  *
  */
- 
+
 /* ***************************************************************************
  *
  *  This program is free software; you can redistribute it and/or modify it
@@ -30,9 +30,7 @@
 #ifndef FF_COMMINTERFACE_HPP
 #define FF_COMMINTERFACE_HPP
 
-
 namespace ff {
-
 
 //**************************************
 // Communication Pattern interface
@@ -50,114 +48,114 @@ namespace ff {
  */
 
 template <typename Impl>
-class commPattern  {
+class commPattern {
 
 protected:
-    Impl impl;
+  Impl impl;
 
 public:
-    typedef typename Impl::descriptor      descriptor;
-    typedef typename Impl::tosend_t        tosend_t;
-    typedef typename Impl::torecv_t        torecv_t;
-    typedef typename Impl::TransportImpl   TransportImpl;
+  typedef typename Impl::descriptor descriptor;
+  typedef typename Impl::tosend_t tosend_t;
+  typedef typename Impl::torecv_t torecv_t;
+  typedef typename Impl::TransportImpl TransportImpl;
 
+  commPattern() : impl() {}
 
-    commPattern():impl() {}
+  commPattern(descriptor *D) : impl(D) {}
 
-    commPattern(descriptor* D):impl(D) {}
+  inline void setDescriptor(descriptor *D) { impl.setDescriptor(D); }
 
-    inline void setDescriptor(descriptor* D) {  impl.setDescriptor(D); }
+  inline descriptor *getDescriptor() { return impl.getDescriptor(); }
 
-    inline  descriptor* getDescriptor() { return impl.getDescriptor(); }
-
-    /*
+  /*
      * It initializes communication pattern.
      *
      * \param address is the IP address of the sender node.
      * \param nodeId is the unique identifier of the calling node in the range [0..inf[.
      */
-    inline bool init(const std::string& address,const int nodeId=-1) { return impl.init(address,nodeId); }
+  inline bool init(const std::string &address, const int nodeId = -1) {
+    return impl.init(address, nodeId);
+  }
 
-    /*
+  /*
      * It specifies that the message being sent is just a part of the
      * entire message. Further message parts are to follow.
      *
      * \param msg is the message to be sent.
      */
-    inline bool putmore(const tosend_t& msg) { return impl.putmore(msg);}
+  inline bool putmore(const tosend_t &msg) { return impl.putmore(msg); }
 
-    /*
+  /*
      * It sends one message to the targeted node.
      *
      * \param msgs is the message to be sent.
      */
-    inline bool put(const tosend_t& msg) { return impl.put(msg); }
-    
-    /*
+  inline bool put(const tosend_t &msg) { return impl.put(msg); }
+
+  /*
      * It sends one message to the targeted node.
      *
      * \param msgs is the message to be sent.
      * \param toNode is the address of the node, where the message is intended
      * to be sent.
      */
-    inline bool put(const tosend_t& msg, const int toNode) { return impl.put(msg,toNode);}
+  inline bool put(const tosend_t &msg, const int toNode) {
+    return impl.put(msg, toNode);
+  }
 
-    /*
+  /*
      * It receives the message header.
      *
      * \param msg is the pointer of the message to be sent.
      * \param peer is the address of the peer where the message is sent.
      */
-    inline bool gethdr(torecv_t& msg, int& peer) { return impl.gethdr(msg,peer); }
+  inline bool gethdr(torecv_t &msg, int &peer) {
+    return impl.gethdr(msg, peer);
+  }
 
-    /*
+  /*
      * It receives one message part.
      *
      * \param msg is the pointer of the message to be sent.
      */
-    inline bool get(torecv_t& msg) { return impl.get(msg); }
+  inline bool get(torecv_t &msg) { return impl.get(msg); }
 
-    /*
+  /*
      * It receives all messages.
      */
-    inline void done() { impl.done(); }
+  inline void done() { impl.done(); }
 
-    /*
+  /*
      * It closes the communication pattern.
      */
-    inline bool close() { return impl.close();  }
+  inline bool close() { return impl.close(); }
 };
 
 //**************************************
 // Communication Transport interface
 //**************************************
 
-
 template <typename Impl>
-class commTransport  {
+class commTransport {
 protected:
-    Impl impl;
+  Impl impl;
+
 public:
-    typedef typename Impl::endpoint_t     endpoint_t;
-    typedef typename Impl::msg_t          msg_t;
+  typedef typename Impl::endpoint_t endpoint_t;
+  typedef typename Impl::msg_t msg_t;
 
-    commTransport(const int procId): impl(procId) {}
+  commTransport(const int procId) : impl(procId) {}
 
-    int initTransport() { return impl.initTransport(); }
-    
-    int closeTransport() { return impl.closeTransport(); }
+  int initTransport() { return impl.initTransport(); }
 
-    endpoint_t * newEndPoint(const bool P) {
-        return impl.newEndPoint(P);
-    }
-    
-    int deleteEndPoint(endpoint_t* ep) {
-        return impl.deleteEndPoint(ep);
-    }
+  int closeTransport() { return impl.closeTransport(); }
 
-    int getProcId() const { return impl.getProcId();}
+  endpoint_t *newEndPoint(const bool P) { return impl.newEndPoint(P); }
+
+  int deleteEndPoint(endpoint_t *ep) { return impl.deleteEndPoint(ep); }
+
+  int getProcId() const { return impl.getProcId(); }
 };
 
-
-} // namespace
-#endif  /* FF_COMMINTERFACE_HPP */
+} // namespace ff
+#endif /* FF_COMMINTERFACE_HPP */

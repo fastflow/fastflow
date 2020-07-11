@@ -53,184 +53,182 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-using mypair = std::pair<long,long>;
+using mypair = std::pair<long, long>;
 
 /* --------------------------------- */
 // these are the helper nodes. They are needed in the first test to transform a
 // multi-output node in a node that is both multi-input and multi-output
 // (i.e. a composition of two nodes, the first one multi-input and the second
 // one multi-output).
-struct MultiInputHelper1: ff_minode_t<mypair> {
-	mypair *svc(mypair *in) {
-        if (in == nullptr) return &init;
-        return in;
-    }
-    mypair init{-1,-1};
+struct MultiInputHelper1 : ff_minode_t<mypair> {
+  mypair *svc(mypair *in) {
+    if (in == nullptr) return &init;
+    return in;
+  }
+  mypair init{-1, -1};
 };
-struct MultiInputHelper2: ff_minode_t<mypair> {
-	mypair *svc(mypair *in) {
-        return in;
-    }
+struct MultiInputHelper2 : ff_minode_t<mypair> {
+  mypair *svc(mypair *in) { return in; }
 };
 /* --------------------------------- */
 
+struct Filter1 : ff_monode_t<mypair> {
+  Filter1(size_t nfilter2, bool check = false)
+      : nfilter2(nfilter2), check(check) {}
 
-struct Filter1: ff_monode_t<mypair> {
-    Filter1(size_t nfilter2, bool check=false):nfilter2(nfilter2),check(check) {}
+  int svc_init() {
+    ntasks = 10 * nfilter2;
+    return 0;
+  }
 
-    int svc_init() {
-        ntasks= 10*nfilter2;
-        return 0;
+  mypair *svc(mypair *in) {
+    if (in->first == -1 && in->second == -1) {
+      for (size_t i = 0; i < ntasks; ++i) {
+        mypair *out = new mypair;
+        out->first = get_my_id();
+        out->second = i;
+        ff_send_out_to(out, i % nfilter2);
+      }
+      return GO_ON;
     }
-    
-	mypair *svc(mypair *in) {
-        if (in->first==-1 && in->second == -1) {
-            for(size_t i=0; i<ntasks; ++i) {
-                mypair *out = new mypair;
-                out->first = get_my_id();
-                out->second = i;
-                ff_send_out_to(out, i%nfilter2);
-            }
-            return GO_ON;
-        }
-        if (check) {
-            if (in->first != get_my_id()) abort();
-        }
-
-        printf("Filter1 (%ld) got back result\n", get_my_id());
-        
-        delete in;
-        if (--ntasks == 0) return EOS;
-        return GO_ON;
+    if (check) {
+      if (in->first != get_my_id()) abort();
     }
-    void svc_end() { assert(ntasks==0); }
-    
-    size_t nfilter2;
-    size_t ntasks=0;
-    bool check;
+
+    printf("Filter1 (%ld) got back result\n", get_my_id());
+
+    delete in;
+    if (--ntasks == 0) return EOS;
+    return GO_ON;
+  }
+  void svc_end() { assert(ntasks == 0); }
+
+  size_t nfilter2;
+  size_t ntasks = 0;
+  bool check;
 };
-struct Filter2: ff_monode_t<mypair> {
-	mypair *svc(mypair *in) {
-        std::cout << "Filter2 (" << get_my_id() << ") : " << in->second << " from: " << in->first << "\n";
-        ff_send_out_to(in, in->first);
-        return GO_ON;
-    }
+struct Filter2 : ff_monode_t<mypair> {
+  mypair *svc(mypair *in) {
+    std::cout << "Filter2 (" << get_my_id() << ") : " << in->second
+              << " from: " << in->first << "\n";
+    ff_send_out_to(in, in->first);
+    return GO_ON;
+  }
 };
 
+struct Filter12 : ff_monode_t<mypair> {
+  Filter12(size_t nfilter2, bool check = false)
+      : nfilter2(nfilter2), check(check) {}
 
-struct Filter12: ff_monode_t<mypair> {
-    Filter12(size_t nfilter2, bool check=false):nfilter2(nfilter2),check(check) {}
+  int svc_init() {
+    ntasks = 10 * nfilter2;
+    return 0;
+  }
 
-    int svc_init() {
-        ntasks= 10*nfilter2;
-        return 0;
+  mypair *svc(mypair *in) {
+    if (in == nullptr || (in->first == -1 && in->second == -1)) {
+      for (size_t i = 0; i < ntasks; ++i) {
+        mypair *out = new mypair;
+        out->first = get_my_id();
+        out->second = i;
+        ff_send_out_to(out, get_my_id());
+      }
+      delete in;
+      return GO_ON;
     }
-    
-	mypair *svc(mypair *in) {
-        if (in == nullptr || (in->first==-1 && in->second == -1)) {
-            for(size_t i=0; i<ntasks; ++i) {
-                mypair *out = new mypair;
-                out->first = get_my_id();
-                out->second = i;
-                ff_send_out_to(out, get_my_id());
-            }
-            delete in;
-            return GO_ON;
-        }
-        if (check) {
-            if (in->first != get_my_id()) abort();
-        }
-
-        printf("Filter12 (%ld) got back result\n", get_my_id());
-        
-        delete in;
-        if (--ntasks == 0) return EOS;
-        return GO_ON;
+    if (check) {
+      if (in->first != get_my_id()) abort();
     }
-    void svc_end() { assert(ntasks==0); }
-    
-    size_t nfilter2;
-    size_t ntasks=0;
-    bool check;
+
+    printf("Filter12 (%ld) got back result\n", get_my_id());
+
+    delete in;
+    if (--ntasks == 0) return EOS;
+    return GO_ON;
+  }
+  void svc_end() { assert(ntasks == 0); }
+
+  size_t nfilter2;
+  size_t ntasks = 0;
+  bool check;
 };
 // this is a standard node
-struct Filter22: ff_node_t<mypair> {
-	mypair *svc(mypair *in) {
-        std::cout << "Filter22 (" << get_my_id() << ") : " << in->second << " from: " << in->first << "\n";
-        return in;
-    }
+struct Filter22 : ff_node_t<mypair> {
+  mypair *svc(mypair *in) {
+    std::cout << "Filter22 (" << get_my_id() << ") : " << in->second
+              << " from: " << in->first << "\n";
+    return in;
+  }
 };
 
-
 int main() {
-    int nfilter1 = 3; 
-    int nfilter2 = 2;
+  int nfilter1 = 3;
+  int nfilter2 = 2;
 
-    { // first test
+  { // first test
 
-        // NOTE: defining them as const is very important here because
-        //       we have to create a different composition for each node
-        const MultiInputHelper1 helper1;
-        const MultiInputHelper2 helper2;
-        const Filter1          F1(nfilter2,true);
-        const Filter2          F2;
-        
-        std::vector<ff_node*> W1;
-        for(int i=0;i<nfilter1;++i) {
-            // dynamically creating a composition of two nodes 
-            W1.push_back(new ff_comb(helper1, F1));
-        }
+    // NOTE: defining them as const is very important here because
+    //       we have to create a different composition for each node
+    const MultiInputHelper1 helper1;
+    const MultiInputHelper2 helper2;
+    const Filter1 F1(nfilter2, true);
+    const Filter2 F2;
 
-        std::vector<ff_node*> W2;          
-        for(int i=0;i<nfilter2;++i) {
-            // dynamically creating a composition of two nodes 
-            W2.push_back(new ff_comb(helper2, F2));
-        }
-        
-        ff_a2a a2a;
-        a2a.add_firstset(W1,0,true);
-        a2a.add_secondset(W2, true);
-        if (a2a.wrap_around()<0) {
-            error("wrap_around\n");
-            return -1;
-        }
-        
-        if (a2a.run_and_wait_end()<0) {
-            error("running A2A\n");
-            return -1;
-        }
+    std::vector<ff_node *> W1;
+    for (int i = 0; i < nfilter1; ++i) {
+      // dynamically creating a composition of two nodes
+      W1.push_back(new ff_comb(helper1, F1));
     }
-    printf("TEST1 DONE\n");
-    sleep(1);
-    { // second test
 
-        // we force the same cardinality for the 2 sets
-        nfilter2 = nfilter1;
-        
-        std::vector<ff_node*> W1;  
-        for(int i=0;i<nfilter1;++i)
-            W1.push_back(new Filter12(nfilter2, true));
-        std::vector<ff_node*> W2;          
-        for(int i=0;i<nfilter2;++i)
-            W2.push_back(new Filter22);
-        
-        ff_a2a a2a;
-        a2a.add_firstset(W1);
-        a2a.add_secondset(W2);
-        if (a2a.wrap_around()<0) {
-            error("wrap_around\n");
-            return -1;
-        }
-        
-        if (a2a.run_and_wait_end()<0) {
-            error("running A2A\n");
-            return -1;
-        }
-
-        for(int i=0;i<nfilter1;++i) delete W1[i];
-
-        for(int i=0;i<nfilter2;++i) delete W2[i];
+    std::vector<ff_node *> W2;
+    for (int i = 0; i < nfilter2; ++i) {
+      // dynamically creating a composition of two nodes
+      W2.push_back(new ff_comb(helper2, F2));
     }
-    printf("TEST2 DONE\n");
-    return 0;
+
+    ff_a2a a2a;
+    a2a.add_firstset(W1, 0, true);
+    a2a.add_secondset(W2, true);
+    if (a2a.wrap_around() < 0) {
+      error("wrap_around\n");
+      return -1;
+    }
+
+    if (a2a.run_and_wait_end() < 0) {
+      error("running A2A\n");
+      return -1;
+    }
+  }
+  printf("TEST1 DONE\n");
+  sleep(1);
+  { // second test
+
+    // we force the same cardinality for the 2 sets
+    nfilter2 = nfilter1;
+
+    std::vector<ff_node *> W1;
+    for (int i = 0; i < nfilter1; ++i)
+      W1.push_back(new Filter12(nfilter2, true));
+    std::vector<ff_node *> W2;
+    for (int i = 0; i < nfilter2; ++i) W2.push_back(new Filter22);
+
+    ff_a2a a2a;
+    a2a.add_firstset(W1);
+    a2a.add_secondset(W2);
+    if (a2a.wrap_around() < 0) {
+      error("wrap_around\n");
+      return -1;
+    }
+
+    if (a2a.run_and_wait_end() < 0) {
+      error("running A2A\n");
+      return -1;
+    }
+
+    for (int i = 0; i < nfilter1; ++i) delete W1[i];
+
+    for (int i = 0; i < nfilter2; ++i) delete W2[i];
+  }
+  printf("TEST2 DONE\n");
+  return 0;
 }

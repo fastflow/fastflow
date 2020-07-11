@@ -43,83 +43,76 @@
 #include <ff/mpmc/MPMCqueues.hpp>
 #include <ff/node.hpp>
 
-
-int    NTHREADS;
+int NTHREADS;
 size_t MYSIZE;
 std::atomic<long> counter;
-ff::MPMC_Ptr_Queue* q=NULL;
+ff::MPMC_Ptr_Queue *q = NULL;
 ff::Barrier *bar = NULL;
 
-
 // consumer function
-void * consumer(void * arg) {
-    int myid= *(int*)arg;
-    size_t * data;
+void *consumer(void *arg) {
+  int myid = *(int *)arg;
+  size_t *data;
 
-    bar->doBarrier(myid);
-    while(1) {
-	if (q->pop((void**)&data)) {
-	    printf("(%d %ld) ", myid, (long)data);
-        counter.fetch_add(1);
-	}
-	if ((size_t)(counter.load())>= MYSIZE) break;
+  bar->doBarrier(myid);
+  while (1) {
+    if (q->pop((void **)&data)) {
+      printf("(%d %ld) ", myid, (long)data);
+      counter.fetch_add(1);
     }
-    pthread_exit(NULL);
-    return NULL;
+    if ((size_t)(counter.load()) >= MYSIZE) break;
+  }
+  pthread_exit(NULL);
+  return NULL;
 }
 
-int main(int argc, char* argv[]) {
-    long qs = 20;
-    int nc = 6;
+int main(int argc, char *argv[]) {
+  long qs = 20;
+  int nc = 6;
 
-    if (argc>1) {
-        if (argc!=3) {
-            std::cerr << "use: "
-                      << argv[0]
-                      << " queue-size #consumers\n";
-            return -1;
-        }
-        qs=atol(argv[1]);
-        nc=atoi(argv[2]);
+  if (argc > 1) {
+    if (argc != 3) {
+      std::cerr << "use: " << argv[0] << " queue-size #consumers\n";
+      return -1;
     }
+    qs = atol(argv[1]);
+    nc = atoi(argv[2]);
+  }
 
+  MYSIZE = qs;
+  assert(MYSIZE > 0);
+  NTHREADS = nc;
+  assert(NTHREADS > 0);
 
-    MYSIZE= qs;
-    assert(MYSIZE>0);
-    NTHREADS=nc;
-    assert(NTHREADS>0);
+  q = new ff::MPMC_Ptr_Queue;
+  assert(q);
+  q->init(MYSIZE);
 
-    q = new ff::MPMC_Ptr_Queue;
-    assert(q);
-    q->init(MYSIZE);
+  for (size_t i = 1; i <= MYSIZE; ++i) q->push((void *)i);
 
-    for(size_t i=1;i<=MYSIZE;++i) 
-        q->push((void*)i);
+  counter.store(0);
 
-    counter.store(0);
+  pthread_t *C_handle;
 
-    pthread_t * C_handle;
+  C_handle = (pthread_t *)malloc(sizeof(pthread_t) * NTHREADS);
 
-    C_handle = (pthread_t *) malloc(sizeof(pthread_t)*NTHREADS);
-	
-    // define the number of threads that are going to partecipate....
-    bar = new ff::Barrier;
-    bar->barrierSetup(NTHREADS);
+  // define the number of threads that are going to partecipate....
+  bar = new ff::Barrier;
+  bar->barrierSetup(NTHREADS);
 
-    int * idC;
-    idC = (int *) malloc(sizeof(int)*NTHREADS);
-    for(int i=0;i<NTHREADS;++i) {
-        idC[i]=i;
-        if (pthread_create(&C_handle[i], NULL,consumer,&idC[i]) != 0) {
-            abort();
-        }
+  int *idC;
+  idC = (int *)malloc(sizeof(int) * NTHREADS);
+  for (int i = 0; i < NTHREADS; ++i) {
+    idC[i] = i;
+    if (pthread_create(&C_handle[i], NULL, consumer, &idC[i]) != 0) {
+      abort();
     }
+  }
 
-    // wait all consumers
-    for(int i=0;i<NTHREADS;++i) {
-        pthread_join(C_handle[i],NULL);
-    }
-    printf("\n");
-    return 0;
-
+  // wait all consumers
+  for (int i = 0; i < NTHREADS; ++i) {
+    pthread_join(C_handle[i], NULL);
+  }
+  printf("\n");
+  return 0;
 }

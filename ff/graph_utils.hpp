@@ -34,7 +34,6 @@
  *      
  */
 
-
 #include <ff/svector.hpp>
 #include <ff/node.hpp>
 #include <ff/farm.hpp>
@@ -43,58 +42,59 @@
 
 namespace ff {
 
-static svector<ff_node*> empty_svector(0);    
-    
-// checks if node is a farm with the collector node 
-static inline bool isfarm_withcollector(ff_node* node) {
-    if (node->isFarm()) {
-        ff_farm* farm= reinterpret_cast<ff_farm*>(node);
-        return farm->hasCollector();
-    }
-    return false;
+static svector<ff_node *> empty_svector(0);
+
+// checks if node is a farm with the collector node
+static inline bool isfarm_withcollector(ff_node *node) {
+  if (node->isFarm()) {
+    ff_farm *farm = reinterpret_cast<ff_farm *>(node);
+    return farm->hasCollector();
+  }
+  return false;
 }
 // checks if node is a farm with no collector and multi-output workers
-static inline bool isfarm_multimultioutput(ff_node* node) {
-    if (node->isFarm()) {
-        ff_farm* farm= reinterpret_cast<ff_farm*>(node);
-        if (farm->hasCollector()) return false;
-        const svector<ff_node*>& w1 = farm->getWorkers();
-        if (w1[0]->isMultiOutput()) return true;   // NOTE: here we suppose homogeneous workers
-    }
-    return false;
+static inline bool isfarm_multimultioutput(ff_node *node) {
+  if (node->isFarm()) {
+    ff_farm *farm = reinterpret_cast<ff_farm *>(node);
+    if (farm->hasCollector()) return false;
+    const svector<ff_node *> &w1 = farm->getWorkers();
+    if (w1[0]->isMultiOutput())
+      return true; // NOTE: here we suppose homogeneous workers
+  }
+  return false;
 }
-// checks if node is a farm, if yes it returns its worker nodes 
-static inline const svector<ff_node*>& isfarm_getworkers(ff_node* node) {
-    if (node->isFarm()) {
-        ff_farm* farm= reinterpret_cast<ff_farm*>(node);
-        return farm->getWorkers();
-    }
-    return empty_svector;
+// checks if node is a farm, if yes it returns its worker nodes
+static inline const svector<ff_node *> &isfarm_getworkers(ff_node *node) {
+  if (node->isFarm()) {
+    ff_farm *farm = reinterpret_cast<ff_farm *>(node);
+    return farm->getWorkers();
+  }
+  return empty_svector;
 }
 // checks if node is an all-to-all, if yes it returns the first set
-static inline const svector<ff_node*>& isa2a_getfirstset(ff_node* node) {
-    if (node->isAll2All()) {
-        ff_a2a* a2a = reinterpret_cast<ff_a2a*>(node);
-        return a2a->getFirstSet();
-    }
-    return empty_svector;
+static inline const svector<ff_node *> &isa2a_getfirstset(ff_node *node) {
+  if (node->isAll2All()) {
+    ff_a2a *a2a = reinterpret_cast<ff_a2a *>(node);
+    return a2a->getFirstSet();
+  }
+  return empty_svector;
 }
 // checks if node is an all-to-all, if yes it returns the second set
-static inline const svector<ff_node*>& isa2a_getsecondset(ff_node* node) {
-    if (node->isAll2All()) {
-        ff_a2a* a2a = reinterpret_cast<ff_a2a*>(node);
-        return a2a->getSecondSet();
-    }
-    return empty_svector;
+static inline const svector<ff_node *> &isa2a_getsecondset(ff_node *node) {
+  if (node->isAll2All()) {
+    ff_a2a *a2a = reinterpret_cast<ff_a2a *>(node);
+    return a2a->getSecondSet();
+  }
+  return empty_svector;
 }
-// checks if node is a pipeline, if yes it returns the last stage 
-static inline ff_node* ispipe_getlast(ff_node* node) {
-    if (node->isPipe()) {
-        ff_pipeline* pipe = reinterpret_cast<ff_pipeline*>(node);
-        return pipe->get_lastnode();
-    }
-    return nullptr;
+// checks if node is a pipeline, if yes it returns the last stage
+static inline ff_node *ispipe_getlast(ff_node *node) {
+  if (node->isPipe()) {
+    ff_pipeline *pipe = reinterpret_cast<ff_pipeline *>(node);
+    return pipe->get_lastnode();
+  }
+  return nullptr;
 }
-    
-} // namespace
+
+} // namespace ff
 #endif /* FF_GRAPH_UTILS_HPP */

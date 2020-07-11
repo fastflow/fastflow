@@ -48,123 +48,121 @@
 
 using namespace ff;
 
-FF_OCL_REDUCE_COMBINATOR(reducef, float, x, y,
-             return (x+y);
-             );
+FF_OCL_REDUCE_COMBINATOR(reducef, float, x, y, return (x + y););
 
 // stream task
 struct myTask {
-    myTask(float *M, const size_t size):M(M),sum(0.0),size(size)
+  myTask(float *M, const size_t size)
+      : M(M), sum(0.0), size(size)
 #ifdef CHECK
-    , expected_sum(0)
+        ,
+        expected_sum(0)
 #endif
-    {}
-    float *M;
-    float  sum;
-    const size_t size;
+  {
+  }
+  float *M;
+  float sum;
+  const size_t size;
 #ifdef CHECK
-    float expected_sum;
+  float expected_sum;
 #endif
 };
 
 // OpenCL task
-struct oclTask: public baseOCLTask<myTask, float> {
-    oclTask() {}
-    void setTask(myTask *task) { 
-        assert(task);
-        setInPtr(task->M, task->size);
-        setReduceVar(&task->sum);
-    }
+struct oclTask : public baseOCLTask<myTask, float> {
+  oclTask() {}
+  void setTask(myTask *task) {
+    assert(task);
+    setInPtr(task->M, task->size);
+    setReduceVar(&task->sum);
+  }
 
-    float combinator(float const &x, float const &y) {
+  float combinator(float const &x, float const &y) {
     //float combinator(float x, float y) {
-    	return x+y;
-    }
+    return x + y;
+  }
 };
 
-struct Emitter: public ff_node {
-    Emitter(long streamlen, size_t size):streamlen(streamlen),size(size) {}
-    void* svc(void*) {
-        for(int i=0;i<streamlen;++i) {
-            float* task = new float[size];            
-            for(size_t j=0;j<size;++j) task[j]=j+i;
-            myTask *T = new myTask(task, size);
+struct Emitter : public ff_node {
+  Emitter(long streamlen, size_t size) : streamlen(streamlen), size(size) {}
+  void *svc(void *) {
+    for (int i = 0; i < streamlen; ++i) {
+      float *task = new float[size];
+      for (size_t j = 0; j < size; ++j) task[j] = j + i;
+      myTask *T = new myTask(task, size);
 #ifdef CHECK
-            T->expected_sum = 0;
-            for(size_t j=0; j<size; ++j)
-            	T->expected_sum += task[j];
+      T->expected_sum = 0;
+      for (size_t j = 0; j < size; ++j) T->expected_sum += task[j];
 #endif
-            ff_send_out(T);
-        }
-        return EOS;
+      ff_send_out(T);
     }
-    long   streamlen;
-    size_t size;
+    return EOS;
+  }
+  long streamlen;
+  size_t size;
 };
 
-struct Collector: public ff_node_t<myTask> {
-    myTask *svc(myTask *t) {
-        printf("%.2f\n", t->sum);
+struct Collector : public ff_node_t<myTask> {
+  myTask *svc(myTask *t) {
+    printf("%.2f\n", t->sum);
 #if defined(CHECK)
-    	check &= (t->sum == t->expected_sum);
+    check &= (t->sum == t->expected_sum);
 #endif
-    	delete [] t->M; delete t;
-        return GO_ON;
-    }
+    delete[] t->M;
+    delete t;
+    return GO_ON;
+  }
 #ifdef CHECK
-    bool check;
-    Collector() : check(true) {}
+  bool check;
+  Collector() : check(true) {}
 #endif
 };
 
-struct Worker: ff_reduceOCL_1D<myTask, oclTask> {
-	Worker(std::string reducef) :
-			ff_reduceOCL_1D<myTask, oclTask>(reducef, 0.0, nullptr, NACC) {
-		SET_DEVICE_TYPE((*this));
-	}
+struct Worker : ff_reduceOCL_1D<myTask, oclTask> {
+  Worker(std::string reducef)
+      : ff_reduceOCL_1D<myTask, oclTask>(reducef, 0.0, nullptr, NACC) {
+    SET_DEVICE_TYPE((*this));
+  }
 };
 
+int main(int argc, char *argv[]) {
 
-int main(int argc, char * argv[]) {
-    
-    size_t inputsize   = 1024;
-    long   streamlen   = 2048;
-    int    nworkers    = 4;
-    
-     if  (argc > 1) {
-        if (argc < 4) { 
-            printf("use %s arraysize streamlen nworkers\n", argv[0]);
-            return 0;
-        } else {
-            inputsize = atol(argv[1]);
-            streamlen = atol(argv[2]);
-            nworkers = atoi(argv[3]);
-        }
+  size_t inputsize = 1024;
+  long streamlen = 2048;
+  int nworkers = 4;
+
+  if (argc > 1) {
+    if (argc < 4) {
+      printf("use %s arraysize streamlen nworkers\n", argv[0]);
+      return 0;
+    } else {
+      inputsize = atol(argv[1]);
+      streamlen = atol(argv[2]);
+      nworkers = atoi(argv[3]);
     }
-   
+  }
 
-    ff_farm<> farm;
-    Emitter   E(streamlen,inputsize);
-    Collector C;
-    farm.add_emitter(&E);
-    farm.add_collector(&C);
+  ff_farm<> farm;
+  Emitter E(streamlen, inputsize);
+  Collector C;
+  farm.add_emitter(&E);
+  farm.add_collector(&C);
 
-    oclTask oclt;
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) 
-        w.push_back(new Worker(reducef));
-    farm.add_workers(w);
-    farm.cleanup_workers();
-    farm.run_and_wait_end();
+  oclTask oclt;
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) w.push_back(new Worker(reducef));
+  farm.add_workers(w);
+  farm.cleanup_workers();
+  farm.run_and_wait_end();
 
 #if defined(CHECK)
-    if (!C.check) {
-    	printf("Wrong result\n");
-    	exit(1); //ctest
-    }
-    else printf("OK\n");
+  if (!C.check) {
+    printf("Wrong result\n");
+    exit(1); //ctest
+  } else
+    printf("OK\n");
 #endif
 
-    printf("DONE\n");
-    return 0;
+  printf("DONE\n");
+  return 0;
 }

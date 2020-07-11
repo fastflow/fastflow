@@ -39,107 +39,96 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-
-struct Generator: ff_node_t<long> {
-    long* svc(long*) {
-        for(long i=1;i<=10;++i) {
-            ff_send_out((long*)i);
-        }
-        return EOS;
+struct Generator : ff_node_t<long> {
+  long *svc(long *) {
+    for (long i = 1; i <= 10; ++i) {
+      ff_send_out((long *)i);
     }
+    return EOS;
+  }
 };
 
-struct Collector: ff_minode_t<long> {
-    int svc_init() {
-	return 0;
-    }
-    long* svc(long*) {
-	return GO_ON;
-    }
+struct Collector : ff_minode_t<long> {
+  int svc_init() { return 0; }
+  long *svc(long *) { return GO_ON; }
 };
-struct Worker: ff_node_t<long> {
-    long* svc(long*) {
-	return GO_ON;
-    }
+struct Worker : ff_node_t<long> {
+  long *svc(long *) { return GO_ON; }
 };
 
-struct PipeWorker: ff_pipeline {
-    PipeWorker() {
-	ff_farm* farm1 = new ff_farm;
-	std::vector<ff_node*> W;
-	W.push_back(new Worker);
-	W.push_back(new Worker);
-	farm1->add_workers(W);
-	farm1->add_collector(nullptr); 
-	
-	ff_a2a* a2a = new ff_a2a;
-	std::vector<ff_node*> Wa2a1;
-	Wa2a1.push_back(new Worker);
-	Wa2a1.push_back(new Worker);
-	a2a->add_firstset(Wa2a1);
+struct PipeWorker : ff_pipeline {
+  PipeWorker() {
+    ff_farm *farm1 = new ff_farm;
+    std::vector<ff_node *> W;
+    W.push_back(new Worker);
+    W.push_back(new Worker);
+    farm1->add_workers(W);
+    farm1->add_collector(nullptr);
 
-	
-      	ff_pipeline *ipipe = new ff_pipeline;
-	
-	ff_farm* farm2 = new ff_farm;
-	std::vector<ff_node*> W2;
-	W2.push_back(new Worker);
-	W2.push_back(new Worker);
-	farm2->add_workers(W2);
-	farm2->add_collector(nullptr);
+    ff_a2a *a2a = new ff_a2a;
+    std::vector<ff_node *> Wa2a1;
+    Wa2a1.push_back(new Worker);
+    Wa2a1.push_back(new Worker);
+    a2a->add_firstset(Wa2a1);
 
-	ipipe->add_stage(farm2);
+    ff_pipeline *ipipe = new ff_pipeline;
 
-	std::vector<ff_node*> Wa2a2;
-	Wa2a2.push_back(ipipe);
-	a2a->add_secondset(Wa2a2);
+    ff_farm *farm2 = new ff_farm;
+    std::vector<ff_node *> W2;
+    W2.push_back(new Worker);
+    W2.push_back(new Worker);
+    farm2->add_workers(W2);
+    farm2->add_collector(nullptr);
 
-       
-	ff_farm* farmA2A = new ff_farm;
-	farmA2A->add_collector(nullptr);
-	std::vector<ff_node*> _W;
-	_W.push_back(a2a);
-	farmA2A->add_workers(_W);
+    ipipe->add_stage(farm2);
 
-	add_stage(farm1);
-	add_stage(farmA2A);
-    }
+    std::vector<ff_node *> Wa2a2;
+    Wa2a2.push_back(ipipe);
+    a2a->add_secondset(Wa2a2);
 
+    ff_farm *farmA2A = new ff_farm;
+    farmA2A->add_collector(nullptr);
+    std::vector<ff_node *> _W;
+    _W.push_back(a2a);
+    farmA2A->add_workers(_W);
 
-    long* svc(long*) { abort();}
+    add_stage(farm1);
+    add_stage(farmA2A);
+  }
+
+  long *svc(long *) { abort(); }
 };
-
 
 int main() {
-    Generator gen;
-    Collector col;
+  Generator gen;
+  Collector col;
 
-    ff_farm farm;
-    std::vector<ff_node*> W;
-    W.push_back(new PipeWorker);
-    W.push_back(new PipeWorker);
-    W.push_back(new PipeWorker);
-    farm.add_workers(W);
-    farm.add_collector(nullptr);
+  ff_farm farm;
+  std::vector<ff_node *> W;
+  W.push_back(new PipeWorker);
+  W.push_back(new PipeWorker);
+  W.push_back(new PipeWorker);
+  farm.add_workers(W);
+  farm.add_collector(nullptr);
 
-    ff_Pipe<> pipe(gen, farm, col);
-    printf("Number of nodes= %d\n", pipe.cardinality());
-    OptLevel opt;
-    opt.remove_collector = true;
-    opt.verbose_level=2;
-    if (optimize_static(pipe, opt)<0) {
-	error("optimizing pipe\n");
-	return -1;
-    }
+  ff_Pipe<> pipe(gen, farm, col);
+  printf("Number of nodes= %d\n", pipe.cardinality());
+  OptLevel opt;
+  opt.remove_collector = true;
+  opt.verbose_level = 2;
+  if (optimize_static(pipe, opt) < 0) {
+    error("optimizing pipe\n");
+    return -1;
+  }
 
-    printf("Number of nodes= %d\n", pipe.cardinality());
-    if (pipe.cardinality() != 30) {
-	printf("WRONG RESULT\n");
-	return -1;
-    }
-    if (pipe.run_and_wait_end()<0) {
-	error("running pipe\n");
-	return -1;
-    }
-    return 0;
+  printf("Number of nodes= %d\n", pipe.cardinality());
+  if (pipe.cardinality() != 30) {
+    printf("WRONG RESULT\n");
+    return -1;
+  }
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+  return 0;
 }

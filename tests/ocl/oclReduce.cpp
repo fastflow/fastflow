@@ -42,52 +42,50 @@ using namespace ff;
 #define NACC 1
 #endif
 
-FF_OCL_REDUCE_COMBINATOR(reducef, float, x, y,
-                          return (x+y);
-                          );
+FF_OCL_REDUCE_COMBINATOR(reducef, float, x, y, return (x + y););
 
-struct oclTask: public baseOCLTask<oclTask, float> {
-    oclTask():M(NULL),result(0.0),size(0) {}
-    oclTask(float *M, size_t size):M(M),result(0.0),size(size) {}
-    void setTask(oclTask *t) { 
-        assert(t);
-        setInPtr(t->M, t->size);
-        setReduceVar(&(t->result));
-    }
-    float combinator(float const &x, float const &y) {return x+y;}
+struct oclTask : public baseOCLTask<oclTask, float> {
+  oclTask() : M(NULL), result(0.0), size(0) {}
+  oclTask(float *M, size_t size) : M(M), result(0.0), size(size) {}
+  void setTask(oclTask *t) {
+    assert(t);
+    setInPtr(t->M, t->size);
+    setReduceVar(&(t->result));
+  }
+  float combinator(float const &x, float const &y) { return x + y; }
 
-    float        *M;
-    float         result;
-    const size_t  size;
+  float *M;
+  float result;
+  const size_t size;
 };
 
-int main(int argc, char * argv[]) {
-    size_t size=5000;
-    if(argc > 1) size = atol(argv[1]);
-    printf("arraysize = %ld\n", size);
+int main(int argc, char *argv[]) {
+  size_t size = 5000;
+  if (argc > 1) size = atol(argv[1]);
+  printf("arraysize = %ld\n", size);
 
-    float *M        = new float[size];
-    for(size_t j=0;j<size;++j) M[j]=j + 1.0;
+  float *M = new float[size];
+  for (size_t j = 0; j < size; ++j) M[j] = j + 1.0;
 
-    oclTask oclt(M, size);
-    ff_reduceOCL_1D<oclTask> oclReduce(oclt, reducef, 0.0, nullptr, NACC);
+  oclTask oclt(M, size);
+  ff_reduceOCL_1D<oclTask> oclReduce(oclt, reducef, 0.0, nullptr, NACC);
 
-    SET_DEVICE_TYPE(oclReduce);
-    oclReduce.run_and_wait_end();
+  SET_DEVICE_TYPE(oclReduce);
+  oclReduce.run_and_wait_end();
 
-    printf("\nres=%.2f\n", oclt.result);
+  printf("\nres=%.2f\n", oclt.result);
 
 #ifdef CHECK
-    float res = 0.0;
-    for (size_t i=0; i<size; ++i) {
-        res +=M[i];
-    }
-    if (res!= oclt.result) {
-        printf("Error\n");
-        exit(1); //ctest
-    }
-    else printf("Result correct\n");
+  float res = 0.0;
+  for (size_t i = 0; i < size; ++i) {
+    res += M[i];
+  }
+  if (res != oclt.result) {
+    printf("Error\n");
+    exit(1); //ctest
+  } else
+    printf("Result correct\n");
 #endif
-    delete [] M;
-    return 0;
+  delete[] M;
+  return 0;
 }

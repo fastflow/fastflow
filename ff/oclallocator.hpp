@@ -47,68 +47,68 @@
 
 namespace ff {
 
-class ff_oclallocator {   
-    typedef std::map<const void*, cl_mem>            inner_map_t;
-    typedef std::map<cl_context, inner_map_t>  outer_map_t;
+class ff_oclallocator {
+  typedef std::map<const void *, cl_mem> inner_map_t;
+  typedef std::map<cl_context, inner_map_t> outer_map_t;
+
 public:
-    
-    cl_mem createBuffer(const void *key, 
-                        cl_context ctx, cl_mem_flags flags, size_t size, cl_int *status) {
-        cl_mem ptr = clCreateBuffer(ctx,flags,size, NULL,status);
-        if (*status == CL_SUCCESS) allocated[ctx][key] = ptr;
-        return ptr;
+  cl_mem createBuffer(const void *key, cl_context ctx, cl_mem_flags flags,
+      size_t size, cl_int *status) {
+    cl_mem ptr = clCreateBuffer(ctx, flags, size, NULL, status);
+    if (*status == CL_SUCCESS) allocated[ctx][key] = ptr;
+    return ptr;
+  }
+
+  cl_mem createBufferUnique(const void *key, cl_context ctx, cl_mem_flags flags,
+      size_t size, cl_int *status) {
+    if (allocated.find(ctx) != allocated.end()) {
+      inner_map_t::iterator it = allocated[ctx].find(key);
+      if (it != allocated[ctx].end()) {
+        *status = CL_SUCCESS;
+        return it->second;
+      }
     }
+    return createBuffer(key, ctx, flags, size, status);
+  }
 
-    cl_mem createBufferUnique(const void *key, 
-                              cl_context ctx, cl_mem_flags flags, size_t size, cl_int *status) {
-        if (allocated.find(ctx) != allocated.end()) {
-            inner_map_t::iterator it = allocated[ctx].find(key);
-            if (it != allocated[ctx].end()) {
-                *status = CL_SUCCESS;
-                return it->second;
-            }
-        }
-        return createBuffer(key,ctx,flags,size,status);
+  void updateKey(const void *oldkey, const void *newkey, cl_context ctx) {
+    assert(allocated.find(ctx) != allocated.end());
+    assert(allocated[ctx].find(oldkey) != allocated[ctx].end());
+
+    cl_mem ptr = allocated[ctx][oldkey];
+    allocated[ctx][newkey] = ptr;
+    allocated[ctx].erase(oldkey);
+  }
+
+  cl_int releaseBuffer(const void *key, cl_context ctx, cl_mem ptr) {
+    assert(allocated.find(ctx) != allocated.end());
+    assert(allocated[ctx].find(key) != allocated[ctx].end());
+    if (clReleaseMemObject(ptr) == CL_SUCCESS) {
+      allocated[ctx].erase(key);
+      return CL_SUCCESS;
     }
+    return CL_INVALID_MEM_OBJECT;
+  }
 
-    void updateKey(const void *oldkey, const void *newkey, cl_context ctx) {
-        assert(allocated.find(ctx) != allocated.end());
-        assert(allocated[ctx].find(oldkey) != allocated[ctx].end());
-        
-        cl_mem ptr = allocated[ctx][oldkey];
-        allocated[ctx][newkey] = ptr;
-        allocated[ctx].erase(oldkey);
-    }
+  cl_int releaseAllBuffers(cl_context ctx) {
+    outer_map_t::iterator it = allocated.find(ctx);
+    if (it == allocated.end()) return CL_SUCCESS;
 
-
-    cl_int releaseBuffer(const void *key, cl_context ctx, cl_mem ptr) {
-        assert(allocated.find(ctx) != allocated.end());
-        assert(allocated[ctx].find(key) != allocated[ctx].end());
-        if (clReleaseMemObject(ptr) == CL_SUCCESS) {
-            allocated[ctx].erase(key);
-            return CL_SUCCESS;
-        }
+    inner_map_t::iterator b = it->second.begin();
+    inner_map_t::iterator e = it->second.end();
+    while (b != e) {
+      if (clReleaseMemObject(b->second) != CL_SUCCESS)
         return CL_INVALID_MEM_OBJECT;
+      ++b;
     }
-
-    cl_int releaseAllBuffers(cl_context ctx) {
-        outer_map_t::iterator it = allocated.find(ctx);
-        if (it == allocated.end()) return CL_SUCCESS;
-
-        inner_map_t::iterator b=it->second.begin();
-        inner_map_t::iterator e=it->second.end();
-        while(b != e) { 
-            if (clReleaseMemObject(b->second) != CL_SUCCESS) return CL_INVALID_MEM_OBJECT;
-            ++b;
-        }
-        it->second.clear();
-        return CL_SUCCESS;
-    }
+    it->second.clear();
+    return CL_SUCCESS;
+  }
 
 protected:
-    std::map<cl_context, std::map<const void*, cl_mem> > allocated;
+  std::map<cl_context, std::map<const void *, cl_mem>> allocated;
 };
 
-} // namespace
+} // namespace ff
 
 #endif /* FF_OCLALLOCATOR_HPP */

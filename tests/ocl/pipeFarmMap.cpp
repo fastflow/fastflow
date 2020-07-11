@@ -45,124 +45,122 @@ using namespace ff;
 #define NACC 1
 #endif
 
-FF_OCL_MAP_ELEMFUNC(mapf, float, elem, useless,
-        (void)useless;
-		return (elem+1.0););
+FF_OCL_MAP_ELEMFUNC(mapf, float, elem, useless, (void)useless;
+                    return (elem + 1.0););
 
 // stream task
 struct myTask {
-    myTask(float *M, const size_t size):M(M),size(size)
+  myTask(float *M, const size_t size)
+      : M(M), size(size)
 #ifdef CHECK
-    , expected_sum(0)
+        ,
+        expected_sum(0)
 #endif
-    {}
-    float *M;
-    const size_t size;
+  {
+  }
+  float *M;
+  const size_t size;
 #ifdef CHECK
-    float expected_sum;
+  float expected_sum;
 #endif
 };
 
 // OpenCL task
-struct oclTask: public baseOCLTask<myTask, float> {
-	oclTask() {
-	}
-	void setTask(myTask *task) {
-		assert(task);
-		setInPtr(task->M, task->size);
-		setOutPtr(task->M, task->size);
-	}
+struct oclTask : public baseOCLTask<myTask, float> {
+  oclTask() {}
+  void setTask(myTask *task) {
+    assert(task);
+    setInPtr(task->M, task->size);
+    setOutPtr(task->M, task->size);
+  }
 };
 
-class ArrayGenerator: public ff_node_t<myTask> {
+class ArrayGenerator : public ff_node_t<myTask> {
 public:
-	ArrayGenerator(int streamlen, size_t size) :
-			streamlen(streamlen), size(size) {
-	}
+  ArrayGenerator(int streamlen, size_t size)
+      : streamlen(streamlen), size(size) {}
 
-	myTask* svc(myTask*) {
-		for (int i = 0; i < streamlen; ++i) {
-			float *t = new float[size];
-			for (size_t j = 0; j < size; ++j)
-				t[j] = j + i;
-			myTask *task = new myTask(t, size);
+  myTask *svc(myTask *) {
+    for (int i = 0; i < streamlen; ++i) {
+      float *t = new float[size];
+      for (size_t j = 0; j < size; ++j) t[j] = j + i;
+      myTask *task = new myTask(t, size);
 #ifdef CHECK
-            task->expected_sum = 0;
-            for(size_t j=0; j<size; ++j)
-            	task->expected_sum += task->M[j] + 1;
+      task->expected_sum = 0;
+      for (size_t j = 0; j < size; ++j) task->expected_sum += task->M[j] + 1;
 #endif
-			ff_send_out(task);
-		}
-		return EOS;
-	}
+      ff_send_out(task);
+    }
+    return EOS;
+  }
+
 private:
-	int streamlen;
-	size_t size;
+  int streamlen;
+  size_t size;
 };
 
-class ArrayGatherer: public ff_node_t<myTask> {
+class ArrayGatherer : public ff_node_t<myTask> {
 public:
-	myTask* svc(myTask *task) {
+  myTask *svc(myTask *task) {
 #if defined(CHECK)
-//		for(size_t i=0;i<task->size;++i) printf("%.2f ", task->M[i]);
-//		printf("\n");
-    	float sum = 0;
-    	for(size_t i=0; i<task->size; ++i)
-    		sum += task->M[i];
-    	check &= (sum == task->expected_sum);
+    //		for(size_t i=0;i<task->size;++i) printf("%.2f ", task->M[i]);
+    //		printf("\n");
+    float sum = 0;
+    for (size_t i = 0; i < task->size; ++i) sum += task->M[i];
+    check &= (sum == task->expected_sum);
 #endif
-		delete[] task->M;
-		delete task;
-		return GO_ON;
-	}
+    delete[] task->M;
+    delete task;
+    return GO_ON;
+  }
 #ifdef CHECK
-    bool check;
-    ArrayGatherer() : check(true) {}
+  bool check;
+  ArrayGatherer() : check(true) {}
 #endif
 };
 
-struct oclMap: ff_mapOCL_1D<myTask, oclTask> {
-    oclMap(const std::string &mapf):ff_mapOCL_1D<myTask, oclTask>(mapf, nullptr, NACC) {
-        SET_DEVICE_TYPE((*this));
-    }
+struct oclMap : ff_mapOCL_1D<myTask, oclTask> {
+  oclMap(const std::string &mapf)
+      : ff_mapOCL_1D<myTask, oclTask>(mapf, nullptr, NACC) {
+    SET_DEVICE_TYPE((*this));
+  }
 };
 
-int main(int argc, char * argv[]) {
+int main(int argc, char *argv[]) {
 
-    size_t size = 1024;
-	long streamlen = 1000;
-	int nworkers = 2;
+  size_t size = 1024;
+  long streamlen = 1000;
+  int nworkers = 2;
 
-    if  (argc > 1) {
-        if (argc < 4) {
-            printf("use %s arraysize streamlen nworkers\n", argv[0]);
-            return 0;
-        } else {
-            size = atol(argv[1]);
-            streamlen = atol(argv[2]);
-            nworkers = atoi(argv[3]);
-        }
+  if (argc > 1) {
+    if (argc < 4) {
+      printf("use %s arraysize streamlen nworkers\n", argv[0]);
+      return 0;
+    } else {
+      size = atol(argv[1]);
+      streamlen = atol(argv[2]);
+      nworkers = atoi(argv[3]);
     }
-    ArrayGenerator  generator(streamlen,size);
-    ArrayGatherer   gatherer;
-    ff_Farm<myTask> farm([nworkers]() {
-            std::vector<std::unique_ptr<ff_node> > W;
-            for (int i = 0; i < nworkers; ++i)
-                W.push_back(make_unique<oclMap>(mapf));            
-            return W;
-        } ());
+  }
+  ArrayGenerator generator(streamlen, size);
+  ArrayGatherer gatherer;
+  ff_Farm<myTask> farm([nworkers]() {
+    std::vector<std::unique_ptr<ff_node>> W;
+    for (int i = 0; i < nworkers; ++i) W.push_back(make_unique<oclMap>(mapf));
+    return W;
+  }());
 
-    ff_Pipe<> pipe(generator, farm, gatherer);
-	pipe.run_and_wait_end();
+  ff_Pipe<> pipe(generator, farm, gatherer);
+  pipe.run_and_wait_end();
 
 #if defined(CHECK)
-    if (!gatherer.check) {
-    	printf("Wrong result\n");
-    	exit(1); //ctest
-    }
-    else printf("OK\n");
+  if (!gatherer.check) {
+    printf("Wrong result\n");
+    exit(1); //ctest
+  } else
+    printf("OK\n");
 #endif
 
-	printf("DONE\n");
-	return 0;
+  printf("DONE\n");
+  return 0;
 }

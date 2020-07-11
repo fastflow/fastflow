@@ -46,125 +46,128 @@
 using namespace ff;
 
 // generic worker
-class Worker: public ff_node {
+class Worker : public ff_node {
 public:
-    Worker(const char *tag): tag(tag) {}
-    int svc_init() { std::cout << "[Worker" << tag << "] " << ff_node::get_my_id() << " started\n"; return 0; } 
-    void * svc(void * task) {
-        int * t = (int *)task;
-        std::cout << "[Worker" << tag << "] " << ff_node::get_my_id() 
-                  << " received task " << *t << "\n";
-        return task;
-    }
+  Worker(const char *tag) : tag(tag) {}
+  int svc_init() {
+    std::cout << "[Worker" << tag << "] " << ff_node::get_my_id()
+              << " started\n";
+    return 0;
+  }
+  void *svc(void *task) {
+    int *t = (int *)task;
+    std::cout << "[Worker" << tag << "] " << ff_node::get_my_id()
+              << " received task " << *t << "\n";
+    return task;
+  }
+
 private:
-    const char* tag;
+  const char *tag;
 };
 
 // the gatherer filter
-class Collector: public ff_node {
+class Collector : public ff_node {
 public:
-    Collector(ff_farm * f):secondFarm(f) {}
+  Collector(ff_farm *f) : secondFarm(f) {}
 
-    int svc_init() {
-        if (secondFarm==NULL) return 0;
-        else {
-            std::cerr << "Starting 2nd farm\n";
-            secondFarm->run_then_freeze();
-        }
-        return 0;
+  int svc_init() {
+    if (secondFarm == NULL)
+      return 0;
+    else {
+      std::cerr << "Starting 2nd farm\n";
+      secondFarm->run_then_freeze();
     }
+    return 0;
+  }
 
-    void * svc(void * task) {   
-        void * result=NULL;
-        int * t = (int *)task;
-        
-        if (secondFarm) {
-            std::cout << "[Farm Collector1] task received " << *t << "\n";
-            secondFarm->offload(task);
-            if (secondFarm->load_result_nb(&result)) {
-                std::cerr << "result_nb = " << *((int*)result) << "\n";
-                delete ((int*)result);
-                return GO_ON;
-            }
-        } else {
-            std::cout << "[Farm Collector2] task received " << *t << "\n";
-        }
-        return task;
+  void *svc(void *task) {
+    void *result = NULL;
+    int *t = (int *)task;
+
+    if (secondFarm) {
+      std::cout << "[Farm Collector1] task received " << *t << "\n";
+      secondFarm->offload(task);
+      if (secondFarm->load_result_nb(&result)) {
+        std::cerr << "result_nb = " << *((int *)result) << "\n";
+        delete ((int *)result);
+        return GO_ON;
+      }
+    } else {
+      std::cout << "[Farm Collector2] task received " << *t << "\n";
     }
+    return task;
+  }
 
-    void svc_end() {
-        if (secondFarm)  {
-            std::cerr << "SENDING EOS and WAITING RESULTS\n";
-            secondFarm->offload((void *)FF_EOS);
+  void svc_end() {
+    if (secondFarm) {
+      std::cerr << "SENDING EOS and WAITING RESULTS\n";
+      secondFarm->offload((void *)FF_EOS);
 
-            void * result;
-            while(secondFarm->load_result(&result)) {
-                std::cerr << "result = " << *((int*)result) << "\n";
-                delete ((int*)result);
-            }
-            secondFarm->wait();
-        }
+      void *result;
+      while (secondFarm->load_result(&result)) {
+        std::cerr << "result = " << *((int *)result) << "\n";
+        delete ((int *)result);
+      }
+      secondFarm->wait();
     }
-
+  }
 
 private:
-    ff_farm *secondFarm;
+  ff_farm *secondFarm;
 };
 
-int main(int argc, char * argv[]) {
-    int nworkers=4;
-    int streamlen=1000;
-    if (argc>1) {
-        if (argc<3) {
-            std::cerr << "use: " 
-                      << argv[0] 
-                      << " nworkers streamlen\n";
-            return -1;
-        }
-        
-        nworkers=atoi(argv[1]);
-        streamlen=atoi(argv[2]);
+int main(int argc, char *argv[]) {
+  int nworkers = 4;
+  int streamlen = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use: " << argv[0] << " nworkers streamlen\n";
+      return -1;
     }
-    if (nworkers<=0 || streamlen<=0) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
-    }
-    
-    ff_farm farm(true /* accelerator set */);
 
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker("1"));
-    farm.add_workers(w);
+    nworkers = atoi(argv[1]);
+    streamlen = atoi(argv[2]);
+  }
+  if (nworkers <= 0 || streamlen <= 0) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
 
-    ff_farm farm2(true);
-    std::vector<ff_node *> w2;
-    for(int i=0;i<nworkers;++i) w2.push_back(new Worker("2"));
-    farm2.add_workers(w2);
-    Collector C2(NULL);
-    farm2.add_collector(&C2);
-    
-    Collector C(&farm2);
-    farm.add_collector(&C);   
+  ff_farm farm(true /* accelerator set */);
 
-    // Now run the accelator asynchronusly
-    farm.run();
-    std::cout << "[Main] Farm accelerator started\n";
-    
-    for (int i=0;i<streamlen;i++) {
-        int * ii = new int(i);
-        std::cout << "[Main] Offloading " << i << "\n"; 
-        // Here offloading computation onto the farm
-        farm.offload(ii); 
-    }
-    std::cout << "[Main] EOS arrived\n";
-    void * eos = (void *)FF_EOS;
-    farm.offload(eos);
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) w.push_back(new Worker("1"));
+  farm.add_workers(w);
 
-    // Here join
-    farm.wait();  
+  ff_farm farm2(true);
+  std::vector<ff_node *> w2;
+  for (int i = 0; i < nworkers; ++i) w2.push_back(new Worker("2"));
+  farm2.add_workers(w2);
+  Collector C2(NULL);
+  farm2.add_collector(&C2);
 
-    std::cout << "[Main] Farm accelerator stopped\n";
+  Collector C(&farm2);
+  farm.add_collector(&C);
 
-    std::cerr << "[Main] DONE, time= " << farm.ffTime() << " (ms)\n";
-    return 0;
+  // Now run the accelator asynchronusly
+  farm.run();
+  std::cout << "[Main] Farm accelerator started\n";
+
+  for (int i = 0; i < streamlen; i++) {
+    int *ii = new int(i);
+    std::cout << "[Main] Offloading " << i << "\n";
+    // Here offloading computation onto the farm
+    farm.offload(ii);
+  }
+  std::cout << "[Main] EOS arrived\n";
+  void *eos = (void *)FF_EOS;
+  farm.offload(eos);
+
+  // Here join
+  farm.wait();
+
+  std::cout << "[Main] Farm accelerator stopped\n";
+
+  std::cerr << "[Main] DONE, time= " << farm.ffTime() << " (ms)\n";
+  return 0;
 }

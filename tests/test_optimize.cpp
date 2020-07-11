@@ -59,165 +59,155 @@
 
 using namespace ff;
 
-struct First: ff_node_t<long> {
-    First(const int ntasks):ntasks(ntasks) {}
-    long* svc(long*) {
-        for(long i=1;i<=ntasks;++i) {
-            struct timespec req;
-            req.tv_sec = 0;
-            req.tv_nsec = 5000;
-            nanosleep(&req, (struct timespec *)NULL);
+struct First : ff_node_t<long> {
+  First(const int ntasks) : ntasks(ntasks) {}
+  long *svc(long *) {
+    for (long i = 1; i <= ntasks; ++i) {
+      struct timespec req;
+      req.tv_sec = 0;
+      req.tv_nsec = 5000;
+      nanosleep(&req, (struct timespec *)NULL);
 
-            ff_send_out((long*)i);
-        }
-        return EOS;
+      ff_send_out((long *)i);
     }
-    const int ntasks;
+    return EOS;
+  }
+  const int ntasks;
 };
-struct Stage1: ff_node_t<long> {
-    long* svc(long*in) {
-        //printf("Stage1 (%ld) %ld\n", get_my_id(), (long)in);
-        struct timespec req;
-        req.tv_sec = 0;
-        req.tv_nsec = 30000;
-        nanosleep(&req, (struct timespec *)NULL);
-        
-        return in;
+struct Stage1 : ff_node_t<long> {
+  long *svc(long *in) {
+    //printf("Stage1 (%ld) %ld\n", get_my_id(), (long)in);
+    struct timespec req;
+    req.tv_sec = 0;
+    req.tv_nsec = 30000;
+    nanosleep(&req, (struct timespec *)NULL);
+
+    return in;
+  }
+};
+struct Stage2 : ff_node_t<long> {
+  long *svc(long *in) {
+    //printf("Stage2 (%ld) %ld\n", get_my_id(), (long)in);
+    struct timespec req;
+    req.tv_sec = 0;
+    req.tv_nsec = 30000;
+    nanosleep(&req, (struct timespec *)NULL);
+
+    return in;
+  }
+};
+struct Stage3 : ff_node_t<long> {
+  long *svc(long *in) {
+    //printf("Stage3 (%ld) %ld\n", get_my_id(), (long)in);
+    struct timespec req;
+    req.tv_sec = 0;
+    req.tv_nsec = 30000;
+    nanosleep(&req, (struct timespec *)NULL);
+
+    return in;
+  }
+};
+struct Stage4 : ff_node_t<long> {
+  long *svc(long *in) {
+    //printf("Stage4 (%ld) %ld\n", get_my_id(), (long)in);
+    struct timespec req;
+    req.tv_sec = 0;
+    req.tv_nsec = 30000;
+    nanosleep(&req, (struct timespec *)NULL);
+
+    return in;
+  }
+};
+struct Stage5 : ff_node_t<long> {
+  long *svc(long *in) {
+    //printf("Stage5 (%ld) %ld\n", get_my_id(), (long)in);
+    struct timespec req;
+    req.tv_sec = 0;
+    req.tv_nsec = 20000;
+    nanosleep(&req, (struct timespec *)NULL);
+
+    return in;
+  }
+};
+struct Stage6 : ff_node_t<long> {
+  long *svc(long *in) {
+    //printf("Stage6 (%ld) %ld\n", get_my_id(), (long)in);
+    struct timespec req;
+    req.tv_sec = 0;
+    req.tv_nsec = 20000;
+    nanosleep(&req, (struct timespec *)NULL);
+
+    return in;
+  }
+};
+struct Last : ff_node_t<long> {
+  long *svc(long *) {
+    //printf("received %ld\n", (long)in);
+    ++counter;
+    return GO_ON;
+  }
+  size_t counter = 0;
+};
+
+int main(int argc, char *argv[]) {
+
+  // default arguments
+  size_t ntasks = 10000;
+  bool optimize = true;
+  size_t nworkers1 = 3;
+  size_t nworkers2 = 2;
+
+  if (argc > 1) {
+    if (argc != 5) {
+      error("use: %s ntasks nworkers1 nworkers2 optimize\n", argv[0]);
+      return -1;
     }
-};
-struct Stage2: ff_node_t<long> {
-    long* svc(long*in) {
-        //printf("Stage2 (%ld) %ld\n", get_my_id(), (long)in);
-        struct timespec req;
-        req.tv_sec = 0;
-        req.tv_nsec = 30000;
-        nanosleep(&req, (struct timespec *)NULL);
+    ntasks = std::stol(argv[1]);
+    nworkers1 = std::stol(argv[2]);
+    nworkers2 = std::stol(argv[3]);
+    optimize = (std::stol(argv[4]) != 0);
+  }
 
-        return in;
-    }
-};
-struct Stage3: ff_node_t<long> {
-    long* svc(long*in) {
-        //printf("Stage3 (%ld) %ld\n", get_my_id(), (long)in);
-        struct timespec req;
-        req.tv_sec = 0;
-        req.tv_nsec = 30000;
-        nanosleep(&req, (struct timespec *)NULL);
-        
-        return in;
-    }
-};
-struct Stage4: ff_node_t<long> {
-    long* svc(long*in) {
-        //printf("Stage4 (%ld) %ld\n", get_my_id(), (long)in);
-        struct timespec req;
-        req.tv_sec = 0;
-        req.tv_nsec = 30000;
-        nanosleep(&req, (struct timespec *)NULL);
+  First first(ntasks);
+  Last last;
 
-        return in;
-    }
-};
-struct Stage5: ff_node_t<long> {
-    long* svc(long*in) {
-        //printf("Stage5 (%ld) %ld\n", get_my_id(), (long)in);
-        struct timespec req;
-        req.tv_sec = 0;
-        req.tv_nsec = 20000;
-        nanosleep(&req, (struct timespec *)NULL);
+  /* all the following farms have nworkers1 workers */
+  ff_Farm<long, long> farm1([&]() {
+    std::vector<std::unique_ptr<ff_node>> V;
+    for (size_t i = 0; i < nworkers1; ++i) V.push_back(make_unique<Stage1>());
+    return V;
+  }());
+  ff_Farm<long, long> farm2([&]() {
+    std::vector<std::unique_ptr<ff_node>> V;
+    for (size_t i = 0; i < nworkers1; ++i) V.push_back(make_unique<Stage2>());
+    return V;
+  }());
 
-        return in;
-    }
-};
-struct Stage6: ff_node_t<long> {
-    long* svc(long*in) {
-        //printf("Stage6 (%ld) %ld\n", get_my_id(), (long)in);
-        struct timespec req;
-        req.tv_sec = 0;
-        req.tv_nsec = 20000;
-        nanosleep(&req, (struct timespec *)NULL);
-        
-        return in;
-    }    
-};
-struct Last: ff_node_t<long> {
-    long* svc(long*) {
-        //printf("received %ld\n", (long)in);
-        ++counter;
-        return GO_ON;
-    }
-    size_t counter=0;
-};
+  ff_Farm<long, long> farm3([&]() {
+    std::vector<std::unique_ptr<ff_node>> V;
+    for (size_t i = 0; i < nworkers1; ++i) V.push_back(make_unique<Stage3>());
+    return V;
+  }());
+  ff_Farm<long, long> farm4([&]() {
+    std::vector<std::unique_ptr<ff_node>> V;
+    for (size_t i = 0; i < nworkers1; ++i) V.push_back(make_unique<Stage4>());
+    return V;
+  }());
+  /* ---------------------------------------------------- */
 
+  /* the following farms have nworkers2 workers */
+  ff_Farm<long, long> farm5([&]() {
+    std::vector<std::unique_ptr<ff_node>> V;
+    for (size_t i = 0; i < nworkers2; ++i) V.push_back(make_unique<Stage5>());
+    return V;
+  }());
 
-int main(int argc, char* argv[]) {
-
-    // default arguments
-    size_t ntasks    = 10000;
-    bool   optimize  = true;
-    size_t nworkers1 = 3;
-    size_t nworkers2 = 2;
-
-
-    if (argc>1) {
-        if (argc!=5) {
-            error("use: %s ntasks nworkers1 nworkers2 optimize\n",argv[0]);
-            return -1;
-        }
-        ntasks    = std::stol(argv[1]);
-        nworkers1 = std::stol(argv[2]);
-        nworkers2 = std::stol(argv[3]);
-        optimize  = (std::stol(argv[4])!=0);
-    }
-
-    First first(ntasks);
-    Last last;
-
-
-    /* all the following farms have nworkers1 workers */
-    ff_Farm<long,long> farm1([&]() {
-	    std::vector<std::unique_ptr<ff_node> > V;
-	    for(size_t i=0;i<nworkers1;++i)
-		V.push_back(make_unique<Stage1>());
-	    return V;
-	} ());
-    ff_Farm<long,long> farm2([&]() {
-	    std::vector<std::unique_ptr<ff_node> > V;
-	    for(size_t i=0;i<nworkers1;++i)
-		V.push_back(make_unique<Stage2>());
-	    return V;
-	} ());
-
-
-    ff_Farm<long,long> farm3([&]() {
-	    std::vector<std::unique_ptr<ff_node> > V;
-	    for(size_t i=0;i<nworkers1;++i)
-		V.push_back(make_unique<Stage3>());
-	    return V;
-	} ());
-    ff_Farm<long,long> farm4([&]() {
-	    std::vector<std::unique_ptr<ff_node> > V;
-	    for(size_t i=0;i<nworkers1;++i)
-		V.push_back(make_unique<Stage4>());
-	    return V;
-	} ());
-    /* ---------------------------------------------------- */
-
-    /* the following farms have nworkers2 workers */
-    ff_Farm<long,long> farm5([&]() {
-	    std::vector<std::unique_ptr<ff_node> > V;
-	    for(size_t i=0;i<nworkers2;++i)
-		V.push_back(make_unique<Stage5>());
-	    return V;
-	} ());
-
-    ff_Farm<long,long> farm6([&]() {
-	    std::vector<std::unique_ptr<ff_node> > V;
-	    for(size_t i=0;i<nworkers2;++i)
-		V.push_back(make_unique<Stage6>());
-	    return V;
-	} ());
-    /* ---------------------------------------------------- */
+  ff_Farm<long, long> farm6([&]() {
+    std::vector<std::unique_ptr<ff_node>> V;
+    for (size_t i = 0; i < nworkers2; ++i) V.push_back(make_unique<Stage6>());
+    return V;
+  }());
+  /* ---------------------------------------------------- */
 
 #if 0
     farm1.set_scheduling_ondemand();
@@ -227,42 +217,45 @@ int main(int argc, char* argv[]) {
     farm5.set_scheduling_ondemand();
     farm6.set_scheduling_ondemand();
 #endif
-    // original network
-    //ff_Pipe<> pipe(first, farm1, farm2, farm3, farm4, farm5, farm6, last);
-    ff_Pipe<> pipe(first, farm1, farm2, farm3, farm4, farm5, farm6, last);
+  // original network
+  //ff_Pipe<> pipe(first, farm1, farm2, farm3, farm4, farm5, farm6, last);
+  ff_Pipe<> pipe(first, farm1, farm2, farm3, farm4, farm5, farm6, last);
 
-    // optimization that I would like to apply, if possible
-    if (optimize) {
-        OptLevel opt;
-        opt.max_nb_threads=ff_realNumCores();
-        opt.max_mapped_threads=opt.max_nb_threads;
-        opt.verbose_level=2;
-        opt.no_initial_barrier=true;
-        opt.no_default_mapping=true; // disable mapping if #threads > max_mapped_threads
-        opt.blocking_mode=true;      // enabling blocking if #threads > max_nb_threads
-        opt.merge_farms=true;        // introducing normal form, if possible
-        opt.merge_with_emitter=true; // merging previous pipeline stage with farm emitter 
-        opt.remove_collector=true;   // remove farm collector
-        opt.introduce_a2a=true;      // introduce all-2-all between two farms, if possible
-        
-        // the next call tries to apply all previous optimizations by changing the 
-        // internal structure of the pipe passed as parameter
-        if (optimize_static(pipe,opt)<0) {
-            error("optimize_static\n");
-            return -1;
-         }
+  // optimization that I would like to apply, if possible
+  if (optimize) {
+    OptLevel opt;
+    opt.max_nb_threads = ff_realNumCores();
+    opt.max_mapped_threads = opt.max_nb_threads;
+    opt.verbose_level = 2;
+    opt.no_initial_barrier = true;
+    opt.no_default_mapping =
+        true; // disable mapping if #threads > max_mapped_threads
+    opt.blocking_mode = true; // enabling blocking if #threads > max_nb_threads
+    opt.merge_farms = true;   // introducing normal form, if possible
+    opt.merge_with_emitter =
+        true; // merging previous pipeline stage with farm emitter
+    opt.remove_collector = true; // remove farm collector
+    opt.introduce_a2a =
+        true; // introduce all-2-all between two farms, if possible
+
+    // the next call tries to apply all previous optimizations by changing the
+    // internal structure of the pipe passed as parameter
+    if (optimize_static(pipe, opt) < 0) {
+      error("optimize_static\n");
+      return -1;
     }
-    printf("the n. of threads implementing the pipe is %d\n", pipe.cardinality());
-    // running the optimized pipe
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipeline\n");
-        return -1;
-    }
-    printf("Time = %g (ms)\n",pipe.ffTime());
-    if (last.counter != ntasks) {
-        printf("test FAILED (%ld)\n", last.counter);
-        return -1;
-    }
-    printf("test DONE\n");
-    return 0;
+  }
+  printf("the n. of threads implementing the pipe is %d\n", pipe.cardinality());
+  // running the optimized pipe
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipeline\n");
+    return -1;
+  }
+  printf("Time = %g (ms)\n", pipe.ffTime());
+  if (last.counter != ntasks) {
+    printf("test FAILED (%ld)\n", last.counter);
+    return -1;
+  }
+  printf("test DONE\n");
+  return 0;
 }

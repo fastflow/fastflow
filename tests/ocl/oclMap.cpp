@@ -51,7 +51,6 @@
 #include <ff/stencilReduceOCL.hpp>
 using namespace ff;
 
-
 // to check the result
 #define CHECK 1
 #ifdef CHECK
@@ -61,68 +60,64 @@ using namespace ff;
 #endif
 
 // kernel 1
-FF_OCL_MAP_ELEMFUNC(mapf1, float, elem, i,
-                    return i;
-                    );
+FF_OCL_MAP_ELEMFUNC(mapf1, float, elem, i, return i;);
 
 // kernel 2
-FF_OCL_MAP_ELEMFUNC(mapf2, float, elem, useless,
-                    (void)useless;
-                    return (elem+1.0);
-                    );
+FF_OCL_MAP_ELEMFUNC(mapf2, float, elem, useless, (void)useless;
+                    return (elem + 1.0););
 
 // the OpenCL interface type
-struct oclTask: public baseOCLTask<oclTask, float> {
-    oclTask():M(NULL),size(0) {}
-    oclTask(float *M, size_t size):M(M),size(size) {}
-    void setTask(oclTask *t) { 
-        setInPtr(t->M, t->size, MemoryFlags());  // set host input pointer
-        setOutPtr(t->M, t->size, MemoryFlags());          // set host output pointer
-    }
+struct oclTask : public baseOCLTask<oclTask, float> {
+  oclTask() : M(NULL), size(0) {}
+  oclTask(float *M, size_t size) : M(M), size(size) {}
+  void setTask(oclTask *t) {
+    setInPtr(t->M, t->size, MemoryFlags());  // set host input pointer
+    setOutPtr(t->M, t->size, MemoryFlags()); // set host output pointer
+  }
 
-    float *M;
-    const size_t  size;
+  float *M;
+  const size_t size;
 };
 
-int main(int argc, char * argv[]) {
-    size_t size=2048;
-    if(argc>1) size     =atol(argv[1]);
-    printf("arraysize = %ld\n", size);
+int main(int argc, char *argv[]) {
+  size_t size = 2048;
+  if (argc > 1) size = atol(argv[1]);
+  printf("arraysize = %ld\n", size);
 
 #ifdef CHECK
-    std::vector<float> M_(size);
-    for(size_t j=0;j<size;++j) M_[j]=j;
+  std::vector<float> M_(size);
+  for (size_t j = 0; j < size; ++j) M_[j] = j;
 #endif
 
-    std::vector<float> M(size);
+  std::vector<float> M(size);
 
-    oclTask oclt(const_cast<float*>(M.data()), size);
-    ff_mapOCL_1D<oclTask> oclMap1(oclt, mapf1, nullptr, NACC);
-    // just selects whether the execution is on the CPU or GPU on the base of what
-    // is written in the ctest.h file
-    SET_DEVICE_TYPE(oclMap1); 
-    if (oclMap1.run_and_wait_end()<0) {
-        error("running oclMap1\n");
-        return -1;
-    }
+  oclTask oclt(const_cast<float *>(M.data()), size);
+  ff_mapOCL_1D<oclTask> oclMap1(oclt, mapf1, nullptr, NACC);
+  // just selects whether the execution is on the CPU or GPU on the base of what
+  // is written in the ctest.h file
+  SET_DEVICE_TYPE(oclMap1);
+  if (oclMap1.run_and_wait_end() < 0) {
+    error("running oclMap1\n");
+    return -1;
+  }
 
-    ff_mapOCL_1D<oclTask> oclMap2(oclt, mapf2, nullptr, NACC);
-    // just selects whether the execution is on the CPU or GPU on the base of what
-    // is written in the ctest.h file
-    SET_DEVICE_TYPE(oclMap2); 
-    if (oclMap2.run_and_wait_end()<0) {
-        error("running oclMap2\n");
-        return -1;
-    }
+  ff_mapOCL_1D<oclTask> oclMap2(oclt, mapf2, nullptr, NACC);
+  // just selects whether the execution is on the CPU or GPU on the base of what
+  // is written in the ctest.h file
+  SET_DEVICE_TYPE(oclMap2);
+  if (oclMap2.run_and_wait_end() < 0) {
+    error("running oclMap2\n");
+    return -1;
+  }
 
 #if defined(CHECK)
-	for (size_t i = 0; i < size; ++i) {
-		if ((M_[i]+1) != M[i]) {
-            printf("Error\n");
-            exit(1); //ctest
-        }
-	}
-    printf("Result correct\n");
+  for (size_t i = 0; i < size; ++i) {
+    if ((M_[i] + 1) != M[i]) {
+      printf("Error\n");
+      exit(1); //ctest
+    }
+  }
+  printf("Result correct\n");
 #endif
-    return 0;
+  return 0;
 }

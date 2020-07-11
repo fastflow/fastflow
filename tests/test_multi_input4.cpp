@@ -34,34 +34,33 @@
 #include <ff/ff.hpp>
 
 using namespace ff;
-long const int NUMTASKS=1000;
+long const int NUMTASKS = 1000;
 
-struct Stage1: ff_node {
-    void *svc(void*) {
-        for(long i=1;i<=NUMTASKS;++i)
-            ff_send_out((void*)i);
-        return NULL;
-    }
+struct Stage1 : ff_node {
+  void *svc(void *) {
+    for (long i = 1; i <= NUMTASKS; ++i) ff_send_out((void *)i);
+    return NULL;
+  }
 };
-struct Stage2: ff_minode {
-    void *svc(void *task) {
-        printf("Stage2 got task from %zd\n", get_channel_id());        
-        if (fromInput()) return task; 
-        return GO_ON;
-    }
-    void eosnotify(ssize_t) {
-        ff_send_out((void*)EOS);
-    }
+struct Stage2 : ff_minode {
+  void *svc(void *task) {
+    printf("Stage2 got task from %zd\n", get_channel_id());
+    if (fromInput()) return task;
+    return GO_ON;
+  }
+  void eosnotify(ssize_t) { ff_send_out((void *)EOS); }
 };
-struct Stage3: ff_node {
-    void *svc(void *task) {
-        long t=(long)task;
-        printf("Stage3: got %ld, sending it back\n",t);
-        return task;
-    }
+struct Stage3 : ff_node {
+  void *svc(void *task) {
+    long t = (long)task;
+    printf("Stage3: got %ld, sending it back\n", t);
+    return task;
+  }
 };
 int main() {
-    Stage1 s1; Stage2 s2; Stage3 s3;
+  Stage1 s1;
+  Stage2 s2;
+  Stage3 s3;
 #if 0    
     ff_pipeline pipe2;
     pipe2.add_stage(&s2);
@@ -76,14 +75,14 @@ int main() {
     pipe.add_stage(&pipe2);
     pipe.run_and_wait_end();
 #else
-    ff_Pipe pipeI(s2,s3);
-    pipeI.wrap_around();
-    ff_Pipe pipe(s1,pipeI);
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipe\n");
-        return -1;
-    }
-#endif    
-    printf("DONE\n");
-    return 0;
+  ff_Pipe pipeI(s2, s3);
+  pipeI.wrap_around();
+  ff_Pipe pipe(s1, pipeI);
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+#endif
+  printf("DONE\n");
+  return 0;
 }

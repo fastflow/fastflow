@@ -45,70 +45,73 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-class Stage1: public ff_node_t<long> {
+class Stage1 : public ff_node_t<long> {
 public:
-    long * svc(long * t) {
-        std::cout << "Stage1 got task " << *t << "\n";
-        (*t)--;
-        return t;
-    }
+  long *svc(long *t) {
+    std::cout << "Stage1 got task " << *t << "\n";
+    (*t)--;
+    return t;
+  }
 };
 
-class Stage2: public ff_node_t<long> {   
+class Stage2 : public ff_node_t<long> {
 public:
-    long * svc(long * t) {
-        std::cout << "Stage2 got task " << *t << "\n";
-        (*t)--;
-        return t;
-    }
-}; 
-
-class Emitter: public ff_node_t<long> {
-public:
-    long * svc(long * task) { 
-        if (!task)  return new long(1000);
-
-        std::cout << "Emitter task came back " << *task << "\n";
-        
-        if (*task<=0) { delete task; return nullptr;}
-        return task;
-    }
+  long *svc(long *t) {
+    std::cout << "Stage2 got task " << *t << "\n";
+    (*t)--;
+    return t;
+  }
 };
 
+class Emitter : public ff_node_t<long> {
+public:
+  long *svc(long *task) {
+    if (!task) return new long(1000);
 
-int main(int argc, char * argv[]) {
-    int nworkers  = 3;
-    if (argc>1) {
-        if (argc != 2) {
-            std::cerr << "use:\n" << " " << argv[0] << " num-farm-workers\n";
-            return -1;
-        }
-        nworkers  =atoi(argv[1]);
+    std::cout << "Emitter task came back " << *task << "\n";
+
+    if (*task <= 0) {
+      delete task;
+      return nullptr;
     }
+    return task;
+  }
+};
 
-    ff_farm farm;
-    Emitter E;
-    farm.add_emitter(&E); 
-
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) {
-        // build worker pipeline 
-        ff_pipeline * pipe = new ff_pipeline;
-        pipe->add_stage(new Stage1, true);
-        pipe->add_stage(new Stage2, true);
-        w.push_back(pipe);
+int main(int argc, char *argv[]) {
+  int nworkers = 3;
+  if (argc > 1) {
+    if (argc != 2) {
+      std::cerr << "use:\n"
+                << " " << argv[0] << " num-farm-workers\n";
+      return -1;
     }
-    farm.add_workers(w);
-    farm.wrap_around();
-    farm.cleanup_workers();
+    nworkers = atoi(argv[1]);
+  }
 
-    farm.run();
-    // wait all threads join
-    if (farm.wait()<0) {
-        error("waiting farm freezing\n");
-        return -1;
-    }
+  ff_farm farm;
+  Emitter E;
+  farm.add_emitter(&E);
 
-    std::cout << "DONE\n";
-    return 0;
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) {
+    // build worker pipeline
+    ff_pipeline *pipe = new ff_pipeline;
+    pipe->add_stage(new Stage1, true);
+    pipe->add_stage(new Stage2, true);
+    w.push_back(pipe);
+  }
+  farm.add_workers(w);
+  farm.wrap_around();
+  farm.cleanup_workers();
+
+  farm.run();
+  // wait all threads join
+  if (farm.wait() < 0) {
+    error("waiting farm freezing\n");
+    return -1;
+  }
+
+  std::cout << "DONE\n";
+  return 0;
 }

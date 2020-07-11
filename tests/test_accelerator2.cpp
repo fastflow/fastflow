@@ -36,32 +36,31 @@
 using namespace ff;
 
 // generic worker
-class Worker: public ff_node {
+class Worker : public ff_node {
 public:
-    void * svc(void * task) {
-        int * t = (int *)task;
-        std::cout << "[Worker] " << ff_node::get_my_id() 
-                  << " received task " << *t << "\n";
-        return task;
-    }
-    // I don't need the following for this test
-    //int   svc_init() { return 0; }
-    //void  svc_end() {}
-
+  void *svc(void *task) {
+    int *t = (int *)task;
+    std::cout << "[Worker] " << ff_node::get_my_id() << " received task " << *t
+              << "\n";
+    return task;
+  }
+  // I don't need the following for this test
+  //int   svc_init() { return 0; }
+  //void  svc_end() {}
 };
 
 // the gatherer filter
-class Collector: public ff_node {
+class Collector : public ff_node {
 public:
-    void * svc(void * task) {        
-        int * t = (int *)task;
-        std::cout << "[Farm Collector] task received " << *t << "\n";
-        delete ((int*)task);
-        return GO_ON;
-    }
+  void *svc(void *task) {
+    int *t = (int *)task;
+    std::cout << "[Farm Collector] task received " << *t << "\n";
+    delete ((int *)task);
+    return GO_ON;
+  }
 };
 
-// the load-balancer filter 
+// the load-balancer filter
 /* 
 class Emitter: public ff_node {
 public:
@@ -77,52 +76,49 @@ private:
 };
 */
 
-int main(int argc, char * argv[]) {
-    int nworkers = 3;
-    int streamlen=1000;
-    if (argc>1) {
-        if (argc<3) {
-            std::cerr << "use: " 
-                      << argv[0] 
-                      << " nworkers streamlen\n";
-            return -1;
-        }    
-        nworkers=atoi(argv[1]);
-        streamlen=atoi(argv[2]);
+int main(int argc, char *argv[]) {
+  int nworkers = 3;
+  int streamlen = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use: " << argv[0] << " nworkers streamlen\n";
+      return -1;
     }
-    if (nworkers<=0 || streamlen<=0) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
-    }
-    
-    ff_farm farm(true /* accelerator set */);
-    std::vector<ff_node *> W;
-    for(int i=0;i<nworkers;++i) W.push_back(new Worker);
-    farm.add_workers(W);
+    nworkers = atoi(argv[1]);
+    streamlen = atoi(argv[2]);
+  }
+  if (nworkers <= 0 || streamlen <= 0) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
 
-    Collector C;
-    farm.add_collector(&C);   
-    
+  ff_farm farm(true /* accelerator set */);
+  std::vector<ff_node *> W;
+  for (int i = 0; i < nworkers; ++i) W.push_back(new Worker);
+  farm.add_workers(W);
 
-    // Now run the accelator asynchronusly
-    farm.run();
-    std::cout << "[Main] Farm accelerator started\n";
-    
-    for (int i=0;i<streamlen;i++) {
-        int * ii = new int(i);
-        std::cout << "[Main] Offloading " << i << "\n"; 
-        // Here offloading computation into the farm
-        farm.offload(ii); 
-    }
-    std::cout << "[Main] EOS arrived\n";
-    void * eos = (void *)FF_EOS;
-    farm.offload(eos);
-    
-    // Here join
-    farm.wait();  
+  Collector C;
+  farm.add_collector(&C);
 
-    std::cout << "[Main] Farm accelerator stopped\n";
+  // Now run the accelator asynchronusly
+  farm.run();
+  std::cout << "[Main] Farm accelerator started\n";
 
-    std::cerr << "[Main] DONE, time= " << farm.ffTime() << " (ms)\n";
-    return 0;
+  for (int i = 0; i < streamlen; i++) {
+    int *ii = new int(i);
+    std::cout << "[Main] Offloading " << i << "\n";
+    // Here offloading computation into the farm
+    farm.offload(ii);
+  }
+  std::cout << "[Main] EOS arrived\n";
+  void *eos = (void *)FF_EOS;
+  farm.offload(eos);
+
+  // Here join
+  farm.wait();
+
+  std::cout << "[Main] Farm accelerator stopped\n";
+
+  std::cerr << "[Main] DONE, time= " << farm.ffTime() << " (ms)\n";
+  return 0;
 }

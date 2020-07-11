@@ -30,8 +30,8 @@
  * Date:   September 2015
  *
  */
-#include<iostream>
-#include<ff/farm.hpp>
+#include <iostream>
+#include <ff/farm.hpp>
 
 #if !defined(FF_TPC)
 // needed to enable the TPC FastFlow run-time
@@ -42,8 +42,8 @@
 using namespace ff;
 
 // kernel id inside the FPGA
-#define KERNEL1_ID	  1
-#define MAX_SIZE 	512
+#define KERNEL1_ID 1
+#define MAX_SIZE 512
 
 // the kernel code is:
 // void kernel1(uint32_t const *const idx_start, uint32_t const *const idx_stop,
@@ -67,103 +67,99 @@ using namespace ff;
 //   *retval = r;
 // }
 
+struct Task : public baseTPCTask<Task> {
+  Task() : in(nullptr), sizein(0), start(0), stop(0), result(0) {}
 
-struct Task: public baseTPCTask<Task> {
-    Task():in(nullptr),sizein(0),start(0),stop(0),result(0) {}
-              
-    Task(uint32_t *in, uint32_t sizein, uint32_t start, uint32_t stop):
-        in(in),sizein(sizein),start(start),stop(stop),result(0) {}
+  Task(uint32_t *in, uint32_t sizein, uint32_t start, uint32_t stop)
+      : in(in), sizein(sizein), start(start), stop(stop), result(0) {}
 
-    void setTask(const Task *t) { 
+  void setTask(const Task *t) {
 
-        setKernelId(KERNEL1_ID);
-        
-        setInPtr(&t->start, 1, 
-                 BitFlags::COPYTO, BitFlags::DONTREUSE, BitFlags::DONTRELEASE);
-        setInPtr(&t->stop,  1,
-                 BitFlags::COPYTO, BitFlags::DONTREUSE, BitFlags::DONTRELEASE);
+    setKernelId(KERNEL1_ID);
 
-        // the input array is copied only the first task
-        setInPtr(t->in, t->sizein, 
-                 first_time_flag?BitFlags::COPYTO:BitFlags::DONTCOPYTO, 
-                 !first_time_flag?BitFlags::REUSE:BitFlags::DONTREUSE, 
-                 BitFlags::DONTRELEASE);
+    setInPtr(&t->start, 1, BitFlags::COPYTO, BitFlags::DONTREUSE,
+        BitFlags::DONTRELEASE);
+    setInPtr(&t->stop, 1, BitFlags::COPYTO, BitFlags::DONTREUSE,
+        BitFlags::DONTRELEASE);
 
-        setOutPtr(&t->result, 1, 
-                  BitFlags::COPYBACK, BitFlags::DONTREUSE, BitFlags::DONTRELEASE);
+    // the input array is copied only the first task
+    setInPtr(t->in, t->sizein,
+        first_time_flag ? BitFlags::COPYTO : BitFlags::DONTCOPYTO,
+        !first_time_flag ? BitFlags::REUSE : BitFlags::DONTREUSE,
+        BitFlags::DONTRELEASE);
 
-        first_time_flag = false;
-    }
+    setOutPtr(&t->result, 1, BitFlags::COPYBACK, BitFlags::DONTREUSE,
+        BitFlags::DONTRELEASE);
 
-    uint32_t *in;
-    uint32_t  sizein;
-    uint32_t  start, stop; 
-    uint32_t  result;
+    first_time_flag = false;
+  }
 
-    bool first_time_flag = true;
+  uint32_t *in;
+  uint32_t sizein;
+  uint32_t start, stop;
+  uint32_t result;
+
+  bool first_time_flag = true;
 };
 
 /* ----------------------------- */
 // functions used for checking the result
-static inline
-uint32_t gauss(uint32_t const to) {
-  return (to * to + to) / 2;
-}
+static inline uint32_t gauss(uint32_t const to) { return (to * to + to) / 2; }
 
-static inline
-uint32_t ingauss(uint32_t const from, uint32_t to) {
+static inline uint32_t ingauss(uint32_t const from, uint32_t to) {
   return gauss(to) - gauss(from);
 }
 /* ----------------------------- */
 
 int main() {
-    const size_t size = 256;
-    uint32_t waits[size];
-    for (int j = 0; j < size; ++j)
-        waits[j] = j + 1;
+  const size_t size = 256;
+  uint32_t waits[size];
+  for (int j = 0; j < size; ++j) waits[j] = j + 1;
 
-    // task-farm scheduler (Emitter)
-    struct Scheduler: ff_node_t<Task> {        
-        Scheduler(uint32_t *waits, size_t size):waits(waits),size(size) {}
-        Task *svc(Task *) {
-            for(int i=10;i<200;++i)
-                ff_send_out(new Task(waits, size, i, i+50));
-            return EOS;                
-        }
-        uint32_t *waits;
-        size_t    size;
-    } sched(waits, size);
-
-    // task-farm Collector
-    struct Checker: ff_node_t<Task> {
-        Task *svc(Task *in) {
-            if (in->result != ingauss(in->start, in->stop+1))
-                std::cerr << "Wrong result: " << in->result << " (expected: " 
-                          << ingauss(in->start, in->stop+1) << ")\n"; 
-            else
-                std::cout << "RESULT OK " << in->result << "\n";
-            return GO_ON;
-        }
-    } checker;
-
-    ff_tpcallocator alloc;
-
-    // this is the farm instance having 4 replicas of the tpcnode
-    // the emitter of the farm is the scheduler (producing the stream)
-    // the collector receives and check the results
-    ff_Farm<> farm([&]() {
-            const size_t nworkers = 4;
-            std::vector<std::unique_ptr<ff_node> > W;
-            for(size_t i=0;i<nworkers;++i)
-                W.push_back(make_unique<ff_tpcNode_t<Task> >(&alloc));
-            return W;
-        } (), sched, checker);
-
-    if (farm.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
+  // task-farm scheduler (Emitter)
+  struct Scheduler : ff_node_t<Task> {
+    Scheduler(uint32_t *waits, size_t size) : waits(waits), size(size) {}
+    Task *svc(Task *) {
+      for (int i = 10; i < 200; ++i)
+        ff_send_out(new Task(waits, size, i, i + 50));
+      return EOS;
     }
+    uint32_t *waits;
+    size_t size;
+  } sched(waits, size);
 
-    return 0;
+  // task-farm Collector
+  struct Checker : ff_node_t<Task> {
+    Task *svc(Task *in) {
+      if (in->result != ingauss(in->start, in->stop + 1))
+        std::cerr << "Wrong result: " << in->result
+                  << " (expected: " << ingauss(in->start, in->stop + 1)
+                  << ")\n";
+      else
+        std::cout << "RESULT OK " << in->result << "\n";
+      return GO_ON;
+    }
+  } checker;
+
+  ff_tpcallocator alloc;
+
+  // this is the farm instance having 4 replicas of the tpcnode
+  // the emitter of the farm is the scheduler (producing the stream)
+  // the collector receives and check the results
+  ff_Farm<> farm(
+      [&]() {
+        const size_t nworkers = 4;
+        std::vector<std::unique_ptr<ff_node>> W;
+        for (size_t i = 0; i < nworkers; ++i)
+          W.push_back(make_unique<ff_tpcNode_t<Task>>(&alloc));
+        return W;
+      }(),
+      sched, checker);
+
+  if (farm.run_and_wait_end() < 0) {
+    error("running farm\n");
+    return -1;
+  }
+
+  return 0;
 }
-    

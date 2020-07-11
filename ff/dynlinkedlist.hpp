@@ -44,116 +44,108 @@ class dynlinkedlist {
 #define CAST_TO_UL(X) ((unsigned long)X)
 
 private:
-    struct Node {
-        void        * data;
-        struct Node * next;
-        void        * next_data;
-        long padding[longxCacheLine-((sizeof(void*)*3)/sizeof(long))]; 
-    };
+  struct Node {
+    void *data;
+    struct Node *next;
+    void *next_data;
+    long padding[longxCacheLine - ((sizeof(void *) * 3) / sizeof(long))];
+  };
 
-    volatile Node *    head;
-    long padding1[longxCacheLxine-(sizeof(Node *)/sizeof(long))];
-    volatile Node *    tail;
-    long padding2[longxCacheLine-(sizeof(Node*)/sizeof(long))];
-    //SWSR_Ptr_Buffer    cache;
-    /*
+  volatile Node *head;
+  long padding1[longxCacheLxine - (sizeof(Node *) / sizeof(long))];
+  volatile Node *tail;
+  long padding2[longxCacheLine - (sizeof(Node *) / sizeof(long))];
+  //SWSR_Ptr_Buffer    cache;
+  /*
       This is a vector of Node elemens.  
       The len is equal to cachesize
      */
-    Node * min_cache;
-    int min_cache_size;
-    void * cache_mem;
+  Node *min_cache;
+  int min_cache_size;
+  void *cache_mem;
+
 private:
-
-    bool isincahce(Node * n){
-        if(((unsigned long) n ) - ((unsigned long)min_cache) < 0){
-            return false;
-        }  
-        
-        if(((unsigned long) n ) - ((unsigned long)min_cache) > min_cache_size - sizeof(Node)){
-            return false;
-        }
+  bool isincahce(Node *n) {
+    if (((unsigned long)n) - ((unsigned long)min_cache) < 0) {
+      return false;
     }
+
+    if (((unsigned long)n) - ((unsigned long)min_cache) >
+        min_cache_size - sizeof(Node)) {
+      return false;
+    }
+  }
+
 public:
+  enum { DEFAULT_CACHE_SIZE = 1024 };
 
-    enum {DEFAULT_CACHE_SIZE=1024};
-
-
-    dynlinkedlist(int cachesize=DEFAULT_CACHE_SIZE, bool fillcache=false){
-        //Node * n = (Node *)::malloc(sizeof(Node));
-        assert(sizeof(Node) == longxCacheLine);
-        cache_mem = malloc((sizeof(Node)+1)*cachesize);
-        if(CAST_TO_UL(cache_mem)%longxCacheLine){
-            min_cache = (Node *)(
-                                 ((CAST_TO_UL(cache_mem)
-                                   /longxCacheLine)+1
-                                  )*longxCacheLine
-                                 );
-        }
-        min_cache_size = cachesize;
-        
-        
-        for(int i=0; i<cachesize-1; i++){
-            min_cache[i].next = &min_cache[i+1];
-            min_cache[i].next_data = &min_cache[i+1].data;
-            min_cache[i].data = NULL;
-        }
-        
-        min_cache[cachesize-1].next = &min_cache[0]; 
-        min_cache[cachesize-1].next_data = &min_cache[0].data; 
-        min_cache[cachesize-1].data = NULL;
-        
-        head = &min_cache[0];
-        tail = &min_cache[0];
+  dynlinkedlist(int cachesize = DEFAULT_CACHE_SIZE, bool fillcache = false) {
+    //Node * n = (Node *)::malloc(sizeof(Node));
+    assert(sizeof(Node) == longxCacheLine);
+    cache_mem = malloc((sizeof(Node) + 1) * cachesize);
+    if (CAST_TO_UL(cache_mem) % longxCacheLine) {
+      min_cache = (Node *)(((CAST_TO_UL(cache_mem) / longxCacheLine) + 1) *
+                           longxCacheLine);
     }
-    
+    min_cache_size = cachesize;
 
-    ~dynlinkedlist() {
-        Node * start_free = min_cache[0].next;
-        min_cache[0].next=NULL;
-        while(start_free){
-            Node *tmp = start_free;
-            start_free = start_free->next;
-            tmp->next = NULL;
-            tmp->next_data = NULL;
-            if(!isincache(tmp)){
-                free(tmp);
-            }
-        }
-        free(cache_mem);
-    }
-    
-
-    inline bool push(void * const data) {
-        assert(data!=NULL);
-        if(likely(tail->next_data == NULL)){
-            tail->data = data;
-            tail = tail->next;
-            WMB();
-            return true;
-        }
-
-        Node * n = (Node *)::malloc(sizeof(Node*));
-        n->data = data; 
-        n->next = tail->next;
-        n->next_data = &tail->next.data;
-        tail->next = n;
-        WMB();
-        return true;
+    for (int i = 0; i < cachesize - 1; i++) {
+      min_cache[i].next = &min_cache[i + 1];
+      min_cache[i].next_data = &min_cache[i + 1].data;
+      min_cache[i].data = NULL;
     }
 
+    min_cache[cachesize - 1].next = &min_cache[0];
+    min_cache[cachesize - 1].next_data = &min_cache[0].data;
+    min_cache[cachesize - 1].data = NULL;
 
-    inline bool  pop(void ** data) {
-        if (likely(head->data)) {
-            *data = head->data;
-            head->data = NULL;
-            head = nead->next;
-            return true;
-        }
-        return false;
+    head = &min_cache[0];
+    tail = &min_cache[0];
+  }
+
+  ~dynlinkedlist() {
+    Node *start_free = min_cache[0].next;
+    min_cache[0].next = NULL;
+    while (start_free) {
+      Node *tmp = start_free;
+      start_free = start_free->next;
+      tmp->next = NULL;
+      tmp->next_data = NULL;
+      if (!isincache(tmp)) {
+        free(tmp);
+      }
     }
+    free(cache_mem);
+  }
+
+  inline bool push(void *const data) {
+    assert(data != NULL);
+    if (likely(tail->next_data == NULL)) {
+      tail->data = data;
+      tail = tail->next;
+      WMB();
+      return true;
+    }
+
+    Node *n = (Node *)::malloc(sizeof(Node *));
+    n->data = data;
+    n->next = tail->next;
+    n->next_data = &tail->next.data;
+    tail->next = n;
+    WMB();
+    return true;
+  }
+
+  inline bool pop(void **data) {
+    if (likely(head->data)) {
+      *data = head->data;
+      head->data = NULL;
+      head = nead->next;
+      return true;
+    }
+    return false;
+  }
 };
-
 
 } // namespace ff
 

@@ -50,76 +50,80 @@
 using namespace ff;
 
 // the corresponding OpenCL type is in the (local) file 'ff_opencl_datatypes.cl'
-struct mypair { float a; float b; };
+struct mypair {
+  float a;
+  float b;
+};
 
-
-FF_OCL_MAP_ELEMFUNC_IO(mapf, float, mypair, elem, useless,
-                     (void)useless;
-                     return (elem.a * elem.b);
-);
+FF_OCL_MAP_ELEMFUNC_IO(mapf, float, mypair, elem, useless, (void)useless;
+                       return (elem.a * elem.b););
 
 //implicit input
 //FF_OCL_MAP_ELEMFUNC_1D_IO(mapf, mypair, float, elem,
 //		return (elem.a * elem.b);
 //);
 
-FF_OCL_REDUCE_COMBINATOR(reducef, float, (x), (y), return (x+y) );
+FF_OCL_REDUCE_COMBINATOR(reducef, float, (x), (y), return (x + y));
 
+struct oclTask : public baseOCLTask<oclTask, mypair, float> {
+  oclTask() : M(NULL), Mout(NULL), result(0.0), size(0) {}
+  oclTask(mypair *M, size_t size) : M(M), Mout(NULL), result(0.0), size(size) {
+    Mout = new float[size];
+    assert(Mout);
+  }
+  ~oclTask() {
+    if (Mout) delete[] Mout;
+  }
+  void setTask(oclTask *t) {
+    assert(t);
+    setInPtr(t->M, t->size);
+    setOutPtr(t->Mout, t->size);
+    setReduceVar(&(t->result));
+  }
+  float combinator(float const &x, float const &y) { return x + y; }
 
-struct oclTask: public baseOCLTask<oclTask, mypair, float> {
-    oclTask():M(NULL),Mout(NULL),result(0.0), size(0) {}
-    oclTask(mypair *M, size_t size):M(M),Mout(NULL),result(0.0),size(size) {
-        Mout = new float[size];
-        assert(Mout);
-    }
-    ~oclTask() { if (Mout) delete [] Mout; }
-    void setTask(oclTask *t) { 
-       assert(t);
-       setInPtr(t->M, t->size);
-       setOutPtr(t->Mout, t->size);
-       setReduceVar(&(t->result));
-    }
-    float combinator(float const &x, float const &y) {return x+y;}
-
-    mypair *M;
-    float  *Mout, result;
-    const size_t  size;
+  mypair *M;
+  float *Mout, result;
+  const size_t size;
 };
 
-int main(int argc, char * argv[]) {
-    size_t size = 640;
-    if (argc>1) size     =atol(argv[1]);
-    printf("arraysize = %ld\n", size);
+int main(int argc, char *argv[]) {
+  size_t size = 640;
+  if (argc > 1) size = atol(argv[1]);
+  printf("arraysize = %ld\n", size);
 
-    mypair *M        = new mypair[size];
-    for(size_t j=0;j<size;++j) {M[j].a=j*1.0; M[j].b=1; /*j*2.0;*/}
+  mypair *M = new mypair[size];
+  for (size_t j = 0; j < size; ++j) {
+    M[j].a = j * 1.0;
+    M[j].b = 1; /*j*2.0;*/
+  }
 
 #if defined(CHECK)
-    float r = 0.0;
-    for(size_t j=0;j<size;++j) {
-        r += M[j].a * M[j].b;
-    }
+  float r = 0.0;
+  for (size_t j = 0; j < size; ++j) {
+    r += M[j].a * M[j].b;
+  }
 #endif
-    oclTask oclt(M, size);
-    ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0.0, nullptr, NACC);
-    SET_DEVICE_TYPE(oclMR);
-   
-    std::vector<std::string> res = clEnvironment::instance()->getDevicesInfo();
-    
-    for (size_t i=0; i<res.size(); ++i)
-        std::cout << i << " - " << res[i] << std::endl;
+  oclTask oclt(M, size);
+  ff_mapReduceOCL_1D<oclTask> oclMR(oclt, mapf, reducef, 0.0, nullptr, NACC);
+  SET_DEVICE_TYPE(oclMR);
 
-    oclMR.pickCPU();
-    oclMR.run_and_wait_end();
+  std::vector<std::string> res = clEnvironment::instance()->getDevicesInfo();
 
-    delete [] M;
-    printf("res=%.2f\n", oclt.result);
+  for (size_t i = 0; i < res.size(); ++i)
+    std::cout << i << " - " << res[i] << std::endl;
+
+  oclMR.pickCPU();
+  oclMR.run_and_wait_end();
+
+  delete[] M;
+  printf("res=%.2f\n", oclt.result);
 #if defined(CHECK)
-    if (r != oclt.result) {
-    	printf("Wrong result, should be %.2f\n", r);
-    	exit(1); //ctest
-    }
-    else printf("OK\n");
+  if (r != oclt.result) {
+    printf("Wrong result, should be %.2f\n", r);
+    exit(1); //ctest
+  } else
+    printf("OK\n");
 #endif
-    return 0;
+  return 0;
 }

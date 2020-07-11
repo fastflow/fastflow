@@ -49,7 +49,7 @@
 //!		    that the user is using the right header for the lib
 //!		    (necessary due to incompatible changes between versions)
 //!		  + added consistent flags to all calls for future use
-//!		- Version 1.0 (jk, dc) 
+//!		- Version 1.0 (jk, dc)
 //!		  + initial prototype version
 //!
 //! @todo 	device enumeration?
@@ -62,7 +62,8 @@
 #include <cstdlib>
 #include <cstring>
 namespace rpr { // reintroduced REPARA namespace
-namespace tpc { extern "C" {
+namespace tpc {
+extern "C" {
 #else
 #include <stdint.h>
 #include <stdlib.h>
@@ -75,10 +76,10 @@ namespace tpc { extern "C" {
 
 /** General purpose result type **/
 typedef enum {
-	/** Indicates unspecific failure, should not be used. **/
-	TPC_FAILURE = 0,
-	/** Indicates successful operation. **/
-	TPC_SUCCESS
+  /** Indicates unspecific failure, should not be used. **/
+  TPC_FAILURE = 0,
+  /** Indicates successful operation. **/
+  TPC_SUCCESS
 } tpc_res_t;
 
 /** FPGA context; opaque forward decl. **/
@@ -105,60 +106,59 @@ typedef uint32_t tpc_handle_t;
 
 /** Flags for device creation (implementation defined). **/
 typedef enum {
-	/** no flags **/
-	TPC_DEVICE_CREATE_FLAGS_NONE 		= 0
+  /** no flags **/
+  TPC_DEVICE_CREATE_FLAGS_NONE = 0
 } tpc_device_create_flag_t;
 
 /** Flags for memory allocation (implementation defined). **/
 typedef enum {
-	/** no flags **/
-	TPC_DEVICE_ALLOC_FLAGS_NONE 		= 0
+  /** no flags **/
+  TPC_DEVICE_ALLOC_FLAGS_NONE = 0
 } tpc_device_alloc_flag_t;
 
 /** Flags for bitstream loading (implementation defined). **/
 typedef enum {
-	/** no flags **/
-	TPC_LOAD_BITSTREAM_FLAGS_NONE 		= 0
+  /** no flags **/
+  TPC_LOAD_BITSTREAM_FLAGS_NONE = 0
 } tpc_load_bitstream_flag_t;
 
 /** Flags for calls to tpc_device_copy_to and tpc_device_copy_from. **/
 typedef enum {
-	/** no flags **/
-	TPC_DEVICE_COPY_FLAGS_NONE		= 0,
-	/** wait until transfer is finished (default) **/
-	TPC_DEVICE_COPY_BLOCKING		= 0,
-	/** return immediately after transfer was scheduled **/
-	TPC_DEVICE_COPY_NONBLOCKING		= 1,
+  /** no flags **/
+  TPC_DEVICE_COPY_FLAGS_NONE = 0,
+  /** wait until transfer is finished (default) **/
+  TPC_DEVICE_COPY_BLOCKING = 0,
+  /** return immediately after transfer was scheduled **/
+  TPC_DEVICE_COPY_NONBLOCKING = 1,
 } tpc_device_copy_flag_t;
 
 /** Flags for calls to tpc_device_acquire_job_id. **/
 typedef enum {
-	/** no flags **/
-	TPC_DEVICE_ACQUIRE_JOB_ID_FLAGS_NONE	= 0,
-	/** wait until id becomes available (default) **/
-	TPC_DEVICE_ACQUIRE_JOB_ID_BLOCKING	= 0,
-	/** fail if id is not immediately available, do not wait **/
-	TPC_DEVICE_ACQUIRE_JOB_ID_NONBLOCKING	= 1,
+  /** no flags **/
+  TPC_DEVICE_ACQUIRE_JOB_ID_FLAGS_NONE = 0,
+  /** wait until id becomes available (default) **/
+  TPC_DEVICE_ACQUIRE_JOB_ID_BLOCKING = 0,
+  /** fail if id is not immediately available, do not wait **/
+  TPC_DEVICE_ACQUIRE_JOB_ID_NONBLOCKING = 1,
 } tpc_device_acquire_job_id_flag_t;
 
 /** Flags for calls to tpc_device_job_launch. **/
 typedef enum {
-	/** no flags **/
-	TPC_DEVICE_JOB_LAUNCH_FLAGS_NONE	= 0,
-	/** launch and wait until job is finished (default) **/
-	TPC_DEVICE_JOB_LAUNCH_BLOCKING		= 0,
-	/** return immediately after job is scheduled **/
-	TPC_DEVICE_JOB_LAUNCH_NONBLOCKING	= 1,
+  /** no flags **/
+  TPC_DEVICE_JOB_LAUNCH_FLAGS_NONE = 0,
+  /** launch and wait until job is finished (default) **/
+  TPC_DEVICE_JOB_LAUNCH_BLOCKING = 0,
+  /** return immediately after job is scheduled **/
+  TPC_DEVICE_JOB_LAUNCH_NONBLOCKING = 1,
 } tpc_device_job_launch_flag_t;
 
 /** @} **/
-
 
 /** @defgroup version Version Info
  *  @{
  **/
 
-#define TPC_API_VERSION					"1.2"
+#define TPC_API_VERSION "1.2"
 
 /**
  * Returns the version string of the library.
@@ -174,7 +174,6 @@ tpc_res_t tpc_check_version(const char *const version);
 
 /** @} **/
 
-
 /** @defgroup aux Auxiliary Functions
  *  @{
  **/
@@ -187,7 +186,6 @@ tpc_res_t tpc_check_version(const char *const version);
 const char *const tpc_strerror(tpc_res_t const res);
 
 /** @} **/
-
 
 /** @defgroup devmgmt Device Management
  *  @{
@@ -207,9 +205,8 @@ tpc_res_t _tpc_init(const char *const version, tpc_ctx_t **pctx);
  * @param pctx pointer to context pointer (will be set on success)
  * @return TPC_SUCCESS if successful, an error code otherwise
  **/
-inline static tpc_res_t tpc_init(tpc_ctx_t **pctx)
-{
-	return _tpc_init(TPC_API_VERSION, pctx);
+inline static tpc_res_t tpc_init(tpc_ctx_t **pctx) {
+  return _tpc_init(TPC_API_VERSION, pctx);
 }
 
 /**
@@ -228,7 +225,7 @@ void tpc_deinit(tpc_ctx_t *ctx);
  * @return TPC_SUCCESS if sucessful, an error code otherwise
  **/
 tpc_res_t tpc_create_device(tpc_ctx_t *ctx, tpc_dev_id_t const dev_id,
-		tpc_dev_ctx_t **pdev_ctx, tpc_device_create_flag_t const flags);
+    tpc_dev_ctx_t **pdev_ctx, tpc_device_create_flag_t const flags);
 
 /**
  * Device deinit: called once for each valid tpc_dev_ctx_t to release exclusive
@@ -246,8 +243,8 @@ void tpc_destroy_device(tpc_ctx_t *ctx, tpc_dev_ctx_t *dev_ctx);
  * @return number of instances > 0 if function is instantiated in the bitstream,
  *         0 if function is unavailable
  **/
-uint32_t tpc_device_func_instance_count(tpc_dev_ctx_t *dev_ctx,
-		tpc_func_id_t const func_id);
+uint32_t tpc_device_func_instance_count(
+    tpc_dev_ctx_t *dev_ctx, tpc_func_id_t const func_id);
 
 /**
  * Loads the bitstream from the given file to the device.
@@ -257,7 +254,7 @@ uint32_t tpc_device_func_instance_count(tpc_dev_ctx_t *dev_ctx,
  * @return TPC_SUCCESS if sucessful, TPC_FAILURE otherwise
  **/
 tpc_res_t tpc_device_load_bitstream_from_file(tpc_dev_ctx_t *dev_ctx,
-		char const *filename, tpc_load_bitstream_flag_t const flags);
+    char const *filename, tpc_load_bitstream_flag_t const flags);
 
 /**
  * Loads a bitstream to the given device.
@@ -268,10 +265,9 @@ tpc_res_t tpc_device_load_bitstream_from_file(tpc_dev_ctx_t *dev_ctx,
  * @return TPC_SUCCESS if sucessful, TPC_FAILURE otherwise
  **/
 tpc_res_t tpc_device_load_bitstream(tpc_dev_ctx_t *dev_ctx, size_t const len,
-		void const *data, tpc_load_bitstream_flag_t const flags);
+    void const *data, tpc_load_bitstream_flag_t const flags);
 
 /** @} **/
-
 
 /** @defgroup data Data Management and Transfer
  *  @{
@@ -286,7 +282,7 @@ tpc_res_t tpc_device_load_bitstream(tpc_dev_ctx_t *dev_ctx, size_t const len,
  * @return TPC_SUCCESS if successful, error code otherwise
  **/
 tpc_res_t tpc_device_alloc(tpc_dev_ctx_t *dev_ctx, tpc_handle_t *handle,
-		size_t const len, tpc_device_alloc_flag_t const flags);
+    size_t const len, tpc_device_alloc_flag_t const flags);
 
 /**
  * Frees a previously allocated chunk of device memory.
@@ -295,7 +291,7 @@ tpc_res_t tpc_device_alloc(tpc_dev_ctx_t *dev_ctx, tpc_handle_t *handle,
  * @param flags device memory allocation flags
  **/
 void tpc_device_free(tpc_dev_ctx_t *dev_ctx, tpc_handle_t handle,
-		tpc_device_alloc_flag_t const flags);
+    tpc_device_alloc_flag_t const flags);
 
 /**
  * Copys memory from main memory to the FPGA device.
@@ -307,8 +303,7 @@ void tpc_device_free(tpc_dev_ctx_t *dev_ctx, tpc_handle_t handle,
  * @return TPC_SUCCESS if copy was successful, TPC_FAILURE otherwise
  **/
 tpc_res_t tpc_device_copy_to(tpc_dev_ctx_t *dev_ctx, void const *src,
-		tpc_handle_t dst, size_t len,
-		tpc_device_copy_flag_t const flags);
+    tpc_handle_t dst, size_t len, tpc_device_copy_flag_t const flags);
 
 /**
  * Copys memory from FPGA device memory to main memory.
@@ -320,10 +315,9 @@ tpc_res_t tpc_device_copy_to(tpc_dev_ctx_t *dev_ctx, void const *src,
  * @return TPC_SUCCESS if copy was successful, TPC_FAILURE otherwise
  **/
 tpc_res_t tpc_device_copy_from(tpc_dev_ctx_t *dev_ctx, tpc_handle_t src,
-		void *dst, size_t len, tpc_device_copy_flag_t const flags);
+    void *dst, size_t len, tpc_device_copy_flag_t const flags);
 
 /** @} **/
-
 
 /** @defgroup exec Execution Control
  *  @{
@@ -340,8 +334,7 @@ tpc_res_t tpc_device_copy_from(tpc_dev_ctx_t *dev_ctx, tpc_handle_t src,
  * @return job id > 0 if successful, 0 otherwise
  **/
 tpc_job_id_t tpc_device_acquire_job_id(tpc_dev_ctx_t *dev_ctx,
-		tpc_func_id_t const func_id,
-		tpc_device_acquire_job_id_flag_t flags);
+    tpc_func_id_t const func_id, tpc_device_acquire_job_id_flag_t flags);
 
 /**
  * Releases a job id obtained via @see tpc_acquire_job_id. Does not affect
@@ -350,8 +343,8 @@ tpc_job_id_t tpc_device_acquire_job_id(tpc_dev_ctx_t *dev_ctx,
  * @param dev_ctx device context
  * @param job_id job id to release
  **/
-void tpc_device_release_job_id(tpc_dev_ctx_t *dev_ctx,
-		tpc_job_id_t const job_id);
+void tpc_device_release_job_id(
+    tpc_dev_ctx_t *dev_ctx, tpc_job_id_t const job_id);
 
 /**
  * Launches the given job and releases its id (does not affect alloc'ed handles,
@@ -364,8 +357,7 @@ void tpc_device_release_job_id(tpc_dev_ctx_t *dev_ctx,
  *         retrieved, TPC_FAILURE otherwise.
  **/
 tpc_res_t tpc_device_job_launch(tpc_dev_ctx_t *dev_ctx,
-		tpc_job_id_t const job_id,
-		tpc_device_job_launch_flag_t const flags);
+    tpc_job_id_t const job_id, tpc_device_job_launch_flag_t const flags);
 
 /**
  * Sets the arg_idx'th argument of function func_id to arg_value.
@@ -377,8 +369,8 @@ tpc_res_t tpc_device_job_launch(tpc_dev_ctx_t *dev_ctx,
  * @return TPC_SUCCESS if successful, TPC_FAILURE otherwise.
  **/
 tpc_res_t tpc_device_job_set_arg(tpc_dev_ctx_t *dev_ctx,
-		tpc_job_id_t const job_id, uint32_t arg_idx,
-		size_t const arg_len, void const *arg_value);
+    tpc_job_id_t const job_id, uint32_t arg_idx, size_t const arg_len,
+    void const *arg_value);
 
 /**
  * Gets the value of the arg_idx'th argument of function func_id.
@@ -390,8 +382,8 @@ tpc_res_t tpc_device_job_set_arg(tpc_dev_ctx_t *dev_ctx,
  * @return TPC_SUCCESS if successful, TPC_FAILURE otherwise.
  **/
 tpc_res_t tpc_device_job_get_arg(tpc_dev_ctx_t *dev_ctx,
-		tpc_job_id_t const job_id, uint32_t arg_idx,
-		size_t const arg_len, void *arg_value);
+    tpc_job_id_t const job_id, uint32_t arg_idx, size_t const arg_len,
+    void *arg_value);
 /**
  * Retrieves the return value of job with the given id to ret_value.
  * @param dev_ctx device context
@@ -401,13 +393,13 @@ tpc_res_t tpc_device_job_get_arg(tpc_dev_ctx_t *dev_ctx,
  * @return TPC_SUCCESS if sucessful, TPC_FAILURE otherwise.
  **/
 tpc_res_t tpc_device_job_get_return(tpc_dev_ctx_t *dev_ctx,
-		tpc_job_id_t const job_id, size_t const ret_len,
-		void *ret_value);
+    tpc_job_id_t const job_id, size_t const ret_len, void *ret_value);
 
 /** @} **/
 
 #ifdef __cplusplus
-} /* extern "C" */ } /* namespace tpc */
+} /* extern "C" */
+} /* namespace tpc */
 } /* namespace rpr */
 #endif /* __cplusplus */
 

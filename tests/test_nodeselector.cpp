@@ -35,67 +35,69 @@
 //
 
 #include <ff/ff.hpp>
-#include <ff/selector.hpp>  
+#include <ff/selector.hpp>
 
-// first kernel 
-struct kernel1: ff::ff_node_t<long> {
-    long *svc(long *in) {
-	printf("kernel1 %ld\n", *in);
-	return GO_ON;
-    }
+// first kernel
+struct kernel1 : ff::ff_node_t<long> {
+  long *svc(long *in) {
+    printf("kernel1 %ld\n", *in);
+    return GO_ON;
+  }
 };
 
 // second kernel
-struct kernel2: ff::ff_node_t<long> {
-    long *svc(long *in) {
-	printf("kernel2 %ld\n", *in);
-	return GO_ON;
-    }
+struct kernel2 : ff::ff_node_t<long> {
+  long *svc(long *in) {
+    printf("kernel2 %ld\n", *in);
+    return GO_ON;
+  }
 };
 
 // the task-farm uses the same Emitter (it is possible to use multiple Emitter as well)
-struct Emitter: ff::ff_node_t<long> {
-    long *svc(long *) {
-	for(long i=0;i<20;++i)
-	    ff_send_out(new long(i));
-	return EOS;
-    }
+struct Emitter : ff::ff_node_t<long> {
+  long *svc(long *) {
+    for (long i = 0; i < 20; ++i) ff_send_out(new long(i));
+    return EOS;
+  }
 };
 
 int main() {
-	using namespace ff;
+  using namespace ff;
 
-    const size_t farmworkers = 1;
-    Emitter E;
+  const size_t farmworkers = 1;
+  Emitter E;
 
-    // create the farm (3 Workers)
-    ff_Farm<> farm([]() {
-	    std::vector<std::unique_ptr<ff_node> > W;
-	    for(size_t i=0;i<farmworkers;++i)
-	    	W.push_back(ff::make_unique<ff_nodeSelector<long>>(ff::make_unique<kernel1>(), ff::make_unique<kernel2>()));
-	    return W;
-	} (), E);
-    farm.remove_collector();
+  // create the farm (3 Workers)
+  ff_Farm<> farm(
+      []() {
+        std::vector<std::unique_ptr<ff_node>> W;
+        for (size_t i = 0; i < farmworkers; ++i)
+          W.push_back(ff::make_unique<ff_nodeSelector<long>>(
+              ff::make_unique<kernel1>(), ff::make_unique<kernel2>()));
+        return W;
+      }(),
+      E);
+  farm.remove_collector();
 
-    // select first the kernel2 (1) and then the kernel1 (0)
+  // select first the kernel2 (1) and then the kernel1 (0)
 
-    const svector<ff_node*>& W = farm.getWorkers();
-    for(size_t i=0;i<W.size();++i)
-	(reinterpret_cast<ff_nodeSelector<long> *>(W[i]))->selectNode(1);
+  const svector<ff_node *> &W = farm.getWorkers();
+  for (size_t i = 0; i < W.size(); ++i)
+    (reinterpret_cast<ff_nodeSelector<long> *>(W[i]))->selectNode(1);
 
-    printf("/* ----------------------- kernel2 start --------------------- */\n");
-    farm.run_then_freeze();
-    farm.wait_freezing();
-    printf("/* ----------------------- kernel2 done ---------------------- */\n");
+  printf("/* ----------------------- kernel2 start --------------------- */\n");
+  farm.run_then_freeze();
+  farm.wait_freezing();
+  printf("/* ----------------------- kernel2 done ---------------------- */\n");
 
-    for(size_t i=0;i<W.size();++i)
-	(reinterpret_cast<ff_nodeSelector<long> *>(W[i]))->selectNode(0);
+  for (size_t i = 0; i < W.size(); ++i)
+    (reinterpret_cast<ff_nodeSelector<long> *>(W[i]))->selectNode(0);
 
-    printf("/* ----------------------- kernel1 start --------------------- */\n");
-    farm.run_then_freeze();
-    farm.wait_freezing();
-    printf("/* ----------------------- kernel1 done ---------------------- */\n");
+  printf("/* ----------------------- kernel1 start --------------------- */\n");
+  farm.run_then_freeze();
+  farm.wait_freezing();
+  printf("/* ----------------------- kernel1 done ---------------------- */\n");
 
-    farm.wait();
-    return 0;
+  farm.wait();
+  return 0;
 }

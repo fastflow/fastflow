@@ -46,87 +46,92 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-class Stage1: public ff_monode_t<long> {
+class Stage1 : public ff_monode_t<long> {
 public:
-    long * svc(long * t) {
-        std::cout << "Stage1 got task " << *t << "\n";
-        return t;
-    }
+  long *svc(long *t) {
+    std::cout << "Stage1 got task " << *t << "\n";
+    return t;
+  }
 };
 
-class Stage2: public ff_monode_t<long> {   
+class Stage2 : public ff_monode_t<long> {
 public:
-    long * svc(long * t) {
-        std::cout << "Stage2 got task " << *t << "\n";
-        bool odd = *t & 0x1;
-        if (!odd) {
-            long * nt = new long(*t);
-            ff_send_out_to(nt, 1); // sends it forward
-        }
-        ff_send_out_to(t, 0); // sends it back        
-        return GO_ON;
+  long *svc(long *t) {
+    std::cout << "Stage2 got task " << *t << "\n";
+    bool odd = *t & 0x1;
+    if (!odd) {
+      long *nt = new long(*t);
+      ff_send_out_to(nt, 1); // sends it forward
     }
-}; 
-
-struct Gatherer: ff_minode_t<long> {
-    long* svc(long* t) {
-        std::cout << "Gatherer, collected " << *t << " from " << get_channel_id() << "\n";
-        delete t;
-        return GO_ON;
-    }
+    ff_send_out_to(t, 0); // sends it back
+    return GO_ON;
+  }
 };
 
-class Emitter: public ff_monode_t<long> {
-public:
-    long * svc(long * task) { 
-        if (!task)  return new long(1000);
-
-        std::cout << "Emitter task came back " << *task << " from " << get_channel_id() << "\n";
-        (*task)--;
-        
-        if (*task<=0) { delete task; return EOS;}
-        return task;
-    }
+struct Gatherer : ff_minode_t<long> {
+  long *svc(long *t) {
+    std::cout << "Gatherer, collected " << *t << " from " << get_channel_id()
+              << "\n";
+    delete t;
+    return GO_ON;
+  }
 };
 
+class Emitter : public ff_monode_t<long> {
+public:
+  long *svc(long *task) {
+    if (!task) return new long(1000);
 
-int main(int argc, char * argv[]) {
-    int nworkers  = 3;
-    if (argc>1) {
-        if (argc != 2) {
-            std::cerr << "use:\n" << " " << argv[0] << " num-farm-workers\n";
-            return -1;
-        }
-        nworkers  =atoi(argv[1]);
+    std::cout << "Emitter task came back " << *task << " from "
+              << get_channel_id() << "\n";
+    (*task)--;
+
+    if (*task <= 0) {
+      delete task;
+      return EOS;
     }
-    
-    ff_farm farm;
-    Emitter E;
-    farm.add_emitter(&E); 
+    return task;
+  }
+};
 
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) {
-        // build worker pipeline 
-        ff_pipeline * pipe = new ff_pipeline;
-        pipe->add_stage(new Stage1, true);
-        pipe->add_stage(new Stage2, true);
-        w.push_back(pipe);
+int main(int argc, char *argv[]) {
+  int nworkers = 3;
+  if (argc > 1) {
+    if (argc != 2) {
+      std::cerr << "use:\n"
+                << " " << argv[0] << " num-farm-workers\n";
+      return -1;
     }
-    farm.add_workers(w);
-    farm.wrap_around();
-    farm.cleanup_workers();
+    nworkers = atoi(argv[1]);
+  }
 
-    ff_pipeline pipe;
-    pipe.add_stage(&farm);
-    pipe.add_stage(new Gatherer, true);
-    
-    pipe.run();
-    // wait all threads join
-    if (pipe.wait()<0) {
-        error("waiting pipeline\n");
-        return -1;
-    }
+  ff_farm farm;
+  Emitter E;
+  farm.add_emitter(&E);
 
-    std::cout << "DONE\n";
-    return 0;
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) {
+    // build worker pipeline
+    ff_pipeline *pipe = new ff_pipeline;
+    pipe->add_stage(new Stage1, true);
+    pipe->add_stage(new Stage2, true);
+    w.push_back(pipe);
+  }
+  farm.add_workers(w);
+  farm.wrap_around();
+  farm.cleanup_workers();
+
+  ff_pipeline pipe;
+  pipe.add_stage(&farm);
+  pipe.add_stage(new Gatherer, true);
+
+  pipe.run();
+  // wait all threads join
+  if (pipe.wait() < 0) {
+    error("waiting pipeline\n");
+    return -1;
+  }
+
+  std::cout << "DONE\n";
+  return 0;
 }

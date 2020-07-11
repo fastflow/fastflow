@@ -31,7 +31,6 @@
  *
  */
 
-
 #include <iostream>
 #include <vector>
 #include <ff/ff.hpp>
@@ -41,142 +40,135 @@ using namespace ff;
 
 static ff_allocator ffalloc;
 
-
-class Worker: public ff_node {
+class Worker : public ff_node {
 public:
-    void * svc(void * task) {
-        int * t = (int *)task;
-        std::cout << "Worker id= " << get_my_id() 
-                  << " got task " << *t << "\n";
+  void *svc(void *task) {
+    int *t = (int *)task;
+    std::cout << "Worker id= " << get_my_id() << " got task " << *t << "\n";
 
-        if (*t>0) {
-            *t = *t -1;
-            task = t;
-            ff_send_out(task);
-            return GO_ON;
-        } 
-        *t = -1;
-        task = t;
-        return task;
+    if (*t > 0) {
+      *t = *t - 1;
+      task = t;
+      ff_send_out(task);
+      return GO_ON;
     }
-    void svc_end() {
-        std::cout << "Worker id= " << get_my_id() << " received EOS\n";
-    }
-
-    
+    *t = -1;
+    task = t;
+    return task;
+  }
+  void svc_end() {
+    std::cout << "Worker id= " << get_my_id() << " received EOS\n";
+  }
 };
 
 // the load-balancer filter
-class Emitter: public ff_monode {
+class Emitter : public ff_monode {
 public:
-    Emitter(int streamlen):streamlen(streamlen) {
-        srandom(::getpid()+(getusec()%4999));
-    };
+  Emitter(int streamlen) : streamlen(streamlen) {
+    srandom(::getpid() + (getusec() % 4999));
+  };
 
-    // called just one time at the very beginning
-    int svc_init() {
-        if (ffalloc.registerAllocator()<0) {
-            error("Emitter, registerAllocator fails\n");
-            return -1;
-        }
-
-        return 0;
+  // called just one time at the very beginning
+  int svc_init() {
+    if (ffalloc.registerAllocator() < 0) {
+      error("Emitter, registerAllocator fails\n");
+      return -1;
     }
 
-    void * svc(void * task) {
-        int * t = (int *)task;
+    return 0;
+  }
 
-        if (!t) {
-            // start generating the stream...
-            for(int i=0;i<streamlen;++i) {
-                t = (int *)ffalloc.malloc(sizeof(int));
-                *t = i;
-                ff_send_out(t);
-            }
-            task = GO_ON; // we want to keep going
-        }
-        return task;
+  void *svc(void *task) {
+    int *t = (int *)task;
+
+    if (!t) {
+      // start generating the stream...
+      for (int i = 0; i < streamlen; ++i) {
+        t = (int *)ffalloc.malloc(sizeof(int));
+        *t = i;
+        ff_send_out(t);
+      }
+      task = GO_ON; // we want to keep going
     }
+    return task;
+  }
 
-    void svc_end() {
-        printf("Emitter received EOS\n");
-        broadcast_task(EOS);
-    }
+  void svc_end() {
+    printf("Emitter received EOS\n");
+    broadcast_task(EOS);
+  }
 
-    
 private:
-    int streamlen;
+  int streamlen;
 };
-
 
 // the gatherer filter
-class Collector: public ff_node {
+class Collector : public ff_node {
 public:
-    Collector(int streamlen):streamlen(streamlen),cnt(0) {}
-    int svc_init() {
-        if (ffalloc.register4free()<0) {
-            error("Collector, register4free fails\n");
-            return -1;
-        }
-        return 0;
+  Collector(int streamlen) : streamlen(streamlen), cnt(0) {}
+  int svc_init() {
+    if (ffalloc.register4free() < 0) {
+      error("Collector, register4free fails\n");
+      return -1;
     }
-    void * svc(void * task) {
-        int * t = (int*)task;
-        if (*t != -1) {
-            std::cout << "Collector got task " << *t << " cnt= " << cnt << "\n";
-            return task;
-        }
+    return 0;
+  }
+  void *svc(void *task) {
+    int *t = (int *)task;
+    if (*t != -1) {
+      std::cout << "Collector got task " << *t << " cnt= " << cnt << "\n";
+      return task;
+    }
 
-        if (++cnt == streamlen) {
-            std::cout << "Collector generating EOS\n";
-            ffalloc.free(task);
-            return EOS;
-        }
-        std::cout << "Collector got -1 cnt= " << cnt << "\n";
-        return GO_ON;
+    if (++cnt == streamlen) {
+      std::cout << "Collector generating EOS\n";
+      ffalloc.free(task);
+      return EOS;
     }
+    std::cout << "Collector got -1 cnt= " << cnt << "\n";
+    return GO_ON;
+  }
+
 private:
-    int streamlen;
-    int cnt;
+  int streamlen;
+  int cnt;
 };
 
-
-
-int main(int argc, char * argv[]) {
-    int streamlen = 100;
-    if (argc>1) {
-        if (argc!=2) {
-            std::cerr << "use: "  << argv[0] << " streamlen\n";
-            return -1;
-        }
-
-        streamlen=atoi(argv[1]);
+int main(int argc, char *argv[]) {
+  int streamlen = 100;
+  if (argc > 1) {
+    if (argc != 2) {
+      std::cerr << "use: " << argv[0] << " streamlen\n";
+      return -1;
     }
 
-    // init FastFlow allocator
-    ffalloc.init();
+    streamlen = atoi(argv[1]);
+  }
 
-    ff_farm farm;
+  // init FastFlow allocator
+  ffalloc.init();
 
-    Emitter e(streamlen);
-    Collector c(streamlen);
-    farm.add_emitter(&e);
-    farm.add_collector(&c);
+  ff_farm farm;
 
-    std::vector<ff_node *> w;
-    w.push_back(new Worker);
-    w.push_back(new Worker);
-    w.push_back(new Worker);
-    farm.add_workers(w);
+  Emitter e(streamlen);
+  Collector c(streamlen);
+  farm.add_emitter(&e);
+  farm.add_collector(&c);
 
-    farm.wrap_around();
+  std::vector<ff_node *> w;
+  w.push_back(new Worker);
+  w.push_back(new Worker);
+  w.push_back(new Worker);
+  farm.add_workers(w);
 
-    if (farm.run_and_wait_end()<0) {
-        error("running farm with feedback\n");
-        return -1;
-    }
+  farm.wrap_around();
 
-	farm.ffStats(std::cerr);
-	
-    return 0;
+  if (farm.run_and_wait_end() < 0) {
+    error("running farm with feedback\n");
+    return -1;
+  }
+
+  farm.ffStats(std::cerr);
+
+  return 0;
 }

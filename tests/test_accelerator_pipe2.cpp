@@ -32,54 +32,52 @@
 #include <vector>
 #include <iostream>
 #include <ff/ff.hpp>
-  
+
 using namespace ff;
 
-struct Worker: ff_node_t<long> {
-    long * svc(long *in) {
-        std::cout << "Worker " << ff_node::get_my_id() 
-                  << " received " << (long)in << "\n";
-        return in;
-    }
+struct Worker : ff_node_t<long> {
+  long *svc(long *in) {
+    std::cout << "Worker " << ff_node::get_my_id() << " received " << (long)in
+              << "\n";
+    return in;
+  }
 };
 
-
 int main() {
-    std::vector<ff_node*> W;
-    W.push_back(new Worker);
-    W.push_back(new Worker);
-    
-    ff_farm farm(W, nullptr, nullptr);
-    farm.cleanup_all();
-    ff_pipeline pipe0;
-    pipe0.add_stage(farm);
+  std::vector<ff_node *> W;
+  W.push_back(new Worker);
+  W.push_back(new Worker);
 
-    
-    ff_pipeline pipe(true /* accelerator flag */);
-    pipe.add_stage(pipe0);
+  ff_farm farm(W, nullptr, nullptr);
+  farm.cleanup_all();
+  ff_pipeline pipe0;
+  pipe0.add_stage(farm);
 
-    pipe.run();
-    void * result=NULL;
-    for (long i=1;i<100;++i) {
-        if (!pipe.offload((long*)(i))) {
-            error("offloading task\n");
-            return -1;
-        }
-        
-        // try to get results, if there are any
-        if (pipe.load_result_nb(&result)) {
-            std::cerr << "result= " << (long)result << "\n";
-        }
+  ff_pipeline pipe(true /* accelerator flag */);
+  pipe.add_stage(pipe0);
+
+  pipe.run();
+  void *result = NULL;
+  for (long i = 1; i < 100; ++i) {
+    if (!pipe.offload((long *)(i))) {
+      error("offloading task\n");
+      return -1;
     }
-    pipe.offload(FF_EOS);
-    // get all remaining results syncronously. 
-    while(pipe.load_result(&result)) {
-        std::cerr << "result= " << (long)result << "\n";
+
+    // try to get results, if there are any
+    if (pipe.load_result_nb(&result)) {
+      std::cerr << "result= " << (long)result << "\n";
     }
-    
-    if (pipe.wait()<0) {
-        error("waiting pipe termination\n");
-        return -1;
-    }
-    return 0;
+  }
+  pipe.offload(FF_EOS);
+  // get all remaining results syncronously.
+  while (pipe.load_result(&result)) {
+    std::cerr << "result= " << (long)result << "\n";
+  }
+
+  if (pipe.wait() < 0) {
+    error("waiting pipe termination\n");
+    return -1;
+  }
+  return 0;
 }

@@ -38,18 +38,19 @@ namespace ff {
  * and device memory allocation.
  *
  */
-enum class CopyFlags    { DONTCOPY, COPY };
-enum class ReuseFlags   { DONTREUSE,  REUSE };
+enum class CopyFlags { DONTCOPY, COPY };
+enum class ReuseFlags { DONTREUSE, REUSE };
 enum class ReleaseFlags { DONTRELEASE, RELEASE };
 
-struct MemoryFlags {  
-    MemoryFlags():copy(CopyFlags::COPY),
-                  reuse(ReuseFlags::DONTREUSE),
-                  release(ReleaseFlags::DONTRELEASE) {}
-    MemoryFlags(CopyFlags c, ReuseFlags r, ReleaseFlags f):copy(c),reuse(r),release(f) {}
-    CopyFlags    copy;
-    ReuseFlags   reuse;
-    ReleaseFlags release;
+struct MemoryFlags {
+  MemoryFlags()
+      : copy(CopyFlags::COPY), reuse(ReuseFlags::DONTREUSE),
+        release(ReleaseFlags::DONTRELEASE) {}
+  MemoryFlags(CopyFlags c, ReuseFlags r, ReleaseFlags f)
+      : copy(c), reuse(r), release(f) {}
+  CopyFlags copy;
+  ReuseFlags reuse;
+  ReleaseFlags release;
 };
 
 using memoryflagsVector = std::vector<MemoryFlags>;
@@ -63,65 +64,70 @@ using memoryflagsVector = std::vector<MemoryFlags>;
  * R: receive (COPYFROM)
  * F: free/remove (RELEASE)
  */
-static inline const memoryflagsVector extractFlags(const std::string &cmd, const int kernel_id) {
-    memoryflagsVector V;
-    // no command in input, we just return a vector with one (default) entry
-    if (cmd == "") { 
-        V.resize(1);
-        return V;
-    }
-    const std::string kid = "kernel_"+std::to_string(kernel_id);
-    const char semicolon = ';';
-    size_t n = cmd.rfind(kid);
-    assert(n != std::string::npos);
-    n = cmd.find_first_of(semicolon, n);   // first ';' after kernel_id
-    assert(n != std::string::npos);
-    n = cmd.find_first_of(semicolon, n+1); // first ';' after device_id
-    assert(n != std::string::npos);
-
-    size_t m = cmd.find_first_of('$', n+1);
-    assert(m != std::string::npos);
-    // gets just the sub-string of the command related to the memory flags 
-    // starting and ending with ';' (i.e. ; UF;SF;...;)
-    const std::string &flag_string = cmd.substr(n,m-n);
-    assert(flag_string != "");
-
-    n = 0;
-    m = flag_string.find_first_of(semicolon,n+1);  
-    assert(m != std::string::npos);
-    V.reserve(10);    
-    do {
-        const std::string &flags = flag_string.substr(n+1, m-n-1);
-        
-        struct MemoryFlags mf;
-        if (flags.find('S') != std::string::npos)      mf.copy = CopyFlags::COPY;
-        else if (flags.find('R') != std::string::npos) mf.copy = CopyFlags::COPY;
-        else                                           mf.copy = CopyFlags::DONTCOPY;
-        mf.reuse   = (flags.find('U')!=std::string::npos ? ReuseFlags::REUSE     : ReuseFlags::DONTREUSE);
-        mf.release = (flags.find('F')!=std::string::npos ? ReleaseFlags::RELEASE : ReleaseFlags::DONTRELEASE);
-        V.push_back(mf);
-        
-        n = m;
-        m = flag_string.find_first_of(semicolon, n+1);  
-    } while(m != std::string::npos);
-    
+static inline const memoryflagsVector extractFlags(
+    const std::string &cmd, const int kernel_id) {
+  memoryflagsVector V;
+  // no command in input, we just return a vector with one (default) entry
+  if (cmd == "") {
+    V.resize(1);
     return V;
+  }
+  const std::string kid = "kernel_" + std::to_string(kernel_id);
+  const char semicolon = ';';
+  size_t n = cmd.rfind(kid);
+  assert(n != std::string::npos);
+  n = cmd.find_first_of(semicolon, n); // first ';' after kernel_id
+  assert(n != std::string::npos);
+  n = cmd.find_first_of(semicolon, n + 1); // first ';' after device_id
+  assert(n != std::string::npos);
+
+  size_t m = cmd.find_first_of('$', n + 1);
+  assert(m != std::string::npos);
+  // gets just the sub-string of the command related to the memory flags
+  // starting and ending with ';' (i.e. ; UF;SF;...;)
+  const std::string &flag_string = cmd.substr(n, m - n);
+  assert(flag_string != "");
+
+  n = 0;
+  m = flag_string.find_first_of(semicolon, n + 1);
+  assert(m != std::string::npos);
+  V.reserve(10);
+  do {
+    const std::string &flags = flag_string.substr(n + 1, m - n - 1);
+
+    struct MemoryFlags mf;
+    if (flags.find('S') != std::string::npos)
+      mf.copy = CopyFlags::COPY;
+    else if (flags.find('R') != std::string::npos)
+      mf.copy = CopyFlags::COPY;
+    else
+      mf.copy = CopyFlags::DONTCOPY;
+    mf.reuse = (flags.find('U') != std::string::npos ? ReuseFlags::REUSE
+                                                     : ReuseFlags::DONTREUSE);
+    mf.release =
+        (flags.find('F') != std::string::npos ? ReleaseFlags::RELEASE
+                                              : ReleaseFlags::DONTRELEASE);
+    V.push_back(mf);
+
+    n = m;
+    m = flag_string.find_first_of(semicolon, n + 1);
+  } while (m != std::string::npos);
+
+  return V;
 }
-    
+
 static inline CopyFlags getCopy(int pos, const memoryflagsVector &V) {
-    return V[pos].copy;
+  return V[pos].copy;
 }
 static inline ReuseFlags getReuse(int pos, const memoryflagsVector &V) {
-    return V[pos].reuse;
+  return V[pos].reuse;
 }
 static inline ReleaseFlags getRelease(int pos, const memoryflagsVector &V) {
-    return V[pos].release;
+  return V[pos].release;
 }
 
 // *******************************************************************
 
-
-} // namespace
-
+} // namespace ff
 
 #endif /* FF_BITFLAGS_HPP */

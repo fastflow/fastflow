@@ -24,76 +24,76 @@
  *
  ****************************************************************************
  */
-// simple task-farm pattern test used as software accelerator 
+// simple task-farm pattern test used as software accelerator
 
 #include <ff/ff.hpp>
-  
+
 using namespace ff;
 
 // sequential function
 static inline long Func(long r, long i) {
-    usleep((r/i) % 1000);
-    return r/i;
+  usleep((r / i) % 1000);
+  return r / i;
 }
 
 #if !defined(SEQUENTIAL)
 struct fftask_t {
-    fftask_t(long r, long i):r(r),i(i) {}
-    long r, i;
+  fftask_t(long r, long i) : r(r), i(i) {}
+  long r, i;
 };
-static inline fftask_t* Wrapper(fftask_t *t, ff_node *const) {
-    t->r = Func(t->r, t->i);
-    return t;
+static inline fftask_t *Wrapper(fftask_t *t, ff_node *const) {
+  t->r = Func(t->r, t->i);
+  return t;
 }
 #endif
 
-int main(int argc, char * argv[]) {
-    int nworkers = 3;
-    long number = 111;
-    if (argc>1) {
-        if (argc<3) {
-            printf("use: %s nworkers number\n",argv[0]);
-            return -1;
-        }
-        nworkers=atoi(argv[1]);
-        number  =atol(argv[2]);
+int main(int argc, char *argv[]) {
+  int nworkers = 3;
+  long number = 111;
+  if (argc > 1) {
+    if (argc < 3) {
+      printf("use: %s nworkers number\n", argv[0]);
+      return -1;
     }
-    srandom(131071);
-    
-#if defined(SEQUENTIAL)
-    long i=0;
-    double k=0.0;
-    do {
-        k = Func(random(), i+1);
-        if (k == number) { 
-            printf("found %ld in i %ld iterations\n",number, i);
-            break;
-        }
-    } while( ++i< 10000/*1e6*/ );
-#else
-    long i=0;
-    fftask_t *r = NULL;
-    ff_Farm<fftask_t> farm(Wrapper, nworkers, true);
-    farm.run();
+    nworkers = atoi(argv[1]);
+    number = atol(argv[2]);
+  }
+  srandom(131071);
 
-    do {
-        farm.offload(new fftask_t(random(),i+1));
-        if (farm.load_result_nb(r)) {
-            if (r->r == number) {
-                printf("found %ld in %ld iterations\n",number, i);
-                break;
-            } 
-            delete r;
-        } 
-    } while( ++i< 10000); //1e6);
-    farm.offload(farm.EOS);
-    while(farm.load_result(r)) {
-        if (r->r == number) {
-            printf("found %ld after all iterations\n",number);
-        }
-        delete r;
+#if defined(SEQUENTIAL)
+  long i = 0;
+  double k = 0.0;
+  do {
+    k = Func(random(), i + 1);
+    if (k == number) {
+      printf("found %ld in i %ld iterations\n", number, i);
+      break;
     }
-    farm.wait();
+  } while (++i < 10000 /*1e6*/);
+#else
+  long i = 0;
+  fftask_t *r = NULL;
+  ff_Farm<fftask_t> farm(Wrapper, nworkers, true);
+  farm.run();
+
+  do {
+    farm.offload(new fftask_t(random(), i + 1));
+    if (farm.load_result_nb(r)) {
+      if (r->r == number) {
+        printf("found %ld in %ld iterations\n", number, i);
+        break;
+      }
+      delete r;
+    }
+  } while (++i < 10000); //1e6);
+  farm.offload(farm.EOS);
+  while (farm.load_result(r)) {
+    if (r->r == number) {
+      printf("found %ld after all iterations\n", number);
+    }
+    delete r;
+  }
+  farm.wait();
 #endif
-    return 0;
+  return 0;
 }

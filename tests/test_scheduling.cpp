@@ -34,113 +34,109 @@
 #include <algorithm> // for min_element
 #include <ff/ff.hpp>
 #include <ff/allocator.hpp>
-#include <ff/utils.hpp>  
+#include <ff/utils.hpp>
 
 using namespace ff;
 
-#define MAX_TIME_MS  999
-#define N              3
+#define MAX_TIME_MS 999
+#define N 3
 
 // generic worker
-class Worker: public ff_node {
+class Worker : public ff_node {
 public:
-    void * svc(void * task) {
-        int * t=(int*)task;
+  void *svc(void *task) {
+    int *t = (int *)task;
 
-        tempo+=*t;
-        //std::cerr << "WORKER received task tempo= " << tempo << "\n";
-        ticks_wait(*t);
-        return task;
-    }
+    tempo += *t;
+    //std::cerr << "WORKER received task tempo= " << tempo << "\n";
+    ticks_wait(*t);
+    return task;
+  }
 
-    void svc_end() {
-        std::cerr << "WORKER time elapsed=" << tempo << " (ticks)\n";
-    }
-        
+  void svc_end() {
+    std::cerr << "WORKER time elapsed=" << tempo << " (ticks)\n";
+  }
+
 private:
-    unsigned int tempo;
+  unsigned int tempo;
 };
-
 
 // emitter filter
-class Emitter: public ff_monode {
+class Emitter : public ff_monode {
 public:
-    Emitter(int maxtasks, int nworkers):
-        maxtasks(maxtasks),ntask(0),nworkers(nworkers),load(nworkers,0) {}
+  Emitter(int maxtasks, int nworkers)
+      : maxtasks(maxtasks), ntask(0), nworkers(nworkers), load(nworkers, 0) {}
 
-    int svc_init() {
-        srandom(::getpid()+(getusec()%4999));
-        return 0;
+  int svc_init() {
+    srandom(::getpid() + (getusec() % 4999));
+    return 0;
+  }
+
+  void *svc(void *task) {
+    if (task == NULL) {
+      for (int i = 0; i < nworkers; ++i) {
+        int *t = new int(random() % MAX_TIME_MS);
+        load[i] += *t;
+        ff_send_out_to(t, i);
+        ++ntask;
+      }
+      return GO_ON;
     }
 
-    void * svc(void * task) {
-        if (task == NULL) {
-            for(int i=0;i<nworkers;++i) {
-                int * t = new int(random() % MAX_TIME_MS);
-                load[i] += *t;
-                ff_send_out_to(t,i);
-                ++ntask;
-            }
-            return GO_ON;
-        }
-        
-        if (ntask+N >= maxtasks) return NULL;
+    if (ntask + N >= maxtasks) return NULL;
 
-        for(int i=0;i<N;++i) {
-            int * t = new int(random() % MAX_TIME_MS);
+    for (int i = 0; i < N; ++i) {
+      int *t = new int(random() % MAX_TIME_MS);
 
-            /* this is my scheduling policy */
-            std::vector<int>::iterator idx_it = std::min_element(load.begin(),load.end());
-            long idx = static_cast<long>(idx_it - load.begin());
-            load[idx] += *t;
-            ff_send_out_to(t, idx);
-            ++ntask;
-        }
-
-        return GO_ON;
+      /* this is my scheduling policy */
+      std::vector<int>::iterator idx_it =
+          std::min_element(load.begin(), load.end());
+      long idx = static_cast<long>(idx_it - load.begin());
+      load[idx] += *t;
+      ff_send_out_to(t, idx);
+      ++ntask;
     }
-    
+
+    return GO_ON;
+  }
+
 private:
-    int maxtasks;
-    int ntask;
-    int nworkers;
-    std::vector<int> load;
+  int maxtasks;
+  int ntask;
+  int nworkers;
+  std::vector<int> load;
 };
 
-
-
-int main(int argc, char * argv[]) {
-    int nworkers = 3;
-    int ntask = 1000;
-    if (argc>1) {
-        if (argc<3) {
-            std::cerr << "use: " 
-                      << argv[0] 
-                      << " nworkers ntask\n";
-            return -1;
-        }
-        
-        nworkers=atoi(argv[1]);
-        ntask=atoi(argv[2]);
+int main(int argc, char *argv[]) {
+  int nworkers = 3;
+  int ntask = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use: " << argv[0] << " nworkers ntask\n";
+      return -1;
     }
-    if (nworkers<=0 || ntask<=0) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
-    }
-    
-    ff_farm farm(false, 1024,8192);
-    Emitter emitter(ntask,nworkers);
-    farm.add_emitter(&emitter);
 
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
-    farm.add_workers(w);
+    nworkers = atoi(argv[1]);
+    ntask = atoi(argv[2]);
+  }
+  if (nworkers <= 0 || ntask <= 0) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
 
-    // set master_worker mode 
-    farm.wrap_around();
+  ff_farm farm(false, 1024, 8192);
+  Emitter emitter(ntask, nworkers);
+  farm.add_emitter(&emitter);
 
-    farm.run_and_wait_end();
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) w.push_back(new Worker);
+  farm.add_workers(w);
 
-    std::cerr << "DONE\n";
-    return 0;
+  // set master_worker mode
+  farm.wrap_around();
+
+  farm.run_and_wait_end();
+
+  std::cerr << "DONE\n";
+  return 0;
 }

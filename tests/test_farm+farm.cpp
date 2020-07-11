@@ -49,60 +49,56 @@
 using namespace ff;
 
 // this is a simple scheduling policy, for a more complex implementation
-// take a look at test_multi_output5.cpp test. 
-struct Scheduler: ff_minode_t<long> {
-    long* svc(long* in) {
-        if (in == nullptr) {
-            for(long i=1;i<=ntasks;++i)
-                ff_send_out((long*)i);
-            return GO_ON;
-        }
-        printf("Scheduler got back %ld from %ld\n", (long)in, get_channel_id()); 
-        if (++cnt>=ntasks) return EOS;
-        return GO_ON;
+// take a look at test_multi_output5.cpp test.
+struct Scheduler : ff_minode_t<long> {
+  long *svc(long *in) {
+    if (in == nullptr) {
+      for (long i = 1; i <= ntasks; ++i) ff_send_out((long *)i);
+      return GO_ON;
     }
-    long cnt=0;
-    const long ntasks= 1000;
-}; 
-struct Worker: ff_node_t<long> {
-    long* svc(long* in) {
-        printf("Worker%ld sends back %ld\n", get_my_id(), (long)in);
-        return in;
-    }
+    printf("Scheduler got back %ld from %ld\n", (long)in, get_channel_id());
+    if (++cnt >= ntasks) return EOS;
+    return GO_ON;
+  }
+  long cnt = 0;
+  const long ntasks = 1000;
 };
-struct Emitter: ff_node_t<long> {
-    long* svc(long* in) { 
-        return in;
-    }
+struct Worker : ff_node_t<long> {
+  long *svc(long *in) {
+    printf("Worker%ld sends back %ld\n", get_my_id(), (long)in);
+    return in;
+  }
+};
+struct Emitter : ff_node_t<long> {
+  long *svc(long *in) { return in; }
 };
 
 int main() {
-    ff_farm farm1, farm2;
-    Emitter E1, E2;
-    farm1.add_emitter(&E1);
-    farm2.add_emitter(&E2);
-    std::vector<ff_node*> W1;
-    W1.push_back(new Worker);
-    //W1.push_back(new Worker);
-    farm1.add_workers(W1);
-    W1.clear();
-    W1.push_back(new Worker);
-    //W1.push_back(new Worker);
-    farm2.add_workers(W1);
+  ff_farm farm1, farm2;
+  Emitter E1, E2;
+  farm1.add_emitter(&E1);
+  farm2.add_emitter(&E2);
+  std::vector<ff_node *> W1;
+  W1.push_back(new Worker);
+  //W1.push_back(new Worker);
+  farm1.add_workers(W1);
+  W1.clear();
+  W1.push_back(new Worker);
+  //W1.push_back(new Worker);
+  farm2.add_workers(W1);
 
+  ff_farm farm;
+  Scheduler sched;
+  farm.add_emitter(&sched);
+  std::vector<ff_node *> W;
+  W.push_back(&farm1);
+  W.push_back(&farm2);
+  farm.add_workers(W);
+  farm.wrap_around();
 
-    ff_farm farm;
-    Scheduler sched;
-    farm.add_emitter(&sched);
-    std::vector<ff_node*> W;
-    W.push_back(&farm1);
-    W.push_back(&farm2);
-    farm.add_workers(W);
-    farm.wrap_around();
-        
-    if (farm.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
-    }
-    return 0;
+  if (farm.run_and_wait_end() < 0) {
+    error("running farm\n");
+    return -1;
+  }
+  return 0;
 }

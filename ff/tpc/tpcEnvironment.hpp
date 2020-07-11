@@ -10,7 +10,6 @@
  *  creates contexts, command queues etc.
  */
 
-
 /* ***************************************************************************
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as 
@@ -58,9 +57,7 @@ using namespace tpc;
 
 namespace ff {
 
-
 static pthread_mutex_t tpcInstanceMutex = PTHREAD_MUTEX_INITIALIZER;
-
 
 /*!
  *  \class tpcEnvironment
@@ -74,74 +71,75 @@ static pthread_mutex_t tpcInstanceMutex = PTHREAD_MUTEX_INITIALIZER;
 
 class tpcEnvironment {
 private:
-    //NOTE: currently only one single TPC device is supported
-    tpc_ctx_t     *ctx;
-    tpc_dev_ctx_t *dev_ctx;
+  //NOTE: currently only one single TPC device is supported
+  tpc_ctx_t *ctx;
+  tpc_dev_ctx_t *dev_ctx;
 
 protected:
-    tpcEnvironment():ctx(NULL),dev_ctx(NULL) {
-        tpcId = 0;
-        
-        bool ok = false;
-        tpc_res_t r = tpc_init(&ctx);
-        if (r == TPC_SUCCESS) {
-            // FIX: need to support multiple TPC devices
-            r = tpc_create_device(ctx, 0, &dev_ctx, TPC_DEVICE_CREATE_FLAGS_NONE);
-            ok = r == TPC_SUCCESS;
-        }
-        if (! ok) { 
-            tpc_deinit(ctx);
-            ctx = NULL, dev_ctx=NULL;
-            error("tpcEnvironment::tpcEnvironment FATAL ERROR, unable to create TPC device\n");
-            abort();
-        }               
-    }
- 
-public:
-    ~tpcEnvironment() {
-        if (ctx != NULL) {
-            tpc_destroy_device(ctx,dev_ctx);
-            tpc_deinit(ctx);
-        }
-    }
-   
-    static inline tpcEnvironment * instance() {
-        while (!m_tpcEnvironment) {
-            pthread_mutex_lock(&tpcInstanceMutex);
-            if (!m_tpcEnvironment) {
-                m_tpcEnvironment = new tpcEnvironment();
-            }
-            assert(m_tpcEnvironment);
-            pthread_mutex_unlock(&tpcInstanceMutex);
-        }
-        return m_tpcEnvironment; 
-    }
-    unsigned long getTPCID() {  return ++tpcId; }
+  tpcEnvironment() : ctx(NULL), dev_ctx(NULL) {
+    tpcId = 0;
 
-    tpc_dev_ctx_t *const getTPCDevice(bool exclusive=false) {
-        return dev_ctx;
+    bool ok = false;
+    tpc_res_t r = tpc_init(&ctx);
+    if (r == TPC_SUCCESS) {
+      // FIX: need to support multiple TPC devices
+      r = tpc_create_device(ctx, 0, &dev_ctx, TPC_DEVICE_CREATE_FLAGS_NONE);
+      ok = r == TPC_SUCCESS;
     }
+    if (!ok) {
+      tpc_deinit(ctx);
+      ctx = NULL, dev_ctx = NULL;
+      error("tpcEnvironment::tpcEnvironment FATAL ERROR, unable to create TPC "
+            "device\n");
+      abort();
+    }
+  }
+
+public:
+  ~tpcEnvironment() {
+    if (ctx != NULL) {
+      tpc_destroy_device(ctx, dev_ctx);
+      tpc_deinit(ctx);
+    }
+  }
+
+  static inline tpcEnvironment *instance() {
+    while (!m_tpcEnvironment) {
+      pthread_mutex_lock(&tpcInstanceMutex);
+      if (!m_tpcEnvironment) {
+        m_tpcEnvironment = new tpcEnvironment();
+      }
+      assert(m_tpcEnvironment);
+      pthread_mutex_unlock(&tpcInstanceMutex);
+    }
+    return m_tpcEnvironment;
+  }
+  unsigned long getTPCID() { return ++tpcId; }
+
+  tpc_dev_ctx_t *const getTPCDevice(bool exclusive = false) { return dev_ctx; }
 
 private:
-    tpcEnvironment(tpcEnvironment const&){};
-    tpcEnvironment& operator=(tpcEnvironment const&){ return *this;};
-private:    
-    static tpcEnvironment * m_tpcEnvironment;
-    std::atomic_long tpcId;
-};
-tpcEnvironment* tpcEnvironment::m_tpcEnvironment = NULL;
+  tpcEnvironment(tpcEnvironment const &){};
+  tpcEnvironment &operator=(tpcEnvironment const &) { return *this; };
 
-} // namespace
+private:
+  static tpcEnvironment *m_tpcEnvironment;
+  std::atomic_long tpcId;
+};
+tpcEnvironment *tpcEnvironment::m_tpcEnvironment = NULL;
+
+} // namespace ff
 
 #else  // FF_TPC not defined
 
 namespace ff {
-class tpcEnvironment{
+class tpcEnvironment {
 private:
-    tpcEnvironment() {}
+  tpcEnvironment() {}
+
 public:
-    static inline tpcEnvironment * instance() { return NULL; }
+  static inline tpcEnvironment *instance() { return NULL; }
 };
-} // namespace
+} // namespace ff
 #endif /* FF_TPC */
 #endif /* FF_TPCENVIRONMENT_HPP */

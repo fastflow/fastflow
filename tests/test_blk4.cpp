@@ -46,108 +46,106 @@
 
 using namespace ff;
 
-class Emitter1: public ff_node_t<long> {
+class Emitter1 : public ff_node_t<long> {
 public:
-    Emitter1(ff_loadbalancer *lb, int ntasks):lb(lb),ntasks(ntasks) {}
-    long* svc(long*) {
-        // enforces nonblocking mode since the beginning
-        // regardless the compilation setting
-        lb->broadcast_task(NBLK); 
-        for(long i=0;i<ntasks;++i) {
-            ff_send_out((long*)(i+10));
-            switch(i) {
-            case 100:{
-            lb->broadcast_task(BLK);
-            } break;
-            case 500: {
-            lb->broadcast_task(NBLK);
-            } break;
-            case 800: {
-            lb->broadcast_task(BLK);
-            } break;
-            }
-        }
-        return EOS;
+  Emitter1(ff_loadbalancer *lb, int ntasks) : lb(lb), ntasks(ntasks) {}
+  long *svc(long *) {
+    // enforces nonblocking mode since the beginning
+    // regardless the compilation setting
+    lb->broadcast_task(NBLK);
+    for (long i = 0; i < ntasks; ++i) {
+      ff_send_out((long *)(i + 10));
+      switch (i) {
+      case 100: {
+        lb->broadcast_task(BLK);
+      } break;
+      case 500: {
+        lb->broadcast_task(NBLK);
+      } break;
+      case 800: {
+        lb->broadcast_task(BLK);
+      } break;
+      }
     }
+    return EOS;
+  }
+
 private:
-    ff_loadbalancer *lb;        
-    const int ntasks;
+  ff_loadbalancer *lb;
+  const int ntasks;
 };
 
-class Emitter2: public ff_node_t<long> {
+class Emitter2 : public ff_node_t<long> {
 public:
-    Emitter2(ff_loadbalancer *lb, long nworkers):neos(0),nworkers(nworkers), lb(lb) {}
-    long* svc(long* t) {
-        int wid = lb->get_channel_id();
-        if (wid == -1) {
-            printf("TASK FROM INPUT %ld\n", (long)(t));
-            return t;
-        }
-        printf("got back a task from Worker2(%d)\n", wid);
-        return GO_ON;
+  Emitter2(ff_loadbalancer *lb, long nworkers)
+      : neos(0), nworkers(nworkers), lb(lb) {}
+  long *svc(long *t) {
+    int wid = lb->get_channel_id();
+    if (wid == -1) {
+      printf("TASK FROM INPUT %ld\n", (long)(t));
+      return t;
     }
-    void eosnotify(ssize_t id) {
-        if (id != -1) return;
-        if (++neos == nworkers) lb->broadcast_task(EOS);        
-    }
+    printf("got back a task from Worker2(%d)\n", wid);
+    return GO_ON;
+  }
+  void eosnotify(ssize_t id) {
+    if (id != -1) return;
+    if (++neos == nworkers) lb->broadcast_task(EOS);
+  }
+
 private:
-    int  neos;
-    long nworkers;
-    ff_loadbalancer *lb;    
+  int neos;
+  long nworkers;
+  ff_loadbalancer *lb;
 };
 
-struct Worker1: ff_node_t<long> {
-    long* svc(long* task) {
-        return task;
-    }
+struct Worker1 : ff_node_t<long> {
+  long *svc(long *task) { return task; }
 };
 
-struct Worker2: ff_node_t<long> {
-    long* svc(long* task) {
-        return task;
-    }
+struct Worker2 : ff_node_t<long> {
+  long *svc(long *task) { return task; }
 };
 
-
-int main(int argc, char* argv[]) {
-    size_t nworkers = 3;
-    size_t ntasks = 1000;
-    if (argc>1) {
-        if (argc < 3) {
-            std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";
-            return -1;
-        }
-        nworkers  =atoi(argv[1]);
-        ntasks    =atoi(argv[2]);
+int main(int argc, char *argv[]) {
+  size_t nworkers = 3;
+  size_t ntasks = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use:\n"
+                << " " << argv[0] << " numworkers ntasks\n";
+      return -1;
     }
+    nworkers = atoi(argv[1]);
+    ntasks = atoi(argv[2]);
+  }
 
-    ff_Farm<long>   farm1(  [nworkers]() { 
-            std::vector<std::unique_ptr<ff_node> > W;
-            for(size_t i=0;i<nworkers;++i)  W.push_back(make_unique<Worker1>());
-            return W;
-        } () );
-    Emitter1 E1(farm1.getlb(), ntasks);
-    farm1.add_emitter(E1);
-    farm1.remove_collector();
-    farm1.setFixedSize(true);
-    farm1.setInputQueueLength(nworkers*100);
-    farm1.setOutputQueueLength(nworkers*100);
+  ff_Farm<long> farm1([nworkers]() {
+    std::vector<std::unique_ptr<ff_node>> W;
+    for (size_t i = 0; i < nworkers; ++i) W.push_back(make_unique<Worker1>());
+    return W;
+  }());
+  Emitter1 E1(farm1.getlb(), ntasks);
+  farm1.add_emitter(E1);
+  farm1.remove_collector();
+  farm1.setFixedSize(true);
+  farm1.setInputQueueLength(nworkers * 100);
+  farm1.setOutputQueueLength(nworkers * 100);
 
+  ff_Farm<long> farm2([nworkers]() {
+    std::vector<std::unique_ptr<ff_node>> W;
+    for (size_t i = 0; i < nworkers; ++i) W.push_back(make_unique<Worker2>());
+    return W;
+  }());
+  Emitter2 E2(farm2.getlb(), nworkers);
+  farm2.add_emitter(E2);
+  farm2.remove_collector();
+  farm2.wrap_around();
 
-    ff_Farm<long>   farm2(  [nworkers]() { 
-            std::vector<std::unique_ptr<ff_node> > W;
-            for(size_t i=0;i<nworkers;++i)  W.push_back(make_unique<Worker2>());
-            return W;
-        } () );
-    Emitter2 E2(farm2.getlb(), nworkers);
-    farm2.add_emitter(E2);
-    farm2.remove_collector();
-    farm2.wrap_around();
-
-    ff_Pipe<> pipe(farm1, farm2);
-    pipe.setFixedSize(true);
-    pipe.setXNodeInputQueueLength(100);
-    pipe.setXNodeOutputQueueLength(100);
-    pipe.run_and_wait_end();
-    return 0;
+  ff_Pipe<> pipe(farm1, farm2);
+  pipe.setFixedSize(true);
+  pipe.setXNodeInputQueueLength(100);
+  pipe.setXNodeOutputQueueLength(100);
+  pipe.run_and_wait_end();
+  return 0;
 }

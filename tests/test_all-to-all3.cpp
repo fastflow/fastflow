@@ -42,108 +42,107 @@
  */
 /* Author: Massimo Torquati
  *
- */ 
-              
+ */
+
 #include <iostream>
 
 #include <ff/ff.hpp>
 using namespace ff;
 
-struct Generator: ff_monode_t<long> { 
-    long *svc(long*) {
-        assert(get_num_outchannels() == 3);
-        
-        // sum: odd 271 even 344
-        ff_send_out_to(new long(13),  0);
-        ff_send_out_to(new long(17),  0);
-        ff_send_out_to(new long(14),  1);       
-        ff_send_out_to(new long(27),  1);
-        ff_send_out_to(new long(31),  1);
-        ff_send_out_to(new long(6),   2);
-        ff_send_out_to(new long(8),   0);
-        ff_send_out_to(new long(4),   1);
-        ff_send_out_to(new long(26),  2);
-        ff_send_out_to(new long(31),  2);
-        ff_send_out_to(new long(105), 0);
-        ff_send_out_to(new long(238), 1);
-        ff_send_out_to(new long(47),  2);
-        ff_send_out_to(new long(48),  2);
-        return EOS; // End-Of-Stream
-    }
+struct Generator : ff_monode_t<long> {
+  long *svc(long *) {
+    assert(get_num_outchannels() == 3);
+
+    // sum: odd 271 even 344
+    ff_send_out_to(new long(13), 0);
+    ff_send_out_to(new long(17), 0);
+    ff_send_out_to(new long(14), 1);
+    ff_send_out_to(new long(27), 1);
+    ff_send_out_to(new long(31), 1);
+    ff_send_out_to(new long(6), 2);
+    ff_send_out_to(new long(8), 0);
+    ff_send_out_to(new long(4), 1);
+    ff_send_out_to(new long(26), 2);
+    ff_send_out_to(new long(31), 2);
+    ff_send_out_to(new long(105), 0);
+    ff_send_out_to(new long(238), 1);
+    ff_send_out_to(new long(47), 2);
+    ff_send_out_to(new long(48), 2);
+    return EOS; // End-Of-Stream
+  }
 };
-struct Sink: ff_minode_t<long> {  
-    long *svc(long *task) {
-        std::cout <<  *task << "\n";
-        delete task;
-        return GO_ON; 
-    }
-}; 
-
-struct Router: ff_monode_t<long> {
-    long *svc(long *in) {
-        if ((*in % 2) == 0) {
-            ff_send_out_to(in, 0);
-        } else
-            ff_send_out_to(in, 1);
-
-        return GO_ON;
-    }
+struct Sink : ff_minode_t<long> {
+  long *svc(long *task) {
+    std::cout << *task << "\n";
+    delete task;
+    return GO_ON;
+  }
 };
 
-struct Even: ff_node_t<long> {
-	long *svc(long *in) {
-        sum+=*in;
-        delete in;
-	    return GO_ON;
-    }
-    void eosnotify(ssize_t=-1) {
-        printf("Even received EOS\n");
-        ff_send_out(new long(sum));
-    }
+struct Router : ff_monode_t<long> {
+  long *svc(long *in) {
+    if ((*in % 2) == 0) {
+      ff_send_out_to(in, 0);
+    } else
+      ff_send_out_to(in, 1);
 
-    long sum=0;
-};
-struct Odd: ff_node_t<long> {
-	long *svc(long *in) {
-        sum+=*in;
-        delete in;
-	    return GO_ON;
-    }
-    void eosnotify(ssize_t=-1) {
-        printf("Odd received EOS\n");
-        ff_send_out(new long(sum));
-    }
-
-    long sum=0;
+    return GO_ON;
+  }
 };
 
+struct Even : ff_node_t<long> {
+  long *svc(long *in) {
+    sum += *in;
+    delete in;
+    return GO_ON;
+  }
+  void eosnotify(ssize_t = -1) {
+    printf("Even received EOS\n");
+    ff_send_out(new long(sum));
+  }
+
+  long sum = 0;
+};
+struct Odd : ff_node_t<long> {
+  long *svc(long *in) {
+    sum += *in;
+    delete in;
+    return GO_ON;
+  }
+  void eosnotify(ssize_t = -1) {
+    printf("Odd received EOS\n");
+    ff_send_out(new long(sum));
+  }
+
+  long sum = 0;
+};
 
 int main() {
 
-    std::vector<ff_node*> W1;  
-    Router w1, w2, w3;
-    W1.push_back(&w1);
-    W1.push_back(&w2);
-    W1.push_back(&w3);
-    std::vector<ff_node*> W2;
-    Even even;
-    Odd  odd;
-    W2.push_back(&even);
-    W2.push_back(&odd);
+  std::vector<ff_node *> W1;
+  Router w1, w2, w3;
+  W1.push_back(&w1);
+  W1.push_back(&w2);
+  W1.push_back(&w3);
+  std::vector<ff_node *> W2;
+  Even even;
+  Odd odd;
+  W2.push_back(&even);
+  W2.push_back(&odd);
 
-    ff_a2a a2a;
-    a2a.add_firstset(W1);
-    a2a.add_secondset(W2);
-        
-    Generator gen;
-    Sink      sink;
-        
-    ff_Pipe<> pipe(gen, a2a, sink);
-        
-    if (pipe.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
-    }
-    
-    return 0;
+  ff_a2a a2a;
+  a2a.add_firstset(W1);
+  a2a.add_secondset(W2);
+
+  Generator gen;
+  Sink sink;
+
+  ff_Pipe<> pipe(gen, a2a, sink);
+
+  if (pipe.run_and_wait_end() < 0) {
+    error("running farm\n");
+    return -1;
+  }
+
+  return 0;
 }

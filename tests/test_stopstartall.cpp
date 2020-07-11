@@ -42,117 +42,109 @@
 
 using namespace ff;
 
-
 static volatile bool reconfGo;
 // an "external" callback reading the reconfGo flag
-static inline bool checkReconfCondition() {
-    return reconfGo;   
-}
+static inline bool checkReconfCondition() { return reconfGo; }
 
+struct Emitter : ff_node {
+  Emitter(long ntasks) : ntasks(ntasks) {}
+  int svc_init() {
+    printf("Emitter: woken-up\n");
+    return 0;
+  }
+  void *svc(void *) {
+    if (checkReconfCondition()) {
+      printf("Emitter: RECONF STARTED\n");
+      return NULL;
+    }
+    for (long i = 1; i <= ntasks; ++i) ff_send_out((void *)i);
+    usleep(5000);
+    return GO_ON;
+  }
+  void svc_end() { printf("Emitter: going to sleep\n"); }
 
-struct Emitter: ff_node {
-    Emitter(long ntasks):ntasks(ntasks) {}
-    int svc_init() {
-        printf("Emitter: woken-up\n");
-        return 0;
-    }
-    void *svc(void *) {
-        if (checkReconfCondition()) {
-            printf("Emitter: RECONF STARTED\n");
-            return NULL;
-        }
-        for(long i=1;i<=ntasks;++i) 
-            ff_send_out((void*)i);
-        usleep(5000);
-        return GO_ON;
-    }
-    void svc_end() {
-        printf("Emitter: going to sleep\n");
-    }
-
-    long ntasks;
+  long ntasks;
 };
-struct Collector: ff_node {
-    int svc_init() {
-        printf("Collector: woken-up\n");
-        ntasks=0;
-        return 0;
-    }
-    void *svc(void *) {
-        ++ntasks;
-        return GO_ON;
-    }
-    void svc_end() {
-        printf("Collector: going to sleep, received %ld tasks\n",ntasks);
-    }
-    long ntasks;
+struct Collector : ff_node {
+  int svc_init() {
+    printf("Collector: woken-up\n");
+    ntasks = 0;
+    return 0;
+  }
+  void *svc(void *) {
+    ++ntasks;
+    return GO_ON;
+  }
+  void svc_end() {
+    printf("Collector: going to sleep, received %ld tasks\n", ntasks);
+  }
+  long ntasks;
 };
-struct  Worker: ff_node {
-    int svc_init() {
-        printf("Worker%ld: woken-up\n",get_my_id());
-        return 0;
-    }
-    void *svc(void *t) {
-        //printf("Worker%ld: received %ld\n", get_my_id(), (long)t);
-        return t;
-    }
-    void svc_end() {
-        printf("Worker%ld: going to sleep\n", get_my_id());
-    }
+struct Worker : ff_node {
+  int svc_init() {
+    printf("Worker%ld: woken-up\n", get_my_id());
+    return 0;
+  }
+  void *svc(void *t) {
+    //printf("Worker%ld: received %ld\n", get_my_id(), (long)t);
+    return t;
+  }
+  void svc_end() { printf("Worker%ld: going to sleep\n", get_my_id()); }
 };
 
 int main(int argc, char *argv[]) {
 #if defined(BLOCKING_MODE)
-    printf("TODO: mixing dynamic behavior and blocking mode has not been tested yet!!!!!\n");
-    return 0;
+  printf("TODO: mixing dynamic behavior and blocking mode has not been tested "
+         "yet!!!!!\n");
+  return 0;
 #endif
 
-    int maxworkers   = ff_numCores();
-    int ntasks       = 100;
-    int nstopstart   = 10;
-    if (argc>1) {
-        if (argc!=4) {
-            printf("use: %s maxworkers ntasks nstopstart\n",argv[0]);
-            return -1;
-        }
-        
-        maxworkers = atoi(argv[1]);
-        ntasks     = atoi(argv[2]);
-        nstopstart = atoi(argv[3]);
+  int maxworkers = ff_numCores();
+  int ntasks = 100;
+  int nstopstart = 10;
+  if (argc > 1) {
+    if (argc != 4) {
+      printf("use: %s maxworkers ntasks nstopstart\n", argv[0]);
+      return -1;
     }
 
-    ff_farm farm;
-    std::vector<ff_node*> w;
-    for(int i=0;i<maxworkers;++i) w.push_back(new Worker);
-    farm.add_workers(w);
-    farm.add_emitter(new Emitter(ntasks));
-    farm.add_collector(new Collector);
+    maxworkers = atoi(argv[1]);
+    ntasks = atoi(argv[2]);
+    nstopstart = atoi(argv[3]);
+  }
 
-    // warm-up: all farm threads start and then stop
+  ff_farm farm;
+  std::vector<ff_node *> w;
+  for (int i = 0; i < maxworkers; ++i) w.push_back(new Worker);
+  farm.add_workers(w);
+  farm.add_emitter(new Emitter(ntasks));
+  farm.add_collector(new Collector);
+
+  // warm-up: all farm threads start and then stop
+  reconfGo = true;
+  farm.run_then_freeze();
+  farm.wait_freezing();
+  printf("------warm-up: done\n\n");
+
+  bool up = true;
+  int n = 1; // starts with 1 worker out of maxworkers
+  reconfGo = false;
+  for (int i = 0; i < nstopstart; ++i) {
+    printf("running with n=%d workers\n", n);
+    farm.run_then_freeze(n);
+    usleep(300000); // waits a while before starting reconfiguration
     reconfGo = true;
-    farm.run_then_freeze();
     farm.wait_freezing();
-    printf("------warm-up: done\n\n");
-
-    bool up = true;
-    int n = 1; // starts with 1 worker out of maxworkers
-    reconfGo = false;
-    for(int i=0;i<nstopstart;++i) {
-        printf("running with n=%d workers\n", n);
-        farm.run_then_freeze(n);
-        usleep(300000); // waits a while before starting reconfiguration
-        reconfGo = true;
-        farm.wait_freezing();
-        if (up && n<maxworkers)
-            n = (std::min)(2*n, maxworkers);
-        else {
-            n = (std::max)(1, n/2);
-            up=false; // starting to go down
-        }
-
-        reconfGo = false; // resets the flag
+    if (up && n < maxworkers)
+      n = (std::min)(2 * n, maxworkers);
+    else {
+      n = (std::max)(1, n / 2);
+      up = false; // starting to go down
     }
 
-    farm.wait();
-    return 0;
+    reconfGo = false; // resets the flag
+  }
+
+  farm.wait();
+  return 0;
 }

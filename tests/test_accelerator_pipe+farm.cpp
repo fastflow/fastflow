@@ -45,7 +45,6 @@
 #include <ff/ff.hpp>
 #include <ff/mapping_utils.hpp>
 
-
 #if __linux__
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -57,165 +56,165 @@
 
 using namespace ff;
 
-enum { IN_QUEUE_SIZE=1024, OUT_QUEUE_SIZE=2048};
+enum { IN_QUEUE_SIZE = 1024, OUT_QUEUE_SIZE = 2048 };
 
 // define your task
 typedef int my_task_t;
 
-class Stage1: public ff_node {
+class Stage1 : public ff_node {
 public:
-    Stage1(int id):num_tasks(0), id(id){}
+  Stage1(int id) : num_tasks(0), id(id) {}
 
-    void * svc(void * task) {
-        ++num_tasks;
-        return task;
-    }
+  void *svc(void *task) {
+    ++num_tasks;
+    return task;
+  }
 
-    void svc_end() {
-        std::cout << "Stage1-Worker" << id << " Received " << num_tasks << " tasks." << std::endl;
-    }
+  void svc_end() {
+    std::cout << "Stage1-Worker" << id << " Received " << num_tasks << " tasks."
+              << std::endl;
+  }
+
 private:
-    int num_tasks;
-    int id;
+  int num_tasks;
+  int id;
 };
 
-class Stage2: public ff_node {
+class Stage2 : public ff_node {
 public:
-    Stage2(int id):num_tasks(0), id(id){}
+  Stage2(int id) : num_tasks(0), id(id) {}
 
-    void * svc(void * task) {
-        ++num_tasks;
-        return task;
-    }
+  void *svc(void *task) {
+    ++num_tasks;
+    return task;
+  }
 
-    void svc_end() {
-        std::cout << "Stage2-Worker" << id << " Received " << num_tasks << " tasks." << std::endl;
-    }
+  void svc_end() {
+    std::cout << "Stage2-Worker" << id << " Received " << num_tasks << " tasks."
+              << std::endl;
+  }
+
 private:
-    int num_tasks;
-    int id;
+  int num_tasks;
+  int id;
 };
-class Emitter: public ff_node {
+class Emitter : public ff_node {
 public:
-    void * svc(void * task) { return task;}
+  void *svc(void *task) { return task; }
 };
 
-class Collector: public ff_node {
+class Collector : public ff_node {
 public:
-    void * svc(void * task) { return task;}
-
+  void *svc(void *task) { return task; }
 };
 
+int main(int argc, char *argv[]) {
+  void *result = NULL;
 
+  int streamlen = 1000;
+  int nworkers = 3;
+  if (argc > 1) {
+    if (argc != 3) {
+      std::cerr << "use:\n"
+                << " " << argv[0] << " stream-length num-farm-workers\n";
+      return -1;
+    }
+    streamlen = atoi(argv[1]);
+    nworkers = atoi(argv[2]);
+  }
 
-int main(int argc, char * argv[]) {
-    void * result = NULL;
+  ff_farm farm_1(false, IN_QUEUE_SIZE, OUT_QUEUE_SIZE);
+  Emitter E;
+  Collector C;
+  farm_1.add_emitter(&E);
+  farm_1.add_collector(&C);
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) {
+    w.push_back(new Stage1(i));
+  }
+  farm_1.add_workers(w);
 
-    int streamlen= 1000;
-    int nworkers  = 3;
-    if (argc>1) {
-        if (argc != 3) {
-            std::cerr << "use:\n" << " " << argv[0] << " stream-length num-farm-workers\n";
-            return -1;
-        }
-        streamlen=atoi(argv[1]);
-        nworkers  =atoi(argv[2]);
+  ff_farm farm_2(false, IN_QUEUE_SIZE, OUT_QUEUE_SIZE);
+  Emitter E2;
+  Collector C2;
+  farm_2.add_emitter(&E2);
+  farm_2.add_collector(&C2);
+  std::vector<ff_node *> w2;
+  for (int i = 0; i < nworkers; ++i) {
+    w2.push_back(new Stage2(i));
+  }
+  farm_2.add_workers(w2);
+
+  ff_pipeline *pipe = new ff_pipeline(true);
+  pipe->add_stage(&farm_1);
+  pipe->add_stage(&farm_2);
+
+  /* ---------------------------------------------------- */
+
+  if (pipe->run_then_freeze() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+
+  int received_results = 0;
+
+  for (int j = 0; j < streamlen; ++j) {
+    my_task_t *task = new my_task_t(j);
+
+    if (!pipe->offload(task)) {
+      error("offloading task\n");
+      return -1;
     }
 
-    ff_farm farm_1(false, IN_QUEUE_SIZE, OUT_QUEUE_SIZE);
-    Emitter E;
-    Collector C;
-    farm_1.add_emitter(&E); 
-    farm_1.add_collector(&C);
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) {
-        w.push_back(new Stage1(i));
+    // Try to get results, if there are any
+    // If there aren't any deadlock problems, the following piece
+    // of code can be moved outside the for-j loop using
+    // the synchronous load_result method.
+    if (pipe->load_result_nb(&result)) {
+      ++received_results;
+
+      /* do something useful, probably using another thread */
+
+      delete ((int *)result);
     }
-    farm_1.add_workers(w);
+  }
 
-    ff_farm farm_2(false, IN_QUEUE_SIZE, OUT_QUEUE_SIZE);
-    Emitter E2;
-    Collector C2;
-    farm_2.add_emitter(&E2); 
-    farm_2.add_collector(&C2);
-    std::vector<ff_node *> w2;
-    for(int i=0;i<nworkers;++i) {
-        w2.push_back(new Stage2(i));
-    }
-    farm_2.add_workers(w2);
+  // offload End-Of-Stream
+  if (!pipe->offload((void *)FF_EOS)) {
+    error("offloading EOS\n");
+    return -1;
+  }
 
-    ff_pipeline * pipe = new ff_pipeline(true);
-    pipe->add_stage(&farm_1);
-    pipe->add_stage(&farm_2);
+  // asynchronously wait results
+  do {
+    if (pipe->load_result_nb(&result)) {
+      if (result == (void *)FF_EOS) break;
+      /* do something useful, probably using onother thread */
 
-
-    /* ---------------------------------------------------- */
-      
-    if (pipe->run_then_freeze()<0) {
-        error("running pipe\n");
-        return -1;
-    }
-        
-    int received_results=0;
-
-    for(int j=0;j<streamlen;++j) {
-        my_task_t * task = new my_task_t(j);
-
-        if (!pipe->offload(task)) {
-            error("offloading task\n");
-            return -1;
-        }
-
-        // Try to get results, if there are any
-        // If there aren't any deadlock problems, the following piece 
-        // of code can be moved outside the for-j loop using 
-        // the synchronous load_result method.
-        if (pipe->load_result_nb(&result)) {
-            ++received_results;
-
-            /* do something useful, probably using another thread */
-
-            delete ((int*)result);
-        }            
+      ++received_results;
+      delete ((int *)result);
     }
 
-    // offload End-Of-Stream
-    if (!pipe->offload((void *)FF_EOS)) {
-        error("offloading EOS\n");
-        return -1;
-    }
+    /* do something else */
 
-    // asynchronously wait results
-    do {
-        if (pipe->load_result_nb(&result)) {
-            if (result==(void*)FF_EOS) break;
-            /* do something useful, probably using onother thread */
+  } while (1);
 
-            ++received_results;
-            delete ((int*)result);
-        } 
+  // here join
+  if (pipe->wait_freezing() < 0) {
+    error("waiting pipe freezing\n");
+    return -1;
+  }
 
-        /* do something else */
-            
-    } while(1);
+  printf("Received %u results.\n", received_results);
 
-    // here join
-    if (pipe->wait_freezing()<0) {
-        error("waiting pipe freezing\n");
-        return -1;
-    }
-    
-    printf("Received %u results.\n", received_results);
+  // wait all threads join
+  if (pipe->wait() < 0) {
+    error("waiting pipe freezing\n");
+    return -1;
+  }
 
+  std::cerr << "DONE, time= " << pipe->ffTime() << " (ms)\n";
+  pipe->ffStats(std::cout);
 
-    // wait all threads join
-    if (pipe->wait()<0) {
-        error("waiting pipe freezing\n");
-        return -1;
-    }
-
-    std::cerr << "DONE, time= " << pipe->ffTime() << " (ms)\n";
-    pipe->ffStats(std::cout);
-
-    return 0;
+  return 0;
 }

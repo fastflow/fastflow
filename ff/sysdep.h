@@ -41,7 +41,6 @@
 #include <AvailabilityMacros.h>
 #endif
 
-
 /***********************************************************\
  * Various types of memory barriers and atomic operations
 \***********************************************************/
@@ -58,20 +57,18 @@
  *   observed such a speculation).
  */
 
-#define WMB()    __asm__ __volatile__ ("lwsync" : : : "memory")
+#define WMB() __asm__ __volatile__("lwsync" : : : "memory")
 #define PAUSE()
 
 /* atomic swap operation */
-static __inline__ int xchg(volatile int *ptr, int x)
-{
-    int result;
-    __asm__ __volatile__ (
-			  "0: lwarx %0,0,%1\n stwcx. %2,0,%1\n bne- 0b\n isync\n" :
-			  "=&r"(result) : 
-			  "r"(ptr), "r"(x) :
-			  "cr0");
-    
-    return result;
+static __inline__ int xchg(volatile int *ptr, int x) {
+  int result;
+  __asm__ __volatile__("0: lwarx %0,0,%1\n stwcx. %2,0,%1\n bne- 0b\n isync\n"
+                       : "=&r"(result)
+                       : "r"(ptr), "r"(x)
+                       : "cr0");
+
+  return result;
 }
 #endif
 
@@ -80,34 +77,34 @@ static __inline__ int xchg(volatile int *ptr, int x)
  ------------------------*/
 #ifdef __ia64__
 
-#define WMB()    __asm__ __volatile__ ("mf" : : : "memory")
+#define WMB() __asm__ __volatile__("mf" : : : "memory")
 #define PAUSE()
 
 /* atomic swap operation */
-static inline int xchg(volatile int *ptr, int x)
-{
-    int result;
-    __asm__ __volatile ("xchg4 %0=%1,%2" : "=r" (result)
-			: "m" (*(int *) ptr), "r" (x) : "memory");
-    return result;
+static inline int xchg(volatile int *ptr, int x) {
+  int result;
+  __asm__ __volatile("xchg4 %0=%1,%2"
+                     : "=r"(result)
+                     : "m"(*(int *)ptr), "r"(x)
+                     : "memory");
+  return result;
 }
 #endif
 
 /*------------------------
          I386 
  ------------------------*/
-#ifdef __i386__ 
+#ifdef __i386__
 
-#define WMB()    __asm__ __volatile__ ("": : :"memory")
-#define PAUSE()  __asm__ __volatile__ ("rep; nop" : : : "memory")
+#define WMB() __asm__ __volatile__("" : : : "memory")
+#define PAUSE() __asm__ __volatile__("rep; nop" : : : "memory")
 
 /* atomic swap operation 
    Note: no "lock" prefix even on SMP: xchg always implies lock anyway
 */
-static inline int xchg(volatile int *ptr, int x)
-{
-    __asm__("xchgl %0,%1" :"=r" (x) :"m" (*(ptr)), "0" (x) :"memory");
-    return x;
+static inline int xchg(volatile int *ptr, int x) {
+  __asm__("xchgl %0,%1" : "=r"(x) : "m"(*(ptr)), "0"(x) : "memory");
+  return x;
 }
 #endif /* __i386__ */
 
@@ -116,21 +113,21 @@ static inline int xchg(volatile int *ptr, int x)
  ------------------------*/
 #if defined(__arm__) || defined(__aarch64__)
 
-#define isb() __asm__ __volatile__ ("isb" : : : "memory")
-#define dsb() __asm__ __volatile__ ("dsb" : : : "memory")
-#define dmb() __asm__ __volatile__ ("dmb" : : : "memory")
-#define smp_mb()  dmb()
+#define isb() __asm__ __volatile__("isb" : : : "memory")
+#define dsb() __asm__ __volatile__("dsb" : : : "memory")
+#define dmb() __asm__ __volatile__("dmb" : : : "memory")
+#define smp_mb() dmb()
 #define smp_rmb() dmb()
 #define smp_wmb() dmb()
 
-#define WMB()   __asm__ __volatile__ ("dmb st": : : "memory")
+#define WMB() __asm__ __volatile__("dmb st" : : : "memory")
 #define PAUSE()
 
-#define xchg(ptr,x) \
-  ((__typeof__(*(ptr)))__xchg((unsigned long)(x),(ptr),sizeof(*(ptr))))
+#define xchg(ptr, x)                                                           \
+  ((__typeof__(*(ptr)))__xchg((unsigned long)(x), (ptr), sizeof(*(ptr))))
 
-static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size)
-{
+static inline unsigned long __xchg(
+    unsigned long x, volatile void *ptr, int size) {
   unsigned long ret;
   unsigned int tmp;
 
@@ -139,23 +136,23 @@ static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size
   switch (size) {
   case 1:
     asm volatile("@ __xchg1\n"
-    "1: ldrexb  %0, [%3]\n"
-    " strexb  %1, %2, [%3]\n"
-    " teq %1, #0\n"
-    " bne 1b"
-      : "=&r" (ret), "=&r" (tmp)
-      : "r" (x), "r" (ptr)
-      : "memory", "cc");
+                 "1: ldrexb  %0, [%3]\n"
+                 " strexb  %1, %2, [%3]\n"
+                 " teq %1, #0\n"
+                 " bne 1b"
+                 : "=&r"(ret), "=&r"(tmp)
+                 : "r"(x), "r"(ptr)
+                 : "memory", "cc");
     break;
   case 4:
     asm volatile("@ __xchg4\n"
-    "1: ldrex %0, [%3]\n"
-    " strex %1, %2, [%3]\n"
-    " teq %1, #0\n"
-    " bne 1b"
-      : "=&r" (ret), "=&r" (tmp)
-      : "r" (x), "r" (ptr)
-      : "memory", "cc");
+                 "1: ldrex %0, [%3]\n"
+                 " strex %1, %2, [%3]\n"
+                 " teq %1, #0\n"
+                 " bne 1b"
+                 : "=&r"(ret), "=&r"(tmp)
+                 : "r"(x), "r"(ptr)
+                 : "memory", "cc");
     break;
   default:
     break;
@@ -173,14 +170,13 @@ static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size
  ------------------------*/
 #ifdef __x86_64
 
-#define WMB()    __asm__ __volatile__ ("": : :"memory")
-#define PAUSE()  __asm__ __volatile__ ("rep; nop" : : : "memory")
+#define WMB() __asm__ __volatile__("" : : : "memory")
+#define PAUSE() __asm__ __volatile__("rep; nop" : : : "memory")
 
 /* atomic swap operation */
-static inline int xchg(volatile int *ptr, int x)
-{
-    __asm__("xchgl %0,%1" :"=r" (x) :"m" (*(ptr)), "0" (x) :"memory");
-    return x;
+static inline int xchg(volatile int *ptr, int x) {
+  __asm__("xchgl %0,%1" : "=r"(x) : "m"(*(ptr)), "0"(x) : "memory");
+  return x;
 }
 #endif /* __x86_64 */
 
@@ -190,31 +186,30 @@ static inline int xchg(volatile int *ptr, int x)
 
 static inline void *getAlignedMemory(size_t align, size_t size) {
   void *ptr;
-  
+
 #if (defined(_WIN32)) // || defined(__INTEL_COMPILER)) && defined(_WIN32)
-  if (posix_memalign(&ptr,align,size)!=0)  // defined in platform.h
-    return NULL; 
-  // Fallback solution in case of strange segfaults on memory allocator
-  //ptr = ::malloc(size);
+  if (posix_memalign(&ptr, align, size) != 0) // defined in platform.h
+    return NULL;
+    // Fallback solution in case of strange segfaults on memory allocator
+    //ptr = ::malloc(size);
 #else // linux or MacOS >= 10.6
-  if (posix_memalign(&ptr,align,size)!=0)
-    return NULL; 
+  if (posix_memalign(&ptr, align, size) != 0) return NULL;
 #endif
-  
+
   /* ptr = (void *)memalign(align, size);
      if (p == NULL) return NULL;
   */
   return ptr;
 }
 
-static inline void freeAlignedMemory(void* ptr) {
+static inline void freeAlignedMemory(void *ptr) {
 #if defined(_WIN32)
   if (ptr) posix_memalign_free(ptr); // defined in platform.h
-  // Fallback solution in case of strange segfaults
-  //::free(ptr);
-#else	
+    // Fallback solution in case of strange segfaults
+    //::free(ptr);
+#else
   if (ptr) ::free(ptr);
-#endif  
+#endif
 }
 
 #endif /* FF_SPIN_SYSDEP_H */

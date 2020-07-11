@@ -34,112 +34,110 @@
 #include <iostream>
 #include <ff/ff.hpp>
 #include <ff/allocator.hpp>
-#include <ff/utils.hpp>  
+#include <ff/utils.hpp>
 
 using namespace ff;
 
-#define MAX_TIME_MS  100000
-
+#define MAX_TIME_MS 100000
 
 // generic worker
-class Worker: public ff_node {
+class Worker : public ff_node {
 public:
-    Worker():ntasks(0) {}
+  Worker() : ntasks(0) {}
 
-    void * svc(void * task) {
-        ++ntasks;
-        ticks_wait(random()%MAX_TIME_MS);
-        return GO_ON;
-    }     
-    void svc_end() {
-        printf("Worker %ld gets %ld tasks\n", get_my_id(), ntasks);
-    }
+  void *svc(void *task) {
+    ++ntasks;
+    ticks_wait(random() % MAX_TIME_MS);
+    return GO_ON;
+  }
+  void svc_end() { printf("Worker %ld gets %ld tasks\n", get_my_id(), ntasks); }
+
 private:
-    long ntasks;
+  long ntasks;
 };
 
-class my_loadbalancer: public ff_loadbalancer {
+class my_loadbalancer : public ff_loadbalancer {
 protected:
-    // called after that the worker has been selected
-    // can be used to allocate/reuse memory for the task
-    // once it is known who is the 'victim'
-    inline void* callback(int n, void *task) { 
-        assert((size_t)n<ff_loadbalancer::getnworkers());
-        if (pool[n]==NULL) pool[n] = (void*)malloc(128*sizeof(char));
-        else printf("ALREADY allocated\n");
-        victim=n;
-        return task;
-    }
-public:
-    my_loadbalancer(int max_num_workers):ff_loadbalancer(max_num_workers),poolsize(max_num_workers) {
-        pool=(void**)malloc(poolsize*sizeof(void*));
-        assert(pool != NULL);
-        for(int i=0;i<poolsize;++i) pool[i]=NULL;
-        victim=-1;
-    }
+  // called after that the worker has been selected
+  // can be used to allocate/reuse memory for the task
+  // once it is known who is the 'victim'
+  inline void *callback(int n, void *task) {
+    assert((size_t)n < ff_loadbalancer::getnworkers());
+    if (pool[n] == NULL)
+      pool[n] = (void *)malloc(128 * sizeof(char));
+    else
+      printf("ALREADY allocated\n");
+    victim = n;
+    return task;
+  }
 
-    void putDone() { 
-        assert(victim>-1 && pool[victim]!=NULL); 
-        pool[victim]=NULL; 
-        victim=-1; 
-    } 
+public:
+  my_loadbalancer(int max_num_workers)
+      : ff_loadbalancer(max_num_workers), poolsize(max_num_workers) {
+    pool = (void **)malloc(poolsize * sizeof(void *));
+    assert(pool != NULL);
+    for (int i = 0; i < poolsize; ++i) pool[i] = NULL;
+    victim = -1;
+  }
+
+  void putDone() {
+    assert(victim > -1 && pool[victim] != NULL);
+    pool[victim] = NULL;
+    victim = -1;
+  }
+
 private:
-    int    victim;
-    int    poolsize;
-    void** pool;
+  int victim;
+  int poolsize;
+  void **pool;
 };
 
 // emitter filter
-class Emitter: public ff_node {
+class Emitter : public ff_node {
 public:
-    Emitter(size_t ntasks, my_loadbalancer * const lb):
-        ntasks(ntasks),lb(lb) {}
+  Emitter(size_t ntasks, my_loadbalancer *const lb) : ntasks(ntasks), lb(lb) {}
 
-    void * svc(void *) {
-        for(size_t i=1;i<=ntasks;++i) {
-            ff_send_out((void*)i);
-            lb->putDone();
-        }
-        return EOS;
+  void *svc(void *) {
+    for (size_t i = 1; i <= ntasks; ++i) {
+      ff_send_out((void *)i);
+      lb->putDone();
     }
-    
+    return EOS;
+  }
+
 private:
-    size_t ntasks;
-    my_loadbalancer * lb;
+  size_t ntasks;
+  my_loadbalancer *lb;
 };
 
-
-
-int main(int argc, char * argv[]) {    
-    int    nworkers = 4;
-    size_t ntask = 1000;
-    if (argc>1) {
-        if (argc<3) {
-            std::cerr << "use: " 
-                      << argv[0] 
-                      << " nworkers ntask\n";
-            return -1;
-        }
-        
-        nworkers=atoi(argv[1]);
-        ntask=atol(argv[2]);
+int main(int argc, char *argv[]) {
+  int nworkers = 4;
+  size_t ntask = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use: " << argv[0] << " nworkers ntask\n";
+      return -1;
     }
-    if (nworkers<=0 || ntask<=0) {
-        std::cerr << "Wrong parameters values\n";
-        return -1;
-    }
-    
-    ff_farm<my_loadbalancer> farm;
-    Emitter emitter(ntask,farm.getlb());
-    farm.add_emitter(&emitter);
-    farm.set_scheduling_ondemand();
 
-    std::vector<ff_node *> w;
-    for(int i=0;i<nworkers;++i) w.push_back(new Worker);
-    farm.add_workers(w);
+    nworkers = atoi(argv[1]);
+    ntask = atol(argv[2]);
+  }
+  if (nworkers <= 0 || ntask <= 0) {
+    std::cerr << "Wrong parameters values\n";
+    return -1;
+  }
 
-    farm.run_and_wait_end();
+  ff_farm<my_loadbalancer> farm;
+  Emitter emitter(ntask, farm.getlb());
+  farm.add_emitter(&emitter);
+  farm.set_scheduling_ondemand();
 
-    std::cerr << "DONE\n";
-    return 0;
+  std::vector<ff_node *> w;
+  for (int i = 0; i < nworkers; ++i) w.push_back(new Worker);
+  farm.add_workers(w);
+
+  farm.run_and_wait_end();
+
+  std::cerr << "DONE\n";
+  return 0;
 }

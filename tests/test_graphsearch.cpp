@@ -34,66 +34,80 @@
 
 using namespace ff;
 
-
 int main(int argc, char *argv[]) {
-    std::string input = "abc";
-    if (argc>1) {
-        if (argc<2) {
-            printf("use: %s string\n", argv[0]);
-            return -1;
-        }
-        input = std::string(argv[1]);
+  std::string input = "abc";
+  if (argc > 1) {
+    if (argc < 2) {
+      printf("use: %s string\n", argv[0]);
+      return -1;
     }
+    input = std::string(argv[1]);
+  }
 
-    // create some nodes
-    gnode_t<std::string> *node1  = new gnode_t<std::string>(1,  "aaa");
-    gnode_t<std::string> *node2  = new gnode_t<std::string>(2,  "aacb");
-    gnode_t<std::string> *node3  = new gnode_t<std::string>(8,  "bbcb");
-    gnode_t<std::string> *node4  = new gnode_t<std::string>(4,  "baac");
-    gnode_t<std::string> *node5  = new gnode_t<std::string>(7,  "bba");
-    gnode_t<std::string> *node6  = new gnode_t<std::string>(6,  "bacb");
-    gnode_t<std::string> *node7  = new gnode_t<std::string>(3,  "aaa");
-    gnode_t<std::string> *node8  = new gnode_t<std::string>(5,  "abb");
-    gnode_t<std::string> *node9  = new gnode_t<std::string>(9,  "abbc");
-    gnode_t<std::string> *node10  = new gnode_t<std::string>(10,  "ccacbb");
-    gnode_t<std::string> *node11  = new gnode_t<std::string>(11,  "acbccb");
-    gnode_t<std::string> *node12  = new gnode_t<std::string>(12,  "cacbbc");
-    gnode_t<std::string> *node13  = new gnode_t<std::string>(13,  "aaa");
-    gnode_t<std::string> *node14  = new gnode_t<std::string>(14,  "abbc");
+  // create some nodes
+  gnode_t<std::string> *node1 = new gnode_t<std::string>(1, "aaa");
+  gnode_t<std::string> *node2 = new gnode_t<std::string>(2, "aacb");
+  gnode_t<std::string> *node3 = new gnode_t<std::string>(8, "bbcb");
+  gnode_t<std::string> *node4 = new gnode_t<std::string>(4, "baac");
+  gnode_t<std::string> *node5 = new gnode_t<std::string>(7, "bba");
+  gnode_t<std::string> *node6 = new gnode_t<std::string>(6, "bacb");
+  gnode_t<std::string> *node7 = new gnode_t<std::string>(3, "aaa");
+  gnode_t<std::string> *node8 = new gnode_t<std::string>(5, "abb");
+  gnode_t<std::string> *node9 = new gnode_t<std::string>(9, "abbc");
+  gnode_t<std::string> *node10 = new gnode_t<std::string>(10, "ccacbb");
+  gnode_t<std::string> *node11 = new gnode_t<std::string>(11, "acbccb");
+  gnode_t<std::string> *node12 = new gnode_t<std::string>(12, "cacbbc");
+  gnode_t<std::string> *node13 = new gnode_t<std::string>(13, "aaa");
+  gnode_t<std::string> *node14 = new gnode_t<std::string>(14, "abbc");
 
+  // connect them
+  node1->add_node(node2);
+  node1->add_node(node3);
+  node2->add_node(node4);
+  node2->add_node(node3);
+  node3->add_node(node7);
+  node4->add_node(node1);
+  node5->add_node(node3);
+  node5->add_node(node13);
+  node5->add_node(node12);
+  node6->add_node(node2);
+  node6->add_node(node7);
+  node6->add_node(node9);
+  node6->add_node(node5);
+  node6->add_node(node10);
+  node7->add_node(node8);
+  node7->add_node(node5);
+  node7->add_node(node6);
+  node8->add_node(node4);
+  node9->add_node(node10);
+  node9->add_node(node14);
+  node10->add_node(node4);
+  node10->add_node(node13);
+  node11->add_node(node1);
+  node11->add_node(node3);
+  node11->add_node(node5);
+  node12->add_node(node2);
+  node12->add_node(node3);
+  node12->add_node(node10);
+  node14->add_node(node7);
 
-    // connect them 
-    node1->add_node(node2);    node1->add_node(node3);
-    node2->add_node(node4);    node2->add_node(node3);
-    node3->add_node(node7);
-    node4->add_node(node1);
-    node5->add_node(node3);    node5->add_node(node13);     node5->add_node(node12);
-    node6->add_node(node2);    node6->add_node(node7);      node6->add_node(node9);    node6->add_node(node5);    node6->add_node(node10);
-    node7->add_node(node8);    node7->add_node(node5);      node7->add_node(node6);
-    node8->add_node(node4);
-    node9->add_node(node10);   node9->add_node(node14);
-    node10->add_node(node4);    node10->add_node(node13);
-    node11->add_node(node1);    node11->add_node(node3);    node11->add_node(node5);
-    node12->add_node(node2);    node12->add_node(node3);    node12->add_node(node10);
-    node14->add_node(node7);
+  // this is the one to search
+  gnode_t<std::string> s(0, input);
 
-    // this is the one to search
-    gnode_t<std::string> s(0, input);
-    
-    // create the pattern
-    ff_graphsearch<gnode_t<std::string> > gs;
+  // create the pattern
+  ff_graphsearch<gnode_t<std::string>> gs;
 
-    // where to store the results
-    std::deque<gnode_t<std::string>*> result;
+  // where to store the results
+  std::deque<gnode_t<std::string> *> result;
 
-    // one-shot search
-    bool found = gs.search(node1, &s, result, 2);
+  // one-shot search
+  bool found = gs.search(node1, &s, result, 2);
 
-    if (found) { 
-        printf("FOUND\n"); 
-        for(auto r: result) 
-            printf("Id=%ld\n", r->getId());
-    } else printf("NOT FOUND\n");
-    
-    return 0;
+  if (found) {
+    printf("FOUND\n");
+    for (auto r : result) printf("Id=%ld\n", r->getId());
+  } else
+    printf("NOT FOUND\n");
+
+  return 0;
 }

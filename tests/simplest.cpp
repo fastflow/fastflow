@@ -36,34 +36,32 @@
 
 using namespace ff;
 
-class Stage: public ff_node {
+class Stage : public ff_node {
 public:
-    Stage():counter(0) {}
+  Stage() : counter(0) {}
 
-    int svc_init() {
-        printf("Hello, I'm Stage\n");
-        return 0;
-    }
-    void * svc(void *) {
-        if (++counter > 10) return NULL;
-        printf("Hi!\n");
-        return GO_ON;
-    }
-    void  svc_end() {
-        printf("Goodbye....\n");
-    }
+  int svc_init() {
+    printf("Hello, I'm Stage\n");
+    return 0;
+  }
+  void *svc(void *) {
+    if (++counter > 10) return NULL;
+    printf("Hi!\n");
+    return GO_ON;
+  }
+  void svc_end() { printf("Goodbye....\n"); }
+
 private:
-    long counter;
+  long counter;
 };
 
-
 int main() {
-    ff_pipeline pipe;
-    pipe.add_stage(new Stage);
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipeline\n");
-        return -1;
-    }
-    std::cerr << "DONE, pipe  time= " << pipe.ffTime() << " (ms)\n";
-    return 0;
+  ff_pipeline pipe;
+  pipe.add_stage(new Stage);
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipeline\n");
+    return -1;
+  }
+  std::cerr << "DONE, pipe  time= " << pipe.ffTime() << " (ms)\n";
+  return 0;
 }

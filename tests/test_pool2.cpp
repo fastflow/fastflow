@@ -32,7 +32,6 @@
  *          --------        -------        ----------
  */
 
-
 #include <cstdio>
 #include <vector>
 #include <cstdlib>
@@ -41,144 +40,138 @@
 
 using namespace ff;
 
-#define STREAMLENGTH  10
+#define STREAMLENGTH 10
 
-#define MAXMUTATIONS  4
-#define K             2
+#define MAXMUTATIONS 4
+#define K 2
 
-static int debug =0;
+static int debug = 0;
 
 struct Element {
-    Element(size_t n=0): number(n),nmutations(0) {}
-    size_t number;
-    size_t nmutations;
+  Element(size_t n = 0) : number(n), nmutations(0) {}
+  size_t number;
+  size_t nmutations;
 };
 
-
 // if we have at least an odd element, than we go on
-bool termination(const std::vector<Element> &P, poolEvolution<Element>::envT&) {
-    for(size_t i=0;i<P.size(); ++i)
-        if (P[i].nmutations < MAXMUTATIONS && P[i].number & 0x1) return false;
-    return true;
+bool termination(
+    const std::vector<Element> &P, poolEvolution<Element>::envT &) {
+  for (size_t i = 0; i < P.size(); ++i)
+    if (P[i].nmutations < MAXMUTATIONS && P[i].number & 0x1) return false;
+  return true;
 }
 
 // selects all odd elements that have a number of mutation less than MAXMUTATIONS
 
 // selects all odd elements that have a number of mutation less than MAXMUTATIONS
-void selection(ParallelForReduce<Element> &, 
-               std::vector<Element> &P, 
-               std::vector<Element> &output,poolEvolution<Element>::envT&) {
-    for(size_t i=0;i<P.size()/2;++i)
-        output.push_back(P[i]);
+void selection(ParallelForReduce<Element> &, std::vector<Element> &P,
+    std::vector<Element> &output, poolEvolution<Element>::envT &) {
+  for (size_t i = 0; i < P.size() / 2; ++i) output.push_back(P[i]);
 }
 
-const Element& evolution(Element & individual,const poolEvolution<Element>::envT&,const int) {
-    individual.number += decltype(individual.number)(individual.number/2);
-    individual.nmutations +=1;
-    return individual;
+const Element &evolution(
+    Element &individual, const poolEvolution<Element>::envT &, const int) {
+  individual.number += decltype(individual.number)(individual.number / 2);
+  individual.nmutations += 1;
+  return individual;
 }
 
 // remove at most K elements randomly
-void filter(ParallelForReduce<Element> &, 
-            std::vector<Element> &P, 
-            std::vector<Element> &output,poolEvolution<Element>::envT&) {
-    
-    if (P.size()<K) { output.clear(); return; }
+void filter(ParallelForReduce<Element> &, std::vector<Element> &P,
+    std::vector<Element> &output, poolEvolution<Element>::envT &) {
+
+  if (P.size() < K) {
     output.clear();
-    output.insert(output.begin(),P.begin(), P.end());
+    return;
+  }
+  output.clear();
+  output.insert(output.begin(), P.begin(), P.end());
 
-    for(size_t i=0;i<K;++i) {
-        auto r = random() % output.size();  // MA Changed from P.size() to output.size()
-        output.erase(output.begin()+r);
-    }
+  for (size_t i = 0; i < K; ++i) {
+    auto r =
+        random() % output.size(); // MA Changed from P.size() to output.size()
+    output.erase(output.begin() + r);
+  }
 }
 
-
-template<typename T>
+template <typename T>
 void printPopulation(std::vector<T> &P) {
-    printf("[ ");
-    for (size_t i=0;i<P.size(); ++i)
-        printf(" (%zu,%zu) ", (size_t)P[i].number, (size_t)P[i].nmutations);
-    printf("  ]\n");
+  printf("[ ");
+  for (size_t i = 0; i < P.size(); ++i)
+    printf(" (%zu,%zu) ", (size_t)P[i].number, (size_t)P[i].nmutations);
+  printf("  ]\n");
 }
 
-template<typename T>
+template <typename T>
 void buildPopulation(std::vector<T> &P, size_t size) {
-    for (size_t i=0;i<size; ++i){
-        Element E(random());
-        P.push_back(E);
-    }
+  for (size_t i = 0; i < size; ++i) {
+    Element E(random());
+    P.push_back(E);
+  }
 }
 
-
-struct BuildPop: ff_node {
-    BuildPop(size_t maxsize):maxsize(maxsize) {
-    }
-    int svc_init() {
-        srandom(10);
-        return 0;
-    }
-    void *svc(void*) {
-        for(int i=0;i<STREAMLENGTH;++i) {
-            std::vector<Element> *V= new std::vector<Element>;
-            buildPopulation(*V, random()%maxsize);
+struct BuildPop : ff_node {
+  BuildPop(size_t maxsize) : maxsize(maxsize) {}
+  int svc_init() {
+    srandom(10);
+    return 0;
+  }
+  void *svc(void *) {
+    for (int i = 0; i < STREAMLENGTH; ++i) {
+      std::vector<Element> *V = new std::vector<Element>;
+      buildPopulation(*V, random() % maxsize);
 #if 0
             if (debug) {
                 printf("Initial population:\n");
                 printPopulation(*V);
             }
 #endif
-            ff_send_out(V);
-        }
-        return NULL;
-    }    
-    size_t maxsize;
+      ff_send_out(V);
+    }
+    return NULL;
+  }
+  size_t maxsize;
 };
 
-struct PrintPop: ff_node {
-    void *svc(void *task) {
-        std::vector<Element> *V = (std::vector<Element>*)task;
-        if (debug) {
-            
-            printPopulation(*V); 
-        }        
-        delete V;
-        return GO_ON;
-    }
+struct PrintPop : ff_node {
+  void *svc(void *task) {
+    std::vector<Element> *V = (std::vector<Element> *)task;
+    if (debug) {
 
+      printPopulation(*V);
+    }
+    delete V;
+    return GO_ON;
+  }
 };
 
+int main(int argc, char *argv[]) {
+  int nw = 3;
+  long maxsize = 500;
 
-int main(int argc, char* argv[]) {
-    int nw       = 3;
-    long maxsize = 500;
-
-    if (argc>1) {
-        if (argc < 3) {
-            printf("use: %s evolution_par_degree size [debug=0|1]\n", argv[0]);
-            return -1;
-        }
-        nw       =atoi(argv[1]);
-        maxsize  =atol(argv[2]); 
-        if (argc==4) debug=atoi(argv[3]);
+  if (argc > 1) {
+    if (argc < 3) {
+      printf("use: %s evolution_par_degree size [debug=0|1]\n", argv[0]);
+      return -1;
     }
-    
-    BuildPop bp(maxsize);
-    poolEvolution<Element> pool(nw, selection,evolution,filter,termination);
-    PrintPop pp;
+    nw = atoi(argv[1]);
+    maxsize = atol(argv[2]);
+    if (argc == 4) debug = atoi(argv[3]);
+  }
 
-    ff_pipeline pipe;
-    pipe.add_stage(&bp);
-    pipe.add_stage(&pool);
-    pipe.add_stage(&pp);
+  BuildPop bp(maxsize);
+  poolEvolution<Element> pool(nw, selection, evolution, filter, termination);
+  PrintPop pp;
 
-    ffTime(START_TIME);
-    pipe.run_and_wait_end();
-    ffTime(STOP_TIME);
+  ff_pipeline pipe;
+  pipe.add_stage(&bp);
+  pipe.add_stage(&pool);
+  pipe.add_stage(&pp);
 
-    printf("Time: %g\n", ffTime(GET_TIME));
-    return 0;
+  ffTime(START_TIME);
+  pipe.run_and_wait_end();
+  ffTime(STOP_TIME);
+
+  printf("Time: %g\n", ffTime(GET_TIME));
+  return 0;
 }
-
-
-

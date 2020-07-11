@@ -1,6 +1,5 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
-
 /* ***************************************************************************
  *
  *  This program is free software; you can redistribute it and/or modify it
@@ -25,18 +24,17 @@
 
 // This file contains some configuration variables. Some of them are
 // particularly critical for performance matters, for example:
-// FF_MAPPING_STRING, BLOCKING_MODE, TRACE_FASTFLOW, etc. 
+// FF_MAPPING_STRING, BLOCKING_MODE, TRACE_FASTFLOW, etc.
 //
 
 #ifndef FF_CONFIG_HPP
 #define FF_CONFIG_HPP
 
-#include <cstddef> 
+#include <cstddef>
 #include <climits>
 #if defined(TRACE_FASTFLOW)
 #include <iostream>
 #endif
-
 
 /*
  * If NO_DEFAULT_MAPPING is not defined (and if FF_MAPPING_STRING is equal 
@@ -104,10 +102,9 @@
 #define FF_NUM_REAL_CORES NUM_REAL_CORES
 #endif
 
-
 #if defined(FF_BOUNDED_BUFFER)
 #define FF_FIXED_SIZE true
-#else  // NOTE: by default the queues are unbounded!!!!
+#else // NOTE: by default the queues are unbounded!!!!
 #define FF_FIXED_SIZE false
 #endif
 
@@ -121,12 +118,11 @@
  * 
  */
 #if !defined(DEFAULT_BUFFER_CAPACITY)
-#define DEFAULT_BUFFER_CAPACITY              2048
+#define DEFAULT_BUFFER_CAPACITY 2048
 #endif
 #if !defined(DEFAULT_IN_OUT_CAPACITY_DIFFERENCE)
-#define DEFAULT_IN_OUT_CAPACITY_DIFFERENCE    128
+#define DEFAULT_IN_OUT_CAPACITY_DIFFERENCE 128
 #endif
-
 
 /* To save energy and improve hyperthreading performance
  * define the following macro
@@ -136,8 +132,7 @@
 /* To enable OPENCL support
  *
  */
-//#define FF_OPENCL 1 
-
+//#define FF_OPENCL 1
 
 /* To enable task callbacks
  *
@@ -156,14 +151,14 @@
 #if defined(BLOCKING_MODE)
 #define FF_RUNTIME_MODE true
 #else
-#define FF_RUNTIME_MODE false   // by default the run-time is in nonblocking mode
+#define FF_RUNTIME_MODE false // by default the run-time is in nonblocking mode
 #endif
 
 /* Used in blocking mode to limit the amount of time 
  * before checking again the input/output queue.
  * NOTE: it cannot be greater than 1e+9 (i.e. 1sec)
  */
-#define FF_TIMEDWAIT_NS   200000
+#define FF_TIMEDWAIT_NS 200000
 
 /*
  * Used in the ordered farm pattern (ff_OFarm). 
@@ -173,27 +168,26 @@
  */
 #define DEF_OFARM_ONDEMAND_MEMORY 10000
 
-
 // If the following is defined, then an initial barrier is executed among all threads
-// to ensure that all threads are started. It can be commented out if that condition 
+// to ensure that all threads are started. It can be commented out if that condition
 // is not needed. Usually it is useful for debugging purposes.
 // #define FF_INITIAL_BARRIER
 
 // Which barrier implementation to use
 #if !defined(BARRIER_T)
-#define BARRIER_T             spinBarrier
+#define BARRIER_T spinBarrier
 #endif
 
 // maximum number of threads that can be spawned
 #if !defined(MAX_NUM_THREADS)
-#define MAX_NUM_THREADS       512 
+#define MAX_NUM_THREADS 512
 #endif
 
 // maximum number of workers in a farm
-#define DEF_MAX_NUM_WORKERS   (MAX_NUM_THREADS-2)
+#define DEF_MAX_NUM_WORKERS (MAX_NUM_THREADS - 2)
 
 // NOTE: BACKOFF_MIN/MAX are lower and upper bound backoff values.
-// Notice that backoff bounds are highly dependent on the system and 
+// Notice that backoff bounds are highly dependent on the system and
 // from the concurrency levels. This values should be carefully tuned
 // in order to achieve the maximum performance.
 #if !defined(BACKOFF_MIN)
@@ -207,21 +201,21 @@
 #define CACHE_LINE_SIZE 64
 #endif
 
-
 // TODO:
 //#if defined(NO_CMAKE_CONFIG)
 
 // TODO change to __GNUC__ that is portable. GNUC specific code currently works
 // on linux only
 #if defined(__USE_GNU) //linux
-//#if defined(__GNUC__) 
+//#if defined(__GNUC__)
 #define HAVE_PTHREAD_SETAFFINITY_NP 1
 //#warning "Is GNU compiler"
-#endif 
+#endif
 
 #if defined(__APPLE__)
 #include <AvailabilityMacros.h>
-#if defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && (__MAC_OS_X_VERSION_MIN_REQUIRED >= 1050)
+#if defined(__MAC_OS_X_VERSION_MIN_REQUIRED) &&                                \
+    (__MAC_OS_X_VERSION_MIN_REQUIRED >= 1050)
 #define MAC_OS_X_HAS_AFFINITY 1
 #else
 #define MAC_OS_X_HAS_AFFINITY 0

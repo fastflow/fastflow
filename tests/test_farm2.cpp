@@ -49,51 +49,51 @@
 
 using namespace ff;
 
-static int WORKTIME_TICKS=25000;
+static int WORKTIME_TICKS = 25000;
 
-struct Emitter: ff_monode_t<long> { 
-Emitter(int nworkers, long ntasks):nworkers(nworkers),ntasks(ntasks) {}
-    long *svc(long*) {
-        for(long i=1;i<=ntasks;++i)
-            ff_send_out_to((long*)i, i % nworkers);
-        return EOS;
-    }
-    int nworkers;
-    long ntasks;
+struct Emitter : ff_monode_t<long> {
+  Emitter(int nworkers, long ntasks) : nworkers(nworkers), ntasks(ntasks) {}
+  long *svc(long *) {
+    for (long i = 1; i <= ntasks; ++i) ff_send_out_to((long *)i, i % nworkers);
+    return EOS;
+  }
+  int nworkers;
+  long ntasks;
 };
-struct Worker: ff_node_t<long> {
-    long *svc(long *in) {
-        ticks_wait(WORKTIME_TICKS); 
-        return in;
-    }
+struct Worker : ff_node_t<long> {
+  long *svc(long *in) {
+    ticks_wait(WORKTIME_TICKS);
+    return in;
+  }
 };
-struct Collector: ff_minode_t<long> {
-    Collector(long ntasks):ntasks(ntasks) {}
-    long *svc(long *) {
-        --ntasks;
-        return GO_ON;
+struct Collector : ff_minode_t<long> {
+  Collector(long ntasks) : ntasks(ntasks) {}
+  long *svc(long *) {
+    --ntasks;
+    return GO_ON;
+  }
+  void svc_end() {
+    if (ntasks != 0) {
+      std::cerr << "ERROR in the test\n"
+                << "\n";
+      abort();
     }
-    void svc_end() {
-        if (ntasks != 0) {
-            std::cerr << "ERROR in the test\n" << "\n";
-            abort();
-        }
-    }
-    long ntasks;
+  }
+  long ntasks;
 };
 
-int main(int argc, char* argv[]) {
-    int nworkers = 4;
-    int ntasks   = 10000;
-    if (argc>1) {
-        if (argc!=4) {
-            std::cerr << "use: " << argv[0] << " [nworkers ntasks ticks]\n";
-            return -1;
-        }
-        nworkers= atol(argv[1]);
-        ntasks  = atol(argv[2]);
-        WORKTIME_TICKS=atol(argv[3]);
+int main(int argc, char *argv[]) {
+  int nworkers = 4;
+  int ntasks = 10000;
+  if (argc > 1) {
+    if (argc != 4) {
+      std::cerr << "use: " << argv[0] << " [nworkers ntasks ticks]\n";
+      return -1;
     }
+    nworkers = atol(argv[1]);
+    ntasks = atol(argv[2]);
+    WORKTIME_TICKS = atol(argv[3]);
+  }
 
 #if 0
     unsigned long start=getusec();
@@ -113,60 +113,57 @@ int main(int argc, char* argv[]) {
         pipe.wait();
         printf("comp Time = %g (%g) ms\n", pipe.ffwTime(), pipe.ffTime());
     }
-    
+
 #endif
 
-    Emitter E(nworkers,ntasks);
-    Collector C(ntasks);
-    std::vector<std::unique_ptr<ff_node>> W;
-    for(int i=0;i<nworkers;++i) 
-        W.push_back(make_unique<Worker>());
-    
-    ff_Farm<> farm(std::move(W), E, C);
+  Emitter E(nworkers, ntasks);
+  Collector C(ntasks);
+  std::vector<std::unique_ptr<ff_node>> W;
+  for (int i = 0; i < nworkers; ++i) W.push_back(make_unique<Worker>());
+
+  ff_Farm<> farm(std::move(W), E, C);
 #if 1
-    OptLevel1 opt;
-    opt.max_nb_threads=ff_realNumCores();
-    opt.max_mapped_threads=opt.max_nb_threads;
-    opt.no_default_mapping=true;
-    opt.verbose_level=2;
-    farm.set_scheduling_ondemand();
-    
-    if (optimize_static(farm,opt)<0) {
-        error("optimizing farm\n");
-        return -1;
-    }
-    if (farm.run()<0) {
-        error("running farm\n");
-        return -1;
-    }
-    if (farm.wait_collector()<0) {
-        error("waiting termination\n");
-        return -1;
-    }
-    printf("farm Time = %g (%g) ms\n", farm.ffwTime(), farm.ffTime());
+  OptLevel1 opt;
+  opt.max_nb_threads = ff_realNumCores();
+  opt.max_mapped_threads = opt.max_nb_threads;
+  opt.no_default_mapping = true;
+  opt.verbose_level = 2;
+  farm.set_scheduling_ondemand();
+
+  if (optimize_static(farm, opt) < 0) {
+    error("optimizing farm\n");
+    return -1;
+  }
+  if (farm.run() < 0) {
+    error("running farm\n");
+    return -1;
+  }
+  if (farm.wait_collector() < 0) {
+    error("waiting termination\n");
+    return -1;
+  }
+  printf("farm Time = %g (%g) ms\n", farm.ffwTime(), farm.ffTime());
 #else
-    // farm with building blocks.......
-    ff_a2a a2a;
-    std::vector<ff_node*> _W1;
-    for(int i=0;i<nworkers;++i)
-        _W1.push_back(new Worker);
+  // farm with building blocks.......
+  ff_a2a a2a;
+  std::vector<ff_node *> _W1;
+  for (int i = 0; i < nworkers; ++i) _W1.push_back(new Worker);
 
-    a2a.add_firstset(_W1, 1, true);
-    std::vector<ff_node*> _W2;
-    _W2.push_back(&C);
-    a2a.add_secondset(_W2);
-    ff_Pipe<> pipe(E, a2a);
-    if (pipe.run()<0) {
-        error("running pipe\n");
-        return -1;
-    }
-    if (pipe.wait_last()<0) {
-        error("waiting termination\n");
-        return -1;
-    }
-    printf("pipe Time = %g (%g) ms\n", pipe.ffwTime(), pipe.ffTime());
-#endif    
+  a2a.add_firstset(_W1, 1, true);
+  std::vector<ff_node *> _W2;
+  _W2.push_back(&C);
+  a2a.add_secondset(_W2);
+  ff_Pipe<> pipe(E, a2a);
+  if (pipe.run() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+  if (pipe.wait_last() < 0) {
+    error("waiting termination\n");
+    return -1;
+  }
+  printf("pipe Time = %g (%g) ms\n", pipe.ffwTime(), pipe.ffTime());
+#endif
 
-    return 0;
+  return 0;
 }
-

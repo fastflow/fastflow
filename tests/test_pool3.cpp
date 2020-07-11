@@ -35,122 +35,113 @@
 
 using namespace ff;
 
-long nwS=0;
-long nwF=0;
-long nwE=0;
-
+long nwS = 0;
+long nwF = 0;
+long nwE = 0;
 
 struct Env_t {
-    Env_t(long avg,long iter):avg(avg),iter(iter) {}
-    long avg;
-    long iter;
+  Env_t(long avg, long iter) : avg(avg), iter(iter) {}
+  long avg;
+  long iter;
 };
 
 void buildPopulation(std::vector<long> &P, size_t size) {
-    for (size_t i=0;i<size; ++i){
-        P.push_back(random() % 10000000);
+  for (size_t i = 0; i < size; ++i) {
+    P.push_back(random() % 10000000);
+  }
+}
+
+long fitness(ParallelForReduce<long> &pfr, std::vector<long> &P, long nw) {
+  long sum = 0;
+
+  auto Fsum = [](long &v, const long elem) { v += elem; };
+  pfr.parallel_reduce(
+      sum, 0L, 0L, (long)(P.size()), 1L, 0, // default static scheduling
+      [&](const long i, long &sum) { sum += P[i]; }, Fsum, nw);
+
+  return sum / P.size();
+}
+
+void selection(ParallelForReduce<long> &pfr, std::vector<long> &P,
+    std::vector<long> &buffer, Env_t &env) {
+
+  std::vector<std::vector<long>> bufferPool(nwS);
+  env.avg = fitness(pfr, P, nwS);
+
+  auto S = [&](const long start, const long stop, const int thread_id) {
+    // losing time
+    ticks_wait(stop - start); //for(volatile long j=0;j<(stop-start);++j);
+
+    for (long j = start; j < stop; ++j) {
+      if (P[j] > env.avg) bufferPool[thread_id].push_back(P[j]);
     }
+  };
+  pfr.parallel_for_idx(0, P.size(), 1, 0, S, nwS); // default static scheduling
+  buffer.clear();
+
+  for (size_t i = 0; i < (size_t)nwS; ++i)
+    buffer.insert(buffer.end(), bufferPool[i].begin(), bufferPool[i].end());
 }
 
+const long &evolution(long &element, const Env_t &, const int) {
+  ticks_wait(element % 5000);
+  //for(volatile long j=0;j<element%5000;++j);   // lose time
 
-long fitness(ParallelForReduce<long> & pfr, std::vector<long> &P, long nw) {
-    long sum = 0;
-
-    auto Fsum = [](long& v, const long elem) { v += elem; };
-    pfr.parallel_reduce(sum, 0L,
-                        0L, (long)(P.size()), 1L, 0,  // default static scheduling
-                        [&](const long i, long& sum) {
-                            sum += P[i];
-                        }, 
-                        Fsum,
-                        nw); 
-
-    return sum/P.size();
+  if (element & 0x1)
+    element += 1;
+  else
+    element -= 1;
+  return element;
 }
 
-void selection(ParallelForReduce<long> & pfr, std::vector<long> &P, std::vector<long> &buffer,Env_t &env) {
+void filter(ParallelForReduce<long> &pfr, std::vector<long> &,
+    std::vector<long> &buffer, Env_t &env) {
+  env.avg = fitness(pfr, buffer, nwF);
+  env.iter += 1;
 
-    std::vector<std::vector<long> >  bufferPool(nwS);
-    env.avg = fitness(pfr, P, nwS);
-
-    auto S = [&](const long start, const long stop, const int thread_id) {
-
-        // losing time
-        ticks_wait(stop-start); //for(volatile long j=0;j<(stop-start);++j);  
-
-        for(long j=start; j<stop; ++j) {
-            if (P[j] > env.avg) bufferPool[thread_id].push_back(P[j]);
-        }
-    };
-    pfr.parallel_for_idx(0,P.size(),1, 0,S,nwS);  // default static scheduling
-    buffer.clear();
-
-    for(size_t i=0;i<(size_t)nwS;++i)
-        buffer.insert( buffer.end(), bufferPool[i].begin(), bufferPool[i].end());
-
-}
-
-const long &evolution(long &element, const Env_t&,const int) {
-    ticks_wait(element%5000);
-    //for(volatile long j=0;j<element%5000;++j);   // lose time
-    
-    if (element & 0x1) element += 1;
-    else element -=1;
-    return element;
-}
-
-void filter(ParallelForReduce<long> & pfr, std::vector<long> &, std::vector<long> &buffer,Env_t &env) {
-    env.avg = fitness(pfr, buffer, nwF);
-    env.iter +=1;
-
-    pfr.parallel_for(0L, (long)(buffer.size()),1L, 8, // dynamic scheduling with grain 8
-                     [&](const long i) {
-                         ticks_wait(buffer[i]%5000);
-                         //for(volatile long j=0;j<buffer[i]%5000;++j);   // lose time
-                     }, nwF );
-    
+  pfr.parallel_for(
+      0L, (long)(buffer.size()), 1L, 8, // dynamic scheduling with grain 8
+      [&](const long i) {
+        ticks_wait(buffer[i] % 5000);
+        //for(volatile long j=0;j<buffer[i]%5000;++j);   // lose time
+      },
+      nwF);
 }
 
 bool termination(const std::vector<long> &P, Env_t &env) {
-    
-    if (P.size()<=2 || env.avg < 100 || env.iter > 50) return true;
 
-    return false;
+  if (P.size() <= 2 || env.avg < 100 || env.iter > 50) return true;
+
+  return false;
 }
 
-
-
-
-int main(int argc, char* argv[]) {
-    long size=0;
-    if (argc>1) {
-        if (argc < 5) {
-            printf("use: %s nwS nwE nwF size \n", argv[0]);
-            return -1;
-        }
-        nwS    = atoi(argv[1]);
-        nwE    = atoi(argv[2]);
-        nwF    = atoi(argv[3]);
-        size   = atol(argv[4]); 
+int main(int argc, char *argv[]) {
+  long size = 0;
+  if (argc > 1) {
+    if (argc < 5) {
+      printf("use: %s nwS nwE nwF size \n", argv[0]);
+      return -1;
     }
+    nwS = atoi(argv[1]);
+    nwE = atoi(argv[2]);
+    nwF = atoi(argv[3]);
+    size = atol(argv[4]);
+  }
 
-    srandom(10);
-    
-    std::vector<long> P;
-    std::vector<long> buffer;
-    buildPopulation(P, size);
+  srandom(10);
 
-    Env_t env(1000000,0);
+  std::vector<long> P;
+  std::vector<long> buffer;
+  buildPopulation(P, size);
 
-    poolEvolution<long, Env_t> pool((std::max)(nwF, (std::max)(nwS,nwE)), P, selection,evolution,filter,termination, env);
-    pool.run_and_wait_end();
+  Env_t env(1000000, 0);
 
-    
-    
-    printf("final avg = %ld (iter i=%ld)\n", pool.getEnv().avg, pool.getEnv().iter);
+  poolEvolution<long, Env_t> pool((std::max)(nwF, (std::max)(nwS, nwE)), P,
+      selection, evolution, filter, termination, env);
+  pool.run_and_wait_end();
 
-    return 0;
+  printf(
+      "final avg = %ld (iter i=%ld)\n", pool.getEnv().avg, pool.getEnv().iter);
+
+  return 0;
 }
-
-
-

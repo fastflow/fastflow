@@ -43,98 +43,92 @@
 
 using namespace ff;
 
-struct First: ff_node_t<long> {
-    First(const int ntasks):ntasks(ntasks) {}
-    long* svc(long*) {
-        for(long i=1;i<=ntasks;++i) {
-            struct timespec req;
-            req.tv_sec = 0;
-            req.tv_nsec = 5000;
-            nanosleep(&req, (struct timespec *)NULL);
+struct First : ff_node_t<long> {
+  First(const int ntasks) : ntasks(ntasks) {}
+  long *svc(long *) {
+    for (long i = 1; i <= ntasks; ++i) {
+      struct timespec req;
+      req.tv_sec = 0;
+      req.tv_nsec = 5000;
+      nanosleep(&req, (struct timespec *)NULL);
 
-            ff_send_out((long*)i);
-        }
-        return EOS;
+      ff_send_out((long *)i);
     }
-    const int ntasks;
+    return EOS;
+  }
+  const int ntasks;
 };
-struct Emitter: ff_monode_t<long> {
-    long* svc(long*in) {
-        return in;
-    }
+struct Emitter : ff_monode_t<long> {
+  long *svc(long *in) { return in; }
 };
-struct Collector: ff_minode_t<long> {
-    long* svc(long*in) {
-        return in;
-    }
+struct Collector : ff_minode_t<long> {
+  long *svc(long *in) { return in; }
 };
 
-struct Worker: ff_node_t<long> {
-    long* svc(long*in) {
-        struct timespec req;
-        req.tv_sec = 0;
-        req.tv_nsec = 3000*get_my_id();
-        nanosleep(&req, (struct timespec *)NULL);        
-        return in;
-    }
+struct Worker : ff_node_t<long> {
+  long *svc(long *in) {
+    struct timespec req;
+    req.tv_sec = 0;
+    req.tv_nsec = 3000 * get_my_id();
+    nanosleep(&req, (struct timespec *)NULL);
+    return in;
+  }
 };
-struct Last: ff_node_t<long> {
-    long* svc(long*) {
-        ++counter;
-        return GO_ON;
-    }
-    size_t counter=0;
+struct Last : ff_node_t<long> {
+  long *svc(long *) {
+    ++counter;
+    return GO_ON;
+  }
+  size_t counter = 0;
 };
 
+int main(int argc, char *argv[]) {
 
-int main(int argc, char* argv[]) {
+  // default arguments
+  size_t ntasks = 10000;
+  size_t nworkers1 = 3;
+  size_t nworkers2 = 2;
 
-    // default arguments
-    size_t ntasks    = 10000;
-    size_t nworkers1 = 3;
-    size_t nworkers2 = 2;
-
-
-    if (argc>1) {
-        if (argc!=4) {
-            error("use: %s ntasks nworkers1 nworkers2\n",argv[0]);
-            return -1;
-        }
-        ntasks    = std::stol(argv[1]);
-        nworkers1 = std::stol(argv[2]);
-        nworkers2 = std::stol(argv[3]);
+  if (argc > 1) {
+    if (argc != 4) {
+      error("use: %s ntasks nworkers1 nworkers2\n", argv[0]);
+      return -1;
     }
+    ntasks = std::stol(argv[1]);
+    nworkers1 = std::stol(argv[2]);
+    nworkers2 = std::stol(argv[3]);
+  }
 
-    First first(ntasks);
-    Last last;
+  First first(ntasks);
+  Last last;
 
-    /* all the following farms have nworkers1 workers */
-    ff_Farm<long,long> farm1([&]() {
-                                 std::vector<std::unique_ptr<ff_node> > V;
-                                 for(size_t i=0;i<nworkers1;++i)
-                                     V.push_back(make_unique<Worker>());
-                                 return V;
-                             } (),
-        make_unique<Emitter>(),
-        make_unique<Collector>());
+  /* all the following farms have nworkers1 workers */
+  ff_Farm<long, long> farm1(
+      [&]() {
+        std::vector<std::unique_ptr<ff_node>> V;
+        for (size_t i = 0; i < nworkers1; ++i)
+          V.push_back(make_unique<Worker>());
+        return V;
+      }(),
+      make_unique<Emitter>(), make_unique<Collector>());
 
-    /* the following farms have nworkers2 workers */
-    ff_Farm<long,long> farm2([&]() {
-                                 std::vector<std::unique_ptr<ff_node> > V;
-                                 for(size_t i=0;i<nworkers2;++i)
-                                     V.push_back(make_unique<Worker>());
-                                 return V;
-                             } (),
-        make_unique<Emitter>(),
-        make_unique<Collector>());
-    
-    //ff_Pipe<> pipe(first, farm1, farm2, last);
-    ff_Pipe<> pipe(first, farm1, last);
-    // running the optimized pipe
-    if (pipe.run_and_wait_end()<0) {
-        error("running pipeline\n");
-        return -1;
-    }
-    printf("test DONE\n");
-    return 0;
+  /* the following farms have nworkers2 workers */
+  ff_Farm<long, long> farm2(
+      [&]() {
+        std::vector<std::unique_ptr<ff_node>> V;
+        for (size_t i = 0; i < nworkers2; ++i)
+          V.push_back(make_unique<Worker>());
+        return V;
+      }(),
+      make_unique<Emitter>(), make_unique<Collector>());
+
+  //ff_Pipe<> pipe(first, farm1, farm2, last);
+  ff_Pipe<> pipe(first, farm1, last);
+  // running the optimized pipe
+  if (pipe.run_and_wait_end() < 0) {
+    error("running pipeline\n");
+    return -1;
+  }
+  printf("test DONE\n");
+  return 0;
 }

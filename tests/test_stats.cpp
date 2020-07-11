@@ -36,60 +36,59 @@
 #include <ff/ff.hpp>
 using namespace ff;
 
-struct Stage: ff_node_t<long> {
-    Stage(int n):n(n), mt(n) { }
-    
-    long *svc(long *in) {
-        
-        switch(n) {
-        case 0: {
-            for(long i=0;i<2000;++i) 
-                ff_send_out(new long(i));
-            return EOS;
-        } break;
-        case 1: {
-            delete in;
-            in = new long(100);
-            std::uniform_int_distribution<long> dist(1000, 10000);
-            usleep(dist(mt));
-            return in;
-        } break;
-        case 2: {
-            delete in;
-            std::uniform_int_distribution<long> dist(500, 5000);
-            usleep(dist(mt));
-            return GO_ON;
-        } break;
-        default:
-            abort();
-        }
-        return EOS;
+struct Stage : ff_node_t<long> {
+  Stage(int n) : n(n), mt(n) {}
+
+  long *svc(long *in) {
+
+    switch (n) {
+    case 0: {
+      for (long i = 0; i < 2000; ++i) ff_send_out(new long(i));
+      return EOS;
+    } break;
+    case 1: {
+      delete in;
+      in = new long(100);
+      std::uniform_int_distribution<long> dist(1000, 10000);
+      usleep(dist(mt));
+      return in;
+    } break;
+    case 2: {
+      delete in;
+      std::uniform_int_distribution<long> dist(500, 5000);
+      usleep(dist(mt));
+      return GO_ON;
+    } break;
+    default:
+      abort();
     }
-    int n=-1;
-    std::mt19937 mt;
+    return EOS;
+  }
+  int n = -1;
+  std::mt19937 mt;
 };
 
 int main() {
-    
-    Stage stage1(0);
-    ff_Farm<long,long> farm([]() {
-            std::vector<std::unique_ptr<ff_node> > W;
-            W.push_back(make_unique<Stage>(1));
-            W.push_back(make_unique<Stage>(1));
-            return W;
-        } ());
-    Stage stage3(2);
 
-    ff_Pipe<> pipe(stage1, farm, stage3);
-    pipe.run();
-    
-    while(!pipe.done()) {
-        sleep(1);
-        pipe.ffStats(std::cout);
-        std::cout<< "\n\n";
-    }
+  Stage stage1(0);
+  ff_Farm<long, long> farm([]() {
+    std::vector<std::unique_ptr<ff_node>> W;
+    W.push_back(make_unique<Stage>(1));
+    W.push_back(make_unique<Stage>(1));
+    return W;
+  }());
+  Stage stage3(2);
 
-    pipe.wait();
-    std::cout << "DONE\n";
-    return 0;
+  ff_Pipe<> pipe(stage1, farm, stage3);
+  pipe.run();
+
+  while (!pipe.done()) {
+    sleep(1);
+    pipe.ffStats(std::cout);
+    std::cout << "\n\n";
+  }
+
+  pipe.wait();
+  std::cout << "DONE\n";
+  return 0;
 }

@@ -39,75 +39,75 @@
 using namespace ff;
 
 struct ReductionVars {
-    ReductionVars():u(0L) {}
+  ReductionVars() : u(0L) {}
 
-    const double& sumd() const { return u.sumd; }
-    double& sumd()             { return u.sumd;}
-    const long& suml() const   { return u.suml; }
-    long& suml()               { return u.suml;}
+  const double &sumd() const { return u.sumd; }
+  double &sumd() { return u.sumd; }
+  const long &suml() const { return u.suml; }
+  long &suml() { return u.suml; }
 
-    ReductionVars& operator+=(const double& v) {
-        u.sumd  += v;
-        return *this;
-    }
-    ReductionVars& operator+=(const long& v) {
-        u.suml  += v;
-        return *this;
-    }
+  ReductionVars &operator+=(const double &v) {
+    u.sumd += v;
+    return *this;
+  }
+  ReductionVars &operator+=(const long &v) {
+    u.suml += v;
+    return *this;
+  }
 
-    union u {
-        u(long x):sumd(x) {}
-        double sumd;
-        long   suml;
-    } u;
+  union u {
+    u(long x) : sumd(x) {}
+    double sumd;
+    long suml;
+  } u;
 };
 
-
 int main(int argc, char *argv[]) {
-    int arraySize= 10000000;
-    int nworkers = 2;
-    if (argc>1) {
-        if (argc<3) {
-            printf("use: %s arraysize nworkers\n", argv[0]);
-            return -1;
-        }
-        arraySize= atoi(argv[1]);
-        nworkers = atoi(argv[2]);
+  int arraySize = 10000000;
+  int nworkers = 2;
+  if (argc > 1) {
+    if (argc < 3) {
+      printf("use: %s arraysize nworkers\n", argv[0]);
+      return -1;
     }
-    if (nworkers<=0) {
-        printf("Wrong parameters values\n");
-        return -1;
-    }
-    
-    // creates the array
-    double *A = new double[arraySize];
+    arraySize = atoi(argv[1]);
+    nworkers = atoi(argv[2]);
+  }
+  if (nworkers <= 0) {
+    printf("Wrong parameters values\n");
+    return -1;
+  }
 
-    ReductionVars R, Rzero;
-    ParallelForReduce<ReductionVars> pfr(nworkers);
+  // creates the array
+  double *A = new double[arraySize];
 
-    // init data
-    for(int j=0; j<arraySize; ++j) A[j]=j*3.14;
+  ReductionVars R, Rzero;
+  ParallelForReduce<ReductionVars> pfr(nworkers);
 
-    {
-        auto reduceF = [](ReductionVars &R, const ReductionVars &r) { 
-            R += r.sumd();
-        };  
-        pfr.parallel_reduce(R, Rzero, 0, arraySize, 1, 0, [&](const long i, ReductionVars &R) {
-                R  += A[i];
-            }, reduceF, nworkers);
-        
-        printf("R (double)\tsum=%g \n", R.sumd());
-    }
-    {
-        R = Rzero;
-        auto reduceF = [](ReductionVars &R, const ReductionVars &r) { 
-            R += r.suml();
-        };  
-        pfr.parallel_reduce(R, Rzero, 0, arraySize, 1, 0, [&](const long i, ReductionVars &R) {
-                R  += (long)A[i];
-            }, reduceF, nworkers);
-        
-        printf("R (long)\tsum=%ld \n", R.suml());
-    }
-    return 0;
+  // init data
+  for (int j = 0; j < arraySize; ++j) A[j] = j * 3.14;
+
+  {
+    auto reduceF = [](ReductionVars &R, const ReductionVars &r) {
+      R += r.sumd();
+    };
+    pfr.parallel_reduce(
+        R, Rzero, 0, arraySize, 1, 0,
+        [&](const long i, ReductionVars &R) { R += A[i]; }, reduceF, nworkers);
+
+    printf("R (double)\tsum=%g \n", R.sumd());
+  }
+  {
+    R = Rzero;
+    auto reduceF = [](ReductionVars &R, const ReductionVars &r) {
+      R += r.suml();
+    };
+    pfr.parallel_reduce(
+        R, Rzero, 0, arraySize, 1, 0,
+        [&](const long i, ReductionVars &R) { R += (long)A[i]; }, reduceF,
+        nworkers);
+
+    printf("R (long)\tsum=%ld \n", R.suml());
+  }
+  return 0;
 }

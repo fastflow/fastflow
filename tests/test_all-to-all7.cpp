@@ -48,82 +48,76 @@
 /* Author: Massimo Torquati
  *
  */
-               
+
 #include <iostream>
 
 #include <ff/ff.hpp>
 using namespace ff;
 
-struct Emitter: ff_node_t<long> { 
-    long *svc(long*) {
-        for(long i=1;i<=100;++i) {
-            ff_send_out((long*)i);
-        }
-        return EOS;
+struct Emitter : ff_node_t<long> {
+  long *svc(long *) {
+    for (long i = 1; i <= 100; ++i) {
+      ff_send_out((long *)i);
     }
+    return EOS;
+  }
 };
-struct Worker: ff_monode_t<long> {  // multi-output attached to the all-2-all
-    long *svc(long *in) {
-        return in;
-    }
+struct Worker : ff_monode_t<long> { // multi-output attached to the all-2-all
+  long *svc(long *in) { return in; }
 };
 // this is an helper node. It is needed because we cannot connect
 // a multi-output node (i.e. the worker) directly to Filter1 that is a
-// single-input multiple-output node 
-struct MultiInputHelper: ff_minode_t<long> {
-	long *svc(long *in) {
-        return in;
-    }
+// single-input multiple-output node
+struct MultiInputHelper : ff_minode_t<long> {
+  long *svc(long *in) { return in; }
 };
-struct Filter1: ff_monode_t<long> {
-	long *svc(long *in) {
-        return in;
-    }
+struct Filter1 : ff_monode_t<long> {
+  long *svc(long *in) { return in; }
 };
 
-struct Filter2: ff_node_t<long> {
-	long *svc(long *in) {
-        std::cout << get_my_id() << ": " << (long)in << "\n";
-        return GO_ON;
-    }
+struct Filter2 : ff_node_t<long> {
+  long *svc(long *in) {
+    std::cout << get_my_id() << ": " << (long)in << "\n";
+    return GO_ON;
+  }
 };
 
 int main() {
 
-    Emitter E;
-    
-    std::vector<std::unique_ptr<ff_node>> W;
-    W.push_back(make_unique<Worker>());
-    W.push_back(make_unique<Worker>());
-    W.push_back(make_unique<Worker>());
-    
-    ff_Farm<> farm(std::move(W), E);
-    farm.remove_collector();
-    
-    std::vector<ff_node*> W1;  
-    Filter1 f11, f12, f13;
-    MultiInputHelper h1, h2, h3;
-    auto comp1 = combine_nodes(h1, f11);
-    auto comp2 = combine_nodes(h2, f12);
-    auto comp3 = combine_nodes(h3, f13);
-    W1.push_back(&comp1);
-    W1.push_back(&comp2);
-    W1.push_back(&comp3);
-    std::vector<ff_node*> W2;          
-    Filter2 f21,f22;
-    W2.push_back(&f21);
-    W2.push_back(&f22);
-    
-    ff_a2a a2a;
-    a2a.add_firstset(W1);
-    a2a.add_secondset(W2);
-    
-    ff_Pipe<> pipe(farm, a2a);
-        
-    if (pipe.run_and_wait_end()<0) {
-        error("running farm\n");
-        return -1;
-    }
-    
-    return 0;
+  Emitter E;
+
+  std::vector<std::unique_ptr<ff_node>> W;
+  W.push_back(make_unique<Worker>());
+  W.push_back(make_unique<Worker>());
+  W.push_back(make_unique<Worker>());
+
+  ff_Farm<> farm(std::move(W), E);
+  farm.remove_collector();
+
+  std::vector<ff_node *> W1;
+  Filter1 f11, f12, f13;
+  MultiInputHelper h1, h2, h3;
+  auto comp1 = combine_nodes(h1, f11);
+  auto comp2 = combine_nodes(h2, f12);
+  auto comp3 = combine_nodes(h3, f13);
+  W1.push_back(&comp1);
+  W1.push_back(&comp2);
+  W1.push_back(&comp3);
+  std::vector<ff_node *> W2;
+  Filter2 f21, f22;
+  W2.push_back(&f21);
+  W2.push_back(&f22);
+
+  ff_a2a a2a;
+  a2a.add_firstset(W1);
+  a2a.add_secondset(W2);
+
+  ff_Pipe<> pipe(farm, a2a);
+
+  if (pipe.run_and_wait_end() < 0) {
+    error("running farm\n");
+    return -1;
+  }
+
+  return 0;
 }

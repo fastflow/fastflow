@@ -36,67 +36,68 @@
 using namespace ff;
 
 void F(long *E) {
-    printf("Executing %ld\n", *E);
-    delete E;
+  printf("Executing %ld\n", *E);
+  delete E;
 }
 
 int main(int argc, char *argv[]) {
-    int W = ff_numCores();
-    if (argc>1) W = atoi(argv[1]);
-    ff_taskf taskf(W);
+  int W = ff_numCores();
+  if (argc > 1) W = atoi(argv[1]);
+  ff_taskf taskf(W);
 
-    // start immediatly the scheduler and all worker threads
-    taskf.run(); 
+  // start immediatly the scheduler and all worker threads
+  taskf.run();
 
-    taskf.AddTask(F, new long(1));
-    taskf.AddTask(F, new long(2));
-    taskf.AddTask(F, new long(3));
+  taskf.AddTask(F, new long(1));
+  taskf.AddTask(F, new long(2));
+  taskf.AddTask(F, new long(3));
 
-    taskf.wait(); // barrier
+  taskf.wait(); // barrier
 
-    // add another task, here the scheduler is stopped
-    taskf.AddTask(F, new long(4)); 
-    taskf.AddTask(F, new long(5));  
+  // add another task, here the scheduler is stopped
+  taskf.AddTask(F, new long(4));
+  taskf.AddTask(F, new long(5));
 
-    // run the scheduler using 1 thread and then barrier
-    taskf.run_then_freeze(1); 
+  // run the scheduler using 1 thread and then barrier
+  taskf.run_then_freeze(1);
 
-    // here the scheduler is stopped
-    taskf.AddTask(F, new long(6));
-    taskf.AddTask(F, new long(7));
-    taskf.AddTask(F, new long(8));
+  // here the scheduler is stopped
+  taskf.AddTask(F, new long(6));
+  taskf.AddTask(F, new long(7));
+  taskf.AddTask(F, new long(8));
 
-    // run the scheduler and then barrier
-    taskf.run_then_freeze(2); 
+  // run the scheduler and then barrier
+  taskf.run_then_freeze(2);
 
-    // here the scheduler is stopped
-    taskf.AddTask(F, new long(9));  
-    taskf.AddTask(F, new long(10));
+  // here the scheduler is stopped
+  taskf.AddTask(F, new long(9));
+  taskf.AddTask(F, new long(10));
 
-    taskf.run_then_freeze();
+  taskf.run_then_freeze();
 
-    // now stressing the parallel for
+  // now stressing the parallel for
 
-    ParallelFor pf(W+4,true);
-    pf.disableScheduler();
-    std::atomic_long K;
-    K.store(0);
+  ParallelFor pf(W + 4, true);
+  pf.disableScheduler();
+  std::atomic_long K;
+  K.store(0);
 
-    for(long i=1;i<=100;++i) {
-	pf.parallel_for(0,10,1,1,[&K](const long j) { K+=j; }, 1+i%4);
-	printf("."); fflush(stdout);
-	pf.threadPause();
-    }
-    printf("\n");
-    if (K != 4500) abort();
-    printf("K=%ld\n", K.load());
+  for (long i = 1; i <= 100; ++i) {
+    pf.parallel_for(
+        0, 10, 1, 1, [&K](const long j) { K += j; }, 1 + i % 4);
+    printf(".");
+    fflush(stdout);
     pf.threadPause();
+  }
+  printf("\n");
+  if (K != 4500) abort();
+  printf("K=%ld\n", K.load());
+  pf.threadPause();
 
-    // re-start the taskf scheduler
-    taskf.run();
-    for(long i=1;i<=100;++i) 
-	taskf.AddTask(F, new long(i));
-    taskf.wait();
+  // re-start the taskf scheduler
+  taskf.run();
+  for (long i = 1; i <= 100; ++i) taskf.AddTask(F, new long(i));
+  taskf.wait();
 
-    return 0;
+  return 0;
 }

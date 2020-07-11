@@ -53,300 +53,294 @@
  *
  */
 
-
 #include <iostream>
 #include <ff/ff.hpp>
 
 using namespace ff;
 
 // this is an id greater than all ids
-const int MANAGERID = MAX_NUM_THREADS+100;
-
+const int MANAGERID = MAX_NUM_THREADS + 100;
 
 typedef enum { ADD, REMOVE } reconf_op_t;
 struct Command_t {
-    Command_t(int id, reconf_op_t op): id(id), op(op) {}
-    int         id;
-    reconf_op_t op;
+  Command_t(int id, reconf_op_t op) : id(id), op(op) {}
+  int id;
+  reconf_op_t op;
 };
 
 // first stage
-struct Seq: ff_node_t<long> {
-    long ntasks=0;
-    Seq(long ntasks):ntasks(ntasks) {}
+struct Seq : ff_node_t<long> {
+  long ntasks = 0;
+  Seq(long ntasks) : ntasks(ntasks) {}
 
-    long *svc(long *) {
-        for(long i=1;i<=ntasks; ++i) {
-            ff_send_out((long*)i);
+  long *svc(long *) {
+    for (long i = 1; i <= ntasks; ++i) {
+      ff_send_out((long *)i);
 
-            struct timespec req = {0, static_cast<long>(5*1000L)};
-            nanosleep(&req, NULL);
-        }
-        return EOS;
+      struct timespec req = {0, static_cast<long>(5 * 1000L)};
+      nanosleep(&req, NULL);
     }
+    return EOS;
+  }
 };
 
-// scheduler 
-class Emitter: public ff_monode_t<long> {
+// scheduler
+class Emitter : public ff_monode_t<long> {
 protected:
-    int selectReadyWorker() {
-        for (unsigned i=last+1;i<ready.size();++i) {
-            if (ready[i]) {
-                last = i;
-                return i;
-            }
-        }
-        for (unsigned i=0;i<=last;++i) {
-            if (ready[i]) {
-                last = i;
-                return i;
-            }
-        }
-        return -1;
+  int selectReadyWorker() {
+    for (unsigned i = last + 1; i < ready.size(); ++i) {
+      if (ready[i]) {
+        last = i;
+        return i;
+      }
     }
+    for (unsigned i = 0; i <= last; ++i) {
+      if (ready[i]) {
+        last = i;
+        return i;
+      }
+    }
+    return -1;
+  }
+
 public:
-    int svc_init() {
-        last = get_num_outchannels();  // at the beginning, this is the number of workers
-        ready.resize(last); 
-        sleeping.resize(last);
-        for(size_t i=0; i<ready.size(); ++i) {
-            ready[i]    = true;
-            sleeping[i] = false;
-        }
-        nready=ready.size();
-        return 0;
+  int svc_init() {
+    last =
+        get_num_outchannels(); // at the beginning, this is the number of workers
+    ready.resize(last);
+    sleeping.resize(last);
+    for (size_t i = 0; i < ready.size(); ++i) {
+      ready[i] = true;
+      sleeping[i] = false;
     }
-    long* svc(long* t) {       
-        int wid = get_channel_id();
-        
-        // the id of the manager channel is greater than the maximum id of the workers
-        if ((size_t)wid == MANAGERID) {  
-            Command_t *cmd = reinterpret_cast<Command_t*>(t);
-            printf("EMITTER2 SENDING %s to WORKER %d\n", cmd->op==ADD?"ADD":"REMOVE", cmd->id);
-            switch(cmd->op) {
-            case ADD:     {
-                ff_monode::getlb()->thaw(cmd->id, true);
-                assert(sleeping[cmd->id]);
-                sleeping[cmd->id] = false;
-                frozen--;
-            } break;
-            case REMOVE:  {
-                ff_send_out_to(GO_OUT, cmd->id);
-                assert(!sleeping[cmd->id]);
-                sleeping[cmd->id] = true;
-                frozen++;
-            } break;
-            default: abort();
-            }
-            delete cmd;            
-            return GO_ON;
-        }
+    nready = ready.size();
+    return 0;
+  }
+  long *svc(long *t) {
+    int wid = get_channel_id();
 
-        if (wid == -1) { // task coming from seq
-            //printf("Emitter: TASK FROM INPUT %ld \n", (long)t);
-            int victim = selectReadyWorker();
-            if (victim < 0) data.push_back(t);
-            else {
-                ff_send_out_to(t, victim);
-                ready[victim]=false;
-                --nready;
-                onthefly++;
-            }
-            return GO_ON;
-        }
-        
-        if ((size_t)wid < get_num_outchannels()) { // ack coming from the workers
-            //printf("Emitter got %ld back from %d data.size=%ld, onthefly=%d\n", (long)t, wid, data.size(), onthefly);
-            assert(ready[wid] == false);
-            ready[wid] = true;
-            ++nready;
-            if (data.size()>0) {
-                ff_send_out_to(data.back(), wid);
-                onthefly++;
-                data.pop_back();
-                ready[wid]=false;
-                --nready;
-            } 
-            return GO_ON;
-        }
+    // the id of the manager channel is greater than the maximum id of the workers
+    if ((size_t)wid == MANAGERID) {
+      Command_t *cmd = reinterpret_cast<Command_t *>(t);
+      printf("EMITTER2 SENDING %s to WORKER %d\n",
+          cmd->op == ADD ? "ADD" : "REMOVE", cmd->id);
+      switch (cmd->op) {
+      case ADD: {
+        ff_monode::getlb()->thaw(cmd->id, true);
+        assert(sleeping[cmd->id]);
+        sleeping[cmd->id] = false;
+        frozen--;
+      } break;
+      case REMOVE: {
+        ff_send_out_to(GO_OUT, cmd->id);
+        assert(!sleeping[cmd->id]);
+        sleeping[cmd->id] = true;
+        frozen++;
+      } break;
+      default:
+        abort();
+      }
+      delete cmd;
+      return GO_ON;
+    }
 
-        // task coming from the Collector
-        --onthefly;
-        //printf("Emitter got %ld back from COLLECTOR data.size=%ld, onthefly=%d\n", (long)t, data.size(), onthefly);
-        if (eos_received && ((nready + frozen) == ready.size()) && (onthefly<=0)) {
-            printf("Emitter EXITING\n");
-            return EOS;
-        }
-        return GO_ON;
+    if (wid == -1) { // task coming from seq
+      //printf("Emitter: TASK FROM INPUT %ld \n", (long)t);
+      int victim = selectReadyWorker();
+      if (victim < 0)
+        data.push_back(t);
+      else {
+        ff_send_out_to(t, victim);
+        ready[victim] = false;
+        --nready;
+        onthefly++;
+      }
+      return GO_ON;
     }
-    void svc_end() {
-        // just for debugging
-        assert(data.size()==0);
-    }
-    void eosnotify(ssize_t id) {
-        if (id == -1) { // we have to receive all EOS from the previous stage            
-            eos_received = true;
-            //printf("EOS received eos_received = %u nready = %u\n", eos_received, nready);
-            if (((nready+frozen) == ready.size()) && (data.size() == 0) && onthefly<=0) {
 
-                if (frozen>0) {
-                    for(size_t i=0;i<sleeping.size();++i)
-                        if (sleeping[i]) ff_monode::getlb()->thaw(i, false); 
-                }
-                printf("EMITTER2 BROADCASTING EOS\n");
-                broadcast_task(EOS);
-            }
-        } 
+    if ((size_t)wid < get_num_outchannels()) { // ack coming from the workers
+      //printf("Emitter got %ld back from %d data.size=%ld, onthefly=%d\n", (long)t, wid, data.size(), onthefly);
+      assert(ready[wid] == false);
+      ready[wid] = true;
+      ++nready;
+      if (data.size() > 0) {
+        ff_send_out_to(data.back(), wid);
+        onthefly++;
+        data.pop_back();
+        ready[wid] = false;
+        --nready;
+      }
+      return GO_ON;
     }
+
+    // task coming from the Collector
+    --onthefly;
+    //printf("Emitter got %ld back from COLLECTOR data.size=%ld, onthefly=%d\n", (long)t, data.size(), onthefly);
+    if (eos_received && ((nready + frozen) == ready.size()) &&
+        (onthefly <= 0)) {
+      printf("Emitter EXITING\n");
+      return EOS;
+    }
+    return GO_ON;
+  }
+  void svc_end() {
+    // just for debugging
+    assert(data.size() == 0);
+  }
+  void eosnotify(ssize_t id) {
+    if (id == -1) { // we have to receive all EOS from the previous stage
+      eos_received = true;
+      //printf("EOS received eos_received = %u nready = %u\n", eos_received, nready);
+      if (((nready + frozen) == ready.size()) && (data.size() == 0) &&
+          onthefly <= 0) {
+
+        if (frozen > 0) {
+          for (size_t i = 0; i < sleeping.size(); ++i)
+            if (sleeping[i]) ff_monode::getlb()->thaw(i, false);
+        }
+        printf("EMITTER2 BROADCASTING EOS\n");
+        broadcast_task(EOS);
+      }
+    }
+  }
+
 private:
-    bool eos_received = 0;
-    unsigned last, nready, frozen=0, onthefly=0;
-    std::vector<bool>  ready;         // which workers are ready
-    std::vector<bool>  sleeping;      // which workers are sleeping
-    std::vector<long*> data;          // local storage
+  bool eos_received = 0;
+  unsigned last, nready, frozen = 0, onthefly = 0;
+  std::vector<bool> ready;    // which workers are ready
+  std::vector<bool> sleeping; // which workers are sleeping
+  std::vector<long *> data;   // local storage
 };
 
-struct Worker: ff_monode_t<long> {
-    int svc_init() {
-        printf("Worker id=%ld starting\n", get_my_id());
-        return 0;
-    }
+struct Worker : ff_monode_t<long> {
+  int svc_init() {
+    printf("Worker id=%ld starting\n", get_my_id());
+    return 0;
+  }
 
-    long* svc(long* task) {
-        //printf("Worker id=%ld got %ld\n", get_my_id(), (long)task);
-        ff_send_out_to(task, 1);  // to the next stage 
-        ff_send_out_to(task, 0);  // send the "ready msg" to the emitter 
-        return GO_ON;
-    }
+  long *svc(long *task) {
+    //printf("Worker id=%ld got %ld\n", get_my_id(), (long)task);
+    ff_send_out_to(task, 1); // to the next stage
+    ff_send_out_to(task, 0); // send the "ready msg" to the emitter
+    return GO_ON;
+  }
 
-    void eosnotify(ssize_t) {
-        printf("Worker2 id=%ld received EOS\n", get_my_id());
-    }
-    
-    void svc_end() {
-        //printf("Worker2 id=%ld going to sleep\n", get_my_id());
-    }
+  void eosnotify(ssize_t) {
+    printf("Worker2 id=%ld received EOS\n", get_my_id());
+  }
 
+  void svc_end() {
+    //printf("Worker2 id=%ld going to sleep\n", get_my_id());
+  }
 };
 
 // multi-input stage
-struct Collector: ff_minode_t<long> {
-    long* svc(long* task) {
-        //printf("Collector received task = %ld, sending it back to the Emitter\n", (long)(task));
-        return task;
-    }
-    void eosnotify(ssize_t) {
-        printf("Collector received EOS\n");
-    }
-    
+struct Collector : ff_minode_t<long> {
+  long *svc(long *task) {
+    //printf("Collector received task = %ld, sending it back to the Emitter\n", (long)(task));
+    return task;
+  }
+  void eosnotify(ssize_t) { printf("Collector received EOS\n"); }
 };
 
+struct Manager : ff_node_t<Command_t> {
+  Manager() : channel(100, true, MANAGERID) {}
 
-struct Manager: ff_node_t<Command_t> {
-    Manager(): 
-        channel(100, true, MANAGERID) {}
-    
-    Command_t* svc(Command_t *) {
-        
-        struct timespec req = {0, static_cast<long>(5*1000L)};
-        nanosleep(&req, NULL);
+  Command_t *svc(Command_t *) {
 
-        Command_t *cmd1 = new Command_t(0, REMOVE);
-        channel.ff_send_out(cmd1);
+    struct timespec req = {0, static_cast<long>(5 * 1000L)};
+    nanosleep(&req, NULL);
 
-        Command_t *cmd2 = new Command_t(1, REMOVE);
-        channel.ff_send_out(cmd2);
+    Command_t *cmd1 = new Command_t(0, REMOVE);
+    channel.ff_send_out(cmd1);
 
-        {
-            struct timespec req = {0, static_cast<long>(5*1000L)};
-            nanosleep(&req, NULL);
-        }
+    Command_t *cmd2 = new Command_t(1, REMOVE);
+    channel.ff_send_out(cmd2);
 
-        Command_t *cmd3 = new Command_t(1, ADD);
-        channel.ff_send_out(cmd3);
-
-        Command_t *cmd4 = new Command_t(0, ADD);
-        channel.ff_send_out(cmd4);
-
-        {
-            struct timespec req = {0, static_cast<long>(5*1000L)};
-            nanosleep(&req, NULL);
-        }
-
-        channel.ff_send_out(EOS);
-
-        return GO_OUT;
+    {
+      struct timespec req = {0, static_cast<long>(5 * 1000L)};
+      nanosleep(&req, NULL);
     }
 
-    void svc_end() {
-        printf("Manager ending\n");
+    Command_t *cmd3 = new Command_t(1, ADD);
+    channel.ff_send_out(cmd3);
+
+    Command_t *cmd4 = new Command_t(0, ADD);
+    channel.ff_send_out(cmd4);
+
+    {
+      struct timespec req = {0, static_cast<long>(5 * 1000L)};
+      nanosleep(&req, NULL);
     }
 
+    channel.ff_send_out(EOS);
 
-    int run(bool=false) { return ff_node_t<Command_t>::run(); }
-    int wait()          { return ff_node_t<Command_t>::wait(); }
+    return GO_OUT;
+  }
 
+  void svc_end() { printf("Manager ending\n"); }
 
-    ff_buffernode * getChannel() { return &channel;}
+  int run(bool = false) { return ff_node_t<Command_t>::run(); }
+  int wait() { return ff_node_t<Command_t>::wait(); }
 
-    ff_buffernode  channel;
+  ff_buffernode *getChannel() { return &channel; }
+
+  ff_buffernode channel;
 };
 
-
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
 #if defined(BLOCKING_MODE)
-    //TODO: in blocking mode the manager channel does not work!!!
-    return 0;
+  //TODO: in blocking mode the manager channel does not work!!!
+  return 0;
 #endif
 
-
-    unsigned nworkers = 3;
-    int ntasks = 1000;
-    if (argc>1) {
-        if (argc < 3) {
-            std::cerr << "use:\n" << " " << argv[0] << " numworkers ntasks\n";
-            return -1;
-        }
-        nworkers  =atoi(argv[1]);
-        ntasks    =atoi(argv[2]);
-        if (ntasks<500) ntasks = 500;
-        if (nworkers <3) nworkers = 3;
+  unsigned nworkers = 3;
+  int ntasks = 1000;
+  if (argc > 1) {
+    if (argc < 3) {
+      std::cerr << "use:\n"
+                << " " << argv[0] << " numworkers ntasks\n";
+      return -1;
     }
+    nworkers = atoi(argv[1]);
+    ntasks = atoi(argv[2]);
+    if (ntasks < 500) ntasks = 500;
+    if (nworkers < 3) nworkers = 3;
+  }
 
-    Seq seq(ntasks);
-    Manager manager;
+  Seq seq(ntasks);
+  Manager manager;
 
-    std::vector<ff_node* > W;
-    for(size_t i=0;i<nworkers;++i)  
-        W.push_back(new Worker);
-    ff_farm farm(W);
-    farm.cleanup_workers();
-    
-    // registering the manager channel as one extra input channel for the load balancer
-    farm.getlb()->addManagerChannel(manager.getChannel());
-    
-    Emitter E;
+  std::vector<ff_node *> W;
+  for (size_t i = 0; i < nworkers; ++i) W.push_back(new Worker);
+  ff_farm farm(W);
+  farm.cleanup_workers();
 
-    farm.remove_collector();
-    farm.add_emitter(&E); 
-    farm.wrap_around();
-    // here the order of instruction is important. The collector must be
-    // added after the wrap_around otherwise the feedback channel will be
-    // between the Collector and the Emitter
-    Collector C;
-    farm.add_collector(&C);
-    farm.wrap_around();
+  // registering the manager channel as one extra input channel for the load balancer
+  farm.getlb()->addManagerChannel(manager.getChannel());
 
-    ff_Pipe<> pipe(seq, farm);
+  Emitter E;
 
-    if (pipe.run_then_freeze()<0) {
-        error("running pipe\n");
-        return -1;
-    }            
-    manager.run();
-    pipe.wait_freezing();
-    pipe.wait();
-    manager.wait();
+  farm.remove_collector();
+  farm.add_emitter(&E);
+  farm.wrap_around();
+  // here the order of instruction is important. The collector must be
+  // added after the wrap_around otherwise the feedback channel will be
+  // between the Collector and the Emitter
+  Collector C;
+  farm.add_collector(&C);
+  farm.wrap_around();
 
-    return 0;
+  ff_Pipe<> pipe(seq, farm);
+
+  if (pipe.run_then_freeze() < 0) {
+    error("running pipe\n");
+    return -1;
+  }
+  manager.run();
+  pipe.wait_freezing();
+  pipe.wait();
+  manager.wait();
+
+  return 0;
 }

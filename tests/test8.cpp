@@ -45,64 +45,56 @@
 using namespace ff;
 
 // global new and delete redefined
-void * operator new(size_t size) { 
-    return ff_malloc(size);
-}
-void operator delete(void* p) noexcept {
-    return ff_free(p);
-}
-void operator delete(void* p, size_t) noexcept {
-    return ff_free(p);
-}
+void *operator new(size_t size) { return ff_malloc(size); }
+void operator delete(void *p) noexcept { return ff_free(p); }
+void operator delete(void *p, size_t) noexcept { return ff_free(p); }
 
 typedef std::vector<float> Task;
-struct firstStage: ff_node_t<Task> {
-    firstStage(const size_t length):length(length) {}
-    Task* svc(Task*) {
-        for(size_t i=1; i<=length; ++i) {
-            Task *t = new Task(i);
-            for(size_t j=0;j<t->size();++j) t->operator[](j) = j;
-            ff_send_out(t);
-        }
-        return EOS;
+struct firstStage : ff_node_t<Task> {
+  firstStage(const size_t length) : length(length) {}
+  Task *svc(Task *) {
+    for (size_t i = 1; i <= length; ++i) {
+      Task *t = new Task(i);
+      for (size_t j = 0; j < t->size(); ++j) t->operator[](j) = j;
+      ff_send_out(t);
     }
-    const size_t length;
+    return EOS;
+  }
+  const size_t length;
 };
-struct secondStage: ff_node_t<Task> {
-    Task* svc(Task* task) { 
-        Task &t = *task; 
-        for(size_t j=0;j<t.size();++j)
-            t[j] *= t[j];
-        return task; 
-    }
+struct secondStage : ff_node_t<Task> {
+  Task *svc(Task *task) {
+    Task &t = *task;
+    for (size_t j = 0; j < t.size(); ++j) t[j] *= t[j];
+    return task;
+  }
 };
-struct thirdStage: ff_node_t<Task> {   
-    Task* svc(Task* task) { 
-        Task &t = *task; 
-        for(size_t j=0;j<t.size();++j)
-            sum += t[j];
-        delete task;
-        return GO_ON; 
-    }
-    void svc_end() { std::cout << "sum = " << sum << "\n"; }
-    float sum = 0.0;
+struct thirdStage : ff_node_t<Task> {
+  Task *svc(Task *task) {
+    Task &t = *task;
+    for (size_t j = 0; j < t.size(); ++j) sum += t[j];
+    delete task;
+    return GO_ON;
+  }
+  void svc_end() { std::cout << "sum = " << sum << "\n"; }
+  float sum = 0.0;
 };
 
-int main(int argc, char *argv[]) {    
-    long streamlen = 500;
-    if (argc>1) {
-        if (argc!=2) {
-            std::cerr << "use: "  << argv[0] << " streamlen\n";
-            return -1;
-        }
-        streamlen=atol(argv[1]);
+int main(int argc, char *argv[]) {
+  long streamlen = 500;
+  if (argc > 1) {
+    if (argc != 2) {
+      std::cerr << "use: " << argv[0] << " streamlen\n";
+      return -1;
     }
-    firstStage  F1(streamlen);
-    secondStage F2;
-    thirdStage  F3;
-    ff_Pipe<> pipe(F1,F2,F3);
-    pipe.setXNodeInputQueueLength(10);
-    pipe.run_and_wait_end();
-    std::cout << "Time: " << pipe.ffTime() << "\n";
-    return 0;
+    streamlen = atol(argv[1]);
+  }
+  firstStage F1(streamlen);
+  secondStage F2;
+  thirdStage F3;
+  ff_Pipe<> pipe(F1, F2, F3);
+  pipe.setXNodeInputQueueLength(10);
+  pipe.run_and_wait_end();
+  std::cout << "Time: " << pipe.ffTime() << "\n";
+  return 0;
 }
