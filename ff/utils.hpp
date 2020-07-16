@@ -155,6 +155,9 @@ static inline int memory_Stats(const std::string &status, size_t &vm, size_t &vm
     f.close();
     return 0;
 #else
+    FF_IGNORE_UNUSED(status);
+    FF_IGNORE_UNUSED(vm);
+    FF_IGNORE_UNUSED(vmp);
     error("memory_Stats, not implemented for this platform\n");
     return -1;
 #endif

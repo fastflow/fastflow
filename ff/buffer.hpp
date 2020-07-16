@@ -61,7 +61,7 @@
 #include <ff/config.hpp>
 
 #if defined(__APPLE__)
-#include <AvailabilityMacros.h>
+#include <Availability.h>
 #endif
 
 #include <ff/platforms/platform.h>

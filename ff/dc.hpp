@@ -571,7 +571,7 @@ public:
     }
     ff_DC(const std::function<void (const OperandType&, std::vector<OperandType> &)>& divide_fn, const std::function<void(std::vector<ResultType>&,ResultType&)>& combine_fn,
         const std::function<void(const OperandType&, ResultType&)>& seq_fn, const std::function<bool(const OperandType&)>& cond_fn, int numw, 
-               size_t outstandingTasks=DEFAULT_OUTSTANDING_TASKS,int maxnw=ff_numCores(), void (*schedRelaxF)(unsigned long)=NULL):
+               size_t /*outstandingTasks*/=DEFAULT_OUTSTANDING_TASKS,int maxnw=ff_numCores(), void (*schedRelaxF)(unsigned long)=NULL):
                                _divide_fn(divide_fn), _combine_fn(combine_fn), _seq_fn(seq_fn), _condition_fn(cond_fn)
     {
 
