@@ -69,8 +69,22 @@ they are added to the high-level layer and provided to the user.
 
 ## Building the library
 FastFlow is header-only, no need for building.
+However, it is recommended to install the library's headers thought cmake. This permits also to configure the thread affinity mapping for the given architecture (it requires hwloc).
 
-See the [BUILD.ME](BUILD.ME) file for instructions about building unit tests and examples.
+To install the library simply do the following:
+```
+mkdir build && cd build
+cmake ..
+make install
+```
+The installation directory can be changed by executing cmake with the parameter `-DCMAKE_INSTALL_PREFIX=mypath`.
+
+Instead, the tests can be built and executed as follows:
+```
+cmake .. -DBUILD_TESTING=ON
+make -j8
+make test
+```
 
 ## Supported Platforms
 FastFlow is currently actively supported for Linux with gcc >4.8, x86_64 and ARM
