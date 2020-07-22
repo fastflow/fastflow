@@ -2,7 +2,7 @@
 #
 # Author: Massimo Torquati
 # 
-# Requires: bash >=4, hwloc
+# Requires: bash >=3.2, hwloc
 #
 # The script builds a string containing the list of logical core of the
 # machine that are topologically contiguous, i.e the first context of the
@@ -42,8 +42,11 @@ nway=$(($logical/$physical))
 # The right-hand side script returns the ids of the Processing Unit of
 # the machine in the linear order.
 # Considering the example above the topocmd command returns something like:
-# 0 8 4 12 2 10 6 14 1 9 5 13 3 11 7 15.
-mapfile -t array < <( $topocmd --only pu | awk -F'[#)]' '{print $3}' )
+#   0 8 4 12 2 10 6 14 1 9 5 13 3 11 7 15.
+# (We do not use mapfile command for portability on MacOS and bash<4)
+while IFS= read -r line; do 
+    array+=("$line")
+done < <( $topocmd --only pu | awk -F'[#)]' '{print $3}' )
 
 for((i=0;i<${#array[@]};i+=nway)); do
     for((j=0;j<$nway;++j)); do    
@@ -53,7 +56,8 @@ done
 for((j=0;j<$nway;++j)); do
      str+=${V[j]}
 done
-string=${str::-1} # remove the last comma
+# remove the last comma
+string=${str::${#str}-1}  # on bash>4 just ${str::-1}
 echo "FF_MAPPING_STRING=\"$string\""
 echo "FF_NUM_CORES=$logical"
 echo "FF_NUM_REAL_CORES=$physical"
@@ -65,7 +69,7 @@ then
     sed -i -e "s/#define FF_MAPPING_STRING \"\"/#define FF_MAPPING_STRING \"$string\"/1" ./config.hpp
     if [ $? -eq 0 ]; then
 	echo "This is the new FF_MAPPING_STRING variable in the ./config.hpp file:"
-	echo -e "\e[1m $(grep -m1 "^#define FF_MAPPING_STRING \"" config.hpp) \e[0m"
+	echo -e "\033[1m $(grep -m1 "^#define FF_MAPPING_STRING \"" config.hpp) \033[0m"
     else
 	echo "something went wrong when replacing the variable FF_MAPPING_STRING...."
 	exit 1
@@ -73,7 +77,7 @@ then
     sed -i -e "s/#define FF_NUM_CORES -1/#define FF_NUM_CORES $logical/1" ./config.hpp
     if [ $? -eq 0 ]; then	      
     	echo "This is the new FF_NUM_CORES variable in the ./config.hpp file:"
-	echo -e "\e[1m $(grep -m1 "^#define FF_NUM_CORES " config.hpp) \e[0m"
+	echo -e "\033[1m $(grep -m1 "^#define FF_NUM_CORES " config.hpp) \033[0m"
     else
 	echo "something went wrong when replacing the variable FF_NUM_CORES...."
 	exit 1
@@ -81,7 +85,7 @@ then
     sed -i -e "s/#define FF_NUM_REAL_CORES -1/#define FF_NUM_REAL_CORES $physical/1" ./config.hpp
     if [ $? -eq 0 ]; then
 	echo "This is the new FF_NUM_REAL_CORES variable in the ./config.hpp file:"
-	echo -e "\e[1m $(grep -m1 "^#define FF_NUM_REAL_CORES " config.hpp) \e[0m"	
+	echo -e "\033[1m $(grep -m1 "^#define FF_NUM_REAL_CORES " config.hpp) \033[0m"	
     else
 	echo "something went wrong when replacing the variable FF_NUM_REAL_CORES...."
 	exit 1
