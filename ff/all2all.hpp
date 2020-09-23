@@ -59,7 +59,21 @@ protected:
             error("A2A, nodes of the first set cannot be farm or all-to-all\n");
             return -1;
         }
+        if (workers2[0]->isFarm() || workers2[0]->isAll2All()) {
+            error("A2A, nodes of the second set cannot be farm or all-to-all\n");
+            return -1;
+        }
+        
         if (workers1[0]->isPipe()) {
+
+            // all other Workers must be pipe
+            for(size_t i=1;i<workers1.size();++i) {
+                if (!workers1[i]->isPipe()) {
+                    error("A2A, workers of the first set are not homogeneous, all of them must be of the same kind of building-block (e.g., all pipelines)\n");
+                    return -1;
+                }
+            }
+            
             if (!workers1[0]->isMultiOutput()) {
                 error("A2A, workers of the first set can be pipelines but only if they are multi-output (automatic transformation not yet supported)\n");
                 return -1;
@@ -85,11 +99,7 @@ protected:
                 }
             }
         }
-        if (workers2[0]->isFarm() || workers2[0]->isAll2All()) {
-            error("A2A, nodes of the second set cannot be farm or all-to-all\n");
-            return -1;
-        }
-
+       
         // checking L-Workers
         if (!workers1[0]->isMultiOutput()) {  // NOTE: we suppose all others to be the same
             // the nodes in the first set cannot be multi-input nodes without being
@@ -117,7 +127,7 @@ protected:
             workers1[i]->set_id(int(i));
         }
         // checking R-Workers
-        if (!workers2[0]->isMultiInput()) { // we suppose that all others are the same        
+        if (!workers2[0]->isMultiInput()) { // NOTE: we suppose that all others are the same        
             if (workers2[0]->isMultiOutput()) {
                 error("A2A, the nodes of the second set cannot be multi-output nodes without being also multi-input (i.e., a composition of nodes). The node must be either standard node or multi-input node or compositions where the first stage is a multi-input node\n");
                 return -1;
@@ -446,9 +456,10 @@ public:
             w += getSecondSet();
     }
     void get_in_nodes(svector<ff_node*>&w) {
+        size_t len=w.size();
         for(size_t i=0;i<workers1.size();++i)
             workers1[i]->get_in_nodes(w);
-        if (w.size() == 0)
+        if (len == w.size())
             w += getFirstSet();
     }
 

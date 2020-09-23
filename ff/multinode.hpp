@@ -187,12 +187,15 @@ protected:
     }
 
     virtual inline void get_in_nodes(svector<ff_node*>&w) {
+        size_t len=w.size();
         // it is possible that the multi-input node is register
         // as collector of farm
         if (inputNodes.size() == 0 && gt->getNWorkers()>0) {
             w += gt->getWorkers();
         }
         w += inputNodes;
+        
+        if (len == w.size())  w.push_back(this);
     }
 
     virtual void get_in_nodes_feedback(svector<ff_node*>&w) {
