@@ -177,12 +177,12 @@ public:
     // NOTE: it is multi-input only if the first node is multi-input
     bool isMultiInput() const {
         if (getFirst()->isMultiInput()) return true;
-        return false; //comp_multi_input;
+        return false; 
     }
     // NOTE: it is multi-output only if the last node is multi-output
     bool isMultiOutput() const {
         if (getLast()->isMultiOutput()) return true;
-        return false; //comp_multi_output;
+        return false;
     }        
     inline bool isComp() const        { return true; }
 
@@ -310,9 +310,9 @@ protected:
             error("COMP, connecting callbacks\n");
             return;
         }
+
         ff_node *n1 = (w1.size() == 0)? comp_nodes[0]:w1[0];
-        ff_node *n2 = (w2.size() == 0)? comp_nodes[1]:w2[0];
-        n1->registerCallback(n2->ff_send_out_comp, n2);
+        n1->registerCallback(this->ff_send_out_comp, this);
     }
 
     int dryrun() {
@@ -357,19 +357,16 @@ protected:
         prepared = true;
         return 0;
     }
+
     void set_multiinput() {
         // see farm.hpp
-        // when the composition is passed as filter of a farm collector (which is a multi-input)
-        // the filter is seen as multi-input because we want to avoid to call eosnotify 
-        // too many times (see ff_comb::eosnotify)
+        // when the composition is passed as filter of a farm collector (which is by
+        // default a multi-input node) the filter is seen as multi-input because we want
+        // to avoid calling eosnotify multiple times (see ff_comb::eosnotify)
+        // The same applies for the farm emitter.
         if (comp_nodes[0]->isComp())
             return comp_nodes[0]->set_multiinput();
         comp_multi_input=true;
-    }
-    void set_multioutput() {
-        if (comp_nodes[1]->isComp())
-            return comp_nodes[1]->set_multioutput();
-        comp_multi_output=true;
     }
 
     void set_neos(ssize_t n) {
@@ -399,45 +396,6 @@ protected:
         return 0;
     }
 
-    inline void* svc_comp_node1(void* task, void*r) {
-        void* ret = r, *r2;
-        if (comp_nodes[1]->isComp())
-            ret = comp_nodes[1]->svc(task);
-        else {
-            svector<void*> &localdata1 = comp_nodes[1]->get_local_data();
-            size_t n = localdata1.size();
-            for(size_t k=0;k<n;++k) {
-                void *t = localdata1[k];
-                if (t == FF_EOS) {
-                    comp_nodes[1]->eosnotify();
-                    /*ret = FF_GO_OUT;*/ // NOTE: we cannot exit if the previous comp node does not exit
-                    if (comp_nodes[1]->isMultiOutput())
-                        comp_nodes[1]->propagateEOS(FF_EOS);         
-                    else {
-                        if (comp_multi_output) ret = FF_EOS;
-                        else comp_nodes[1]->ff_send_out(FF_EOS); // if no output is present it calls devnull
-                    }
-                    break;
-                }
-                r2= comp_nodes[1]->svc(t);
-                if (r2 == FF_GO_ON || r2 == FF_GO_OUT || r2 == FF_EOS_NOFREEZE) continue;
-                if (r2 == FF_EOS) {
-                    ret = FF_GO_OUT;
-                    if (comp_nodes[1]->isMultiOutput())
-                        comp_nodes[1]->propagateEOS(FF_EOS);
-                    else {
-                        if (comp_multi_output) ret = FF_EOS;
-                        comp_nodes[1]->ff_send_out(FF_EOS); // if no output is present it calls devnull
-                    }
-                    break;
-                }
-                comp_nodes[1]->ff_send_out(r2);  // if no output is present it calls devnull
-            }
-            localdata1.clear();
-        }
-        return ret;
-    }
-    
     // main service function
     void *svc(void *task) {
         void *ret = FF_GO_ON;
@@ -446,36 +404,15 @@ protected:
         if (comp_nodes[0]->isComp())
             ret = comp_nodes[0]->svc(task);
         else {
-            svector<void*> &localdata1 = comp_nodes[0]->get_local_data();
-            size_t n = localdata1.size();
-            if (n>0) {
-                for(size_t k=0;k<n;++k) {
-                    void *t = localdata1[k];
-                    if (t == FF_EOS) {
-                        comp_nodes[0]->eosnotify();
-                        ret = FF_GO_OUT;
-                        comp_nodes[1]->push_comp_local(t);
-                        break;
-                    }
-                    r1= comp_nodes[0]->svc(t);
-                    if (r1 == FF_GO_ON || r1 == FF_GO_OUT || r1 == FF_EOS_NOFREEZE) continue;
-                    comp_nodes[1]->push_comp_local(r1);
-                    if (r1 == FF_EOS) {
-                        ret = FF_GO_OUT;
-                        break;
-                    }
+            if (task || comp_nodes[0]->skipfirstpop()) {
+                r1= comp_nodes[0]->svc(task);
+                if (!(r1 == FF_GO_ON || r1 == FF_GO_OUT || r1 == FF_EOS_NOFREEZE)) {
+                    comp_nodes[0]->ff_send_out(r1);
                 }
-                localdata1.clear();
-            } else {
-                if (task || comp_nodes[0]->skipfirstpop()) {
-                    r1= comp_nodes[0]->svc(task);
-                    if (!(r1 == FF_GO_ON || r1 == FF_GO_OUT || r1 == FF_EOS_NOFREEZE))
-                        comp_nodes[1]->push_comp_local(r1);
-                    if (r1 == FF_EOS) ret=FF_GO_OUT;
-                }
+                if (r1 == FF_EOS) 
+                    ret=FF_GO_OUT;                        
             }
         }
-        ret = svc_comp_node1(nullptr, ret);        
         return ret;
     }
 
@@ -485,8 +422,20 @@ protected:
         }
     }
 
-    bool push_comp_local(void *task) {        
-        return comp_nodes[0]->push_comp_local(task);
+    // this is called by the ff_send_out for those nodes that are inside a combine
+    bool push_comp_local(void *task) {
+        if (task == FF_EOS) {
+            comp_nodes[1]->eosnotify();
+            propagateEOS();
+            return true;
+        }
+        void *r = comp_nodes[1]->svc(task);
+        if (r == FF_GO_ON || r== FF_GO_OUT || r == FF_EOS_NOFREEZE) return true;
+        if (r == FF_EOS) {
+            propagateEOS();
+            return true;
+        }
+        return comp_nodes[1]->ff_send_out(r);
     }
     
     int set_output(const svector<ff_node *> & w) {
@@ -499,9 +448,6 @@ protected:
         return comp_nodes[1]->set_output_feedback(n);
     }
     int set_input(const svector<ff_node *> & w) {
-
-        //if (comp_nodes[0]->isComp()) return comp_nodes[0]->set_input(w); // WARNING: <--------
-
         //assert(comp_nodes[0]->isMultiInput());
         if (comp_nodes[0]->set_input(w)<0) return -1;
         // if the first node of the comp is a multi-input node
@@ -510,9 +456,6 @@ protected:
         return ff_minode::set_input(w);        
     }
     int set_input(ff_node *n) {
-        //if (comp_nodes[0]->isComp()) return comp_nodes[0]->set_input(n); // WARNING: <-------
-
-
         //assert(comp_nodes[0]->isMultiInput());
         if (comp_nodes[0]->set_input(n)<0) return -1;
         // if the first node of the comp is a multi-input node
@@ -521,8 +464,6 @@ protected:
         return ff_minode::set_input(n);        
     }
     int set_input_feedback(ff_node *n) {
-        //if (comp_nodes[0]->isComp()) return comp_nodes[0]->set_input_feedback(n); // WARNING: <-----
-
         //assert(comp_nodes[0]->isMultiInput());
         if (comp_nodes[0]->set_input_feedback(n)<0) return -1;
         // if the first node of the comp is a multi-input node
@@ -553,22 +494,16 @@ protected:
     void eosnotify(ssize_t id=-1) {
         comp_nodes[0]->eosnotify();
         
-        // the eosnotify might produce some data in output 
-        void *ret = svc_comp_node1(nullptr, GO_ON);
-        
         ++neos;
         // if the first node is multi-input or is a comp passed as filter to a farm collector,
         // then we have to call eosnotify only if we have received all EOSs
         if (comp_nodes[0]->isMultiInput() || comp_multi_input) {
             const ssize_t n=getFirst()->get_neos();
-            if ((neos >= n) &&
-                (ret != FF_GO_OUT) /*this means that svc_comp_node1 has already called eosnotify */
-                )
+            if (neos >= n)
                 comp_nodes[1]->eosnotify(id);                
             return;
         }
-        if (ret != FF_GO_OUT)
-            comp_nodes[1]->eosnotify(id);
+        comp_nodes[1]->eosnotify(id);
     }
 
     void propagateEOS(void *task=FF_EOS) {
@@ -577,8 +512,7 @@ protected:
             return;
         }
         
-        if (comp_nodes[1]->isMultiOutput() ||
-            comp_multi_output)               
+        if (comp_nodes[1]->isMultiOutput())
             comp_nodes[1]->propagateEOS(task);
         else
             comp_nodes[1]->ff_send_out(task);
@@ -721,7 +655,6 @@ private:
     svector<ff_node*> comp_nodes;
     svector<ff_node*> cleanup_stages;   
     bool comp_multi_input = false;
-    bool comp_multi_output= false;
     ssize_t neos=0;
 };
 
@@ -778,8 +711,8 @@ static inline const ff_pipeline combine_nodes_in_pipeline(ff_node& node1, ff_nod
             if (cleanup2) farm2->cleanup_all();
             return combine_ofarm_farm(*farm1, *farm2);
         }
-        error("combine_nodes_in_pipeline, FEATURE NOT YET SUPPORTED (node1 ordered farm and node1 standard or combine node\n");
-        abort(); // TODO
+        error("combine_nodes_in_pipeline, FEATURE NOT YET SUPPORTED (node1 ordered farm and node2 standard or combine node\n");
+        abort(); // FIX: TODO <---------
         return ff_pipeline();
     }
     if (!node1.isFarm() && !node2.isFarm()) { // two sequential nodes
@@ -793,7 +726,27 @@ static inline const ff_pipeline combine_nodes_in_pipeline(ff_node& node1, ff_nod
         ff_node *e = farm->getEmitter();
         if (!e) farm->add_emitter(&node1);
         else {
-            ff_comb *p = new ff_comb(&node1, e, cleanup1, farm->isset_cleanup_emitter());
+            ff_comb *p;
+            if (!e->isMultiOutput()) { // we have to transform the emitter node into a multi-output
+                if (e->isMultiInput()) { // this is a "strange" case: the emitter is multi-input without being also multi-output (through a combine node)
+                    struct hnode:ff_monode {
+                        void* svc(void*in) {return in;}
+                    };
+
+                    // c is a multi-input AND multi-output node
+                    ff_comb *c = new ff_comb(e, new hnode,
+                                             farm->isset_cleanup_emitter(), true);
+                    assert(c);                    
+                    p = new ff_comb(&node1, c, cleanup1, true);
+                } else {
+                    auto mo = new internal_mo_transformer(e, farm->isset_cleanup_emitter());
+                    assert(mo);
+                    p = new ff_comb(&node1, mo, cleanup1, true);
+                }
+            } else {
+                p = new ff_comb(&node1, e, cleanup1, farm->isset_cleanup_emitter());
+            }
+            assert(p);
             if (farm->isset_cleanup_emitter()) farm->cleanup_emitter(false);
             farm->change_emitter(p, true);
         }
@@ -928,9 +881,6 @@ static inline const ff_farm combine_farms_a2a(ff_farm &farm1, const E_t& node, f
     std::vector<ff_node*> Wtmp(W1.size());
     for(size_t i=0;i<W1.size();++i) {
         if (!node.isMultiOutput()) {
-            //const auto emitter_mo = mo_transformer(node);
-            //auto c = combine_nodes(*W1[i], emitter_mo);
-            //auto pc = new decltype(c)(c);
             auto mo = new internal_mo_transformer(node);
             assert(mo);
             auto pc = new ff_comb(W1[i], mo,
@@ -938,8 +888,6 @@ static inline const ff_farm combine_farms_a2a(ff_farm &farm1, const E_t& node, f
             assert(pc);
             Wtmp[i]=pc;
         } else {
-            //auto c = combine_nodes(*W1[i], node);
-            //auto pc = new decltype(c)(c);
             auto e = new E_t(node);
             auto pc = new ff_comb(W1[i], e,
                                   farm1.isset_cleanup_workers(), true);    
@@ -1023,8 +971,6 @@ static inline const ff_farm combine_farms_nf(ff_farm& farm1, ff_farm& farm2) {
     
     std::vector<ff_node*> Wtmp1(W1.size());
     for(size_t i=0;i<W1.size();++i) {
-        //auto c = combine_nodes(*W1[i], *W2[i]);
-        //auto pc = new decltype(c)(c);
         auto pc = new ff_comb(W1[i], W2[i],
                               farm1.isset_cleanup_workers(),
                               farm2.isset_cleanup_workers());
@@ -1178,7 +1124,7 @@ static inline const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm
  *     1. mergeCE==false: it produces a pipeline of a single farm 
  *        whose worker is an all-to-all building block where the nodes of the first set
  *        is a composition of farm1's workers and node1 whereas the nodes of the second set
- *        is a composition of farm2's workers and node2.
+ *        is a composition of nodes2 and farm2's workers.
  *     2. mergeCE==true:  this produces a pipeline of two farms where the first 
  *        farm has no collector while the second farm has as emitter the composition
  *        of node1 and node2.
@@ -1233,18 +1179,32 @@ static inline const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
             return newpipe;            
         }        
         if (node2!=nullptr && node1!=nullptr) {   // case4.2
-            if (node1->isMultiOutput()) {
-                error("combine_farms, node1 cannot be a multi-output node\n");
+            if (node2->isComp() && !node2->isMultiOutput()) {
+                error("combine_farms, if node2 is a combine node, then it must be multi-output\n");
                 return newpipe;
             }
             // here we compose node1 and node2 and we set this new 
             // node as emitter of the second farm
 
+            // we require that the last stage of the combine is a multi-output node
+            if (!node2->isMultiOutput()) {
+                if (node2->isMultiInput()) { // this is a multi-input node
+                    error("combine_farms, node2 is multi-input without being a combine, this is currently needed to apply the transformation (FEATURE NONT YET SUPPORTED)\n");
+                    return newpipe;
+                }
+                auto second = new internal_mo_transformer(*node2);
+                assert(second);
+                auto first = new C_t(*node1);
+                assert(first);
+                auto p = new ff_comb(first, second, true, true);
+                assert(p);
+                farm2.change_emitter(p,true); // cleanup set                
+            } else {        
+                auto ec= combine_nodes(*node1, *node2);
+                auto pec = new decltype(ec)(ec);
+                farm2.change_emitter(pec,true); // cleanup set
+            }
             farm1.remove_collector();
-            auto ec= combine_nodes(*node1, *node2);
-            auto pec = new decltype(ec)(ec);
-            farm2.change_emitter(pec,true); // cleanup set
-
             newpipe.add_stage(&farm1);
             newpipe.add_stage(&farm2);
             return newpipe;
@@ -1260,7 +1220,7 @@ static inline const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
         }
         assert(node1!=nullptr);    // case3.2
         if (node1->isMultiInput()) {  
-            const struct hnode:ff_node {
+            const struct hnode:ff_monode {
                 void* svc(void*in) {return in;}
             } helper_node;
             farm1.remove_collector();
@@ -1327,9 +1287,6 @@ static inline const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
         std::vector<ff_node*> Wtmp1(W1.size());
         for(size_t i=0;i<W1.size();++i) {
             if (!node1->isMultiOutput()) {
-                //const auto collector_mo = mo_transformer(*node1);
-                //auto c = combine_nodes(*W1[i], collector_mo);
-                //auto pc = new decltype(c)(c);
                 auto mo = new internal_mo_transformer(*node1);
                 assert(mo);
                 auto pc = new ff_comb(W1[i], mo,
@@ -1337,8 +1294,6 @@ static inline const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
                 assert(pc);
                 Wtmp1[i]=pc;
             } else {
-                //auto c = combine_nodes(*W1[i], *node1);
-                //auto pc = new decltype(c)(c);
                 auto c = new C_t(*node1);
                 assert(c);
                 auto pc = new ff_comb(W1[i], c,
@@ -1364,14 +1319,16 @@ static inline const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
     }
     assert(node2!=nullptr && node1!=nullptr);    // case4.1
 
-    // TODO: we can relax the following two constraints.
-    if (node1->isMultiInput()) {
-        error("combine_farms, node1 cannot be a multi-input node\n");
-        return newpipe;
-    }
-    if (node2->isMultiOutput()) {
-        error("combine_farms, node2 cannot be a multi-output node\n");
-        return newpipe;
+    if (!mergeCE) {
+        // TODO: we can relax the following two constraints.
+        if (node1->isMultiInput()) {
+            error("combine_farms, node1 cannot be a multi-input node\n");
+            return newpipe;
+        }
+        if (node2->isMultiOutput()) {
+            error("combine_farms, node2 cannot be a multi-output node\n");
+            return newpipe;
+        }
     }
 
     ff_a2a *a2a = new ff_a2a;
@@ -1409,17 +1366,12 @@ static inline const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
     std::vector<ff_node*> Wtmp1(W1.size());
     for(size_t i=0;i<W1.size();++i) {
         if (!node1->isMultiOutput()) {
-            //const auto collector_mo = mo_transformer(*node1);
-            //auto c = combine_nodes(*W1[i], collector_mo);
-            //auto pc = new decltype(c)(c);
             auto mo = new internal_mo_transformer(*node1);
             assert(mo);
             auto pc = new ff_comb(W1[i], mo, 
                                   farm1.isset_cleanup_workers() , true);
             Wtmp1[i]=pc;
         } else {
-            //auto c = combine_nodes(*W1[i], *node1);
-            //auto pc = new decltype(c)(c);
             auto c = new C_t(*node1);
             assert(c);
             auto pc = new ff_comb(W1[i], c,
@@ -1433,9 +1385,6 @@ static inline const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
     std::vector<ff_node*> Wtmp2(W2.size());
     for(size_t i=0;i<W2.size();++i) {
         if (!node2->isMultiInput()) {
-            //const auto emitter_mi = mi_transformer(*node2);
-            //auto c = combine_nodes(emitter_mi, *W2[i]);
-            //auto pc = new decltype(c)(c);
             auto mi = new internal_mi_transformer(*node2);
             assert(mi);
             auto pc = new ff_comb(mi,W2[i],
@@ -1443,8 +1392,6 @@ static inline const ff_pipeline combine_farms(ff_farm& farm1, const C_t *node1,
             assert(pc);
             Wtmp2[i]=pc;
         } else {
-            //auto c = combine_nodes(*node2, *W2[i]);
-            //auto pc = new decltype(c)(c);
             auto e = new E_t(*node2);
             assert(e);
             auto pc = new ff_comb(e, W2[i],

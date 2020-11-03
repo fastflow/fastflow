@@ -1155,8 +1155,7 @@ public:
     virtual inline bool isPipe() const        { return false; }
 
     virtual inline void set_multiinput()  {}
-    virtual inline void set_multioutput() {}
-
+    
 #if defined(FF_REPARA)
     struct rpr_measure_t {
         size_t schedule_id;
@@ -1213,9 +1212,9 @@ protected:
     }
 
 
-    virtual bool push_comp_local(void *task) {        
-        comp_localdata.push_back(task);
-        return true;
+    virtual bool push_comp_local(void *task) {
+        (void)task;
+        abort();  // to be removed, just for debugging purposes
     }
 
        
@@ -1449,9 +1448,6 @@ private:
         return thread->getTid();
     } 
 
-    inline svector<void*>& get_local_data() { return comp_localdata;}
-    
-
 protected:
 
 #if defined(TRACE_FASTFLOW)
@@ -1484,7 +1480,6 @@ protected:
     bool                  prepared = false;
     bool                  initial_barrier = true;
     bool                  default_mapping = true;
-    svector<void*>    comp_localdata;
 };  // ff_node
 
 

@@ -7,7 +7,7 @@
  *
  * \brief FastFlow optimization heuristics 
  *
- * @detail FastFlow basic contanier for a shared-memory parallel activity 
+ * @detail FastFlow basic container for a shared-memory parallel activity 
  *
  */
 
@@ -121,11 +121,20 @@ static inline int combine_with_emitter(ff_farm& farm, ff_node*node, bool cleanup
         farm.cleanup_emitter(cleanup_node);
         return 0;
     }
-    ff_comb* comb    = new ff_comb(node,emitter,
-                                   cleanup_node, farm.isset_cleanup_emitter());
+    ff_comb* comb;
+
+    if (!emitter->isMultiOutput()) {
+        internal_mo_transformer *mo_emitter = new internal_mo_transformer(emitter,
+                                                                          farm.isset_cleanup_emitter());
+        comb = new ff_comb(node, mo_emitter, cleanup_node, true);
+    } else {    
+        comb = new ff_comb(node,emitter,
+                           cleanup_node, farm.isset_cleanup_emitter());
+
+    }
     if (farm.isset_cleanup_emitter())
         farm.cleanup_emitter(false);
-
+    
     farm.change_emitter(comb, true);
     return 0;
 }

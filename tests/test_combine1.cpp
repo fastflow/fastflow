@@ -25,7 +25,7 @@
  ****************************************************************************
  */
 /*
- * Basic tests for combine_with_firststage/laststage.
+ * Basic tests for the combine_with_firststage/laststage helping functions.
  */
 
 /* Author: Massimo Torquati

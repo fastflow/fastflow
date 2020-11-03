@@ -667,7 +667,7 @@ public:
                      unsigned long retry=((unsigned long)-1),
                      unsigned long ticks=(ff_node::TICKS2WAIT)) {
         // NOTE: this callback should be set only if the multi-output node is part of
-        // a composition the it is not the last stage 
+        // a composition and it is not the last stage 
         if (callback) return  callback(task,retry,ticks,callback_arg);
         return lb->schedule_task(task,retry,ticks);
     }
@@ -728,8 +728,8 @@ public:
      */
     inline ff_loadbalancer * getlb() const { return lb;}
 
-    // used when a multi-input node is a filter of an emitter (i.e. a comp)
-    // it can also be used to set a particular gathering policy like for
+    // used when a multi-output node is used as a filter in the emitter of a farm 
+    // it can also be used to set a particular scheduling policy like for
     // example the ones pre-defined in the file ordering_policies.hpp
     void setlb(ff_loadbalancer *elb, bool cleanup=false) {
         if (lb && myownlb) {
@@ -857,10 +857,12 @@ struct ff_monode_t: ff_monode {
 struct internal_mo_transformer: ff_monode {
     internal_mo_transformer(ff_node* n, bool cleanup=false):
         ff_monode(n),cleanup(cleanup),n(n) {
+        assert(!n->isMultiOutput());
     }
 
     template<typename T>
     internal_mo_transformer(const T& _n) {
+        assert(!_n.isMultiOutput());
         T *t = new T(_n);
         assert(t);
         n = t;
@@ -893,11 +895,20 @@ struct internal_mo_transformer: ff_monode {
         return 0;
     }    
 
+    
     void set_id(ssize_t id) {
         if (n) n->set_id(id);
         ff_monode::set_id(id);
     }
-    
+
+    int dryrun() {
+        if (prepared) return 0;
+        if (n) {
+            n->registerCallback(ff_send_out_motransformer, this);
+        }
+        return ff_monode::dryrun();
+    }
+
     int run(bool skip_init=false) {
         assert(n);
         if (!prepared) {
@@ -911,7 +922,15 @@ struct internal_mo_transformer: ff_monode {
         }
         ff_monode::getlb()->get_filter()->set_id(get_my_id());
         return ff_monode::run(skip_init);
-    }   
+    }
+
+    static inline bool ff_send_out_motransformer(void * task,
+                                                 unsigned long retry,
+                                                 unsigned long ticks, void *obj) {
+        bool r= ((internal_mo_transformer *)obj)->ff_send_out(task, retry, ticks);
+        return r;
+    }
+    
     bool cleanup;
     ff_node *n=nullptr;
 };
