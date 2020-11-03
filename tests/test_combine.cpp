@@ -38,7 +38,7 @@ using namespace ff;
 long ntasks = 100000;
 long worktime = 1*2400; // usecs
 
-#if 0 // two different ways to implement the first stage
+#if 1 // two different ways to implement the first stage
 struct firstStage: ff_node_t<long> {
     long *svc(long*) {
         for(long i=1;i<=ntasks;++i) {
@@ -87,7 +87,7 @@ int main() {
     secondStage2  _3; 
     secondStage3  _4;
     thirdStage    _5;
-    
+
     unsigned long inizio=getusec();
     long *r;
     for(long i=1;i<=ntasks;++i) {
@@ -109,7 +109,6 @@ int main() {
         const secondStage2  _3; 
         const secondStage3  _4;
         const thirdStage    _5;
-#if 0
         {
             auto comb = combine_nodes(_1, combine_nodes(_2, combine_nodes(_3, combine_nodes(_4, _5))));
             if (comb.run_and_wait_end()<0)
@@ -204,17 +203,16 @@ int main() {
             std::cout << "TEST10 DONE Time = " << pipe.ffwTime() << " ms\n";
         }
         usleep(500000);
-#endif
         {
             // testing multi-input + multi-output combined
 
             struct miStage:ff_minode_t<long> {
                 long* svc(long* in) {
-                    printf("MULTI INPUT input channels %ld\n", get_num_inchannels());
+                    //printf("MULTI INPUT input channels %ld\n", get_num_inchannels());
                     return in;
                 }
                 void eosnotify(ssize_t) {
-                    printf("MULTI INPUT %ld, eosnotify\n", get_my_id());
+                    //printf("MULTI INPUT %ld, eosnotify\n", get_my_id());
                 }
             };
             struct moStage:ff_monode_t<long> {
@@ -222,7 +220,7 @@ int main() {
                     return in;
                 }
                 void eosnotify(ssize_t) {
-                    printf("MULTI OUTPUT %ld, eosnotify\n", get_my_id());
+                    //printf("MULTI OUTPUT %ld, eosnotify\n", get_my_id());
                 }
                 
             };
@@ -237,7 +235,7 @@ int main() {
             // starts the pipeline
             if (pipe.run_and_wait_end()<0)
                 error("running pipe\n");
-            std::cout << "TEST11 DONE\n";
+            std::cout << "TEST11 DONE Time = " << pipe.ffwTime() << " ms\n";
         }
     }
   

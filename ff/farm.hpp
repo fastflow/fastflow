@@ -949,8 +949,24 @@ public:
     int add_emitter(T * e) { 
         if (e==nullptr) return 0;
         if (e->isFarm() || e->isAll2All() || e->isPipe()) {
-            error("FARM, add_emitter: wrong king of node, the Emitter filter can be either a standard node or a multi-output node\n");
+            error("FARM, add_emitter: wrong kind of node, the Emitter filter cannot be a parallel building block (i.e. farm, all2all, pipeline)\n");
             return -1;
+        }
+        if (e->isComp()) {
+            // NOTE: if a comp is set as a filter in the emitter of a farm,
+            // it must terminate with a multi-output node.
+            // In the previous version, it was allowed to add whatever kind of sequantial BB
+            // as filter, but in some cases we experienced problems with EOS propagation
+            if (!e->isMultiOutput()) {
+                error("FARM, add_emitter: wrong kind of node, if the filter is a combine building block, it must terminate with a multi-output node\n");
+
+               
+                abort();    // WARNING: here for debugging purposes, it must be removed!          
+                return -1;
+            }
+
+            // the combine is forced to appear as multi-input even if it is not
+            e->set_multiinput();                             
         }
         if (emitter) {
             error("FARM, add_emitter: emitter already present\n");
@@ -962,15 +978,7 @@ public:
         // the all_gather call        
         if (e->isMultiInput()) {
             e->registerAllGatherCallback(lb->ff_all_gather_emitter, lb);
-        }
-      
-        if (e->isComp()) {
-            // NOTE: if a comp is set as a filter in the emitter of a farm,
-            // it is a multiinput and multioutput node (like an emitter) even if
-            // the first/last stage of the composition are not a multi-input/output.   
-            e->set_multioutput();
-            e->set_multiinput();
-        }
+        }      
         return 0;
     }
     template<typename T>
@@ -1124,7 +1132,14 @@ public:
         // NOTE: if a comp is set as a filter in the collector of a farm,
         // it is a multiinput node even if the first stage of the composition
         // is not a multi-input.
-        if (c && c->isComp()) c->set_multiinput();
+        if (c && c->isComp()) {
+            // NOTE: if a comp is set as a filter in the collector of a farm,
+            // it should start with a multi-input node.
+            // However, if it is not the case, the combine is forced to appear as multi-input
+            // even if its first stage is not. This is because EOS should be propagated
+            // only if all EOSs from previous stages were received (see eosnotify in the combine)
+            c->set_multiinput();
+        }
         if (c) {
             collector = c;
             if (cleanup) collector_cleanup=true;

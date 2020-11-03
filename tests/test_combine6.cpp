@@ -27,13 +27,15 @@
 /* 
  * Single farm topology where the emitter and the collector are a composition of nodes
  *  
- *   |<------------ comp ----------->|   |--> Worker -->|    |<------------- comp ------------>|
- *                                       |              |  
- *   Generator -->Filter1 -->Emitter --> |--> Worker -->|--> Collector --> Filter2 --> Gatherer
- *                                       |              |  
- *                                       |--> Worker -->|  
+ *   |<------------ comp ----------->| |--> Worker -->|    |<----------- comp --------->|
+ *                                     |              |  
+ *   Generator -->Filter1 --->Emit --> |--> Worker -->|--> Coll --> Filter2 --> Gatherer
+ *                                     |              |  
+ *                                     |--> Worker -->|  
  *
- *
+ * NOTE: Since the Emit node is the last stage of a combine, which is added as farm Emitter 
+ *       filter, it must be defined as multi-output node.
+ * 
  */
 /* Author: Massimo Torquati
  *
@@ -52,7 +54,7 @@ struct Generator: ff_node_t<long> {
     int ntasks;
 };
 
-struct Emitter: ff_node_t<long> { //ff_monode_t<long> {
+struct Emit: ff_monode_t<long> {
     enum { HowMany=1 };
     long *svc(long* in) {
         for(long i=0;i<HowMany;++i) {
@@ -60,27 +62,52 @@ struct Emitter: ff_node_t<long> { //ff_monode_t<long> {
         }
         return GO_ON;
     }
+
+    void eosnotify(ssize_t ) {
+        std::cout << "Emitter eosnotify EOS received\n";
+    }
+
+    
 };
 struct Filter1: ff_node_t<long> {
     long *svc(long *in) {
         return in;
+    }
+    void eosnotify(ssize_t ) {
+        std::cout << "Filter1 EOS received\n";
     }
 };
 struct Filter2: ff_node_t<long> {
     long *svc(long *in) {
         return in;
     }
+    void eosnotify(ssize_t ) {
+        std::cout << "Filter2 EOS received\n";
+    }
+
+
 };
 struct Worker: ff_node_t<long> {
     long *svc(long *in) {
         if (get_my_id() == 0) usleep(10000);
         return in;
     }
+
+    void eosnotify(ssize_t ) {
+        std::cout << "Worker" << get_my_id() << " eosnotify EOS received\n";
+    }
+
+    
 };
-struct Collector: ff_node_t<long> {  //ff_minode_t<long> {
+struct Coll: ff_node_t<long> {
     long *svc(long *in) {
         return in;
     }
+
+    void eosnotify(ssize_t ) {
+        std::cout << "Collector EOS received\n";
+    }
+    
 };
 struct Gatherer: ff_node_t<long> {
     Gatherer(long ntasks):ntasks(ntasks) {}
@@ -115,12 +142,12 @@ int main(int argc, char* argv[]) {
     Generator Gen(ntasks);
     Filter1 Fil1;
     Filter2 Fil2;    
-    Emitter E;
-    Collector C;
+    Emit E;
+    Coll C;
     std::vector<std::unique_ptr<ff_node>> W;
     for(int i=0;i<nworkers;++i) 
         W.push_back(make_unique<Worker>());    
-    Gatherer Sink(Emitter::HowMany * ntasks);
+    Gatherer Sink(Emit::HowMany * ntasks);
 
     auto First  = combine_nodes(Gen, combine_nodes(Fil1, E));
     auto Third  = combine_nodes(combine_nodes(C,Fil2), Sink);

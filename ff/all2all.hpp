@@ -65,7 +65,6 @@ protected:
         }
         
         if (workers1[0]->isPipe()) {
-
             // all other Workers must be pipe
             for(size_t i=1;i<workers1.size();++i) {
                 if (!workers1[i]->isPipe()) {
@@ -75,9 +74,10 @@ protected:
             }
             
             if (!workers1[0]->isMultiOutput()) {
-                error("A2A, workers of the first set can be pipelines but only if they are multi-output (automatic transformation not yet supported)\n");
+                error("A2A, workers of the first set can be pipelines but only if they are multi-output (automatic transformation NOT YET SUPPORTED)\n");
                 return -1;
             }
+
             ff_node* last = ispipe_getlast(workers1[0]); // NOTE: we suppose homogeneous first set
             assert(last);
             if (last->isFarm() && !last->isOFarm()) { // standard farm ...
@@ -85,21 +85,45 @@ protected:
                     svector<ff_node*> w1;
                     last->get_out_nodes(w1);
                     if (!w1[0]->isMultiOutput()) { // NOTE: we suppose homogeneous workers
-                        error("A2A, workers of the first set are pipelines but their last stage are not multi-output (automatic transformation not yet supported)\n");
+                        error("A2A, workers (farm/ofarm) of the first set are pipelines but their last stage is not multi-output (automatic transformation NOT YET SUPPORTED)\n");
                         return -1;
                     }
                 }
             }
+            // since by default the a2a is multi-output, we have to check if its workers
+            // are multi-output
             if (last->isAll2All()) {
                 svector<ff_node*> w1;
                 last->get_out_nodes(w1);
                 if (!w1[0]->isMultiOutput()) { // NOTE: we suppose homogeneous second set
-                    error("A2A, workers of the first set are pipelines but their last stage are not multi-output (automatic transformation not yet supported)\n");                    
+                    error("A2A, workers (a2a) of the first set are pipelines but their last stage is not multi-output (automatic transformation NOT YET SUPPORTED)\n");
                     return -1;
                 }
             }
         }
-       
+        if (workers2[0]->isPipe()) {
+            // all other Workers must be pipe
+            for(size_t i=1;i<workers2.size();++i) {
+                if (!workers2[i]->isPipe()) {
+                    error("A2A, workers of the second set are not homogeneous, all of them must be of the same kind (e.g., all pipelines)\n");
+                    return -1;
+                }
+            }
+            
+            if (!workers2[0]->isMultiInput()) {
+                error("A2A, workers of the second set can be pipelines but only if they are multi-input (automatic transformation NOT YET SUPPORTED)\n");
+                return -1;
+            }
+            // since by default the a2a is multi-input, we have to check if its workers
+            // are multi-input
+            svector<ff_node*> w1;
+            workers2[0]->get_in_nodes(w1);
+            if (!w1[0]->isMultiInput()) { // NOTE: we suppose homogeneous second set
+                error("A2A, workers of the second set are pipelines but their first stage is not multi-input (automatic transformation NOT YET SUPPORTED)\n");
+                return -1;
+            }
+        }
+        
         // checking L-Workers
         if (!workers1[0]->isMultiOutput()) {  // NOTE: we suppose all others to be the same
             // the nodes in the first set cannot be multi-input nodes without being
@@ -175,7 +199,6 @@ protected:
             for(size_t i=0;i<nworkers1;++i)
                 workers1[i]->get_out_nodes(L);
             if (L.size()==0) L=workers1;
-
             svector<ff_node*> R;
             for(size_t i=0;i<nworkers2;++i)
                 workers2[i]->get_in_nodes(R);

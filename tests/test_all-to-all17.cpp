@@ -29,11 +29,11 @@
  *   Left -->|    
  *           |    | -> pipe(Right -> Right)
  *     ...   | -->|  
- *           |    | -> comb(Right,Right)
+ *           |    | -> pipe(comb(Right,Right))
  *   Left -->|
  *                          
  * In this simple test, the right-hand side Workers are "heterogeneous", the top one is 
- * a pipeline (starting with a multi-input node) and the bottom one is a combine node. 
+ * a pipeline (starting with a multi-input node), whereas the bottom one is a pipeline of a single combine node. 
  */
 /*
  *
@@ -81,7 +81,9 @@ int main(int argc, char* argv[]) {
     pipe.add_stage(new Right(false), true);
     W2.push_back(&pipe);
     ff_comb comb(new Right(true), new Right(false), true,true);
-    W2.push_back(&comb);
+    ff_pipeline pipe1;
+    pipe1.add_stage(&comb);
+    W2.push_back(&pipe1);
   
     ff_a2a a2a;
     a2a.add_firstset(W1, 0, true);
