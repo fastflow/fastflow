@@ -180,12 +180,7 @@ protected:
     inline pthread_cond_t    &get_prod_c()  { return gt->get_prod_c(); }
     inline pthread_mutex_t   &get_cons_m()  { return gt->get_cons_m(); }
     inline pthread_cond_t    &get_cons_c()  { return gt->get_cons_c(); }
-
     
-    void set_input_channelid(ssize_t id, bool fromin=true) {
-        gt->set_input_channelid(id, fromin);
-    }
-
     virtual inline void get_in_nodes(svector<ff_node*>&w) {
         size_t len=w.size();
         // it is possible that the multi-input node is register
@@ -284,6 +279,10 @@ public:
         return 0; 
     }
 
+    void set_input_channelid(ssize_t id, bool fromin=true) {
+        gt->set_input_channelid(id, fromin);
+    }
+    
     /**
      * \brief Assembly a input channel
      *
@@ -301,6 +300,11 @@ public:
     
     virtual bool isMultiInput() const { return true;}
 
+
+    void set_running(int r) {
+        gt->running = r;
+    }
+    
     /**
      * \brief Skip first pop
      *
@@ -639,7 +643,10 @@ public:
         w += outputNodesFeedback;
     }
 
-
+    void set_running(int r) {
+        lb->running = r;
+    }
+    
     /**
      * \brief Skips the first pop
      *
@@ -655,23 +662,25 @@ public:
      *
      * \return true if successful, false otherwise
      */
-    inline bool ff_send_out_to(void *task, int id, unsigned long retry=((unsigned long)-1),
-                               unsigned long ticks=(ff_node::TICKS2WAIT)) {
+    virtual inline bool ff_send_out_to(void *task, int id, unsigned long retry=((unsigned long)-1),
+                                       unsigned long ticks=(ff_node::TICKS2WAIT)) {
         // NOTE: this callback should be set only if the multi-output node is part of
         // a composition and the node is not the last stage
-        if (callback) return  callback(task,retry,ticks, callback_arg);
+        if (callback) return  callback(task,id, retry,ticks, callback_arg);
         return lb->ff_send_out_to(task,id,retry,ticks);
     }
     
-    inline bool ff_send_out(void * task, 
+    inline bool ff_send_out(void * task, int id=0,
                      unsigned long retry=((unsigned long)-1),
                      unsigned long ticks=(ff_node::TICKS2WAIT)) {
         // NOTE: this callback should be set only if the multi-output node is part of
         // a composition and it is not the last stage 
-        if (callback) return  callback(task,retry,ticks,callback_arg);
+        if (callback) return  callback(task,id, retry,ticks,callback_arg);
         return lb->schedule_task(task,retry,ticks);
     }
-    
+
+    // TODO: broadcast_task should have callback as in ff_send_out
+    //
     inline void broadcast_task(void *task) {
         lb->broadcast_task(task);
     }
@@ -857,12 +866,10 @@ struct ff_monode_t: ff_monode {
 struct internal_mo_transformer: ff_monode {
     internal_mo_transformer(ff_node* n, bool cleanup=false):
         ff_monode(n),cleanup(cleanup),n(n) {
-        assert(!n->isMultiOutput());
     }
 
     template<typename T>
     internal_mo_transformer(const T& _n) {
-        assert(!_n.isMultiOutput());
         T *t = new T(_n);
         assert(t);
         n = t;
@@ -901,14 +908,19 @@ struct internal_mo_transformer: ff_monode {
         ff_monode::set_id(id);
     }
 
+    void registerCallback(bool (*cb)(void *,int,unsigned long,unsigned long,void *), void * arg) {
+        n->registerCallback(cb,arg);
+    }
+
     int dryrun() {
         if (prepared) return 0;
         if (n) {
-            n->registerCallback(ff_send_out_motransformer, this);
+            if (!n->callback)
+                n->registerCallback(ff_send_out_motransformer, this);
         }
         return ff_monode::dryrun();
     }
-
+    
     int run(bool skip_init=false) {
         assert(n);
         if (!prepared) {
@@ -924,13 +936,14 @@ struct internal_mo_transformer: ff_monode {
         return ff_monode::run(skip_init);
     }
 
-    static inline bool ff_send_out_motransformer(void * task,
+       
+    static inline bool ff_send_out_motransformer(void * task, int id, 
                                                  unsigned long retry,
                                                  unsigned long ticks, void *obj) {
-        bool r= ((internal_mo_transformer *)obj)->ff_send_out(task, retry, ticks);
+        bool r= ((internal_mo_transformer *)obj)->ff_send_out_to(task, id, retry, ticks);
         return r;
     }
-    
+
     bool cleanup;
     ff_node *n=nullptr;
 };
@@ -968,7 +981,7 @@ struct internal_mi_transformer: ff_minode {
         if (cleanup && n)
             delete n;
     }
-    inline void* svc(void*task) {return n->svc(task);}
+    inline void* svc(void*task) { return n->svc(task);  }
 
     int set_input(const svector<ff_node *> & w) {
         n->neos += w.size();
@@ -991,14 +1004,26 @@ struct internal_mi_transformer: ff_minode {
         return 0;
     }    
 
-    void registerCallback(bool (*cb)(void *,unsigned long,unsigned long,void *), void * arg) {
+    void registerCallback(bool (*cb)(void *,int,unsigned long,unsigned long,void *), void * arg) {
         n->registerCallback(cb,arg);
     }
-    
+
     int set_output_buffer(FFBUFFER * const o) {
-        return ff_minode::getgt()->set_output_buffer(o);
+        return n->set_output_buffer(o);
     }
 
+    bool init_output_blocking(pthread_mutex_t   *&m,
+                              pthread_cond_t    *&c,
+                              bool feedback=true) {
+        return n->init_output_blocking(m,c,feedback);
+    }
+    
+    void set_output_blocking(pthread_mutex_t   *&m,
+                             pthread_cond_t    *&c,
+                             bool canoverwrite=false) {
+        n->set_output_blocking(m,c, canoverwrite);
+    }
+        
     inline void eosnotify(ssize_t id) { n->eosnotify(id); }
 
     void set_id(ssize_t id) {
