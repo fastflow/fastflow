@@ -47,10 +47,10 @@ namespace ff {
 template<typename IN_t, typename OUT_t=IN_t>
 class ff_nodeSelector: public ff_node_t<IN_t,OUT_t> {
 protected:
-    static bool ff_send_out_selector(void * task,
+    static bool ff_send_out_selector(void * task,int id,
                                      unsigned long retry,
                                      unsigned long ticks, void *obj) {
-        return reinterpret_cast<ff_node*>(obj)->ff_send_out(task, retry, ticks);
+        return reinterpret_cast<ff_node*>(obj)->ff_send_out(task, id, retry, ticks);
     }
 
 

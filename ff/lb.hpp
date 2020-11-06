@@ -412,11 +412,11 @@ protected:
      * \return The status of scheduled task, which can be either \p true or \p
      * false.
      */
-    static inline bool ff_send_out_emitter(void * task,
+    static inline bool ff_send_out_emitter(void * task,int id,
                                            unsigned long retry,
                                            unsigned long ticks, void *obj) {
         
-
+        (void)id;
         bool r= ((ff_loadbalancer *)obj)->schedule_task(task, retry, ticks);
 #if defined(FF_TASK_CALLBACK)
         // used to notify that a task has been sent out

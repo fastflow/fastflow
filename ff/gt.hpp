@@ -307,9 +307,10 @@ protected:
 
     void set_input_channelid(ssize_t id, bool fromin=true) { channelid = id; frominput=fromin;}
     
-    static bool ff_send_out_collector(void * task,
+    static bool ff_send_out_collector(void * task, int id,
                                       unsigned long retry, 
                                       unsigned long ticks, void *obj) {
+        (void)id;
         bool r = ((ff_gatherer *)obj)->push(task, retry, ticks);
 #if defined(FF_TASK_CALLBACK)
         if (r) ((ff_gatherer *)obj)->callbackOut(obj);

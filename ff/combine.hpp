@@ -73,7 +73,7 @@ class ff_comb: public ff_minode {
     friend class ff_a2a;
     
     // used if the last stage has no output channel
-    static bool devnull(void*,unsigned long, unsigned long, void*) {return true;}
+    static bool devnull(void*,int,unsigned long, unsigned long, void*) {return true;}
 
 private:    
     void registerAllGatherCallback(int (*cb)(void *,void **, void*), void * arg) {
@@ -291,7 +291,7 @@ protected:
         return ff_node::put(ptr);
     }
        
-    void registerCallback(bool (*cb)(void *,unsigned long,unsigned long,void *), void * arg) {
+    void registerCallback(bool (*cb)(void *,int,unsigned long,unsigned long,void *), void * arg) {
         comp_nodes[1]->registerCallback(cb,arg);
     }
     
@@ -343,15 +343,9 @@ protected:
             n2->get_out_nodes(w);
             if (w.size()==0) 
                 n2->registerCallback(devnull, nullptr);   // devnull callback
-            else {
-                // NOTE: if the last stage of a composition is a multi-output node
-                // we must be sure that the callback is not set.
-                // see comments in lb.hpp (dryrun) and in multinode.hpp (ff_monode::ff_send_out_to)
-                n2->registerCallback(nullptr, nullptr); // resetting callback
-            }
         } else 
             if (n2->get_out_buffer() == nullptr)
-            n2->registerCallback(devnull, nullptr);   // devnull callback
+                n2->registerCallback(devnull, nullptr);   // devnull callback
 
         
         prepared = true;
@@ -622,15 +616,15 @@ protected:
         if (getLast()->isMultiOutput()) return nullptr;
         return comp_nodes[1]->get_out_buffer();
     }
-    inline bool ff_send_out(void * task, 
+    inline bool ff_send_out(void * task, int id=0,
                             unsigned long retry=((unsigned long)-1),
                             unsigned long ticks=(ff_node::TICKS2WAIT)) { 
-        return comp_nodes[1]->ff_send_out(task,retry,ticks);
+        return comp_nodes[1]->ff_send_out(task,id,retry,ticks);
     }
 
-    inline bool ff_send_out_to(void * task,int, unsigned long retry=((unsigned long)-1),
+    inline bool ff_send_out_to(void * task,int id, unsigned long retry=((unsigned long)-1),
                                unsigned long ticks=(ff_node::TICKS2WAIT)) { 
-        return comp_nodes[1]->ff_send_out(task,retry,ticks);
+        return comp_nodes[1]->ff_send_out(task,id,retry,ticks);
     }
 
     const struct timeval getstarttime() const {

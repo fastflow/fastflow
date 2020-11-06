@@ -91,7 +91,7 @@ protected:
             task_f_t *task = &(TASKS[ntasks++ % maxMsgs]);
             task->P     = P;
             task->wtask = wtask;
-            while(!ff_send_out(task, 1)) ff_relax(1);
+            while(!ff_send_out(task, -1, 1)) ff_relax(1);
         }
 
         void *svc(void *) {

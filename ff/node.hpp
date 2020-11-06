@@ -511,7 +511,7 @@ private:
     bool              my_own_thread;
 
     ff_thread       * thread;       /// A \p thWorker object, which extends the \p ff_thread class 
-    bool (*callback)(void *,unsigned long,unsigned long, void *);
+    bool (*callback)(void *, int, unsigned long,unsigned long, void *);
     void            * callback_arg;
     BARRIER_T       * barrier;      /// A \p Barrier object
     struct timeval tstart;
@@ -1125,10 +1125,10 @@ public:
      * \param ticks delay between successive retries
      * 
      */
-    virtual bool ff_send_out(void * task, 
+    virtual bool ff_send_out(void * task, int id=0,
                              unsigned long retry=((unsigned long)-1),
                              unsigned long ticks=(TICKS2WAIT)) { 
-        if (callback) return  callback(task,retry,ticks,callback_arg);
+        if (callback) return  callback(task,id,retry,ticks,callback_arg);
         bool r =Push(task,retry,ticks);
 #if defined(FF_TASK_CALLBACK)
         if (r) callbackOut();
@@ -1207,7 +1207,7 @@ protected:
     /** 
      *  used for composition (see ff_comb)
      */
-    static inline bool ff_send_out_comp(void * task,unsigned long /*retry*/,unsigned long /*ticks*/, void *obj) {
+    static inline bool ff_send_out_comp(void * task, int, unsigned long /*retry*/,unsigned long /*ticks*/, void *obj) {
         return ((ff_node *)obj)->push_comp_local(task);
     }
 
@@ -1280,7 +1280,7 @@ protected:
             in_active= onoff;
     }
 
-    virtual void registerCallback(bool (*cb)(void *,unsigned long,unsigned long,void *), void * arg) {
+    virtual void registerCallback(bool (*cb)(void *,int,unsigned long,unsigned long,void *), void * arg) {
         callback=cb;
         callback_arg=arg;
     }
@@ -1600,8 +1600,9 @@ struct ff_buffernode: ff_node {
         return 0;
     }
     
-    bool ff_send_out(void *ptr, unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {
-        return ff_node::ff_send_out(ptr,retry,ticks);
+    bool ff_send_out(void *ptr, int id=0,
+                     unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {
+        return ff_node::ff_send_out(ptr,id,retry,ticks);
     }
     bool gather_task(void **task, unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {    
         bool r =ff_node::Pop(task,retry,ticks);
