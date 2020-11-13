@@ -1125,7 +1125,7 @@ public:
      * \param ticks delay between successive retries
      * 
      */
-    virtual bool ff_send_out(void * task, int id=0,
+    virtual bool ff_send_out(void * task, int id=-1,
                              unsigned long retry=((unsigned long)-1),
                              unsigned long ticks=(TICKS2WAIT)) { 
         if (callback) return  callback(task,id,retry,ticks,callback_arg);
@@ -1600,7 +1600,7 @@ struct ff_buffernode: ff_node {
         return 0;
     }
     
-    bool ff_send_out(void *ptr, int id=0,
+    bool ff_send_out(void *ptr, int id=-1,
                      unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {
         return ff_node::ff_send_out(ptr,id,retry,ticks);
     }
