@@ -670,7 +670,7 @@ public:
         return lb->ff_send_out_to(task,id,retry,ticks);
     }
     
-    inline bool ff_send_out(void * task, int id=0,
+    inline bool ff_send_out(void * task, int id=-1,
                      unsigned long retry=((unsigned long)-1),
                      unsigned long ticks=(ff_node::TICKS2WAIT)) {
         // NOTE: this callback should be set only if the multi-output node is part of

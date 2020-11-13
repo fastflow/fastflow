@@ -616,7 +616,7 @@ protected:
         if (getLast()->isMultiOutput()) return nullptr;
         return comp_nodes[1]->get_out_buffer();
     }
-    inline bool ff_send_out(void * task, int id=0,
+    inline bool ff_send_out(void * task, int id=-1,
                             unsigned long retry=((unsigned long)-1),
                             unsigned long ticks=(ff_node::TICKS2WAIT)) { 
         return comp_nodes[1]->ff_send_out(task,id,retry,ticks);
