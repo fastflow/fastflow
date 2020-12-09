@@ -25,6 +25,13 @@
  ****************************************************************************
  */
 
+/*
+ *
+ *   Source --->  FlatMap ---> Map ---> Sink
+ *
+ *
+ *
+ */
 
 #include <mutex>
 #include <iostream>
@@ -39,7 +46,7 @@ struct S_t {
     float f;
 };
 
-long qlen    = 2;
+long qlen    = 1;
 long howmany = 10;
 long ntasks  = 1000;
 
@@ -72,6 +79,7 @@ struct FlatMap: ff_monode_t<S_t> {
             *p = *in;
             ff_send_out(p);
         }
+        StaticAllocator::dealloc(in);
         return GO_ON;
 	}
     StaticAllocator *SAlloc = nullptr;
@@ -94,7 +102,8 @@ struct Sink: ff_minode_t<S_t> {
             std::lock_guard<std::mutex> lck (mtx);
             std::cout << "Sink ERROR " << in->t << ", " << in->f << " cnt = " << cnt << "\n";
             abort();
-        }            
+        }
+        StaticAllocator::dealloc(in);
         if (cnt2 == howmany) {
             cnt++;
             cnt2= 0;
@@ -113,13 +122,12 @@ int main(int argc, char* argv[]) {
     Map     M;
     Sink    Sk;
 
-
     StaticAllocator* SourceAlloc  = new StaticAllocator(qlen + 2, sizeof(S_t)); 
     StaticAllocator* FlatMapAlloc = new StaticAllocator(qlen*2 + 3, sizeof(S_t));
 
     Sc.SAlloc = SourceAlloc;
     FM.SAlloc = FlatMapAlloc;
-    
+
     ff_pipeline pipeMain(false, qlen, qlen, true);
 
     pipeMain.add_stage(&Sc);

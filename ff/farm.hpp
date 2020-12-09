@@ -709,17 +709,7 @@ protected:
         }
     }
 
-    virtual inline pthread_mutex_t   &get_cons_m()        { return *(lb->cons_m);}
     virtual inline pthread_cond_t    &get_cons_c()        { return *(lb->cons_c);}
-
-    virtual inline pthread_mutex_t   &get_prod_m()        {
-        assert(collector && !collector_removed);
-        return *((collector==(ff_node*)gt) ? gt->prod_m:collector->prod_m);
-    }
-    virtual inline pthread_cond_t    &get_prod_c()        {
-        assert(collector && !collector_removed);
-        return *((collector==(ff_node*)gt) ? gt->prod_c:collector->prod_c);
-    }
 
 public:
     enum { DEF_IN_BUFF_ENTRIES=DEFAULT_BUFFER_CAPACITY,

@@ -72,7 +72,7 @@ public:
 
     // NOTE:
     //  - TICKS2WAIT should be a valued profiled for the application
-    //    Consider to redifine losetime_in and losetime_out for your app.
+    //    Consider to redefine losetime_in and losetime_out for your app.
     //
     enum {TICKS2WAIT=1000};
 protected:
@@ -116,10 +116,6 @@ protected:
         assert(1==0);
     }
 
-    virtual inline pthread_mutex_t   &get_prod_m()       { return *prod_m;}
-    virtual inline pthread_cond_t    &get_prod_c()       { return *prod_c;}
-    
-    virtual inline pthread_mutex_t   &get_cons_m()       { return *cons_m;}
     virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
     
     /**
@@ -181,13 +177,13 @@ protected:
 #endif
 
     /**
-     * \brief Gets the number of tentatives before wasting some times
+     * \brief Gets the number of attempts before wasting some times
      *
-     * The number of tentative before wasting some times and than retry.
+     * The number of attempts before wasting some times and than retry.
      *
      * \return The number of workers.
      */
-    virtual inline size_t ntentative() { return running;}
+    virtual inline size_t nattempts() { return running;}
 
     /**
      * \brief Loses some time before sending the message to output buffer
@@ -235,7 +231,7 @@ protected:
      */
     virtual inline bool schedule_task(void * task, 
                                       unsigned long retry=((unsigned long)-1), 
-                                      unsigned long /*ticks*/=0) {
+                                      unsigned long ticks=TICKS2WAIT) {
         unsigned long cnt;
         if (blocking_out) {
             do {
@@ -253,7 +249,7 @@ protected:
                         return true;
                     } 
                     ++cnt;
-                    if (cnt == ntentative()) break; 
+                    if (cnt == nattempts()) break; 
                 } while(1);
                 
                 struct timespec tv;
@@ -278,9 +274,9 @@ protected:
                 }
                 ++cnt;
                 if (cnt>=retry) { nextw=-1; return false; }
-                if (cnt == ntentative()) break; 
+                if (cnt == nattempts()) break; 
             } while(1);
-            losetime_out();
+            losetime_out(ticks);
         } while(1);
         return false;
     }
@@ -443,7 +439,22 @@ protected:
             assert((task == FF_EOS) || (task == FF_EOS_NOFREEZE));
         }
     }
-    
+
+    int get_next_free_channel(bool forever=true) {
+        long x=1;
+        const size_t attempts = (forever ? (size_t)-1 : running);
+        do {
+            int nextone = (nextw + x) % running;
+            FFBUFFER* buf = workers[nextone]->get_in_buffer();
+            
+            if (buf->buffersize()>buf->length()) {
+                nextw = (nextw + x - 1) % running;
+                return nextone;
+            }
+            if ((x % running) == 0) losetime_out();
+        } while((size_t)++x <= attempts);
+        return -1;
+    }
 
 #if defined(FF_TASK_CALLBACK)
     virtual void callbackIn(void  *t=NULL) { if (filter) filter->callbackIn(t);  }
@@ -1129,7 +1140,7 @@ public:
      * \return 0 if successful, otherwise -1 is returned.
      */
     int runlb(bool=false, ssize_t nw=-1) {
-        dryrun();        
+        ff_loadbalancer::dryrun();        
         running = (nw<=0)?(feedbackid>0?feedbackid:workers.size()):nw;
         
         if (this->spawn(filter?filter->getCPUId():-1) == -2) {

@@ -115,7 +115,7 @@ protected:
     
     int prepare() {
         if (prepared) return 0;
-        if (dryrun()<0) return -1;
+        if (ff_minode::dryrun()<0) return -1;
         prepared=true;
         return 0;
     }
@@ -176,9 +176,6 @@ protected:
         ff_node::set_output_blocking(m,c, canoverwrite);
     }
 
-    inline pthread_mutex_t   &get_prod_m()  { return gt->get_prod_m(); }
-    inline pthread_cond_t    &get_prod_c()  { return gt->get_prod_c(); }
-    inline pthread_mutex_t   &get_cons_m()  { return gt->get_cons_m(); }
     inline pthread_cond_t    &get_cons_c()  { return gt->get_cons_c(); }
     
     virtual inline void get_in_nodes(svector<ff_node*>&w) {
@@ -487,7 +484,7 @@ protected:
     
     int prepare() {
         if (prepared) return 0;
-        if (dryrun()<0) return -1;
+        if (ff_monode::dryrun()<0) return -1;
         prepared=true;
         return 0;
     }
@@ -520,10 +517,6 @@ protected:
         ff_node::set_output_blocking(m,c, canoverwrite);
     }
 
-    virtual inline pthread_mutex_t   &get_prod_m()        { return lb->get_prod_m();}
-    virtual inline pthread_cond_t    &get_prod_c()        { return lb->get_prod_c();}
-
-    virtual inline pthread_mutex_t   &get_cons_m()        { return lb->get_cons_m();}
     virtual inline pthread_cond_t    &get_cons_c()        { return lb->get_cons_c();}
 
 public:
@@ -658,6 +651,14 @@ public:
     }
 
     /**
+     * \brief Provides the next channel id that will be selected for sending out the task
+     *  
+     */    
+    int get_next_free_channel(bool forever=true) {
+        return lb->get_next_free_channel(forever);
+    }
+    
+    /**
      * \brief Sends one task to a specific node id.
      *
      * \return true if successful, false otherwise
@@ -667,6 +668,7 @@ public:
         // NOTE: this callback should be set only if the multi-output node is part of
         // a composition and the node is not the last stage
         if (callback) return  callback(task,id, retry,ticks, callback_arg);
+        assert(id>=0);
         return lb->ff_send_out_to(task,id,retry,ticks);
     }
     
@@ -940,7 +942,7 @@ struct internal_mo_transformer: ff_monode {
     static inline bool ff_send_out_motransformer(void * task, int id, 
                                                  unsigned long retry,
                                                  unsigned long ticks, void *obj) {
-        bool r= ((internal_mo_transformer *)obj)->ff_send_out_to(task, id, retry, ticks);
+        bool r= ((internal_mo_transformer *)obj)->ff_send_out_to(task, (id<0?0:id), retry, ticks);
         return r;
     }
 
@@ -1030,7 +1032,7 @@ struct internal_mi_transformer: ff_minode {
         if (n) n->set_id(id);
         ff_minode::set_id(id);
     }
-    
+
     int run(bool skip_init=false) {
         assert(n);
         if (!prepared) {

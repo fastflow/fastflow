@@ -36,6 +36,10 @@
  *   Author: Massimo Torquati
  *      
  */
+// This file contains the ff_comb combiner building block class
+// the ff_comb_t class, which is the type-preserving version of ff_comb,
+// and some helper functions, e.g., combine_nodes, combine_farms, etc.
+
 
 #include <ff/node.hpp>
 #include <ff/multinode.hpp>
@@ -141,7 +145,7 @@ public:
             if (w.size() == 0)  getFirst()->skipfirstpop(true);
             return ff_minode::run();
         }
-
+        
         if (ff_node::run(true)<0) return -1;
         return 0;
     }
@@ -324,17 +328,17 @@ protected:
     int prepare() {
         if (prepared) return 0;
         connectCallback();
-        dryrun();
 
         // checking if the first node is a multi-input node
         ff_node *n1 = getFirst();
         if (n1->isMultiInput()) {
             // here we substitute the gt
             ((ff_minode*)n1)->setgt(ff_minode::getgt());
-
-            if (ff_minode::prepare()<0) return -1;
         }
-
+        // dryrun should be executed here because the gt of the
+        // first node might have been substituted
+        ff_comb::dryrun();
+        
         // registering a special callback if the last stage does
         // not have an output channel
         ff_node *n2 = getLast();
@@ -486,7 +490,7 @@ protected:
     }
    
     void eosnotify(ssize_t id=-1) {
-        comp_nodes[0]->eosnotify();
+        comp_nodes[0]->eosnotify(id);
         
         ++neos;
         // if the first node is multi-input or is a comp passed as filter to a farm collector,
@@ -539,7 +543,10 @@ protected:
             r=ff_node::set_input_buffer(w[0]->get_in_buffer());
             return r;
         }
-        return ff_node::create_input_buffer(nentries,fixedsize);
+        int r = ff_node::create_input_buffer(nentries,fixedsize);
+        if (r<0) return r;
+        r = getFirst()->set_input_buffer(ff_node::get_in_buffer());
+        return r;
     }
     int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         return comp_nodes[1]->create_output_buffer(nentries,fixedsize);
@@ -580,7 +587,14 @@ protected:
                 w[i]->set_output_blocking(m,c);
             return true;
         }
-        return ff_node::init_input_blocking(m,c);
+        bool r = ff_node::init_input_blocking(m,c);
+        if (!r) return false;
+        // if the first node is a standard node or a multi-output node
+        // then the comb node and the first node share the same
+        // cond variable. This is due to the put_done method in the lb
+        // (i.e. the prev node is a multi-output or an emitter node) 
+        n->cons_c = c; 
+        return true;   
     }
     // producer
     bool init_output_blocking(pthread_mutex_t   *&m,
@@ -598,14 +612,6 @@ protected:
     // uses as output channel(s) the one(s) of the second node.
     // these functions should not be called if the node is multi-output
     inline bool  get(void **ptr)                 { return comp_nodes[1]->get(ptr);}
-    inline pthread_mutex_t   &get_prod_m()       { return comp_nodes[1]->get_prod_m();}
-    inline pthread_cond_t    &get_prod_c()       { return comp_nodes[1]->get_prod_c();}
-
-    inline pthread_mutex_t   &get_cons_m()  {
-        ff_node *n = getFirst();
-        if (n->isMultiInput()) return ff_minode::get_cons_m();
-        return ff_node::get_cons_m();
-    }
     inline pthread_cond_t    &get_cons_c()  {
         ff_node *n = getFirst();
         if (n->isMultiInput()) return ff_minode::get_cons_c();
@@ -652,6 +658,61 @@ private:
     ssize_t neos=0;
 };
 
+/* 
+ * Type-preserving combiner building block 
+ * 
+ */
+template <typename TIN, typename T, typename TOUT>
+struct ff_comb_t: ff_comb {
+	typedef TIN  IN_t;
+	typedef T    T_t;
+	typedef TOUT OUT_t;
+
+	ff_comb_t(ff_node_t<TIN, T>* n1, ff_node_t<T,TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_node_t<TIN, T>* n1, ff_minode_t<T,TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_node_t<TIN, T>* n1, ff_monode_t<T,TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+	template<typename S>
+	ff_comb_t(ff_node_t<TIN, T>* n1, ff_comb_t<T, S, TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+
+
+	ff_comb_t(ff_minode_t<TIN, T>* n1, ff_node_t<T,TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_minode_t<TIN, T>* n1, ff_minode_t<T,TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_minode_t<TIN, T>* n1, ff_monode_t<T,TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+	template<typename S>
+	ff_comb_t(ff_minode_t<TIN, T>* n1, ff_comb_t<T, S, TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+	
+	ff_comb_t(ff_monode_t<TIN, T>* n1, ff_node_t<T,TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_monode_t<TIN, T>* n1, ff_minode_t<T,TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_monode_t<TIN, T>* n1, ff_monode_t<T,TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+	template<typename S>
+	ff_comb_t(ff_monode_t<TIN, T>* n1, ff_comb_t<T, S, TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+
+	template<typename S>
+	ff_comb_t(ff_comb_t<TIN, S, T>* n1, ff_node_t<T,TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+	template<typename S>
+	ff_comb_t(ff_comb_t<TIN, S, T>* n1, ff_minode_t<T,TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+	template<typename S>
+	ff_comb_t(ff_comb_t<TIN, S, T>* n1, ff_monode_t<T,TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}
+	template<typename S, typename W>
+	ff_comb_t(ff_comb_t<TIN, S, T>* n1, ff_comb_t<T, W, TOUT>* n2):
+		ff_comb(n1,n2,false,false) {}	
+};
+    
 
 /* *************************************************************************** *
  *                                                                             *

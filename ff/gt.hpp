@@ -117,22 +117,6 @@ protected:
             filter->set_output_blocking(m,c, canoverwrite);
         }
     }
-
-    inline pthread_mutex_t   &get_prod_m()       {
-        if (!prod_m && filter &&
-            ( (filter->get_out_buffer()!=nullptr) || filter->isMultiOutput() ) )  {
-            return filter->get_prod_m();
-        }    
-        return *prod_m;
-    }
-    inline pthread_cond_t    &get_prod_c()       {
-        if (!prod_c && filter &&
-            ( (filter->get_out_buffer()!=nullptr) || filter->isMultiOutput() ) )  {
-            return filter->get_prod_c();
-        }
-        return *prod_c;
-    }
-    inline pthread_mutex_t   &get_cons_m()  { return *cons_m; }
     inline pthread_cond_t    &get_cons_c()  { return *cons_c; }
 
     
@@ -160,11 +144,11 @@ protected:
     virtual inline void notifyeos(int /*id*/) {}
 
     /**
-     * \brief Gets the number of tentatives.
+     * \brief Gets the number of attempts.
      *
-     * The number of tentative before wasting some times and than retry 
+     * The number of attempts before wasting some times and than retry 
      */
-    virtual inline size_t ntentative() { return getnworkers();}
+    virtual inline size_t nattempts() { return getnworkers();}
 
     /**
      * \brief Loses the time out.
@@ -218,7 +202,7 @@ protected:
                 if (workers[nextr]->get(task)) {
                     return nextr;
                 }
-                else if (++cnt == ntentative()) break;
+                else if (++cnt == nattempts()) break;
             } while(1);
             if (blocking_in) {
                 struct timespec tv;
@@ -686,7 +670,7 @@ public:
     int dryrun() {
         running=workers.size();
         if (filter) {
-            if ((filter->get_out_buffer() == nullptr) && buffer)   // TODO WARNING: <----- TO BE CHECKED   vedi dryrun di lb.hpp
+            if ((filter->get_out_buffer() == nullptr) && buffer) 
                 filter->registerCallback(ff_send_out_collector, this);
             // setting the thread for the filter
             filter->setThread(this);
@@ -705,7 +689,7 @@ public:
      * \return 0 if successful, otherwise -1 is returned.
      */
     int run(bool=false) {
-        dryrun();
+        ff_gatherer::dryrun();
         
         if (this->spawn(filter?filter->getCPUId():-1)== -2) {
             error("GT, spawning GT thread\n");

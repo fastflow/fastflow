@@ -102,20 +102,22 @@ protected:
             const bool curr_single_standard      = (!nodes_list[i]->isMultiInput());
             // the farm is considered single_multiinput
             const bool curr_single_multiinput   = (!isa2a_curr && nodes_list[i]->isMultiInput());
-            const bool curr_multi_standard      = [&]() {
-                if (!isa2a_curr) return false;
-                const svector<ff_node*>& w1=isa2a_getfirstset(get_node(i));
-                assert(w1.size()>0);
-                if (w1[0]->isMultiInput()) return false; // NOTE: we suppose homogeneous first set
-                return true;
-            }();
             const bool curr_multi_multiinput    = [&]() {
                 if (!isa2a_curr) return false;
                 const svector<ff_node*>& w1=isa2a_getfirstset(get_node(i));
                 assert(w1.size()>0);
-                if (w1[0]->isMultiInput()) return true; // NOTE: we suppose homogeneous first set
+                for(size_t k=0;k<w1.size();++k) {
+                    svector<ff_node*> w2(1);
+                    w1[k]->get_in_nodes(w2);
+                    for(size_t j=0;j<w2.size();++j)
+                        if (w2[j]->isMultiInput()) return true;
+                }
                 return false;
             } ();
+            const bool curr_multi_standard      = [&]() {
+                if (!isa2a_curr) return false;
+                return !curr_multi_multiinput;
+            }();
             const bool isa2a_prev   = get_node_last(i-1)->isAll2All();
             const bool isfarm_prev  = get_node_last(i-1)->isFarm();
             const bool prev_isfarm_nocollector   = (isfarm_prev && !get_node_last(i-1)->isOFarm() && !(isfarm_withcollector(get_node_last(i-1))));
@@ -248,7 +250,6 @@ protected:
                         error("PIPE, init output blocking mode for node %d\n", i);
                         return -1;
                     }
-
                     // ------------------------------------------------------------
                 }
             }
@@ -267,6 +268,18 @@ protected:
                     nodes_list[i]->get_in_nodes(w);
                     assert(w.size() == 1);
                     if (nodes_list[i-1]->set_output_buffer(w[0]->get_in_buffer())<0) return -1;
+
+                    // blocking stuff --------------------------------------------
+                    if (!nodes_list[i]->init_input_blocking(m,c)) {
+                        error("PIPE, init input blocking mode for node %d\n", i);
+                        return -1;
+                    }                
+                    nodes_list[i-1]->set_output_blocking(m,c); 
+                    if (!nodes_list[i-1]->init_output_blocking(m,c)) {
+                        error("PIPE, init output blocking mode for node %d\n", i-1);
+                        return -1;
+                    }
+                    // -----------------------------------------------------------
                 } else {
                     if (prev_single_multioutput) {
                         if (a2a->create_input_buffer(in_buffer_entries, fixedsize)<0) return -1;
@@ -275,15 +288,7 @@ protected:
                         if (nodes_list[i-1]->set_output(w)<0) return -1;
                         
                         // blocking stuff --------------------------------------------
-                        w.clear();
-                        nodes_list[i]->get_in_nodes(w);
-                        assert(w.size() == W1.size());
-                        for(size_t j=0;j<w.size();++j) {
-                            if (!W1[j]->init_input_blocking(m,c)) return -1;
-                            w[j]->set_output_blocking(m,c);
-                            
-                            if (!w[j]->init_output_blocking(m,c)) return -1;
-                        }                                        
+                        if (!a2a->init_input_blocking(m,c)) return -1;
                         if (!nodes_list[i-1]->init_output_blocking(m,c)) {
                             error("PIPE, init output blocking mode for node %d\n", i-1);
                             return -1;
@@ -343,10 +348,14 @@ protected:
                 }
                 if (prev_single_multioutput) {
                     for(size_t j=0;j<W1.size();++j) {
-                        ff_node* t = new ff_buffernode(in_buffer_entries,fixedsize, j);
-                        internalSupportNodes.push_back(t);
-                        W1[j]->set_input(t);
-                        nodes_list[i-1]->set_output(t);
+                        svector<ff_node*> w(MAX_NUM_THREADS);
+                        W1[j]->get_in_nodes(w);
+                        for(size_t k=0;k<w.size();++k) {
+                            ff_node* t = new ff_buffernode(in_buffer_entries,fixedsize, j);
+                            internalSupportNodes.push_back(t);
+                            w[k]->set_input(t);
+                            nodes_list[i-1]->set_output(t);
+                        }
                     }
                 }                
                 if (prev_multi_standard) {
@@ -1510,17 +1519,7 @@ protected:
         nodes_list[last]->set_output_blocking(m,c, canoverwrite);
     }
 
-    virtual inline pthread_mutex_t   &get_cons_m()        { return nodes_list[0]->get_cons_m();}
     virtual inline pthread_cond_t    &get_cons_c()        { return nodes_list[0]->get_cons_c();}
-
-    virtual inline pthread_mutex_t &get_prod_m()        { 
-        const int last = static_cast<int>(nodes_list.size())-1;
-        return nodes_list[last]->get_prod_m();
-    }
-    virtual inline pthread_cond_t  &get_prod_c()        { 
-        const int last = static_cast<int>(nodes_list.size())-1;
-        return nodes_list[last]->get_prod_c();
-    }
 
     int create_input_buffer(int nentries, bool fixedsize) { 
         if (in) return -1;  

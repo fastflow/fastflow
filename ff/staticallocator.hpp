@@ -36,59 +36,84 @@
 #include <atomic>
 #include <new>
 
-/* Author:
- *  Massimo Torquati
- *
+/* Author: Massimo Torquati
+ * December 2020
  */
+
 
 
 namespace ff {
 
 class StaticAllocator {
 public:
-	StaticAllocator(const size_t nslot, const size_t slotsize):
-		nslot(nslot),slotsize(slotsize), cnt(0), segment(nullptr) {
+	StaticAllocator(const size_t _nslot, const size_t slotsize, const int nchannels=1):
+		ssize(slotsize), nchannels(nchannels), cnts(nchannels,0), segment(nullptr) {
 
+        assert(nchannels>0);
+        assert(slotsize>0);
+        ssize  = slotsize + sizeof(long*);
+
+        
+        // rounding up nslot to be multiple of nchannels
+        nslot = ((_nslot + nchannels -1) / nchannels) * nchannels;
+        slotsxchannel = nslot / nchannels;
+        
+        
 		void* result = 0;
-        result = mmap(NULL, nslot*slotsize, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+        result = mmap(NULL, nslot*ssize, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
         if (result == MAP_FAILED) abort();
         segment = (char*)result;
-        printf("allocated %ld bytes\n", nslot*slotsize);
+
+        // initialize the "header"
+        char* p = segment;
+        for(size_t i=0; i<nslot;++i) {
+            long** _p = (long**)p;
+            _p[0] = (long*)FF_GO_ON;  // this tells me that the slot is free!
+            p+=ssize;
+        }
 	}
 
 	~StaticAllocator() {
-		if (segment) munmap(segment, nslot*slotsize);
+		if (segment) munmap(segment, nslot*ssize);
 		segment=nullptr;
 	}
 
 	template<typename T>
-	void alloc(T*& p) {
-		size_t m  = cnt.fetch_add(1,std::memory_order_relaxed) % nslot;
-		char  *mp = segment + m*slotsize;
-		new (mp) T();
-		p = reinterpret_cast<T*>(mp);
+	void alloc(T*& p, int channel=0) {
+        assert(channel>=0 && channel<nchannels) ;
+        do {
+            size_t m  = cnts[channel]++ % slotsxchannel;
+            char  *mp = segment + (channel*slotsxchannel + m)*ssize;
+            long** _p = (long**)mp;
+            if (_p[0] == (long*)FF_GO_ON) {
+                _p[0] = (long*)FF_EOS;    // the slot is occupied 
+                p = new (mp+sizeof(long*)) T();
+                return;
+            }
+        } while(1);
 	}
-
-	template<typename T, typename S>
-	void realloc(T* in, S*& out) {
-        dealloc(in);
-        char  *mp = reinterpret_cast<char*>(in);
-		new (mp) S();
-		out = reinterpret_cast<S*>(mp);
-	}
-    
-protected:
 
 	template<typename T>
-	void dealloc(T* p) {
+	static inline void dealloc(T* p) {
 		p->~T();
+        long** _p = (long**)((char*)p-sizeof(long*));
+        _p[0] = (long*)FF_GO_ON;  // the slot is free and can be re-used
 	}
     
+	template<typename T, typename S>
+	void realloc(T* in, S*& out) {
+        in->~T();
+        char* mp = reinterpret_cast<char*>(in);
+        out = new (mp) S();
+	}
+        
 private:
-	const size_t nslot;
-	const size_t slotsize;
-	std::atomic_ullong cnt;
-	char *segment;
+	size_t nslot;                // total number of slots in the data segment
+    size_t slotsxchannel;        // how many slots for each sub data segment
+	size_t ssize;                // size of a data slot (real size + sizeof(long*)) 
+    int    nchannels;            // number of sub data segments
+    std::vector<size_t> cnts;    // counters
+	char *segment;               // data segment
 };
 
 };

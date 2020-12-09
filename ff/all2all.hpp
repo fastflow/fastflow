@@ -293,21 +293,25 @@ public:
      * e.g., a composition where the last stage is a multi-output node
      * 
      */
-    int add_firstset(const std::vector<ff_node *> & w, int ondemand=0, bool cleanup=false) {
+    template<typename T>
+    int add_firstset(const std::vector<T*> & w, int ondemand=0, bool cleanup=false) {
         if (workers1.size()>0) {
             error("A2A, add_firstset cannot be called multiple times\n");
             return -1;
-        }
+        }        
         if (w.size()==0) {
             error("A2A, try to add zero workers to the first set!\n");
             return -1; 
         }        
-        for(size_t i=0;i<w.size();++i) workers1.push_back(w[i]);
+        for(size_t i=0;i<w.size();++i) {
+            workers1.push_back(w[i]);
+        }
         workers1_to_free = cleanup;
         ondemand_chunk   = ondemand;
         return 0;        
     }
-    int change_firstset(const std::vector<ff_node*>& w, int ondemand=0, bool cleanup=false) {
+    template<typename T>
+    int change_firstset(const std::vector<T*>& w, int ondemand=0, bool cleanup=false) {
         workers1.clear();
         return add_firstset(w, ondemand, cleanup);
     }
@@ -315,7 +319,8 @@ public:
      * The nodes of the second set must be either standard ff_node or a node that is multi-input.
      * 
      */
-    int add_secondset(const std::vector<ff_node *> & w, bool cleanup=false) {
+    template<typename T>
+    int add_secondset(const std::vector<T*> & w, bool cleanup=false) {
         if (workers2.size()>0) {
             error("A2A, add_secondset cannot be called multiple times\n");
             return -1;
@@ -324,11 +329,14 @@ public:
             error("A2A, try to add zero workers to the second set!\n");
             return -1; 
         }        
-        for(size_t i=0;i<w.size();++i) workers2.push_back(w[i]);
+        for(size_t i=0;i<w.size();++i) {
+            workers2.push_back(w[i]);
+        }
         workers2_to_free = cleanup;
         return 0;
     }
-    int change_secondset(const std::vector<ff_node*>& w, bool cleanup=false) {
+    template<typename T>
+    int change_secondset(const std::vector<T*>& w, bool cleanup=false) {
         workers2.clear();
         return add_secondset(w, cleanup);
     }
@@ -678,14 +686,15 @@ protected:
         return 0;        
     }
     
-    bool init_input_blocking(pthread_mutex_t   *&,
-                             pthread_cond_t    *&,
+    bool init_input_blocking(pthread_mutex_t   *&m,
+                             pthread_cond_t    *&c,
                              bool /*feedback*/=true) {
         size_t nworkers1 = workers1.size();
         for(size_t i=0;i<nworkers1; ++i) {
-            pthread_mutex_t   *m        = NULL;
-            pthread_cond_t    *c        = NULL;
-            if (!workers1[i]->init_input_blocking(m,c)) return false;
+            pthread_mutex_t   *m1        = NULL;
+            pthread_cond_t    *c1        = NULL;
+            if (!workers1[i]->init_input_blocking(m1,c1)) return false;
+            if (nworkers1==1) { m=m1; c=c1; }
         }
         return true;
     }
