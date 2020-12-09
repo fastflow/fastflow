@@ -616,17 +616,13 @@ protected:
                                             pthread_cond_t    *&c,
                                             bool canoverwrite=false) {
         assert(canoverwrite ||
-               (p_cons_m == nullptr && p_cons_c == nullptr) ||
-               (p_cons_m == m && p_cons_c == c));
+               (p_cons_c == nullptr) ||
+               (p_cons_c == c));
         FF_IGNORE_UNUSED(canoverwrite);
-        p_cons_m = m, p_cons_c = c;
+        FF_IGNORE_UNUSED(m);
+        p_cons_c = c;
     }
-
-    virtual inline pthread_mutex_t   &get_cons_m()       { return *cons_m;}
     virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
-
-    virtual inline pthread_mutex_t   &get_prod_m()       { return *prod_m;}
-    virtual inline pthread_cond_t    &get_prod_c()       { return *prod_c;}
 
     /**
      * \brief Set the ff_node to start with no input task
@@ -731,7 +727,9 @@ protected:
     }
 
     virtual inline int set_input(const svector<ff_node *> &) { return -1;}
-    virtual inline int set_input(ff_node *) { return -1;}
+    virtual inline int set_input(ff_node *n) {
+        return set_input_buffer(n->get_in_buffer());
+    }
     virtual inline int set_input_feedback(ff_node *) { return -1;}
     virtual inline int set_output(const svector<ff_node *> &) { return -1;}
     virtual inline int set_output(ff_node *n) {
@@ -1143,7 +1141,7 @@ public:
     }
 
     /** 
-     *  checking for multi-input/output, all-to-all, farm 
+     *  checking for multi-input/output, all-to-all, farm, pipe
      *
      */
     virtual inline bool isMultiInput() const {  return false; }
@@ -1233,7 +1231,7 @@ protected:
         wttime=0;
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
         
-        p_cons_m = NULL, p_cons_c = NULL;
+        p_cons_c = NULL;
 
         blocking_in = blocking_out = FF_RUNTIME_MODE;
     };
@@ -1246,7 +1244,7 @@ protected:
         wtstart = n.wtstart;
         wtstop = n.wtstop;
         wttime = n.wttime;
-        p_cons_m = n.p_cons_m, p_cons_c = n.p_cons_c;
+        p_cons_c = n.p_cons_c;
         blocking_in = n.blocking_in;
         blocking_out = n.blocking_out;
         default_mapping = n.default_mapping;
@@ -1471,7 +1469,6 @@ protected:
     pthread_cond_t     *prod_c = nullptr;
 
     // for synchronizing with the next multi-input stage
-    pthread_mutex_t    *p_cons_m = nullptr;
     pthread_cond_t     *p_cons_c = nullptr;
 
     bool               FF_MEM_ALIGN(blocking_in,32); 
@@ -1619,7 +1616,6 @@ struct ff_buffernode: ff_node {
 protected:
     void* svc(void*){return NULL;}
 
-    pthread_mutex_t   &get_cons_m()       { return *p_cons_m;}
     pthread_cond_t    &get_cons_c()       { return *p_cons_c;}
 
 
