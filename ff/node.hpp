@@ -893,15 +893,15 @@ public:
         if (in && myinbuffer) delete in;
         if (out && myoutbuffer) delete out;
         if (thread && my_own_thread) delete reinterpret_cast<thWorker*>(thread);
+        if (cons_c && cons_m) {
+            pthread_cond_destroy(cons_c);
+            free(cons_c);
+            cons_c = nullptr;
+        }
         if (cons_m) {
             pthread_mutex_destroy(cons_m);
             free(cons_m);
             cons_m = nullptr;
-        }
-        if (cons_c) {
-            pthread_cond_destroy(cons_c);
-            free(cons_c);
-            cons_c = nullptr;
         }
         if (prod_m) {
             pthread_mutex_destroy(prod_m);

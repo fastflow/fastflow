@@ -593,7 +593,8 @@ protected:
         // then the comb node and the first node share the same
         // cond variable. This is due to the put_done method in the lb
         // (i.e. the prev node is a multi-output or an emitter node) 
-        n->cons_c = c; 
+        assert(n->cons_m == nullptr);
+        n->cons_c = c; n->cons_m = nullptr;        
         return true;   
     }
     // producer
