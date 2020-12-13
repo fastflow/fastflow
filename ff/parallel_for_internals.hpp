@@ -507,7 +507,8 @@ protected:
     virtual inline size_t init_data_static(long start, long stop) {
         assert(_chunk <= 0);
         static_scheduling = true;  // this forces static scheduling in the nextTaskConcurrent
-
+        skip1=false,jump=0,maxid=-1;
+        
         if (_chunk == 0) { 
             // default static scheduling, i.e. the iteration space is almost equally divided
             // in contiguous chunks among threads
@@ -517,7 +518,6 @@ protected:
             _chunk               = numtasks / long(_nw);
             
             data.resize(_nw); taskv.resize(_nw);eossent.resize(_nw);
-            skip1=false,jump=0,maxid=-1;
             
             long end, e;
             for(size_t i=0; totalnumtasks>0; ++i,--totalnumtasks) {
@@ -810,6 +810,7 @@ public:
 
     inline void setloop(long start, long stop, long step, long chunk, size_t nw) {
         _start=start, _stop=stop, _step=step, _chunk=chunk, _nw=nw;
+        
 #ifdef FF_PARFOR_PASSIVE_NOSTEALING
         _nextIteration = _start;
 #endif
