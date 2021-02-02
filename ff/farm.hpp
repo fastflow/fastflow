@@ -245,7 +245,7 @@ protected:
                 ordered_lb* _lb= new ordered_lb(nworkers);
                 ordered_gt* _gt= new ordered_gt(nworkers);
                 assert(_lb); assert(_gt);
-                ordering_Memory.resize(nworkers * (2*ff_farm::ondemand_buffer()+DEF_IN_OUT_DIFF+3)+ordering_memsize);
+                ordering_Memory.resize(nworkers * (2*ff_farm::ondemand_buffer()+3)+ordering_memsize);
                 _lb->init(ordering_Memory.begin(), ordering_Memory.size());
                 _gt->init(ordering_memsize);
                 setlb(_lb, true);
@@ -311,7 +311,7 @@ protected:
 
 
                 
-                if (a2a_first->create_input_buffer((int) (ondemand ? ondemand: (in_buffer_entries/nworkers + 1)), 
+                if (a2a_first->create_input_buffer((int) (ondemand ? ondemand: in_buffer_entries), 
                                              (ondemand ? true: fixedsize))<0) return -1;
                 
                 const svector<ff_node*>& W1 = a2a_first->getFirstSet();
@@ -319,7 +319,7 @@ protected:
                     lb->register_worker(W1[i]);
                 }
             } else {
-                if (workers[i]->create_input_buffer((int) (ondemand ? ondemand: (in_buffer_entries/nworkers + 1)), 
+                if (workers[i]->create_input_buffer((int) (ondemand ? ondemand: in_buffer_entries), 
                                                     (ondemand ? true: fixedsize))<0) return -1;
 
                 lb->register_worker(workers[i]);
@@ -346,8 +346,7 @@ protected:
                         
                         // NOTE: the following call might fail because the buffers were already created for example by
                         // the pipeline that contains this stage
-                        a2a_last->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
-                                                  (lb->masterworker()?false:fixedsize));
+                        a2a_last->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsize));
                         
                         for(size_t i=0;i<W2.size();++i) {
                             svector<ff_node*> w(1);
@@ -369,8 +368,7 @@ protected:
                     } else {
                         // NOTE: the following call might fail because the buffers were already created for example by
                         // the pipeline that contains this stage
-                        if (a2a_last->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
-                                                      (lb->masterworker()?false:fixedsize))<0) {
+                        if (a2a_last->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsize))<0) {
                             if (lb->masterworker()) return -1; // something went wrong
                         }
                         if (lb->masterworker()) {
@@ -440,8 +438,7 @@ protected:
                             gt->register_worker(t);
                         }                        
                     } else { // standard worker or composition where the second stage is not multi-output
-                        if (workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF), 
-                                                             (lb->masterworker()?false:fixedsize))<0)
+                        if (workers[i]->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsize))<0)
                             return -1;
                         assert(!lb->masterworker());
                         gt->register_worker(workers[i]);
@@ -712,9 +709,6 @@ protected:
     virtual inline pthread_cond_t    &get_cons_c()        { return *(lb->cons_c);}
 
 public:
-    enum { DEF_IN_BUFF_ENTRIES=DEFAULT_BUFFER_CAPACITY,
-           DEF_IN_OUT_DIFF=DEFAULT_IN_OUT_CAPACITY_DIFFERENCE,
-           DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+DEF_IN_OUT_DIFF)};
 
     using lb_t = ff_loadbalancer;
     using gt_t = ff_gatherer;    
@@ -735,8 +729,8 @@ public:
         has_input_channel(input_ch),collector_removed(false),ordered(false),fixedsize(FF_FIXED_SIZE),
         myownlb(true),myowngt(true),worker_cleanup(false),emitter_cleanup(false),
         collector_cleanup(false),ondemand(0),
-        in_buffer_entries(DEF_IN_BUFF_ENTRIES),
-        out_buffer_entries(DEF_OUT_BUFF_ENTRIES),
+        in_buffer_entries(DEFAULT_BUFFER_CAPACITY),
+        out_buffer_entries(DEFAULT_BUFFER_CAPACITY),
         max_nworkers(DEF_MAX_NUM_WORKERS),ordering_memsize(0),
         emitter(NULL),collector(NULL),
         lb(new lb_t(max_nworkers)),gt(new gt_t(max_nworkers)),
@@ -776,8 +770,8 @@ public:
      *  \param fixedsize = true uses only fixed size queue
      */
     explicit ff_farm(bool input_ch=false,
-                     int in_buffer_entries=DEF_IN_BUFF_ENTRIES, 
-                     int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
+                     int in_buffer_entries=DEFAULT_BUFFER_CAPACITY,
+                     int out_buffer_entries=DEFAULT_BUFFER_CAPACITY,
                      bool worker_cleanup=false, // NOTE: by default no cleanup at exit is done !
                      size_t max_num_workers=DEF_MAX_NUM_WORKERS,
                      bool fixedsize=FF_FIXED_SIZE): 
@@ -1921,7 +1915,7 @@ protected:
                 // have to be registered as output channels for the worker.
 
                 for(size_t i=0;i<nworkers;++i) {
-                    if (workers[i]->create_output_buffer((int) (out_buffer_entries/nworkers + DEF_IN_OUT_DIFF),fixedsize)<0)   return -1;
+                    if (workers[i]->create_output_buffer(out_buffer_entries,fixedsize)<0)   return -1;
                 }
             }
             return 0;
@@ -2081,7 +2075,7 @@ public:
             std::unique_ptr<ff_node> E  =std::unique_ptr<ff_node>(nullptr), 
             std::unique_ptr<ff_node> C  =std::unique_ptr<ff_node>(nullptr), 
             bool input_ch=false): 
-        ff_farm(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false), 
+        ff_farm(input_ch,DEFAULT_BUFFER_CAPACITY,DEFAULT_BUFFER_CAPACITY,false), 
         Workers(std::move(W)), Emitter(std::move(E)), Collector(std::move(C)) { 
 
         const size_t nw = Workers.size();
@@ -2100,7 +2094,7 @@ public:
     ff_Farm(std::vector<std::unique_ptr<ff_node> > &&W,
             ff_node &E, ff_node &C, 
             bool input_ch=false):
-        ff_farm(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false),
+        ff_farm(input_ch,DEFAULT_BUFFER_CAPACITY,DEFAULT_BUFFER_CAPACITY,false),
         Workers(std::move(W)) {
 
         const size_t nw = Workers.size();
@@ -2114,7 +2108,7 @@ public:
     }
     ff_Farm(std::vector<std::unique_ptr<ff_node> > &&W,  
             ff_node &E, bool input_ch=false):
-        ff_farm(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false),
+        ff_farm(input_ch,DEFAULT_BUFFER_CAPACITY, DEFAULT_BUFFER_CAPACITY,false),
         Workers(std::move(W)) {
 
         const size_t nw = Workers.size();
@@ -2154,7 +2148,7 @@ public:
 
     template <typename FUNC_t>
     explicit ff_Farm(FUNC_t F, ssize_t nw, bool input_ch=false): 
-        ff_farm(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,
+        ff_farm(input_ch,DEFAULT_BUFFER_CAPACITY,DEFAULT_BUFFER_CAPACITY,
                   true, nw) {
 
         std::vector<ff_node*> w(nw);        
@@ -2222,7 +2216,7 @@ public:
     typedef OUT_t out_type;
 
     ff_OFarm(std::vector<std::unique_ptr<ff_node> > &&W,  bool input_ch=false): 
-        ff_farm(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false,W.size()), 
+        ff_farm(input_ch, DEFAULT_BUFFER_CAPACITY, DEFAULT_BUFFER_CAPACITY,false,W.size()), 
         Workers(std::move(W)) { 
         assert(Workers.size());
         const size_t nw = Workers.size();
@@ -2236,7 +2230,7 @@ public:
 
     template <typename FUNC_t>
     explicit ff_OFarm(FUNC_t F, size_t nw, bool input_ch=false): 
-        ff_farm(input_ch,DEF_IN_BUFF_ENTRIES, DEF_OUT_BUFF_ENTRIES,false,nw) {
+        ff_farm(input_ch,DEFAULT_BUFFER_CAPACITY,DEFAULT_BUFFER_CAPACITY,false,nw) {
         if (Workers.size()>0) {
             error("OFARM: workers already added\n");
             return;

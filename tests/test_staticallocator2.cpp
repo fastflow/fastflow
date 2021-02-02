@@ -59,8 +59,8 @@ struct S_t {
 };
 
 static long qlen    = 1;
-static long howmany = 11;
-static long ntasks  = 100;
+static long howmany = 7;
+static long ntasks  = 1000;
 static std::mutex mtx;  // used only for pretty printing
 
 struct Source: ff_monode_t<S_t> {
@@ -75,7 +75,9 @@ struct Source: ff_monode_t<S_t> {
             SAlloc->alloc(p, ch);
             p->t = start+i;
             p->f = p->t*1.0;
-            ff_send_out_to(p, ch); // NOTE: here we cannot use ff_send_out or return p
+            // NOTE: here we cannot use ff_send_out or return p
+            //       see also test_staticallocator3.cpp
+            ff_send_out_to(p, ch); 
         }
 		return EOS; 
 	}
@@ -153,7 +155,9 @@ int main(int argc, char* argv[]) {
     
     ff_a2a _2(false, qlen, qlen, true);
     for (int i=0;i<nFlatMap;++i) {
-        SA[i] = new StaticAllocator(((1+nSink)*qlen + (1+1+nSink))*nMap, sizeof(S_t), nMap);        
+        // NOTE: for each queue we have +2 slots
+        SA[i] = new StaticAllocator((nMap*nSink+1)*(qlen+2), sizeof(S_t), nMap);        
+        //SA[i] = new StaticAllocator(((1+nSink)*qlen + (1+1+nSink))*nMap, sizeof(S_t), nMap);        
         L.push_back(new ff_comb(new miHelperFM, new FlatMap(SA[i]), true, true));
     }
     ff_pipeline pipe1(false, qlen,qlen,true);
@@ -168,7 +172,8 @@ int main(int argc, char* argv[]) {
     
     ff_a2a _3(false, qlen, qlen, true);
     for (int i=0, j=nFlatMap;i<nSource;++i,++j) {
-        SA[j] = new StaticAllocator( (qlen +2 )*nFlatMap, sizeof(S_t), nFlatMap); 
+        // NOTE: for each queue we have +2 slots
+        SA[j] = new StaticAllocator( (qlen+2)*nFlatMap, sizeof(S_t), nFlatMap); 
         L.push_back(new Source(ntasks, SA[j]));
     }
     

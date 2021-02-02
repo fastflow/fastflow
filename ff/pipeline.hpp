@@ -509,10 +509,6 @@ protected:
     } 
 
 public:
- 
-    enum { DEF_IN_BUFF_ENTRIES=DEFAULT_BUFFER_CAPACITY,
-           DEF_IN_OUT_DIFF=DEFAULT_IN_OUT_CAPACITY_DIFFERENCE,
-           DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+DEF_IN_OUT_DIFF)};
 
     /**
      *  \brief Constructor
@@ -523,8 +519,8 @@ public:
      *  \param fixedsize \p true uses bound channels (SPSC queue)
      */
     explicit ff_pipeline(bool input_ch=false,
-                         int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
-                         int out_buffer_entries=DEF_OUT_BUFF_ENTRIES, 
+                         int in_buffer_entries=DEFAULT_BUFFER_CAPACITY,
+                         int out_buffer_entries=DEFAULT_BUFFER_CAPACITY, 
                          bool fixedsize=FF_FIXED_SIZE):  
         has_input_channel(input_ch),
         node_cleanup(false),fixedsize(fixedsize),

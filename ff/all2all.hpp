@@ -251,9 +251,6 @@ protected:
 
     
 public:
-    enum { DEF_IN_BUFF_ENTRIES=DEFAULT_BUFFER_CAPACITY,
-           DEF_IN_OUT_DIFF=DEFAULT_IN_OUT_CAPACITY_DIFFERENCE,
-           DEF_OUT_BUFF_ENTRIES=(DEF_IN_BUFF_ENTRIES+DEF_IN_OUT_DIFF)};
 
     /**
      *
@@ -262,8 +259,8 @@ public:
      *
      */
     ff_a2a(bool reduce_channels=false,
-           int in_buffer_entries=DEF_IN_BUFF_ENTRIES,
-           int out_buffer_entries=DEF_OUT_BUFF_ENTRIES,
+           int in_buffer_entries=DEFAULT_BUFFER_CAPACITY,
+           int out_buffer_entries=DEFAULT_BUFFER_CAPACITY,
            bool fixedsize=FF_FIXED_SIZE):prepared(false),fixedsize(fixedsize),
                                  reduce_channels(reduce_channels), 
                                  in_buffer_entries(in_buffer_entries),

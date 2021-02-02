@@ -122,8 +122,9 @@ int main(int argc, char* argv[]) {
     Map     M;
     Sink    Sk;
 
-    StaticAllocator* SourceAlloc  = new StaticAllocator(qlen + 2, sizeof(S_t)); 
-    StaticAllocator* FlatMapAlloc = new StaticAllocator(qlen*2 + 3, sizeof(S_t));
+    // NOTE: for each queue we have +2 slots
+    StaticAllocator* SourceAlloc  = new StaticAllocator(qlen+2, sizeof(S_t)); 
+    StaticAllocator* FlatMapAlloc = new StaticAllocator((qlen+2)*2, sizeof(S_t));
 
     Sc.SAlloc = SourceAlloc;
     FM.SAlloc = FlatMapAlloc;
