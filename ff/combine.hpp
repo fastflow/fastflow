@@ -202,6 +202,79 @@ public:
             return ((ff_comb*)comp_nodes[1])->getLast();
         return comp_nodes[1];
     }
+
+    // returns the pointer to the "replaced" node
+    ff_node* replace_first(ff_node* n, bool cleanup=false, bool remove_from_cleanup=true) {
+        if (comp_nodes[0]->isComp()) return nullptr;        
+        ff_node* first = comp_nodes[0];
+        comp_nodes[0] = n;
+
+        if (remove_from_cleanup) {
+            ssize_t pos=-1;
+            for(size_t i=0;i<cleanup_stages.size();++i)
+                if (cleanup_stages[i] == first) { pos=i; break;}
+            if (pos>=0) 
+                cleanup_stages.erase(cleanup_stages.begin()+pos);
+        }
+        if (cleanup)
+            cleanup_stages.push_back(n);        
+        return first;
+    }
+
+    // returns the pointer to the "replaced" node
+    ff_node* replace_last(ff_node* n, bool cleanup=false, bool remove_from_cleanup=true) {
+        if (comp_nodes[1]->isComp()) return nullptr;        
+        ff_node* last = comp_nodes[1];
+        comp_nodes[1] = n;
+
+        if (remove_from_cleanup) {
+            ssize_t pos=-1;
+            for(size_t i=0;i<cleanup_stages.size();++i)
+                if (cleanup_stages[i] == last) { pos=i; break;}
+            if (pos>=0) 
+                cleanup_stages.erase(cleanup_stages.begin()+pos);
+        }
+        if (cleanup)
+            cleanup_stages.push_back(n);
+        return last;
+    }
+    
+    // returns true if the "replaced" node has been deleted (it was added with cleanup=true)
+    template<typename T>
+    bool changeFirst(T* n, bool cleanup=false) {
+        bool r=false;
+        ff_comb* c     = getFirstComb();
+        ff_node* first = getFirst();
+
+        ssize_t pos=-1;
+        for(size_t i=0;i<cleanup_stages.size();++i)
+            if (cleanup_stages[i] == first) { pos=i; break;}
+        if (pos>=0) {
+            cleanup_stages.erase(cleanup_stages.begin()+pos);
+            r = true;
+        }
+        c->replace_first(n, cleanup, false);
+        if (r) delete first;
+        return r;
+    }
+    // returns true if the "replaced" node has been deleted (it was added with cleanup=true)
+    template<typename T>
+    bool changeLast(T* n,  bool cleanup=false) {
+        bool r=false;
+        ff_comb* c     = getLastComb();
+        ff_node* last = getLast();
+
+        ssize_t pos=-1;
+        for(size_t i=0;i<cleanup_stages.size();++i)
+            if (cleanup_stages[i] == last) { pos=i; break;}
+        if (pos>=0) {
+            cleanup_stages.erase(cleanup_stages.begin()+pos);
+            r = true;
+        }
+        c->replace_last(n, cleanup, false);
+        if (r) delete last;
+        return r;
+    }
     
     double ffTime() {
         return diffmsec(getstoptime(),getstarttime());
@@ -294,7 +367,18 @@ protected:
     bool  put(void * ptr) { 
         return ff_node::put(ptr);
     }
-       
+
+    ff_comb* getFirstComb() {
+        if (comp_nodes[0]->isComp())
+            return ((ff_comb*)comp_nodes[0])->getFirstComb();
+        return this;
+    }
+    ff_comb* getLastComb() {
+        if (comp_nodes[1]->isComp())
+            return ((ff_comb*)comp_nodes[1])->getLastComb();
+        return this;
+    }
+    
     void registerCallback(bool (*cb)(void *,int,unsigned long,unsigned long,void *), void * arg) {
         comp_nodes[1]->registerCallback(cb,arg);
     }
@@ -669,49 +753,49 @@ struct ff_comb_t: ff_comb {
 	typedef T    T_t;
 	typedef TOUT OUT_t;
 
-	ff_comb_t(ff_node_t<TIN, T>* n1, ff_node_t<T,TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
-	ff_comb_t(ff_node_t<TIN, T>* n1, ff_minode_t<T,TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
-	ff_comb_t(ff_node_t<TIN, T>* n1, ff_monode_t<T,TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_node_t<TIN, T>* n1, ff_node_t<T,TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
+	ff_comb_t(ff_node_t<TIN, T>* n1, ff_minode_t<T,TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
+	ff_comb_t(ff_node_t<TIN, T>* n1, ff_monode_t<T,TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
 	template<typename S>
-	ff_comb_t(ff_node_t<TIN, T>* n1, ff_comb_t<T, S, TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_node_t<TIN, T>* n1, ff_comb_t<T, S, TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
 
 
-	ff_comb_t(ff_minode_t<TIN, T>* n1, ff_node_t<T,TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
-	ff_comb_t(ff_minode_t<TIN, T>* n1, ff_minode_t<T,TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
-	ff_comb_t(ff_minode_t<TIN, T>* n1, ff_monode_t<T,TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_minode_t<TIN, T>* n1, ff_node_t<T,TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
+	ff_comb_t(ff_minode_t<TIN, T>* n1, ff_minode_t<T,TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
+	ff_comb_t(ff_minode_t<TIN, T>* n1, ff_monode_t<T,TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
 	template<typename S>
-	ff_comb_t(ff_minode_t<TIN, T>* n1, ff_comb_t<T, S, TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_minode_t<TIN, T>* n1, ff_comb_t<T, S, TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
 	
-	ff_comb_t(ff_monode_t<TIN, T>* n1, ff_node_t<T,TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
-	ff_comb_t(ff_monode_t<TIN, T>* n1, ff_minode_t<T,TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
-	ff_comb_t(ff_monode_t<TIN, T>* n1, ff_monode_t<T,TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_monode_t<TIN, T>* n1, ff_node_t<T,TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
+	ff_comb_t(ff_monode_t<TIN, T>* n1, ff_minode_t<T,TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
+	ff_comb_t(ff_monode_t<TIN, T>* n1, ff_monode_t<T,TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
 	template<typename S>
-	ff_comb_t(ff_monode_t<TIN, T>* n1, ff_comb_t<T, S, TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_monode_t<TIN, T>* n1, ff_comb_t<T, S, TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
 
 	template<typename S>
-	ff_comb_t(ff_comb_t<TIN, S, T>* n1, ff_node_t<T,TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_comb_t<TIN, S, T>* n1, ff_node_t<T,TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
 	template<typename S>
-	ff_comb_t(ff_comb_t<TIN, S, T>* n1, ff_minode_t<T,TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_comb_t<TIN, S, T>* n1, ff_minode_t<T,TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
 	template<typename S>
-	ff_comb_t(ff_comb_t<TIN, S, T>* n1, ff_monode_t<T,TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}
+	ff_comb_t(ff_comb_t<TIN, S, T>* n1, ff_monode_t<T,TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}
 	template<typename S, typename W>
-	ff_comb_t(ff_comb_t<TIN, S, T>* n1, ff_comb_t<T, W, TOUT>* n2):
-		ff_comb(n1,n2,false,false) {}	
+	ff_comb_t(ff_comb_t<TIN, S, T>* n1, ff_comb_t<T, W, TOUT>* n2, bool cleanup1=false, bool cleanup2=false):
+		ff_comb(n1,n2,cleanup1,cleanup2) {}	
 };
     
 
@@ -1075,7 +1159,7 @@ static inline const ff_pipeline combine_ofarm_farm(ff_farm& farm1, ff_farm& farm
     
     ordered_lb* _lb= new ordered_lb(farm1.getNWorkers());
     assert(_lb);
-    const size_t memsize = farm1.getNWorkers() * (2*newfarm1.ondemand_buffer()+ff_farm::DEF_IN_OUT_DIFF+3)+ DEF_OFARM_ONDEMAND_MEMORY; 
+    const size_t memsize = farm1.getNWorkers() * (2*newfarm1.ondemand_buffer()+3)+ DEF_OFARM_ONDEMAND_MEMORY; 
     newfarm1.ordered_resize_memory(memsize);
     _lb->init(newfarm1.ordered_get_memory(), memsize);
     newfarm1.setlb(_lb, true);

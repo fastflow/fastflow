@@ -660,6 +660,7 @@ protected:
      */
     virtual int create_input_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         if (in) return -1;
+        if (nentries<=0) return -1;
         in = new FFBUFFER(nentries,fixedsize);
         if (!in) return -1;
         myinbuffer=true;
@@ -686,6 +687,7 @@ protected:
      */
     virtual int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         if (out) return -1;
+        if (nentries<=0) return -1;
         out = new FFBUFFER(nentries,fixedsize); 
         if (!out) return -1;
         myoutbuffer=true;

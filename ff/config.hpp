@@ -123,9 +123,6 @@
 #if !defined(DEFAULT_BUFFER_CAPACITY)
 #define DEFAULT_BUFFER_CAPACITY              2048
 #endif
-#if !defined(DEFAULT_IN_OUT_CAPACITY_DIFFERENCE)
-#define DEFAULT_IN_OUT_CAPACITY_DIFFERENCE    128
-#endif
 
 
 /* To save energy and improve hyperthreading performance
