@@ -95,6 +95,69 @@ static inline ff_node* ispipe_getlast(ff_node* node) {
     }
     return nullptr;
 }
+// returns:
+//    - the innermost BB that contains the node 'n' passed as argument
+//    - null if the node 'n' is not found
+//    - the node 'n' if the starting node is 'n'
+static inline ff_node* getBB(ff_node* startnode, ff_node* n) {
+    if (startnode == n) return n;
+
+    if (startnode->isPipe()) {
+        ff_pipeline* pipe = reinterpret_cast<ff_pipeline*>(startnode);
+        svector<ff_node*> Vn = pipe->getStages();
+        for(size_t i=0;i<Vn.size();++i) {
+            ff_node* r = getBB(Vn[i], n);
+            if (r) return ((r==n)?pipe:r);
+        }                   
+        return nullptr;
+    }
+    if (startnode->isAll2All()) {
+        ff_a2a* a2a = reinterpret_cast<ff_a2a*>(startnode);
+        svector<ff_node*> L = a2a->getFirstSet();
+        svector<ff_node*> R = a2a->getSecondSet();
+        for(size_t i=0;i<L.size();++i) {
+            ff_node* r = getBB(L[i], n);
+            if (r) return ((r==n)?a2a:r);
+        }
+        for(size_t i=0;i<R.size();++i) {
+            ff_node* r = getBB(R[i], n);
+            if (r) return ((r==n)?a2a:r);
+        }
+        return nullptr;
+    }
+    // TODO: ofarm
+    if (startnode->isFarm()) {
+        ff_farm* farm = reinterpret_cast<ff_farm*>(startnode);
+        if (farm->getEmitter() == n) return farm;
+        if (farm->getCollector() == n) return farm;
+        svector<ff_node*> W = farm->getWorkers();
+        for(size_t i=0;i<W.size();++i) {
+            ff_node* r = getBB(W[i], n);
+            if (r) return ((r==n)?farm:r);
+        }
+        return nullptr;
+    }
+    if (startnode->isComp()) {
+        ff_comb* comb = reinterpret_cast<ff_comb*>(startnode);
+        ff_node* cl = comb->getLeft();
+        ff_node* cr = comb->getRight();
+        if (cl->isComp()) {
+            ff_node* r = getBB(cl,n);
+            if (r) return ((r==n)?cl:r);
+        } else {
+            if (comb->getFirst() == n) return comb;
+        }
+        if (cr->isComp()) {
+            ff_node* r = getBB(cr,n);
+            if (r) return ((r==n)?cr:r);
+        } else {
+            if (comb->getLast() == n) return comb;
+        }
+        return nullptr;
+    }    
+    return nullptr;
+}
+
     
 } // namespace
 #endif /* FF_GRAPH_UTILS_HPP */

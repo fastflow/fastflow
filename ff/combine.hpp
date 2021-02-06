@@ -190,26 +190,32 @@ public:
     }        
     inline bool isComp() const        { return true; }
 
-    // returns the first node on the left-hand side
+    // returns the first sequential node (not comb) on the left-hand side
     ff_node* getFirst() const {
         if (comp_nodes[0]->isComp())
             return ((ff_comb*)comp_nodes[0])->getFirst();
         return comp_nodes[0];
     }
-    // returns the last node on the right-hand side
+    // returns the last sequential node (not comb) on the right-hand side
     ff_node* getLast() const {
         if (comp_nodes[1]->isComp())
             return ((ff_comb*)comp_nodes[1])->getLast();
         return comp_nodes[1];
     }
-
+    ff_node* getLeft() const {
+        return comp_nodes[0];
+    }
+    ff_node* getRight() const {
+        return comp_nodes[1];
+    }
+    
     // returns the pointer to the "replaced" node
-    ff_node* replace_first(ff_node* n, bool cleanup=false, bool remove_from_cleanup=true) {
+    ff_node* replace_first(ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=true) {
         if (comp_nodes[0]->isComp()) return nullptr;        
         ff_node* first = comp_nodes[0];
         comp_nodes[0] = n;
 
-        if (remove_from_cleanup) {
+        if (remove_from_cleanuplist) {
             ssize_t pos=-1;
             for(size_t i=0;i<cleanup_stages.size();++i)
                 if (cleanup_stages[i] == first) { pos=i; break;}
@@ -222,12 +228,12 @@ public:
     }
 
     // returns the pointer to the "replaced" node
-    ff_node* replace_last(ff_node* n, bool cleanup=false, bool remove_from_cleanup=true) {
+    ff_node* replace_last(ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=true) {
         if (comp_nodes[1]->isComp()) return nullptr;        
         ff_node* last = comp_nodes[1];
         comp_nodes[1] = n;
 
-        if (remove_from_cleanup) {
+        if (remove_from_cleanuplist) {
             ssize_t pos=-1;
             for(size_t i=0;i<cleanup_stages.size();++i)
                 if (cleanup_stages[i] == last) { pos=i; break;}
@@ -237,6 +243,14 @@ public:
         if (cleanup)
             cleanup_stages.push_back(n);
         return last;
+    }
+
+    bool change_node(ff_node* old, ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=false) {
+        if (comp_nodes[0] == old)
+            return (replace_first(n, cleanup, remove_from_cleanuplist) != nullptr);
+        if (comp_nodes[1] == old)
+            return (replace_last(n, cleanup, remove_from_cleanuplist) != nullptr);
+        return false;
     }
     
     // returns true if the "replaced" node has been deleted (it was added with cleanup=true)
@@ -367,12 +381,13 @@ protected:
     bool  put(void * ptr) { 
         return ff_node::put(ptr);
     }
-
+    // returns the innermost combine on the left-hand side
     ff_comb* getFirstComb() {
         if (comp_nodes[0]->isComp())
             return ((ff_comb*)comp_nodes[0])->getFirstComb();
         return this;
     }
+    // returns the innermost combine on the right-hand side
     ff_comb* getLastComb() {
         if (comp_nodes[1]->isComp())
             return ((ff_comb*)comp_nodes[1])->getLastComb();
@@ -429,10 +444,10 @@ protected:
         if (n2->isMultiOutput()) {
             svector<ff_node*> w(1);
             n2->get_out_nodes(w);
-            if (w.size()==0) 
+            if ((w.size()==0) && (n2->callback == nullptr)) 
                 n2->registerCallback(devnull, nullptr);   // devnull callback
         } else 
-            if (n2->get_out_buffer() == nullptr)
+            if ((n2->get_out_buffer() == nullptr) && (n2->callback == nullptr))
                 n2->registerCallback(devnull, nullptr);   // devnull callback
 
         
