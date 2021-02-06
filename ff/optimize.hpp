@@ -251,23 +251,23 @@ static inline int combine_right_with_a2a(ff_a2a& a2a, T* node, bool cleanup_node
         if (combine_with_laststage(*reinterpret_cast<ff_pipeline*>(w[0]), node, cleanup_node)<0) return -1;
         int r=0;
         for(size_t i=1;i<w.size();++i) {
+            assert(w[i]->isPipe());
             ff_pipeline* pipe = reinterpret_cast<ff_pipeline*>(w[i]);
             r+=combine_with_laststage(*pipe, new T(*node), true);
         }        
         return (r>0?-1:0); 
     }
-    bool rset_cleanup = a2a.isset_cleanup_secondset();
     std::vector<ff_node*> new_secondset;
     
-    ff_comb* comb = new ff_comb(w[0], node, rset_cleanup, cleanup_node);
+    ff_comb* comb = new ff_comb(w[0], node, false, cleanup_node);
     assert(comb);
     new_secondset.push_back(comb);
     for(size_t i=1;i<w.size();++i) {
-        ff_comb* c = new ff_comb(w[i], new T(*node), rset_cleanup, true);
+        ff_comb* c = new ff_comb(w[i], new T(*node), false, true);
         assert(c);
         new_secondset.push_back(c);
     }
-    a2a.change_secondset(new_secondset); 
+    a2a.change_secondset(new_secondset, true); 
     return 0;
 }
 template<typename T> 
@@ -279,19 +279,18 @@ static inline int combine_left_with_a2a(ff_a2a& a2a, T* node, bool cleanup_node)
             return -1;
         int r=0;
         for(size_t i=1;i<w.size();++i) {
+            assert(w[i]->isPipe());
             ff_pipeline* pipe = reinterpret_cast<ff_pipeline*>(w[i]);
             r+=combine_with_firststage(*pipe, new T(*node), true);
         }        
         return (r>0?-1:0); 
     }
-    bool lset_cleanup = a2a.isset_cleanup_firstset();
     std::vector<ff_node*> new_firstset;    
-    
-    ff_comb* comb = new ff_comb(node, w[0], cleanup_node, lset_cleanup);
+    ff_comb* comb = new ff_comb(node, w[0], cleanup_node, false);
     assert(comb);
     new_firstset.push_back(comb);
     for(size_t i=1;i<w.size();++i) {
-        ff_comb* c = new ff_comb(new T(*node), w[i], true, lset_cleanup);
+        ff_comb* c = new ff_comb(new T(*node), w[i], true, false);
         assert(c);
         new_firstset.push_back(c);
     }

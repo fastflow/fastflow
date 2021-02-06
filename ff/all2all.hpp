@@ -134,7 +134,7 @@ protected:
             }
             // it is a standard node or a pipeline with a standard node as last stage, so we transform it to a multi-output node
             for(size_t i=0;i<workers1.size();++i) {
-                internal_mo_transformer *mo = new internal_mo_transformer(workers1[i], workers1_to_free);
+                internal_mo_transformer *mo = new internal_mo_transformer(workers1[i], false);
                 if (!mo) {
                     error("A2A, FATAL ERROR not enough memory\n");
                     return -1;
@@ -142,8 +142,8 @@ protected:
                 BARRIER_T *bar =workers1[i]->get_barrier();
                 if (bar) mo->set_barrier(bar);
                 workers1[i] = mo; // replacing old node
+                internalSupportNodes.push_back(mo);
             }
-            workers1_to_free = true;
         } 
         for(size_t i=0;i<workers1.size();++i) {
             if (ondemand_chunk && (workers1[i]->ondemand_buffer()==0))
@@ -159,7 +159,7 @@ protected:
 
             // here we have to transform the standard node into a multi-input node
             for(size_t i=0;i<workers2.size();++i) {
-                internal_mi_transformer *mi = new internal_mi_transformer(workers2[i], workers2_to_free);
+                internal_mi_transformer *mi = new internal_mi_transformer(workers2[i], false);
                 if (!mi) {
                     error("A2A, FATAL ERROR not enough memory\n");
                     return -1;
@@ -167,8 +167,8 @@ protected:
                 BARRIER_T *bar =workers2[i]->get_barrier();
                 if (bar) mi->set_barrier(bar);
                 workers2[i] = mi; // replacing old node
+                internalSupportNodes.push_back(mi);
             }
-            workers2_to_free = true;
         }
         for(size_t i=0;i<workers2.size();++i) {
             workers2[i]->set_id(int(i));
@@ -269,20 +269,14 @@ public:
     
     virtual ~ff_a2a() {
         if (barrier) delete barrier;
-        if (workers1_to_free) {
-            for(size_t i=0;i<workers1.size();++i) {
-                delete workers1[i];
-                workers1[i] = nullptr;
-            }
-        }
-        if (workers2_to_free) {
-            for(size_t i=0;i<workers2.size();++i) {
-                delete workers2[i];
-                workers2[i] = nullptr;
-            }
-        }
-        for(size_t i=0;i<internalSupportNodes.size();++i) 
+        for(size_t i=0;i<workers1.size();++i)
+            workers1[i] = nullptr;        
+        for(size_t i=0;i<workers2.size();++i) 
+            workers2[i] = nullptr;
+        for(size_t i=0;i<internalSupportNodes.size();++i) {            
             delete internalSupportNodes[i];
+            internalSupportNodes[i] = nullptr;
+        }
     }
 
     /**
@@ -303,12 +297,25 @@ public:
         for(size_t i=0;i<w.size();++i) {
             workers1.push_back(w[i]);
         }
-        workers1_to_free = cleanup;
+        workers1_cleanup = cleanup;
+        if (cleanup) {
+            for(size_t i=0;i<w.size();++i) {
+                internalSupportNodes.push_back(w[i]);
+            }
+        }
         ondemand_chunk   = ondemand;
         return 0;        
     }
     template<typename T>
-    int change_firstset(const std::vector<T*>& w, int ondemand=0, bool cleanup=false) {
+    int change_firstset(const std::vector<T*>& w, int ondemand=0, bool cleanup=false, bool remove_from_cleanuplist=false) {
+        if (remove_from_cleanuplist) {
+            for(size_t j=0;j<workers1.size(); ++j) {
+                int pos=-1;
+                for(size_t i=0;i<internalSupportNodes.size();++i)
+                    if (internalSupportNodes[i] == workers1[j]) { pos = i; break; }
+                if (pos>=0) internalSupportNodes.erase(internalSupportNodes.begin()+pos);
+            }
+        }
         workers1.clear();
         return add_firstset(w, ondemand, cleanup);
     }
@@ -329,13 +336,61 @@ public:
         for(size_t i=0;i<w.size();++i) {
             workers2.push_back(w[i]);
         }
-        workers2_to_free = cleanup;
+        workers2_cleanup = cleanup;
+        if (cleanup) {
+            for(size_t i=0;i<w.size();++i) {
+                internalSupportNodes.push_back(w[i]);
+            }
+        }
         return 0;
     }
     template<typename T>
-    int change_secondset(const std::vector<T*>& w, bool cleanup=false) {
+    int change_secondset(const std::vector<T*>& w, bool cleanup=false, bool remove_from_cleanuplist=false) {
+        if (remove_from_cleanuplist) {
+            for(size_t j=0;j<workers2.size(); ++j) {
+                int pos=-1;
+                for(size_t i=0;i<internalSupportNodes.size();++i)
+                    if (internalSupportNodes[i] == workers2[j]) { pos = i; break; }
+                if (pos>=0) internalSupportNodes.erase(internalSupportNodes.begin()+pos);
+            }                     
+        }        
         workers2.clear();
         return add_secondset(w, cleanup);
+    }
+
+    bool change_node(ff_node* old, ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=false) {
+        if (prepared) {
+            error("A2A, change_node cannot be called because the A2A has already been prepared\n");
+            return false;
+        }
+        for(size_t i=0; i<workers1.size();++i) {
+            if (workers1[i] == old) {
+                if (remove_from_cleanuplist) {
+                    int pos=-1;
+                    for(size_t i=0;i<internalSupportNodes.size();++i)
+                        if (internalSupportNodes[i] == old) { pos = i; break; }
+                    if (pos>=0) internalSupportNodes.erase(internalSupportNodes.begin()+pos);            
+                }
+                workers1[i] = n;
+                if (cleanup) internalSupportNodes.push_back(n);
+                return true;
+            }
+        }
+        for(size_t i=0; i<workers2.size();++i) {
+            if (workers2[i] == old) {
+                if (remove_from_cleanuplist) {
+                    int pos=-1;
+                    for(size_t i=0;i<internalSupportNodes.size();++i)
+                        if (internalSupportNodes[i] == old) { pos = i; break; }
+                    if (pos>=0) internalSupportNodes.erase(internalSupportNodes.begin()+pos);            
+                }
+                workers2[i] = n;
+                if (cleanup) internalSupportNodes.push_back(n);                
+                return true;
+            }
+        }
+        
+        return false;
     }
     
     bool reduceChannel() const { return reduce_channels;}
@@ -447,20 +502,19 @@ public:
         return true;
     }
 
-    const svector<ff_node*>& getFirstSet()  const { return workers1; }
+    void remove_from_cleanuplist(const svector<ff_node*>& w) {
+        for(size_t j=0;j<w.size(); ++j) {
+            int pos=-1;
+            for(size_t i=0;i<internalSupportNodes.size();++i)
+                if (internalSupportNodes[i] == w[j]) { pos = i; break; }
+            if (pos>=0) internalSupportNodes.erase(internalSupportNodes.begin()+pos);
+        }
+    }
+    
+    const svector<ff_node*>& getFirstSet() const  { return workers1; }
     const svector<ff_node*>& getSecondSet() const { return workers2; }
 
-    bool isset_cleanup_firstset()  const { return workers1_to_free; }
-    bool isset_cleanup_secondset() const { return workers2_to_free;}
-
     int ondemand_buffer() const { return ondemand_chunk; }
-    
-    void cleanup_firstset(bool onoff=true) {
-        workers1_to_free = onoff;
-    }
-    void cleanup_secondset(bool onoff=true) {
-        workers2_to_free = onoff;
-    }
     
     int numThreads() const { return cardinality(); }
 
@@ -716,8 +770,8 @@ protected:
     }
    
 protected:
-    bool workers1_to_free=false;
-    bool workers2_to_free=false;
+    bool workers1_cleanup=false;
+    bool workers2_cleanup=false;
     bool prepared, fixedsize,reduce_channels;
     int in_buffer_entries, out_buffer_entries;
     int ondemand_chunk=0;

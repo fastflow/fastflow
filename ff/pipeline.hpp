@@ -652,6 +652,23 @@ public:
         if (cleanup) internalSupportNodes.push_back(node);
     }
 
+    // returns true if the old node has been changed with the new one
+    // false in case of error of if the old node has not been found
+    bool change_node(ff_node* old, ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=false) {
+        if (prepared) {
+            error("PIPE, change_node cannot be called because the PIPE has already been prepared\n");
+            return false;
+        }
+        for(size_t i=0; i<nodes_list.size(); ++i) {
+            if (nodes_list[i] == old) {
+                insert_stage(i+1, n, cleanup);
+                remove_stage(i, remove_from_cleanuplist);
+                return true;
+            }
+        }
+        return false;
+    }
+
     /*
      * returns the list of nodes removing them from the pipeline(s)
      */
@@ -1566,6 +1583,11 @@ protected:
         int last = static_cast<int>(nodes_list.size())-1;
         return nodes_list[last]->set_output(node);
     }
+    inline int set_output(const svector<ff_node *> &w) {
+        int last = static_cast<int>(nodes_list.size())-1;
+        return nodes_list[last]->set_output(w);
+    }
+
     inline int set_output_feedback(ff_node *node) {
         int last = static_cast<int>(nodes_list.size())-1;
 
