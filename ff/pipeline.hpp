@@ -1073,6 +1073,25 @@ public:
         return nodes_list[last];
     }
 
+    
+    inline void get_out_nodes(svector<ff_node*>&w) {
+        assert(nodes_list.size()>0);
+        int last = static_cast<int>(nodes_list.size())-1;
+        nodes_list[last]->get_out_nodes(w);
+    }
+
+    inline void get_out_nodes_feedback(svector<ff_node*>&w) {
+        assert(nodes_list.size()>0);
+        int last = static_cast<int>(nodes_list.size())-1;
+        nodes_list[last]->get_out_nodes_feedback(w);
+    }
+
+    
+    inline void get_in_nodes(svector<ff_node*>&w) {
+        assert(nodes_list.size()>0);
+        nodes_list[0]->get_in_nodes(w);
+    }
+    
     void skipfirstpop(bool sk)   { 
         get_node(0)->skipfirstpop(sk);
         for(size_t i=1;i<nodes_list.size();++i)
@@ -1457,25 +1476,6 @@ protected:
         return card;
     }
     
-    inline void get_out_nodes(svector<ff_node*>&w) {
-        assert(nodes_list.size()>0);
-        int last = static_cast<int>(nodes_list.size())-1;
-        nodes_list[last]->get_out_nodes(w);
-    }
-
-    inline void get_out_nodes_feedback(svector<ff_node*>&w) {
-        assert(nodes_list.size()>0);
-        int last = static_cast<int>(nodes_list.size())-1;
-        nodes_list[last]->get_out_nodes_feedback(w);
-    }
-
-    
-    inline void get_in_nodes(svector<ff_node*>&w) {
-        assert(nodes_list.size()>0);
-        nodes_list[0]->get_in_nodes(w);
-    }
-    
-
     /* The pipeline has not been flattened and its first stage is a multi-input node used as 
      * a standard node. 
      */
