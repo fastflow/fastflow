@@ -537,6 +537,12 @@ public:
         if (w.size() == 0)
             w += getSecondSet();
     }
+
+    void get_out_nodes_feedback(svector<ff_node*>& w) {
+        for(size_t i=0;i<workers2.size();++i)
+            workers2[i]->get_out_nodes_feedback(w);
+    }
+   
     void get_in_nodes(svector<ff_node*>&w) {
         size_t len=w.size();
         for(size_t i=0;i<workers1.size();++i)
