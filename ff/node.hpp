@@ -739,12 +739,7 @@ protected:
     }
     virtual inline int set_output_feedback(ff_node *) { return -1;}
     virtual inline void set_input_channelid(ssize_t, bool=true) {}
-    
-    virtual inline void get_out_nodes(svector<ff_node*>&w) { w.push_back(this); }
-    virtual inline void get_out_nodes_feedback(svector<ff_node*>&) {}
-    virtual inline void get_in_nodes(svector<ff_node*>&w) { w.push_back(this); }
-    virtual inline void get_in_nodes_feedback(svector<ff_node*>&) {}
-    
+        
     virtual int prepare() { prepared=true; return 0; }
     virtual int dryrun() { if (!prepared) return prepare(); return 0; }
 
@@ -999,6 +994,11 @@ public:
     virtual void callbackOut(void * =NULL) { }
 #endif
 
+    virtual inline void get_out_nodes(svector<ff_node*>&w) { w.push_back(this); }
+    virtual inline void get_out_nodes_feedback(svector<ff_node*>&) {}
+    virtual inline void get_in_nodes(svector<ff_node*>&w) { w.push_back(this); }
+    virtual inline void get_in_nodes_feedback(svector<ff_node*>&) {}
+    
     /**
      * \brief Force ff_node-to-core pinning
      *
