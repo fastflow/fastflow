@@ -54,7 +54,10 @@ std::mutex mtx;  // used only for pretty printing
 
 struct Source: ff_monode_t<S_t> {
 	Source(long ntasks): ntasks(ntasks) {}
-    
+
+    int svc_init() {
+        return SAlloc->init();
+    }
 	S_t* svc(S_t*) {        
         long start = get_my_id()*ntasks;
         for (long i=1;i<=ntasks;++i){
@@ -72,6 +75,9 @@ struct Source: ff_monode_t<S_t> {
 };
 struct FlatMap: ff_monode_t<S_t> {
 
+    int svc_init() {
+        return SAlloc->init();
+    }
     S_t* svc(S_t* in) {
         for(int i=0;i<howmany; ++i) {
             S_t* p;

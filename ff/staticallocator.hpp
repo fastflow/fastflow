@@ -33,13 +33,11 @@
 #include <cstdlib>
 #include <cstdio>
 #include <ff/config.hpp>
-#include <atomic>
 #include <new>
 
 /* Author: Massimo Torquati
  * December 2020
  */
-
 
 
 namespace ff {
@@ -52,18 +50,23 @@ public:
         assert(nchannels>0);
         assert(slotsize>0);
         ssize  = slotsize + sizeof(long*);
-
         
         // rounding up nslot to be multiple of nchannels
         nslot = ((_nslot + nchannels -1) / nchannels) * nchannels;
         slotsxchannel = nslot / nchannels;
-        
-        
+    }
+
+	~StaticAllocator() {
+		if (segment) munmap(segment, nslot*ssize);
+		segment=nullptr;
+	}
+
+    int init() {
 		void* result = 0;
         result = mmap(NULL, nslot*ssize, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-        if (result == MAP_FAILED) abort();
+        if (result == MAP_FAILED) return -1;
         segment = (char*)result;
-
+        
         // initialize the "header"
         char* p = segment;
         for(size_t i=0; i<nslot;++i) {
@@ -71,13 +74,9 @@ public:
             _p[0] = (long*)FF_GO_ON;  // this tells me that the slot is free!
             p+=ssize;
         }
-	}
-
-	~StaticAllocator() {
-		if (segment) munmap(segment, nslot*ssize);
-		segment=nullptr;
-	}
-
+        return 0;
+    }
+    
 	template<typename T>
 	void alloc(T*& p, int channel=0) {
         assert(channel>=0 && channel<nchannels) ;

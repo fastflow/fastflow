@@ -440,6 +440,8 @@ protected:
         }
     }
 
+    // FIX: this function is too costly, it should be re-implemented!
+    //
     int get_next_free_channel(bool forever=true) {
         long x=1;
         const size_t attempts = (forever ? (size_t)-1 : running);

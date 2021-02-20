@@ -42,6 +42,12 @@
  *  the data items flowing into the output streams are allocated
  *  using the StaticAllocator (one for each Source and FlatMap).
  *
+ *  The StaticAllocator in each Source node uses the following amount of memory:
+ *    #FlatMap * (qlen + 2) * sizeof(task);
+ *
+ *  The StaticAllocator in each FlatMap node uses the following amount of memory:
+ *   (#Sink + 1) * #Map * (qlen + 2) * sizeof(task)
+ *
  */
 
 #include <map>
@@ -66,7 +72,11 @@ static std::mutex mtx;  // used only for pretty printing
 struct Source: ff_monode_t<S_t> {
 	Source(long ntasks, StaticAllocator* SAlloc):
         ntasks(ntasks), SAlloc(SAlloc) {}
-    
+
+    int svc_init() {
+        return SAlloc->init();
+    }
+
 	S_t* svc(S_t*) {
         long start = get_my_id()*ntasks;
         for (long i=1;i<=ntasks;++i){
@@ -87,6 +97,9 @@ struct Source: ff_monode_t<S_t> {
 };
 struct FlatMap: ff_monode_t<S_t> {
     FlatMap(StaticAllocator* SAlloc): SAlloc(SAlloc) {
+    }
+    int svc_init() {
+        return SAlloc->init();
     }
     S_t* svc(S_t* in) {
         for(int i=0;i<howmany; ++i) {
@@ -156,8 +169,7 @@ int main(int argc, char* argv[]) {
     ff_a2a _2(false, qlen, qlen, true);
     for (int i=0;i<nFlatMap;++i) {
         // NOTE: for each queue we have +2 slots
-        SA[i] = new StaticAllocator((nMap*nSink+1)*(qlen+2), sizeof(S_t), nMap);        
-        //SA[i] = new StaticAllocator(((1+nSink)*qlen + (1+1+nSink))*nMap, sizeof(S_t), nMap);        
+        SA[i] = new StaticAllocator((nSink+1)*(qlen+2), sizeof(S_t), nMap);
         L.push_back(new ff_comb(new miHelperFM, new FlatMap(SA[i]), true, true));
     }
     ff_pipeline pipe1(false, qlen,qlen,true);
@@ -173,7 +185,7 @@ int main(int argc, char* argv[]) {
     ff_a2a _3(false, qlen, qlen, true);
     for (int i=0, j=nFlatMap;i<nSource;++i,++j) {
         // NOTE: for each queue we have +2 slots
-        SA[j] = new StaticAllocator( (qlen+2)*nFlatMap, sizeof(S_t), nFlatMap); 
+        SA[j] = new StaticAllocator( 1*(qlen+2), sizeof(S_t), nFlatMap); 
         L.push_back(new Source(ntasks, SA[j]));
     }
     

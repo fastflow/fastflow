@@ -52,7 +52,7 @@
 #pragma message ("Define -DNO_STD_C0X to use a non c++0x/c++11 compiler")
 #endif
 
-#define NO_STD_C0X
+//#define NO_STD_C0X
 
 
 // // Check for g++ version >= 4.5
