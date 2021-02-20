@@ -43,6 +43,11 @@
  *  the data items flowing into the output streams are allocated
  *  using the StaticAllocator (one for each Source and FlatMap).
  *
+ *  The StaticAllocator in each Source node uses the following amount of memory:
+ *    #FlatMap * (qlen + 2) * sizeof(task);
+ *
+ *  The StaticAllocator in each FlatMap node uses the following amount of memory:
+ *   (#Sink + 1) * #Map * (qlen + 2) * sizeof(task)
  */
 
 #include <map>
@@ -74,15 +79,15 @@ static std::mutex mtx;  // used only for pretty printing
 struct Source: ff_monode_t<S_t> {
 	Source(long ntasks, StaticAllocator* SAlloc):
         ntasks(ntasks), SAlloc(SAlloc) {}
-    
+
+    int svc_init() {
+        return (!enablestd?SAlloc->init():0);
+    }
 	S_t* svc(S_t*) {
         long start = get_my_id()*ntasks;
         for (long i=1;i<=ntasks;++i){
             S_t* p;
-            if (enablestd) {
-                p = new S_t;
-                assert(p);
-            } else {
+            if (!enablestd) {
                 // NOTE: 
                 // to know which allocator to use, we must use
                 // the get_next_free_channel to know which will be
@@ -91,7 +96,11 @@ struct Source: ff_monode_t<S_t> {
                 int ch = get_next_free_channel();
                 assert(ch>=0 && ch <(int)get_num_outchannels());
                 SAlloc->alloc(p, ch);
+            } else {
+                p = new S_t;
+                assert(p);
             }
+
             p->t = start+i;
             p->f = p->t*1.0;
 
@@ -106,16 +115,21 @@ struct Source: ff_monode_t<S_t> {
 struct FlatMap: ff_monode_t<S_t> {
     FlatMap(StaticAllocator* SAlloc): SAlloc(SAlloc) {
     }
+
+    int svc_init() {
+        return (!enablestd?SAlloc->init():0);
+    }
+
     S_t* svc(S_t* in) {
         for(int i=0;i<howmany; ++i) {
             S_t* p;
-            if (enablestd) {
-                p = new S_t;
-                assert(p);
-            } else {
+            if (!enablestd) {
                 int ch = get_next_free_channel();
                 assert(ch>=0 && ch <(int)get_num_outchannels());
                 SAlloc->alloc(p,ch);
+            } else {
+                p = new S_t;
+                assert(p);
             }
             
             *p = *in;
@@ -153,7 +167,6 @@ struct Sink: ff_minode_t<S_t> {
     }
     
     std::map<int,int> M;
-    StaticAllocator* SAlloc=nullptr;
 };
 
 
@@ -294,7 +307,7 @@ int main(int argc, char* argv[]) {
         StaticAllocator* FlatMapAlloc = nullptr;
         if (!enablestd){
             // NOTE: for each queue we have +2 slots
-            FlatMapAlloc = new StaticAllocator((nMap*nSink +1)*(qlen+2), sizeof(S_t), nMap);
+            FlatMapAlloc = new StaticAllocator((nSink +1)*(qlen+2), sizeof(S_t), nMap);
             assert(FlatMapAlloc);
         }
         L.push_back(new ff_comb(new miHelper, new FlatMap(FlatMapAlloc), true, true));
@@ -314,7 +327,7 @@ int main(int argc, char* argv[]) {
         StaticAllocator* SourceAlloc  = nullptr;
         if (!enablestd) {
             // NOTE: for each queue we have +2 slots
-            SourceAlloc = new StaticAllocator( nFlatMap*(qlen+2), sizeof(S_t), nFlatMap);
+            SourceAlloc = new StaticAllocator( 1*(qlen+2), sizeof(S_t), nFlatMap);
             assert(SourceAlloc);
         }
         L.push_back(new Source(ntasks, SourceAlloc));
