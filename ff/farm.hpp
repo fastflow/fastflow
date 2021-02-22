@@ -216,6 +216,9 @@ protected:
             error("FARM: wrong number of workers\n");
             return -1;
         }
+        for(size_t i=0;i<workers.size();++i) {
+            workers[i]->set_id(int(i));
+        }
 
         // NOTE: if the farm is in a master-worker configuration, all workers must be either
         //       sequential or parallel  building block
@@ -1074,8 +1077,7 @@ public:
             return -1; 
         }        
         for(size_t i=0;i<w.size();++i) {
-            workers.push_back(w[i]);
-			(workers.back())->set_id(int(i));
+            workers.push_back(w[i]);	   
         }
 
         return 0;
