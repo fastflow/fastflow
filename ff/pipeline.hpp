@@ -41,6 +41,10 @@
 #include <mammut/mammut.hpp>
 #endif
 
+#ifdef DFF_ENABLED
+ class dGroup;
+#endif
+
 
 namespace ff {
 
@@ -1192,6 +1196,9 @@ public:
      * Blocking behaviour w.r.t. main thread to be clarified
      */
     int run_and_wait_end() {
+
+
+
         if (isfrozen()) {  // TODO 
             error("PIPE: Error: feature not yet supported\n");
             return -1;
@@ -1201,7 +1208,7 @@ public:
         if (wait()<0) return -1;
         return 0;
     }
-    
+
     /**
      * \related ff_pipe
      * \brief run the pipeline, waits that all stages received the End-Of-Stream (EOS),
@@ -1464,6 +1471,10 @@ public:
     void ffStats(std::ostream & out) { 
         out << "FastFlow trace not enabled\n";
     }
+#endif
+
+#ifdef DFF_ENABLED
+    dGroup& createGroup(std::string);
 #endif
     
 protected:

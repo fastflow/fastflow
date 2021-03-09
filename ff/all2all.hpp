@@ -702,6 +702,10 @@ public:
     }
 #endif
 
+#ifdef DFF_ENABLED
+    dGroup& createGroup(std::string);
+#endif
+
     
     
 protected:
