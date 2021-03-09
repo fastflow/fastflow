@@ -42,7 +42,8 @@
 #endif
 
 #ifdef DFF_ENABLED
- class dGroup;
+#include <ff/distributed/ff_dgroups.hpp>
+
 #endif
 
 
@@ -50,6 +51,7 @@ namespace ff {
 
 // forward declarations
 class ff_pipeline;
+class dGroup;
 static inline int optimize_static(ff_pipeline&, const OptLevel&);
 template<typename T>    
 static inline int combine_with_firststage(ff_pipeline&,T*,bool=false);
@@ -1196,7 +1198,10 @@ public:
      * Blocking behaviour w.r.t. main thread to be clarified
      */
     int run_and_wait_end() {
-
+        #ifdef DFF_ENABLED
+        dGroups::Instance()->run_and_wait_end(this);
+        return 0;
+        #endif
 
 
         if (isfrozen()) {  // TODO 
@@ -1474,7 +1479,7 @@ public:
 #endif
 
 #ifdef DFF_ENABLED
-    dGroup& createGroup(std::string);
+    ff::dGroup& createGroup(std::string);
 #endif
     
 protected:

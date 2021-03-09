@@ -25,7 +25,7 @@
 #define DFF_ENABLED
 
 #include <ff/ff.hpp>
-
+#include <ff/distributed/ff_dgroups.hpp>
 #include <ff/distributed/ff_dgroup.hpp>
 #include <ff/distributed/ff_network.hpp>
 
