@@ -39,6 +39,9 @@ namespace ff {
 
 // forward declarations
 static ff_node* ispipe_getlast(ff_node*);
+#ifdef DFF_ENABLED
+class dGroup;
+#endif
     
 class ff_a2a: public ff_node {
     friend class ff_farm;
@@ -703,7 +706,7 @@ public:
 #endif
 
 #ifdef DFF_ENABLED
-    dGroup& createGroup(std::string);
+    ff::dGroup& createGroup(std::string);
 #endif
 
     
