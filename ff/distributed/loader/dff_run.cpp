@@ -1,10 +1,21 @@
 #include <iostream>
 #include <fstream>
+#include <chrono>
+#include <thread>
 #include <unistd.h>
-#include <../external/cereal/cereal.hpp>
-#include <../external/cereal/archives/json.hpp>
-#include <../external/cereal/types/string.hpp>
-#include <../external/cereal/types/vector.hpp>
+#include <sys/time.h>
+
+#include <cereal/cereal.hpp>
+#include <cereal/archives/json.hpp>
+#include <cereal/types/string.hpp>
+#include <cereal/types/vector.hpp>
+
+
+static inline unsigned long getusec() {
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    return (unsigned long)(tv.tv_sec*1e6+tv.tv_usec);
+}
 
 std::string configFile;
 std::string executable;
@@ -99,8 +110,10 @@ int main(int argc, char** argv) {
     
     std::ifstream is(configFile);
 
-    if (!is) throw std::runtime_error("Unable to open configuration file for the program!");
-        
+    if (!is){
+        std::cerr << "Unable to open configuration file for the program!" << std::endl;
+        return -1;
+    }        
     cereal::JSONInputArchive ar(is);
 
     std::vector<G> parsedGroups;
@@ -117,9 +130,10 @@ int main(int argc, char** argv) {
             std::cout << "Group: " << g.name << " on host " << g.host << std::endl;
     #endif
 
+    auto Tstart = getusec();
+
     for (G& g : parsedGroups)
         g.run();
-
     
     while(!allTerminated(parsedGroups)){
         for(G& g : parsedGroups){
@@ -135,10 +149,13 @@ int main(int argc, char** argv) {
             }
         }
 
-        sleep(0.20);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
     }
     
-    std::cout << "Everything terminated correctly" << std::endl;
+    std::cout << "Everything terminated correctly!" << std::endl;
+    std::cout << "Elapsed time: " << (getusec()-(Tstart))/1000 << " ms" << std::endl;
+
 
     return 0;
 }

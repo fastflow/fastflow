@@ -2,8 +2,6 @@
 #include <iostream>
 #include <mutex>
 
-
-
 #define ITEMS 100
 std::mutex mtx;  // used only for pretty printing
 
