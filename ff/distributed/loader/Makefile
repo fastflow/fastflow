@@ -23,24 +23,17 @@
 #
 # ---------------------------------------------------------------------------
 
-CXXFLAGS            += -std=c++17 
+CXXFLAGS            += -std=c++17
 ifdef DEBUG
     OPTIMIZE_FLAGS  += -g -fno-inline-functions
 else
     OPTIMIZE_FLAGS  += -O3 -finline-functions -DNDEBUG
 endif
-ifdef BLOCKING_MODE
-    CXXFLAGS        += -DBLOCKING_MODE
-endif
-ifdef FF_HOME
-    INCS            += -I$(FF_HOME)
-else
-    INCS            += -I ~/fastflow
-endif
+
 ifdef CEREAL_HOME
     INCS            += -I$(CEREAL_HOME)
 else
-    INCS            += -I ~/cereal
+    INCS            += -I ~/cereal/include
 endif
 
 
@@ -51,8 +44,10 @@ INCLUDES             = $(INCS)
 SOURCES              = $(wildcard *.cpp)
 TARGET               = $(SOURCES:.cpp=)
 
+.DEFAULT_GOAL := dff_run
 .PHONY: all clean cleanall 
 .SUFFIXES: .c .cpp .o
+
 
 %.d: %.cpp
 	set -e; $(CXX) -MM $(INCLUDES) $(CXXFLAGS) $< \

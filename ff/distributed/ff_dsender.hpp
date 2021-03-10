@@ -4,7 +4,7 @@
 #include <iostream>
 #include <map>
 #include <ff/ff.hpp>
-#include "ff_network.hpp"
+#include <ff/distributed/ff_network.hpp>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
@@ -25,7 +25,6 @@ using namespace ff;
 class ff_dsender: public ff_minode_t<message_t> { 
 private:
     size_t neos=0;
-    int distibutedGroupId;
     int next_rr_destination = 0; //next destiation to send for round robin policy
     std::vector<ff_endpoint> dest_endpoints;
     std::map<int, int> dest2Socket;
@@ -159,13 +158,13 @@ private:
 
     
 public:
-    ff_dsender(const int dGroup_id, ff_endpoint dest_endpoint, int coreid=-1)
-		: distibutedGroupId(dGroup_id),coreid(coreid) {
+    ff_dsender(ff_endpoint dest_endpoint, int coreid=-1)
+		: coreid(coreid) {
         this->dest_endpoints.push_back(std::move(dest_endpoint));
     }
 
-    ff_dsender(const int dGroup_id, std::vector<ff_endpoint> dest_endpoints_, int coreid=-1)
-		: distibutedGroupId(dGroup_id), dest_endpoints(std::move(dest_endpoints_)),coreid(coreid) {}
+    ff_dsender( std::vector<ff_endpoint> dest_endpoints_, int coreid=-1)
+		: dest_endpoints(std::move(dest_endpoints_)),coreid(coreid) {}
 
     int svc_init() {
 		if (coreid!=-1)

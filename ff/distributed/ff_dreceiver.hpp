@@ -1,7 +1,11 @@
+#ifndef FF_DRECEIVER_H
+#define FF_DRECEIVER_H
+
+
 #include <iostream>
 #include <sstream>
 #include <ff/ff.hpp>
-#include "ff_network.hpp"
+#include <ff/distributed/ff_network.hpp>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/types.h>
@@ -13,12 +17,6 @@
 #include <cereal/types/polymorphic.hpp>
 
 using namespace ff;
-
-/*
-    The distributed sender is a multi output node
-*/
-#ifndef FF_DRECEIVER_H
-#define FF_DRECEIVER_H
 
 class ff_dreceiver: public ff_monode_t<message_t> { 
 private:

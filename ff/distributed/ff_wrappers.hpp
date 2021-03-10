@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <functional>
 #include <ff/ff.hpp>
-#include "ff_network.hpp"
+#include <ff/distributed/ff_network.hpp>
 #include <cereal/cereal.hpp>
 #include <cereal/types/polymorphic.hpp>
 #include <cereal/archives/portable_binary.hpp>

@@ -7,10 +7,12 @@
 #include <fstream>
 #include <map>
 #include <exception>
-#include "ff_wrappers.hpp"
-#include "ff_dreceiver.hpp"
-#include "ff_dsender.hpp"
-#include "ff_dgroups.hpp"
+#include <ff/distributed/ff_network.hpp>
+#include <ff/distributed/ff_wrappers.hpp>
+#include <ff/distributed/ff_dreceiver.hpp>
+#include <ff/distributed/ff_dsender.hpp>
+#include <ff/distributed/ff_dgroups.hpp>
+
 
 namespace ff{
 
@@ -260,7 +262,7 @@ public:
         // create sender
         if (!isSink()){
             std::cout << "Creating the sender!" << std::endl;
-            this->add_collector(new ff_dsender(0, this->destinations), true);
+            this->add_collector(new ff_dsender(this->destinations), true);
         }
        
 
@@ -280,29 +282,22 @@ public:
         return this->inout_[n];
     }
 
-    int run(bool skip_init=false){
-        buildFarm();
-        return ff_farm::run(skip_init);
+    int run(bool skip_init=false) override {
+        // nothing to do
+        return 0;
     }
 
     int run(ff_node* baseBB, bool skip_init=false) override {
-        // parsare il config File
+
         dGroups* groups_ = dGroups::Instance();
         groups_->parseConfig();
         
         buildFarm(reinterpret_cast<ff_pipeline*>(baseBB));
 
-        //std::cout << "Called run of the group!" << std::endl;
         return ff_farm::run(skip_init);
     }
 
     int wait() override{return ff_farm::wait();}
-
-    int run_and_wait_end() {
-        if (run()<0) return -1;
-        if (ff_farm::wait()<0) return -1;
-        return 0;
-    }
 
 
     void setEndpoint(const std::string address, const int port){
@@ -500,76 +495,6 @@ void dGroups::parseConfig(){
             groupRef->setExpectedInputConnections(expectedInputConnections(g.name, parsedGroups)); 
         }
 
-    }
-
-    void DFF_Init(int &argc, char **&argv){
-        int c;
-        std::string groupName, configFile;
-
-        while (1){
-            static struct option long_options[] =
-                {
-                    {"DFF_GName", required_argument, 0, 'n'},
-                    {"DFF_Config", required_argument, 0, 'c'},
-                    {0, 0, 0, 0}
-                };
-
-            /* getopt_long stores the option index here. */
-            int option_index = 0;
-            c = getopt_long(argc, argv, "", long_options, &option_index);
-
-            /* Detect the end of the options. */
-            if (c == -1) break;
-
-            switch (c){
-            case 0:
-                /* If this option set a flag, do nothing else now. */
-                if (long_options[option_index].flag != 0)
-                    break;
-                printf("option %s", long_options[option_index].name);
-                if (optarg)
-                    printf(" with arg %s", optarg);
-                printf("\n");
-                break;
-
-            case 'c':
-                configFile = std::string(optarg);
-                break;
-
-            case 'n':
-                groupName = std::string(optarg);
-                break;
-
-            case '?':
-                /* getopt_long already printed an error message. */
-                break;
-
-            default:
-                abort();
-            }
-        }
-
-        if (configFile.empty()){
-            std::cerr << "Config file not passed as argument!" << std::endl;
-            abort();
-        }
-
-        if (groupName.empty()){
-            std::cerr << "Group not passed as argument!" << std::endl;
-            abort();
-        }
-
-        dGroups::Instance()->setConfigFile(configFile);
-        dGroups::Instance()->setRunningGroup(groupName);
-
-        // if other arguments are passed, they are preserved!
-        if (optind <= argc){
-            optind--;
-            char *exeName = argv[0];
-            argc -= optind;
-            argv += optind;
-            argv[0] = exeName;
-        }
     }
 
 }
