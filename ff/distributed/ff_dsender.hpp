@@ -44,7 +44,7 @@ private:
 		assert(buff);
 
         if(readn(sck, buff, sz) < 0){
-            error("Error reading from socket");
+            error("Error reading from socket\n");
             delete [] buff;
             return -1;
         }
@@ -144,12 +144,12 @@ private:
         iov[2].iov_len = sizeof(sz);
 
         if (writevn(sck, iov, 3) < 0){
-            error("Error writing on socket header");
+            error("Error writing on socket header\n");
             return -1;
         }
 
         if (writen(sck, task->data.getPtr(), task->data.getLen()) < 0){
-            error("Error writing on socket data");
+            error("Error writing on socket data\n");
             return -1;
         }
 
