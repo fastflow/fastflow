@@ -15,10 +15,6 @@
 //#define LOCAL
 #define REMOTE
 
-#ifdef LOCAL
-  #define SOCKET_PATH "./socket_fd"
-#endif
-
 #define MAXBACKLOG 32
 #define MAX_RETRIES 15
 

@@ -69,11 +69,6 @@ private:
     bool isSource(){return in_.empty() && inout_.empty();}
     bool isSink(){return out_.empty() && inout_.empty();}
 
-public:
-    dGroup(ff_node* parent, std::string label): parentStructure(parent), endpoint(), destinations(), expectedInputConnections(0), in(this), out(this){
-        dGroups::Instance()->addGroup(label, this);
-    }
-
     static bool isIncludedIn(const ff::svector<ff_node*>& firstSet, std::vector<ff_node*>& secondSet){
         for (const ff_node* n : firstSet)
             if (std::find(secondSet.begin(), secondSet.end(), n) == secondSet.end())
@@ -271,21 +266,16 @@ public:
         return 0;
     }
 
-    void print(){
-        for(auto it = inout_.cbegin(); it != inout_.cend(); ++it)
-        {
-            std::cout << it->first << " " << it->second << std::endl;
-        }
-    }
-
     ff_node* getWrapper(ff_node* n){
         return this->inout_[n];
     }
 
-    int run(bool skip_init=false) override {
-        // nothing to do
-        return 0;
+public:
+    dGroup(ff_node* parent, std::string label): parentStructure(parent), endpoint(), destinations(), expectedInputConnections(0), in(this), out(this){
+        dGroups::Instance()->addGroup(label, this);
     }
+
+    int run(bool skip_init=false) override {return 0;}
 
     int run(ff_node* baseBB, bool skip_init=false) override {
 

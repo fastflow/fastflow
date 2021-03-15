@@ -77,6 +77,15 @@ bool allTerminated(std::vector<G>& groups){
 
 int main(int argc, char** argv) {
 
+    if (strcmp(argv[0], "--help") == 0 || strcmp(argv[0], "-help") == 0 || strcmp(argv[0], "-h")){
+        std::cout << "USAGE: " <<  argv[0] << " [options] -f <configFile> <cmd> \n\n"
+                  << "OPTIONS: \n"
+                  << "\t -v <g1>,...,<g2> \t Print the ouput of the g1 and g2 processes. If no groups are specified all are printed\n";
+
+        exit(EXIT_SUCCESS);
+    }
+
+
     std::vector<std::string> viewGroups;
     
     int c;
