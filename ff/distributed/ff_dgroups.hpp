@@ -38,7 +38,7 @@ public:
 
     int run_and_wait_end(ff_node* parent){
         if (groups.find(runningGroup) == groups.end()){
-            ff::error("The group specified is not found nor implemented!");
+            ff::error("The group specified is not found nor implemented!\n");
             return -1;
         }
 
@@ -152,12 +152,12 @@ int DFF_Init(int &argc, char **&argv){
         }
 
         if (configFile.empty()){
-            ff::error("Config file not passed as argument!");
+            ff::error("Config file not passed as argument!\nUse option --DFF_Config=\"config-file-name\"\n");
             return -1;
         }
 
         if (groupName.empty()){
-            ff::error("Group not passed as argument!");
+            ff::error("Group not passed as argument!\nUse option --DFF_GName=\"group-name\"\n");
             return -1;
         }
 

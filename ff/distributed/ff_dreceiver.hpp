@@ -38,7 +38,7 @@ private:
         iov[0].iov_len = sizeof(sz);
 
         if (writevn(sck, iov, 1) < 0 || writen(sck, buff.getPtr(), buff.getLen()) < 0){
-            error("Error writing on socket the routing Table");
+            error("Error writing on socket the routing Table\n");
             return -1;
         }
 
@@ -58,7 +58,7 @@ private:
         iov[2].iov_len = sizeof(sz);
 
         switch (readvn(sck, iov, 3)) {
-           case -1: error("Error reading from socket"); // fatal error
+           case -1: error("Error reading from socket\n"); // fatal error
            case  0: return -1; // connection close
         }
 
@@ -71,7 +71,7 @@ private:
             char* buff = new char [sz];
 			assert(buff);
             if(readn(sck, buff, sz) < 0){
-                error("Error reading from socket");
+                error("Error reading from socket\n");
                 delete [] buff;
                 return -1;
             }
@@ -101,7 +101,7 @@ public:
 
         #ifdef LOCAL
             if ((listen_sck=socket(AF_LOCAL, SOCK_STREAM, 0)) < 0){
-                error("Error creating the socket");
+                error("Error creating the socket\n");
                 return -1;
             }
             
@@ -113,14 +113,14 @@ public:
 
         #ifdef REMOTE
             if ((listen_sck=socket(AF_INET, SOCK_STREAM, 0)) < 0){
-                error("Error creating the socket");
+                error("Error creating the socket\n");
                 return -1;
             }
 
             int enable = 1;
             // enable the reuse of the address
             if (setsockopt(listen_sck, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
-                error("setsockopt(SO_REUSEADDR) failed");
+                error("setsockopt(SO_REUSEADDR) failed\n");
 
             struct sockaddr_in serv_addr;
             serv_addr.sin_family = AF_INET; 
@@ -130,12 +130,12 @@ public:
         #endif
 
         if (bind(listen_sck, (struct sockaddr*)&serv_addr,sizeof(serv_addr)) < 0){
-            error("Error binding");
+            error("Error binding\n");
             return -1;
         }
 
         if (listen(listen_sck, MAXBACKLOG) < 0){
-            error("Error listening");
+            error("Error listening\n");
             return -1;
         }
 
@@ -176,7 +176,7 @@ public:
             tmpset = set;
 
             switch(select(fdmax+1, &tmpset, NULL, NULL, NULL)){
-                case -1: error("Error on selecting socket"); return EOS;
+                case -1: error("Error on selecting socket\n"); return EOS;
                 case  0: continue;
             }
 
@@ -186,7 +186,7 @@ public:
                     if (i == this->listen_sck) {
                         int connfd = accept(this->listen_sck, (struct sockaddr*)NULL ,NULL);
                         if (connfd == -1){
-                            error("Error accepting client");
+                            error("Error accepting client\n");
                         } else {
                             FD_SET(connfd, &set);
                             if(connfd > fdmax) fdmax = connfd;
