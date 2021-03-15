@@ -124,7 +124,10 @@ private:
         int fd, retries = 0;
 
         while((fd = this->create_connect(destination)) < 0 && ++retries < MAX_RETRIES)
-            std::this_thread::sleep_for(std::chrono::milliseconds((long)std::pow(2, retries)));
+            if (retries < 9)
+                std::this_thread::sleep_for(std::chrono::milliseconds((long)std::pow(2, retries)));
+            else
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
         return fd;
     }
@@ -171,7 +174,7 @@ public:
 			ff_mapThreadToCpu(coreid);
 		
         for(size_t i=0; i < this->dest_endpoints.size(); i++)
-            sockets[i] = tryConnect(this->dest_endpoints[i]);
+            if ((sockets[i] = tryConnect(this->dest_endpoints[i])) <= 0 ) return -1;
 
         return 0;
     }
