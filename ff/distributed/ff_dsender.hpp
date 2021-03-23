@@ -186,7 +186,7 @@ public:
     }
     message_t *svc(message_t* task) {
         /* here i should send the task via socket */
-        if (task->chid == -1){ // roundrobin over the destinationss
+        if (task->chid == -1){ // roundrobin over the destinations
             task->chid = next_rr_destination;
             next_rr_destination = (next_rr_destination + 1) % dest2Socket.size();
         }
