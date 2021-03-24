@@ -104,77 +104,67 @@ private:
     }
 };
 
-int DFF_Init(int &argc, char **&argv){
-        int c;
-        std::string groupName, configFile;
+int DFF_Init(int& argc, char**& argv){
+    
+    std::string configFile, groupName;
 
-        while (1){
-            static struct option long_options[] =
-                {
-                    {"DFF_GName", required_argument, 0, 'n'},
-                    {"DFF_Config", required_argument, 0, 'c'},
-                    {0, 0, 0, 0}
-                };
-
-            /* getopt_long stores the option index here. */
-            int option_index = 0;
-            c = getopt_long(argc, argv, "", long_options, &option_index);
-
-            /* Detect the end of the options. */
-            if (c == -1) break;
-
-            switch (c){
-            case 0:
-                /* If this option set a flag, do nothing else now. */
-                if (long_options[option_index].flag != 0)
-                    break;
-                printf("option %s", long_options[option_index].name);
-                if (optarg)
-                    printf(" with arg %s", optarg);
-                printf("\n");
-                break;
-
-            case 'c':
-                configFile = std::string(optarg);
-                break;
-
-            case 'n':
-                groupName = std::string(optarg);
-                break;
-
-            case '?':
-                /* getopt_long already printed an error message. */
-                break;
-
-            default:
-                return -1;
-            }
+    for(int i = 0; i < argc; i++){
+      if (strstr(argv[i], "--DFF_Config") != NULL){
+        char * equalPosition = strchr(argv[i], '=');
+        if (equalPosition == NULL){
+          // the option is in the next argument array position
+          configFile = std::string(argv[i+1]);
+          argv[i] = argv[i+1] = NULL;
+          i++;
+        } else {
+          // the option is in the next position of this string
+          configFile = std::string(++equalPosition);
+          argv[i] = NULL;
         }
+        continue;
+      }
 
-        if (configFile.empty()){
-            ff::error("Config file not passed as argument!\nUse option --DFF_Config=\"config-file-name\"\n");
-            return -1;
+      if (strstr(argv[i], "--DFF_GName") != NULL){
+        char * equalPosition = strchr(argv[i], '=');
+        if (equalPosition == NULL){
+          // the option is in the next argument array position
+          groupName = std::string(argv[i+1]);
+          argv[i] = argv[i+1] = NULL;
+          i++;
+        } else {
+          // the option is in the next position of this string
+          groupName = std::string(++equalPosition);
+          argv[i] = NULL;
         }
-
-        if (groupName.empty()){
-            ff::error("Group not passed as argument!\nUse option --DFF_GName=\"group-name\"\n");
-            return -1;
-        }
-
-        dGroups::Instance()->setRunningGroup(groupName); 
-        dGroups::Instance()->setConfigFile(configFile);
-
-        // if other arguments are passed, they are preserved!
-        if (optind <= argc){
-            optind--;
-            char *exeName = argv[0];
-            argc -= optind;
-            argv += optind;
-            argv[0] = exeName;
-        }
-
-        return 0;
+        continue;
+      } 
     }
+
+    if (configFile.empty()){
+      ff::error("Config file not passed as argument!\nUse option --DFF_Config=\"config-file-name\"\n");
+      return -1;
+    }
+
+    if (groupName.empty()){
+      ff::error("Group not passed as argument!\nUse option --DFF_GName=\"group-name\"\n");
+      return -1;
+    }
+
+    dGroups::Instance()->setRunningGroup(groupName); 
+    dGroups::Instance()->setConfigFile(configFile);
+
+
+    // recompact the argv array
+    int j = 0;
+    for(int i = 0;  i < argc; i++)
+      if (argv[i] != NULL)
+        argv[j++] = argv[i];
+    
+    // update the argc value
+    argc = j;
+
+    return 0;
+}
 
 }
 
