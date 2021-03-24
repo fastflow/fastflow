@@ -4,6 +4,8 @@
 #include <thread>
 #include <unistd.h>
 #include <sys/time.h>
+#include <getopt.h>
+
 
 #include <cereal/cereal.hpp>
 #include <cereal/archives/json.hpp>
@@ -47,12 +49,10 @@ struct G {
             host = "127.0.0.1"; // set the host to localhost if not found in config file!
             ar.setNextName(nullptr);
             }
-        
-        std::cout << "Host: " << host << std::endl;
     }
 
     void run(){
-        char b[100]; // ssh -t
+        char b[150]; // ssh -t
         sprintf(b, " %s %s %s --DFF_Config=%s --DFF_GName=%s", (isRemote() ? "ssh -t " : ""), (isRemote() ? host.c_str() : "") , executable.c_str(), configFile.c_str(), this->name.c_str());
        std::cout << "Executing the following string: " << b << std::endl;
         fd = popen(b, "r");
@@ -77,7 +77,7 @@ bool allTerminated(std::vector<G>& groups){
 
 int main(int argc, char** argv) {
 
-    if (strcmp(argv[0], "--help") == 0 || strcmp(argv[0], "-help") == 0 || strcmp(argv[0], "-h")){
+    if (strcmp(argv[0], "--help") == 0 || strcmp(argv[0], "-help") == 0 || strcmp(argv[0], "-h") == 0){
         std::cout << "USAGE: " <<  argv[0] << " [options] -f <configFile> <cmd> \n\n"
                   << "OPTIONS: \n"
                   << "\t -v <g1>,...,<g2> \t Print the ouput of the g1 and g2 processes. If no groups are specified all are printed\n";
@@ -87,32 +87,34 @@ int main(int argc, char** argv) {
 
 
     std::vector<std::string> viewGroups;
+    bool seeAll = false;
     
     int c;
-    while ((c = getopt (argc, argv, ":f:v:")) != -1)
+    while ((c = getopt(argc, argv, "Vv:f:")) != -1){
+        std::cout << (char)c << std::endl;
         switch (c){
             case 'f':
                 configFile = std::string(optarg);
+                std::cout << configFile << std::endl;
                 break;
-            case 'v':
+            case 'V':
+                seeAll = true;
+                break;
+            case 'v':    
                 viewGroups = split(optarg, ',');
-                break;
-            case ':':
-                if (optopt == 'v'){
-                    // see all
-                }
                 break;
             case '?':
                 if (optopt == 'f')
-                fprintf (stderr, "Option -%c requires an argument.\n", optopt);
+                    printf ("Option -%c requires an argument.\n", optopt);
                 else if (isprint (optopt))
-                fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+                    printf ("Unknown option `-%c'.\n", optopt);
                 else
-                fprintf (stderr, "Unknown option character `\\x%x'.\n", optopt);
+                    printf ("Unknown option character `\\x%x'.\n", optopt);
                 return 1;
             default:
                 abort();
         }
+    }
     
     for (int index = optind; index < argc; index++)
         executable += std::string(argv[index]) + " ";
@@ -152,7 +154,7 @@ int main(int argc, char** argv) {
                 if (result == NULL){
                     pclose(g.fd); g.fd = nullptr;
                 } else {
-                    if (find(viewGroups.begin(), viewGroups.end(), g.name) != viewGroups.end())
+                    if (seeAll || find(viewGroups.begin(), viewGroups.end(), g.name) != viewGroups.end())
                         std::cout << "[" << g.name << "]" << buff;
                 }
             }
