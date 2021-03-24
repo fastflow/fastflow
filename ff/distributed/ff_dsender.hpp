@@ -124,10 +124,11 @@ private:
         int fd, retries = 0;
 
         while((fd = this->create_connect(destination)) < 0 && ++retries < MAX_RETRIES)
-            if (retries < 9)
-                std::this_thread::sleep_for(std::chrono::milliseconds((long)std::pow(2, retries)));
+            if (retries < AGGRESSIVE_TRESHOLD)
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
             else
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                //std::this_thread::sleep_for(std::chrono::milliseconds((long)std::pow(2, retries - AGGRESSIVE_TRESHOLD)));
 
         return fd;
     }

@@ -15,10 +15,6 @@
 //#define LOCAL
 #define REMOTE
 
-#define MAXBACKLOG 32
-#define MAX_RETRIES 15
-
-
 #ifdef __APPLE__
     #include <libkern/OSByteOrder.h>
     #define htobe16(x) OSSwapHostToBigInt16(x)
