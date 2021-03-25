@@ -1,11 +1,13 @@
 /*  
- *            
- *                    | ->  Node3 -->| 
- *   Node1-->Node2 -->| ->  Node3 -->| -> Node4    
- *                    | ->  Node3 -->|
- *   /<-- pipe0-->/   /<--------- a2a -------->/
- *         G1                     G2
- *   /<----------------- pipe ---------------->/
+ *           |-> Helper->Node2 -->|    |->  Helper->Node3 -->|             
+ *           |                    |    |                     |
+ *   Node1-->|                    | -> |->  Helper->Node3 -->| -> Node4    
+ *           |-> Helper->Node2 -->|    |                     |
+ *                                     |->  Helper->Node3 -->|
+ *
+ *   /<---------- a2a0 ---------->/   /<------------ a2a ------------>/
+ *                     G1                        G2
+ *   /<---------------------------- pipe ---------------------------->/
  *
  *
  */
@@ -47,7 +49,7 @@ struct Node1: ff_monode_t<myTask_t>{
 
 struct Node2: ff_node_t<myTask_t>{
     myTask_t* svc(myTask_t* t){
-		t->str += std::string(" World");		
+		t->str += std::string(" World") + std::to_string(get_my_id());
         return t;
     }
 };
@@ -77,36 +79,43 @@ struct Node4: ff_minode_t<myTask_t>{
 	long processed=0;
 };
 
+struct Helper: ff_minode_t<myTask_t> {
+	myTask_t* svc(myTask_t* t) { return t; }
+};
+
 
 int main(int argc, char*argv[]){
     if (DFF_Init(argc, argv)<0 ) {
 		error("DFF_Init\n");
 		return -1;
-	}	
+	}
 	long ntasks = 1000;
 	if (argc>1) {
 		ntasks = std::stol(argv[1]);
 	}
 		
     ff_pipeline pipe;
-	Node1 n1(ntasks);
-	Node2 n2;
-	Node3 n31, n32, n33;
-	Node4 n4(ntasks);
-	ff_pipeline pipe0;
-	pipe0.add_stage(&n1);
-	pipe0.add_stage(&n2);
-	ff_a2a      a2a;
-	a2a.add_firstset<Node3>({&n31, &n32, &n33});
-    a2a.add_secondset<Node4>({&n4});
-	pipe.add_stage(&pipe0);
-	pipe.add_stage(&a2a);
+	Node1  n1(ntasks);
+	Helper h21, h22;
+	Node2  n21, n22;
+	Helper h31, h32, h33;
+	Node3  n31, n32, n33;
+	Node4  n4(ntasks);
+	ff_a2a      a2a0;
+	a2a0.add_firstset<Node1>({&n1});
+    a2a0.add_secondset<ff_node>({new ff_comb(&h21, &n21), new ff_comb(&h22, &n22)});
+	ff_a2a      a2a1;
+	a2a1.add_firstset<ff_node>({new ff_comb(&h31, &n31), new ff_comb(&h32, &n32), new ff_comb(&h33, &n33)});
+    a2a1.add_secondset<Node4>({&n4});
+	pipe.add_stage(&a2a0);
+	pipe.add_stage(&a2a1);
 	
-    auto G1 = pipe0.createGroup("G1");
-    auto G2 = a2a.createGroup("G2");
+    auto G1 = a2a0.createGroup("G1");
+    auto G2 = a2a1
+		.createGroup("G2");
 	
-    G1.out << &n2;
-    G2.in  << &n31 << &n32 << &n33;
+    G1.out << &n21 << &n22;
+    G2.in  << &h31 << &h32 << &h33;
 	
 	if (pipe.run_and_wait_end()<0) {
 		error("running the main pipe\n");

@@ -15,7 +15,7 @@
 
 using namespace ff;
 
-struct task_t {
+struct myTask_t {
 	std::string str;
 	struct S_t {
 		long  t;
@@ -30,11 +30,11 @@ struct task_t {
 };
 
 
-struct Node1: ff_monode_t<task_t>{
+struct Node1: ff_monode_t<myTask_t>{
 	Node1(long ntasks):ntasks(ntasks) {}
-    task_t* svc(task_t*){
+    myTask_t* svc(myTask_t*){
         for(long i=0; i< ntasks; i++) {
-			task_t* task = new task_t;
+			myTask_t* task = new myTask_t;
 			task->str="Hello";
 			task->S.t = i;
 			task->S.f = i*1.0;
@@ -45,8 +45,8 @@ struct Node1: ff_monode_t<task_t>{
 	const long ntasks;
 };
 
-struct Node2: ff_node_t<task_t>{
-    task_t* svc(task_t* t){
+struct Node2: ff_node_t<myTask_t>{
+    myTask_t* svc(myTask_t* t){
 		t->str += std::string(" World");		
 		std::cout << "Node2: " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";
 
@@ -54,16 +54,16 @@ struct Node2: ff_node_t<task_t>{
     }
 };
 
-struct Node3: ff_minode_t<task_t>{
-    task_t* svc(task_t* t){
+struct Node3: ff_minode_t<myTask_t>{
+    myTask_t* svc(myTask_t* t){
 		t->S.t  += 1;
 		t->S.f  += 1.0; 
         return t;
     }
 };
 
-struct Node4: ff_node_t<task_t>{
-    task_t* svc(task_t* t){
+struct Node4: ff_node_t<myTask_t>{
+    myTask_t* svc(myTask_t* t){
 		std::cout << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";
 		delete t;
         return GO_ON;
