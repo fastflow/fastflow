@@ -582,15 +582,14 @@ void dGroups::parseConfig(){
         std::ifstream is(this->configFilePath);
 
         if (!is) throw FF_Exception("Unable to open configuration file for the program!");
-        
-        cereal::JSONInputArchive ari(is);
 
         std::vector<G> parsedGroups;
 
         try {
+            cereal::JSONInputArchive ari(is);
             ari(cereal::make_nvp("groups", parsedGroups));
         } catch (const cereal::Exception& e){
-            std::cerr <<  e.what();
+            std::cerr << "Error parsing the JSON config file. Check syntax and structure of  the file and retry!" << std::endl;
             exit(EXIT_FAILURE);
         }
 

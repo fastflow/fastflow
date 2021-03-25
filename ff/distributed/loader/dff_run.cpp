@@ -91,11 +91,10 @@ int main(int argc, char** argv) {
     
     int c;
     while ((c = getopt(argc, argv, "Vv:f:")) != -1){
-        std::cout << (char)c << std::endl;
+
         switch (c){
             case 'f':
                 configFile = std::string(optarg);
-                std::cout << configFile << std::endl;
                 break;
             case 'V':
                 seeAll = true;
@@ -124,15 +123,15 @@ int main(int argc, char** argv) {
     if (!is){
         std::cerr << "Unable to open configuration file for the program!" << std::endl;
         return -1;
-    }        
-    cereal::JSONInputArchive ar(is);
+    }
 
     std::vector<G> parsedGroups;
 
     try {
+        cereal::JSONInputArchive ar(is);
         ar(cereal::make_nvp("groups", parsedGroups));
     } catch (const cereal::Exception& e){
-        std::cerr <<  e.what();
+        std::cerr << "Error parsing the JSON config file. Check syntax and structure of  the file and retry!" << std::endl;
         exit(EXIT_FAILURE);
     }
 
