@@ -1,0 +1,13 @@
+{
+    "groups" : [
+    {   
+        "endpoint" : "localhost:8004",
+        "name" : "G1",
+        "OConn" : ["G2"]
+    },
+    { 
+        "name" : "G2",
+        "endpoint": "localhost:8005"
+    }
+    ]
+}
