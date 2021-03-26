@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <getopt.h>
+#include <sys/wait.h>
 
 
 #include <cereal/cereal.hpp>
@@ -151,7 +152,10 @@ int main(int argc, char** argv) {
                 char buff[1024];
                 char* result = fgets(buff, sizeof(buff), g.fd);
                 if (result == NULL){
-                    pclose(g.fd); g.fd = nullptr;
+                    int code = pclose(g.fd);
+                    if (WEXITSTATUS(code) != 0)
+                        std::cout << "[" << g.name << "][ERR] Report an return code: " << WEXITSTATUS(code) << std::endl;
+                    g.fd = nullptr;
                 } else {
                     if (seeAll || find(viewGroups.begin(), viewGroups.end(), g.name) != viewGroups.end())
                         std::cout << "[" << g.name << "]" << buff;
@@ -159,11 +163,9 @@ int main(int argc, char** argv) {
             }
         }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
     }
     
-    std::cout << "Everything terminated correctly!" << std::endl;
     std::cout << "Elapsed time: " << (getusec()-(Tstart))/1000 << " ms" << std::endl;
 
 
