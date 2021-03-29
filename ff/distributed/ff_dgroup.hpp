@@ -295,7 +295,7 @@ public:
         return ff_farm::run(skip_init);
     }
 
-    int wait() override{return ff_farm::wait();}
+    //int wait() {return ff_farm::wait();}
 
 
     void setEndpoint(const std::string address, const int port){
