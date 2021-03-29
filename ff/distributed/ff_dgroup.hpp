@@ -92,17 +92,17 @@ private:
                 ff_node* wrapped = wrappers_[node].first;
                 
                 if (parentBB->isPipe()){
-                    reinterpret_cast<ff_pipeline*>(parentBB)->change_node(node, wrapped, false, true);
+                    reinterpret_cast<ff_pipeline*>(parentBB)->change_node(node, wrapped, true, true);
                     continue;
                 }
 
                 if (parentBB->isAll2All()){
-                    reinterpret_cast<ff_a2a*>(parentBB)->change_node(node, wrapped, false, true);
+                    reinterpret_cast<ff_a2a*>(parentBB)->change_node(node, wrapped, true, true);
                     continue;
                 }
 
                 if (parentBB->isComp()){
-                    reinterpret_cast<ff_comb*>(parentBB)->change_node(node, wrapped, false, true);
+                    reinterpret_cast<ff_comb*>(parentBB)->change_node(node, wrapped, true, true);
                     continue;
                 }
 
@@ -333,12 +333,12 @@ MySet<IN>& MySet<IN>::operator<<(ff_node_t<Tin, Tout>* node){
     if (!handle.empty()){ // the node is edge also in its output
         if (handle.mapped().second){
             if constexpr (cereal::traits::is_output_serializable<Tout, cereal::BinaryOutputArchive>::value){
-                this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, true)});
+                this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, false)});
             }
         } else 
-            this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, false, Tin, Tout>(node, 1, true, nullptr, ((WrapperOUT<false, Tin, Tout>*)handle.mapped().first)->getTransform())});
+            this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, false, Tin, Tout>(node, 1, false, nullptr, ((WrapperOUT<false, Tin, Tout>*)handle.mapped().first)->getTransform())});
     } else
-        this->group->in_.insert({node, {new WrapperIN<true, Tin, Tout>(node, true), true}});
+        this->group->in_.insert({node, {new WrapperIN<true, Tin, Tout>(node, false), true}});
 
     return *this;
 }
@@ -357,12 +357,12 @@ MySet<IN>& MySet<IN>::operator<<(ff_minode_t<Tin, Tout>* node){
     if (!handle.empty()){// the node is edge also in its output
         if (handle.mapped().second){
             if constexpr (cereal::traits::is_output_serializable<Tout, cereal::BinaryOutputArchive>::value){
-                this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, true)});
+                this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, false)});
             }
         } else
-            this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, false, Tin, Tout>(node, 1, true, nullptr, reinterpret_cast<WrapperOUT<false, Tin, Tout>*>(reinterpret_cast<ff_comb*>(handle.mapped().first)->getFirst())->getTransform())});
+            this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, false, Tin, Tout>(node, 1, false, nullptr, reinterpret_cast<WrapperOUT<false, Tin, Tout>*>(reinterpret_cast<ff_comb*>(handle.mapped().first)->getFirst())->getTransform())});
     } else
-        this->group->in_.insert({node, {new WrapperIN<true, Tin, Tout>(node, true), true}});
+        this->group->in_.insert({node, {new WrapperIN<true, Tin, Tout>(node, false), true}});
 
     return *this;
 }
@@ -377,12 +377,12 @@ MySet<IN>& MySet<IN>::operator<<(ff_monode_t<Tin, Tout>* node){
     if (!handle.empty()){ // the node is edge also in its output
         if (handle.mapped().second){ 
             if constexpr (cereal::traits::is_output_serializable<Tout, cereal::BinaryOutputArchive>::value){
-                this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, true)});
+                this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, false)});
             }
         } else
-            this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, false, Tin, Tout>(node, 1, true, nullptr, ((WrapperOUT<false, Tin, Tout>*)handle.mapped().first)->getTransform())});
+            this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, false, Tin, Tout>(node, 1, false, nullptr, ((WrapperOUT<false, Tin, Tout>*)handle.mapped().first)->getTransform())});
     } else {
-        ff_comb* combine = new ff_comb(new WrapperIN<true, Tin>(new ForwarderNode, true), node, true);
+        ff_comb* combine = new ff_comb(new WrapperIN<true, Tin>(new ForwarderNode, true), node, true, false);
         this->group->in_.insert({node, {combine, true}});
     }
 
@@ -398,12 +398,12 @@ MySet<OUT>& MySet<OUT>::operator<<(ff_node_t<Tin, Tout>* node){
     if (!handle.empty()){ // the node is edge also in its input
         if (handle.mapped().second){
             if constexpr (cereal::traits::is_output_serializable<Tin, cereal::BinaryOutputArchive>::value){
-                this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, true)});
+                this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, false)});
             }
         } else
-            this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<false, true, Tin, Tout>(node, 1, true, ((WrapperIN<false, Tin, Tout>*)handle.mapped().first)->getFinalizer())});
+            this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<false, true, Tin, Tout>(node, 1, false, ((WrapperIN<false, Tin, Tout>*)handle.mapped().first)->getFinalizer())});
     } else
-        this->group->out_.insert({node, {new WrapperOUT<true, Tin, Tout>(node, true), true}});
+        this->group->out_.insert({node, {new WrapperOUT<true, Tin, Tout>(node, false), true}});
 
     return *this;
 }
@@ -417,10 +417,10 @@ MySet<OUT>& MySet<OUT>::operator<<(ff_minode_t<Tin, Tout>* node){
     if (!handle.empty()){ // the node is edge also in its input
         if (handle.mapped().second){
             if constexpr (cereal::traits::is_output_serializable<Tin, cereal::BinaryOutputArchive>::value){
-                this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, true)});
+                this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, false)});
             }
         } else
-            this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<false, true, Tin, Tout>(node, 1, true, ((WrapperIN<false, Tin, Tout>*)handle.mapped().first)->getFinalizer())});
+            this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<false, true, Tin, Tout>(node, 1, false, ((WrapperIN<false, Tin, Tout>*)handle.mapped().first)->getFinalizer())});
     } else {
         ff_comb* combine = new ff_comb(node, new WrapperOUT<true, Tout>(new ForwarderNode, true), false, true);
         this->group->out_.insert({node, {combine, true}});
@@ -438,12 +438,12 @@ MySet<OUT>& MySet<OUT>::operator<<(ff_monode_t<Tin, Tout>* node){
     if (!handle.empty()){ // the node is edge also in its input
         if (handle.mapped().second){
             if constexpr (cereal::traits::is_output_serializable<Tin, cereal::BinaryOutputArchive>::value){
-                this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, true)});
+                this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, false)});
             }
         } else
-            this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<false, true, Tin, Tout>(node, 1, true, reinterpret_cast<WrapperIN<false, Tin, Tout>*>(reinterpret_cast<ff_comb*>(handle.mapped().first)->getLast())->getFinalizer())});
+            this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<false, true, Tin, Tout>(node, 1, false, reinterpret_cast<WrapperIN<false, Tin, Tout>*>(reinterpret_cast<ff_comb*>(handle.mapped().first)->getLast())->getFinalizer())});
     } else
-        this->group->out_.insert({node, {new WrapperOUT<true, Tin, Tout>(node, true), true}});
+        this->group->out_.insert({node, {new WrapperOUT<true, Tin, Tout>(node, false), true}});
 
     return *this;
 }
