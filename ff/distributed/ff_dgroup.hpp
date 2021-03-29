@@ -92,17 +92,17 @@ private:
                 ff_node* wrapped = wrappers_[node].first;
                 
                 if (parentBB->isPipe()){
-                    reinterpret_cast<ff_pipeline*>(parentBB)->change_node(node, wrapped, true);
+                    reinterpret_cast<ff_pipeline*>(parentBB)->change_node(node, wrapped, false, true);
                     continue;
                 }
 
                 if (parentBB->isAll2All()){
-                    reinterpret_cast<ff_a2a*>(parentBB)->change_node(node, wrapped, true);
+                    reinterpret_cast<ff_a2a*>(parentBB)->change_node(node, wrapped, false, true);
                     continue;
                 }
 
                 if (parentBB->isComp()){
-                    reinterpret_cast<ff_comb*>(parentBB)->change_node(node, wrapped, true);
+                    reinterpret_cast<ff_comb*>(parentBB)->change_node(node, wrapped, false, true);
                     continue;
                 }
 
