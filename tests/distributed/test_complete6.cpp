@@ -1,14 +1,16 @@
 /*  
- *            
- *                    | ->  Node3 -->| 
- *   Node1-->Node2 -->| ->  Node3 -->| -> Node4    
- *                    | ->  Node3 -->|
- *   /<-- pipe0-->/   /<--------- a2a -------->/
- *         G1                     G2
- *   /<----------------- pipe ---------------->/
+ *                           |-> Node31 -->|             
+ *             |-> Node21 -->|             |
+ *   Node1---->|             |-> Node32 -->| ----> Node4    
+ *             |-> Node22 -->|             |
+ *                           |-> Node33 -->|
  *
- *  G1: pipe0
- *  G2: a2a
+ *   /<-pipe0->//<--------- a2a0 ---------->//<- pipe1->/  
+ *   /<-------------..------ pipe --------------------->/
+ *
+ * G1: pipe0
+ * G2: a2a0
+ * G3: pipe1
  */
 
 
@@ -46,24 +48,19 @@ struct Node1: ff_monode_t<myTask_t>{
 	const long ntasks;
 };
 
-struct Node2: ff_node_t<myTask_t>{
+struct Node2: ff_monode_t<myTask_t>{
     myTask_t* svc(myTask_t* t){
-		t->str += std::string(" World");		
+		t->str += std::string(" World") + std::to_string(get_my_id());
         return t;
     }
 };
 
-struct Node3: ff_monode_t<myTask_t>{ 
+struct Node3: ff_minode_t<myTask_t>{ 
     myTask_t* svc(myTask_t* t){
 		t->S.t  += get_my_id();
 		t->S.f  += get_my_id()*1.0;
         return t;
     }
-	void eosnotify(ssize_t) {
-		printf("Node3 %ld EOS RECEIVED\n", get_my_id());
-			fflush(NULL);
-	}
-	
 };
 
 struct Node4: ff_minode_t<myTask_t>{
@@ -74,11 +71,6 @@ struct Node4: ff_minode_t<myTask_t>{
 		delete t;
         return GO_ON;
     }
-	void eosnotify(ssize_t id) {
-		printf("Node4 EOS RECEIVED from %ld\n", id);
-		fflush(NULL);
-	}
-
 	void svc_end() {
 		if (processed != ntasks) {
 			abort();
@@ -89,36 +81,39 @@ struct Node4: ff_minode_t<myTask_t>{
 	long processed=0;
 };
 
-
 int main(int argc, char*argv[]){
     if (DFF_Init(argc, argv)<0 ) {
 		error("DFF_Init\n");
 		return -1;
-	}	
+	}
 	long ntasks = 1000;
 	if (argc>1) {
 		ntasks = std::stol(argv[1]);
 	}
 		
-    ff_pipeline pipe;
-	Node1 n1(ntasks);
-	Node2 n2;
-	Node3 n31, n32, n33;
-	Node4 n4(ntasks);
-	ff_pipeline pipe0;
+    ff_pipeline pipe, pipe0, pipe1;
+	Node1  n1(ntasks);
+	Node2  n21, n22;
+	Node3  n31, n32, n33;
+	Node4  n4(ntasks);
 	pipe0.add_stage(&n1);
-	pipe0.add_stage(&n2);
+	pipe1.add_stage(&n4);
 	ff_a2a      a2a;
-	a2a.add_firstset<Node3>({&n31, &n32, &n33});
-    a2a.add_secondset<Node4>({&n4});
+	a2a.add_firstset<Node2>({&n21, &n22});
+    a2a.add_secondset<Node3>({&n31, &n32, &n33});
+
 	pipe.add_stage(&pipe0);
 	pipe.add_stage(&a2a);
+	pipe.add_stage(&pipe1);
 	
     auto G1 = pipe0.createGroup("G1");
-    auto G2 = a2a.createGroup("G2");
-	
-    G1.out << &n2;
-    G2.in  << &n31 << &n32 << &n33;
+	auto G2 = a2a.createGroup("G2");
+	auto G3 = pipe1.createGroup("G3");
+
+
+	/* ----------------- */ G1.out << &n1;	
+    G2.in  << &n21 << &n22; G2.out << &n31 << &n32 << &n33;
+	G3.in  << &n4;          /* -------------------------- */
 	
 	if (pipe.run_and_wait_end()<0) {
 		error("running the main pipe\n");
