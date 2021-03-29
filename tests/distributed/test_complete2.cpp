@@ -1,12 +1,12 @@
 /*  
- *            
  *                        
  *   Node1-->Node2 --> Node3 --> Node4 
  *
  *   /<-- pipe0-->/    /<---pipe1--->/
  *   /<----------- pipe ------------>/
  *
- *
+ *  G1: pipe0
+ *  G2: pipe1
  */
 
 
@@ -48,26 +48,36 @@ struct Node1: ff_monode_t<myTask_t>{
 struct Node2: ff_node_t<myTask_t>{
     myTask_t* svc(myTask_t* t){
 		t->str += std::string(" World");		
-		std::cout << "Node2: " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";
+		//std::cout << "Node2: " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";
 
         return t;
     }
 };
 
-struct Node3: ff_minode_t<myTask_t>{
+struct Node3: ff_monode_t<myTask_t>{
     myTask_t* svc(myTask_t* t){
 		t->S.t  += 1;
-		t->S.f  += 1.0; 
+		t->S.f  += 1.0;
         return t;
     }
 };
 
-struct Node4: ff_node_t<myTask_t>{
+struct Node4: ff_minode_t<myTask_t>{
+	Node4(long ntasks):ntasks(ntasks) {}
     myTask_t* svc(myTask_t* t){
-		std::cout << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";
+		//std::cout << "Node4: from (" << get_channel_id() << ") " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";
+		++processed;
 		delete t;
         return GO_ON;
     }
+	void svc_end() {
+		if (processed != ntasks) {
+			abort();
+		}
+		std::cout << "RESULT OK\n";
+	}
+	long ntasks;
+	long processed=0;
 };
 
 
@@ -76,14 +86,16 @@ int main(int argc, char*argv[]){
 		error("DFF_Init\n");
 		return -1;
 	}
+	long ntasks = 1000;
+	if (argc>1) {
+		ntasks = std::stol(argv[1]);
+	}
 
-	long ntasks = 100;
-		
     ff_pipeline pipe;
 	Node1 n1(ntasks);
 	Node2 n2;
 	Node3 n3;
-	Node4 n4;
+	Node4 n4(ntasks);
 	ff_pipeline pipe0;
 	pipe0.add_stage(&n1);
 	pipe0.add_stage(&n2);

@@ -47,7 +47,7 @@ public:
 	}
 
 	void registerCallback(bool (*cb)(void *,int,unsigned long,unsigned long,void *), void * arg) {
-		ff_node::registerCallback(cb,arg);
+		internal_mi_transformer::registerCallback(cb,arg);
 	}
 
 	Tin* deserialize(void* buffer) {

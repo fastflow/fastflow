@@ -5,10 +5,12 @@
  *           |-> Helper->Node2 -->|    |                     |
  *                                     |->  Helper->Node3 -->|
  *
- *   /<---------- a2a0 ---------->/   /<------------ a2a ------------>/
+ *   /<---------- a2a0 ---------->/   /<------------ a2a1 ------------>/
  *                     G1                        G2
  *   /<---------------------------- pipe ---------------------------->/
  *
+ *  G1: a2a0
+ *  G2: a2a1
  *
  */
 
@@ -65,7 +67,7 @@ struct Node3: ff_monode_t<myTask_t>{
 struct Node4: ff_minode_t<myTask_t>{
 	Node4(long ntasks):ntasks(ntasks) {}
     myTask_t* svc(myTask_t* t){
-		//std::cout << "Node4: from (" << get_channel_id() << ") " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";
+		//std::cout << "Node4: from (" << get_channel_id() << ") " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n" << std::flush;
 		++processed;
 		delete t;
         return GO_ON;
@@ -74,6 +76,7 @@ struct Node4: ff_minode_t<myTask_t>{
 		if (processed != ntasks) {
 			abort();
 		}
+		std::cout << "RESULT OK\n";
 	}
 	long ntasks;
 	long processed=0;

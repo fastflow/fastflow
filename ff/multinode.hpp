@@ -1014,6 +1014,14 @@ struct internal_mi_transformer: ff_minode {
         return n->set_output_buffer(o);
     }
 
+    FFBUFFER * get_out_buffer() const { return n->get_out_buffer();}
+
+    bool ff_send_out(void * task, int id=-1,
+                     unsigned long retry=((unsigned long)-1),
+                     unsigned long ticks=(TICKS2WAIT)) { 
+        return n->ff_send_out(task,id,retry,ticks);
+    }
+    
     bool init_output_blocking(pthread_mutex_t   *&m,
                               pthread_cond_t    *&c,
                               bool feedback=true) {
