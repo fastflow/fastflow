@@ -53,8 +53,15 @@ struct Node2: ff_node_t<myTask_t>{
 
 struct Node3: ff_node_t<myTask_t>{
     myTask_t* svc(myTask_t* t){
+		static bool even=true;
 		t->S.t  += 1;
 		t->S.f  += 1.0;
+		if (even) {
+			ff_send_out(t);
+			even=false;
+			return GO_ON;
+		}
+		even=true;
         return t;
     }
 };
