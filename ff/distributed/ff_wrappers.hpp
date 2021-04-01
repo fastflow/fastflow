@@ -244,6 +244,10 @@ public:
         registerCallback(ff_send_out_to_cbk, this);
 	}
 
+	void registerCallback(bool (*cb)(void *,int,unsigned long,unsigned long,void *), void * arg) {
+		internal_mi_transformer::registerCallback(cb,arg);
+	}
+
 	
 	Tin* deserialize(void* buffer) {
 		message_t* msg = (message_t*)buffer;
@@ -271,7 +275,7 @@ public:
 	}
 
     bool serialize(Tout* in, int id) {
-		if ((void*)in > FF_TAG_MIN) return this->ff_send_out(in);
+		if ((void*)in > FF_TAG_MIN) return ff_node::ff_send_out(in);
 		
 		message_t* msg = nullptr;
 
@@ -293,7 +297,7 @@ public:
 			msg->chid   = id;
 		}
 
-		return this->ff_send_out(msg);
+		return ff_node::ff_send_out(msg);
 	}
 
 	int svc_init() {

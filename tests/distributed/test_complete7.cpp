@@ -55,7 +55,7 @@ struct Node3: ff_node_t<myTask_t>{
     }
 	void eosnotify(ssize_t) {
 		printf("Node3 %ld EOS RECEIVED\n", get_my_id());
-			fflush(NULL);
+		fflush(NULL);
 	}
 	
 };
