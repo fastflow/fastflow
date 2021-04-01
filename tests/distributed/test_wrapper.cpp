@@ -1,18 +1,14 @@
 /*  
  *                        
  *   Node1-->Node2 --> Node3 --> Node4 
- *
- *   /<-- pipe0-->//<-- pipe1 -->//<-pipe2->/
  *   /<----------- pipe ------------>/
  *
- *  G1: pipe0
- *  G2: pipe1
- *  G3: pipe2
  */
 
 
 #include <iostream>
-#include <ff/dff.hpp>
+#include <ff/ff.hpp>
+#include <ff/distributed/ff_wrappers.hpp>
 
 using namespace ff;
 
@@ -83,10 +79,6 @@ struct Node4: ff_node_t<myTask_t>{
 
 
 int main(int argc, char*argv[]){
-    if (DFF_Init(argc, argv)<0 ) {
-		error("DFF_Init\n");
-		return -1;
-	}
 	long ntasks = 1000;
 	if (argc>1) {
 		ntasks = std::stol(argv[1]);
@@ -97,24 +89,11 @@ int main(int argc, char*argv[]){
 	Node2 n2;
 	Node3 n3;
 	Node4 n4(ntasks);
-	ff_pipeline pipe0;
-	pipe0.add_stage(&n1);
-	pipe0.add_stage(&n2);
-	ff_pipeline pipe1;
-	pipe1.add_stage(&n3);
-    ff_pipeline pipe2;
-	pipe2.add_stage(&n4);
-	pipe.add_stage(&pipe0);
-	pipe.add_stage(&pipe1);
-    pipe.add_stage(&pipe2);
 	
-    auto G1 = pipe0.createGroup("G1");
-    auto G2 = pipe1.createGroup("G2");
-    auto G3 = pipe2.createGroup("G3");
-	
-    G1.out << &n2;
-    G2.in << &n3; G2.out << &n3;
-    G3.in << &n4;
+    pipe.add_stage(&n1);
+    pipe.add_stage(new WrapperOUT<true,myTask_t>(&n2));
+    pipe.add_stage(new WrapperINOUT<true, true, myTask_t>(&n3));
+    pipe.add_stage(new WrapperIN<true, myTask_t>(&n4));
 	
 	if (pipe.run_and_wait_end()<0) {
 		error("running the main pipe\n");
