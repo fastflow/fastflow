@@ -250,6 +250,7 @@ private:
         
         // in/out nodes left to be added to the farm. The next lines does it
         for (const auto& pair : this->inout_){
+            std::cout << "Added INOUT node" << std::endl;
             this->add_workers({pair.second});
         }
 
@@ -333,6 +334,7 @@ MySet<IN>& MySet<IN>::operator<<(ff_node_t<Tin, Tout>* node){
     if (!handle.empty()){ // the node is edge also in its output
         if (handle.mapped().second){
             if constexpr (cereal::traits::is_output_serializable<Tout, cereal::BinaryOutputArchive>::value){
+                std::cout << "Annoted INOUT!" << std::endl;
                 this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, false)});
             }
         } else 
@@ -398,6 +400,7 @@ MySet<OUT>& MySet<OUT>::operator<<(ff_node_t<Tin, Tout>* node){
     if (!handle.empty()){ // the node is edge also in its input
         if (handle.mapped().second){
             if constexpr (cereal::traits::is_output_serializable<Tin, cereal::BinaryOutputArchive>::value){
+                std::cout << "Annoted INOUT!" << std::endl;
                 this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, false)});
             }
         } else
