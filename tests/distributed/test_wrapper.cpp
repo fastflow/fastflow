@@ -42,7 +42,7 @@ struct Node1: ff_node_t<myTask_t>{
 	const long ntasks;
 };
 
-struct Node2: ff_node_t<myTask_t>{
+struct Node2: ff_monode_t<myTask_t>{
     myTask_t* svc(myTask_t* t){
 		t->str += std::string(" World");		
 		//std::cout << "Node2: " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";
@@ -98,9 +98,9 @@ int main(int argc, char*argv[]){
 	Node4 n4(ntasks);
 	
     pipe.add_stage(&n1);
-    pipe.add_stage(new WrapperOUT<true,myTask_t>(&n2));
-    pipe.add_stage(new WrapperINOUT<true, true, myTask_t>(&n3));
-    pipe.add_stage(new WrapperIN<true, myTask_t>(&n4));
+    pipe.add_stage(new WrapperOUT<true,myTask_t>(&n2), true);
+    pipe.add_stage(new WrapperINOUT<true, true, myTask_t>(&n3), true);
+    pipe.add_stage(new WrapperIN<true, myTask_t>(&n4), true);
 	
 	if (pipe.run_and_wait_end()<0) {
 		error("running the main pipe\n");
