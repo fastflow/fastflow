@@ -36,6 +36,8 @@ public:
 
     void setRunningGroup(std::string g){this->runningGroup = g;}
 
+	const std::string& getRunningGroup() const { return runningGroup; }
+	
     int run_and_wait_end(ff_node* parent){
         if (groups.find(runningGroup) == groups.end()){
             ff::error("The group specified is not found nor implemented!\n");
@@ -104,7 +106,7 @@ private:
     }
 };
 
-int DFF_Init(int& argc, char**& argv){
+static inline int DFF_Init(int& argc, char**& argv){
     
     std::string configFile, groupName;
 
@@ -166,6 +168,10 @@ int DFF_Init(int& argc, char**& argv){
     return 0;
 }
 
+static inline const std::string DFF_getMyGroup() {
+	return dGroups::Instance()->getRunningGroup();
+}
+	
 }
 
 #endif
