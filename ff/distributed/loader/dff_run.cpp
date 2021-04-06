@@ -2,9 +2,9 @@
 #include <fstream>
 #include <chrono>
 #include <thread>
+#include <filesystem>
 #include <unistd.h>
 #include <sys/time.h>
-#include <getopt.h>
 #include <sys/wait.h>
 
 
@@ -20,7 +20,7 @@ static inline unsigned long getusec() {
     return (unsigned long)(tv.tv_sec*1e6+tv.tv_usec);
 }
 
-std::string configFile;
+std::string configFile("");
 std::string executable;
 
 inline std::vector<std::string> split (const std::string &s, char delim) {
@@ -55,7 +55,7 @@ struct G {
     void run(){
         char b[150]; // ssh -t
         sprintf(b, " %s %s %s --DFF_Config=%s --DFF_GName=%s", (isRemote() ? "ssh -t " : ""), (isRemote() ? host.c_str() : "") , executable.c_str(), configFile.c_str(), this->name.c_str());
-       std::cout << "Executing the following string: " << b << std::endl;
+       std::cout << "Executing the following command: " << b << std::endl;
         fd = popen(b, "r");
 
         if (fd == NULL) {
@@ -76,49 +76,66 @@ bool allTerminated(std::vector<G>& groups){
     return true;
 }
 
+static inline void usage(char* progname) {
+	std::cout << "\nUSAGE: " <<  progname << " [Options] -f <configFile> <cmd> \n"
+			  << "Options: \n"
+			  << "\t -v <g1>,...,<g2> \t Prints the output of the specified groups\n"
+			  << "\t -V               \t Print the output of all groups\n";
+		
+}
+
 int main(int argc, char** argv) {
 
     if (strcmp(argv[0], "--help") == 0 || strcmp(argv[0], "-help") == 0 || strcmp(argv[0], "-h") == 0){
-        std::cout << "USAGE: " <<  argv[0] << " [options] -f <configFile> <cmd> \n\n"
-                  << "OPTIONS: \n"
-                  << "\t -v <g1>,...,<g2> \t Print the ouput of the g1 and g2 processes. If no groups are specified all are printed\n";
-
+		usage(argv[0]);
         exit(EXIT_SUCCESS);
     }
 
-
     std::vector<std::string> viewGroups;
     bool seeAll = false;
-    
-    int c;
-    while ((c = getopt(argc, argv, "Vv:f:")) != -1){
+	int optind=0;
+	for(int i=1;i<argc;++i) {
+		if (argv[i][0]=='-') {
+			switch(argv[i][1]) {
+			case 'f': {
+				if (argv[i+1] == NULL) {
+					std::cerr << "-f requires a file name\n";
+					usage(argv[0]);
+					exit(EXIT_FAILURE);
+				}
+				++i;
+				configFile = std::string(argv[i]);
+			} break;
+			case 'V': {
+				seeAll=true;
+			} break;
+			case 'v': {
+				if (argv[i+1] == NULL) {
+					std::cerr << "-v requires at list one argument\n";
+					usage(argv[0]);
+					exit(EXIT_FAILURE);
+				}
+				viewGroups = split(argv[i+1], ',');
+				i+=viewGroups.size();
+			} break;
+			}
+		} else { optind=i; break;}
+	}
 
-        switch (c){
-            case 'f':
-                configFile = std::string(optarg);
-                break;
-            case 'V':
-                seeAll = true;
-                break;
-            case 'v':    
-                viewGroups = split(optarg, ',');
-                break;
-            case '?':
-                if (optopt == 'f')
-                    printf ("Option -%c requires an argument.\n", optopt);
-                else if (isprint (optopt))
-                    printf ("Unknown option `-%c'.\n", optopt);
-                else
-                    printf ("Unknown option character `\\x%x'.\n", optopt);
-                return 1;
-            default:
-                abort();
-        }
-    }
-    
-    for (int index = optind; index < argc; index++)
+	if (configFile == "") {
+		std::cerr << "ERROR: Missing config file for the loader\n";
+		usage(argv[0]);
+		exit(EXIT_FAILURE);
+	}
+	if (!std::filesystem::exists(std::string(argv[optind]))) {
+		std::cerr << "ERROR: Unable to find the executable file (we found as executable \'" << argv[optind] << "\')\n";
+		exit(EXIT_FAILURE);
+	}	
+		
+    for (int index = optind; index < argc; index++) {
         executable += std::string(argv[index]) + " ";
-    
+	}
+	
     std::ifstream is(configFile);
 
     if (!is){
