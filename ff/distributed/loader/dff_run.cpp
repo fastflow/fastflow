@@ -20,6 +20,7 @@ static inline unsigned long getusec() {
     return (unsigned long)(tv.tv_sec*1e6+tv.tv_usec);
 }
 
+char hostname[100];
 std::string configFile("");
 std::string executable;
 
@@ -64,7 +65,7 @@ struct G {
         }
     }
 
-    bool isRemote(){return !(!host.compare("127.0.0.1") || !host.compare("localhost"));}
+    bool isRemote(){return !(!host.compare("127.0.0.1") || !host.compare("localhost") || !host.compare(hostname));}
 
 
 };
@@ -90,6 +91,9 @@ int main(int argc, char** argv) {
 		usage(argv[0]);
         exit(EXIT_SUCCESS);
     }
+
+    // get the hostname
+    gethostname(hostname, 100);
 
     std::vector<std::string> viewGroups;
     bool seeAll = false;
