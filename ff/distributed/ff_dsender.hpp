@@ -139,21 +139,18 @@ private:
         task->chid = htonl(task->chid);
 
         size_t sz = htobe64(task->data.getLen());
-        struct iovec iov[3];
+        struct iovec iov[4];
         iov[0].iov_base = &task->sender;
         iov[0].iov_len = sizeof(task->sender);
         iov[1].iov_base = &task->chid;
         iov[1].iov_len = sizeof(task->chid);
         iov[2].iov_base = &sz;
         iov[2].iov_len = sizeof(sz);
+        iov[3].iov_base = task->data.getPtr();
+        iov[3].iov_len = task->data.getLen();
 
-        if (writevn(sck, iov, 3) < 0){
-            error("Error writing on socket header\n");
-            return -1;
-        }
-
-        if (writen(sck, task->data.getPtr(), task->data.getLen()) < 0){
-            error("Error writing on socket data\n");
+        if (writevn(sck, iov, 4) < 0){
+            error("Error writing on socket\n");
             return -1;
         }
 
