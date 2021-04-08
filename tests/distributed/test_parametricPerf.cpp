@@ -48,7 +48,6 @@ struct ExcType {
 
 
 struct MoNode : ff::ff_monode_t<int, ExcType>{
-    int processedItems = 0;
     int items, execTime;
     long dataLength;
 
@@ -64,7 +63,7 @@ struct MoNode : ff::ff_monode_t<int, ExcType>{
 
     void svc_end(){
         const std::lock_guard<std::mutex> lock(mtx);
-        std::cout << "[MoNode" << this->get_my_id() << "] Generated Items: " << processedItems << std::endl;
+        std::cout << "[MoNode" << this->get_my_id() << "] Generated Items: " << items << std::endl;
     }
 };
 
@@ -112,7 +111,7 @@ int main(int argc, char*argv[]){
     std::vector<MiNode*> dxWorkers;
 
     for(int i = 0; i < numWorkerSx; i++)
-        sxWorkers.push_back(new MoNode(items, execTimeSource, bytexItem));
+        sxWorkers.push_back(new MoNode(ceil((double)items/numWorkerSx), execTimeSource, bytexItem));
 
     for(int i = 0; i < numWorkerDx; i++)
         dxWorkers.push_back(new MiNode(execTimeSink));
