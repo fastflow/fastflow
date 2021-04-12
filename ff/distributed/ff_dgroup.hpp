@@ -45,29 +45,20 @@ public:
     template <typename Tin, typename Tout>
     MySet& operator<<=(ff_node_t<Tin, Tout>*) {}
 
-    template <typename Tin, typename Tout>
-    MySet& operator<<=(std::pair<ff_node_t<Tin, Tout>*, const std::function<void(std::add_pointer_t<Tin>)>>) {}
+    template <typename Tin, typename Tout, typename Function>
+    MySet& operator<<=(std::pair<ff_node_t<Tin, Tout>*, Function>);
 
     template <typename Tin, typename Tout>
-    MySet& operator<<=(std::pair<ff_node_t<Tin, Tout>*, std::function<std::pair<char*, size_t>(std::add_pointer_t<Tout>)>>) {}
+    MySet& operator<<=(ff_minode_t<Tin, Tout>*);
+
+    template <typename Tin, typename Tout, typename Function>
+    MySet& operator<<=(std::pair<ff_minode_t<Tin, Tout>*, Function>);
 
     template <typename Tin, typename Tout>
-    MySet& operator<<=(ff_minode_t<Tin, Tout>*) {}
+    MySet& operator<<=(ff_monode_t<Tin, Tout>*);
 
-    template <typename Tin, typename Tout>
-    MySet& operator<<=(std::pair<ff_minode_t<Tin, Tout>*, const std::function<void(std::add_pointer_t<Tin>)>>) {}
-
-    template <typename Tin, typename Tout>
-    MySet& operator<<=(std::pair<ff_minode_t<Tin, Tout>*, std::function<std::pair<char*, size_t>(std::add_pointer_t<Tout>)>>) {}
-
-    template <typename Tin, typename Tout>
-    MySet& operator<<=(ff_monode_t<Tin, Tout>*) {}
-
-    template <typename Tin, typename Tout>
-    MySet& operator<<=(std::pair<ff_monode_t<Tin, Tout>*, const std::function<void(std::add_pointer_t<Tin>)>>) {}
-
-    template <typename Tin, typename Tout>
-    MySet& operator<<=(std::pair<ff_monode_t<Tin, Tout>*, std::function<std::pair<char*, size_t>(std::add_pointer_t<Tout>)>>) {}
+    template <typename Tin, typename Tout, typename Function>
+    MySet& operator<<=(std::pair<ff_monode_t<Tin, Tout>*, Function>);
 
 
     bool check_inout(ff_node* node);
@@ -491,8 +482,8 @@ MySet<IN>& MySet<IN>::operator<<=(ff_node_t<Tin, Tout>* node){
 }
 
 template<>
-template<typename Tin, typename Tout>
-MySet<IN>& MySet<IN>::operator<<=(std::pair<ff_node_t<Tin, Tout>*, const std::function<void(std::add_pointer_t<Tin>)>> nodeFun){
+template<typename Tin, typename Tout, typename Function>
+MySet<IN>& MySet<IN>::operator<<=(std::pair<ff_node_t<Tin, Tout>*, Function> nodeFun){
     if (check_inout(nodeFun.first)) return *this; // the node is already processed in input and output, just skip it!
 
     auto handle = this->group->out_.extract(nodeFun.first);
@@ -531,8 +522,8 @@ MySet<IN>& MySet<IN>::operator<<=(ff_minode_t<Tin, Tout>* node){
 }
 
 template<>
-template<typename Tin, typename Tout>
-MySet<IN>& MySet<IN>::operator<<=(std::pair<ff_minode_t<Tin, Tout>*, const std::function<void(std::add_pointer_t<Tin>)>> nodeFun){
+template<typename Tin, typename Tout, typename Function>
+MySet<IN>& MySet<IN>::operator<<=(std::pair<ff_minode_t<Tin, Tout>*, Function> nodeFun){
     if (check_inout(nodeFun.first)) return *this; // the node is already processed in input and output, just skip it!
 
     auto handle = this->group->out_.extract(nodeFun.first);
@@ -545,7 +536,7 @@ MySet<IN>& MySet<IN>::operator<<=(std::pair<ff_minode_t<Tin, Tout>*, const std::
             this->group->inout_.insert({nodeFun.first, (ff_node*)new WrapperINOUT<false, false, Tin, Tout>(nodeFun.first, 1, true, nodeFun.second, reinterpret_cast<WrapperOUT<false, Tin, Tout>*>(reinterpret_cast<ff_comb*>(handle.mapped().first)->getFirst())->getTransform())});
     
     } else
-        this->group->in_.insert({nodeFun.first, {new WrapperIN<false, Tin, Tout>(nodeFun.first, true, nodeFun.second), false}});
+        this->group->in_.insert({nodeFun.first, {new WrapperIN<false, Tin, Tout>(nodeFun.first, 1, true, nodeFun.second), false}});
 
     return *this;
 }
@@ -573,8 +564,8 @@ MySet<IN>& MySet<IN>::operator<<=(ff_monode_t<Tin, Tout>* node){
 }
 
 template<>
-template<typename Tin, typename Tout>
-MySet<IN>& MySet<IN>::operator<<=(std::pair<ff_monode_t<Tin, Tout>*, const std::function<void(std::add_pointer_t<Tin>)>> nodeFun){
+template<typename Tin, typename Tout, typename Function>
+MySet<IN>& MySet<IN>::operator<<=(std::pair<ff_monode_t<Tin, Tout>*, Function> nodeFun){
     if (check_inout(nodeFun.first)) return *this; // the node is already processed in input and output, just skip it!
 
     auto handle = this->group->out_.extract(nodeFun.first);
@@ -614,8 +605,8 @@ MySet<OUT>& MySet<OUT>::operator<<=(ff_node_t<Tin, Tout>* node){
 }
 
 template<>
-template<typename Tin, typename Tout>
-MySet<OUT>& MySet<OUT>::operator<<=(std::pair<ff_node_t<Tin, Tout>*, std::function<std::pair<char*, size_t>(std::add_pointer_t<Tout>)>> nodeFun){
+template<typename Tin, typename Tout, typename Function>
+MySet<OUT>& MySet<OUT>::operator<<=(std::pair<ff_node_t<Tin, Tout>*, Function> nodeFun){
     if (check_inout(nodeFun.first)) return *this; // the node is already processed in input and output, just skip it!
 
     auto handle = this->group->in_.extract(nodeFun.first);
@@ -656,8 +647,8 @@ MySet<OUT>& MySet<OUT>::operator<<=(ff_minode_t<Tin, Tout>* node){
 }
 
 template<>
-template<typename Tin, typename Tout>
-MySet<OUT>& MySet<OUT>::operator<<=(std::pair<ff_minode_t<Tin, Tout>*, std::function<std::pair<char*, size_t>(std::add_pointer_t<Tout>)>> nodeFun){
+template<typename Tin, typename Tout, typename Function>
+MySet<OUT>& MySet<OUT>::operator<<=(std::pair<ff_minode_t<Tin, Tout>*, Function> nodeFun){
     if (check_inout(nodeFun.first)) return *this; // the node is already processed in input and output, just skip it!
 
     auto handle = this->group->in_.extract(nodeFun.first);
@@ -696,8 +687,8 @@ MySet<OUT>& MySet<OUT>::operator<<=(ff_monode_t<Tin, Tout>* node){
 }
 
 template<>
-template<typename Tin, typename Tout>
-MySet<OUT>& MySet<OUT>::operator<<=(std::pair<ff_monode_t<Tin, Tout>*, std::function<std::pair<char*, size_t>(std::add_pointer_t<Tout>)>> nodeFun){
+template<typename Tin, typename Tout, typename Function>
+MySet<OUT>& MySet<OUT>::operator<<=(std::pair<ff_monode_t<Tin, Tout>*, Function> nodeFun){
     if (check_inout(nodeFun.first)) return *this; // the node is already processed in input and output, just skip it!
 
     auto handle = this->group->in_.extract(nodeFun.first);
@@ -709,7 +700,7 @@ MySet<OUT>& MySet<OUT>::operator<<=(std::pair<ff_monode_t<Tin, Tout>*, std::func
         } else
             this->group->inout_.insert({nodeFun.first, (ff_node*)new WrapperINOUT<false, false, Tin, Tout>(nodeFun.first, 1, true, reinterpret_cast<WrapperIN<false, Tin, Tout>*>(reinterpret_cast<ff_comb*>(handle.mapped().first)->getLast())->getFinalizer(), nodeFun.second)});
     } else
-        this->group->out_.insert({nodeFun.first, {new WrapperOUT<false, Tin, Tout>(nodeFun.first, true, nodeFun.second), false}});
+        this->group->out_.insert({nodeFun.first, {new WrapperOUT<false, Tin, Tout>(nodeFun.first, 1, true, nodeFun.second), false}});
 
     return *this;
 }
