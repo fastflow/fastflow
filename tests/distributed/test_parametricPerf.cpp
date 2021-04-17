@@ -48,8 +48,7 @@ struct ExcType {
 	char*  C    = nullptr;
 	bool contiguous;
 	
-	
-#if !defined(MANUAL_SERIALIZATION)
+
 	template<class Archive>
 	void serialize(Archive & archive) {
 	  archive(clen);
@@ -59,7 +58,7 @@ struct ExcType {
 	  }
 	  archive(cereal::binary_data(C, clen));
 	}
-#endif	
+	
 };
 
 static ExcType* allocateExcType(size_t size, bool setdata=false) {
@@ -178,14 +177,14 @@ int main(int argc, char*argv[]){
 
     for(int i = 0; i < numWorkerSx; i++) {
 #if defined(MANUAL_SERIALIZATION)				
-		g1.out <<= packup(sxWorkers[i], [](ExcType* in) {return std::make_pair((char*)in, in->clen+sizeof(ExcType)); });
+		g1.out <<= packup(sxWorkers[i], [](ExcType* in) -> std::pair<char*,size_t> {return std::make_pair((char*)in, in->clen+sizeof(ExcType)); });
 #else
 		g1.out << sxWorkers[i];
 #endif
     }
     for(int i = 0; i < numWorkerDx; i++) {
 #if defined(MANUAL_SERIALIZATION)						
-		g2.in  <<= packup(dxWorkers[i], [](char* in, size_t len) {
+		g2.in  <<= packup(dxWorkers[i], [](char* in, size_t len) -> ExcType* {
 											ExcType* p = new (in) ExcType(true);
 											p->C = in + sizeof(ExcType);
 											p->clen = len - sizeof(ExcType);
