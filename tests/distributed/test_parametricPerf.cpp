@@ -17,6 +17,8 @@
 #include <mutex>
 #include <chrono>
 
+#define MANUAL_SERIALIZATION 1
+
 std::mutex mtx;  // used only for pretty printing
 
 float active_delay(int msecs) {
@@ -35,30 +37,64 @@ float active_delay(int msecs) {
 }
 
 struct ExcType {
-    int taskID;
-    std::vector<char> data;
-    ExcType(){}
-    ExcType(int taskID, long length) : taskID(taskID), data(length, 'F') {}
-
-    template<class Archive>
-	void serialize(Archive & archive) {
-		archive(taskID, data);
+	ExcType():contiguous(false) {}
+	ExcType(bool): contiguous(true) {}
+	~ExcType() {
+		if (!contiguous)
+			delete [] C;
 	}
+	
+	size_t clen = 0;
+	char*  C    = nullptr;
+	bool contiguous;
+	
+	
+#if !defined(MANUAL_SERIALIZATION)
+	template<class Archive>
+	void serialize(Archive & archive) {
+	  archive(clen);
+	  if (!C) {
+		  assert(!contiguous);
+		  C = new char[clen];
+	  }
+	  archive(cereal::binary_data(C, clen));
+	}
+#endif	
 };
 
+static ExcType* allocateExcType(size_t size, bool setdata=false) {
+	char* _p = (char*)malloc(size+sizeof(ExcType));	
+	ExcType* p = new (_p) ExcType(true);  // contiguous allocation
+	
+	p->clen    = size;
+	p->C       = (char*)p+sizeof(ExcType);
+	if (setdata) {
+		bzero(p->C, p->clen);
+		p->C[0]       = 'c';
+		if (size>10) 
+			p->C[10]  = 'i';
+		if (size>100)
+			p->C[100] = 'a';
+		if (size>500)
+			p->C[500] = 'o';		
+	}
+	return p;
+}
 
-struct MoNode : ff::ff_monode_t<int, ExcType>{
+
+struct MoNode : ff::ff_monode_t<ExcType>{
     int items, execTime;
     long dataLength;
+	bool checkdata;
+    MoNode(int itemsToGenerate, int execTime, long dataLength, bool checkdata):
+		items(itemsToGenerate), execTime(execTime), dataLength(dataLength), checkdata(checkdata) {}
 
-    MoNode(int itemsToGenerate, int execTime, long dataLength): items(itemsToGenerate), execTime(execTime), dataLength(dataLength) {}
-
-    ExcType* svc(int*){
+    ExcType* svc(ExcType*){
        for(int i=0; i< items; i++){
-            active_delay(this->execTime);
-            ff_send_out(new ExcType(i, dataLength));
+		   if (execTime) active_delay(this->execTime);
+		   ff_send_out(allocateExcType(dataLength, checkdata));
        }        
-        return this->EOS;
+	   return this->EOS;
     }
 
     void svc_end(){
@@ -70,13 +106,25 @@ struct MoNode : ff::ff_monode_t<int, ExcType>{
 struct MiNode : ff::ff_minode_t<ExcType>{
     int processedItems = 0;
     int execTime;
-    MiNode(int execTime) : execTime(execTime) {}
+	bool checkdata;
+    MiNode(int execTime, bool checkdata=false): execTime(execTime),checkdata(checkdata) {}
 
-    ExcType* svc(ExcType* i){
-        active_delay(this->execTime);
-        ++processedItems;
-        delete i;
-        return this->GO_ON;
+    ExcType* svc(ExcType* in){
+      if (execTime) active_delay(this->execTime);
+      ++processedItems;
+	  if (checkdata) {
+		  assert(in->C[0]     == 'c');
+		  if (in->clen>10) 
+			  assert(in->C[10]  == 'i');
+		  if (in->clen>100)
+			  assert(in->C[100] == 'a');
+		  if (in->clen>500)
+			  assert(in->C[500] == 'o');
+		  std::cout << "message [size=" << in->clen << "] id=" << processedItems << " OK\n";
+	  }
+
+	  delete in;
+      return this->GO_ON;
     }
 
     void svc_end(){
@@ -85,16 +133,15 @@ struct MiNode : ff::ff_minode_t<ExcType>{
     }
 };
 
-
 int main(int argc, char*argv[]){
     
     DFF_Init(argc, argv);
 
     if (argc < 7){
-        std::cout << "Usage: " << argv[0] << "#items #byteXitem #execTimeSource #execTimeSink #nw_sx #nw_dx"  << std::endl;
+        std::cout << "Usage: " << argv[0] << " #items #byteXitem #execTimeSource #execTimeSink #nw_sx #nw_dx"  << std::endl;
         return -1;
     }
-
+	bool check = false;
     int items = atoi(argv[1]);
     long bytexItem = atol(argv[2]);
     int execTimeSource = atoi(argv[3]);
@@ -102,6 +149,10 @@ int main(int argc, char*argv[]){
     int numWorkerSx = atoi(argv[5]);
     int numWorkerDx = atoi(argv[6]);
 
+	char* p=nullptr;
+	if ((p=getenv("CHECK_DATA"))!=nullptr) check=true;
+	printf("chackdata = %s\n", p);
+	
     ff_pipeline mainPipe;
     ff::ff_a2a a2a;
 
@@ -111,10 +162,10 @@ int main(int argc, char*argv[]){
     std::vector<MiNode*> dxWorkers;
 
     for(int i = 0; i < numWorkerSx; i++)
-        sxWorkers.push_back(new MoNode(ceil((double)items/numWorkerSx), execTimeSource, bytexItem));
+        sxWorkers.push_back(new MoNode(ceil((double)items/numWorkerSx), execTimeSource, bytexItem, check));
 
     for(int i = 0; i < numWorkerDx; i++)
-        dxWorkers.push_back(new MiNode(execTimeSink));
+        dxWorkers.push_back(new MiNode(execTimeSink, check));
 
     a2a.add_firstset(sxWorkers);
     a2a.add_secondset(dxWorkers);
@@ -124,13 +175,30 @@ int main(int argc, char*argv[]){
     auto g1 = a2a.createGroup("G1");
     auto g2 = a2a.createGroup("G2");
 
-     for(int i = 0; i < numWorkerSx; i++) g1.out << sxWorkers[i];
 
-     for(int i = 0; i < numWorkerDx; i++) g2.in << dxWorkers[i];
-
-   if (mainPipe.run_and_wait_end()<0) {
-		error("running mainPipe\n");
-		return -1;
-	}
-
+    for(int i = 0; i < numWorkerSx; i++) {
+#if defined(MANUAL_SERIALIZATION)				
+		g1.out <<= packup(sxWorkers[i], [](ExcType* in) {return std::make_pair((char*)in, in->clen+sizeof(ExcType)); });
+#else
+		g1.out << sxWorkers[i];
+#endif
+    }
+    for(int i = 0; i < numWorkerDx; i++) {
+#if defined(MANUAL_SERIALIZATION)						
+		g2.in  <<= packup(dxWorkers[i], [](char* in, size_t len) {
+											ExcType* p = new (in) ExcType(true);
+											p->C = in + sizeof(ExcType);
+											p->clen = len - sizeof(ExcType);
+											return p;
+										});
+#else
+		g2.in << dxWorkers[i];
+#endif		
+    }
+    
+    if (mainPipe.run_and_wait_end()<0) {
+      error("running mainPipe\n");
+      return -1;
+    }
+    return 0;
 }
