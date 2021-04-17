@@ -761,4 +761,19 @@ ff::dGroup& ff_pipeline::createGroup(std::string name){
     return *g;
 }
 
+// utility functions useful for creating suitable pairs to be used
+// when defining custom serialization/deserialization functions
+template<typename Tin, typename Tout, typename Function>
+static inline std::pair<ff_node_t<Tin, Tout>*, Function> packup(ff_node_t<Tin, Tout>* node, Function f){
+    return std::make_pair(node, f);
+}
+template<typename Tin, typename Tout, typename Function>
+static inline std::pair<ff_minode_t<Tin, Tout>*, Function> packup(ff_minode_t<Tin, Tout>* node, Function f){
+    return std::make_pair(node, f);
+}
+template<typename Tin, typename Tout, typename Function>
+static inline std::pair<ff_monode_t<Tin, Tout>*, Function> packup(ff_monode_t<Tin, Tout>* node, Function f){
+    return std::make_pair(node, f);
+}
+
 #endif
