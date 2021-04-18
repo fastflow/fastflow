@@ -19,9 +19,9 @@
 
 #define MANUAL_SERIALIZATION 1
 
+// ------------------------------------------------------
 std::mutex mtx;  // used only for pretty printing
-
-float active_delay(int msecs) {
+static inline float active_delay(int msecs) {
   // read current time
   float x = 1.25f;
   auto start = std::chrono::high_resolution_clock::now();
@@ -35,7 +35,14 @@ float active_delay(int msecs) {
   }
   return x;
 }
-
+// this assert will not be removed by -DNDEBUG
+#define myassert(c) {													      \
+		if (!(c)) {														\
+			std::cerr << "ERROR: assert at line " << __LINE__ << " failed\n"; \
+			abort();													      \
+		}																      \
+	}
+// -----------------------------------------------------
 struct ExcType {
 	ExcType():contiguous(false) {}
 	ExcType(bool): contiguous(true) {}
@@ -53,7 +60,7 @@ struct ExcType {
 	void serialize(Archive & archive) {
 	  archive(clen);
 	  if (!C) {
-		  assert(!contiguous);
+		  myassert(!contiguous);
 		  C = new char[clen];
 	  }
 	  archive(cereal::binary_data(C, clen));
@@ -77,6 +84,7 @@ static ExcType* allocateExcType(size_t size, bool setdata=false) {
 		if (size>500)
 			p->C[500] = 'o';		
 	}
+	p->C[p->clen-1] = 'F';
 	return p;
 }
 
@@ -112,16 +120,16 @@ struct MiNode : ff::ff_minode_t<ExcType>{
       if (execTime) active_delay(this->execTime);
       ++processedItems;
 	  if (checkdata) {
-		  assert(in->C[0]     == 'c');
+		  myassert(in->C[0]     == 'c');
 		  if (in->clen>10) 
-			  assert(in->C[10]  == 'i');
+			  myassert(in->C[10]  == 'i');
 		  if (in->clen>100)
-			  assert(in->C[100] == 'a');
+			  myassert(in->C[100] == 'a');
 		  if (in->clen>500)
-			  assert(in->C[500] == 'o');
-		  std::cout << "message [size=" << in->clen << "] id=" << processedItems << " OK\n";
+			  myassert(in->C[500] == 'o');
+		  std::cout << "MiNode" << get_my_id() << " input data " << processedItems << " OK\n";
 	  }
-
+	  myassert(in->C[in->clen-1] == 'F');
 	  delete in;
       return this->GO_ON;
     }
