@@ -62,6 +62,7 @@
 #include <map>
 #include <ff/dff.hpp>
 
+
 using namespace ff;
 using namespace std;
 
@@ -80,7 +81,21 @@ struct result_t {
     char     key[MAXWORD];  // key word
     uint64_t id;            // id that indicates the current number of occurrences of the key word
     uint64_t ts;            // timestamp
+
+	template<class Archive>
+	void serialize(Archive & archive) {
+		archive(key,id,ts);
+	}
 };
+struct Result_t {
+    std::vector<result_t> keys;
+
+	template<class Archive>
+	void serialize(Archive & archive) {
+		archive(keys);
+	}
+};
+
 
 vector<tuple_t> dataset;     // contains all the input tuples in memory
 atomic<long> total_lines=0;  // total number of lines processed by the system
@@ -138,15 +153,15 @@ struct Source: ff_monode_t<tuple_t> {
         return EOS;
 	}
 };
-struct Splitter: ff_monode_t<tuple_t, result_t> {
-    Splitter(long noutch):noutch(noutch) {}
+struct Splitter: ff_monode_t<tuple_t, Result_t> {
+    Splitter(long noutch, long buffered_lines):noutch(noutch),buffered_lines(buffered_lines), outV(noutch,nullptr) { }
 
     // int svc_init() {
     // noutch=get_num_outchannels(); // TODO: this doesn't work, it must be fixed!
     // /return 0;
     // }
 
-    result_t* svc(tuple_t* in) {        
+    Result_t* svc(tuple_t* in) {        
         char *tmpstr;
         char *token = strtok_r(in->text_line, " ", &tmpstr);
         while (token) {
@@ -154,28 +169,52 @@ struct Splitter: ff_monode_t<tuple_t, result_t> {
             int ch = std::hash<std::string>()(std::string(token)) % noutch;
 #else            
             int ch = ++idx % noutch;
-#endif            
-            result_t* r = new result_t;
-            assert(r);
-            strncpy(r->key, token, MAXWORD-1);
-            r->key[MAXWORD-1]='\0';
-            r->ts  = in->ts;
-
-            ff_send_out_to(r, ch);
+#endif
+            if (outV[ch] == nullptr) {            
+                Result_t* r = new Result_t;
+                assert(r);
+                outV[ch] = r;
+            }
+            result_t r;
+            strncpy(r.key, token, MAXWORD-1);
+            r.key[MAXWORD-1]='\0';
+            r.ts  = in->ts;
+            outV[ch]->keys.push_back(r);
+            
             token = strtok_r(NULL, " ", &tmpstr);
+        }
+        ++nmsgs;
+        if (nmsgs>=buffered_lines) {
+            for(long i=0;i<noutch; ++i) {
+                if (outV[i]) ff_send_out_to(outV[i], i);
+                outV[i] = nullptr;
+            }
+            nmsgs=0;            
         }
         delete in;        
         return GO_ON;
 	}
+
+    void esonotify(ssize_t) {
+        for(long i=0;i<noutch; ++i) {
+            if (outV[i]) ff_send_out_to(outV[i], i);
+            outV[i] = nullptr;
+        }
+    }
     long noutch=0;
     long idx=-1;
+    long nmsgs=0;
+    long buffered_lines;
+    std::vector<Result_t*> outV;
 };
 
-struct Counter: ff_minode_t<result_t> {
-    result_t* svc(result_t* in) {
-        ++M[std::string(in->key)];
-        // number of occurrences of the string word up to now
-        in->id = M[std::string(in->key)]; 
+struct Counter: ff_minode_t<Result_t> {
+    Result_t* svc(Result_t* in) {
+        for(size_t i=0;i<in->keys.size();++i) {
+            ++M[std::string(in->keys[i].key)];
+            // number of occurrences of the string word up to now
+            in->keys[i].id = M[std::string(in->keys[i].key)];
+        }
         return in;
     }
     size_t unique() {
@@ -188,9 +227,9 @@ struct Counter: ff_minode_t<result_t> {
     std::map<std::string,size_t> M;
 };
 
-struct Sink: ff_node_t<result_t> {
-    result_t* svc(result_t* in) {        
-        ++words;
+struct Sink: ff_node_t<Result_t> {
+    Result_t* svc(Result_t* in) {        
+        words+= in->keys.size();
         delete in;
         return GO_ON;
     }
@@ -248,10 +287,11 @@ int main(int argc, char* argv[]) {
     std::string file_path("");
     size_t source_par_deg = 0;
     size_t sink_par_deg = 0;
+    long buffered_lines = 100;
     
     if (argc >= 3 || argc == 1) {
         int option = 0;    
-        while ((option = getopt(argc, argv, "f:p:t:")) != -1) {
+        while ((option = getopt(argc, argv, "f:p:t:b:")) != -1) {
             switch (option) {
             case 'f': file_path=string(optarg);  break;
             case 'p': {
@@ -279,6 +319,13 @@ int main(int argc, char* argv[]) {
                 }
                 app_run_time = t;
             } break;
+            case 'b': {
+                buffered_lines = stol(optarg);
+                if (buffered_lines<=0 || buffered_lines>10000000) {
+                    std::cerr << "Wrong value fro the '-b' option\n";
+                    return -1;
+                }
+            } break;
             default: {
                 std::cerr << "Error in parsing the input arguments\n";
                 return -1;
@@ -286,7 +333,7 @@ int main(int argc, char* argv[]) {
             }
         }
     } else {
-        std::cerr << "Parameters:  -p  <nSource/nSplitter,nCounter/nSink> -f <filepath>\n";
+        std::cerr << "Parameters:  -p  <nSource/nSplitter,nCounter/nSink> -f <filepath> -t <time-in-seconds> -b <buffered-lines>\n";
         return -1;
     }
     if (file_path.length()==0) {
@@ -326,12 +373,11 @@ int main(int argc, char* argv[]) {
         ff_pipeline* pipe0 = new ff_pipeline(false, qlen, qlen, true);
         
         pipe0->add_stage(new Source(app_start_time));
-        Splitter* sp = new Splitter(sink_par_deg);
+        Splitter* sp = new Splitter(sink_par_deg, buffered_lines);
         pipe0->add_stage(sp);
         L.push_back(pipe0);
 
-        // using the default serialization since the result_t is contiguous in memory
-        G1.out <<= sp;  
+        G1.out << sp;
     }
     for (size_t i=0;i<sink_par_deg; ++i) {
         ff_pipeline* pipe1 = new ff_pipeline(false, qlen, qlen, true);
@@ -341,22 +387,21 @@ int main(int argc, char* argv[]) {
         pipe1->add_stage(S[i]);
         R.push_back(pipe1);
 
-        // using the default deserialization 
-        G2.in <<= C[i];
+        G2.in << C[i];
     }
 
     a2a.add_firstset(L, 0, true);
     a2a.add_secondset(R, true);
     ff_pipeline pipeMain(false, qlen, qlen, true);
     pipeMain.add_stage(&a2a);
-
 #if 0    
     if (DFF_getMyGroup() == "G1") {
         threadMapper::instance()->setMappingList("0,1,2,3,4,5,6,7,8,9,10,11, 24,25,26,27,28,29,30,31,32,33,34,35");        
     } else {
         threadMapper::instance()->setMappingList("12,13,14,15,16,17,18,19,20,21,22,23, 36,37,38,39,40,41,42,43,44,45,46,47");
     }
-#endif        
+#endif     
+    
     std::cout << "Starting " << pipeMain.numThreads() << " threads\n";
     /// evaluate topology execution time
     volatile unsigned long start_time_main_usecs = current_time_usecs();
