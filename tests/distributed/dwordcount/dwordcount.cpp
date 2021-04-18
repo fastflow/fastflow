@@ -80,11 +80,6 @@ struct result_t {
     char     key[MAXWORD];  // key word
     uint64_t id;            // id that indicates the current number of occurrences of the key word
     uint64_t ts;            // timestamp
-
-	template<class Archive>
-	void serialize(Archive & archive) {
-		archive(key, id, ts);
-	}
 };
 
 vector<tuple_t> dataset;     // contains all the input tuples in memory
@@ -335,7 +330,8 @@ int main(int argc, char* argv[]) {
         pipe0->add_stage(sp);
         L.push_back(pipe0);
 
-        G1.out << sp;
+        // using the default serialization since the result_t is contiguous in memory
+        G1.out <<= sp;  
     }
     for (size_t i=0;i<sink_par_deg; ++i) {
         ff_pipeline* pipe1 = new ff_pipeline(false, qlen, qlen, true);
@@ -345,7 +341,8 @@ int main(int argc, char* argv[]) {
         pipe1->add_stage(S[i]);
         R.push_back(pipe1);
 
-        G2.in << C[i];
+        // using the default deserialization 
+        G2.in <<= C[i];
     }
 
     a2a.add_firstset(L, 0, true);
