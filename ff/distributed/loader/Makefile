@@ -38,7 +38,7 @@ endif
 
 
 CXXFLAGS            += -Wall
-LIBS                 = -pthread
+LIBS                 = -pthread -lstdc++fs
 INCLUDES             = $(INCS)
 
 SOURCES              = $(wildcard *.cpp)

@@ -14,10 +14,10 @@
 
 #if(defined(_MSC_VER) or (defined(__GNUC__) and (7 <= __GNUC_MAJOR__)))
     #include <filesystem>
-    using n_fs = ::std::filesystem;
+    namespace n_fs = std::filesystem;
 #else
     #include <experimental/filesystem>
-    using n_fs = ::std::experimental::filesystem;    
+    namespace n_fs = std::experimental::filesystem;    
 #endif
 
 
