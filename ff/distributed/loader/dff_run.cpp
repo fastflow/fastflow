@@ -2,7 +2,6 @@
 #include <fstream>
 #include <chrono>
 #include <thread>
-#include <filesystem>
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/wait.h>
@@ -12,6 +11,14 @@
 #include <cereal/archives/json.hpp>
 #include <cereal/types/string.hpp>
 #include <cereal/types/vector.hpp>
+
+#if(defined(_MSC_VER) or (defined(__GNUC__) and (7 <= __GNUC_MAJOR__)))
+    #include <filesystem>
+    using n_fs = ::std::filesystem;
+#else
+    #include <experimental/filesystem>
+    using n_fs = ::std::experimental::filesystem;    
+#endif
 
 
 static inline unsigned long getusec() {
@@ -131,7 +138,7 @@ int main(int argc, char** argv) {
 		usage(argv[0]);
 		exit(EXIT_FAILURE);
 	}
-	if (!std::filesystem::exists(std::string(argv[optind]))) {
+	if (!n_fs::exists(std::string(argv[optind]))) {
 		std::cerr << "ERROR: Unable to find the executable file (we found as executable \'" << argv[optind] << "\')\n";
 		exit(EXIT_FAILURE);
 	}	
