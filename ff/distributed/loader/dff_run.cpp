@@ -43,7 +43,7 @@ inline std::vector<std::string> split (const std::string &s, char delim) {
 }
 
 struct G {
-    std::string name, host;
+    std::string name, host, preCmd;
     FILE* fd = nullptr;
 
     template <class Archive>
@@ -57,12 +57,18 @@ struct G {
         } catch (cereal::Exception&) {
             host = "127.0.0.1"; // set the host to localhost if not found in config file!
             ar.setNextName(nullptr);
-            }
+        }
+
+        try {
+            ar(cereal::make_nvp("preCmd", preCmd)); 
+        } catch (cereal::Exception&) {
+            ar.setNextName(nullptr);
+        }
     }
 
     void run(){
-        char b[150]; // ssh -t
-        sprintf(b, " %s %s %s --DFF_Config=%s --DFF_GName=%s", (isRemote() ? "ssh -t " : ""), (isRemote() ? host.c_str() : "") , executable.c_str(), configFile.c_str(), this->name.c_str());
+        char b[350]; // ssh -t
+        sprintf(b, " %s %s %s %s --DFF_Config=%s --DFF_GName=%s", (isRemote() ? "ssh -t " : ""), (isRemote() ? host.c_str() : "") , this->preCmd.c_str(),  executable.c_str(), configFile.c_str(), this->name.c_str());
        std::cout << "Executing the following command: " << b << std::endl;
         fd = popen(b, "r");
 

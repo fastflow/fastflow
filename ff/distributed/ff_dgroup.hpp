@@ -260,7 +260,7 @@ private:
         
         // in/out nodes left to be added to the farm. The next lines does it
         for (const auto& pair : this->inout_){
-            std::cout << "Added INOUT node" << std::endl;
+            //std::cout << "Added INOUT node" << std::endl;
             this->add_workers({pair.second});
         }
 
@@ -270,17 +270,17 @@ private:
       
         // create receiver
         if (!isSource()){
-            std::cout << "Creating the receiver!" << std::endl;
+            //std::cout << "Creating the receiver!" << std::endl;
             this->add_emitter(new ff_dreceiver(0 , this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB))); // set right parameters HERE!!
         }
         // create sender
         if (!isSink()){
-            std::cout << "Creating the sender!" << std::endl;
+            //std::cout << "Creating the sender!" << std::endl;
             this->add_collector(new ff_dsender(this->destinations), true);
         }
        
 
-        std::cout << "Built a farm of " << this->getNWorkers() << " workers!" << std::endl;
+        //std::cout << "Built a farm of " << this->getNWorkers() << " workers!" << std::endl;
         // call the base class (ff_farm)'s prepare
         return 0;
     }
@@ -344,7 +344,6 @@ MySet<IN>& MySet<IN>::operator<<(ff_node_t<Tin, Tout>* node){
     if (!handle.empty()){ // the node is edge also in its output
         if (handle.mapped().second){
             if constexpr (cereal::traits::is_output_serializable<Tout, cereal::BinaryOutputArchive>::value){
-                std::cout << "Annoted INOUT!" << std::endl;
                 this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, 1, false)});
             }
         } else 
@@ -410,7 +409,6 @@ MySet<OUT>& MySet<OUT>::operator<<(ff_node_t<Tin, Tout>* node){
     if (!handle.empty()){ // the node is edge also in its input
         if (handle.mapped().second){
             if constexpr (cereal::traits::is_output_serializable<Tin, cereal::BinaryOutputArchive>::value){
-                std::cout << "Annoted INOUT!" << std::endl;
                 this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<true, true, Tin, Tout>(node, 1, false)});
             }
         } else

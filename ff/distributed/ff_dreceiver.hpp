@@ -30,8 +30,6 @@ private:
 
 		oarchive << reachableDestinations;
 
-        std::cout << "Sending routing table (" << buff.getLen() << " bytes)" << std::endl;
-
         size_t sz = htobe64(buff.getLen());
         struct iovec iov[1];
         iov[0].iov_base = &sz;
@@ -139,8 +137,9 @@ public:
             return -1;
         }
 
-        for (const auto& e : routingTable)
+        /*for (const auto& e : routingTable)
             std::cout << "Entry: " << e.first << " -> " << e.second << std::endl;
+        */
 
         return 0;
     }
@@ -150,7 +149,6 @@ public:
         #ifdef LOCAL
             unlink(this->acceptAddr.address.c_str());
         #endif
-        std::cout << "Receiver of distribute group " << distributedGroupId << " shutdown " << std::endl;
     }
     /* 
         Here i should not care of input type nor input data since they come from a socket listener.
@@ -159,7 +157,6 @@ public:
     message_t *svc(message_t* task) {
         /* here i should receive the task via socket */
         
-        std::cout << "Receiver correctly started... start to listening" << std::endl;
         fd_set set, tmpset;
         // intialize both sets (master, temp)
         FD_ZERO(&set);
