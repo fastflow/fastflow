@@ -495,6 +495,7 @@ private:
     friend class ff_comb;
     friend struct internal_mo_transformer;
     friend struct internal_mi_transformer;
+    friend class dGroups;
     
 private:
     FFBUFFER        * in;           ///< Input buffer, built upon SWSR lock-free (wait-free) 
@@ -758,6 +759,10 @@ protected:
         if (!thread) return -1;
         return thread->run();
     }
+
+    #ifdef DFF_ENABLED
+    virtual int run(ff_node*, bool=false) {return 0;}
+    #endif     
     
     /**
      * \brief Suspend (freeze) the ff_node and run it

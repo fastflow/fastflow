@@ -1392,7 +1392,13 @@ public:
      */
     int wait() {
         int ret=0;
-        if (lb->waitWorkers()<0) ret = -1;
+        //if (lb->waitWorkers()<0) ret = -1;
+        for(size_t i=0;i<workers.size();++i)
+            if (workers[i]->wait()<0) {
+                error("FARM, waiting worker thread, id = %d\n",workers[i]->get_my_id());
+                ret = -1;
+            }
+        lb->running = -1;
         if (lb->waitlb()<0) ret=-1;
         if (!collector_removed && collector) if (gt->wait()<0) ret=-1;
         return ret;
@@ -1415,7 +1421,13 @@ public:
      */
     inline int wait_freezing(/* timeval */ ) {
         int ret=0;
-        if (lb->wait_freezingWorkers()<0) ret = -1;
+        //if (lb->wait_freezingWorkers()<0) ret = -1;
+        for(size_t i=0;i<workers.size();++i)
+            if (workers[i]->wait_freezing()<0) {
+                error("FARM, waiting freezing of worker thread, id = %d\n",workers[i]->get_my_id());
+                ret = -1;
+            }
+        lb->running = -1;        
         if (lb->wait_lb_freezing()<0) ret=-1;
         if (!collector_removed && collector) if (gt->wait_freezing()<0) ret=-1;
         return ret; 
