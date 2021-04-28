@@ -144,6 +144,19 @@
  */
 //#define FF_TASK_CALLBACK 1
 
+/*
+ ****** DISTRIBUTED SUPPORT PARAMETERS
+ */
+#define MAX_RETRIES 1500
+#define AGGRESSIVE_TRESHOLD 1000
+
+#define MAXBACKLOG 32
+
+/*
+ ****** END DISTRIBUTED VERSION PARAMETERS
+ */
+
+
 #if defined(TRACE_FASTFLOW)
 #define FFTRACE(x) x
 #else

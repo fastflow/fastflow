@@ -39,6 +39,9 @@ namespace ff {
 
 // forward declarations
 static ff_node* ispipe_getlast(ff_node*);
+#ifdef DFF_ENABLED
+class dGroup;
+#endif
     
 class ff_a2a: public ff_node {
     friend class ff_farm;
@@ -700,6 +703,10 @@ public:
     void ffStats(std::ostream & out) { 
         out << "FastFlow trace not enabled\n";
     }
+#endif
+
+#ifdef DFF_ENABLED
+    ff::dGroup& createGroup(std::string);
 #endif
 
     
