@@ -10,6 +10,8 @@
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_wrappers.hpp>
 #include <ff/distributed/ff_dreceiver.hpp>
+#include <ff/distributed/ff_dreceiverOD.hpp>
+#include <ff/distributed/ff_dsenderOD.hpp>
 #include <ff/distributed/ff_dsender.hpp>
 #include <ff/distributed/ff_dgroups.hpp>
 
@@ -239,21 +241,32 @@ private:
         for (const auto& pair : this->in_) in_C.push_back(pair.first);
         for (const auto& pair : this->out_) out_C.push_back(pair.first);
 
+        int onDemandQueueLength = 0;
 
         if (this->parentStructure->isPipe())
            processBB(this->parentStructure, in_C, out_C);
-
 
         if (this->parentStructure->isAll2All()){
             ff_a2a * a2a = (ff_a2a*) this->parentStructure;
 
             if (!processBB(a2a, in_C, out_C)){ // if the user has not wrapped the whole a2a, expan its sets
-
+                bool first = false, second = false;
+                
                 for(ff_node* bb : a2a->getFirstSet())
-                    processBB(bb, in_C, out_C);
+                    if (processBB(bb, in_C, out_C))
+                        first = true;
                 
                 for(ff_node* bb : a2a->getSecondSet())
-                    processBB(bb, in_C, out_C);
+                    if (processBB(bb, in_C, out_C))
+                        second = true;
+                
+                if (first && second) throw FF_Exception("Nodes from first and second of an A2A cannot belong to the same group");
+                // if the ondemand scheduling is set in the a2a, i need to adjust the queues of this farm in order to implement the ondemand policy
+                if (a2a->ondemand_buffer() > 0){
+                    onDemandQueueLength = a2a->ondemand_buffer();
+                    if (first) this->setOutputQueueLength(1, true); // always set to 1 the length of the queue between worker and collector (SOURCE side)
+                    if (second) this->set_scheduling_ondemand(a2a->ondemand_buffer()); // set the right length of the queue between emitter and worker (SINK side)
+                }
             }
 
         }
@@ -271,17 +284,18 @@ private:
         // create receiver
         if (!isSource()){
             //std::cout << "Creating the receiver!" << std::endl;
-            this->add_emitter(new ff_dreceiver(0 , this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB))); // set right parameters HERE!!
+            this->add_emitter(new ff_dreceiverOD(0 , this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB), onDemandQueueLength > 0)); // set right parameters HERE!!
         }
         // create sender
         if (!isSink()){
             //std::cout << "Creating the sender!" << std::endl;
-            this->add_collector(new ff_dsender(this->destinations), true);
+            if (onDemandQueueLength > 0)
+                this->add_collector(new ff_dsenderOD(this->destinations, onDemandQueueLength), true);
+            else
+                this->add_collector(new ff_dsender(this->destinations), true);
+            
         }
        
-
-        //std::cout << "Built a farm of " << this->getNWorkers() << " workers!" << std::endl;
-        // call the base class (ff_farm)'s prepare
         return 0;
     }
 

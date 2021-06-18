@@ -270,7 +270,7 @@ protected:
 
         // accelerator
         if (has_input_channel) { 
-            if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
+            if (create_input_buffer(in_buffer_entries, fixedsizeIN)<0) {
                 error("FARM, creating input buffer\n");
                 return -1;
             }
@@ -315,7 +315,7 @@ protected:
 
                 
                 if (a2a_first->create_input_buffer((int) (ondemand ? ondemand: in_buffer_entries), 
-                                             (ondemand ? true: fixedsize))<0) return -1;
+                                             (ondemand ? true: fixedsizeIN))<0) return -1;
                 
                 const svector<ff_node*>& W1 = a2a_first->getFirstSet();
                 for(size_t i=0;i<W1.size();++i) {
@@ -323,7 +323,7 @@ protected:
                 }
             } else {
                 if (workers[i]->create_input_buffer((int) (ondemand ? ondemand: in_buffer_entries), 
-                                                    (ondemand ? true: fixedsize))<0) return -1;
+                                                    (ondemand ? true: fixedsizeIN))<0) return -1;
 
                 lb->register_worker(workers[i]);
             }
@@ -349,7 +349,7 @@ protected:
                         
                         // NOTE: the following call might fail because the buffers were already created for example by
                         // the pipeline that contains this stage
-                        a2a_last->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsize));
+                        a2a_last->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsizeOUT));
                         
                         for(size_t i=0;i<W2.size();++i) {
                             svector<ff_node*> w(1);
@@ -371,7 +371,7 @@ protected:
                     } else {
                         // NOTE: the following call might fail because the buffers were already created for example by
                         // the pipeline that contains this stage
-                        if (a2a_last->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsize))<0) {
+                        if (a2a_last->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsizeOUT))<0) {
                             if (lb->masterworker()) return -1; // something went wrong
                         }
                         if (lb->masterworker()) {
@@ -427,21 +427,21 @@ protected:
                             static int idx=0;
                             
                             for(size_t j=0;j<w.size();++j) {
-                                ff_node* t = new ff_buffernode(out_buffer_entries,fixedsize, idx++);
+                                ff_node* t = new ff_buffernode(out_buffer_entries,fixedsizeOUT, idx++);
                                 assert(t);
                                 internalSupportNodes.push_back(t);
                                 workers[i]->set_output(t);
                                 gt->register_worker(t);
                             }                            
                         } else  { // single node multi-output
-                            ff_node* t = new ff_buffernode(out_buffer_entries,fixedsize, i); 
+                            ff_node* t = new ff_buffernode(out_buffer_entries,fixedsizeOUT, i); 
                             internalSupportNodes.push_back(t);
                             workers[i]->set_output(t);
                             if (!lb->masterworker()) workers[i]->set_output_buffer(t->get_out_buffer());
                             gt->register_worker(t);
                         }                        
                     } else { // standard worker or composition where the second stage is not multi-output
-                        if (workers[i]->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsize))<0)
+                        if (workers[i]->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsizeOUT))<0)
                             return -1;
                         assert(!lb->masterworker());
                         gt->register_worker(workers[i]);
@@ -729,7 +729,7 @@ public:
      * @param input_ch \p true for enabling the input stream
      */
     ff_farm(const std::vector<ff_node*>& W, ff_node *const Emitter=NULL, ff_node *const Collector=NULL, bool input_ch=false):
-        has_input_channel(input_ch),collector_removed(false),ordered(false),fixedsize(FF_FIXED_SIZE),
+        has_input_channel(input_ch),collector_removed(false),ordered(false),fixedsizeIN(FF_FIXED_SIZE),fixedsizeOUT(FF_FIXED_SIZE),
         myownlb(true),myowngt(true),worker_cleanup(false),emitter_cleanup(false),
         collector_cleanup(false),ondemand(0),
         in_buffer_entries(DEFAULT_BUFFER_CAPACITY),
@@ -770,7 +770,7 @@ public:
      *  \param out_buffer_entries = output queue length
      *  \param max_num_workers = highest number of farm's worker
      *  \param worker_cleanup = true deallocate worker object at exit
-     *  \param fixedsize = true uses only fixed size queue
+     *  \param fixedsize = true uses only fixed size queue (both between Emitter and Workers and between Workers and Collector)
      */
     explicit ff_farm(bool input_ch=false,
                      int in_buffer_entries=DEFAULT_BUFFER_CAPACITY,
@@ -778,7 +778,7 @@ public:
                      bool worker_cleanup=false, // NOTE: by default no cleanup at exit is done !
                      size_t max_num_workers=DEF_MAX_NUM_WORKERS,
                      bool fixedsize=FF_FIXED_SIZE): 
-        has_input_channel(input_ch),collector_removed(false), ordered(false), fixedsize(fixedsize),
+        has_input_channel(input_ch),collector_removed(false), ordered(false), fixedsizeIN(FF_FIXED_SIZE),fixedsizeOUT(FF_FIXED_SIZE),
         myownlb(true),myowngt(true),worker_cleanup(worker_cleanup),emitter_cleanup(false),
         collector_cleanup(false), ondemand(0),
         in_buffer_entries(in_buffer_entries),
@@ -808,7 +808,8 @@ public:
         collector_cleanup = f.collector_cleanup;
         max_nworkers = f.max_nworkers;
         internalSupportNodes= f.internalSupportNodes;
-        fixedsize = f.fixedsize;
+        fixedsizeIN  = f.fixedsizeIN;
+        fixedsizeOUT = f.fixedsizeOUT;
         myownlb = f.myownlb;
         myowngt = f.myowngt;
         workers = f.workers;
@@ -849,7 +850,8 @@ public:
         emitter_cleanup = f.emitter_cleanup;
         collector_cleanup = f.collector_cleanup;
         max_nworkers = f.max_nworkers;
-        fixedsize = f.fixedsize;
+        fixedsizeIN  = f.fixedsizeIN;
+        fixedsizeOUT = f.fixedsizeOUT;
 
         emitter = f.emitter;  collector = f.collector;
         lb = f.lb;   gt = f.gt;     
@@ -1695,9 +1697,15 @@ public:
      *  run_and_wait_end/run_then_freeze/run/....) they have no effect.     
      *
      */
-    void setFixedSize(bool fs)        { fixedsize = fs;         }
-    void setInputQueueLength(int sz)  { in_buffer_entries = sz; }
-    void setOutputQueueLength(int sz) { out_buffer_entries = sz;}
+    void setFixedSize(bool fs) { fixedsizeIN = fixedsizeOUT = fs; }
+    void setInputQueueLength(int sz, bool fixedsize)  {
+        in_buffer_entries = sz;
+        fixedsizeIN       = fixedsize;
+    }
+    void setOutputQueueLength(int sz, bool fixedsize) {
+        out_buffer_entries = sz;
+        fixedsizeOUT       = fixedsize;
+    }
 
     int numThreads() const { return cardinality(); }
 
@@ -2034,7 +2042,7 @@ protected:
     bool has_input_channel; // for the accelerator mode
     bool collector_removed;
     bool ordered;          
-    bool fixedsize;
+    bool fixedsizeIN, fixedsizeOUT;
     bool myownlb,myowngt;
     bool worker_cleanup, emitter_cleanup,collector_cleanup;
     
