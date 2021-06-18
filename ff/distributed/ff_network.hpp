@@ -72,6 +72,9 @@ struct message_t {
 	dataBuffer    data;
 };
 
+struct ack_t {
+    char ack = 'A';
+};
 
 struct ff_endpoint {
 	std::string address;
@@ -135,6 +138,23 @@ ssize_t writevn(int fd, struct iovec *v, int count){
         v[cur].iov_base = (char *)v[cur].iov_base + written;
         v[cur].iov_len -= written;
     }
+}
+
+static inline ssize_t recvnnb(int fd, char *buf, size_t size) {
+    size_t left = size;
+    int r;
+    while(left>0) {
+      if ((r=recv(fd ,buf,left,MSG_DONTWAIT)) == -1) {
+	    if (errno == EINTR) continue;
+	    if (left == size) return -1;
+	    break;
+      }
+      
+      if (r == 0) return 0;   // EOF
+      left    -= r;
+      buf  += r;
+    }
+    return (size-left);
 }
 
 #endif
