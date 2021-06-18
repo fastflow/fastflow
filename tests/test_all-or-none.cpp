@@ -195,9 +195,8 @@ int main(int argc, char* argv[]) {
     farm.cleanup_workers();
     ff_Pipe<> pipe(Gen, farm, Gat);
 
-    pipe.setFixedSize(true);
-    pipe.setXNodeInputQueueLength(512);  
-    pipe.setXNodeOutputQueueLength(512); 
+    pipe.setXNodeInputQueueLength(512,true);  
+    pipe.setXNodeOutputQueueLength(512,true); 
     if (pipe.run_and_wait_end()<0) {
 	error("running pipe\n");
 	return -1;

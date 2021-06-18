@@ -145,9 +145,8 @@ int main(int argc, char* argv[]) {
     farm2.wrap_around();
 
     ff_Pipe<> pipe(farm1, farm2);
-    pipe.setFixedSize(true);
-    pipe.setXNodeInputQueueLength(100);
-    pipe.setXNodeOutputQueueLength(100);
+    pipe.setXNodeInputQueueLength(100,true);
+    pipe.setXNodeOutputQueueLength(100,true);
     pipe.run_and_wait_end();
     return 0;
 }
