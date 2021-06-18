@@ -162,7 +162,7 @@ protected:
             pthread_cond_t    *c        = NULL;
             if (curr_single_standard) {
                 bool skip_set_output_blocking = false;
-                if (nodes_list[i]->create_input_buffer(in_buffer_entries, fixedsize)<0)  return -1;
+                if (nodes_list[i]->create_input_buffer(in_buffer_entries, fixedsizeIN)<0)  return -1;
                 if (prev_single_standard) {
                     if (nodes_list[i-1]->set_output_buffer(nodes_list[i]->get_in_buffer())<0) return -1;
                 } else {
@@ -197,7 +197,7 @@ protected:
             }
             if (curr_single_multiinput) {
                 if (prev_single_standard) {
-                    if (nodes_list[i-1]->create_output_buffer(in_buffer_entries, fixedsize)<0) return -1;
+                    if (nodes_list[i-1]->create_output_buffer(in_buffer_entries, fixedsizeOUT)<0) return -1;
                     if (nodes_list[i]->set_input(nodes_list[i-1])<0) return -1;
 
                     // blocking stuff --------------------------------------------
@@ -215,13 +215,13 @@ protected:
                     // ------------------------------------------------------------
                 } else {
                     if (prev_single_multioutput) {
-                        ff_node* t = new ff_buffernode(in_buffer_entries,fixedsize, i);
+                        ff_node* t = new ff_buffernode(in_buffer_entries,fixedsizeIN|fixedsizeOUT, i);
                         internalSupportNodes.push_back(t);
                         nodes_list[i-1]->set_output(t);
                         nodes_list[i]->set_input(t);                        
                     }
                     if (prev_multi_standard) {
-                        if (nodes_list[i-1]->create_output_buffer(out_buffer_entries, fixedsize)<0) return -1;
+                        if (nodes_list[i-1]->create_output_buffer(out_buffer_entries, fixedsizeOUT)<0) return -1;
                         svector<ff_node*> w(MAX_NUM_THREADS);
                         nodes_list[i-1]->get_out_nodes(w);
                         assert(w.size());
@@ -234,7 +234,7 @@ protected:
                         nodes_list[i-1]->get_out_nodes(w);
                         assert(w.size());
                         for(size_t j=0;j<w.size();++j) {
-                            ff_node* t = new ff_buffernode(in_buffer_entries,fixedsize, j);
+                            ff_node* t = new ff_buffernode(in_buffer_entries,fixedsizeIN|fixedsizeOUT, j);
                             internalSupportNodes.push_back(t);
                             w[j]->set_output(t);
                             nodes_list[i]->set_input(t);
@@ -269,7 +269,7 @@ protected:
                         error("PIPE, cannot connect stage %d with stage %d because of different cardinality\n", i-1, i);
                         return -1;
                     }
-                    if (a2a->create_input_buffer(in_buffer_entries, fixedsize)<0) return -1;
+                    if (a2a->create_input_buffer(in_buffer_entries, fixedsizeIN)<0) return -1;
                     svector<ff_node*> w(1);
                     nodes_list[i]->get_in_nodes(w);
                     assert(w.size() == 1);
@@ -288,7 +288,7 @@ protected:
                     // -----------------------------------------------------------
                 } else {
                     if (prev_single_multioutput) {
-                        if (a2a->create_input_buffer(in_buffer_entries, fixedsize)<0) return -1;
+                        if (a2a->create_input_buffer(in_buffer_entries, fixedsizeIN)<0) return -1;
                         svector<ff_node*> w(MAX_NUM_THREADS);
                         nodes_list[i]->get_in_nodes(w);
                         if (nodes_list[i-1]->set_output(w)<0) return -1;
@@ -311,7 +311,7 @@ protected:
                             error("PIPE, cannot connect stage %d with stage %d, because of different input/output cardinality (**)\n", i-1, i);
                             return -1;
                         }
-                        if (a2a->create_input_buffer(in_buffer_entries, fixedsize)<0) return -1;
+                        if (a2a->create_input_buffer(in_buffer_entries, fixedsizeIN)<0) return -1;
                         // the previous node can be a farm or a all2all                       
                         for(size_t i=0;i<w1.size();++i) {
                             if (prev_multi_multioutput) {
@@ -346,7 +346,7 @@ protected:
                         error("PIPE, cannot connect stage %d with stage %d\n", i-1, i);
                         return -1;
                     }
-                    if (a2a->create_input_buffer(in_buffer_entries, fixedsize)<0) return -1;
+                    if (a2a->create_input_buffer(in_buffer_entries, fixedsizeIN)<0) return -1;
                     svector<ff_node*> w(1);
                     nodes_list[i]->get_in_nodes(w);
                     assert(w.size() == 1);
@@ -357,7 +357,7 @@ protected:
                         svector<ff_node*> w(MAX_NUM_THREADS);
                         W1[j]->get_in_nodes(w);
                         for(size_t k=0;k<w.size();++k) {
-                            ff_node* t = new ff_buffernode(in_buffer_entries,fixedsize, j);
+                            ff_node* t = new ff_buffernode(in_buffer_entries,fixedsizeIN|fixedsizeOUT, j);
                             internalSupportNodes.push_back(t);
                             w[k]->set_input(t);
                             nodes_list[i-1]->set_output(t);
@@ -375,7 +375,7 @@ protected:
                         return -1;
                     }
                     w.clear();
-                    if (nodes_list[i-1]->create_output_buffer(in_buffer_entries, fixedsize)<0) return -1;
+                    if (nodes_list[i-1]->create_output_buffer(in_buffer_entries, fixedsizeOUT)<0) return -1;
                     nodes_list[i-1]->get_out_nodes(w);
                     assert(w.size()== W1.size());
 
@@ -390,7 +390,7 @@ protected:
 
                     for(size_t k=0;k<W1.size(); ++k) {
                         for(size_t j=0;j<w.size();++j) {
-                            ff_node* t = new ff_buffernode(in_buffer_entries,fixedsize, j);
+                            ff_node* t = new ff_buffernode(in_buffer_entries,fixedsizeIN|fixedsizeOUT, j);
                             internalSupportNodes.push_back(t);
                             W1[k]->set_input(t);
                             w[j]->set_output(t);
@@ -427,7 +427,7 @@ protected:
         // Preparation of buffers for the accelerator
         int ret = 0;
         if (has_input_channel) {
-            if (create_input_buffer(in_buffer_entries, fixedsize)<0) {
+            if (create_input_buffer(in_buffer_entries, fixedsizeIN)<0) {
                 error("PIPE, creating input buffer for the accelerator\n");
                 ret=-1;
             } else {             
@@ -529,7 +529,7 @@ public:
                          int out_buffer_entries=DEFAULT_BUFFER_CAPACITY, 
                          bool fixedsize=FF_FIXED_SIZE):  
         has_input_channel(input_ch),
-        node_cleanup(false),fixedsize(fixedsize),
+        node_cleanup(false),fixedsizeIN(fixedsize),fixedsizeOUT(fixedsize),
         in_buffer_entries(in_buffer_entries),
         out_buffer_entries(out_buffer_entries) {            
     }
@@ -541,7 +541,8 @@ public:
         }
         has_input_channel = p.has_input_channel;
         node_cleanup = p.node_cleanup;
-        fixedsize    = p.fixedsize;
+        fixedsizeIN    = p.fixedsizeIN;
+        fixedsizeOUT   = p.fixedsizeOUT;
         in_buffer_entries  = p.in_buffer_entries;
         out_buffer_entries = p.out_buffer_entries;
         nodes_list = p.nodes_list;
@@ -586,9 +587,15 @@ public:
      *  run_and_wait_end/run_then_freeze/run/....) they have no effect.     
      *
      */
-    void setFixedSize(bool fs)             { fixedsize = fs;         }
-    void setXNodeInputQueueLength(int sz)  { in_buffer_entries = sz; }
-    void setXNodeOutputQueueLength(int sz) { out_buffer_entries = sz;}
+    void setFixedSize(bool fs) { fixedsizeIN = fixedsizeOUT= fs; }
+    void setXNodeInputQueueLength(int sz, bool fixedsize)  {
+        in_buffer_entries = sz;
+        fixedsizeIN       = fixedsize;
+    }
+    void setXNodeOutputQueueLength(int sz, bool fixedsize) {
+        out_buffer_entries = sz;
+        fixedsizeOUT       = fixedsize;
+    }
 
 
     int numThreads() const { return cardinality(); }
@@ -1618,7 +1625,7 @@ protected:
 private:
     bool has_input_channel; // for accelerator
     bool node_cleanup;
-    bool fixedsize;
+    bool fixedsizeIN, fixedsizeOUT;
     int in_buffer_entries;
     int out_buffer_entries;
     svector<ff_node *> nodes_list;

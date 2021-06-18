@@ -196,9 +196,8 @@ int main(int argc, char* argv[]) {
     
     First first(numtasks, ffalloc);
     ff_Pipe<> pipe(first, farm);
-    pipe.setFixedSize(true);
-    pipe.setXNodeInputQueueLength(100);
-    pipe.setXNodeOutputQueueLength(100);
+    pipe.setXNodeInputQueueLength(100,true);
+    pipe.setXNodeOutputQueueLength(100,true);
     if (pipe.run_and_wait_end()<0) {
         error("running pipeline\n");
         return -1;

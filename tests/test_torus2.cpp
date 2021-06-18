@@ -167,8 +167,8 @@ int main(int argc, char * argv[]) {
     for(unsigned i=1;i<nstages;++i)
         pipe.add_stage(new Stage);
     pipe.wrap_around();
-    pipe.setXNodeInputQueueLength(512);
-    pipe.setXNodeOutputQueueLength(512);
+    pipe.setXNodeInputQueueLength(512,false);
+    pipe.setXNodeOutputQueueLength(512,false);
     if (pipe.run_and_wait_end()<0) {
         error("running pipeline\n");
         return -1;
