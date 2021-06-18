@@ -180,22 +180,7 @@ protected:
         size_t nworkers1 = workers1.size();
         size_t nworkers2 = workers2.size();
 
-        // NOTE: the nodes of the second set will have in input a multi-producer queue
-        //       if reduce_channels=true. The node itself is multi-input because otherwise we have
-        //       problems with the blocking stuff.
-        if (reduce_channels) {
-            int ondemand = workers1[0]->ondemand_buffer();  // NOTE: here we suppose that all nodes in workers1 are homogeneous!
-            for(size_t i=0;i<nworkers2; ++i) {
-                // NOTE: if reduce_channels is set, each worker2 node has to wait nworkers1 EOS messages before
-                //       terminating
-                ff_node* t = new ff_buffernode(ondemand?ondemand:in_buffer_entries,ondemand?true:fixedsize, i, nworkers1);
-                assert(t);
-                internalSupportNodes.push_back(t);
-                workers2[i]->set_input(t);                
-                for(size_t j=0;j<nworkers1;++j)                     
-                    workers1[j]->set_output(t);
-            }
-        } else {
+        {
             int ondemand = workers1[0]->ondemand_buffer();  // NOTE: here we suppose that all nodes in workers1 are homogeneous!
 
             svector<ff_node*> L;
@@ -209,9 +194,7 @@ protected:
 
             for(size_t i=0;i<R.size(); ++i) {
                 for(size_t j=0;j<L.size();++j) {
-                    // NOTE: if reduce_channels is set, each worker2 node has to wait nworkers1 EOS messages before
-                    //       terminating
-                    ff_node* t = new ff_buffernode(ondemand?ondemand:in_buffer_entries,ondemand?true:fixedsize, j);
+                    ff_node* t = new ff_buffernode(ondemand?ondemand:in_buffer_entries,ondemand?true:(fixedsizeIN|fixedsizeOUT), j);
                     assert(t);
                     internalSupportNodes.push_back(t);                    
                     L[j]->set_output(t);
@@ -255,17 +238,10 @@ protected:
     
 public:
 
-    /**
-     *
-     * reduce_channels should be set to true only if we want/need to reduce the number of channel
-     * by making use of multi-producer input queues.
-     *
-     */
-    ff_a2a(bool reduce_channels=false,
+    ff_a2a(bool notusedanymore=false,
            int in_buffer_entries=DEFAULT_BUFFER_CAPACITY,
            int out_buffer_entries=DEFAULT_BUFFER_CAPACITY,
-           bool fixedsize=FF_FIXED_SIZE):prepared(false),fixedsize(fixedsize),
-                                 reduce_channels(reduce_channels), 
+           bool fixedsize=FF_FIXED_SIZE):prepared(false),fixedsizeIN(fixedsize),fixedsizeOUT(fixedsize),
                                  in_buffer_entries(in_buffer_entries),
                                  out_buffer_entries(out_buffer_entries)
     {}
@@ -396,7 +372,6 @@ public:
         return false;
     }
     
-    bool reduceChannel() const { return reduce_channels;}
     
     void skipfirstpop(bool sk)   { 
         for(size_t i=0;i<workers1.size(); ++i)
@@ -644,6 +619,20 @@ public:
         return 0;
     }
 
+    /*  WARNING: if these methods are called after prepare (i.e. after having called
+     *  run_and_wait_end/run_then_freeze/run/....) they have no effect.     
+     *
+     */
+    void setFixedSize(bool fs) { fixedsizeIN = fixedsizeOUT = fs; }
+    void setInputQueueLength(int sz, bool fixedsize)  {
+        in_buffer_entries = sz;
+        fixedsizeIN       = fixedsize;
+    }
+    void setOutputQueueLength(int sz, bool fixedsize) {
+        out_buffer_entries = sz;
+        fixedsizeOUT       = fixedsize;
+    }
+    
     // time functions --------------------------------
 
     const struct timeval  getstarttime()  const {
@@ -723,14 +712,6 @@ protected:
         return 0;
     }
 
-    int create_input_buffer_mp(int nentries, bool fixedsize, int neos=1) {
-        size_t nworkers1 = workers1.size();
-        for(size_t i=0;i<nworkers1; ++i) {
-            if (workers1[i]->create_input_buffer_mp(nentries,fixedsize, neos)==-1) return -1;
-        }
-        return 0;
-    }
-
     int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         size_t nworkers2 = workers2.size();
         for(size_t i=0;i<nworkers2; ++i) {
@@ -785,7 +766,7 @@ protected:
 protected:
     bool workers1_cleanup=false;
     bool workers2_cleanup=false;
-    bool prepared, fixedsize,reduce_channels;
+    bool prepared, fixedsizeIN, fixedsizeOUT;
     int in_buffer_entries, out_buffer_entries;
     int ondemand_chunk=0;
     svector<ff_node*>  workers1;  // first set, nodes must be multi-output

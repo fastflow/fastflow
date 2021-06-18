@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
     secondStage F2;
     thirdStage  F3;
     ff_Pipe<> pipe(F1,F2,F3);
-    pipe.setXNodeInputQueueLength(10);
+    pipe.setXNodeInputQueueLength(10,true);
     pipe.run_and_wait_end();
     std::cout << "Time: " << pipe.ffTime() << "\n";
     return 0;

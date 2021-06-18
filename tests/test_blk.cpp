@@ -95,13 +95,11 @@ int main() {
 	    return W;
 	} () );
     
-    farm.setFixedSize(true);
-    farm.setInputQueueLength(nworkers*1);
-    farm.setOutputQueueLength(nworkers*1);
+    farm.setInputQueueLength(nworkers*1, true);
+    farm.setOutputQueueLength(nworkers*1, true);
     ff_Pipe<> pipe(first,farm,last);
-    pipe.setFixedSize(true);
-    pipe.setXNodeInputQueueLength(1);
-    pipe.setXNodeOutputQueueLength(1);
+    pipe.setXNodeInputQueueLength(1,true);
+    pipe.setXNodeOutputQueueLength(1,true);
     pipe.run_then_freeze();
     pipe.wait();
 
