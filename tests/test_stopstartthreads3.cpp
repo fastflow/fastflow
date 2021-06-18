@@ -158,9 +158,8 @@ int main(int argc, char *argv[]) {
     Collector C(10);
     ofarm.add_emitter(E);
     ofarm.add_collector(C);
-    ofarm.setFixedSize(true);
-    ofarm.setInputQueueLength(4); // setting very small queues
-    ofarm.setOutputQueueLength(4);
+    ofarm.setInputQueueLength(4, true); // setting very small queues
+    ofarm.setOutputQueueLength(4, true);
     ofarm.run();
     ofarm.getgt()->wait(); // waiting for the termination of the collector
 
