@@ -241,7 +241,7 @@ private:
         for (const auto& pair : this->in_) in_C.push_back(pair.first);
         for (const auto& pair : this->out_) out_C.push_back(pair.first);
 
-        int onDemandQueueLength = 0;
+        int onDemandQueueLength = 0; bool onDemandReceiver = false; bool onDemandSender = false;
 
         if (this->parentStructure->isPipe())
            processBB(this->parentStructure, in_C, out_C);
@@ -264,8 +264,8 @@ private:
                 // if the ondemand scheduling is set in the a2a, i need to adjust the queues of this farm in order to implement the ondemand policy
                 if (a2a->ondemand_buffer() > 0){
                     onDemandQueueLength = a2a->ondemand_buffer();
-                    if (first) this->setOutputQueueLength(1, true); // always set to 1 the length of the queue between worker and collector (SOURCE side)
-                    if (second) this->set_scheduling_ondemand(a2a->ondemand_buffer()); // set the right length of the queue between emitter and worker (SINK side)
+                    if (first) {this->setOutputQueueLength(1, true); onDemandSender = true;} // always set to 1 the length of the queue between worker and collector (SOURCE side)
+                    if (second) {this->set_scheduling_ondemand(a2a->ondemand_buffer()); onDemandReceiver = true;} // set the right length of the queue between emitter and worker (SINK side)
                 }
             }
 
@@ -284,12 +284,12 @@ private:
         // create receiver
         if (!isSource()){
             //std::cout << "Creating the receiver!" << std::endl;
-            this->add_emitter(new ff_dreceiverOD(0 , this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB), onDemandQueueLength > 0)); // set right parameters HERE!!
+            this->add_emitter(new ff_dreceiverOD(0 , this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB), onDemandReceiver)); // set right parameters HERE!!
         }
         // create sender
         if (!isSink()){
             //std::cout << "Creating the sender!" << std::endl;
-            if (onDemandQueueLength > 0)
+            if (onDemandSender)
                 this->add_collector(new ff_dsenderOD(this->destinations, onDemandQueueLength), true);
             else
                 this->add_collector(new ff_dsender(this->destinations), true);

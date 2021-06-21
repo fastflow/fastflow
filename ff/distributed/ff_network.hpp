@@ -110,6 +110,7 @@ ssize_t readvn(int fd, struct iovec *v, int count){
         v[cur].iov_base = (char *)v[cur].iov_base + rread;
         v[cur].iov_len -= rread;
     }
+	return -1;
 }
 
 ssize_t writen(int fd, const char *ptr, size_t n) {  
@@ -138,6 +139,7 @@ ssize_t writevn(int fd, struct iovec *v, int count){
         v[cur].iov_base = (char *)v[cur].iov_base + written;
         v[cur].iov_len -= written;
     }
+	return -1;
 }
 
 static inline ssize_t recvnnb(int fd, char *buf, size_t size) {
