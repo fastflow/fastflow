@@ -30,7 +30,7 @@ private:
     std::vector<ff_endpoint> dest_endpoints;
     std::map<int, int> dest2Socket;
     std::map<int, unsigned int> sockCounters;
-    std::map<int, int> sockets;
+	std::vector<int> sockets;
 	int coreid;
     fd_set set, tmpset;
     int fdmax = -1;
@@ -38,17 +38,26 @@ private:
     int receiveReachableDestinations(int sck){
         size_t sz;
 
-        //while (readvn(sck, iov, 1) != sizeof(sz)) // wait untill a size is received!
-        recv(sck, &sz, sizeof(sz), MSG_WAITALL);
-
+        // wait until the size is received!
+        //recv(sck, &sz, sizeof(sz), MSG_WAITALL);
+	long r;
+	if ((r=readn(sck, (char*)&sz, sizeof(sz)))!=sizeof(sz)) {
+		if (r==0)
+			error("Error unexpected connection closed by receiver\n");
+		else			
+			error("Error reading size (errno=%d)");
+		return -1;
+	}
+	
         sz = be64toh(sz);
 
         std::cout << "Receiving routing table (" << sz << " bytes)" << std::endl;
         char* buff = new char [sz];
-		assert(buff);
+	assert(buff);
 
-        if(readn(sck, buff, sz) < 0){
-            error("Error reading from socket\n");
+        if((r=readn(sck, buff, sz)) != (long)sz){
+	    if (r==0) error("Error unexpected connection closed by receiver\n");
+	    else error("Error reading from socket\n");
             delete [] buff;
             return -1;
         }
@@ -178,6 +187,7 @@ public:
         FD_ZERO(&set);
         FD_ZERO(&tmpset);
 
+		sockets.resize(this->dest_endpoints.size());
         for(size_t i=0; i < this->dest_endpoints.size(); i++){
             if ((sockets[i] = tryConnect(this->dest_endpoints[i])) <= 0 ) return -1;
             
@@ -195,21 +205,21 @@ public:
 
     int waitAckFrom(int sck){
         while (sockCounters[sck] == 0){
-            for (int i = 0; i < this->sockets.size(); ++i){
+            for (size_t i = 0; i < this->sockets.size(); ++i){
                 int r; ack_t a;
                 if ((r = recvnnb(sockets[i], reinterpret_cast<char*>(&a), sizeof(ack_t))) != sizeof(ack_t)){
                     if (errno == EWOULDBLOCK){
                         assert(r == -1);
                         continue;
                     }
-                    perror("readn ack");
+                    perror("recvnnb ack");
                     return -1;
                 } else 
                     //printf("received ACK from conn %d\n", i);
                     sockCounters[sockets[i]]++;
                 
             }
-
+			
             if (sockCounters[sck] == 0){
                 tmpset = set;
                 if (select(fdmax + 1, &tmpset, NULL, NULL, NULL) == -1){
@@ -221,14 +231,35 @@ public:
         return 1;
     }
 
-    bool isOneReady(){
-        for(const auto& pair : sockCounters)
-            if (pair.second > 0) return true;
-        return false;
-    }
+	int waitAckFromAny() {
+		tmpset = set;
+		if (select(fdmax + 1, &tmpset, NULL, NULL, NULL) == -1){
+			perror("select");
+			return -1;
+		} 
+		// try to receive from all connections in a non blocking way
+		for (size_t i = 0; i < this->sockets.size(); ++i){
+			int r; ack_t a;
+			int sck = sockets[i];
+			if ((r = recvnnb(sck, reinterpret_cast<char*>(&a), sizeof(ack_t))) != sizeof(ack_t)){
+				if (errno == EWOULDBLOCK){
+					assert(r == -1);
+					continue;
+				}
+				perror("recvnnb ack");
+				return -1;
+			} else {
+				sockCounters[sck]++;
+				last_rr_socket = i;
+				return sck;
+			}
+		} 
+		assert(1==0);
+		return -1;
+	}
 
     int getNextReady(){
-        for(int i = 0; i < this->sockets.size(); i++){
+        for(size_t i = 0; i < this->sockets.size(); i++){
             int actualSocket = (last_rr_socket + 1 + i) % this->sockets.size();
             int sck = sockets[actualSocket];
             if (sockCounters[sck] > 0) {
@@ -236,43 +267,24 @@ public:
                 return sck;
             }
         }
-
-        // devo ricevere almeno un ack da qualcuno
-        while(!isOneReady()){
-
-            // se non ho ricevuto nessun ack mi sospendo finche non ricevo qualcosa
-            tmpset = set;
-            if (select(fdmax + 1, &tmpset, NULL, NULL, NULL) == -1){
-                perror("select");
-                return -1;
-            } 
-
-            for (int i = 0; i < this->sockets.size(); ++i){
-                int r; ack_t a;
-                int sck = sockets[i];
-                if ((r = recvnnb(sck, reinterpret_cast<char*>(&a), sizeof(ack_t))) != sizeof(ack_t)){
-                    if (errno == EWOULDBLOCK){
-                        assert(r == -1);
-                        continue;
-                    }
-                    perror("readn ack");
-                    return -1;
-                } else {
-                    //printf("received ACK from conn %d\n", i);
-                    
-                    sockCounters[sck]++;
-                    last_rr_socket = i;
-                    return sck;
-                }
-            } 
-        }
+		return waitAckFromAny();		
     }
 
 
     void svc_end() {
-        // close the socket not matter if local or remote
-        for(size_t i=0; i < this->sockets.size(); i++)
-            close(sockets[i]);    
+		long totalack = sockets.size()*queueDim;
+		long currack  = 0;
+        for(const auto& pair : sockCounters)
+            currack += pair.second;
+		while(currack<totalack) {
+			waitAckFromAny();
+			currack++;
+		}
+
+		// close the socket not matter if local or remote
+        for(size_t i=0; i < this->sockets.size(); i++) {
+	            close(sockets[i]);
+		}
     }
     message_t *svc(message_t* task) {
         int sck;
@@ -299,13 +311,12 @@ public:
             message_t * E_O_S = new message_t;
             E_O_S->chid = 0;
             E_O_S->sender = 0;
-            for(const auto& pair : sockets)
-                sendToSck(pair.second, E_O_S);
+            for(const auto& fd : sockets)
+                sendToSck(fd, E_O_S);
 
             delete E_O_S;
         }
     }
-
 
 };
 

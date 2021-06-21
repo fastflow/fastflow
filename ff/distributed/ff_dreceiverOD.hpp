@@ -83,11 +83,14 @@ private:
             else
                 ff_send_out(out);
 
-            // send back the ack only if the onDemand is true!
+            if (onDemand) {
                 if (writen(sck, reinterpret_cast<char*>(&ACK),sizeof(ack_t)) < 0){
-                    error("Error sending back ACK to the sender\n");
-                    return -1;
+					if (errno != ECONNRESET || errno != EPIPE) {
+						error("Error sending back ACK to the sender (errno=%d)\n",errno);
+						return -1;
+					}
                 }
+			}
 
             return 0;
         }
