@@ -56,12 +56,10 @@ struct MoNode : ff::ff_monode_t<DataType>{
 			for(int i=0; i< items; i++){
 				auto d = new DataType;
 				d->x=i, d->y=i+1;
-				printf("generator %ld,%ld\n", d->x, d->y);
 				ff_send_out(d);
 			}        
 			return this->EOS;
 		}
-		printf("MoNode %ld,%ld\n", in->x, in->y);
 		return in;
     }
 	void svc_end() {
@@ -79,7 +77,6 @@ struct MiNode : ff::ff_minode_t<DataType>{
     MiNode(int execTime): execTime(execTime) {}
 
     DataType* svc(DataType* in){
-		printf("MiNode receved data\n");
 		active_delay(this->execTime);
 		++processedItems;
 		delete in;
