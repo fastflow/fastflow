@@ -69,25 +69,50 @@ struct Source: ff::ff_monode_t<myTask_t>{
 int main(int argc, char*argv[]){
     DFF_Init(argc, argv);
 
+    if (argc != 5){
+        std::cout << "Usage: " << argv[0] << " #items #nw_sx #nw_dx #async"  << std::endl;
+        return -1;
+    }
+
+	
+    int items = atoi(argv[1]);
+    int numWorkerSx = atoi(argv[2]);
+    int numWorkerDx = atoi(argv[3]);
+	int asyncdegree = atoi(argv[4]);
+
+	if (numWorkerSx <= 0 ||
+		numWorkerDx <= 0 ||
+		asyncdegree  <= 0) {
+		error("Bad parameter values\n");
+		return -1;
+	}
+	
     ff::ff_pipeline mainPipe;
     ff::ff_a2a a2a;
 
+	auto g1 = a2a.createGroup("G1");
     auto g2 = a2a.createGroup("G2");
 
-    Source s(10);
-    a2a.add_firstset<Source>({&s}, 1);
-    a2a.createGroup("G1").out << &s;
+	std::vector<Source*> sx;
+	std::vector<Sink*>   dx;
 
-    std::vector<ff::ff_node*> sinks;
-    for(int i = 0; i < 3; i++){
-        Sink * sink = new Sink((long)1000*(i+1));
-        sinks.push_back(sink);
-        g2.in << sink;
+	for(int i = 0; i < numWorkerSx; i++) {
+		sx.push_back(new Source(items));
+		g1.out << sx[i];
     }
+	a2a.add_firstset<Source>(sx, asyncdegree);
 
-    a2a.add_secondset(sinks);
+    for(int i = 0; i < numWorkerDx; i++){
+		dx.push_back(new Sink((long)100*(i+1)));
+		g2.in << dx[i];
+	}
+    a2a.add_secondset(dx);
 
     mainPipe.add_stage(&a2a);
-    mainPipe.run_and_wait_end();
+    if (mainPipe.run_and_wait_end()<0) {
+		error("running pipe");
+		return -1;
+	}
 
+	return 0;
 }
