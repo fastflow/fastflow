@@ -260,10 +260,8 @@ private:
                     if (processBB(bb, in_C, out_C))
                         second = true;
                 
-                
-                // if the ondemand scheduling is set in the a2a, i need to adjust the queues of this farm in order to implement the ondemand policy
-                if (a2a->ondemand_buffer() > 0){
-                    if (!first && !second){
+                // check on input/output nodes, used for ondemand stuff and for checking collision between nodes
+                if (!first && !second){
                         for (const auto& pair : this->inout_){
                             if (std::find(a2a->getFirstSet().begin(), a2a->getFirstSet().end(), pair.first) != a2a->getFirstSet().end())
                                 first = true;
@@ -271,13 +269,16 @@ private:
                                 second = true;
                         }
                     }
+                
+                // if the ondemand scheduling is set in the a2a, i need to adjust the queues of this farm in order to implement the ondemand policy
+                if (a2a->ondemand_buffer() > 0){
 
                     onDemandQueueLength = a2a->ondemand_buffer();
                     if (first) {this->setOutputQueueLength(1, true); onDemandSender = true;} // always set to 1 the length of the queue between worker and collector (SOURCE side)
                     if (second) {this->set_scheduling_ondemand(a2a->ondemand_buffer()); onDemandReceiver = true;} // set the right length of the queue between emitter and worker (SINK side)
                 }
 
-                if (first && second) throw FF_Exception("Nodes from first and second of an A2A cannot belong to the same group");
+                if (first && second) throw FF_Exception("Nodes from first and second of an A2A cannot belong to the same group!!");
             }
 
         }
