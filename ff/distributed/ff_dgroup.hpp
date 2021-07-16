@@ -10,8 +10,6 @@
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_wrappers.hpp>
 #include <ff/distributed/ff_dreceiver.hpp>
-#include <ff/distributed/ff_dreceiverOD.hpp>
-#include <ff/distributed/ff_dsenderOD.hpp>
 #include <ff/distributed/ff_dsender.hpp>
 #include <ff/distributed/ff_dgroups.hpp>
 
@@ -295,7 +293,10 @@ private:
         // create receiver
         if (!isSource()){
             //std::cout << "Creating the receiver!" << std::endl;
-            this->add_emitter(new ff_dreceiverOD(0 , this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB), onDemandReceiver)); // set right parameters HERE!!
+            if (onDemandReceiver)
+                this->add_emitter(new ff_dreceiverOD(this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB))); // set right parameters HERE!!
+            else
+                this->add_emitter(new ff_dreceiver(this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB)));
         }
         // create sender
         if (!isSink()){

@@ -5,7 +5,6 @@
 #include <map>
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
-#include <sys/socket.h>
 #include <sys/types.h>
 #include <netdb.h>
 #include <cmath>
@@ -21,7 +20,7 @@
 using namespace ff;
 
 class ff_dsenderMPI: public ff_minode_t<message_t> { 
-private:
+protected:
     size_t neos=0;
     int next_rr_destination = 0; //next destiation to send for round robin policy
     std::map<int, int> dest2Rank;
@@ -48,25 +47,6 @@ private:
         iarchive >> destinationsList;
 
         for (int d : destinationsList) dest2Rank[d] = rank;
-
-        return 0;
-    }
-	
-
-    int sendToSck(int rank, message_t* task){
-        //std::cout << "received something from " << task->sender << " directed to " << task->chid << std::endl;
-        size_t sz = task->data.getLen();
-        
-        char headerBuff[sizeof(size_t)+2*sizeof(int)];
-        memcpy(headerBuff, &sz, sizeof(size_t));
-        memcpy(headerBuff+sizeof(size_t), &task->sender, sizeof(int));
-        memcpy(headerBuff+sizeof(int)+sizeof(size_t), &task->chid, sizeof(int));
-        
-        if (MPI_Send(headerBuff, sizeof(size_t)+2*sizeof(int), MPI_BYTE, rank, DFF_HEADER_TAG, MPI_COMM_WORLD) != MPI_SUCCESS)
-            return -1;
-        if (sz > 0)
-            if (MPI_Send(task->data.getPtr(), sz, MPI_BYTE, rank, DFF_TASK_TAG, MPI_COMM_WORLD) != MPI_SUCCESS)
-                return -1;
 
         return 0;
     }
@@ -99,7 +79,15 @@ public:
             next_rr_destination = (next_rr_destination + 1) % dest2Rank.size();
         }
 
-        sendToSck(dest2Rank[task->chid], task);
+        size_t sz = task->data.getLen();
+        int rank =dest2Rank[task->chid];
+        
+        int header[3] = {sz, task->sender, task->chid};
+
+        MPI_Send(header, 3, MPI_INT, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
+    
+        MPI_Send(task->data.getPtr(), sz, MPI_BYTE, rank, DFF_TASK_TAG, MPI_COMM_WORLD);
+
 
         delete task;
         return this->GO_ON;
@@ -107,17 +95,113 @@ public:
 
      void eosnotify(ssize_t) {
 	    if (++neos >= this->get_num_inchannels()){
-            message_t * E_O_S = new message_t;
-            E_O_S->chid = 0;
-            E_O_S->sender = 0;
+            int header[3] = {0,0,0};
+            
             for(const auto& rank : destRanks)
-                sendToSck(rank, E_O_S);
+                MPI_Send(header, 3, MPI_INT, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
 
-            delete E_O_S;
+        }
+    }
+};
+
+
+/* versione Ondemand */
+
+class ff_dsenderMPIOD: public ff_dsenderMPI { 
+private:
+    int last_rr_rank = 0; //next destiation to send for round robin policy
+    std::map<int, unsigned int> rankCounters;
+    int queueDim;
+    
+public:
+    ff_dsenderMPIOD(int destRank, int queueDim_ = 1, int coreid=-1)
+		: ff_dsenderMPI(destRank, coreid), queueDim(queueDim_) {}
+
+    ff_dsenderMPIOD( std::vector<int> destRanks_, int queueDim_ = 1, int coreid=-1)
+		: ff_dsenderMPI(destRanks_, coreid), queueDim(queueDim_){}
+
+    int svc_init() {
+		if (coreid!=-1)
+			ff_mapThreadToCpu(coreid);
+
+        for(const int& rank: this->destRanks){
+           receiveReachableDestinations(rank);
+           rankCounters[rank] = queueDim;
+        } 
+
+        return 0;
+    }
+
+    void svc_end(){
+        long totalack = destRanks.size()*queueDim;
+		long currack  = 0;
+        
+        for(const auto& pair : rankCounters) currack += pair.second;
+		
+        while(currack<totalack) {
+			waitAckFromAny();
+			currack++;
+		}
+    }
+
+    inline int waitAckFromAny(){
+        ack_t tmpAck;
+        MPI_Status status;
+        if (MPI_Recv(&tmpAck, sizeof(ack_t), MPI_BYTE, MPI_ANY_SOURCE, DFF_ACK_TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS)
+            return -1;
+        rankCounters[status.MPI_SOURCE]++;
+        return status.MPI_SOURCE;
+    }
+
+    int waitAckFrom(int rank){
+        ack_t tmpAck;
+        MPI_Status status;
+        while(true){
+            if (MPI_Recv(&tmpAck, sizeof(ack_t), MPI_BYTE, MPI_ANY_SOURCE, DFF_ACK_TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS)
+                return -1;
+            rankCounters[status.MPI_SOURCE]++;
+            if (rank == status.MPI_SOURCE) return 0;
         }
     }
 
+    int getNextReady(){
+        for(size_t i = 0; i < this->destRanks.size(); i++){
+            int rankIndex = (last_rr_rank + 1 + i) % this->destRanks.size();
+            int rank = destRanks[rankIndex];
+            if (rankCounters[rank] > 0) {
+                last_rr_rank = rankIndex;
+                return rank;
+            }
+        }
+		return waitAckFromAny();		
+    }
 
+  
+    message_t *svc(message_t* task) {
+        int rank;
+        if (task->chid != -1){
+            rank = dest2Rank[task->chid];
+            if (rankCounters[rank] == 0 && waitAckFrom(rank) == -1){
+                error("Error waiting ACK\n");
+                delete task; return this->GO_ON;
+            }
+        } else {
+            rank = getNextReady();
+        }
+
+        size_t sz = task->data.getLen();
+        
+        int header[3] = {sz, task->sender, task->chid};
+
+        MPI_Send(header, 3, MPI_INT, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
+    
+        MPI_Send(task->data.getPtr(), sz, MPI_BYTE, rank, DFF_TASK_TAG, MPI_COMM_WORLD);
+
+        rankCounters[rank]--;
+
+        delete task;
+        return this->GO_ON;
+    }
 };
 
 #endif

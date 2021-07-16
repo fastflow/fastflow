@@ -19,7 +19,7 @@
 using namespace ff;
 
 class ff_dreceiver: public ff_monode_t<message_t> { 
-private:
+protected:
 
     int sendRoutingTable(int sck){
         dataBuffer buff; std::ostream oss(&buff);
@@ -43,8 +43,8 @@ private:
         return 0;
     }
 
-    int handleRequest(int sck){
-		int sender;
+    virtual int handleRequest(int sck){
+   		int sender;
 		int chid;
         size_t sz;
         struct iovec iov[3];
@@ -89,9 +89,8 @@ private:
     }
 
 public:
-    ff_dreceiver(const int dGroup_id, ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
-		: input_channels(input_channels), acceptAddr(acceptAddr), routingTable(routingTable),
-		  distributedGroupId(dGroup_id), coreid(coreid) {}
+    ff_dreceiver(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
+		: input_channels(input_channels), acceptAddr(acceptAddr), routingTable(routingTable), coreid(coreid) {}
 
     int svc_init() {
   		if (coreid!=-1)
@@ -178,9 +177,11 @@ public:
             }
 
             // iterate over the file descriptor to see which one is active
-            for(int i=0; i <= fdmax; i++) 
-	            if (FD_ISSET(i, &tmpset)){
-                    if (i == this->listen_sck) {
+            int fixed_last = (this->last_receive_fd + 1) % (fdmax +1);
+            for(int i=0; i <= fdmax; i++){
+                int actualFD = (fixed_last + i) % (fdmax +1);
+	            if (FD_ISSET(actualFD, &tmpset)){
+                    if (actualFD == this->listen_sck) {
                         int connfd = accept(this->listen_sck, (struct sockaddr*)NULL ,NULL);
                         if (connfd == -1){
                             error("Error accepting client\n");
@@ -194,35 +195,112 @@ public:
                     }
                     
                     // it is not a new connection, call receive and handle possible errors
-                    if (this->handleRequest(i) < 0){
-                        close(i);
-                        FD_CLR(i, &set);
+                    // save the last socket i
+                    this->last_receive_fd = actualFD;
+
+                    
+                    if (this->handleRequest(actualFD) < 0){
+                        close(actualFD);
+                        FD_CLR(actualFD, &set);
 
                         // update the maximum file descriptor
-                        if (i == fdmax)
-                            for(int i=(fdmax-1);i>=0;--i)
-                                if (FD_ISSET(i, &set)){
-                                    fdmax = i;
+                        if (actualFD == fdmax)
+                            for(int ii=(fdmax-1);ii>=0;--ii)
+                                if (FD_ISSET(ii, &set)){
+                                    fdmax = ii;
+                                    this->last_receive_fd = -1;
                                     break;
                                 }
                                     
                     }
+                   
                 }
-
+            }
         }
 
         /* In theory i should never return because of the while true. In our first example this is necessary */
         return this->EOS;
     }
 
-private:
+protected:
     size_t neos = 0;
     size_t input_channels;
     int listen_sck;
     ff_endpoint acceptAddr;	
     std::map<int, int> routingTable;
-    int distributedGroupId;
+    int last_receive_fd = -1;
 	int coreid;
+};
+
+/*
+    ONDEMAND specification
+*/
+
+
+class ff_dreceiverOD: public ff_dreceiver { 
+protected:
+    virtual int handleRequest(int sck) override {
+		int sender;
+		int chid;
+        size_t sz;
+        struct iovec iov[3];
+        iov[0].iov_base = &sender;
+        iov[0].iov_len = sizeof(sender);
+        iov[1].iov_base = &chid;
+        iov[1].iov_len = sizeof(chid);
+        iov[2].iov_base = &sz;
+        iov[2].iov_len = sizeof(sz);
+
+        switch (readvn(sck, iov, 3)) {
+           case -1: error("Error reading from socket\n"); // fatal error
+           case  0: return -1; // connection close
+        }
+
+        // convert values to host byte order
+        sender = ntohl(sender);
+        chid   = ntohl(chid);
+        sz     = be64toh(sz);
+
+        if (sz > 0){
+            char* buff = new char [sz];
+			assert(buff);
+            if(readn(sck, buff, sz) < 0){
+                error("Error reading from socket\n");
+                delete [] buff;
+                return -1;
+            }
+			message_t* out = new message_t(buff, sz, true);
+			assert(out);
+			out->sender = sender;
+			out->chid   = chid;
+
+            if (chid != -1)
+                ff_send_out_to(out, this->routingTable[chid]); // assume the routing table is consistent WARNING!!!
+            else
+                ff_send_out(out);
+
+          
+            if (writen(sck, reinterpret_cast<char*>(&ACK),sizeof(ack_t)) < 0){
+                if (errno != ECONNRESET || errno != EPIPE) {
+                    error("Error sending back ACK to the sender (errno=%d)\n",errno);
+                    return -1;
+                }
+            }
+		
+
+            return 0;
+        }
+
+        neos++; // increment the eos received        
+        return -1;
+    }
+
+public:
+    ff_dreceiverOD(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
+		: ff_dreceiver(acceptAddr, input_channels, routingTable, coreid) {}
+
+private:
+    ack_t ACK;
 };
 
 #endif
