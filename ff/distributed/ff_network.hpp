@@ -12,24 +12,6 @@
 #include <sys/uio.h>
 #include <arpa/inet.h>
 
-#include <stdint.h>
-#include <limits.h>
-
-// define the type my_MPI_SIZE_T
-#if SIZE_MAX == UCHAR_MAX
-   #define my_MPI_SIZE_T MPI_UNSIGNED_CHAR
-#elif SIZE_MAX == USHRT_MAX
-   #define my_MPI_SIZE_T MPI_UNSIGNED_SHORT
-#elif SIZE_MAX == UINT_MAX
-   #define my_MPI_SIZE_T MPI_UNSIGNED
-#elif SIZE_MAX == ULONG_MAX
-   #define my_MPI_SIZE_T MPI_UNSIGNED_LONG
-#elif SIZE_MAX == ULLONG_MAX
-   #define my_MPI_SIZE_T MPI_UNSIGNED_LONG_LONG
-#else
-   #error "what is happening here?"
-#endif
-
 #define REMOTE
 
 #ifdef __APPLE__
@@ -184,6 +166,7 @@ static inline ssize_t recvnnb(int fd, char *buf, size_t size) {
 #define DFF_ROUTING_TABLE_TAG 2
 #define DFF_TASK_TAG 3
 #define DFF_HEADER_TAG 4
+#define DFF_ACK_TAG 5
 
 #define DFF_REQUEST_ROUTING_TABLE 10
 
