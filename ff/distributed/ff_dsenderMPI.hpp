@@ -24,21 +24,22 @@ protected:
     size_t neos=0;
     int next_rr_destination = 0; //next destiation to send for round robin policy
     std::map<int, int> dest2Rank;
-    std::vector<int> destRanks;
+    std::vector<ff_endpoint> destRanks;
 	int coreid;
 
     int receiveReachableDestinations(int rank){
         int sz;
         int cmd = DFF_REQUEST_ROUTING_TABLE;
-        char* buff = new char [1000];
-
+        
         MPI_Status status;
-        MPI_Sendrecv(&cmd, 1, MPI_INT, rank, DFF_ROUTING_TABLE_TAG, buff, 1000, MPI_BYTE, rank, DFF_ROUTING_TABLE_TAG, MPI_COMM_WORLD, &status);
-
+        MPI_Send(&cmd, 1, MPI_INT, rank, DFF_ROUTING_TABLE_REQUEST_TAG, MPI_COMM_WORLD);
+        MPI_Probe(rank, DFF_ROUTING_TABLE_TAG, MPI_COMM_WORLD, &status);
         MPI_Get_count(&status,MPI_BYTE, &sz);
-
+        char* buff = new char [sz];
         std::cout << "Received routing table (" << sz  << " bytes)" << std::endl;
-     
+        MPI_Recv(buff, sz, MPI_BYTE, rank, DFF_ROUTING_TABLE_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+
         dataBuffer dbuff(buff, sz, true);
         std::istream iss(&dbuff);
 		cereal::PortableBinaryInputArchive iarchive(iss);
@@ -53,20 +54,20 @@ protected:
 
     
 public:
-    ff_dsenderMPI(int destRank, int coreid=-1)
+    ff_dsenderMPI(ff_endpoint destRank, int coreid=-1)
 		: coreid(coreid) {
         this->destRanks.push_back(std::move(destRank));
     }
 
-    ff_dsenderMPI( std::vector<int> destRanks_, int coreid=-1)
+    ff_dsenderMPI( std::vector<ff_endpoint> destRanks_, int coreid=-1)
 		: destRanks(std::move(destRanks_)),coreid(coreid) {}
 
     int svc_init() {
 		if (coreid!=-1)
 			ff_mapThreadToCpu(coreid);
 
-        for(const int& rank: this->destRanks)
-           receiveReachableDestinations(rank); 
+        for(ff_endpoint& ep: this->destRanks)
+           receiveReachableDestinations(ep.getRank()); 
 
         return 0;
     }
@@ -97,8 +98,8 @@ public:
 	    if (++neos >= this->get_num_inchannels()){
             int header[3] = {0,0,0};
             
-            for(const auto& rank : destRanks)
-                MPI_Send(header, 3, MPI_INT, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
+            for(auto& ep : destRanks)
+                MPI_Send(header, 3, MPI_INT, ep.getRank(), DFF_HEADER_TAG, MPI_COMM_WORLD);
 
         }
     }
@@ -114,19 +115,21 @@ private:
     int queueDim;
     
 public:
-    ff_dsenderMPIOD(int destRank, int queueDim_ = 1, int coreid=-1)
+    ff_dsenderMPIOD(ff_endpoint destRank, int queueDim_ = 1, int coreid=-1)
 		: ff_dsenderMPI(destRank, coreid), queueDim(queueDim_) {}
 
-    ff_dsenderMPIOD( std::vector<int> destRanks_, int queueDim_ = 1, int coreid=-1)
+    ff_dsenderMPIOD( std::vector<ff_endpoint> destRanks_, int queueDim_ = 1, int coreid=-1)
 		: ff_dsenderMPI(destRanks_, coreid), queueDim(queueDim_){}
 
     int svc_init() {
+        std::cout << "instantiating the ondemand mpi sender!\n";
+
 		if (coreid!=-1)
 			ff_mapThreadToCpu(coreid);
 
-        for(const int& rank: this->destRanks){
-           receiveReachableDestinations(rank);
-           rankCounters[rank] = queueDim;
+        for(ff_endpoint& ep: this->destRanks){
+           receiveReachableDestinations(ep.getRank());
+           rankCounters[ep.getRank()] = queueDim;
         } 
 
         return 0;
@@ -167,7 +170,7 @@ public:
     int getNextReady(){
         for(size_t i = 0; i < this->destRanks.size(); i++){
             int rankIndex = (last_rr_rank + 1 + i) % this->destRanks.size();
-            int rank = destRanks[rankIndex];
+            int rank = destRanks[rankIndex].getRank();
             if (rankCounters[rank] > 0) {
                 last_rr_rank = rankIndex;
                 return rank;

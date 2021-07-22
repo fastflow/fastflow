@@ -76,6 +76,10 @@ struct ack_t {
 };
 
 struct ff_endpoint {
+    ff_endpoint(){}
+    ff_endpoint(std::string addr, int port) : address(addr), port(port) {}
+    ff_endpoint(int rank) : port(rank) {}
+    const int getRank() {return port;}
 	std::string address;
 	int port;
 };
@@ -152,7 +156,7 @@ static inline ssize_t recvnnb(int fd, char *buf, size_t size) {
       }
       
       if (r == 0) return 0;   // EOF
-      left    -= r;
+      left -= r;
       buf  += r;
     }
     return (size-left);
@@ -162,12 +166,14 @@ static inline ssize_t recvnnb(int fd, char *buf, size_t size) {
 /*
     MPI DEFINES 
 */
+#ifdef DFF_MPI
+    #define DFF_ROUTING_TABLE_REQUEST_TAG 9
+    #define DFF_ROUTING_TABLE_TAG 2
+    #define DFF_TASK_TAG 3
+    #define DFF_HEADER_TAG 4
+    #define DFF_ACK_TAG 5
 
-#define DFF_ROUTING_TABLE_TAG 2
-#define DFF_TASK_TAG 3
-#define DFF_HEADER_TAG 4
-#define DFF_ACK_TAG 5
-
-#define DFF_REQUEST_ROUTING_TABLE 10
+    #define DFF_REQUEST_ROUTING_TABLE 10
+#endif
 
 #endif
