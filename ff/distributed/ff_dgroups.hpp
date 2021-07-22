@@ -11,11 +11,20 @@
 #include <ff/node.hpp>
 #include <ff/utils.hpp>
 
+
+
 #include <cereal/cereal.hpp>
 #include <cereal/archives/json.hpp>
 #include <cereal/types/string.hpp>
 #include <cereal/types/vector.hpp>
+
+#ifdef DFF_MPI
+#include <mpi.h>
+#endif
+
 namespace ff {
+
+enum Proto {TCP , MPI};
 
 class dGroups {
 public:
@@ -26,19 +35,29 @@ public:
         return i;
     }
 
-    void parseConfig();
+    Proto usedProtocol;
+
+    void parseConfig(std::string);
+
+    void consolidateGroups();
 
     void addGroup(std::string label, ff_node* g){ groups.insert(make_pair(label, g));}
 
     int size(){ return groups.size();}
 
-    void setConfigFile(std::string f){this->configFilePath = f;}
-
     void setRunningGroup(std::string g){this->runningGroup = g;}
+    
+    void setRunningGroupByRank(int rank){
+        this->runningGroup = parsedGroups[rank].name;
+    }
 
-	const std::string& getRunningGroup() const { return runningGroup; }
+	  const std::string& getRunningGroup() const { return runningGroup; }
 	
     int run_and_wait_end(ff_node* parent){
+
+        // perfrom connection between groups
+        this->consolidateGroups();
+
         if (groups.find(runningGroup) == groups.end()){
             ff::error("The group specified is not found nor implemented!\n");
             return -1;
@@ -48,17 +67,22 @@ public:
         
         if (runningGroup->run(parent) < 0) return -1;
         if (runningGroup->wait() < 0) return -1;
+
+      #ifdef DFF_MPI
+        if (usedProtocol == Proto::MPI)
+          if (MPI_Finalize() != MPI_SUCCESS) abort();
+      #endif 
+        
         return 0;
     }
 protected:
-    dGroups() : groups(), configFilePath(), runningGroup() {
+    dGroups() : groups(), runningGroup() {
         // costruttore
     }
 
 private:
     inline static dGroups* i = nullptr;
     std::map<std::string, ff_node*> groups;
-    std::string configFilePath;
     std::string runningGroup;
 
     // helper class to parse config file Json
@@ -84,6 +108,8 @@ private:
         }
     };
 
+    std::vector<G> parsedGroups;
+
     static inline std::vector<std::string> split (const std::string &s, char delim) {
         std::vector<std::string> result;
         std::stringstream ss (s);
@@ -96,9 +122,9 @@ private:
     }
 
 
-    static int expectedInputConnections(std::string groupName, std::vector<G>& groups){
+    int expectedInputConnections(std::string groupName){
         int result = 0;
-        for (const G& g : groups)
+        for (const G& g : parsedGroups)
             if (g.name != groupName)
                 for (const std::string& conn : g.Oconn)
                     if (conn == groupName)  result++;
@@ -107,8 +133,7 @@ private:
 };
 
 static inline int DFF_Init(int& argc, char**& argv){
-    
-    std::string configFile, groupName;
+    std::string configFile, groupName;  
 
     for(int i = 0; i < argc; i++){
       if (strstr(argv[i], "--DFF_Config") != NULL){
@@ -125,6 +150,7 @@ static inline int DFF_Init(int& argc, char**& argv){
         }
         continue;
       }
+
 
       if (strstr(argv[i], "--DFF_GName") != NULL){
         char * equalPosition = strchr(argv[i], '=');
@@ -146,15 +172,41 @@ static inline int DFF_Init(int& argc, char**& argv){
       ff::error("Config file not passed as argument!\nUse option --DFF_Config=\"config-file-name\"\n");
       return -1;
     }
+    
+    dGroups::Instance()->parseConfig(configFile);
 
-    if (groupName.empty()){
-      ff::error("Group not passed as argument!\nUse option --DFF_GName=\"group-name\"\n");
-      return -1;
+    if (dGroups::Instance()->usedProtocol == Proto::TCP){
+       if (groupName.empty()){
+        ff::error("Group not passed as argument!\nUse option --DFF_GName=\"group-name\"\n");
+        return -1;
+      } 
+      dGroups::Instance()->setRunningGroup(groupName); 
     }
 
-    dGroups::Instance()->setRunningGroup(groupName); 
-    dGroups::Instance()->setConfigFile(configFile);
+  #ifdef DFF_MPI
+    if (dGroups::Instance()->usedProtocol == Proto::MPI){
+      //MPI_Init(&argc, &argv);
+      int provided;
+      
+      if (MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided) != MPI_SUCCESS)
+        return -1;
+      
+      
+      // no thread support 
+      if (provided < MPI_THREAD_MULTIPLE){
+          error("No thread support by MPI\n");
+          return -1;
+      }
 
+      int myrank;
+      MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+      dGroups::Instance()->setRunningGroupByRank(myrank);
+
+      std::cout << "Running group: " << dGroups::Instance()->getRunningGroup() << " on rank: " <<  myrank << "\n";
+    }
+  #endif  
+
+  
 
     // recompact the argv array
     int j = 0;

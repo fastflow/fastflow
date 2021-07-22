@@ -11,9 +11,16 @@
 #include <ff/distributed/ff_wrappers.hpp>
 #include <ff/distributed/ff_dreceiver.hpp>
 #include <ff/distributed/ff_dsender.hpp>
+
+#ifdef DFF_MPI
+#include <ff/distributed/ff_dreceiverMPI.hpp>
+#include <ff/distributed/ff_dsenderMPI.hpp>
+#endif
+
 #include <ff/distributed/ff_dgroups.hpp>
 
 #include <cereal/details/traits.hpp> // used for operators constexpr evaulations
+
 
 
 namespace ff{
@@ -291,20 +298,43 @@ private:
             return -1;
       
         // create receiver
+        Proto currentProto = dGroups::Instance()->usedProtocol;
         if (!isSource()){
-            //std::cout << "Creating the receiver!" << std::endl;
-            if (onDemandReceiver)
-                this->add_emitter(new ff_dreceiverOD(this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB))); // set right parameters HERE!!
-            else
-                this->add_emitter(new ff_dreceiver(this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB)));
+            if (currentProto == Proto::TCP){
+                if (onDemandReceiver)
+                    this->add_emitter(new ff_dreceiverOD(this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB))); // set right parameters HERE!!
+                else
+                    this->add_emitter(new ff_dreceiver(this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB)));
+            }
+
+        #ifdef DFF_MPI
+            if (currentProto == Proto::MPI){
+                if (onDemandReceiver)
+                    this->add_emitter(new ff_dreceiverMPIOD(this->expectedInputConnections, buildRoutingTable(level1BB))); // set right parameters HERE!!
+                else
+                    this->add_emitter(new ff_dreceiverMPI(this->expectedInputConnections, buildRoutingTable(level1BB)));
+            }
+        #endif
+
         }
         // create sender
         if (!isSink()){
-            //std::cout << "Creating the sender!" << std::endl;
-            if (onDemandSender)
-                this->add_collector(new ff_dsenderOD(this->destinations, onDemandQueueLength), true);
-            else
-                this->add_collector(new ff_dsender(this->destinations), true);
+            
+            if (currentProto == Proto::TCP){
+                if (onDemandSender)
+                    this->add_collector(new ff_dsenderOD(this->destinations, onDemandQueueLength), true);
+                else
+                    this->add_collector(new ff_dsender(this->destinations), true);
+            }
+
+        #ifdef DFF_MPI
+            if (currentProto == Proto::MPI){
+                if (onDemandSender)
+                    this->add_collector(new ff_dsenderMPIOD(this->destinations, onDemandQueueLength), true);
+                else
+                    this->add_collector(new ff_dsenderMPI(this->destinations), true);
+            }
+        #endif
             
         }
        
@@ -323,21 +353,14 @@ public:
     int run(bool skip_init=false) override {return 0;}
 
     int run(ff_node* baseBB, bool skip_init=false) override {
-
-        dGroups* groups_ = dGroups::Instance();
-        groups_->parseConfig();
-        
         buildFarm(reinterpret_cast<ff_pipeline*>(baseBB));
 
         return ff_farm::run(skip_init);
     }
 
-    //int wait() {return ff_farm::wait();}
 
-
-    void setEndpoint(const std::string address, const int port){
-        this->endpoint.address = address;
-        this->endpoint.port = port;
+    void setEndpoint(ff_endpoint e){
+        this->endpoint = e;
     }
 
     ff_endpoint getEndpoint(){return this->endpoint;}
@@ -734,45 +757,69 @@ bool MySet<T>::check_inout(ff_node* node){
         return this->group->inout_.find(node) != this->group->inout_.end();
     }
 
-
-void dGroups::parseConfig(){
-        if (this->configFilePath.empty()) throw FF_Exception("Config file not defined!");
-
-        std::ifstream is(this->configFilePath);
-
-        if (!is) throw FF_Exception("Unable to open configuration file for the program!");
-
-        std::vector<G> parsedGroups;
-
-        try {
-            cereal::JSONInputArchive ari(is);
-            ari(cereal::make_nvp("groups", parsedGroups));
-        } catch (const cereal::Exception& e){
-            std::cerr << "Error parsing the JSON config file. Check syntax and structure of  the file and retry!" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-
-        for(G& g : parsedGroups)
-            if (groups.find(g.name) != groups.end())
-                reinterpret_cast<dGroup*>(groups[g.name])->setEndpoint(g.address, g.port);
-            else {
-                std::cout << "Cannot find group: " << g.name << std::endl;
-                throw FF_Exception("A specified group in the configuration file has not been implemented! :(");
+void dGroups::consolidateGroups(){
+    for(int i = 0; i < parsedGroups.size(); i++){
+        const G & g = parsedGroups[i];
+        if (groups.find(g.name) != groups.end())
+            switch (this->usedProtocol){
+                case Proto::TCP : reinterpret_cast<dGroup*>(groups[g.name])->setEndpoint(ff_endpoint(g.address, g.port)); break;
+                case Proto::MPI : reinterpret_cast<dGroup*>(groups[g.name])->setEndpoint(ff_endpoint(i)); break;
             }
+        else {
+            std::cout << "Cannot find group: " << g.name << std::endl;
+            throw FF_Exception("A specified group in the configuration file has not been implemented! :(");
+        }
+    }
 
-        for(G& g : parsedGroups){
+
+    for(G& g : parsedGroups){
             dGroup* groupRef = reinterpret_cast<dGroup*>(groups[g.name]);
             for(std::string& conn : g.Oconn)
                 if (groups.find(conn) != groups.end())
                     groupRef->setDestination(reinterpret_cast<dGroup*>(groups[conn])->getEndpoint());
                 else throw FF_Exception("A specified destination has a wrong name! :(");
             
-            groupRef->setExpectedInputConnections(expectedInputConnections(g.name, parsedGroups)); 
+            groupRef->setExpectedInputConnections(this->expectedInputConnections(g.name)); 
         }
 
+}
+
+void dGroups::parseConfig(std::string configFile){
+
+        std::ifstream is(configFile);
+
+        if (!is) throw FF_Exception("Unable to open configuration file for the program!");
+
+        try {
+            cereal::JSONInputArchive ari(is);
+            ari(cereal::make_nvp("groups", parsedGroups));
+            
+            // get the protocol to be used from the configuration file
+            try {
+                std::string tmpProtocol;
+                ari(cereal::make_nvp("protocol", tmpProtocol));
+                if (tmpProtocol == "MPI") 
+                    #ifdef DFF_MPI
+                        this->usedProtocol = Proto::MPI;
+                    #else
+                        std::cout << "NO MPI support! Falling back to TCP\n";
+                        this->usedProtocol = Proto::TCP;
+                    #endif 
+                else this->usedProtocol = Proto::TCP;
+            } catch (cereal::Exception&) {
+                ari.setNextName(nullptr);
+                this->usedProtocol = Proto::TCP;
+            }
+
+        } catch (const cereal::Exception& e){
+            std::cerr << "Error parsing the JSON config file. Check syntax and structure of the file and retry!" << std::endl;
+            exit(EXIT_FAILURE);
+        }
     }
 
 }
+
+
 
 // redefinition of createGroup methods for ff_a2a and ff_pipeline
 ff::dGroup& ff_a2a::createGroup(std::string name){
