@@ -23,7 +23,7 @@
 #define FF_DFF_HPP
 
 #define DFF_ENABLED
-
+#define DFF_MPI
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_dgroups.hpp>

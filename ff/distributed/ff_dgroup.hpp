@@ -798,14 +798,15 @@ void dGroups::parseConfig(std::string configFile){
             try {
                 std::string tmpProtocol;
                 ari(cereal::make_nvp("protocol", tmpProtocol));
-                if (tmpProtocol == "MPI") 
+                if (tmpProtocol == "MPI"){
                     #ifdef DFF_MPI
                         this->usedProtocol = Proto::MPI;
                     #else
                         std::cout << "NO MPI support! Falling back to TCP\n";
                         this->usedProtocol = Proto::TCP;
                     #endif 
-                else this->usedProtocol = Proto::TCP;
+
+                } else this->usedProtocol = Proto::TCP;
             } catch (cereal::Exception&) {
                 ari.setNextName(nullptr);
                 this->usedProtocol = Proto::TCP;
