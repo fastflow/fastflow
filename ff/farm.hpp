@@ -369,12 +369,14 @@ protected:
                             if (W2[i]->set_output(outputNodes[i])<0) return -1;
                                                                                      }
                     } else {
-                        // NOTE: the following call might fail because the buffers were already created for example by
-                        // the pipeline that contains this stage
-                        if (a2a_last->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsizeOUT))<0) {
-                            if (lb->masterworker()) return -1; // something went wrong
-                        }
+                        // TODO: for the moment we support only feedback channels and not both feedback and forward channels
+                        //       for the last stages of the last all-to-all
                         if (lb->masterworker()) {
+                            if (a2a_last->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsizeOUT))<0) {
+                                error("FARM failed to create feedback channels\n");
+                                return -1;
+                            }
+
                             for(size_t i=0;i<W2.size();++i) {
                                 svector<ff_node*> w(1);
                                 W2[i]->get_out_nodes(w);

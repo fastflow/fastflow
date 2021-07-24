@@ -244,7 +244,17 @@ struct Collector: ff_minode_t<long> {
 
 struct Manager: ff_node_t<Command_t> {
     Manager(): 
-        channel(100, true, MANAGERID) {}
+        channel(100, true, MANAGERID) {
+
+        // The following is needed if the program runs in BLOCKING_MODE
+        // In this case, channel will not be automatically initialized
+        // so we have to do it manually. Moreover, even if we
+        // want to run in BLOCKING_MODE, channel cannot be
+        // configured in blocking mode for the output, that is, ff_send_out
+        // has to be non-blocking!!!!
+        channel.init_blocking_stuff();
+        channel.reset_blocking_out();        
+    }
     
     Command_t* svc(Command_t *) {
         
@@ -294,12 +304,6 @@ struct Manager: ff_node_t<Command_t> {
 
 
 int main(int argc, char* argv[]) {
-#if defined(BLOCKING_MODE)
-    //TODO: in blocking mode the manager channel does not work!!!
-    return 0;
-#endif
-
-
     unsigned nworkers = 3;
     int ntasks = 1000;
     if (argc>1) {

@@ -623,6 +623,14 @@ protected:
         FF_IGNORE_UNUSED(m);
         p_cons_c = c;
     }
+
+    // this function is used mainly for combined node where the cond variable must
+    // be shared with the first internal node 
+    virtual inline void  set_cons_c(pthread_cond_t *c) {
+        assert(cons_c == nullptr);
+        assert(cons_m == nullptr);
+        cons_c = c;
+    }        
     virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
 
     /**
@@ -1603,6 +1611,8 @@ struct ff_buffernode: ff_node {
         }
         return 0;
     }
+
+    void reset_blocking_out() { blocking_out = false; }
     
     bool ff_send_out(void *ptr, int id=-1,
                      unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {
@@ -1617,7 +1627,6 @@ struct ff_buffernode: ff_node {
     bool gather_task(T *&task, unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {    
         return gather_task((void **)&task, retry, ticks);
     }
-
 
 
 protected:
