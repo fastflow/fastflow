@@ -191,8 +191,7 @@ public:
 	int run(bool skip_init=false) {
 		return internal_mo_transformer::run(skip_init);
 	}
-
-
+	
 	ff_serialize_F_t transform_;
 	ff_serialize_F_t getTransform() { return this->transform_;}
 	
@@ -323,6 +322,19 @@ public:
         serialize(reinterpret_cast<Tout*>(out), -1);
         return GO_ON;
 	}
+
+	bool init_output_blocking(pthread_mutex_t   *&m,
+							  pthread_cond_t    *&c,
+							  bool feedback=true) {
+        return ff_node::init_output_blocking(m,c,feedback);
+    }
+
+    void set_output_blocking(pthread_mutex_t   *&m,
+							 pthread_cond_t    *&c,
+							 bool canoverwrite=false) {
+		ff_node::set_output_blocking(m,c,canoverwrite);
+	}
+
 	
 	ff_deserialize_F_t finalizer_;
 	std::function<std::pair<char*,size_t>(Tout*)> transform_;

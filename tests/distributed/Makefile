@@ -23,14 +23,17 @@
 #
 # ---------------------------------------------------------------------------
 
-CXXFLAGS            += -std=c++17 
+CXXFLAGS            += -std=c++17
 ifdef DEBUG
     OPTIMIZE_FLAGS  += -g -fno-inline-functions
 else
     OPTIMIZE_FLAGS  += -O3 -finline-functions -DNDEBUG
 endif
-ifdef BLOCKING_MODE
-    CXXFLAGS        += -DBLOCKING_MODE
+ifdef EXCLUDE_BLOCKING
+    CXXFLAGS        += -DDFF_EXCLUDE_BLOCKING
+endif
+ifdef EXCLUDE_MPI
+    CXXFLAGS	    += -DDFF_EXCLUDE_MPI
 endif
 ifdef FF_HOME
     INCS            += -I$(FF_HOME)
