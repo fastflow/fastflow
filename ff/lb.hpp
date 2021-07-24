@@ -78,6 +78,7 @@ public:
 protected:
 
     inline void put_done(int id) {
+        // here we access the cond variable of the worker, that must be initialized
         pthread_cond_signal(&workers[id]->get_cons_c());
     }
     
@@ -115,7 +116,12 @@ protected:
                                     bool /*canoverwrite*/=false) {
         assert(1==0);
     }
-
+    
+    virtual inline void  set_cons_c(pthread_cond_t *c) {
+        assert(cons_c == nullptr);
+        assert(cons_m == nullptr);
+        cons_c = c;
+    }        
     virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
     
     /**
@@ -522,7 +528,7 @@ public:
             free(cons_m);
             cons_m = nullptr;
         }
-        if (cons_c) {
+        if (cons_c && cons_m) {
             pthread_cond_destroy(cons_c);
             free(cons_c);
             cons_c = nullptr;

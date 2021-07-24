@@ -517,6 +517,9 @@ protected:
         ff_node::set_output_blocking(m,c, canoverwrite);
     }
 
+    virtual inline void  set_cons_c(pthread_cond_t *c) {
+        lb->set_cons_c(c);
+    }        
     virtual inline pthread_cond_t    &get_cons_c()        { return lb->get_cons_c();}
 
 public:
