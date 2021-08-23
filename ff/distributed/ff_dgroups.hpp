@@ -11,6 +11,8 @@
 #include <ff/node.hpp>
 #include <ff/utils.hpp>
 
+#include <ff/distributed/ff_dprinter.hpp>
+
 
 
 #include <cereal/cereal.hpp>
@@ -52,6 +54,8 @@ public:
     }
 
 	  const std::string& getRunningGroup() const { return runningGroup; }
+
+    void forceProtocol(Proto p){this->usedProtocol = p;}
 	
     int run_and_wait_end(ff_node* parent){
 
@@ -175,6 +179,10 @@ static inline int DFF_Init(int& argc, char**& argv){
     
     dGroups::Instance()->parseConfig(configFile);
 
+    if (!groupName.empty()){
+      dGroups::Instance()->forceProtocol(Proto::TCP);
+    }
+
     if (dGroups::Instance()->usedProtocol == Proto::TCP){
        if (groupName.empty()){
         ff::error("Group not passed as argument!\nUse option --DFF_GName=\"group-name\"\n");
@@ -204,6 +212,10 @@ static inline int DFF_Init(int& argc, char**& argv){
 
       std::cout << "Running group: " << dGroups::Instance()->getRunningGroup() << " on rank: " <<  myrank << "\n";
     }
+
+    // set the name for the printer
+    ff::cout.setPrefix(dGroups::Instance()->getRunningGroup());
+
   #endif  
 
   

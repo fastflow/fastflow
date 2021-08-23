@@ -17,7 +17,7 @@
 #include <mutex>
 #include <chrono>
 
-#define MANUAL_SERIALIZATION 1
+//#define MANUAL_SERIALIZATION 1
 
 // ------------------------------------------------------
 std::mutex mtx;  // used only for pretty printing
@@ -106,7 +106,7 @@ struct MoNode : ff::ff_monode_t<ExcType>{
 
     void svc_end(){
         const std::lock_guard<std::mutex> lock(mtx);
-        std::cout << "[MoNode" << this->get_my_id() << "] Generated Items: " << items << std::endl;
+        ff::cout << "[MoNode" << this->get_my_id() << "] Generated Items: " << items << ff::endl;
     }
 };
 
@@ -127,7 +127,7 @@ struct MiNode : ff::ff_minode_t<ExcType>{
 			  myassert(in->C[100] == 'a');
 		  if (in->clen>500)
 			  myassert(in->C[500] == 'o');
-		  std::cout << "MiNode" << get_my_id() << " input data " << processedItems << " OK\n";
+		  ff::cout << "MiNode" << get_my_id() << " input data " << processedItems << " OK\n";
 	  }
 	  myassert(in->C[in->clen-1] == 'F');
 	  delete in;
@@ -136,7 +136,7 @@ struct MiNode : ff::ff_minode_t<ExcType>{
 
     void svc_end(){
         const std::lock_guard<std::mutex> lock(mtx);
-        std::cout << "[MiNode" << this->get_my_id() << "] Processed Items: " << processedItems << std::endl;
+        ff::cout << "[MiNode" << this->get_my_id() << "] Processed Items: " << processedItems << ff::endl;
     }
 };
 
@@ -144,8 +144,8 @@ int main(int argc, char*argv[]){
     
     DFF_Init(argc, argv);
 
-    if (argc < 7){
-        std::cout << "Usage: " << argv[0] << " #items #byteXitem #execTimeSource #execTimeSink #nw_sx #nw_dx"  << std::endl;
+    if (argc < 8){
+        std::cout << "Usage: " << argv[0] << " #items #byteXitem #execTimeSource #execTimeSink #np_sx #np_dx #nwXp"  << std::endl;
         return -1;
     }
 	bool check = false;
@@ -153,9 +153,9 @@ int main(int argc, char*argv[]){
     long bytexItem = atol(argv[2]);
     int execTimeSource = atoi(argv[3]);
     int execTimeSink = atoi(argv[4]);
-    int numWorkerSx = atoi(argv[5]);
-    int numWorkerDx = atoi(argv[6]);
-
+    int numProcSx = atoi(argv[5]);
+    int numProcDx = atoi(argv[6]);
+	int numWorkerXProcess = atoi(argv[7]);
 	char* p=nullptr;
 	if ((p=getenv("CHECK_DATA"))!=nullptr) check=true;
 	printf("chackdata = %s\n", p);
@@ -168,40 +168,41 @@ int main(int argc, char*argv[]){
     std::vector<MoNode*> sxWorkers;
     std::vector<MiNode*> dxWorkers;
 
-    for(int i = 0; i < numWorkerSx; i++)
-        sxWorkers.push_back(new MoNode(ceil((double)items/numWorkerSx), execTimeSource, bytexItem, check));
+    for(int i = 0; i < (numProcSx*numWorkerXProcess); i++)
+        sxWorkers.push_back(new MoNode(ceil((double)items/(numProcSx*numWorkerXProcess)), execTimeSource, bytexItem, check));
 
-    for(int i = 0; i < numWorkerDx; i++)
+    for(int i = 0; i < (numProcDx*numWorkerXProcess); i++)
         dxWorkers.push_back(new MiNode(execTimeSink, check));
 
     a2a.add_firstset(sxWorkers);
     a2a.add_secondset(dxWorkers);
 
-    //mainPipe.run_and_wait_end();
+	for(int i = 0; i < numProcSx; i++){
+		auto& g = a2a.createGroup(std::string("S")+std::to_string(i));
+		for(int j = i*numWorkerXProcess; j < (i+1)*numWorkerXProcess; j++){
+			#if defined(MANUAL_SERIALIZATION)				
+				g.out <<= packup(sxWorkers[j], [](ExcType* in) -> std::pair<char*,size_t> {return std::make_pair((char*)in, in->clen+sizeof(ExcType)); });
+			#else
+				g.out << sxWorkers[j];
+			#endif
+		}
+	}
 
-    auto g1 = a2a.createGroup("G1");
-    auto g2 = a2a.createGroup("G2");
-
-
-    for(int i = 0; i < numWorkerSx; i++) {
-#if defined(MANUAL_SERIALIZATION)				
-		g1.out <<= packup(sxWorkers[i], [](ExcType* in) -> std::pair<char*,size_t> {return std::make_pair((char*)in, in->clen+sizeof(ExcType)); });
-#else
-		g1.out << sxWorkers[i];
-#endif
-    }
-    for(int i = 0; i < numWorkerDx; i++) {
-#if defined(MANUAL_SERIALIZATION)						
-		g2.in  <<= packup(dxWorkers[i], [](char* in, size_t len) -> ExcType* {
+	for(int i = 0; i < numProcDx; i++){
+		auto& g = a2a.createGroup(std::string("D")+std::to_string(i));
+		for(int j = i*numWorkerXProcess; j < (i+1)*numWorkerXProcess; j++){
+			#if defined(MANUAL_SERIALIZATION)						
+				g.in  <<= packup(dxWorkers[j], [](char* in, size_t len) -> ExcType* {
 											ExcType* p = new (in) ExcType(true);
 											p->C = in + sizeof(ExcType);
 											p->clen = len - sizeof(ExcType);
 											return p;
 										});
-#else
-		g2.in << dxWorkers[i];
-#endif		
-    }
+			#else
+				g.in << dxWorkers[j];
+			#endif		
+		}
+	}
     
     if (mainPipe.run_and_wait_end()<0) {
       error("running mainPipe\n");
