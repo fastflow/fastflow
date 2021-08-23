@@ -78,8 +78,6 @@ protected:
 			out->sender = sender;
 			out->chid   = chid;
 
-            //std::cout << "received something from " << sender << " directed to " << chid << std::endl;
-
             ff_send_out_to(out, this->routingTable[chid]); // assume the routing table is consistent WARNING!!!
             return 0;
         }

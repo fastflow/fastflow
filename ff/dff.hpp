@@ -23,9 +23,11 @@
 #define FF_DFF_HPP
 
 #define DFF_ENABLED
+
 #if !defined(DFF_EXCLUDE_MPI)
 #define DFF_MPI
 #endif
+
 #if !defined(DFF_EXCLUDE_BLOCKING)
 #define BLOCKING_MODE
 #else

@@ -354,7 +354,6 @@ public:
 
     int run(ff_node* baseBB, bool skip_init=false) override {
         buildFarm(reinterpret_cast<ff_pipeline*>(baseBB));
-
         return ff_farm::run(skip_init);
     }
 
@@ -758,7 +757,7 @@ bool MySet<T>::check_inout(ff_node* node){
     }
 
 void dGroups::consolidateGroups(){
-    for(int i = 0; i < parsedGroups.size(); i++){
+    for(size_t i = 0; i < parsedGroups.size(); i++){
         const G & g = parsedGroups[i];
         if (groups.find(g.name) != groups.end())
             switch (this->usedProtocol){
