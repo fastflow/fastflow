@@ -462,7 +462,7 @@ MySet<OUT>& MySet<OUT>::operator<<(ff_node_t<Tin, Tout>* node){
         } else
             this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<false, true, Tin, Tout>(node, 1, false, ((WrapperIN<false, Tin, Tout>*)handle.mapped().first)->getFinalizer())});
     } else
-        this->group->out_.insert({node, {new WrapperOUT<true, Tin, Tout>(node, false), true}});
+        this->group->out_.insert({node, {new WrapperOUT<true, Tin, Tout>(node, 1, false, -1), true}});
 
     return *this;
 }
@@ -481,7 +481,7 @@ MySet<OUT>& MySet<OUT>::operator<<(ff_minode_t<Tin, Tout>* node){
         } else
             this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<false, true, Tin, Tout>(node, 1, false, ((WrapperIN<false, Tin, Tout>*)handle.mapped().first)->getFinalizer())});
     } else {
-        ff_comb* combine = new ff_comb(node, new WrapperOUT<true, Tout>(new ForwarderNode, true), false, true);
+        ff_comb* combine = new ff_comb(node, new WrapperOUT<true, Tout>(new ForwarderNode, 1, true, -1), false, true);
         this->group->out_.insert({node, {combine, true}});
     }
 
@@ -502,7 +502,7 @@ MySet<OUT>& MySet<OUT>::operator<<(ff_monode_t<Tin, Tout>* node){
         } else
             this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<false, true, Tin, Tout>(node, 1, false, reinterpret_cast<WrapperIN<false, Tin, Tout>*>(reinterpret_cast<ff_comb*>(handle.mapped().first)->getLast())->getFinalizer())});
     } else
-        this->group->out_.insert({node, {new WrapperOUT<true, Tin, Tout>(node, false), true}});
+        this->group->out_.insert({node, {new WrapperOUT<true, Tin, Tout>(node, 1, false, -1), true}});
 
     return *this;
 }
@@ -645,7 +645,7 @@ MySet<OUT>& MySet<OUT>::operator<<=(ff_node_t<Tin, Tout>* node){
         } else
             this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<false, false, Tin, Tout>(node, 1, true, ((WrapperIN<false, Tin, Tout>*)handle.mapped().first)->getFinalizer())});
     } else
-        this->group->out_.insert({node, {new WrapperOUT<false, Tin, Tout>(node, true), false}});
+        this->group->out_.insert({node, {new WrapperOUT<false, Tin, Tout>(node, 1, true, -1), false}});
 
     return *this;
 }
@@ -664,7 +664,7 @@ MySet<OUT>& MySet<OUT>::operator<<=(std::pair<ff_node_t<Tin, Tout>*, Function> n
         } else
             this->group->inout_.insert({nodeFun.first, (ff_node*)new WrapperINOUT<false, false, Tin, Tout>(nodeFun.first, 1, true, ((WrapperIN<false, Tin, Tout>*)handle.mapped().first)->getFinalizer(), nodeFun.second)});
     } else
-        this->group->out_.insert({nodeFun.first, {new WrapperOUT<false, Tin, Tout>(nodeFun.first, true, nodeFun.second), false}});
+        this->group->out_.insert({nodeFun.first, {new WrapperOUT<false, Tin, Tout>(nodeFun.first, 1, true, -1, nodeFun.second), false}});
 
     return *this;
 }
@@ -685,7 +685,7 @@ MySet<OUT>& MySet<OUT>::operator<<=(ff_minode_t<Tin, Tout>* node){
         } else
             this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<false, false, Tin, Tout>(node, 1, true, ((WrapperIN<false, Tin, Tout>*)handle.mapped().first)->getFinalizer())});
     } else {
-        ff_comb* combine = new ff_comb(node, new WrapperOUT<false, Tout>(new ForwarderNode, true), false, true);
+        ff_comb* combine = new ff_comb(node, new WrapperOUT<false, Tout>(new ForwarderNode, 1, true, -1), false, true);
         this->group->out_.insert({node, {combine, false}});
     }
 
@@ -706,7 +706,7 @@ MySet<OUT>& MySet<OUT>::operator<<=(std::pair<ff_minode_t<Tin, Tout>*, Function>
         } else
             this->group->inout_.insert({nodeFun.first, (ff_node*)new WrapperINOUT<false, false, Tin, Tout>(nodeFun.first, 1, true, ((WrapperIN<false, Tin, Tout>*)handle.mapped().first)->getFinalizer(), nodeFun.second)});
     } else {
-        ff_comb* combine = new ff_comb(nodeFun.first, new WrapperOUT<false, Tout>(new ForwarderNode, true, nodeFun.second), false, true);
+        ff_comb* combine = new ff_comb(nodeFun.first, new WrapperOUT<false, Tout>(new ForwarderNode, 1, true, -1, nodeFun.second), false, true);
         this->group->out_.insert({nodeFun.first, {combine, false}});
     }
 
@@ -727,7 +727,7 @@ MySet<OUT>& MySet<OUT>::operator<<=(ff_monode_t<Tin, Tout>* node){
         } else
             this->group->inout_.insert({node, (ff_node*)new WrapperINOUT<false, false, Tin, Tout>(node, 1, true, reinterpret_cast<WrapperIN<false, Tin, Tout>*>(reinterpret_cast<ff_comb*>(handle.mapped().first)->getLast())->getFinalizer())});
     } else
-        this->group->out_.insert({node, {new WrapperOUT<false, Tin, Tout>(node, true), false}});
+        this->group->out_.insert({node, {new WrapperOUT<false, Tin, Tout>(node, 1, true, -1), false}});
 
     return *this;
 }
@@ -746,7 +746,7 @@ MySet<OUT>& MySet<OUT>::operator<<=(std::pair<ff_monode_t<Tin, Tout>*, Function>
         } else
             this->group->inout_.insert({nodeFun.first, (ff_node*)new WrapperINOUT<false, false, Tin, Tout>(nodeFun.first, 1, true, reinterpret_cast<WrapperIN<false, Tin, Tout>*>(reinterpret_cast<ff_comb*>(handle.mapped().first)->getLast())->getFinalizer(), nodeFun.second)});
     } else
-        this->group->out_.insert({nodeFun.first, {new WrapperOUT<false, Tin, Tout>(nodeFun.first, 1, true, nodeFun.second), false}});
+        this->group->out_.insert({nodeFun.first, {new WrapperOUT<false, Tin, Tout>(nodeFun.first, 1, true, -1, nodeFun.second), false}});
 
     return *this;
 }

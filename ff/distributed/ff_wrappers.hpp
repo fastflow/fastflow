@@ -28,10 +28,12 @@ public:
 		this->n       = n;
 		this->cleanup = cleanup;
 	}
+
 	WrapperIN(ff_node* n, int inchannels=1, bool cleanup=false, const ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; })): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer) {
 		this->n       = n;
 		this->cleanup = cleanup;
 	}
+
 	WrapperIN(ff_minode_t<Tin, Tout>* n, int inchannels, bool cleanup=false, const ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; })): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer) {
 		this->n       = n;
 		this->cleanup = cleanup;
@@ -109,36 +111,38 @@ template<bool Serialization, typename Tin, typename Tout = Tin>
 class WrapperOUT: public internal_mo_transformer {
 private:
     int outchannels; // number of output channels the wrapped node is supposed to have
+	int defaultDestination;
 public:
 
 	typedef Tout T_out;
 	using ff_serialize_F_t   = std::function<std::pair<char*,size_t>(std::add_pointer_t<Tout>)>;
 	
-	WrapperOUT(ff_node_t<Tin, Tout>* n, int outchannels=1, bool cleanup=false, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), transform_(transform) {
-		this->n       = n;
-		this->cleanup = cleanup;
-		registerCallback(ff_send_out_to_cbk, this);
-	}
-	WrapperOUT(ff_node* n, int outchannels=1, bool cleanup=false, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), transform_(transform) {
+	WrapperOUT(ff_node_t<Tin, Tout>* n, int outchannels=1, bool cleanup=false, int defaultDestination = -1, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), transform_(transform) {
 		this->n       = n;
 		this->cleanup = cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
 	}
 	
-	WrapperOUT(ff_monode_t<Tin, Tout>* n, int outchannels=1, bool cleanup=false, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), transform_(transform) {
+	WrapperOUT(ff_node* n, int outchannels=1, bool cleanup=false, int defaultDestination = -1, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), transform_(transform) {
+		this->n       = n;
+		this->cleanup = cleanup;
+		registerCallback(ff_send_out_to_cbk, this);
+	}
+	
+	WrapperOUT(ff_monode_t<Tin, Tout>* n, int outchannels=1, bool cleanup=false, int defaultDestination = -1, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), transform_(transform) {
 		this->n       = n;
 		this->cleanup = cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
 	}
 
-	WrapperOUT(ff_minode_t<Tin, Tout>* n, int outchannels=1, bool cleanup=false, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), transform_(transform) {
+	WrapperOUT(ff_minode_t<Tin, Tout>* n, int outchannels=1, bool cleanup=false, int defaultDestination = -1, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), transform_(transform) {
 		this->n       = n;
 		this->cleanup = cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
 	}
 
 	template <typename T>
-	WrapperOUT(ff_comb_t<Tin, T, Tout>* n, int outchannels=1, bool cleanup=false, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), transform_(transform) {
+	WrapperOUT(ff_comb_t<Tin, T, Tout>* n, int outchannels=1, bool cleanup=false, int defaultDestination = -1, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), transform_(transform) {
 		this->n       = n;
 		this->cleanup = cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
@@ -174,7 +178,7 @@ public:
 	void * svc(void* in) {
 		void* out = n->svc(in);
 		if (out > FF_TAG_MIN) return out;					
-		serialize(reinterpret_cast<Tout*>(out), -1);
+		serialize(reinterpret_cast<Tout*>(out), defaultDestination);
 		return GO_ON;
 	}
 
