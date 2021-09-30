@@ -34,16 +34,19 @@ ifdef EXCLUDE_BLOCKING
 endif
 ifdef EXCLUDE_MPI
     CXXFLAGS	    += -DDFF_EXCLUDE_MPI
+else
+	INCS += -I/usr/local/Cellar/open-mpi/4.1.1_2/include
+	CXXFLAGS += -L/usr/local/opt/libevent/lib -L/usr/local/Cellar/open-mpi/4.1.1_2/lib -lmpi
 endif
 ifdef FF_HOME
     INCS            += -I$(FF_HOME)
 else
-    INCS            += -I ~/fastflow
+    INCS            += -I ~/SPM/fastflow
 endif
 ifdef CEREAL_HOME
     INCS            += -I$(CEREAL_HOME)
 else
-    INCS            += -I ~/cereal
+    INCS            += -I ~/SPM/cereal
 endif
 
 

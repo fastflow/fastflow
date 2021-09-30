@@ -7,7 +7,7 @@
 
 using namespace ff;
 
-#define WORKERS 10
+#define WORKERS 9
 
 struct Source : ff_monode_t<std::string>{
     int numWorker;
@@ -49,30 +49,43 @@ int main(int argc, char*argv[]){
 
     if (atoi(argv[1]) == 0){
         ff_farm f;
-        f.add_emitter(new EmitterAdapter(new Source(WORKERS), WORKERS, WORKERS/2, true));
+        f.add_emitter(new EmitterAdapter(new Source(WORKERS), WORKERS, 3, true));
         std::vector<ff_node*> workers;
-        for(int i = 0; i < WORKERS/2; i++)
+        for(int i = 0; i < 3; i++)
             workers.push_back(new WrapperOUT<true, std::string, std::string>(new Worker(i), 1, true, FARM_GATEWAY));
         workers.push_back(new WrapperOUT<true, std::string, std::string>(new SquareBoxEmitter<std::string>(), 1, true));
         f.add_workers(workers);
-        f.add_collector(new ff_dsender(ff_endpoint("127.0.0.1", 8001)));
+        f.add_collector(new ff_dsender({ff_endpoint("127.0.0.1", 8001), ff_endpoint("127.0.0.1", 8002)}));
         f.run_and_wait_end();
 
-    } else {
+    } else if (atoi(argv[1]) == 1) {
+        ff_farm f;
+        std::map<int, int> routingTable;
+        std::vector<ff_node*> workers;
+        int j = 0;
+        for(int i = 3; i < 6; i++){
+            workers.push_back(new WrapperINOUT<true, true, std::string, std::string>(new Worker(i), 1, true, FARM_GATEWAY));
+            routingTable.emplace(i, j++);
+        }
+        f.add_workers(workers);
+        f.add_emitter(new ff_dreceiver(ff_endpoint("127.0.0.1", 8002), 1, routingTable));
+        f.add_collector(new ff_dsender(ff_endpoint("127.0.0.1", 8001)));
+        f.run_and_wait_end();
+    }else {
         ff_farm f;
         std::map<int, int> routingTable;
         std::vector<ff_node*> workers;
         int j = 1;
         workers.push_back(new WrapperIN<true, std::string, std::string>(new SquareBoxCollector<std::string>(), 1, true));
         routingTable.emplace(FARM_GATEWAY, 0);
-        for(int i = WORKERS / 2; i < WORKERS; i++){
+        for(int i = 6; i < WORKERS; i++){
             workers.push_back(new WrapperIN<true, std::string, std::string>(new Worker(i), 1, true));
             routingTable.emplace(i, j++);
         }
 
         f.add_workers(workers);
         f.add_emitter(new ff_dreceiver(ff_endpoint("127.0.0.1", 8001), 1, routingTable));
-        f.add_collector(new CollectorAdapter(new Sink, 5, 5, true), true);
+        f.add_collector(new CollectorAdapter(new Sink, 6, 3, true), true);
 
         f.run_and_wait_end();
     }

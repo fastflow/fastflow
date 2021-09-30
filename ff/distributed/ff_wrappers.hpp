@@ -218,32 +218,33 @@ class WrapperINOUT: public internal_mi_transformer {
 private:
     int inchannels;	// number of input channels the wrapped node is supposed to have
     int outchannels; // number of output channels the wrapped node is supposed to have
+	int defaultDestination;
 public:
 
     typedef Tout T_out;
 	using ff_serialize_F_t   = std::function<std::pair<char*,size_t>(std::add_pointer_t<Tout>)>;
 	using ff_deserialize_F_t = 	std::function<std::add_pointer_t<Tin>(char*,size_t)>;
 
-	WrapperINOUT(ff_node_t<Tin, Tout>* n, int inchannels=1, bool cleanup=false, ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; }), ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer), transform_(transform) {
+	WrapperINOUT(ff_node_t<Tin, Tout>* n, int inchannels=1, bool cleanup=false, int defaultDestination = -1, ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; }), ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mi_transformer(this, false), inchannels(inchannels), defaultDestination(defaultDestination), finalizer_(finalizer), transform_(transform) {
 		this->n       = n;
 		this->cleanup = cleanup;
         registerCallback(ff_send_out_to_cbk, this);
 	}	
 
-	WrapperINOUT(ff_minode_t<Tin, Tout>* n, int inchannels=1, bool cleanup=false, ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; }), ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer), transform_(transform) {
+	WrapperINOUT(ff_minode_t<Tin, Tout>* n, int inchannels=1, bool cleanup=false, int defaultDestination = -1, ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; }), ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mi_transformer(this, false), inchannels(inchannels), defaultDestination(defaultDestination), finalizer_(finalizer), transform_(transform) {
 		this->n       = n;
 		this->cleanup = cleanup;
         registerCallback(ff_send_out_to_cbk, this);
 	}
 
-	WrapperINOUT(ff_monode_t<Tin, Tout>* n, int inchannels=1, bool cleanup=false, ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; }), ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer), transform_(transform) {
+	WrapperINOUT(ff_monode_t<Tin, Tout>* n, int inchannels=1, bool cleanup=false, int defaultDestination = -1, ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; }), ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mi_transformer(this, false), inchannels(inchannels), defaultDestination(defaultDestination), finalizer_(finalizer), transform_(transform) {
 		this->n       = n;
 		this->cleanup = cleanup;
         registerCallback(ff_send_out_to_cbk, this);
 	}
 
 	template <typename T>
-	WrapperINOUT(ff_comb_t<Tin, T, Tout>* n, int inchannels=1, bool cleanup=false, ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; }), ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer), transform_(transform){
+	WrapperINOUT(ff_comb_t<Tin, T, Tout>* n, int inchannels=1, bool cleanup=false, int defaultDestination = -1, ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; }), ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mi_transformer(this, false), inchannels(inchannels), defaultDestination(defaultDestination), finalizer_(finalizer), transform_(transform){
 		this->n       = n;
 		this->cleanup = cleanup;
         registerCallback(ff_send_out_to_cbk, this);
@@ -323,7 +324,7 @@ public:
 
 		void* out = n->svc(deserialize(in));
         if (out > FF_TAG_MIN) return out;
-        serialize(reinterpret_cast<Tout*>(out), -1);
+        serialize(reinterpret_cast<Tout*>(out), defaultDestination);
         return GO_ON;
 	}
 
