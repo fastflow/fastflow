@@ -183,6 +183,39 @@ private:
         return false;
     }
 
+    static int getOutputIndexOfNode(ff_node*bb, ff_node* wrapper, ff_node* original = nullptr){
+        if (bb->isAll2All()){
+            ff_a2a* a2a = (ff_a2a*) bb;
+            int index = 0;
+            for (ff_node* n : a2a->getFirstSet()){
+                ff::svector<ff_node*> outputs; n->get_out_nodes(outputs);
+                for (const ff_node* output : outputs){
+                    if (output == wrapper || output == original)
+                        return index;
+                    index++;
+                }
+            }
+
+            index = 0;
+            for (ff_node* n : a2a->getSecondSet()){
+                ff::svector<ff_node*> outputs; n->get_out_nodes(outputs);
+                for (ff_node* output : outputs)
+                    if (output == wrapper || output == original) 
+                        return index; 
+                    else index++;
+            }
+        }
+
+        int index = 0;
+        ff::svector<ff_node*> outputs; bb->get_out_nodes(outputs);
+        for (ff_node* output : outputs)
+            if (output == wrapper || output == original) 
+                return index; 
+            else index++;
+
+        return 0;
+    }
+
     static int getInputIndexOfNode(ff_node* bb, ff_node* wrapper, ff_node* original){
         if (bb->isAll2All()){
             ff_a2a* a2a = (ff_a2a*) bb;
@@ -296,6 +329,7 @@ private:
 
         if (this->getNWorkers() == 0)
             return -1;
+
       
         // create receiver
         Proto currentProto = dGroups::Instance()->usedProtocol;
@@ -319,6 +353,16 @@ private:
         }
         // create sender
         if (!isSink()){
+
+            // set the senderID to each wrapperOUT (or WrapperINOUT), meaningful only when the the group is not a sink
+            for (ff_node* bb : this->getWorkers()){
+                ff::svector<ff_node*> outputs; bb->get_out_nodes(outputs);
+                for (ff_node* output : outputs)
+                    if (dynamic_cast<Wrapper*>(output) != NULL)
+                        dynamic_cast<Wrapper*>(output)->setMyId(getOutputIndexOfNode(parentStructure, output));
+                    else
+                        ff::cout << "Else branch dynamic cast" << ff::endl;
+            }
             
             if (currentProto == Proto::TCP){
                 if (onDemandSender)

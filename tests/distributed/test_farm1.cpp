@@ -9,6 +9,8 @@ using namespace ff;
 
 #define WORKERS 10
 
+std::mutex mtx;
+
 struct Source : ff_monode_t<std::string>{
     int numWorker;
     Source(int numWorker) : numWorker(numWorker) {}
@@ -33,6 +35,7 @@ struct Worker : ff_node_t<std::string>{
 
 struct Sink : ff_minode_t<std::string>{
     std::string* svc(std::string* in){
+        const std::lock_guard<std::mutex> lock(mtx);
         std::cout << *in << " received by Collector from " << get_channel_id() << std::endl;
         delete in;
         return this->GO_ON;
@@ -49,7 +52,7 @@ int main(int argc, char*argv[]){
 
     if (atoi(argv[1]) == 0){
         ff_farm f;
-        f.add_emitter(new EmitterAdapter(new Source(WORKERS), WORKERS, WORKERS/2, true));
+        f.add_emitter(new EmitterAdapter(new Source(WORKERS), WORKERS, {{0,0}, {1,1}, {2,2}, {3,3}, {4,4}}, true));
         std::vector<ff_node*> workers;
         for(int i = 0; i < WORKERS/2; i++)
             workers.push_back(new WrapperOUT<true, std::string, std::string>(new Worker(i), 1, true, FARM_GATEWAY));
@@ -62,17 +65,17 @@ int main(int argc, char*argv[]){
         ff_farm f;
         std::map<int, int> routingTable;
         std::vector<ff_node*> workers;
-        int j = 1;
-        workers.push_back(new WrapperIN<true, std::string, std::string>(new SquareBoxCollector<std::string>(), 1, true));
-        routingTable.emplace(FARM_GATEWAY, 0);
+        int j = 0;
+        routingTable.emplace(FARM_GATEWAY, 5);
         for(int i = WORKERS / 2; i < WORKERS; i++){
             workers.push_back(new WrapperIN<true, std::string, std::string>(new Worker(i), 1, true));
             routingTable.emplace(i, j++);
         }
+        workers.push_back(new WrapperIN<true, std::string, std::string>(new SquareBoxCollector<std::string>(), 1, true));
 
         f.add_workers(workers);
         f.add_emitter(new ff_dreceiver(ff_endpoint("127.0.0.1", 8001), 1, routingTable));
-        f.add_collector(new CollectorAdapter(new Sink, 5, 5, true), true);
+        f.add_collector(new CollectorAdapter(new Sink, {5,6,7,8,9}, true), true);
 
         f.run_and_wait_end();
     }

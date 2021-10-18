@@ -78,6 +78,8 @@ protected:
 			out->sender = sender;
 			out->chid   = chid;
 
+            std::cout << "Receiver recevied something!\n";
+
             ff_send_out_to(out, this->routingTable[chid]); // assume the routing table is consistent WARNING!!!
             return 0;
         }
@@ -285,7 +287,6 @@ protected:
                 }
             }
 		
-
             return 0;
         }
 

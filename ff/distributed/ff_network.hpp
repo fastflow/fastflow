@@ -62,6 +62,15 @@ protected:
 	bool cleanup = false;
 };
 
+struct SMmessage_t {
+    SMmessage_t(){}
+    SMmessage_t(void* t, int s, int d) : task(t), sender(s), dst(d) {}
+    void * task;
+    int sender;
+    int dst;
+};
+
+
 struct message_t {
 	message_t(){}
 	message_t(char *rd, size_t size, bool cleanup=true) : data(rd,size,cleanup){}
@@ -86,6 +95,7 @@ struct ff_endpoint {
 
 
 struct FF_Exception: public std::runtime_error {FF_Exception(const char* err) throw() : std::runtime_error(err) {}};
+
 
 ssize_t readn(int fd, char *ptr, size_t n) {  
     size_t   nleft = n;
