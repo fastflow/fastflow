@@ -650,13 +650,6 @@ public:
         ff_node::skipfirstpop(sk);
     }
 
-#ifdef DFF_ENABLED
-    inline void skipallpop(bool sk) {
-        lb->skipallpop = sk;
-        ff_node::skipallpop(sk);
-    }
-#endif
-
     /**
      * \brief Provides the next channel id that will be selected for sending out the task
      *  

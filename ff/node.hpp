@@ -508,10 +508,6 @@ private:
     bool              myoutbuffer;
     bool              myinbuffer;
     bool              skip1pop;
-#ifdef DFF_ENABLED
-    bool _skipallpop;
-#endif
-
     bool              in_active;    // allows to disable/enable input tasks receiving   
     bool              my_own_thread;
 
@@ -640,10 +636,6 @@ protected:
      *
      */
     virtual inline void skipfirstpop(bool sk)   { skip1pop=sk;}
-
-#ifdef DFF_ENABLED
-    virtual inline void skipallpop(bool sk) {_skipallpop = sk;}
-#endif
 
     /** 
      * \brief Gets the status of spontaneous start

@@ -889,11 +889,7 @@ public:
             int neos = filter?filter->neos:1;
             
             do {
-#ifdef DFF_ENABLED
-                if (!skipallpop && inpresent){
-#else
                 if (inpresent) {
-#endif
                     if (!skipfirstpop) pop(&task);
                     else skipfirstpop=false;
 
@@ -1474,10 +1470,6 @@ private:
 
     bool               blocking_in;
     bool               blocking_out;
-
-#ifdef DFF_ENABLED
-    bool               skipallpop;    
-#endif
 
 #if defined(TRACE_FASTFLOW)
     unsigned long taskcnt;
