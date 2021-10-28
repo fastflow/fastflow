@@ -21,12 +21,17 @@ using namespace ff;
 class ff_dreceiver: public ff_monode_t<message_t> { 
 protected:
 
-    int sendRoutingTable(int sck){
+    int sendRoutingTable(int sck, ConnectionType type){
         dataBuffer buff; std::ostream oss(&buff);
 		cereal::PortableBinaryOutputArchive oarchive(oss);
         std::vector<int> reachableDestinations;
 
-        for(auto const& p : this->routingTable) reachableDestinations.push_back(p.first);
+        for(auto const& p : this->routingTable){ 
+            if (type == ConnectionType::EXTERNAL && p.first > 0)
+                reachableDestinations.push_back(p.first);
+            else if (type == ConnectionType::INTERNAL && p.first <= 100)
+                reachableDestinations.push_back(p.first);
+        }
 
 		oarchive << reachableDestinations;
 
@@ -41,6 +46,37 @@ protected:
         }
 
         return 0;
+    }
+
+    int handshakeHandler(int sck){
+        // ricevo l'handshake e mi salvo che tipo di connessione è
+        ConnectionType type;
+        
+        struct iovec iov; iov.iov_base = &type; iov.iov_len = sizeof(type);
+        switch (readvn(sck, &iov, 1)) {
+           case -1: error("Error reading from socket\n"); // fatal error
+           case  0: return -1; // connection close
+        }
+
+        type = (ConnectionType) ntohl(type);
+
+        // save the connection type locally
+        connectionsTypes[sck] = type;
+
+        return this->sendRoutingTable(sck, type);
+    }
+
+    void registerEOS(int sck){
+        switch(connectionsTypes[sck]){
+            case ConnectionType::EXTERNAL: 
+                if (Eneos++ == Einput_channels)
+                    for(auto& c : routingTable) if (c.first > 0) ff_send_out_to(this->EOS, c.second);    
+                break;
+            case ConnectionType::INTERNAL:
+                if (Ineos++ == Iinput_channels)
+                    for(auto & c : routingTable) if (c.first <= -100) ff_send_out(this->EOS, c.second);
+                break;
+        }
     }
 
     virtual int handleRequest(int sck){
@@ -78,19 +114,18 @@ protected:
 			out->sender = sender;
 			out->chid   = chid;
 
-            std::cout << "Receiver recevied something!\n";
-
             ff_send_out_to(out, this->routingTable[chid]); // assume the routing table is consistent WARNING!!!
             return 0;
         }
 
-        neos++; // increment the eos received        
+        registerEOS(sck);
+
         return -1;
     }
 
 public:
-    ff_dreceiver(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
-		: input_channels(input_channels), acceptAddr(acceptAddr), routingTable(routingTable), coreid(coreid) {}
+    ff_dreceiver(ff_endpoint acceptAddr, size_t Einput_channels, size_t Iinput_channels = 0, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
+		: Einput_channels(Einput_channels), Iinput_channels(Iinput_channels), acceptAddr(acceptAddr), routingTable(routingTable), coreid(coreid) {}
 
     int svc_init() {
   		if (coreid!=-1)
@@ -167,7 +202,7 @@ public:
         // hold the greater descriptor
         int fdmax = this->listen_sck; 
 
-        while(neos < input_channels){
+        while((Ineos + Eneos) < (Einput_channels + Iinput_channels)){
             // copy the master set to the temporary
             tmpset = set;
 
@@ -189,7 +224,7 @@ public:
                             FD_SET(connfd, &set);
                             if(connfd > fdmax) fdmax = connfd;
 
-                            this->sendRoutingTable(connfd); // here i should check the result of the call! and handle possible errors!
+                            this->handshakeHandler(connfd);
                         }
                         continue;
                     }
@@ -218,16 +253,16 @@ public:
             }
         }
 
-        /* In theory i should never return because of the while true. In our first example this is necessary */
         return this->EOS;
     }
 
 protected:
-    size_t neos = 0;
-    size_t input_channels;
+    size_t Eneos = 0, Ineos = 0;
+    size_t Einput_channels, Iinput_channels;
     int listen_sck;
     ff_endpoint acceptAddr;	
     std::map<int, int> routingTable;
+    std::map<int, ConnectionType> connectionsTypes;
     int last_receive_fd = -1;
 	int coreid;
 };
@@ -290,13 +325,14 @@ protected:
             return 0;
         }
 
-        neos++; // increment the eos received        
+        registerEOS(sck);
+
         return -1;
     }
 
 public:
-    ff_dreceiverOD(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
-		: ff_dreceiver(acceptAddr, input_channels, routingTable, coreid) {}
+    ff_dreceiverOD(ff_endpoint acceptAddr, size_t Einput_channels, size_t Iinput_channels = 0, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
+		: ff_dreceiver(acceptAddr, Einput_channels, Iinput_channels, routingTable, coreid) {}
 
 private:
     ack_t ACK;
