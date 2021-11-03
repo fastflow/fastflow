@@ -120,10 +120,6 @@ protected:
                return -1;
         #endif
 
-        // TODO: send the hanshake information
-
-        
-
         // receive the reachable destination from this sockets
         if (receiveReachableDestinations(socketFD) < 0)
             return -1;
