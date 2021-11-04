@@ -27,9 +27,9 @@ protected:
         std::vector<int> reachableDestinations;
 
         for(auto const& p : this->routingTable){ 
-            if (type == ConnectionType::EXTERNAL && p.first > 0)
+            if (type == ConnectionType::EXTERNAL && p.first >= 0)
                 reachableDestinations.push_back(p.first);
-            else if (type == ConnectionType::INTERNAL && p.first <= 100)
+            else if (type == ConnectionType::INTERNAL && p.first <= -100)
                 reachableDestinations.push_back(p.first);
         }
 
@@ -58,10 +58,12 @@ protected:
            case  0: return -1; // connection close
         }
 
-        type = (ConnectionType) ntohl(type);
+    // TODO da sistemare network byte order del connectiontype!!!!!!!!!
+        //type = (ConnectionType) type);
 
         // save the connection type locally
         connectionsTypes[sck] = type;
+        //std::cout << "i got a " << type << " connection" << std::endl;
 
         return this->sendRoutingTable(sck, type);
     }
@@ -69,11 +71,11 @@ protected:
     void registerEOS(int sck){
         switch(connectionsTypes[sck]){
             case ConnectionType::EXTERNAL: 
-                if (Eneos++ == Einput_channels)
-                    for(auto& c : routingTable) if (c.first > 0) ff_send_out_to(this->EOS, c.second);    
+                if (++Eneos == Einput_channels)
+                    for(auto& c : routingTable) if (c.first >= 0) ff_send_out_to(this->EOS, c.second);    
                 break;
             case ConnectionType::INTERNAL:
-                if (Ineos++ == Iinput_channels)
+                if (++Ineos == Iinput_channels)
                     for(auto & c : routingTable) if (c.first <= -100) ff_send_out(this->EOS, c.second);
                 break;
         }
@@ -117,6 +119,7 @@ protected:
             ff_send_out_to(out, this->routingTable[chid]); // assume the routing table is consistent WARNING!!!
             return 0;
         }
+
 
         registerEOS(sck);
 
@@ -183,6 +186,9 @@ public:
         #ifdef LOCAL
             unlink(this->acceptAddr.address.c_str());
         #endif
+
+                std::cout << "Receiver Exited!\n";
+
     }
     /* 
         Here i should not care of input type nor input data since they come from a socket listener.

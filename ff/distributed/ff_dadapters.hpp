@@ -28,56 +28,85 @@ struct ResultWrapper {
 };
 
 template<typename T>
-class SquareBoxEmitter : public ff_monode_t<TaskWrapper<T>, T> {
-    T* svc(TaskWrapper<T>* in) {
-            this->ff_send_out_to(in->task, in->destination);
-            return this->GO_ON;
+class SquareBoxEmitter : public ff_minode_t<TaskWrapper<T>, SMmessage_t> {
+    std::vector<int> sources;
+	int neos = 0;
+public:
+	SquareBoxEmitter(const std::vector<int> localSources) : sources(localSources) {}
+	
+	SMmessage_t* svc(TaskWrapper<T>* in) {
+			int chId = ff_minode::get_channel_id();
+			SMmessage_t* o = new SMmessage_t(in->task, chId < sources.size() ? sources[chId] : -1 , -100 - in->destination);
+			delete in;
+            return o;
         }
-};
 
-template<typename T>
-class SquareBoxCollector : public ff_minode_t<T, ResultWrapper<T>> {
-    ResultWrapper<T>* svc(T* in){
-        return new ResultWrapper<T>(in, ff_minode::get_channel_id());
+	void eosnotify(ssize_t i) {
+		std::cout << "SquareBox - Received EOS! " << i <<"\n";
+		if (i == sources.size()) return;
+		if (++neos == sources.size()){
+			this->ff_send_out(this->EOS);
+			std::cout << "SquareBox - Sending out EOS!\n";
+		}
+	}
+
+	void svc_end() {
+        std::cout << "SQEmitter Exited!\n";
     }
 };
 
+template<typename T>
+class SquareBoxCollector : public ff_monode_t<SMmessage_t, ResultWrapper<T>> {
+	std::unordered_map<int, int> destinations;
+public:
+	SquareBoxCollector(const std::unordered_map<int, int> localDestinations) : destinations(localDestinations) {}
+    
+	ResultWrapper<T>* svc(SMmessage_t* in){
+		this->ff_send_out_to(new ResultWrapper<T>(reinterpret_cast<T*>(in->task), in->sender), destinations[in->dst]);
+		delete in; return this->GO_ON;
+    }
+
+	void svc_end() {
+        std::cout << "SQCollector Exited!\n";
+    }
+};
 
 template<typename Tin, typename Tout = Tin>
 class EmitterAdapter: public internal_mo_transformer {
 private:
-    int totalWorkers, localWorkers;
+    int totalWorkers;
+	std::unordered_map<int, int> localWorkersMap;
     int nextDestination;
 public:
 
 	typedef Tout T_out;
 	
-	EmitterAdapter(ff_node_t<Tin, Tout>* n, int totalWorkers, int localWorkers=1, bool cleanup=false): internal_mo_transformer(this, false), totalWorkers(totalWorkers), localWorkers(localWorkers) {
+	EmitterAdapter(ff_node_t<Tin, Tout>* n, int totalWorkers, std::unordered_map<int, int> localWorkers = {0,0}, bool cleanup=false): internal_mo_transformer(this, false), totalWorkers(totalWorkers), localWorkersMap(localWorkers) {
 		this->n       = n;
 		this->cleanup = cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
 	}
 
-	EmitterAdapter(ff_node* n, int totalWorkers, int localWorkers=1, bool cleanup=false): internal_mo_transformer(this, false), totalWorkers(totalWorkers),  localWorkers(localWorkers) {
+	EmitterAdapter(ff_node* n, int totalWorkers, std::unordered_map<int, int> localWorkers = {0,0}, bool cleanup=false): internal_mo_transformer(this, false), totalWorkers(totalWorkers),  localWorkersMap(localWorkers) {
 		this->n       = n;
 		this->cleanup = cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
 	}
 	
-	EmitterAdapter(ff_monode_t<Tin, Tout>* n, int totalWorkers, int localWorkers=1, bool cleanup=false): internal_mo_transformer(this, false), totalWorkers(totalWorkers), localWorkers(localWorkers) {
+	EmitterAdapter(ff_monode_t<Tin, Tout>* n, int totalWorkers, std::unordered_map<int, int> localWorkers = {0,0}, bool cleanup=false): internal_mo_transformer(this, false), totalWorkers(totalWorkers), localWorkersMap(localWorkers) {
 		this->n       = n;
 		this->cleanup = cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
 	}
 
-	EmitterAdapter(ff_minode_t<Tin, Tout>* n, int totalWorkers, int localWorkers=1, bool cleanup=false): internal_mo_transformer(this, false), totalWorkers(totalWorkers), localWorkers(localWorkers) {
+	EmitterAdapter(ff_minode_t<Tin, Tout>* n, int totalWorkers, std::unordered_map<int, int> localWorkers = {0,0}, bool cleanup=false): internal_mo_transformer(this, false), totalWorkers(totalWorkers), localWorkersMap(localWorkers) {
 		this->n       = n;
 		this->cleanup = cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
 	}
 
 	template <typename T>
-	EmitterAdapter(ff_comb_t<Tin, T, Tout>* n, int totalWorkers, int localWorkers=1, bool cleanup=false): internal_mo_transformer(this, false), totalWorkers(totalWorkers), localWorkers(localWorkers) {
+	EmitterAdapter(ff_comb_t<Tin, T, Tout>* n, int totalWorkers, std::unordered_map<int, int> localWorkers = {0,0}, bool cleanup=false): internal_mo_transformer(this, false), totalWorkers(totalWorkers), localWorkersMap(localWorkers) {
 		this->n       = n;
 		this->cleanup = cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
@@ -93,19 +122,27 @@ public:
 	}
 
     bool forward(void* task, int destination){
-        if (destination == -1) destination = nextDestination;
-        
-        if (destination < localWorkers) ff_send_out_to(task, destination);
-            else ff_send_out_to(new TaskWrapper<Tout>(reinterpret_cast<Tout*>(task), destination), localWorkers);
+        if (destination == -1) {
+			destination = nextDestination;
+			nextDestination = (nextDestination + 1) % totalWorkers;
+		}
 
-        nextDestination = (nextDestination + 1) % totalWorkers;
+		
+        
+        auto pyshicalDestination = localWorkersMap.find(destination);
+		if (pyshicalDestination != localWorkersMap.end()) {
+			ff_send_out_to(task, pyshicalDestination->second);
+		} else {
+			ff_send_out_to(new TaskWrapper<Tout>(reinterpret_cast<Tout*>(task), destination), localWorkersMap.size());
+		}
+        
         return true;
     }
 
 	int svc_init() {
 		if (this->n->isMultiOutput()) {
 			ff_monode* mo = reinterpret_cast<ff_monode*>(this->n);
-			mo->set_running(localWorkers + 1); // the last worker is the forwarder to the remote workers
+			mo->set_running(localWorkersMap.size() + 1); // the last worker is the forwarder to the remote workers
 		}
 		return n->svc_init();
 	}
@@ -130,31 +167,31 @@ template<typename Tin, typename Tout = Tin>
 class CollectorAdapter: public internal_mi_transformer {
 
 private:
-    int localWorkers, indexFirstLocal;	// number of input channels the wrapped node is supposed to have
+	std::vector<int> localWorkers;
 public:
 
-	CollectorAdapter(ff_node_t<Tin, Tout>* n, int indexFirstLocal, int localWorkers=1, bool cleanup=false): internal_mi_transformer(this, false), localWorkers(localWorkers), indexFirstLocal(indexFirstLocal) {
+	CollectorAdapter(ff_node_t<Tin, Tout>* n, std::vector<int> localWorkers, bool cleanup=false): internal_mi_transformer(this, false), localWorkers(localWorkers) {
 		this->n       = n;
 		this->cleanup = cleanup;
 	}
 
-	CollectorAdapter(ff_node* n, int indexFirstLocal, int localWorkers=1, bool cleanup=false): internal_mi_transformer(this, false), localWorkers(localWorkers), indexFirstLocal(indexFirstLocal) {
+	CollectorAdapter(ff_node* n, std::vector<int> localWorkers, bool cleanup=false): internal_mi_transformer(this, false), localWorkers(localWorkers) {
 		this->n       = n;
 		this->cleanup = cleanup;
 	}
 
-	CollectorAdapter(ff_minode_t<Tin, Tout>* n, int indexFirstLocal, int localWorkers, bool cleanup=false): internal_mi_transformer(this, false), localWorkers(localWorkers), indexFirstLocal(indexFirstLocal) {
+	CollectorAdapter(ff_minode_t<Tin, Tout>* n, std::vector<int> localWorkers, bool cleanup=false): internal_mi_transformer(this, false), localWorkers(localWorkers) {
 		this->n       = n;
 		this->cleanup = cleanup;
 	}
 
-	CollectorAdapter(ff_monode_t<Tin, Tout>* n, int indexFirstLocal, int localWorkers, bool cleanup=false): internal_mi_transformer(this, false), localWorkers(localWorkers), indexFirstLocal(indexFirstLocal) {
+	CollectorAdapter(ff_monode_t<Tin, Tout>* n, std::vector<int> localWorkers, bool cleanup=false): internal_mi_transformer(this, false), localWorkers(localWorkers) {
 		this->n       = n;
 		this->cleanup = cleanup;
 	}
 
 	template <typename T>
-	CollectorAdapter(ff_comb_t<Tin, T, Tout>* n, int indexFirstLocal, int localWorkers=1, bool cleanup=false): internal_mi_transformer(this, false), localWorkers(localWorkers), indexFirstLocal(indexFirstLocal) {
+	CollectorAdapter(ff_comb_t<Tin, T, Tout>* n, std::vector<int> localWorkers, bool cleanup=false): internal_mi_transformer(this, false), localWorkers(localWorkers) {
 		this->n       = n;
 		this->cleanup = cleanup;
 	}
@@ -164,9 +201,9 @@ public:
 	}
 
 	int svc_init() {
-		if (this->n->isMultiOutput()) {
+		if (this->n->isMultiInput()) { ////???????? MASSIMO???
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
-			mi->set_running(localWorkers + indexFirstLocal);
+			mi->set_running(localWorkers.size() + 1);
 		}
 		return n->svc_init();
 	}
@@ -177,29 +214,26 @@ public:
         Tin * task;
         ssize_t channel;
 
-        // if the results come from the "square box", it is a result from a remote workers so i have to read from which worker it come from 
-		if (get_channel_id() == 0){
-            ResultWrapper<Tin> * tw = reinterpret_cast<ResultWrapper<Tin>*>(in);
+		// if the results come from the "square box", it is a result from a remote workers so i have to read from which worker it come from 
+		if (get_channel_id() == localWorkers.size()){
+			ResultWrapper<Tin> * tw = reinterpret_cast<ResultWrapper<Tin>*>(in);
             task = tw->result;
             channel = tw->source;
-        } else { // the result come from a local worker, just pass it to collector and compute the right worker id
-            task = reinterpret_cast<Tin*>(in);
-            channel = get_channel_id() + indexFirstLocal - 1;
-        }
+		} else {  // the result come from a local worker, just pass it to collector and compute the right worker id
+			task = reinterpret_cast<Tin*>(in);
+            channel = localWorkers.at(get_channel_id());
+		}
 
-
+		// update the input channel id field only if the wrapped node is a multi input
 		if (this->n->isMultiInput()) {
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
 			mi->set_input_channelid(channel, true);
-		}		
+		}	
+
 		return n->svc(task);
 	}
 
 	ff_node* getOriginal(){ return this->n;	}
 };
-
-
-
-
 
 #endif
