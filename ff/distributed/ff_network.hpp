@@ -62,8 +62,17 @@ protected:
 	bool cleanup = false;
 };
 
+struct SMmessage_t {
+    SMmessage_t(){}
+    SMmessage_t(void* t, int s, int d) : task(t), sender(s), dst(d) {}
+    void * task;
+    int sender;
+    int dst;
+};
+
 struct message_t {
 	message_t(){}
+    message_t(int sender, int chid) : sender(sender), chid(chid) {}
 	message_t(char *rd, size_t size, bool cleanup=true) : data(rd,size,cleanup){}
 	
 	int           sender;
@@ -75,7 +84,7 @@ struct ack_t {
     char ack = 'A';
 };
 
-enum ConnectionType : int {EXTERNAL, INTERNAL};
+enum ConnectionType : int {EXTERNAL = 0, INTERNAL = 1};
 
 struct ff_endpoint {
     ff_endpoint(){}
