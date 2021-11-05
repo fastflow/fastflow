@@ -713,6 +713,7 @@ protected:
     }
 
     int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
+        int id=0;
         size_t nworkers2 = workers2.size();
         for(size_t i=0;i<nworkers2; ++i) {
             if (workers2[i]->isMultiOutput()) {
@@ -721,12 +722,14 @@ protected:
                 assert(w.size());
                 for(size_t j=0;j<w.size();++j) {
                     ff_node* t = new ff_buffernode(nentries,fixedsize); 
-                    t->set_id(j);
+                    t->set_id(id++);
                     internalSupportNodes.push_back(t);
                     if (workers2[i]->set_output(t)<0) return -1;
                 }
-            } else
+            } else{ 
                 if (workers2[i]->create_output_buffer(nentries,fixedsize)==-1) return -1;
+                id++;
+            }
         }
         return 0;        
     }

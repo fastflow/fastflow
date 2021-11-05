@@ -198,8 +198,6 @@ public:
         // close the socket not matter if local or remote
         for(size_t i=0; i < this->sockets.size(); i++)
             close(sockets[i]);
-
-        std::cout << "Sender Exited!\n";
     }
 
     message_t *svc(message_t* task) {
@@ -215,10 +213,9 @@ public:
         return this->GO_ON;
     }
 
-    void eosnotify(ssize_t i) {
+    void eosnotify(ssize_t id) {
         // receive it from an internal gateway
-        std::cout << "Sender: getchannelid: " << this->get_channel_id() << " - i: " << i << std::endl;
-        if (internalGateways > 0 && this->get_channel_id() >= (this->get_num_inchannels() - internalGateways) && ++Ineos == internalGateways){
+        if (internalGateways > 0 && id >= (this->get_num_inchannels() - internalGateways) && ++Ineos == internalGateways){
             message_t E_O_S(0,0);
             for (const auto & sck : type2sck[ConnectionType::INTERNAL]) sendToSck(sck, &E_O_S);
         } else 

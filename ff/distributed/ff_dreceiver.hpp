@@ -186,9 +186,6 @@ public:
         #ifdef LOCAL
             unlink(this->acceptAddr.address.c_str());
         #endif
-
-                std::cout << "Receiver Exited!\n";
-
     }
     /* 
         Here i should not care of input type nor input data since they come from a socket listener.
