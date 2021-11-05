@@ -21,8 +21,8 @@ struct Source : ff_monode_t<std::string>{
     std::string* svc(std::string* in){
         delete in;
         std::cout << "Source starting generating tasks!" << std::endl;
-        for(int i = 0; i < numWorker; i++)
-            ff_send_out_to(new std::string("Task generated from " + std::to_string(generatorID) + " for " + std::to_string(i)), i);
+        for(int i = 0; i < 10; i++)
+			ff_send_out_to(new std::string("Task" + std::to_string(i) + " generated from " + std::to_string(generatorID) + " for " + std::to_string(i%numWorker)), i%numWorker);
         
         std::cout << "Source generated all task sending now EOS!" << std::endl;
         return EOS;
@@ -40,6 +40,12 @@ struct Sink : ff_minode_t<std::string>{
         return this->GO_ON;
     }
 };
+
+
+struct ForwarderNode : ff_node{ 
+	void* svc(void* input){return input;}
+};
+
 
 int main(int argc, char*argv[]){
 
@@ -60,8 +66,10 @@ int main(int argc, char*argv[]){
         gFarm.add_emitter(new ff_dreceiver(ff_endpoint("127.0.0.1", 8001), 1, 1, {{0, 0}, {-100, 1}}));
         gFarm.add_collector(new ff_dsender(ff_endpoint("127.0.0.1", 8002, ConnectionType::INTERNAL), 1));
 
-        auto ea = new EmitterAdapter(new Source(2,0), 2, {{0,0}}, true); //ea->skipallpop(true);
+        //auto ea = new EmitterAdapter(new Source(2,0), 2, {{0,0}}, true); //ea->skipallpop(true);
+		auto ea = new ff_comb(new WrapperIN<true,std::string>(new ForwarderNode), new EmitterAdapter(new Source(2,0), 2, {{0,0}}, true), true, true);
 
+		
         a2a.add_firstset<ff_node>({ea, new ff_comb(new WrapperINCustom<true, std::string>(), new SquareBoxCollector<std::string>({std::make_pair(0,0)}), true, true)});
         a2a.add_secondset<ff_node>({new CollectorAdapter(new Sink(0), {0}, true), new ff_comb(new SquareBoxEmitter<std::string>({0}), new WrapperOUTCustom<true, std::string>(), true, true)});
 
@@ -69,7 +77,8 @@ int main(int argc, char*argv[]){
         gFarm.add_emitter(new ff_dreceiver(ff_endpoint("127.0.0.1", 8002), 1, 1, {{1, 0}, {-101, 1}}));
         gFarm.add_collector(new ff_dsender(ff_endpoint("127.0.0.1", 8001, ConnectionType::INTERNAL), 1));
 
-        auto ea = new EmitterAdapter(new Source(2,1), 2, {{1,0}}, true); //ea->skipallpop(true);
+        //auto ea = new EmitterAdapter(new Source(2,1), 2, {{1,0}}, true); //ea->skipallpop(true);
+		auto ea = new ff_comb(new WrapperIN<true,std::string>(new ForwarderNode), new EmitterAdapter(new Source(2,1), 2, {{1,0}}, true), true, true);
 
         a2a.add_firstset<ff_node>({ea, new ff_comb(new WrapperINCustom<true, std::string>(), new SquareBoxCollector<std::string>({std::make_pair(1,0)}), true, true)});
         a2a.add_secondset<ff_node>({new CollectorAdapter(new Sink(1), {1}, true), new ff_comb(new SquareBoxEmitter<std::string>({1}), new WrapperOUTCustom<true, std::string>(),true, true)});

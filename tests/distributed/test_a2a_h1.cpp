@@ -12,19 +12,11 @@ struct Source : ff_monode_t<std::string>{
     Source(int numWorker, int generatorID) : numWorker(numWorker), generatorID(generatorID) {}
 
     std::string* svc(std::string* in){
-        std::cout << "Source starting generating tasks!" << std::endl;
-        for(int i = 0; i < numWorker; i++)
-            ff_send_out_to(new std::string("Task generated from " + std::to_string(generatorID) + " for " + std::to_string(i)), i);
-        
-        
-        if (generatorID != 0)
-            sleep(10);
 
-        std::cout << "Source " << generatorID << " generated all task sending now EOS!" << std::endl;
+        for(int i = 0; i < 10; i++)
+            ff_send_out_to(new std::string("Task" + std::to_string(i) + " generated from " + std::to_string(generatorID) + " for " + std::to_string(i%numWorker)), i%numWorker);
+        
         return EOS;
-    }
-    void svc_end() {
-        std::cout << "Source Exited!\n";
     }
 };
 
@@ -37,14 +29,6 @@ struct Sink : ff_minode_t<std::string>{
         std::cout << *in << " received by Sink " << sinkID << " from " << get_channel_id() << std::endl;
         delete in;
         return this->GO_ON;
-    }
-
-    void eosnotify(ssize_t){
-        std::cout << "Receiver " << sinkID << " - Received EOS!\n";
-    }
-
-    void svc_end() {
-        std::cout << "Sink Exited!\n";
     }
 };
 

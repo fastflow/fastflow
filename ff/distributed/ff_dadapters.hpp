@@ -41,18 +41,12 @@ public:
             return o;
         }
 
-	void eosnotify(ssize_t i) {
-		std::cout << "SquareBox - Received EOS! " << i <<"\n";
-		if (i == sources.size()) return;
+	void eosnotify(ssize_t id) {
+		if (id == sources.size()) return;   // EOS coming from the SquareBoxCollector, we must ignore it
 		if (++neos == sources.size()){
 			this->ff_send_out(this->EOS);
-			std::cout << "SquareBox - Sending out EOS!\n";
 		}
 	}
-
-	void svc_end() {
-        std::cout << "SQEmitter Exited!\n";
-    }
 };
 
 template<typename T>
@@ -64,10 +58,6 @@ public:
 	ResultWrapper<T>* svc(SMmessage_t* in){
 		this->ff_send_out_to(new ResultWrapper<T>(reinterpret_cast<T*>(in->task), in->sender), destinations[in->dst]);
 		delete in; return this->GO_ON;
-    }
-
-	void svc_end() {
-        std::cout << "SQCollector Exited!\n";
     }
 };
 
