@@ -1476,7 +1476,7 @@ private:
     bool               blocking_out;
 
 #ifdef DFF_ENABLED
-    bool               skipallpop;    
+    bool               skipallpop = false;    
 #endif
 
 #if defined(TRACE_FASTFLOW)

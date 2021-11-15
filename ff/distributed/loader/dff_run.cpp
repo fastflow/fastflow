@@ -6,7 +6,6 @@
 #include <sys/time.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-#include <sys/syslimits.h>
 
 #include <cereal/cereal.hpp>
 #include <cereal/archives/json.hpp>
