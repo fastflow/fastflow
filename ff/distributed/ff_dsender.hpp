@@ -118,7 +118,8 @@ protected:
 
                close(socketFD);
            }
-
+		   free(result);
+			
            if (rp == NULL)            /* No address succeeded */
                return -1;
         #endif

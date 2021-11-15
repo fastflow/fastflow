@@ -44,12 +44,14 @@ struct StringPrinter : ff_node_t<std::string>{
     std::string* svc(std::string* in){
         const std::lock_guard<std::mutex> lock(mtx);
         std::cout << "Received something! Addr:" << in << "\n";
+#if 1
         try {
             std::cout << *in << std::endl;
-            //delete in;
+            delete in;
         } catch (const std::exception& ex){
             std::cerr << ex.what();
         }
+#endif		
         return this->GO_ON;
     }
 };
@@ -87,11 +89,21 @@ int main(int argc, char*argv[]){
     } else if (atoi(argv[1]) == 2) {
         gFarm.add_emitter(new ff_dreceiver(ff_endpoint("127.0.0.1", 8002), 1, 1, {{1, 0}, {-101, 1}}));
         gFarm.add_collector(new ff_dsender({ff_endpoint("127.0.0.1", 8001, ConnectionType::INTERNAL), ff_endpoint("127.0.0.1", 8003, ConnectionType::EXTERNAL)}, 1));
+		gFarm.cleanup_emitter();
+		gFarm.cleanup_collector();
 
-		auto ea = new ff_comb(new WrapperIN<true,std::string>(new ForwarderNode), new EmitterAdapter(new Source(2,1), 2, {{1,0}}, true), true, true);
+		auto ea = new ff_comb(new WrapperIN<true,std::string>(new ForwarderNode, 1, true), new EmitterAdapter(new Source(2,1), 2, {{1,0}}, true), true, true);
 
-        a2a.add_firstset<ff_node>({ea, new ff_comb(new WrapperINCustom<true, std::string>(), new SquareBoxCollector<std::string>({std::make_pair(1,0)}), true, true)});
-        a2a.add_secondset<ff_node>({new ff_comb(new CollectorAdapter(new Sink(1), {1}, true), new WrapperOUT<true, std::string>(new ForwarderNode, 1, true, 0)), new ff_comb(new SquareBoxEmitter<std::string>({1}), new WrapperOUTCustom<true, std::string>(),true, true)});
+        a2a.add_firstset<ff_node>({ea, new ff_comb(new WrapperINCustom<true, std::string>(), new SquareBoxCollector<std::string>({std::make_pair(1,0)}), true, true)}, 0, true);
+
+		a2a.add_secondset<ff_node>({
+									new ff_comb(new CollectorAdapter(new Sink(1), {1}, true),
+												new WrapperOUT<true, std::string>(new ForwarderNode, 1, true, 0), true, true),
+									new ff_comb(new SquareBoxEmitter<std::string>({1}),
+												new WrapperOUTCustom<true, std::string>(),true, true)
+			                        }, true);
+
+		
         
     } else {
         gFarm.add_emitter(new ff_dreceiver(ff_endpoint("127.0.0.1", 8003), 2));

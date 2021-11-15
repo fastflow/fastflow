@@ -209,6 +209,7 @@ public:
 			ResultWrapper<Tin> * tw = reinterpret_cast<ResultWrapper<Tin>*>(in);
             task = tw->result;
             channel = tw->source;
+			delete tw;
 		} else {  // the result come from a local worker, just pass it to collector and compute the right worker id
 			task = reinterpret_cast<Tin*>(in);
             channel = localWorkers.at(get_channel_id());
