@@ -109,7 +109,8 @@ static inline void usage(char* progname) {
 	std::cout << "\nUSAGE: " <<  progname << " [Options] -f <configFile> <cmd> \n"
 			  << "Options: \n"
 			  << "\t -v <g1>,...,<g2> \t Prints the output of the specified groups\n"
-			  << "\t -V               \t Print the output of all groups\n";
+			  << "\t -V               \t Print the output of all groups\n"
+			  << "\t -p \"TCP|MPI\"   \t Force communication protocol\n";
 		
 }
 
@@ -272,7 +273,6 @@ int main(int argc, char** argv) {
         // invoke mpirun using the just created hostfile
 
         char command[350];
-
      
         sprintf(command, "mpirun --hostfile %s %s --DFF_Config=%s", hostFile.c_str(), executable.c_str(), configFile.c_str());
 

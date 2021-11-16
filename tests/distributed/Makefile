@@ -35,8 +35,12 @@ endif
 ifdef EXCLUDE_MPI
     CXXFLAGS	    += -DDFF_EXCLUDE_MPI
 else
-	INCS += -I/usr/local/Cellar/open-mpi/4.1.1_2/include
-	CXXFLAGS += -L/usr/local/opt/libevent/lib -L/usr/local/Cellar/open-mpi/4.1.1_2/lib -lmpi
+ifdef MPI_HOME
+    INCS            += `pkg-config --cflags-only-I $(MPI_HOME)/lib/pkgconfig/ompi-cxx.pc`
+    LIBS            += `pkg-config --libs $(MPI_HOME)/lib/pkgconfig/ompi-cxx.pc`
+else
+    CXXFLAGS	    += -DDFF_EXCLUDE_MPI
+endif
 endif
 ifdef FF_HOME
     INCS            += -I$(FF_HOME)
@@ -51,7 +55,7 @@ endif
 
 
 CXXFLAGS            += -Wall
-LIBS                 = -pthread
+LIBS                += -pthread
 INCLUDES             = $(INCS)
 
 SOURCES              = $(wildcard *.cpp)
