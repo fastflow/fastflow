@@ -14,7 +14,7 @@ using namespace ff;
 
 template<typename Tin, typename Tout = Tin>
 struct DummyNode : public ff_node_t<Tin, Tout> {
-    Tout* svc(Tin* i){}
+    Tout* svc(Tin* in){ return nullptr;}
 };
 
 class Wrapper {
@@ -231,7 +231,7 @@ struct WrapperOUTCustom : public WrapperOUT<Serialization, Tin, Tout> {
 		SMmessage_t * input = reinterpret_cast<SMmessage_t*>(in);
 		Wrapper::myID = input->sender;
 		this->serialize(reinterpret_cast<Tout*>(input->task), input->dst);
-		delete in;
+		delete input;
 		return this->GO_ON;
 	}
 };

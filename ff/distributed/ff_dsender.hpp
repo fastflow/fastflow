@@ -24,8 +24,8 @@ using namespace ff;
 
 class ff_dsender: public ff_minode_t<message_t> { 
 protected:
-    size_t neos=0;
-    size_t Ineos=0;
+    int neos=0;
+    int Ineos=0;
     int next_rr_destination = 0; //next destiation to send for round robin policy
     std::vector<ff_endpoint> dest_endpoints;
     std::map<int, int> dest2Socket;
@@ -216,13 +216,13 @@ public:
 
     void eosnotify(ssize_t id) {
         // receive it from an internal gateway
-        if (internalGateways > 0 && id >= (this->get_num_inchannels() - internalGateways) && ++Ineos == internalGateways){
+        if (internalGateways > 0 && id >= (ssize_t)(this->get_num_inchannels() - internalGateways) && ++Ineos == internalGateways){
             message_t E_O_S(0,0);
             for (const auto & sck : type2sck[ConnectionType::INTERNAL]) sendToSck(sck, &E_O_S);
         } else 
             ++neos;
 
-        if (neos > 0 && neos + Ineos >= this->get_num_inchannels()){
+        if (neos > 0 && (neos + Ineos) >= (int)this->get_num_inchannels()){
             // send to all the external
             message_t E_O_S(0,0);
             for(const auto& sck : type2sck[ConnectionType::EXTERNAL]) sendToSck(sck, &E_O_S);

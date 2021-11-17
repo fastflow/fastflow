@@ -67,8 +67,9 @@ echo "    ]
 ##  #items #byteXitem #execTimeSource #execTimeSink #nw_sx #nw_dx
 ###
 
-dff_run -V -f tmpFilePP.json $1 $ITEMS $BYTExITEM $EXECTIMESOURCE $EXECTIMESINK $2 $3 $WORKERSXPROCESS
+DFF_RUN_HOME=../../ff/distributed/loader
+$DFF_RUN_HOME/dff_run -V -f tmpFilePP.json $1 $ITEMS $BYTExITEM $EXECTIMESOURCE $EXECTIMESINK $2 $3 $WORKERSXPROCESS
 
-rm tmpFilePP.json
-#exiting justo for testin purpose
+#rm tmpFilePP.json
+#exiting just for testin purpose
 exit 0
