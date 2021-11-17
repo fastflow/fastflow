@@ -58,14 +58,14 @@ public:
     */
     message_t *svc(message_t* task) {
         MPI_Status status;
-        int header[3];
+        long header[3];
         while(neos < input_channels){
 
-            if (MPI_Recv(header, 3, MPI_INT, MPI_ANY_SOURCE, DFF_HEADER_TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS)
+            if (MPI_Recv(header, 3, MPI_LONG, MPI_ANY_SOURCE, DFF_HEADER_TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS)
                 error("Error on Recv Receiver primo in alto\n");
             
             
-            int sz = header[0];
+            size_t sz = header[0];
 
             if (sz == 0){
                 neos++;
@@ -83,6 +83,8 @@ public:
             out->sender = header[1];
             out->chid   = header[2];
 
+			assert(out->chid>=0);
+			
             //std::cout << "received something from " << sender << " directed to " << chid << std::endl;
 
             ff_send_out_to(out, this->routingTable[out->chid]); // assume the routing table is consistent WARNING!!!
@@ -113,9 +115,9 @@ public:
     message_t *svc(message_t* task) {
         MPI_Request tmpAckReq;
         MPI_Status status;
-        int header[3];
+        long header[3];
         while(neos < input_channels){
-            MPI_Recv(header, 3, MPI_INT, MPI_ANY_SOURCE, DFF_HEADER_TAG, MPI_COMM_WORLD, &status);
+            MPI_Recv(header, 3, MPI_LONG, MPI_ANY_SOURCE, DFF_HEADER_TAG, MPI_COMM_WORLD, &status);
 
             size_t sz = header[0];
 

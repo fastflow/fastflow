@@ -83,9 +83,9 @@ public:
         size_t sz = task->data.getLen();
         int rank =dest2Rank[task->chid];
         
-        int header[3] = {sz, task->sender, task->chid};
+        long header[3] = {(long)sz, task->sender, task->chid};
 
-        MPI_Send(header, 3, MPI_INT, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
+        MPI_Send(header, 3, MPI_LONG, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
     
         MPI_Send(task->data.getPtr(), sz, MPI_BYTE, rank, DFF_TASK_TAG, MPI_COMM_WORLD);
 
@@ -96,10 +96,10 @@ public:
 
      void eosnotify(ssize_t) {
 	    if (++neos >= this->get_num_inchannels()){
-            int header[3] = {0,0,0};
+            long header[3] = {0,0,0};
             
             for(auto& ep : destRanks)
-                MPI_Send(header, 3, MPI_INT, ep.getRank(), DFF_HEADER_TAG, MPI_COMM_WORLD);
+                MPI_Send(header, 3, MPI_LONG, ep.getRank(), DFF_HEADER_TAG, MPI_COMM_WORLD);
 
         }
     }
@@ -194,9 +194,9 @@ public:
 
         size_t sz = task->data.getLen();
         
-        int header[3] = {sz, task->sender, task->chid};
+        long header[3] = {(long)sz, task->sender, task->chid};
 
-        MPI_Send(header, 3, MPI_INT, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
+        MPI_Send(header, 3, MPI_LONG, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
     
         MPI_Send(task->data.getPtr(), sz, MPI_BYTE, rank, DFF_TASK_TAG, MPI_COMM_WORLD);
 

@@ -35,15 +35,15 @@ public:
 	SquareBoxEmitter(const std::vector<int> localSources) : sources(localSources) {}
 	
 	SMmessage_t* svc(TaskWrapper<T>* in) {
-			int chId = ff_minode::get_channel_id();
+			size_t chId = ff_minode::get_channel_id();
 			SMmessage_t* o = new SMmessage_t(in->task, chId < sources.size() ? sources[chId] : -1 , -100 - in->destination);
 			delete in;
             return o;
         }
 
 	void eosnotify(ssize_t id) {
-		if (id == sources.size()) return;   // EOS coming from the SquareBoxCollector, we must ignore it
-		if (++neos == sources.size()){
+		if (id == (ssize_t)sources.size()) return;   // EOS coming from the SquareBoxCollector, we must ignore it
+		if (++neos == (int)sources.size()){
 			this->ff_send_out(this->EOS);
 		}
 	}
@@ -205,7 +205,7 @@ public:
         ssize_t channel;
 
 		// if the results come from the "square box", it is a result from a remote workers so i have to read from which worker it come from 
-		if (get_channel_id() == localWorkers.size()){
+		if ((size_t)get_channel_id() == localWorkers.size()){
 			ResultWrapper<Tin> * tw = reinterpret_cast<ResultWrapper<Tin>*>(in);
             task = tw->result;
             channel = tw->source;
