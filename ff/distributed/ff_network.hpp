@@ -37,14 +37,23 @@ public:
     dataBuffer()
         : std::stringbuf(std::ios::in | std::ios::out | std::ios::binary) {
 	}
+    
     dataBuffer(char p[], size_t len, bool cleanup=false)
         : std::stringbuf(std::ios::in | std::ios::out | std::ios::binary),
 		  len(len),cleanup(cleanup) {
         setg(p, p, p + len);
     }
+
 	~dataBuffer() {
 		if (cleanup) delete [] getPtr();
 	}
+
+    void setBuffer(char p[], size_t len, bool cleanup=true){
+        setg(p, p, p+len);
+        this->len = len;
+        this->cleanup = cleanup;
+    }
+
 	size_t getLen() const {
 		if (len>=0) return len;
 		return str().length();
@@ -61,6 +70,8 @@ protected:
 	ssize_t len=-1;
 	bool cleanup = false;
 };
+
+using ffDbuffer = std::pair<char*, size_t>;
 
 struct SMmessage_t {
     SMmessage_t(){}
