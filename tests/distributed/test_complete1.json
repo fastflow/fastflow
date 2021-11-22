@@ -1,5 +1,4 @@
 {
-    "protocol" : "MPI",
     "groups" : [
     {   
         "endpoint" : "localhost:8004",

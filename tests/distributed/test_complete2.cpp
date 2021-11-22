@@ -74,7 +74,7 @@ struct Node4: ff_minode_t<myTask_t>{
 		if (processed != ntasks) {
 			abort();
 		}
-		std::cout << "RESULT OK\n";
+		ff::cout << "RESULT OK\n";
 	}
 	long ntasks;
 	long processed=0;

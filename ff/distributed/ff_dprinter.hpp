@@ -26,7 +26,7 @@ namespace ff {
         
     public:
         prefixbuf(std::string const& p, std::streambuf* sbuf) : prefix(std::string("[" + p + "] ")), sbuf(sbuf) {}
-        void setPrefix(std::string const& p){prefix = std::string("[" + p + "] ");}
+        void setPrefix(std::string const& p){this->prefix = std::string("[" + p + "] ");}
     };
     
     class Printer : private virtual prefixbuf, public std::ostream {

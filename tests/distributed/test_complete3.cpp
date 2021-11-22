@@ -60,8 +60,8 @@ struct Node3: ff_monode_t<myTask_t>{
         return t;
     }
 	void eosnotify(ssize_t) {
-		printf("Node3 %ld EOS RECEIVED\n", get_my_id());
-			fflush(NULL);
+		
+		ff::cout << "Node3 " << get_my_id() << " EOS RECEIVED\n";
 	}
 	
 };
@@ -75,15 +75,14 @@ struct Node4: ff_minode_t<myTask_t>{
         return GO_ON;
     }
 	void eosnotify(ssize_t id) {
-		printf("Node4 EOS RECEIVED from %ld\n", id);
-		fflush(NULL);
+		ff::cout << "Node4 EOS RECEIVED from " << id << ff::endl;
 	}
 
 	void svc_end() {
 		if (processed != ntasks) {
 			abort();
 		}
-		std::cout << "RESULT OK\n";
+		ff::cout << "RESULT OK\n";
 	}
 	long ntasks;
 	long processed=0;
