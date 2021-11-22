@@ -179,9 +179,13 @@ static inline int DFF_Init(int& argc, char**& argv){
     
     dGroups::Instance()->parseConfig(configFile);
 
-    if (!groupName.empty()){
+    if (!groupName.empty())
       dGroups::Instance()->forceProtocol(Proto::TCP);
-    }
+  #ifdef DFF_MPI
+    else
+        dGroups::Instance()->forceProtocol(Proto::MPI);
+  #endif
+
 
     if (dGroups::Instance()->usedProtocol == Proto::TCP){
        if (groupName.empty()){
