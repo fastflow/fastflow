@@ -217,12 +217,10 @@ static inline int DFF_Init(int& argc, char**& argv){
       std::cout << "Running group: " << dGroups::Instance()->getRunningGroup() << " on rank: " <<  myrank << "\n";
     }
 
-    // set the name for the printer
-    ff::cout.setPrefix(dGroups::Instance()->getRunningGroup());
-
   #endif  
 
-  
+    // set the name for the printer
+    ff::cout.setPrefix(dGroups::Instance()->getRunningGroup());
 
     // recompact the argv array
     int j = 0;

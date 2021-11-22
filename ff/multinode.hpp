@@ -823,6 +823,28 @@ struct ff_minode_t: ff_minode {
         EOS((OUT_t*)FF_EOS),EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
         EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
+#ifdef DFF_ENABLED
+
+    // check on Serialization capabilities on the OUTPUT type!
+    if constexpr (traits::is_serializable_v<OUT_t>){
+        this->serializeF = [](void* o, dataBuffer& b) {std::pair<char*, size_t> p = serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o)); b.setBuffer(p.first, p.second);};
+    } else if constexpr (cereal::traits::is_output_serializable<OUT_t, cereal::PortableBinaryOutputArchive>::value){
+        this->serializeF = [](void* o, dataBuffer& b) -> void { std::ostream oss(&b); cereal::PortableBinaryOutputArchive ar(oss); ar << *reinterpret_cast<OUT_t*>(o); delete reinterpret_cast<OUT_t*>(o);};
+    }
+    
+    // check on Serialization capabilities on the INPUT type!
+    if constexpr (traits::is_deserializable_v<IN_t>){
+        this->deserializeF = [](dataBuffer& b) -> void* {
+            IN_t* ptr = nullptr;
+            b.doNotCleanup();
+            deserializeWrapper<IN_t>(b.getPtr(), b.getLen(), ptr);
+            return ptr;
+        };
+    } else if constexpr(cereal::traits::is_input_serializable<IN_t, cereal::PortableBinaryInputArchive>::value){
+        this->deserializeF = [](dataBuffer& b) -> void* {std::istream iss(&b);cereal::PortableBinaryInputArchive ar(iss); IN_t* o = new IN_t; ar >> *o; return o;};
+    }
+
+#endif
 	}
     OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_minode_t()  {}
@@ -861,6 +883,28 @@ struct ff_monode_t: ff_monode {
         EOS((OUT_t*)FF_EOS),EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
         EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
+#ifdef DFF_ENABLED
+
+    // check on Serialization capabilities on the OUTPUT type!
+    if constexpr (traits::is_serializable_v<OUT_t>){
+        this->serializeF = [](void* o, dataBuffer& b) {std::pair<char*, size_t> p = serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o)); b.setBuffer(p.first, p.second);};
+    } else if constexpr (cereal::traits::is_output_serializable<OUT_t, cereal::PortableBinaryOutputArchive>::value){
+        this->serializeF = [](void* o, dataBuffer& b) -> void { std::ostream oss(&b); cereal::PortableBinaryOutputArchive ar(oss); ar << *reinterpret_cast<OUT_t*>(o); delete reinterpret_cast<OUT_t*>(o);};
+    }
+    
+    // check on Serialization capabilities on the INPUT type!
+    if constexpr (traits::is_deserializable_v<IN_t>){
+        this->deserializeF = [](dataBuffer& b) -> void* {
+            IN_t* ptr = nullptr;
+            b.doNotCleanup();
+            deserializeWrapper<IN_t>(b.getPtr(), b.getLen(), ptr);
+            return ptr;
+        };
+    } else if constexpr(cereal::traits::is_input_serializable<IN_t, cereal::PortableBinaryInputArchive>::value){
+        this->deserializeF = [](dataBuffer& b) -> void* {std::istream iss(&b);cereal::PortableBinaryInputArchive ar(iss); IN_t* o = new IN_t; ar >> *o; return o;};
+    }
+
+#endif
 	}
     OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_monode_t()  {}
