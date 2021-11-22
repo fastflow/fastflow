@@ -41,7 +41,7 @@ struct Node1: ff_monode_t<myTask_t>{
 			task->S.f = i*1.0;
             ff_send_out(task);
 		}   
-        std::cout << "Source exiting!" << std::endl;
+        ff::cout << "Source exiting!" << std::endl;
         return EOS;
     }
 	const long ntasks;
@@ -77,7 +77,7 @@ struct Node4: ff_minode_t<myTask_t>{
 		if (processed != ntasks) {
 			abort();
 		}
-		std::cout << "RESULT OK\n";
+		ff::cout << "RESULT OK\n";
 	}
 	long ntasks;
 	long processed=0;

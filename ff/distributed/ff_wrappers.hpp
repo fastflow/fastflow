@@ -113,8 +113,7 @@ public:
 	}
 
 	void * svc(void* in) {
-		void* out = n->svc(in);
-		if (out > FF_TAG_MIN) return out;					
+		void* out = n->svc(in);					
 		serialize(out, defaultDestination);
 		return GO_ON;
 	}
@@ -180,7 +179,7 @@ public:
 	}
 
     bool serialize(void* in, int id) {
-		if ((void*)in > FF_TAG_MIN) return this->ff_send_out(in);
+		if ((void*)in > FF_TAG_MIN) return ff_node::ff_send_out(in);
 		
 		message_t* msg = new message_t;
 
@@ -189,12 +188,12 @@ public:
 		msg->sender = get_my_id(); // da cambiare con qualcosa di reale!
 		msg->chid   = id;
 
-		return this->ff_send_out(msg);
+		return ff_node::ff_send_out(msg);
 	}
 
 	int svc_init() {
-		if (this->n->isMultiOutput()) {
-			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
+		if (this->n->isMultiOutput()) { // ??? what??
+			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n); // what?????
 			mi->set_running(inchannels);
 		}
 		return n->svc_init();
@@ -210,11 +209,8 @@ public:
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
 			mi->set_input_channelid(channelid, true);
 		}
-
 		void* out = n->svc(this->n->deserializeF(msg->data));
         delete msg;
-
-        if (out > FF_TAG_MIN) return out;
 
         serialize(out, defaultDestination);
         return GO_ON;
