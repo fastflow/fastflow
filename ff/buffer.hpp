@@ -233,7 +233,7 @@ public:
             WMB(); 
             //std::atomic_thread_fence(std::memory_order_release);
             buf[pwrite] = data;
-            pwrite = pwrite + (pwrite+1 >=  size) ? (1-size): 1; // circular buffer
+            pwrite = pwrite + ((pwrite+1 >=  size) ? (1-size): 1); // circular buffer
             return true;
         }
         return false;
@@ -263,7 +263,7 @@ public:
                     buf[pwrite+i] = data[i];
             
             WMB();
-            pwrite = (last+1 >= size) ? 0 : (last+1);
+            pwrite = pwrite + ((last+1 >= size) ? 0 : (last+1));
 #if defined(SWSR_MULTIPUSH)
             mcnt = 0; // reset mpush counter
 #endif
@@ -312,7 +312,7 @@ public:
      */
     inline bool  inc() {
         buf[pread]=NULL;
-        pread = pread + (pread+1 >= size) ? (1-size): 1; // circular buffer       
+        pread = pread + ((pread+1 >= size) ? (1-size): 1); // circular buffer     
         return true;
     }           
 
@@ -488,7 +488,7 @@ public:
 
         if (empty()) return false;
         *data = buf[pread];
-        pread = pread + (pread+1 >= size) ? (1-size): 1;
+        pread = pread + ((pread+1 >= size) ? (1-size): 1);
         return true;
     }    
     
