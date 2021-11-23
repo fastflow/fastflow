@@ -18,10 +18,10 @@ struct exists{
     static constexpr bool value = decltype(check<T>(0))::value;
 };
 
-template<class U, class = std::enable_if_t<std::is_same_v<void, decltype(mYserialize<std::pair<char*, size_t>>(std::declval<std::pair<char*, size_t>&>(), std::declval<U*>()))>>>
+template<class U, class = std::enable_if_t<std::is_same_v<void, decltype(serialize<std::pair<char*, size_t>>(std::declval<std::pair<char*, size_t>&>(), std::declval<U*>()))>>>
 struct user_serialize_test{};
 
-template<class U, class = std::enable_if_t<std::is_same_v<void, decltype(mYdeserialize<std::pair<char*, size_t>>(std::declval<const std::pair<char*, size_t>&>(), std::declval<U*&>()))>>>
+template<class U, class = std::enable_if_t<std::is_same_v<void, decltype(deserialize<std::pair<char*, size_t>>(std::declval<const std::pair<char*, size_t>&>(), std::declval<U*&>()))>>>
 struct user_deserialize_test{};
 
 template<class U, class = std::enable_if_t<std::is_same_v<std::pair<char*,size_t>, decltype(serializeWrapper<U>(std::declval<U*>()))>>>
@@ -60,13 +60,13 @@ inline constexpr bool is_deserializable_v = is_deserializable<T>::value;
 template<typename T, typename = std::enable_if_t<traits::exists<T, traits::user_serialize_test>::value>>
 std::pair<char*,size_t> serializeWrapper(T*in){
     std::pair<char*,size_t> p;
-    mYserialize<std::pair<char*, size_t>>(p, in);
+    serialize<std::pair<char*, size_t>>(p, in);
     return p;
 }
 
 template<typename T, typename = std::enable_if_t<traits::exists<T, traits::user_deserialize_test>::value>>
 void deserializeWrapper(char* c, size_t s, T*& obj){
-    mYdeserialize<std::pair<char*, size_t>>(std::make_pair(c, s),obj);
+    deserialize<std::pair<char*, size_t>>(std::make_pair(c, s),obj);
 }
 
 
