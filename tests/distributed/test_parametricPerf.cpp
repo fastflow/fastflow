@@ -68,6 +68,21 @@ struct ExcType {
 	
 };
 
+
+#ifdef MANUAL_SERIALIZATION
+template<typename Buffer>
+void serialize(Buffer&b, ExcType* input){
+	b = {(char*)input, input->clen+sizeof(ExcType)};
+}
+
+template<typename Buffer>
+void deserialize(const Buffer&b, ExcType*& Ptr){
+    ExcType* p = new (b.first) ExcType(true);
+	p->clen = b.second - sizeof(ExcType);
+	Ptr = p;
+}
+#endif
+
 static ExcType* allocateExcType(size_t size, bool setdata=false) {
 	char* _p = (char*)malloc(size+sizeof(ExcType));	
 	ExcType* p = new (_p) ExcType(true);  // contiguous allocation
@@ -180,27 +195,14 @@ int main(int argc, char*argv[]){
 	for(int i = 0; i < numProcSx; i++){
 		auto& g = a2a.createGroup(std::string("S")+std::to_string(i));
 		for(int j = i*numWorkerXProcess; j < (i+1)*numWorkerXProcess; j++){
-			#if defined(MANUAL_SERIALIZATION)				
-				g.out <<= packup(sxWorkers[j], [](ExcType* in) -> std::pair<char*,size_t> {return std::make_pair((char*)in, in->clen+sizeof(ExcType)); });
-			#else
-				g.out << sxWorkers[j];
-			#endif
+			g.out << sxWorkers[j];
 		}
 	}
 
 	for(int i = 0; i < numProcDx; i++){
 		auto& g = a2a.createGroup(std::string("D")+std::to_string(i));
 		for(int j = i*numWorkerXProcess; j < (i+1)*numWorkerXProcess; j++){
-			#if defined(MANUAL_SERIALIZATION)						
-				g.in  <<= packup(dxWorkers[j], [](char* in, size_t len) -> ExcType* {
-											ExcType* p = new (in) ExcType(true);
-											p->C = in + sizeof(ExcType);
-											p->clen = len - sizeof(ExcType);
-											return p;
-										});
-			#else
-				g.in << dxWorkers[j];
-			#endif		
+			g.in << dxWorkers[j];	
 		}
 	}
     

@@ -81,6 +81,16 @@ struct result_t {
     uint64_t ts;            // timestamp
 };
 
+template<typename Buffer>
+void serialize(Buffer&b, result_t* input){
+    b = {reinterpret_cast<char*>(input), sizeof(result_t)};
+}
+
+template<typename Buffer>
+void deserialize(const Buffer&b, result_t*& strPtr){
+    strPtr = reinterpret_cast<result_t*>(b.first);
+}
+
 std::vector<tuple_t> dataset;     // contains all the input tuples in memory
 std::atomic<long> total_lines=0;  // total number of lines processed by the system
 std::atomic<long> total_bytes=0;  // total number of bytes processed by the system
@@ -329,8 +339,7 @@ int main(int argc, char* argv[]) {
         pipe0->add_stage(sp);
         L.push_back(pipe0);
 
-        // using the default serialization since the result_t is contiguous in memory
-        G1.out <<= sp;  
+        G1.out << sp;  
     }
     for (size_t i=0;i<sink_par_deg; ++i) {
         ff_pipeline* pipe1 = new ff_pipeline(false, qlen, qlen, true);
@@ -340,8 +349,7 @@ int main(int argc, char* argv[]) {
         pipe1->add_stage(S[i]);
         R.push_back(pipe1);
 
-        // using the default deserialization 
-        G2.in <<= C[i];
+        G2.in << C[i];
     }
 
     a2a.add_firstset(L, 0, true);
