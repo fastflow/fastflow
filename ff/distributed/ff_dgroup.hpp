@@ -63,7 +63,7 @@ private:
     ff_endpoint endpoint;
     std::vector<ff_endpoint> destinations;
     int expectedInputConnections;
-
+	bool executed = false;
     /**
      * Key: reference to original node
      * Value: pair of [reference to wrapper, serialization_required] 
@@ -296,6 +296,7 @@ private:
             }
         #endif
 
+			this->cleanup_emitter();
         }
         // create sender
         if (!isSink()){
@@ -315,7 +316,7 @@ private:
                     this->add_collector(new ff_dsenderMPI(this->destinations), true);
             }
         #endif
-            
+
         }
        
         return 0;
@@ -330,11 +331,24 @@ public:
         dGroups::Instance()->addGroup(label, this);
     }
 
+	~dGroup() {
+		if (!executed) {
+			for(auto s: in_)
+				delete s.second;
+			for(auto s: out_)
+				delete s.second;
+			for(auto s: inout_)
+				delete s.second;
+		}
+	}
+	
     int run(bool skip_init=false) override {return 0;}
 
     int run(ff_node* baseBB, bool skip_init=false) override {
         buildFarm(reinterpret_cast<ff_pipeline*>(baseBB));
-        return ff_farm::run(skip_init);
+		auto r= ff_farm::run(skip_init);
+		executed = true;
+        return r;
     }
 
 
