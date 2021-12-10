@@ -1,3 +1,18 @@
+/*
+ *           |-> Forwarder1 ->|
+ *           |                | -> |-> Sink1 ->|  
+ *  Source ->|-> Forwarder2 ->|    |           | -> StringPrinter
+ *           |                | -> |-> Sink2 ->|
+ *           |-> Forwarder3 ->|  
+ *
+ * 
+ *  G0: Source
+ *  G1: Forwarer1, Forwarder2, Sink1
+ *  G2: Forwarder3, Sink2
+ *  G3: StringPrinter
+ *
+ */
+
 #include <iostream>
 #include <ff/dff.hpp>
 #include <ff/distributed/ff_dadapters.hpp>
