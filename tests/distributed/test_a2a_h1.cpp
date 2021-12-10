@@ -1,3 +1,17 @@
+/*
+ *     Source1 ->|
+ *               |    | ->Sink1
+ *     Source2 ->| -> |
+ *               |    | ->Sink2
+ *     Source3 ->|
+ *
+ *  G1: Source1, Source2, Sink1
+ *  G2: Source3, Sink2
+ *
+ */
+
+
+
 #include <iostream>
 #include <ff/dff.hpp>
 #include <ff/distributed/ff_dadapters.hpp>
