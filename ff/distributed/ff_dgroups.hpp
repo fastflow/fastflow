@@ -60,7 +60,7 @@ public:
 
     void forceProtocol(Proto p){this->usedProtocol = p;}
 
-    bool isBuildByMyBuildingBlock(const std::string gName){ return groups[gName] == groups[runningGroup];}
+    bool isBuildByMyBuildingBlock(const std::string gName);
 	
     int run_and_wait_end(ff_node* parent){
 
