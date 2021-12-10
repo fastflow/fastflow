@@ -47,11 +47,12 @@ int main(int argc, char*argv[]){
 
 
     ff_farm gFarm;
-    ff_a2a a2a;
+    ff_a2a  a2a;
+
 
     // the following are just for building this example! 
-    dGroups::Instance()->addGroup("G1", &a2a);
-    dGroups::Instance()->addGroup("G2", &a2a);
+	a2a.createGroup("G1");
+	a2a.createGroup("G2");
 
     if (atoi(argv[1]) == 0){
         dGroups::Instance()->setRunningGroup("G1");

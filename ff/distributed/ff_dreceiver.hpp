@@ -295,7 +295,7 @@ class ff_dreceiverH : public ff_dreceiver {
             error("Error reading from socket groupName\n"); return -1;
         }
         
-        bool internalGroup = dGroups::Instance()->isBuildByMyBuildingBlock(std::string(groupName));
+        bool internalGroup = dGroups::Instance()->isBuildByMyBuildingBlock(std::string(groupName,size));
 
         isInternalConnection[sck] = internalGroup; // save somewhere the fact that this sck represent an internal connection
 

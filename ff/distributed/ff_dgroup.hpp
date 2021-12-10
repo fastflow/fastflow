@@ -358,6 +358,8 @@ public:
 
     ff_endpoint getEndpoint(){return this->endpoint;}
 
+	ff_node* getParent() const { return parentStructure; }
+	
     void setDestination(ff_endpoint e){ this->destinations.push_back(std::move(e));}
 
     void setExpectedInputConnections(int connections){this->expectedInputConnections = connections;}
@@ -440,6 +442,14 @@ void dGroups::consolidateGroups(){
 
 }
 
+bool dGroups::isBuildByMyBuildingBlock(const std::string gName) {
+	auto g1 = reinterpret_cast<dGroup*>(groups[gName]);
+	auto g2 = reinterpret_cast<dGroup*>(groups[runningGroup]);
+	
+	return g1->getParent() == g2->getParent();
+}
+
+	
 void dGroups::parseConfig(std::string configFile){
 
         std::ifstream is(configFile);
@@ -488,4 +498,6 @@ ff::dGroup& ff_pipeline::createGroup(std::string name){
     dGroup * g = new dGroup(this, std::move(name));
     return *g;
 }
+
+
 #endif
