@@ -6,6 +6,7 @@
 #include <sstream>
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
+#include <ff/distributed/ff_dgroups.hpp>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/types.h>
@@ -21,26 +22,19 @@ using namespace ff;
 class ff_dreceiver: public ff_monode_t<message_t> { 
 protected:
 
-    int sendRoutingTable(int sck, ConnectionType type){
+    static int sendRoutingTable(const int sck, const std::vector<int>& dest){
         dataBuffer buff; std::ostream oss(&buff);
 		cereal::PortableBinaryOutputArchive oarchive(oss);
-        std::vector<int> reachableDestinations;
-
-        for(auto const& p : this->routingTable){ 
-            if (type == ConnectionType::EXTERNAL && p.first >= 0)
-                reachableDestinations.push_back(p.first);
-            else if (type == ConnectionType::INTERNAL && p.first <= -100)
-                reachableDestinations.push_back(p.first);
-        }
-
-		oarchive << reachableDestinations;
+		oarchive << dest;
 
         size_t sz = htobe64(buff.getLen());
-        struct iovec iov[1];
+        struct iovec iov[2];
         iov[0].iov_base = &sz;
         iov[0].iov_len = sizeof(sz);
+        iov[1].iov_base = buff.getPtr();
+        iov[1].iov_len = buff.getLen();
 
-        if (writevn(sck, iov, 1) < 0 || writen(sck, buff.getPtr(), buff.getLen()) < 0){
+        if (writevn(sck, iov, 2) < 0){
             error("Error writing on socket the routing Table\n");
             return -1;
         }
@@ -48,28 +42,29 @@ protected:
         return 0;
     }
 
-    int handshakeHandler(int sck){
+    virtual int handshakeHandler(const int sck){
         // ricevo l'handshake e mi salvo che tipo di connessione è
-        ConnectionType type;
-        
-        struct iovec iov; iov.iov_base = &type; iov.iov_len = sizeof(type);
+        size_t size;
+        struct iovec iov; iov.iov_base = &size; iov.iov_len = sizeof(size);
         switch (readvn(sck, &iov, 1)) {
            case -1: error("Error reading from socket\n"); // fatal error
            case  0: return -1; // connection close
         }
 
-    // TODO da sistemare network byte order del connectiontype!!!!!!!!!
-        //type = (ConnectionType) type);
+        size = be64toh(size);
 
-        // save the connection type locally
-        connectionsTypes[sck] = type;
-        //std::cout << "i got a " << type << " connection" << std::endl;
+        char groupName[size];
+        if (readn(sck, groupName, size) < 0){
+            error("Error reading from socket groupName\n"); return -1;
+        }
+        std::vector<int> reachableDestinations;
+        for(const auto& [key, value] : this->routingTable) reachableDestinations.push_back(key);
 
-        return this->sendRoutingTable(sck, type);
+        return this->sendRoutingTable(sck, reachableDestinations);
     }
 
     void registerEOS(int sck){
-        switch(connectionsTypes[sck]){
+        /*switch(connectionsTypes[sck]){
             case ConnectionType::EXTERNAL: 
                 if (++Eneos == Einput_channels)
                     for(auto& c : routingTable) if (c.first >= 0) ff_send_out_to(this->EOS, c.second);    
@@ -78,7 +73,12 @@ protected:
                 if (++Ineos == Iinput_channels)
                     for(auto & c : routingTable) if (c.first <= -100) ff_send_out(this->EOS, c.second);
                 break;
-        }
+        }*/
+        neos++;
+    }
+
+    virtual void forward(message_t* task, int){
+        ff_send_out_to(task, this->routingTable[task->chid]); // assume the routing table is consistent WARNING!!!
     }
 
     virtual int handleRequest(int sck){
@@ -116,7 +116,7 @@ protected:
 			out->sender = sender;
 			out->chid   = chid;
 
-            ff_send_out_to(out, this->routingTable[chid]); // assume the routing table is consistent WARNING!!!
+            this->forward(out, sck);
             return 0;
         }
 
@@ -127,8 +127,8 @@ protected:
     }
 
 public:
-    ff_dreceiver(ff_endpoint acceptAddr, size_t Einput_channels, size_t Iinput_channels = 0, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
-		: Einput_channels(Einput_channels), Iinput_channels(Iinput_channels), acceptAddr(acceptAddr), routingTable(routingTable), coreid(coreid) {}
+    ff_dreceiver(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
+		: input_channels(input_channels), acceptAddr(acceptAddr), routingTable(routingTable), coreid(coreid) {}
 
     int svc_init() {
   		if (coreid!=-1)
@@ -174,12 +174,9 @@ public:
             return -1;
         }
 
-        /*for (const auto& e : routingTable)
-            std::cout << "Entry: " << e.first << " -> " << e.second << std::endl;
-        */
-
         return 0;
     }
+
     void svc_end() {
         close(this->listen_sck);
 
@@ -191,9 +188,7 @@ public:
         Here i should not care of input type nor input data since they come from a socket listener.
         Everything will be handled inside a while true in the body of this node where data is pulled from network
     */
-    message_t *svc(message_t* task) {
-        /* here i should receive the task via socket */
-        
+    message_t *svc(message_t* task) {        
         fd_set set, tmpset;
         // intialize both sets (master, temp)
         FD_ZERO(&set);
@@ -205,7 +200,7 @@ public:
         // hold the greater descriptor
         int fdmax = this->listen_sck; 
 
-        while((Ineos + Eneos) < (Einput_channels + Iinput_channels)){
+        while(neos < input_channels){
             // copy the master set to the temporary
             tmpset = set;
 
@@ -260,14 +255,68 @@ public:
     }
 
 protected:
-    size_t Eneos = 0, Ineos = 0;
-    size_t Einput_channels, Iinput_channels;
+    size_t neos = 0;
+    size_t input_channels;
     int listen_sck;
     ff_endpoint acceptAddr;	
     std::map<int, int> routingTable;
-    std::map<int, ConnectionType> connectionsTypes;
     int last_receive_fd = -1;
 	int coreid;
+};
+
+
+class ff_dreceiverH : public ff_dreceiver {
+
+    std::vector<int> internalDestinations;
+    std::map<int, bool> isInternalConnection;
+    int internalNEos = 0;
+
+    void registerEOS(int sck){
+        if (isInternalConnection[sck] && ++internalNEos == std::count_if(std::begin(isInternalConnection),
+                                                                         std::end  (isInternalConnection),
+                                                                         [](std::pair<int, bool> const &p) {return p.second;}))
+            ff_send_out_to(this->EOS, this->get_num_outchannels()-1);
+        
+        neos++;
+    }
+
+    virtual int handshakeHandler(const int sck){
+        size_t size;
+        struct iovec iov; iov.iov_base = &size; iov.iov_len = sizeof(size);
+        switch (readvn(sck, &iov, 1)) {
+           case -1: error("Error reading from socket\n"); // fatal error
+           case  0: return -1; // connection close
+        }
+
+        size = be64toh(size);
+
+        char groupName[size];
+        if (readn(sck, groupName, size) < 0){
+            error("Error reading from socket groupName\n"); return -1;
+        }
+        
+        bool internalGroup = dGroups::Instance()->isBuildByMyBuildingBlock(std::string(groupName));
+
+        isInternalConnection[sck] = internalGroup; // save somewhere the fact that this sck represent an internal connection
+
+        if (internalGroup) return this->sendRoutingTable(sck, internalDestinations);
+
+        std::vector<int> reachableDestinations;
+        for(const auto& [key, value] :  this->routingTable) reachableDestinations.push_back(key);
+        return this->sendRoutingTable(sck, reachableDestinations);
+    }
+
+    void forward(message_t* task, int sck){
+        if (isInternalConnection[sck]) ff_send_out_to(task, this->get_num_outchannels()-1);
+        else ff_dreceiver::forward(task, sck);
+    }
+
+public:
+    ff_dreceiverH(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {{0,0}}, std::vector<int> internalRoutingTable = {0}, int coreid=-1) 
+    : ff_dreceiver(acceptAddr, input_channels, routingTable, coreid), internalDestinations(internalRoutingTable) {
+
+    }
+
 };
 
 /*
@@ -335,8 +384,8 @@ protected:
     }
 
 public:
-    ff_dreceiverOD(ff_endpoint acceptAddr, size_t Einput_channels, size_t Iinput_channels = 0, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
-		: ff_dreceiver(acceptAddr, Einput_channels, Iinput_channels, routingTable, coreid) {}
+    ff_dreceiverOD(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
+		: ff_dreceiver(acceptAddr, input_channels, routingTable, coreid) {}
 
 private:
     ack_t ACK;

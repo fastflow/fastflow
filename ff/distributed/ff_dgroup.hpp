@@ -282,9 +282,9 @@ private:
         if (!isSource()){
             if (currentProto == Proto::TCP){
                 if (onDemandReceiver)
-                    this->add_emitter(new ff_dreceiverOD(this->endpoint, this->expectedInputConnections, 0, buildRoutingTable(level1BB))); // set right parameters HERE!!
+                    this->add_emitter(new ff_dreceiverOD(this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB))); // set right parameters HERE!!
                 else
-                    this->add_emitter(new ff_dreceiver(this->endpoint, this->expectedInputConnections, 0, buildRoutingTable(level1BB)));
+                    this->add_emitter(new ff_dreceiver(this->endpoint, this->expectedInputConnections, buildRoutingTable(level1BB)));
             }
 
         #ifdef DFF_MPI

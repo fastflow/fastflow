@@ -13,8 +13,6 @@
 
 #include <ff/distributed/ff_dprinter.hpp>
 
-
-
 #include <cereal/cereal.hpp>
 #include <cereal/archives/json.hpp>
 #include <cereal/types/string.hpp>
@@ -56,6 +54,8 @@ public:
 	  const std::string& getRunningGroup() const { return runningGroup; }
 
     void forceProtocol(Proto p){this->usedProtocol = p;}
+
+    bool isBuildByMyBuildingBlock(const std::string gName){ return groups[gName] == groups[runningGroup];}
 	
     int run_and_wait_end(ff_node* parent){
 

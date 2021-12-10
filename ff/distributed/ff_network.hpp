@@ -95,16 +95,13 @@ struct ack_t {
     char ack = 'A';
 };
 
-enum ConnectionType : int {EXTERNAL = 0, INTERNAL = 1};
-
 struct ff_endpoint {
     ff_endpoint(){}
-    ff_endpoint(std::string addr, int port, ConnectionType t = EXTERNAL) : address(addr), port(port), typ(t) {}
-    ff_endpoint(int rank, ConnectionType t = EXTERNAL) : port(rank), typ(t) {}
+    ff_endpoint(std::string addr, int port) : address(addr), port(port) {}
+    ff_endpoint(int rank) : port(rank) {}
     const int getRank() {return port;}
-	std::string address;
+	std::string address, groupName;
 	int port;
-    ConnectionType typ;
 };
 
 
