@@ -25,16 +25,15 @@ using namespace ff;
 class ff_dsender: public ff_minode_t<message_t> { 
 protected:
     int neos=0;
-    int Ineos=0;
     int next_rr_destination = 0; //next destiation to send for round robin policy
     std::vector<ff_endpoint> dest_endpoints;
     std::map<int, int> dest2Socket;
-    std::unordered_map<ConnectionType, std::vector<int>> type2sck;
+    //std::unordered_map<ConnectionType, std::vector<int>> type2sck;
     std::vector<int> sockets;
-	int internalGateways;
+	//int internalGateways;
     int coreid;
 
-    int receiveReachableDestinations(int sck){
+    int receiveReachableDestinations(int sck, std::map<int,int>& m){
        
         size_t sz;
         ssize_t r;
@@ -66,9 +65,35 @@ protected:
 
         iarchive >> destinationsList;
 
-        for (int d : destinationsList) dest2Socket[d] = sck;
+        for (const int& d : destinationsList) m[d] = sck;
+
+        for (const auto& p : m)
+            std::cout << p.first << " - "  << p.second << std::endl;
 
         return 0;
+    }
+
+    int sendGroupName(const int sck){    
+        std::string gName = dGroups::Instance()->getRunningGroup();
+        size_t sz = htobe64(gName.size());
+        struct iovec iov[2];
+        iov[0].iov_base = &sz;
+        iov[0].iov_len = sizeof(sz);
+        iov[1].iov_base = (char*)(gName.c_str());
+        iov[1].iov_len = gName.size();
+
+        if (writevn(sck, iov, 2) < 0){
+            error("Error writing on socket\n");
+            return -1;
+        }
+
+        return 0;
+    }
+
+    virtual int handshakeHandler(const int sck, bool){
+        if (sendGroupName(sck) < 0) return -1;
+
+        return receiveReachableDestinations(sck, dest2Socket);
     }
 	
     int create_connect(const ff_endpoint& destination){
@@ -124,18 +149,8 @@ protected:
                return -1;
         #endif
 
-        // store the connection type
-        type2sck[destination.typ].push_back(socketFD);
-
-        if (writen(socketFD, (char*) &destination.typ, sizeof(destination.typ)) < 0){
-            error("Error sending the connection type during handshaking!");
-            return -1;
-        }
 
         // receive the reachable destination from this sockets
-        if (receiveReachableDestinations(socketFD) < 0)
-            return -1;
-
 
         return socketFD;
     }
@@ -178,19 +193,23 @@ protected:
 
     
 public:
-    ff_dsender(ff_endpoint dest_endpoint, int internalGateways = 0, int coreid=-1): internalGateways(internalGateways), coreid(coreid) {
+    ff_dsender(ff_endpoint dest_endpoint, int coreid=-1): coreid(coreid) {
         this->dest_endpoints.push_back(std::move(dest_endpoint));
     }
 
-    ff_dsender( std::vector<ff_endpoint> dest_endpoints_, int internalGateways = 0, int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), internalGateways(internalGateways), coreid(coreid) {}
+    ff_dsender( std::vector<ff_endpoint> dest_endpoints_, int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), coreid(coreid) {}
+
+    
 
     int svc_init() {
 		if (coreid!=-1)
 			ff_mapThreadToCpu(coreid);
 		
         sockets.resize(this->dest_endpoints.size());
-        for(size_t i=0; i < this->dest_endpoints.size(); i++)
+        for(size_t i=0; i < this->dest_endpoints.size(); i++){
             if ((sockets[i] = tryConnect(this->dest_endpoints[i])) <= 0 ) return -1;
+            if (handshakeHandler(sockets[i], false) < 0) return -1;
+        }
 
         return 0;
     }
@@ -215,6 +234,12 @@ public:
     }
 
     void eosnotify(ssize_t id) {
+        if (++neos >= this->get_num_inchannels()){
+            message_t E_O_S(0,0);
+            for(const auto& sck : sockets) sendToSck(sck, &E_O_S);
+        }
+
+        /*
         // receive it from an internal gateway
         if (internalGateways > 0 && id >= (ssize_t)(this->get_num_inchannels() - internalGateways) && ++Ineos == internalGateways){
             message_t E_O_S(0,0);
@@ -227,9 +252,79 @@ public:
             message_t E_O_S(0,0);
             for(const auto& sck : type2sck[ConnectionType::EXTERNAL]) sendToSck(sck, &E_O_S);
         }
+        */
+
+
+
     }
 
 };
+
+
+class ff_dsenderH : public ff_dsender {
+
+    std::map<int, int> internalDest2Socket;
+    std::map<int, int>::const_iterator rr_iterator;
+    std::vector<int> internalSockets;
+
+public:
+
+    ff_dsenderH(ff_endpoint e, int coreid=-1) : ff_dsender(e, coreid) {} 
+    ff_dsenderH(std::vector<ff_endpoint> dest_endpoints_, int coreid=-1) : ff_dsender(dest_endpoints_, coreid) {}
+    
+    int handshakeHandler(const int sck, bool isInternal){
+        if (sendGroupName(sck) < 0) return -1;
+
+        return receiveReachableDestinations(sck, isInternal ? internalDest2Socket : dest2Socket);
+    }
+
+    int svc_init() {
+		
+        sockets.resize(this->dest_endpoints.size());
+        for(const auto& endpoint : this->dest_endpoints){
+            int sck = tryConnect(endpoint);
+            if (sck <= 0) return -1;
+
+            bool isInternal = dGroups::Instance()->isBuildByMyBuildingBlock(endpoint.groupName);
+            if (isInternal) internalSockets.push_back(sck);
+            else sockets.push_back(sck);
+            handshakeHandler(sck, isInternal);
+        }
+
+        rr_iterator = internalDest2Socket.cbegin();
+        return 0;
+    }
+
+    message_t *svc(message_t* task) {
+        if (this->get_channel_id() == (this->get_num_inchannels() - 1)){
+            // pick destination from the list of internal connections!
+            if (task->chid == -1){ // roundrobin over the destinations
+                task->chid = rr_iterator->first;
+                if (++rr_iterator == internalDest2Socket.cend()) rr_iterator = internalDest2Socket.cbegin();
+            }
+            std::cout << "[Sender] Internal message to be sent to " << task->chid <<" through socket " << internalDest2Socket[task->chid] << " of size " << internalDest2Socket.size() << "!\n";
+            sendToSck(internalDest2Socket[task->chid], task); 
+            delete task;
+            return this->GO_ON;
+        }
+
+        return ff_dsender::svc(task);
+    }
+
+     void eosnotify(ssize_t id) {
+         if (id == (this->get_num_inchannels() - 1)){
+            // send the EOS to all the internal connections
+            message_t E_O_S(0,0);
+            for(const auto& sck : internalSockets) sendToSck(sck, &E_O_S);
+            ++neos; // count anyway a new EOS received!
+         } else if (++neos >= this->get_num_inchannels()){
+            message_t E_O_S(0,0);
+            for(const auto& sck : sockets) sendToSck(sck, &E_O_S);
+        }
+     }
+};
+
+
 
 
 

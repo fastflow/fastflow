@@ -13,8 +13,8 @@ struct Source : ff_monode_t<std::string>{
 
     std::string* svc(std::string* in){
 
-        for(int i = 0; i < 10; i++)
-            ff_send_out_to(new std::string("Task" + std::to_string(i) + " generated from " + std::to_string(generatorID) + " for " + std::to_string(i%numWorker)), i%numWorker);
+        for(int i = 0; i < numWorker; i++)
+            ff_send_out_to(new std::string("Task generated from " + std::to_string(generatorID) + " for " + std::to_string(i)), i);
         
         return EOS;
     }
@@ -39,25 +39,40 @@ int main(int argc, char*argv[]){
         return 1;
     }
 
+    ff_endpoint g1("127.0.0.1", 8001);
+    g1.groupName = "G1";
+
+    ff_endpoint g2("127.0.0.1", 8002);
+    g2.groupName = "G2";
+
+
     ff_farm gFarm;
     ff_a2a a2a;
+
+    // the following are just for building this example! 
+    dGroups::Instance()->addGroup("G1", &a2a);
+    dGroups::Instance()->addGroup("G2", &a2a);
+
     if (atoi(argv[1]) == 0){
-        gFarm.add_emitter(new ff_dreceiver(ff_endpoint("127.0.0.1", 8001), 0, 1, {{-100, 1}}));
-        gFarm.add_collector(new ff_dsender(ff_endpoint("127.0.0.1", 8002, ConnectionType::INTERNAL), 1));
+        dGroups::Instance()->setRunningGroup("G1");
+        gFarm.add_emitter(new ff_dreceiverH(g1, 1, {{0, 0}}, {0}));
+        gFarm.add_collector(new ff_dsenderH(g2));
 
-        auto ea = new EmitterAdapter(new Source(2,0), 2, {{0,0}}, true); ea->skipallpop(true);
+        auto ea1 = new EmitterAdapter(new Source(2,0), 2, 0, {{0,0}}, true); ea1->skipallpop(true);
+        auto ea2 = new EmitterAdapter(new Source(2,1), 2, 1, {{0,0}}, true); ea2->skipallpop(true);
 
-        a2a.add_firstset<ff_node>({ea, new ff_comb(new WrapperINCustom<true, std::string>(), new SquareBoxCollector<std::string>({std::make_pair(0,0)}), true, true)});
-        a2a.add_secondset<ff_node>({new CollectorAdapter(new Sink(0), {0}, true), new ff_comb(new SquareBoxEmitter<std::string>({0}), new WrapperOUTCustom<true, std::string>(), true, true)});
+        a2a.add_firstset<ff_node>({ea1, ea2, new SquareBoxLeft({std::make_pair(0,0)})});
+        a2a.add_secondset<ff_node>({new CollectorAdapter(new Sink(0), {0, 1}, true), new SquareBoxRight()});
 
     } else {
-        gFarm.add_emitter(new ff_dreceiver(ff_endpoint("127.0.0.1", 8002), 0, 1, {{-101, 1}}));
-        gFarm.add_collector(new ff_dsender(ff_endpoint("127.0.0.1", 8001, ConnectionType::INTERNAL), 1));
+        dGroups::Instance()->setRunningGroup("G2");
+        gFarm.add_emitter(new ff_dreceiverH(g2, 1, {{0, 0}}, {1}));
+        gFarm.add_collector(new ff_dsenderH(g1));
 
-        auto ea = new EmitterAdapter(new Source(2,1), 2, {{1,0}}, true); ea->skipallpop(true);
+        auto ea = new EmitterAdapter(new Source(2,2), 2, 2, {{1,0}}, true); ea->skipallpop(true);
 
-        a2a.add_firstset<ff_node>({ea, new ff_comb(new WrapperINCustom<true, std::string>(), new SquareBoxCollector<std::string>({std::make_pair(1,0)}), true, true)});
-        a2a.add_secondset<ff_node>({new CollectorAdapter(new Sink(1), {1}, true), new ff_comb(new SquareBoxEmitter<std::string>({1}), new WrapperOUTCustom<true, std::string>(),true, true)});
+        a2a.add_firstset<ff_node>({ea, new SquareBoxLeft({std::make_pair(1,0)})});
+        a2a.add_secondset<ff_node>({new CollectorAdapter(new Sink(1), {2}, true), new SquareBoxRight()});
         
     }
     gFarm.add_workers({&a2a});
