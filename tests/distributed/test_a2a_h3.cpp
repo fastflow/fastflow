@@ -73,7 +73,13 @@ struct StringPrinter : ff_node_t<std::string>{
 
 
 struct ForwarderNode : ff_node{ 
-	void* svc(void* input){return input;}
+        ForwarderNode(std::function<void(void*, dataBuffer&)> f){
+            this->serializeF = f;
+        }
+        ForwarderNode(std::function<void*(dataBuffer&)> f){
+            this->deserializeF = f;
+        }
+        void* svc(void* input){return input;}
 };
 
 
@@ -84,45 +90,67 @@ int main(int argc, char*argv[]){
         return 1;
     }
 
+    ff_endpoint g1("127.0.0.1", 8001);
+    g1.groupName = "G1";
+
+    ff_endpoint g2("127.0.0.1", 8002);
+    g2.groupName = "G2";
+
+    ff_endpoint g3("127.0.0.1", 8003);
+    g3.groupName = "G3";
+
     ff_farm gFarm;
     ff_a2a a2a;
+
+    a2a.createGroup("G1");
+    a2a.createGroup("G2");
+    ff_pipeline dummypipe; dummypipe.createGroup("G3"); dummypipe.createGroup("G0"); 
+
+
     if (atoi(argv[1]) == 0){
-        gFarm.add_collector(new ff_dsender({ff_endpoint("127.0.0.1", 8001, ConnectionType::EXTERNAL), ff_endpoint("127.0.0.1", 8002, ConnectionType::EXTERNAL)}));
-         gFarm.add_workers({new WrapperOUT<true, std::string>(new RealSource(), 1, true, -1)});
+        dGroups::Instance()->setRunningGroup("G0");
+        gFarm.add_collector(new ff_dsender({g1, g2}));
+        gFarm.add_workers({new WrapperOUT(new RealSource(), 1, true)});
 
-         gFarm.run_and_wait_end();
-         return 0;
+        gFarm.run_and_wait_end();
+        return 0;
     } else if (atoi(argv[1]) == 1){
-        gFarm.add_emitter(new ff_dreceiver(ff_endpoint("127.0.0.1", 8001), 1, 1, {{0, 0}, {-100, 1}}));
-        gFarm.add_collector(new ff_dsender({ff_endpoint("127.0.0.1", 8002, ConnectionType::INTERNAL), ff_endpoint("127.0.0.1", 8003, ConnectionType::EXTERNAL)}, 1));
+        dGroups::Instance()->setRunningGroup("G1");
+        gFarm.add_emitter(new ff_dreceiverH(g1, 2, {{0, 0}}, {0}));
+        gFarm.add_collector(new ff_dsenderH({g2,g3}));
 
-		auto ea = new ff_comb(new WrapperIN<true,std::string>(new ForwarderNode), new EmitterAdapter(new Source(2,0), 2, {{0,0}}, true), true, true);
-		
-        a2a.add_firstset<ff_node>({ea, new ff_comb(new WrapperINCustom<true, std::string>(), new SquareBoxCollector<std::string>({std::make_pair(0,0)}), true, true)});
-        a2a.add_secondset<ff_node>({new ff_comb(new CollectorAdapter(new Sink(0), {0}, true), new WrapperOUT<true, std::string>(new ForwarderNode, 1, true, 0)), new ff_comb(new SquareBoxEmitter<std::string>({0}), new WrapperOUTCustom<true, std::string>(), true, true)});
+		auto s = new Source(2,0);
+        auto ea = new ff_comb(new WrapperIN(new ForwarderNode(s->deserializeF)), new EmitterAdapter(s, 2, 0, {{0,0}}, true), true, true);
+
+        a2a.add_firstset<ff_node>({ea, new SquareBoxLeft({std::make_pair(0,0)})});
+        auto sink = new Sink(0);
+        a2a.add_secondset<ff_node>({new ff_comb(new CollectorAdapter(sink, {0}, true), new WrapperOUT(new ForwarderNode(sink->serializeF), 1, true)), new SquareBoxRight});
 
     } else if (atoi(argv[1]) == 2) {
-        gFarm.add_emitter(new ff_dreceiver(ff_endpoint("127.0.0.1", 8002), 1, 1, {{1, 0}, {-101, 1}}));
-        gFarm.add_collector(new ff_dsender({ff_endpoint("127.0.0.1", 8001, ConnectionType::INTERNAL), ff_endpoint("127.0.0.1", 8003, ConnectionType::EXTERNAL)}, 1));
+        dGroups::Instance()->setRunningGroup("G2");
+        gFarm.add_emitter(new ff_dreceiverH(g2, 2, {{1, 0}}, {1}));
+        gFarm.add_collector(new ff_dsenderH({g1, g3}));
 		gFarm.cleanup_emitter();
 		gFarm.cleanup_collector();
 
-		auto ea = new ff_comb(new WrapperIN<true,std::string>(new ForwarderNode, 1, true), new EmitterAdapter(new Source(2,1), 2, {{1,0}}, true), true, true);
+		auto s = new Source(2,1);
+		auto ea = new ff_comb(new WrapperIN(new ForwarderNode(s->deserializeF)), new EmitterAdapter(s, 2, 1, {{1,0}}, true), true, true);
 
-        a2a.add_firstset<ff_node>({ea, new ff_comb(new WrapperINCustom<true, std::string>(), new SquareBoxCollector<std::string>({std::make_pair(1,0)}), true, true)}, 0, true);
+        a2a.add_firstset<ff_node>({ea, new SquareBoxLeft({std::make_pair(1,0)})}, 0, true);
 
+        auto sink = new Sink(1);
 		a2a.add_secondset<ff_node>({
-									new ff_comb(new CollectorAdapter(new Sink(1), {1}, true),
-												new WrapperOUT<true, std::string>(new ForwarderNode, 1, true, 0), true, true),
-									new ff_comb(new SquareBoxEmitter<std::string>({1}),
-												new WrapperOUTCustom<true, std::string>(),true, true)
+									new ff_comb(new CollectorAdapter(sink, {1}, true),
+												new WrapperOUT(new ForwarderNode(sink->serializeF), 1, true), true, true),
+									new SquareBoxRight
 			                        }, true);
 
 		
         
     } else {
-        gFarm.add_emitter(new ff_dreceiver(ff_endpoint("127.0.0.1", 8003), 2));
-         gFarm.add_workers({new WrapperIN<true, std::string>(new StringPrinter(), 1, true)});
+        dGroups::Instance()->setRunningGroup("G3");
+        gFarm.add_emitter(new ff_dreceiver(g3, 2));
+         gFarm.add_workers({new WrapperIN(new StringPrinter(), 1, true)});
 
          gFarm.run_and_wait_end();
          return 0;
