@@ -30,11 +30,16 @@ class dGroups {
 public:
 
     static dGroups* Instance(){
-        if (i == nullptr)
-            i = new dGroups();
-        return i;
+		static dGroups dg;
+		return &dg;
     }
-
+	~dGroups() {
+		for (auto g : groups)
+            if (g.second)
+				delete g.second;
+		groups.clear();
+	}
+	
     Proto usedProtocol;
 
     void parseConfig(std::string);

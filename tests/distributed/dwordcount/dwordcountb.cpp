@@ -175,6 +175,9 @@ struct Splitter: ff_monode_t<tuple_t, Result_t> {
                 outV[ch] = r;
             }
             result_t r;
+#if defined(MAKE_VALGRIND_HAPPY)
+            bzero(r.key, MAXWORD);
+#endif                        
             strncpy(r.key, token, MAXWORD-1);
             r.key[MAXWORD-1]='\0';
             r.ts  = in->ts;

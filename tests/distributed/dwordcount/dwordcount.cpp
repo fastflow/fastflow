@@ -50,6 +50,8 @@
  */
 
 #define FF_BOUNDED_BUFFER
+//#define MAKE_VALGRIND_HAPPY
+//#define MANUAL_SERIALIZATION
 #define DEFAULT_BUFFER_CAPACITY 2048
 #define BYKEY true
 
@@ -79,8 +81,15 @@ struct result_t {
     char     key[MAXWORD];  // key word
     uint64_t id;            // id that indicates the current number of occurrences of the key word
     uint64_t ts;            // timestamp
+
+	template<class Archive>
+	void serialize(Archive & archive) {
+		archive(key,id,ts);
+	}
+
 };
 
+#if defined(MANUAL_SERIALIZATION)
 template<typename Buffer>
 void serialize(Buffer&b, result_t* input){
     b = {reinterpret_cast<char*>(input), sizeof(result_t)};
@@ -90,6 +99,7 @@ template<typename Buffer>
 void deserialize(const Buffer&b, result_t*& strPtr){
     strPtr = reinterpret_cast<result_t*>(b.first);
 }
+#endif
 
 std::vector<tuple_t> dataset;     // contains all the input tuples in memory
 std::atomic<long> total_lines=0;  // total number of lines processed by the system
@@ -166,10 +176,14 @@ struct Splitter: ff_monode_t<tuple_t, result_t> {
 #endif            
             result_t* r = new result_t;
             assert(r);
+#if defined(MAKE_VALGRIND_HAPPY)
+            bzero(r->key, MAXWORD);
+#endif            
             strncpy(r->key, token, MAXWORD-1);
             r->key[MAXWORD-1]='\0';
             r->ts  = in->ts;
-
+            r->id  = in->id;
+            
             ff_send_out_to(r, ch);
             token = strtok_r(NULL, " ", &tmpstr);
         }
@@ -326,20 +340,21 @@ int main(int argc, char* argv[]) {
     std::vector<ff_node*> L;  // left and right workers of the A2A
     std::vector<ff_node*> R;
 
+        
     ff_a2a a2a(false, qlen, qlen, true);
 
     auto G1 = a2a.createGroup("G1");
     auto G2 = a2a.createGroup("G2");
-    
+
     for (size_t i=0;i<source_par_deg; ++i) {        
         ff_pipeline* pipe0 = new ff_pipeline(false, qlen, qlen, true);
         
-        pipe0->add_stage(new Source(app_start_time));
+        pipe0->add_stage(new Source(app_start_time), true);
         Splitter* sp = new Splitter(sink_par_deg);
-        pipe0->add_stage(sp);
+        pipe0->add_stage(sp, true);
         L.push_back(pipe0);
 
-        G1.out << sp;  
+        G1.out << sp;
     }
     for (size_t i=0;i<sink_par_deg; ++i) {
         ff_pipeline* pipe1 = new ff_pipeline(false, qlen, qlen, true);
@@ -381,17 +396,20 @@ int main(int argc, char* argv[]) {
         //double throughput = total_lines / elapsed_time_seconds;
         //double mbs = (double)((total_bytes / 1048576) / elapsed_time_seconds);
         //std::cout << "Measured throughput: " << (int) throughput << " lines/second, " << mbs << " MB/s" << endl;
+
     } else {
         size_t words=0;
         size_t unique=0;
         for(size_t i=0;i<S.size();++i) {
             words += S[i]->words;
             unique+= C[i]->unique();
-            delete S[i];
-            delete C[i];
         }
         std::cout << "words            : " << words << "\n";
         std::cout << "unique           : " << unique<< "\n";
+    }
+    for(size_t i=0;i<S.size();++i) {
+        delete S[i];
+        delete C[i];
     }
     
     return 0;
