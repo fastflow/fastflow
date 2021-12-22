@@ -24,7 +24,7 @@ using namespace ff;
 
 class ff_dsender: public ff_minode_t<message_t> { 
 protected:
-    int neos=0;
+    size_t neos=0;
     int next_rr_destination = 0; //next destiation to send for round robin policy
     std::vector<ff_endpoint> dest_endpoints;
     std::map<int, int> dest2Socket;
@@ -67,9 +67,9 @@ protected:
 
         for (const int& d : destinationsList) m[d] = sck;
 
-        for (const auto& p : m)
+        /*for (const auto& p : m)
             std::cout << p.first << " - "  << p.second << std::endl;
-
+        */
         return 0;
     }
 
@@ -238,24 +238,6 @@ public:
             message_t E_O_S(0,0);
             for(const auto& sck : sockets) sendToSck(sck, &E_O_S);
         }
-
-        /*
-        // receive it from an internal gateway
-        if (internalGateways > 0 && id >= (ssize_t)(this->get_num_inchannels() - internalGateways) && ++Ineos == internalGateways){
-            message_t E_O_S(0,0);
-            for (const auto & sck : type2sck[ConnectionType::INTERNAL]) sendToSck(sck, &E_O_S);
-        } else 
-            ++neos;
-
-        if (neos > 0 && (neos + Ineos) >= (int)this->get_num_inchannels()){
-            // send to all the external
-            message_t E_O_S(0,0);
-            for(const auto& sck : type2sck[ConnectionType::EXTERNAL]) sendToSck(sck, &E_O_S);
-        }
-        */
-
-
-
     }
 
 };
@@ -302,7 +284,7 @@ public:
                 task->chid = rr_iterator->first;
                 if (++rr_iterator == internalDest2Socket.cend()) rr_iterator = internalDest2Socket.cbegin();
             }
-            std::cout << "[Sender] Internal message to be sent to " << task->chid <<" through socket " << internalDest2Socket[task->chid] << " of size " << internalDest2Socket.size() << "!\n";
+
             sendToSck(internalDest2Socket[task->chid], task); 
             delete task;
             return this->GO_ON;

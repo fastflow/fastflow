@@ -17,15 +17,6 @@ struct DummyNode : public ff_node_t<Tin, Tout> {
     Tout* svc(Tin* in){ return nullptr;}
 };
 
-class Wrapper {
-protected:
-	int myID; // used to populate sender field of the header
-
-public:
-	Wrapper() : myID(-1){}
-	void setMyId(int id){myID = id;}
-};
-
 /*
 	Wrapper IN class
 */
@@ -69,34 +60,22 @@ public:
 	ff_node* getOriginal(){ return this->n;	}
 };
 
-template<bool Serialization, typename Tin, typename Tout = Tin>
-struct WrapperINCustom : public WrapperIN {
-	WrapperINCustom() : WrapperIN(new DummyNode<Tin, Tout>(), 1, true){}
-
-	void * svc(void* in) {
-		message_t* msg = (message_t*)in;	   
-		auto* out = new SMmessage_t(this->n->deserializeF(msg->data), msg->sender, msg->chid);
-		delete msg;
-		return out;
-	}
-};
-
 
 /*
 	Wrapper OUT class
 */
 
-class WrapperOUT: public Wrapper, public internal_mo_transformer {
+class WrapperOUT: public internal_mo_transformer {
 private:
     int outchannels; // number of output channels the wrapped node is supposed to have
 	int defaultDestination;
+	int myID;
 public:
 	
-	WrapperOUT(ff_node* n, int outchannels=1, bool cleanup=false, int defaultDestination = -1): Wrapper(), internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination) {
+	WrapperOUT(ff_node* n, int id, int outchannels=1, bool cleanup=false, int defaultDestination = -1): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), myID(id) {
 		this->n = n;
 		this->cleanup= cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
-
 	}
 	
 	bool serialize(void* in, int id) {
@@ -106,7 +85,7 @@ public:
 
 	
 		this->n->serializeF(in, msg->data);
-		msg->sender = get_my_id(); // da cambiare con qualcosa di reale!
+		msg->sender = myID; // da cambiare con qualcosa di reale!
 		msg->chid   = id;
 
 		return this->ff_send_out(msg);
@@ -142,33 +121,19 @@ public:
 	}
 };
 
-template<typename Tin, typename Tout = Tin>
-struct WrapperOUTCustom : public WrapperOUT {
-	WrapperOUTCustom() : WrapperOUT(new DummyNode<Tin, Tout>(), 1, true){}
-	
-	void* svc(void* in){
-		SMmessage_t * input = reinterpret_cast<SMmessage_t*>(in);
-		Wrapper::myID = input->sender;
-		this->serialize(input->task, input->dst);
-		delete input;
-		return this->GO_ON;
-	}
-};
-
-
 /*
 	Wrapper INOUT class
 */
-class WrapperINOUT: public Wrapper, public internal_mi_transformer {
+class WrapperINOUT: public internal_mi_transformer {
 
 private:
     int inchannels;	// number of input channels the wrapped node is supposed to have
     int outchannels; // number of output channels the wrapped node is supposed to have
 	int defaultDestination;
-
+	int myID;
 public:
 
-	WrapperINOUT(ff_node* n, int inchannels=1, bool cleanup=false, int defaultDestination = -1): internal_mi_transformer(this, false), inchannels(inchannels), defaultDestination(defaultDestination){
+	WrapperINOUT(ff_node* n, int id, int inchannels=1, bool cleanup=false, int defaultDestination = -1): internal_mi_transformer(this, false), inchannels(inchannels), defaultDestination(defaultDestination), myID(id){
 		this->n       = n;
 		this->cleanup = cleanup;
         registerCallback(ff_send_out_to_cbk, this);
@@ -185,7 +150,7 @@ public:
 
 	
 		this->n->serializeF(in, msg->data);
-		msg->sender = get_my_id(); // da cambiare con qualcosa di reale!
+		msg->sender = myID; // da cambiare con qualcosa di reale!
 		msg->chid   = id;
 
 		return ff_node::ff_send_out(msg);
