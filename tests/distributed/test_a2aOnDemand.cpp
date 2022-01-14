@@ -120,7 +120,7 @@ int main(int argc, char*argv[]){
     for(int i = 0; i < numWorkerDx; i++)
         dxWorkers.push_back(new MiNode(i*100));
 	
-    a2a.add_firstset(sxWorkers, 1);
+    a2a.add_firstset(sxWorkers, 1);  // enabling on-demand distribution policy
     a2a.add_secondset(dxWorkers);
 	
 

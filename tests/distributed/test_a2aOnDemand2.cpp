@@ -100,7 +100,7 @@ int main(int argc, char*argv[]){
 		sx.push_back(new Source(items));
 		g1.out << sx[i];
     }
-	a2a.add_firstset<Source>(sx, asyncdegree);
+	a2a.add_firstset<Source>(sx, asyncdegree); // enabling on-demand distribution policy with #asyncdegree buffer slots
 
     for(int i = 0; i < numWorkerDx; i++){
 		dx.push_back(new Sink((long)100*(i+1)));
