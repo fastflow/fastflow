@@ -340,7 +340,7 @@ public:
 		sockets.resize(this->dest_endpoints.size());
         for(size_t i=0; i < this->dest_endpoints.size(); i++){
             if ((sockets[i] = tryConnect(this->dest_endpoints[i])) <= 0 ) return -1;
-            
+			if (handshakeHandler(sockets[i], false) < 0) return -1;
             // execute the following block only if the scheduling is onDemand
             
             sockCounters[sockets[i]] = queueDim;
