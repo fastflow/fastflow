@@ -31,7 +31,7 @@ enum Proto {TCP , MPI};
 
 class dGroups {
 public:
-    template <NodeIOTypes> friend class SingleNodeAnnotator;
+    friend struct GroupInterface;
     static dGroups* Instance(){
       static dGroups dg;
       return &dg;
@@ -130,7 +130,7 @@ protected:
     dGroups() : runningGroup() {
         // costruttore
     }
-    std::map<ff_node*, std::pair<NodeIOTypes, std::string>> annotated;
+    std::map<ff_node*, std::string> annotated;
 private:
     inline static dGroups* i = nullptr;
     std::map<std::string, ff_IR> annotatedGroups;
@@ -232,9 +232,9 @@ private:
         
         std::erase_if(children, [&](auto& p){
             if (!annotated.contains(p.first)) return false;
-            auto& ann = annotated[p.first]; 
-            if (((isSrc && p.second == SetEnum::L) || ann.first == NodeIOTypes::IN || ann.first == NodeIOTypes::INOUT) && (isSnk || ann.first == NodeIOTypes::OUT || ann.first == NodeIOTypes::INOUT)){
-              annotatedGroups[ann.second].insertInList(std::make_pair(p.first, p.second)); return true;
+            std::string& groupName = annotated[p.first]; 
+            if (((isSrc && p.second == SetEnum::L) || p.first->isDeserializable()) && (isSnk || p.first->isSerializable())){
+              annotatedGroups[groupName].insertInList(std::make_pair(p.first, p.second)); return true;
             }
             return false;
         });
