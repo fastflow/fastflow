@@ -428,30 +428,7 @@ bool MySet<T>::check_inout(ff_node* node){
     }
 
 void dGroups::consolidateGroups(){
-    for(size_t i = 0; i < parsedGroups.size(); i++){
-        const G & g = parsedGroups[i];
-        if (groups.find(g.name) != groups.end())
-            switch (this->usedProtocol){
-                case Proto::TCP : reinterpret_cast<dGroup*>(groups[g.name])->setEndpoint(ff_endpoint(g.address, g.port)); break;
-                case Proto::MPI : reinterpret_cast<dGroup*>(groups[g.name])->setEndpoint(ff_endpoint(i)); break;
-            }
-        else {
-            std::cout << "Cannot find group: " << g.name << std::endl;
-            throw FF_Exception("A specified group in the configuration file has not been implemented! :(");
-        }
-    }
-
-
-    for(G& g : parsedGroups){
-            dGroup* groupRef = reinterpret_cast<dGroup*>(groups[g.name]);
-            for(std::string& conn : g.Oconn)
-                if (groups.find(conn) != groups.end())
-                    groupRef->setDestination(reinterpret_cast<dGroup*>(groups[conn])->getEndpoint());
-                else throw FF_Exception("A specified destination has a wrong name! :(");
-            
-            groupRef->setExpectedInputConnections(this->expectedInputConnections(g.name)); 
-        }
-
+    
 }
 
 bool dGroups::isBuildByMyBuildingBlock(const std::string gName) {
@@ -460,44 +437,6 @@ bool dGroups::isBuildByMyBuildingBlock(const std::string gName) {
 	
 	return g1->getParent() == g2->getParent();
 }
-
-	
-void dGroups::parseConfig(std::string configFile){
-
-        std::ifstream is(configFile);
-
-        if (!is) throw FF_Exception("Unable to open configuration file for the program!");
-
-        try {
-            cereal::JSONInputArchive ari(is);
-            ari(cereal::make_nvp("groups", parsedGroups));
-            
-            // get the protocol to be used from the configuration file
-            try {
-                std::string tmpProtocol;
-                ari(cereal::make_nvp("protocol", tmpProtocol));
-                if (tmpProtocol == "MPI"){
-                    #ifdef DFF_MPI
-                        this->usedProtocol = Proto::MPI;
-                    #else
-                        std::cout << "NO MPI support! Falling back to TCP\n";
-                        this->usedProtocol = Proto::TCP;
-                    #endif 
-
-                } else this->usedProtocol = Proto::TCP;
-            } catch (cereal::Exception&) {
-                ari.setNextName(nullptr);
-                this->usedProtocol = Proto::TCP;
-            }
-
-        } catch (const cereal::Exception& e){
-            std::cerr << "Error parsing the JSON config file. Check syntax and structure of the file and retry!" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-    }
-
-}
-
 
 
 // redefinition of createGroup methods for ff_a2a and ff_pipeline

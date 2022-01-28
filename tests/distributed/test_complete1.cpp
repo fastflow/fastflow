@@ -15,7 +15,7 @@
 #include <ff/dff.hpp>
 #include <iostream>
 #include <mutex>
-
+using namespace ff;
 #define ITEMS 100
 std::mutex mtx;  // used only for pretty printing
 
@@ -72,9 +72,7 @@ struct Sink : ff::ff_minode_t<int>{
 
 
 int main(int argc, char*argv[]){
-    
     DFF_Init(argc, argv);
-
     ff_pipeline mainPipe;
     ff::ff_a2a a2a;
     Source s;
@@ -92,7 +90,6 @@ int main(int argc, char*argv[]){
     a2a.add_secondset<MiNode>({&dx1, &dx2, &dx3});
 
     //mainPipe.run_and_wait_end();
-
     auto g1 = sp.createGroup("G1");
     auto g2 = a2a.createGroup("G2");
     auto g3 = sinkp.createGroup("G3");

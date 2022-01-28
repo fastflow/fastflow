@@ -48,7 +48,6 @@
 
 #ifdef DFF_ENABLED
 
-#include <iostream>
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_typetraits.hpp>
 #include <cereal/cereal.hpp>
@@ -59,6 +58,10 @@
 
 
 namespace ff {
+
+#ifdef DFF_ENABLED
+struct GroupInterface; 
+#endif
 
 static void* FF_EOS           = (void*)(ULLONG_MAX);     /// automatically propagated
 static void* FF_EOS_NOFREEZE  = (void*)(ULLONG_MAX-1);   /// not automatically propagated
@@ -1248,8 +1251,12 @@ protected:
     std::function<void(void*, dataBuffer&)> serializeF;
     std::function<void*(dataBuffer&)> deserializeF;
 
-    bool isSerializable(){ return (bool)serializeF; }
-    bool isDeserializable(){ return (bool)deserializeF; }
+    virtual bool isSerializable(){ return (bool)serializeF; }
+    virtual bool isDeserializable(){ return (bool)deserializeF; }
+    virtual decltype(serializeF) getSerializationFunction(){return serializeF;}
+    virtual decltype(deserializeF) getDeserializationFunction(){return deserializeF;}
+
+    GroupInterface createGroup(std::string);
 #endif
     
 protected:

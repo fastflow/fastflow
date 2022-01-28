@@ -7,9 +7,10 @@
  *
  * 
  *  G0: Source
- *  G1: Forwarer1, Forwarder2, Sink1
- *  G2: Forwarder3, Sink2
- *  G3: StringPrinter
+ *  G1: Forwarer1
+ *  G2: Sink1
+ *  G3: Forwarder3, Sink2
+ *  G4: StringPrinter
  *
  */
 
