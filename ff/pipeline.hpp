@@ -41,17 +41,11 @@
 #include <mammut/mammut.hpp>
 #endif
 
-#ifdef DFF_ENABLED
-#include <ff/distributed/ff_dgroups.hpp>
-
-#endif
-
 
 namespace ff {
 
 // forward declarations
 class ff_pipeline;
-class dGroup;
 static inline int optimize_static(ff_pipeline&, const OptLevel&);
 template<typename T>    
 static inline int combine_with_firststage(ff_pipeline&,T*,bool=false);
@@ -1204,13 +1198,10 @@ public:
      * 
      * Blocking behaviour w.r.t. main thread to be clarified
      */
+#ifdef DFF_ENABLED
+    int run_and_wait_end();
+#else
     int run_and_wait_end() {
-        #ifdef DFF_ENABLED
-        dGroups::Instance()->run_and_wait_end(this);
-        return 0;
-        #endif
-
-
         if (isfrozen()) {  // TODO 
             error("PIPE: Error: feature not yet supported\n");
             return -1;
@@ -1220,6 +1211,7 @@ public:
         if (wait()<0) return -1;
         return 0;
     }
+#endif
 
     /**
      * \related ff_pipe
@@ -1486,7 +1478,17 @@ public:
 #endif
 
 #ifdef DFF_ENABLED
-    ff::dGroup& createGroup(std::string);
+    virtual bool isSerializable(){ 
+        svector<ff_node*> outputs; this->get_out_nodes(outputs);
+        for(ff_node* output: outputs) if (!output->isSerializable()) return false;
+        return true;
+    }
+
+    virtual bool isDeserializable(){ 
+        svector<ff_node*> inputs; this->get_in_nodes(inputs);
+        for(ff_node* input: inputs) if(!input->isDeserializable()) return false;
+        return true; 
+    }
 #endif
     
 protected:

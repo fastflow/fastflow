@@ -5,6 +5,7 @@
 #include <iostream>
 #include <exception>
 #include <string>
+#include <utility>
 #include <sys/socket.h>
 #include <sys/un.h>
 
@@ -97,7 +98,7 @@ struct ack_t {
 
 struct ff_endpoint {
     ff_endpoint(){}
-    ff_endpoint(std::string addr, int port) : address(addr), port(port) {}
+    ff_endpoint(std::string addr, int port) : address(std::move(addr)), port(port) {}
     ff_endpoint(int rank) : port(rank) {}
     const int getRank() {return port;}
 	std::string address, groupName;

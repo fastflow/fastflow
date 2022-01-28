@@ -25,7 +25,7 @@
 
 CXXFLAGS            += -std=c++20
 ifdef DEBUG
-    OPTIMIZE_FLAGS  += -g -fno-inline-functions
+    OPTIMIZE_FLAGS  += -g -ggdb -fno-inline-functions
 else
     OPTIMIZE_FLAGS  += -O3 -finline-functions -DNDEBUG
 endif
@@ -45,12 +45,12 @@ endif
 ifdef FF_HOME
     INCS            += -I$(FF_HOME)
 else
-    INCS            += -I ~/fastflow
+    INCS            += -I ~/SPM/fastflow
 endif
 ifdef CEREAL_HOME
     INCS            += -I$(CEREAL_HOME)
 else
-    INCS            += -I ~/cereal
+    INCS            += -I ~/SPM/cereal
 endif
 
 

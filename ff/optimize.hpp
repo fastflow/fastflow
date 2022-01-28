@@ -793,6 +793,5 @@ static inline int optimize_static(ff_pipeline& pipe, const OptLevel& opt=OptLeve
 }
 
 
-    
-} // namespace ff 
+} // namespace ff
 #endif /* FF_OPTIMIZE_HPP */

@@ -39,9 +39,6 @@ namespace ff {
 
 // forward declarations
 static ff_node* ispipe_getlast(ff_node*);
-#ifdef DFF_ENABLED
-class dGroup;
-#endif
     
 class ff_a2a: public ff_node {
     friend class ff_farm;
@@ -456,6 +453,9 @@ public:
         return ret;
     }
     
+#ifdef DFF_ENABLED
+    int run_and_wait_end();
+#else
     int run_and_wait_end() {
         if (isfrozen()) {  // TODO 
             error("A2A: Error: feature not yet supported\n");
@@ -465,6 +465,7 @@ public:
         if (wait()<0) return -1;
         return 0;
     }
+#endif
 
     /**
      * \brief checks if the node is running 
@@ -695,7 +696,17 @@ public:
 #endif
 
 #ifdef DFF_ENABLED
-    ff::dGroup& createGroup(std::string);
+    virtual bool isSerializable(){ 
+        svector<ff_node*> outputs; this->get_out_nodes(outputs);
+        for(ff_node* output: outputs) if (!output->isSerializable()) return false;
+        return true;
+    }
+
+    virtual bool isDeserializable(){ 
+        svector<ff_node*> inputs; this->get_in_nodes(inputs);
+        for(ff_node* input: inputs) if(!input->isDeserializable()) return false;
+        return true; 
+    }
 #endif
 
     

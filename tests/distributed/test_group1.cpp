@@ -113,17 +113,16 @@ int main(int argc, char*argv[]){
     a2a.add_secondset<MiNode>({&dx1, &dx2, &dx3});
 
 	//----- defining the distributed groups ------
+    auto g1 = source.createGroup("G1");
+	auto g2 = a2a.createGroup("G2");
+	auto g3 = a2a.createGroup("G3");
+	auto g4 = sink.createGroup("G4");
 
-    dGroup g1 = source.createGroup("G1");
-	dGroup g2 = a2a.createGroup("G2");
-	dGroup g3 = a2a.createGroup("G3");
-	dGroup g4 = sink.createGroup("G4");
-
-    g2.in  << &sx1;
-	g2.out << &dx1 << &dx2;
+    g2.in  << &sx1 << &dx1 << &dx2;
+	g2.out << &sx1 << &dx1 << &dx2;
 	
-    g3.in  << &sx2;
-	g3.out << &dx3;
+    g3.in  << &sx2 << &dx3;
+	g3.out << &dx3 << &sx2;
     // -------------------------------------------
 
 	// running the distributed groups
