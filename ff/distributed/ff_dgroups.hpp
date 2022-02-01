@@ -217,13 +217,14 @@ private:
         if (!pair.second.contains(this->runningGroup))
           continue;
 
-        bool isSrc = isSource(pair.first, parentPipe);
-        bool isSnk = isSink(pair.first, parentPipe);
+        bool isSrc = runningGroup_IR.isSource = isSource(pair.first, parentPipe);
+        bool isSnk = runningGroup_IR.isSink = isSink(pair.first, parentPipe);
         // check if from the under analysis 1st level building block it has been created just one group
         if (pair.second.size() == 1){
           // if the unique group is not the one i'm going to run just skip this 1st level building block
-          if ((isSrc || pair.first->isDeserializable()) && (isSnk || pair.first->isSerializable()))
+          if ((isSrc || pair.first->isDeserializable()) && (isSnk || pair.first->isSerializable())){
             runningGroup_IR.insertInList(std::make_pair(pair.first, SetEnum::L), true);
+          }
           continue; // skip anyway
         }
         
@@ -239,11 +240,14 @@ private:
             return false;
         });
 
+        // compute coverage for the running group
+        runningGroup_IR.computeCoverage();
+
         if (!children.empty()){
           // seconda passata per verificare se ce da qualche parte c'è copertura completa altrimenti errore
           for(const std::string& gName : pair.second){
             ff_IR& ir = annotatedGroups[gName];
-            ir.computeCoverage();
+            if (gName != runningGroup) ir.computeCoverage();
             if (ir.coverageL)
               std::erase_if(children, [&](auto& p){
                 if (p.second == SetEnum::R && (isSnk || p.first->isSerializable()) && p.first->isDeserializable()){
