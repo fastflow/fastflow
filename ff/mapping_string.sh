@@ -62,7 +62,7 @@ read -p "Do you want that I change the ./config.hpp file for you? (y/N) " -n 1 -
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]
 then
-    sed -i -e "s/#define FF_MAPPING_STRING \"\"/#define FF_MAPPING_STRING \"$string\"/1" ./config.hpp
+    sed -i -e "s/#define FF_MAPPING_STRING \".*\"/#define FF_MAPPING_STRING \"$string\"/1" config.hpp
     if [ $? -eq 0 ]; then
 	echo "This is the new FF_MAPPING_STRING variable in the ./config.hpp file:"
 	echo -e "\e[1m $(grep -m1 "^#define FF_MAPPING_STRING \"" config.hpp) \e[0m"
@@ -70,7 +70,7 @@ then
 	echo "something went wrong when replacing the variable FF_MAPPING_STRING...."
 	exit 1
     fi
-    sed -i -e "s/#define FF_NUM_CORES -1/#define FF_NUM_CORES $logical/1" ./config.hpp
+    sed -i -e "s/#define FF_NUM_CORES [-]\{0,1\}[[:digit:]].*/#define FF_NUM_CORES $logical/1" ./config.hpp
     if [ $? -eq 0 ]; then	      
     	echo "This is the new FF_NUM_CORES variable in the ./config.hpp file:"
 	echo -e "\e[1m $(grep -m1 "^#define FF_NUM_CORES " config.hpp) \e[0m"
@@ -78,7 +78,7 @@ then
 	echo "something went wrong when replacing the variable FF_NUM_CORES...."
 	exit 1
     fi
-    sed -i -e "s/#define FF_NUM_REAL_CORES -1/#define FF_NUM_REAL_CORES $physical/1" ./config.hpp
+    sed -i -e "s/#define FF_NUM_REAL_CORES [-]\{0,1\}[[:digit:]].*/#define FF_NUM_REAL_CORES $physical/1" ./config.hpp
     if [ $? -eq 0 ]; then
 	echo "This is the new FF_NUM_REAL_CORES variable in the ./config.hpp file:"
 	echo -e "\e[1m $(grep -m1 "^#define FF_NUM_REAL_CORES " config.hpp) \e[0m"	
