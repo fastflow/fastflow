@@ -1346,7 +1346,7 @@ private:
             bool skipfirstpop = filter->skipfirstpop(); 
             bool exit=false;            
             bool filter_outpresent = false;
-            ssize_t neos=input_neos;
+            size_t neos=input_neos;
 
             
             // if the node is a combine where the last stage is a multi-output
