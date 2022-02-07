@@ -70,18 +70,22 @@ public:
     std::set<ff_node*> L, R;
     bool coverageL = false, coverageR = false;
     bool isSource = false, isSink = false;
+    bool hasReceiver = false, hasSender = false; // todo settare qui.
 
     ff_node* parentBB;
 
     ff_endpoint listenEndpoint;
     std::vector<ff_endpoint> destinationEndpoints;
 
-    size_t expectedEOS;
+    size_t expectedEOS = 0;
 
     // liste degli index dei nodi input/output nel builiding block in the shared memory context. The first list: inputL will become the rouitng table
     std::vector<int> inputL, outputL, inputR, outputR;
 
     bool isVertical(){return (L.empty() + R.empty()) == 1;}
+
+    bool hasLeftChildren() {return !L.empty();}
+    bool hasRightChildren() {return !R.empty();}
 
     void insertInList(std::pair<ff_node*, SetEnum> bb, bool _wholeParent = false){
         wholeParent = _wholeParent;

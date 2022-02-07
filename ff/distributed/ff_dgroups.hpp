@@ -176,7 +176,8 @@ private:
 
     void prepareIR(ff_pipeline* parentPipe){
       ff::ff_IR& runningGroup_IR = annotatedGroups[this->runningGroup];
-
+      ff_node* previousStage = getPreviousStage(parentPipe, runningGroup_IR.parentBB);
+      ff_node* nextStage = getNextStage(parentPipe, runningGroup_IR.parentBB);
       // TODO: check coverage all 1st level
 
       for(size_t i = 0; i < parsedGroups.size(); i++){
@@ -189,22 +190,21 @@ private:
         annotatedGroups[g.name].listenEndpoint = this->usedProtocol == Proto::TCP ? ff_endpoint(g.address, g.port) : ff_endpoint(i);
       }
   
-      auto g = std::find_if(parsedGroups.begin(), parsedGroups.end(), [this](const G& g){return g.name == getRunningGroup();});
+
+      /*auto g = std::find_if(parsedGroups.begin(), parsedGroups.end(), [this](const G& g){return g.name == getRunningGroup();});
       for(std::string& conn : g->Oconn)
           // build the list of outgoing connections for each group
           if (annotatedGroups.find(conn) != annotatedGroups.end())
               runningGroup_IR.destinationEndpoints.push_back(annotatedGroups[conn].listenEndpoint);
           else throw FF_Exception("A specified destination has a wrong name! :(");
-      
+      */
       
       // compute how many expected EOS the future running must wait before exiting
-      size_t expectedEOS = 0;
+      /*size_t expectedEOS = 0;
       for (const G& g : parsedGroups)
         if (g.name != this->runningGroup)
           for (const std::string& conn : g.Oconn)
-            if (conn == this->runningGroup) expectedEOS++;
-      runningGroup_IR.expectedEOS = expectedEOS;
-
+            if (conn == this->runningGroup) expectedEOS++;*/
 
       // build the map parentBB -> <groups names>
       std::map<ff_node*, std::set<std::string>> parentBB2GroupsName;
@@ -213,17 +213,19 @@ private:
       // iterate over the 1st level building blocks and the list of create groups 
       for(const auto& pair : parentBB2GroupsName){
 
-        //if the current group is build from another building block we can just skip this!
-        if (!pair.second.contains(this->runningGroup))
+        //just build the current previous the current and the next stage of the parentbuilding block i'm going to exeecute  //// TODO: reprhase this comment!
+        if (!(pair.first == previousStage || pair.first == runningGroup_IR.parentBB || pair.first == nextStage))
           continue;
 
-        bool isSrc = runningGroup_IR.isSource = isSource(pair.first, parentPipe);
-        bool isSnk = runningGroup_IR.isSink = isSink(pair.first, parentPipe);
+        bool isSrc = isSource(pair.first, parentPipe);
+        bool isSnk = isSink(pair.first, parentPipe);
         // check if from the under analysis 1st level building block it has been created just one group
         if (pair.second.size() == 1){
           // if the unique group is not the one i'm going to run just skip this 1st level building block
           if ((isSrc || pair.first->isDeserializable()) && (isSnk || pair.first->isSerializable())){
-            runningGroup_IR.insertInList(std::make_pair(pair.first, SetEnum::L), true);
+            auto& ir_ = annotatedGroups[*pair.second.begin()];
+            ir_.insertInList(std::make_pair(pair.first, SetEnum::L), true);
+            ir_.isSink = isSnk; ir_.isSource = isSrc;
           }
           continue; // skip anyway
         }
@@ -240,14 +242,11 @@ private:
             return false;
         });
 
-        // compute coverage for the running group
-        runningGroup_IR.computeCoverage();
-
         if (!children.empty()){
           // seconda passata per verificare se ce da qualche parte c'è copertura completa altrimenti errore
           for(const std::string& gName : pair.second){
             ff_IR& ir = annotatedGroups[gName];
-            if (gName != runningGroup) ir.computeCoverage();
+            ir.computeCoverage();
             if (ir.coverageL)
               std::erase_if(children, [&](auto& p){
                 if (p.second == SetEnum::R && (isSnk || p.first->isSerializable()) && p.first->isDeserializable()){
@@ -270,14 +269,63 @@ private:
             std::cerr << "Some building block has not been annotated and no coverage found! You missed something. Aborting now" << std::endl;
             abort();
           }
-        }
+        } else // compute the coverage anyway 
+          for(const std::string& gName : pair.second) annotatedGroups[gName].computeCoverage();
+
       }
+
+      //############# compute the number of excpected input connections
+      if (runningGroup_IR.hasRightChildren()){
+        auto& currentGroups = parentBB2GroupsName[runningGroup_IR.parentBB];
+        runningGroup_IR.expectedEOS = std::count_if(currentGroups.cbegin(), currentGroups.cend(), [&](auto& gName){return (!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasLeftChildren());});
+        // if the current group is horizontal count out itsleft from the all horizontals
+        if (!runningGroup_IR.isVertical()) runningGroup_IR.expectedEOS -= 1;
+      }
+      // if the previousStage exists, count all the ouput groups pointing to the one i'm going to run
+      if (previousStage && runningGroup_IR.hasLeftChildren())
+        runningGroup_IR.expectedEOS += outputGroups(parentBB2GroupsName[previousStage]).size();
+
+
+      //############ compute the name of the outgoing connection groups
+      if (runningGroup_IR.parentBB->isAll2All() && runningGroup_IR.isVertical() && runningGroup_IR.hasLeftChildren()){
+          // inserisci tutte i gruppi di questo bb a destra
+          for(const auto& gName: parentBB2GroupsName[runningGroup_IR.parentBB])
+            if (!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasRightChildren())
+              runningGroup_IR.destinationEndpoints.push_back(annotatedGroups[gName].listenEndpoint);
+      } else {
+        if (!runningGroup_IR.isVertical()){
+          // inserisci tutti i gruppi come sopra
+          for(const auto& gName: parentBB2GroupsName[runningGroup_IR.parentBB])
+            if ((!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasRightChildren()) && gName != runningGroup)
+              runningGroup_IR.destinationEndpoints.push_back(annotatedGroups[gName].listenEndpoint);
+        }
+
+        if (nextStage)
+          for(const auto& gName : inputGroups(parentBB2GroupsName[nextStage]))
+            runningGroup_IR.destinationEndpoints.push_back(annotatedGroups[gName].listenEndpoint);
+      }
+      
 
       runningGroup_IR.buildIndexes();
 
       runningGroup_IR.print();
     }
+
+  std::set<std::string> outputGroups(std::set<std::string> groupNames){
+    if (groupNames.size() > 1)
+      std::erase_if(groupNames, [this](const auto& gName){return (annotatedGroups[gName].isVertical() && annotatedGroups[gName].hasLeftChildren());});
+    return groupNames;
+  }
+
+  std::set<std::string> inputGroups(std::set<std::string> groupNames){
+    if (groupNames.size() > 1) 
+      std::erase_if(groupNames,[this](const auto& gName){return (annotatedGroups[gName].isVertical() && annotatedGroups[gName].hasRightChildren());});
+    return groupNames;
+  }
+
 };
+
+
 
 static inline int DFF_Init(int& argc, char**& argv){
     std::string configFile, groupName;  

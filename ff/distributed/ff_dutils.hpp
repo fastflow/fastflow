@@ -54,6 +54,24 @@ static inline bool isSink(const ff_node* n, const ff_pipeline* p){
     return p->getStages().back() == n;
 }
 
+static inline ff_node* getPreviousStage(ff_pipeline* p, ff_node* s){
+    ff::svector<ff_node*> stages = p->getStages();
+    for(size_t i = 1; i < stages.size(); i++)
+        if (stages[i] == s) return stages[--i];
+    
+    return nullptr;
+}
+
+static inline ff_node* getNextStage(ff_pipeline* p, ff_node* s){
+    ff::svector<ff_node*> stages = p->getStages();
+    for(size_t i = 0; i < stages.size() - 1; i++)
+        if(stages[i] == s) return stages[++i];
+    
+    return nullptr;
+}
+
+
+
 
 
 
