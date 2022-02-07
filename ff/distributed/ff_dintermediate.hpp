@@ -101,15 +101,18 @@ public:
         std::cout << std::boolalpha << "Source group: " << isSource << std::endl;
         std::cout << std::boolalpha << "Sink group: " << isSink << std::endl;
         std::cout << std::boolalpha << "Coverage Left: " << coverageL << std::endl;
-        std::cout << std::boolalpha << "Coverage Right: " << coverageR << std::endl;
+        std::cout << std::boolalpha << "Coverage Right: " << coverageR << std::endl << std::endl;
 
-        std::cout << "Listen endpoint: " << listenEndpoint.address << ":" << listenEndpoint.port << std::endl;
+        std::cout << std::boolalpha << "Has Receiver: " << hasReceiver << std::endl;
+        std::cout << "Expected input connections: " << expectedEOS << std::endl;
+        std::cout << "Listen endpoint: " << listenEndpoint.address << ":" << listenEndpoint.port << std::endl << std::endl;
+
+        std::cout << std::boolalpha << "Has Sender: " << hasSender << std::endl;
         std::cout << "Destination endpoints: " << std::endl;
         for(ff_endpoint& e : destinationEndpoints)
-            std::cout << "\t* " << e.address << ":" << e.port << std::endl;
+            std::cout << "\t* " << e.groupName << "\t[[" << e.address << ":" << e.port << "]]" << std::endl;
         
-        std::cout << "Expected input connections: " << expectedEOS << std::endl;
-        std::cout << "Index Input Left: ";
+        std::cout << "\n\nIndex Input Left: ";
         for(int i : inputL) std::cout << i << " ";
         std::cout << "\n";
 

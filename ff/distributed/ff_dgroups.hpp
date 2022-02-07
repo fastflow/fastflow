@@ -185,9 +185,11 @@ private:
 
         // throw an error if a group in the configuration has not been annotated in the current program
         if (!annotatedGroups.contains(g.name)) throw FF_Exception("present in the configuration file has not been implemented! :(");
-        
+        auto endpoint = this->usedProtocol == Proto::TCP ? ff_endpoint(g.address, g.port) : ff_endpoint(i);
+        endpoint.groupName = g.name;
+
         // annotate the listen endpoint for the specified group
-        annotatedGroups[g.name].listenEndpoint = this->usedProtocol == Proto::TCP ? ff_endpoint(g.address, g.port) : ff_endpoint(i);
+        annotatedGroups[g.name].listenEndpoint = endpoint;
       }
   
 
@@ -285,6 +287,7 @@ private:
       if (previousStage && runningGroup_IR.hasLeftChildren())
         runningGroup_IR.expectedEOS += outputGroups(parentBB2GroupsName[previousStage]).size();
 
+      if (runningGroup_IR.expectedEOS > 0) runningGroup_IR.hasReceiver = true;
 
       //############ compute the name of the outgoing connection groups
       if (runningGroup_IR.parentBB->isAll2All() && runningGroup_IR.isVertical() && runningGroup_IR.hasLeftChildren()){
@@ -304,6 +307,8 @@ private:
           for(const auto& gName : inputGroups(parentBB2GroupsName[nextStage]))
             runningGroup_IR.destinationEndpoints.push_back(annotatedGroups[gName].listenEndpoint);
       }
+
+      if (!runningGroup_IR.destinationEndpoints.empty()) runningGroup_IR.hasSender = true;
       
 
       runningGroup_IR.buildIndexes();
