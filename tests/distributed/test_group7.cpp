@@ -199,7 +199,7 @@ int main(int argc, char*argv[]){
 	auto G4 = s3.createGroup("G4");
 
 	G2 << &pipe1 << &pipeA2A1;
-	G2 << &pipe2 << &pipeA2A2;
+	G3 << &pipe2 << &pipeA2A2;
 	
     // -------------------------------------------
 
