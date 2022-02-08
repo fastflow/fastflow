@@ -9,8 +9,20 @@
  *
  *             /<--------- a2a -------->/
  *  /<-------------------- pipeMain ------------------>/
+ *
+ *  distributed version:
+ *
+ *     G1                        G2                   G3
+ *   --------          -----------------------      ------
+ *  |        |        |           |-> MiNode1 |    |      |
+ *  | Source | ---->  | MoNode1 ->|           | -->| Sink |   
+ *  |        |        |           |-> MiNode2 |    |      |
+ *   --------         | MoNode2 ->|           |     ------
+ *                    |           |-> MiNode3 |
+ *                     -----------------------
+ *              
+ *                               
  */
-
 
 #include <ff/dff.hpp>
 #include <iostream>
@@ -89,17 +101,15 @@ int main(int argc, char*argv[]){
     a2a.add_firstset<MoNode>({&sx1, &sx2, &sx3});
     a2a.add_secondset<MiNode>({&dx1, &dx2, &dx3});
 
-    //mainPipe.run_and_wait_end();
+	//----- defining the distributed groups ------
+
     auto g1 = sp.createGroup("G1");
     auto g2 = a2a.createGroup("G2");
     auto g3 = sinkp.createGroup("G3");
-
-
-    g1.out << &s;
-    g2.in << &sx1 << &sx2 << &sx3; g2.out << &dx1 << &dx2 << &dx3;
-    g3.in << &sink;
-
-   if (mainPipe.run_and_wait_end()<0) {
+	
+    // -------------------------------------------
+	
+	if (mainPipe.run_and_wait_end()<0) {
 		error("running mainPipe\n");
 		return -1;
 	}
