@@ -354,7 +354,7 @@ int main(int argc, char* argv[]) {
         pipe0->add_stage(sp, true);
         L.push_back(pipe0);
 
-        G1.out << sp;
+        G1 << pipe0;
     }
     for (size_t i=0;i<sink_par_deg; ++i) {
         ff_pipeline* pipe1 = new ff_pipeline(false, qlen, qlen, true);
@@ -364,7 +364,7 @@ int main(int argc, char* argv[]) {
         pipe1->add_stage(S[i]);
         R.push_back(pipe1);
 
-        G2.in << C[i];
+        G2 << pipe1;
     }
 
     a2a.add_firstset(L, 0, true);

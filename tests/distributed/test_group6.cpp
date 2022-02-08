@@ -56,7 +56,6 @@ struct W_left: ff_minode_t<std::string> {
 struct W_right: ff_monode_t<std::string> {
 
     std::string* svc(std::string* in){
-        const std::lock_guard<std::mutex> lock(mtx);
 		long outchannels = get_num_outchannels();
 		
         for(long i = 0; i < outchannels; i++) 

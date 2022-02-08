@@ -71,12 +71,8 @@ int main(int argc, char*argv[]){
 
 	//----- defining the distributed groups ------
 
-	dGroup g1 = a2a.createGroup("G1");
-	dGroup g2 = a2a.createGroup("G2");
-
-	g1.out << &source1 << &source2 << &source3;  // &sink1 automatically added to G1
-	//g1.in << &sink1;		// redundant!!!
-	g2.in  << &sink2;
+	a2a.createGroup("G1") << &source1 << &source2 << &source3 << &sink1; 
+	a2a.createGroup("G2") << &sink2;
 	
     // -------------------------------------------
 	
