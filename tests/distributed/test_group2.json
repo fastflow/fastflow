@@ -1,0 +1,24 @@
+{
+    "protocol" : "TCP",
+    "groups" : [
+    {   
+        "endpoint" : "localhost:8004",
+        "name" : "G1",
+        "OConn" : ["G2", "G3"]
+    },
+    { 
+        "name" : "G2",
+        "endpoint": "localhost:8005",
+	    "OConn" : ["G3", "G4"]
+    },
+    {
+        "name" : "G3",
+        "endpoint": "localhost:8006",
+	    "OConn" : ["G2", "G4"]
+    },
+    {
+        "name" : "G4",
+        "endpoint": "localhost:8007"
+    }
+    ]
+}
