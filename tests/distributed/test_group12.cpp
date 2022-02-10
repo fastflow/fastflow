@@ -1,17 +1,19 @@
 /*  
- *           |-> Helper->Node2 -->|    |->  Helper->Node3 -->|             
- *           |                    |    |                     |
- *   Node1-->|                    | -> |->  Helper->Node3 -->| -> Node4    
- *           |-> Helper->Node2 -->|    |                     |
- *                                     |->  Helper->Node3 -->|
+ *           |-> Helper->Node21 -->|    |->  Helper->Node31 -->|             
+ *           |                     |    |                      |
+ *   Node1-->|-> Helper->Node22 -->| -> |->  Helper->Node32 -->| -> Node4    
+ *           |                     |    |                      |
+ *           |-> Helper->Node23 -->|    |->  Helper->Node33 -->|
  *
- *   /<---------- a2a0 ---------->/   /<------------ a2a1 ------------>/
- *                     G1                        G2
+ *   /<---------- a2a0 ---------->/   /<------------ a2a ------------>/
  *   /<---------------------------- pipe ---------------------------->/
  *
- *  G1: a2a0
- *  G2: a2a1
- *
+ * G1: Node1
+ * G2: Helper->Node21 (combL1) and Helper->Node22 (combL2)  
+ * G3: Helper->Node23 (combL3)
+ * G4: Helper->Node31 (combR1)
+ * G5: Helper->Node32 (combR2) and Helper->Node33 (combR3)
+ * G6: Node4
  */
 
 
@@ -67,7 +69,7 @@ struct Node3: ff_monode_t<myTask_t>{
 struct Node4: ff_minode_t<myTask_t>{
 	Node4(long ntasks):ntasks(ntasks) {}
     myTask_t* svc(myTask_t* t){
-		//std::cout << "Node4: from (" << get_channel_id() << ") " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n" << std::flush;
+		//std::cout << "Node4: from (" << get_channel_id() << ") " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";
 		++processed;
 		delete t;
         return GO_ON;
@@ -99,26 +101,44 @@ int main(int argc, char*argv[]){
 		
     ff_pipeline pipe;
 	Node1  n1(ntasks);
-	Helper h21, h22;
-	Node2  n21, n22;
+	Helper h21, h22, h23;
+	Node2  n21, n22, n23;
 	Helper h31, h32, h33;
 	Node3  n31, n32, n33;
 	Node4  n4(ntasks);
 	ff_a2a      a2a0;
 	a2a0.add_firstset<Node1>({&n1});
-    a2a0.add_secondset<ff_node>({new ff_comb(&h21, &n21), new ff_comb(&h22, &n22)}, true);
+	ff_comb combL1(&h21, &n21); 
+	ff_comb combL2(&h22, &n22);
+	ff_comb combL3(&h23, &n23);
+    a2a0.add_secondset<ff_comb>({&combL1, &combL2, &combL3});
 	ff_a2a      a2a1;
-	a2a1.add_firstset<ff_node>({new ff_comb(&h31, &n31), new ff_comb(&h32, &n32), new ff_comb(&h33, &n33)}, 0, true);
+	ff_comb combR1(&h31, &n31); 
+	ff_comb combR2(&h32, &n32); 
+	ff_comb combR3(&h33, &n33);
+	a2a1.add_firstset<ff_comb>({&combR1, &combR2, &combR3});
     a2a1.add_secondset<Node4>({&n4});
 	pipe.add_stage(&a2a0);
 	pipe.add_stage(&a2a1);
 	
+    //----- defining the distributed groups ------
+
     auto G1 = a2a0.createGroup("G1");
-    auto G2 = a2a1.createGroup("G2");
+	auto G2 = a2a0.createGroup("G2");
+	auto G3 = a2a0.createGroup("G3");
+    auto G4 = a2a1.createGroup("G4");
+	auto G5 = a2a1.createGroup("G5");
+	auto G6 = a2a1.createGroup("G6");
+
+	G1 << &n1;	
+    G2 << &combL1 << &combL2; 
+    G3 << &combL3;
+	G4 << &combR1;
+	G5 << &combR2 << &combR3;
+	G6 << &n4;
 	
-    G1.out << &n21 << &n22;
-    G2.in  << &h31 << &h32 << &h33;
-	
+    // -------------------------------------------	
+
 	if (pipe.run_and_wait_end()<0) {
 		error("running the main pipe\n");
 		return -1;
