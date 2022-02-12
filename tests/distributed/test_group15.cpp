@@ -8,14 +8,14 @@
  *                       |--> MiNode -->|
  *
  *             /<--------- a2a -------->/
- *  /<------------ pipe1 -------------->/  /<- pipe2 ->/
+ *  /<------------- pipe -------------->/ 
  *  /<-------------------- pipeMain ------------------>/
  *
  *
  *  distributed version:
  *
  *   --------          --------
- *  |  pipe1 | ---->  |  pipe2 |
+ *  |  pipe  | ---->  |  Sink  |
  *  |        |        |        |
  *   --------          --------
  *     G1                 G2
@@ -91,33 +91,29 @@ int main(int argc, char*argv[]){
 	}
 
 	// defining the concurrent network
-    ff_pipeline mainPipe;
-    ff_a2a a2a;
+    ff_pipeline pipe;
     Source s;
-    ff_pipeline sp;
-	sp.add_stage(&s);
-	sp.add_stage(&a2a);
-    ff_pipeline sinkp;
-	Sink sink;
-	sinkp.add_stage(&sink);
-    mainPipe.add_stage(&sp);
-    mainPipe.add_stage(&sinkp);
-
+    ff_a2a a2a;
     MoNode sx1, sx2, sx3;
     MiNode dx1, dx2, dx3;
-
     a2a.add_firstset<MoNode>({&sx1, &sx2, &sx3});
     a2a.add_secondset<MiNode>({&dx1, &dx2, &dx3});
-	// -----------------------
+	pipe.add_stage(&s);
+	pipe.add_stage(&a2a);
+	
+	Sink sink;
+	ff_pipeline mainPipe;
+	
+	mainPipe.add_stage(&pipe);
+    mainPipe.add_stage(&sink);
 
-	// defining the distributed groups
-    dGroup g1 = sp.createGroup("G1");
-    dGroup g3 = sinkp.createGroup("G2");
+	//----- defining the distributed groups ------
+	
+    auto g1 = pipe.createGroup("G1");
+    auto g2 = sink.createGroup("G2");
 
-    g1.out << &dx1 << &dx2 << &dx3;
-    g3.in << &sink;
-    // ----------------------
-
+    // -------------------------------------------
+	
 	// running the distributed groups
     if (mainPipe.run_and_wait_end()<0) {
 		error("running mainPipe\n");

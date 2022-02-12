@@ -1,13 +1,16 @@
 /*  
- *                        
- *   Node1-->Node2 --> Node3 --> Node4 
+ *                           |-> Node31 -->|             
+ *             |-> Node21 -->|             |
+ *   Node1---->|             |-> Node32 -->| ----> Node4    
+ *             |-> Node22 -->|             |
+ *                           |-> Node33 -->|
  *
- *   /<-- pipe0-->//<-- pipe1 -->//<-pipe2->/
- *   /<----------- pipe ------------>/
+ *             /<--------- a2a0 ---------->/
+ *   /<--------------------- pipe --------------------->/
  *
- *  G1: pipe0
- *  G2: pipe1
- *  G3: pipe2
+ * G1: pipe0
+ * G2: a2a0
+ * G3: pipe1
  */
 
 
@@ -30,8 +33,7 @@ struct myTask_t {
 
 };
 
-
-struct Node1: ff_node_t<myTask_t>{
+struct Node1: ff_monode_t<myTask_t>{
 	Node1(long ntasks):ntasks(ntasks) {}
     myTask_t* svc(myTask_t*){
         for(long i=0; i< ntasks; i++) {
@@ -46,24 +48,22 @@ struct Node1: ff_node_t<myTask_t>{
 	const long ntasks;
 };
 
-struct Node2: ff_node_t<myTask_t>{
+struct Node2: ff_monode_t<myTask_t>{
     myTask_t* svc(myTask_t* t){
-		t->str += std::string(" World");		
-		//std::cout << "Node2: " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";
-
+		t->str += std::string(" World") + std::to_string(get_my_id());
         return t;
     }
 };
 
-struct Node3: ff_node_t<myTask_t>{
+struct Node3: ff_minode_t<myTask_t>{ 
     myTask_t* svc(myTask_t* t){
-		t->S.t  += 1;
-		t->S.f  += 1.0;
+		t->S.t  += get_my_id();
+		t->S.f  += get_my_id()*1.0;
         return t;
     }
 };
 
-struct Node4: ff_node_t<myTask_t>{
+struct Node4: ff_minode_t<myTask_t>{
 	Node4(long ntasks):ntasks(ntasks) {}
     myTask_t* svc(myTask_t* t){
 		//std::cout << "Node4: from (" << get_channel_id() << ") " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";
@@ -75,12 +75,11 @@ struct Node4: ff_node_t<myTask_t>{
 		if (processed != ntasks) {
 			abort();
 		}
-		ff::cout << "RESULT OK\n";
+		std::cout << "RESULT OK\n";
 	}
 	long ntasks;
 	long processed=0;
 };
-
 
 int main(int argc, char*argv[]){
     if (DFF_Init(argc, argv)<0 ) {
@@ -91,30 +90,27 @@ int main(int argc, char*argv[]){
 	if (argc>1) {
 		ntasks = std::stol(argv[1]);
 	}
-
+		
     ff_pipeline pipe;
-	Node1 n1(ntasks);
-	Node2 n2;
-	Node3 n3;
-	Node4 n4(ntasks);
-	ff_pipeline pipe0;
-	pipe0.add_stage(&n1);
-	pipe0.add_stage(&n2);
-	ff_pipeline pipe1;
-	pipe1.add_stage(&n3);
-    ff_pipeline pipe2;
-	pipe2.add_stage(&n4);
-	pipe.add_stage(&pipe0);
-	pipe.add_stage(&pipe1);
-    pipe.add_stage(&pipe2);
+	Node1  n1(ntasks);
+	Node2  n21, n22;
+	Node3  n31, n32, n33;
+	Node4  n4(ntasks);
+	ff_a2a      a2a;
+	a2a.add_firstset<Node2>({&n21, &n22});
+    a2a.add_secondset<Node3>({&n31, &n32, &n33});
+
+	pipe.add_stage(&n1);
+	pipe.add_stage(&a2a);
+	pipe.add_stage(&n4);
+
+	//----- defining the distributed groups ------
 	
-    auto G1 = pipe0.createGroup("G1");
-    auto G2 = pipe1.createGroup("G2");
-    auto G3 = pipe2.createGroup("G3");
-	
-    G1.out << &n2;
-    G2.in << &n3; G2.out << &n3;
-    G3.in << &n4;
+    auto G1 = n1.createGroup("G1");
+	auto G2 = a2a.createGroup("G2");
+	auto G3 = n4.createGroup("G3");
+
+    // -------------------------------------------
 	
 	if (pipe.run_and_wait_end()<0) {
 		error("running the main pipe\n");
