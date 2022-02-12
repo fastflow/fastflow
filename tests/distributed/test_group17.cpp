@@ -1,3 +1,23 @@
+/* 
+ * FastFlow concurrent network:
+ *
+ * 
+ *             -----------------------------
+ *            |            |--> Sink1 --> | 
+ *            |  Source1-->|              | 
+ *            |            |--> Sink2 --> |
+ *            |  Source2-->|              |
+ *            |            |--> Sink3 --> |
+ *             -----------------------------                            
+ *
+ *  distributed version:
+ *
+ *  G1: all Source(s)
+ *  G2: all Sink(s)
+ *
+ */
+
+
 #include <iostream>
 #include<ff/dff.hpp>
 #include <mutex>
@@ -45,18 +65,22 @@ int main(int argc, char*argv[]){
     for(int i  = 0 ; i < 3; i++){
         auto s = new Source(4, i);
         firstSet.push_back(s);
-        g1.out << s;
+        g1 << s;
     }
 
     for(int i  = 0; i < 4; i++){
         auto s = new Sink(i);
         secondSet.push_back(s);
-        g2.in << s;
+        g2 << s;
     }
 
     a2a.add_firstset(firstSet);
     a2a.add_secondset(secondSet);
 
     ff_Pipe p(&a2a);
-    p.run_and_wait_end();
+    if (p.run_and_wait_end()<0) {
+		error("running pipe");
+		return -1;
+	}
+	return 0;
 }

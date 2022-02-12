@@ -8,7 +8,10 @@
  *           |--> MiNode 
  *
  * /<------- a2a ------>/
- * /<---- pipeMain ---->/
+ *
+ * S: all left-hand side nodes
+ * D: all righ-hand side nodes
+ *
  */
 
 
@@ -175,7 +178,6 @@ int main(int argc, char*argv[]){
 	if ((p=getenv("CHECK_DATA"))!=nullptr) check=true;
 	printf("chackdata = %s\n", p);
 	
-    ff_pipeline mainPipe;
     ff::ff_a2a a2a;
 
     mainPipe.add_stage(&a2a);
@@ -195,14 +197,14 @@ int main(int argc, char*argv[]){
 	for(int i = 0; i < numProcSx; i++){
 		auto& g = a2a.createGroup(std::string("S")+std::to_string(i));
 		for(int j = i*numWorkerXProcess; j < (i+1)*numWorkerXProcess; j++){
-			g.out << sxWorkers[j];
+			g << sxWorkers[j];
 		}
 	}
 
 	for(int i = 0; i < numProcDx; i++){
 		auto& g = a2a.createGroup(std::string("D")+std::to_string(i));
 		for(int j = i*numWorkerXProcess; j < (i+1)*numWorkerXProcess; j++){
-			g.in << dxWorkers[j];	
+			g << dxWorkers[j];	
 		}
 	}
     

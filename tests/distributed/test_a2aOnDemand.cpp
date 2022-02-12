@@ -7,8 +7,14 @@
  *             |-> MoNode-->|           
  *                          |--> MiNode 
  *
- * /<- pipe ->//<-------- a2a -------->/
+ *            /<-------- a2a -------->/
  * /<----------- pipeMain ------------->/
+ *
+ *  distributed version:
+ *
+ *  G1: MoNode
+ *  G2: a2a
+ *
  */
 
 
@@ -123,21 +129,20 @@ int main(int argc, char*argv[]){
     a2a.add_firstset(sxWorkers, 1);  // enabling on-demand distribution policy
     a2a.add_secondset(dxWorkers);
 	
+	//----- defining the distributed groups ------
 
-	auto g0 = pipe.createGroup("G0");
+	auto g0 = generator.createGroup("G0");
     auto g1 = a2a.createGroup("G1");
     auto g2 = a2a.createGroup("G2");
 
-	g0.out << &generator;
+    for(int i = 0; i < numWorkerSx; i++) 
+		g1  << sxWorkers[i];
+    for(int i = 0; i < numWorkerDx; i++) 
+		g2 << dxWorkers[i];
 
-    for(int i = 0; i < numWorkerSx; i++) {
-		g1.in  << sxWorkers[i];
-		g1.out << sxWorkers[i];
-    }
-    for(int i = 0; i < numWorkerDx; i++) {
-		g2.in << dxWorkers[i];
-    }
+    // -------------------------------------------
 
+	
     if (mainPipe.run_and_wait_end()<0) {
 		error("running mainPipe\n");
 		return -1;

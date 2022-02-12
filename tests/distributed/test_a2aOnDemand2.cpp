@@ -1,10 +1,31 @@
+/* 
+ * FastFlow concurrent network:
+ * 
+ *             |--> Sink1 
+ *   Source1-->|           
+ *             |--> Sink2 
+ *   Source2-->|           
+ *             |--> Sink3
+ *
+ *
+ *  distributed version:
+ *
+ *  G1: all Source(s)
+ *  G2: all Sink(s)
+ *
+ */
+
+
+
 #include <ff/dff.hpp>
 #include <mutex>
 #include <iostream>
 #include <cmath>
 
-std::mutex mtx; 
+using namespace ff;
 
+// ------------------------------------------------------
+std::mutex mtx;  // used only for pretty printing
 static inline float active_delay(int msecs) {
   // read current time
   float x = 1.25f;
@@ -19,6 +40,7 @@ static inline float active_delay(int msecs) {
   }
   return x;
 }
+// -----------------------------------------------------
 
 struct myTask_t {
 	std::string str;
@@ -31,7 +53,6 @@ struct myTask_t {
 	void serialize(Archive & archive) {
 		archive(str, S.t, S.f);
 	}
-
 };
 
 struct Sink: ff::ff_minode_t<myTask_t>{
@@ -87,7 +108,6 @@ int main(int argc, char*argv[]){
 		return -1;
 	}
 	
-    ff::ff_pipeline mainPipe;
     ff::ff_a2a a2a;
 
 	auto g1 = a2a.createGroup("G1");
@@ -98,19 +118,19 @@ int main(int argc, char*argv[]){
 
 	for(int i = 0; i < numWorkerSx; i++) {
 		sx.push_back(new Source(items));
-		g1.out << sx[i];
+		g1 << sx[i];
     }
-	a2a.add_firstset<Source>(sx, asyncdegree); // enabling on-demand distribution policy with #asyncdegree buffer slots
-
     for(int i = 0; i < numWorkerDx; i++){
 		dx.push_back(new Sink((long)100*(i+1)));
-		g2.in << dx[i];
+		g2 << dx[i];
 	}
+
+	// enabling on-demand distribution policy with #asyncdegree buffer slots
+	a2a.add_firstset<Source>(sx, asyncdegree); 
     a2a.add_secondset(dx);
 
-    mainPipe.add_stage(&a2a);
-    if (mainPipe.run_and_wait_end()<0) {
-		error("running pipe");
+    if (a2a.run_and_wait_end()<0) {
+		error("running a2a");
 		return -1;
 	}
 
