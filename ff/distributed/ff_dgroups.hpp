@@ -15,6 +15,7 @@
 #include <ff/distributed/ff_dprinter.hpp>
 #include <ff/distributed/ff_dutils.hpp>
 #include <ff/distributed/ff_dintermediate.hpp>
+#include <ff/distributed/ff_dgroup2.hpp>
 
 #include <cereal/cereal.hpp>
 #include <cereal/archives/json.hpp>
@@ -97,8 +98,6 @@ public:
 	  const std::string& getRunningGroup() const { return runningGroup; }
 
     void forceProtocol(Proto p){this->usedProtocol = p;}
-
-    bool isBuildByMyBuildingBlock(const std::string gName);
 	
     int run_and_wait_end(ff_pipeline* parent){
         if (annotatedGroups.find(runningGroup) == annotatedGroups.end()){
@@ -110,10 +109,21 @@ public:
       // qui dovrei creare la rappresentazione intermedia di tutti
       this->prepareIR(parent);
 
+      this->annotatedGroups[this->runningGroup].print();
+      
       // buildare il farm dalla rappresentazione intermedia del gruppo che devo rannare
-
+      dGroup2 _grp(this->annotatedGroups[this->runningGroup]);
       // rannere il farm come sotto!
+    if (_grp.run() < 0){
+      std::cerr << "Error running the group!" << std::endl;
+      return -1;
+    }
 
+      if (_grp.wait() < 0){
+        std::cerr << "Error waiting the group!" << std::endl;
+        return -1;
+      }
+      
         //ff_node* runningGroup = this->groups[this->runningGroup];
         
         //if (runningGroup->run(parent) < 0) return -1;
@@ -271,9 +281,16 @@ private:
             std::cerr << "Some building block has not been annotated and no coverage found! You missed something. Aborting now" << std::endl;
             abort();
           }
-        } else // compute the coverage anyway 
-          for(const std::string& gName : pair.second) annotatedGroups[gName].computeCoverage();
+        } else  
+          for(const std::string& gName : pair.second) {
+           annotatedGroups[gName].computeCoverage();
+            // compute the coverage anyway
+          }
 
+        // set the isSrc and isSink fields
+        runningGroup_IR.isSink = isSnk; runningGroup_IR.isSource = isSrc;
+        // populate the set with the names of other groups created from this 1st level BB
+        runningGroup_IR.otherGroupsFromSameParentBB = pair.second;
       }
 
       //############# compute the number of excpected input connections
@@ -313,7 +330,7 @@ private:
 
       runningGroup_IR.buildIndexes();
 
-      runningGroup_IR.print();
+      //runningGroup_IR.print();
     }
 
   std::set<std::string> outputGroups(std::set<std::string> groupNames){

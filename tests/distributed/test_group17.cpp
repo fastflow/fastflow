@@ -29,8 +29,15 @@ std::mutex mtx;
 struct Source : ff_monode_t<std::string>{
     int numWorker, generatorID;
     Source(int numWorker, int generatorID) : numWorker(numWorker), generatorID(generatorID) {}
+    
+    int svc_init(){
+        std::cout << "Source init called!\n";
 
+        return 0;
+    }
+    
     std::string* svc(std::string* in){
+        std::cout << "Entering the loop of Source\n";
         for(int i = 0; i < numWorker; i++)
             ff_send_out_to(new std::string("Task generated from " + std::to_string(generatorID) + " for " + std::to_string(i)), i);
         return EOS;
@@ -41,6 +48,7 @@ struct Source : ff_monode_t<std::string>{
 struct Sink : ff_minode_t<std::string>{
     int sinkID;
     Sink(int id): sinkID(id) {}
+
     std::string* svc(std::string* in){
         const std::lock_guard<std::mutex> lock(mtx);
         ff::cout << *in << " received by Sink " << sinkID << " from " << get_channel_id() << ff::endl;

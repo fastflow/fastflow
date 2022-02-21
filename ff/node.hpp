@@ -509,8 +509,12 @@ private:
     friend class ff_comb;
     friend struct internal_mo_transformer;
     friend struct internal_mi_transformer;
+
+#ifdef DFF_ENABLED
     friend class dGroups;
-    
+    friend class dGroup2;
+#endif
+
 private:
     FFBUFFER        * in;           ///< Input buffer, built upon SWSR lock-free (wait-free) 
                                     ///< (un)bounded FIFO queue                                 
@@ -1015,6 +1019,7 @@ public:
      */
     inline size_t getOSThreadId() const { if (thread) return thread->getOSThreadId(); return 0; }
 
+    virtual bool change_node(ff_node* old, ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=false) {}
 
 #if defined(FF_TASK_CALLBACK)
     virtual void callbackIn(void * =NULL)  { }
