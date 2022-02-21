@@ -1,0 +1,179 @@
+#include <ff/ff.hpp>
+#include <ff/distributed/ff_network.hpp>
+#include <ff/distributed/ff_wrappers.hpp>
+#include <ff/distributed/ff_dreceiver.hpp>
+#include <ff/distributed/ff_dsender.hpp>
+#include <ff/distributed/ff_dadapters.hpp>
+
+#ifdef DFF_MPI
+#include <ff/distributed/ff_dreceiverMPI.hpp>
+#include <ff/distributed/ff_dsenderMPI.hpp>
+#endif
+
+
+template<typename T>
+T getBackAndPop(std::vector<T> v){
+    T b = v.back();
+    v.pop_back();
+    return b;
+}
+
+namespace ff{
+class dGroup2 : public ff::ff_farm {
+
+    static inline std::unordered_map<int, int> vector2UMap(const std::vector<int> v){
+        std::unordered_map<int,int> output;
+        for(int i = 0; i < v.size(); i++) output[v[i]] = i;
+        return output;
+    }
+
+    static inline std::map<int, int> vector2Map(const std::vector<int> v){
+        std::map<int,int> output;
+        for(int i = 0; i < v.size(); i++) output[v[i]] = i;
+        return output;
+    }
+
+    struct ForwarderNode : ff_node { 
+        ForwarderNode(std::function<void(void*, dataBuffer&)> f){
+            this->serializeF = f;
+        }
+        ForwarderNode(std::function<void*(dataBuffer&)> f){
+            this->deserializeF = f;
+        }
+        void* svc(void* input){return input;}
+    };
+
+public:
+    dGroup2(ff_IR& ir){
+
+        if (ir.isVertical()){ 
+            std::vector<int> reverseOutputIndexes((ir.hasLeftChildren() ? ir.outputL : ir.outputR).rbegin(), (ir.hasLeftChildren() ? ir.outputL : ir.outputR).rend());
+            for(ff_node* child: (ir.hasLeftChildren() ? ir.L : ir.R)){
+               if (isSeq(child)){
+                    if (ir.hasReceiver && ir.hasSender)
+                        workers.push_back(new WrapperINOUT(child, getBackAndPop(reverseOutputIndexes)));
+                    else if (ir.hasReceiver)
+                        workers.push_back(new WrapperIN(child));
+                    else  workers.push_back(new WrapperOUT(child, getBackAndPop(reverseOutputIndexes)));
+
+               } else {
+                   if (ir.hasReceiver){
+                        ff::svector<ff_node*> inputs; child->get_in_nodes(inputs);
+                        for(ff_node* input : inputs){
+                            ff_node* inputParent = getBB(child, input);
+                            if (inputParent) inputParent->change_node(input, new WrapperIN(input), true); //cleanup?? removefromcleanuplist??
+                        }
+                   }
+
+                   if (ir.hasSender){
+                       ff::svector<ff_node*> outputs; child->get_out_nodes(outputs);
+                        for(ff_node* output : outputs){
+                            ff_node* outputParent = getBB(child, output);
+                            if (outputParent) outputParent->change_node(output, new WrapperOUT(output, getBackAndPop(reverseOutputIndexes)), true); // cleanup?? removefromcleanuplist??
+                        }
+                   }
+
+                   workers.push_back(child);
+               }
+            }
+
+            if (!ir.hasReceiver)
+                this->add_emitter(new ff_dreceiver(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.inputL)));
+
+            if (!ir.hasSender)
+                this->add_collector(new ff_dsender(ir.destinationEndpoints, ir.listenEndpoint.groupName), true);
+        }
+        else { // the group is horizontal!
+            ff_a2a* innerA2A = new ff_a2a();
+            
+            std::vector<int> reverseLeftOutputIndexes(ir.outputL.rbegin(), ir.outputL.rend());
+
+            std::unordered_map<int, int> localRightWorkers = vector2UMap(ir.inputR);
+            std::vector<ff_node*> firstSet;
+            for(ff_node* child : ir.L){
+                if (isSeq(child))
+                    if (ir.isSource){
+                        ff_node* wrapped = new EmitterAdapter(child, ir.rightTotalInputs, getBackAndPop(reverseLeftOutputIndexes) , localRightWorkers);
+                        wrapped->skipallpop(true);
+                        firstSet.push_back(wrapped);
+                    } else {
+                        firstSet.push_back(new ff_comb(new WrapperIN(new ForwarderNode(child->getDeserializationFunction()), 1, true), new EmitterAdapter(child, ir.rightTotalInputs, getBackAndPop(reverseLeftOutputIndexes) , localRightWorkers), true, true));
+                    }
+                else {
+                    
+                    ff::svector<ff_node*> inputs; child->get_in_nodes(inputs);
+                    for(ff_node* input : inputs){
+                        if (ir.isSource)
+                            input->skipallpop(true);
+                        else {
+                            ff_node* inputParent = getBB(child, input);
+                            if (inputParent) inputParent->change_node(input, new WrapperIN(input, 1), true); // cleanup??? remove_fromcleanuplist??
+                        }
+                    }
+                    
+                    ff::svector<ff_node*> outputs; child->get_out_nodes(outputs);
+                    for(ff_node* output : outputs){
+                        ff_node* outputParent = getBB(child, output);
+                        if (outputParent) outputParent->change_node(output,  new EmitterAdapter(output, ir.rightTotalInputs, getBackAndPop(reverseLeftOutputIndexes) , localRightWorkers) , true); // cleanup??? remove_fromcleanuplist??
+                    }
+                    firstSet.push_back(child); //ondemand?? cleanup??
+                }
+            }
+            // add the Square Box Left, just if we have a receiver!
+            if (ir.hasReceiver)
+                firstSet.push_back(new SquareBoxLeft(vector2UMap(ir.inputR))); // ondemand??
+            
+            innerA2A->add_firstset(firstSet); // ondemand ??? clenaup??
+            
+
+            std::vector<int> reverseRightOutputIndexes(ir.outputR.rbegin(), ir.outputR.rend());
+            std::vector<ff_node*> secondSet;
+            for(ff_node* child : ir.R){
+                if (isSeq(child))
+                    secondSet.push_back(
+                        (ir.isSink) ? (ff_node*)new CollectorAdapter(child, ir.outputL) 
+                                    : (ff_node*)new ff_comb(new CollectorAdapter(child, ir.outputL), new WrapperOUT(new ForwarderNode(child->getSerializationFunction()), getBackAndPop(reverseRightOutputIndexes), 1, true), true, true)
+                    );
+                else {
+                    ff::svector<ff_node*> inputs; child->get_in_nodes(inputs);
+                    for(ff_node* input : inputs){
+                        ff_node* inputParent = getBB(child, input);
+                        if (inputParent) inputParent->change_node(input, new CollectorAdapter(input, ir.outputL), true); //cleanup?? remove_fromcleanuplist??
+                    }
+
+                    if (!ir.isSink){
+                        ff::svector<ff_node*> outputs; child->get_out_nodes(outputs);
+                        for(ff_node* output : outputs){
+                            ff_node* outputParent = getBB(child, output);
+                            if (outputParent) outputParent->change_node(output, new WrapperOUT(output, getBackAndPop(reverseRightOutputIndexes)), true); //cleanup?? removefromcleanuplist?
+                        }
+                    }
+
+                    secondSet.push_back(child);
+                }
+            }
+            
+            // add the SQuareBox Right, iif there is a sender!
+            if (ir.hasSender)
+                secondSet.push_back(new SquareBoxRight);
+
+            innerA2A->add_secondset<ff_node>(secondSet); // cleanup??
+            workers.push_back(innerA2A);
+
+            
+            if (ir.hasReceiver)
+                this->add_emitter(new ff_dreceiverH(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.inputL), ir.inputR, ir.otherGroupsFromSameParentBB));
+
+            if (ir.hasSender)
+                this->add_collector(new ff_dsenderH(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.otherGroupsFromSameParentBB) , true);
+        }  
+
+        if (this->getNWorkers() == 0){
+            std::cerr << "The farm implementing the distributed group is empty! There might be an error! :(\n";
+            abort();
+        }
+    }
+         
+
+};
+}

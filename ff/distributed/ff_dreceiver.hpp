@@ -173,7 +173,7 @@ public:
             error("Error listening\n");
             return -1;
         }
-
+        
         return 0;
     }
 
@@ -269,6 +269,7 @@ class ff_dreceiverH : public ff_dreceiver {
 
     std::vector<int> internalDestinations;
     std::map<int, bool> isInternalConnection;
+    std::set<std::string> internalGroupsNames;
     int internalNEos = 0;
 
     void registerEOS(int sck){
@@ -295,7 +296,7 @@ class ff_dreceiverH : public ff_dreceiver {
             error("Error reading from socket groupName\n"); return -1;
         }
         
-        bool internalGroup = dGroups::Instance()->isBuildByMyBuildingBlock(std::string(groupName,size));
+        bool internalGroup = internalGroupsNames.contains(std::string(groupName,size));
 
         isInternalConnection[sck] = internalGroup; // save somewhere the fact that this sck represent an internal connection
 
@@ -312,8 +313,8 @@ class ff_dreceiverH : public ff_dreceiver {
     }
 
 public:
-    ff_dreceiverH(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {{0,0}}, std::vector<int> internalRoutingTable = {0}, int coreid=-1) 
-    : ff_dreceiver(acceptAddr, input_channels, routingTable, coreid), internalDestinations(internalRoutingTable) {
+    ff_dreceiverH(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {{0,0}}, std::vector<int> internalRoutingTable = {0}, std::set<std::string> internalGroups = {}, int coreid=-1) 
+    : ff_dreceiver(acceptAddr, input_channels, routingTable, coreid), internalDestinations(internalRoutingTable), internalGroupsNames(internalGroups) {
 
     }
 

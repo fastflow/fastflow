@@ -31,6 +31,7 @@ protected:
     //std::unordered_map<ConnectionType, std::vector<int>> type2sck;
     std::vector<int> sockets;
 	//int internalGateways;
+    std::string gName;
     int coreid;
 
     int receiveReachableDestinations(int sck, std::map<int,int>& m){
@@ -74,7 +75,6 @@ protected:
     }
 
     int sendGroupName(const int sck){    
-        std::string gName = dGroups::Instance()->getRunningGroup();
         size_t sz = htobe64(gName.size());
         struct iovec iov[2];
         iov[0].iov_base = &sz;
@@ -193,11 +193,11 @@ protected:
 
     
 public:
-    ff_dsender(ff_endpoint dest_endpoint, int coreid=-1): coreid(coreid) {
+    ff_dsender(ff_endpoint dest_endpoint, std::string gName = "", int coreid=-1): gName(gName), coreid(coreid) {
         this->dest_endpoints.push_back(std::move(dest_endpoint));
     }
 
-    ff_dsender( std::vector<ff_endpoint> dest_endpoints_, int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), coreid(coreid) {}
+    ff_dsender( std::vector<ff_endpoint> dest_endpoints_, std::string gName = "", int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), gName(gName), coreid(coreid) {}
 
     
 
@@ -227,7 +227,7 @@ public:
             next_rr_destination = (next_rr_destination + 1) % dest2Socket.size();
         }
 
-
+        std::cout << "Sender sending out a task!\n";
         sendToSck(dest2Socket[task->chid], task);
         delete task;
         return this->GO_ON;
@@ -248,11 +248,12 @@ class ff_dsenderH : public ff_dsender {
     std::map<int, int> internalDest2Socket;
     std::map<int, int>::const_iterator rr_iterator;
     std::vector<int> internalSockets;
+    std::set<std::string> internalGroupNames;
 
 public:
 
-    ff_dsenderH(ff_endpoint e, int coreid=-1) : ff_dsender(e, coreid) {} 
-    ff_dsenderH(std::vector<ff_endpoint> dest_endpoints_, int coreid=-1) : ff_dsender(dest_endpoints_, coreid) {}
+    ff_dsenderH(ff_endpoint e, std::string gName  = "", std::set<std::string> internalGroups = {}, int coreid=-1) : ff_dsender(e, gName, coreid), internalGroupNames(internalGroups) {} 
+    ff_dsenderH(std::vector<ff_endpoint> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int coreid=-1) : ff_dsender(dest_endpoints_, gName, coreid), internalGroupNames(internalGroups) {}
     
     int handshakeHandler(const int sck, bool isInternal){
         if (sendGroupName(sck) < 0) return -1;
@@ -267,13 +268,14 @@ public:
             int sck = tryConnect(endpoint);
             if (sck <= 0) return -1;
 
-            bool isInternal = dGroups::Instance()->isBuildByMyBuildingBlock(endpoint.groupName);
+            bool isInternal = internalGroupNames.contains(endpoint.groupName);
             if (isInternal) internalSockets.push_back(sck);
             else sockets.push_back(sck);
             handshakeHandler(sck, isInternal);
         }
 
         rr_iterator = internalDest2Socket.cbegin();
+        std::cout << "SenderH started correctly!\n";
         return 0;
     }
 
@@ -324,11 +326,11 @@ private:
 
     
 public:
-    ff_dsenderOD(ff_endpoint dest_endpoint, int queueDim = 1, int coreid=-1)
-		: ff_dsender(dest_endpoint, coreid), queueDim(queueDim) {}
+    ff_dsenderOD(ff_endpoint dest_endpoint, int queueDim = 1, std::string gName = "", int coreid=-1)
+		: ff_dsender(dest_endpoint, gName, coreid), queueDim(queueDim) {}
 
-    ff_dsenderOD(std::vector<ff_endpoint> dest_endpoints_, int queueDim = 1, int coreid=-1)
-		: ff_dsender(dest_endpoints_, coreid), queueDim(queueDim) {}
+    ff_dsenderOD(std::vector<ff_endpoint> dest_endpoints_, int queueDim = 1, std::string gName = "", int coreid=-1)
+		: ff_dsender(dest_endpoints_, gName, coreid), queueDim(queueDim) {}
 
     int svc_init() {
 		if (coreid!=-1)
