@@ -80,10 +80,10 @@ public:
 	
 	bool serialize(void* in, int id) {
 		if ((void*)in > FF_TAG_MIN) return this->ff_send_out(in);
-		
+
 		message_t* msg = new message_t;
 
-	
+
 		this->n->serializeF(in, msg->data);
 		msg->sender = myID; // da cambiare con qualcosa di reale!
 		msg->chid   = id;

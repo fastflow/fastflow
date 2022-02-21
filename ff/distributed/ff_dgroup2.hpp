@@ -12,7 +12,7 @@
 
 
 template<typename T>
-T getBackAndPop(std::vector<T> v){
+T getBackAndPop(std::vector<T>& v){
     T b = v.back();
     v.pop_back();
     return b;
@@ -47,8 +47,15 @@ public:
     dGroup2(ff_IR& ir){
 
         if (ir.isVertical()){ 
-            std::vector<int> reverseOutputIndexes((ir.hasLeftChildren() ? ir.outputL : ir.outputR).rbegin(), (ir.hasLeftChildren() ? ir.outputL : ir.outputR).rend());
+            std::vector<int> reverseOutputIndexes(ir.hasLeftChildren() ? ir.outputL.rbegin() : ir.outputR.rbegin(), ir.hasLeftChildren() ? ir.outputL.rend() : ir.outputR.rend());
             for(ff_node* child: (ir.hasLeftChildren() ? ir.L : ir.R)){
+                ff::svector<ff_node*> inputs; child->get_in_nodes(inputs);
+                ff::svector<ff_node*> outputs; child->get_out_nodes(outputs);
+                
+                // handle the case we have a pipe (or more nested) with just one sequential stage (not a combine)
+                if (inputs.size() == 1 && outputs.size() == 1 && inputs[0] == outputs[0])
+                    child = inputs[0];
+
                if (isSeq(child)){
                     if (ir.hasReceiver && ir.hasSender)
                         workers.push_back(new WrapperINOUT(child, getBackAndPop(reverseOutputIndexes)));
@@ -58,7 +65,6 @@ public:
 
                } else {
                    if (ir.hasReceiver){
-                        ff::svector<ff_node*> inputs; child->get_in_nodes(inputs);
                         for(ff_node* input : inputs){
                             ff_node* inputParent = getBB(child, input);
                             if (inputParent) inputParent->change_node(input, new WrapperIN(input), true); //cleanup?? removefromcleanuplist??
@@ -66,7 +72,6 @@ public:
                    }
 
                    if (ir.hasSender){
-                       ff::svector<ff_node*> outputs; child->get_out_nodes(outputs);
                         for(ff_node* output : outputs){
                             ff_node* outputParent = getBB(child, output);
                             if (outputParent) outputParent->change_node(output, new WrapperOUT(output, getBackAndPop(reverseOutputIndexes)), true); // cleanup?? removefromcleanuplist??
@@ -77,10 +82,10 @@ public:
                }
             }
 
-            if (!ir.hasReceiver)
-                this->add_emitter(new ff_dreceiver(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.inputL)));
+            if (ir.hasReceiver)
+                this->add_emitter(new ff_dreceiver(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.hasLeftChildren() ? ir.inputL : ir.inputR)));
 
-            if (!ir.hasSender)
+            if (ir.hasSender)
                 this->add_collector(new ff_dsender(ir.destinationEndpoints, ir.listenEndpoint.groupName), true);
         }
         else { // the group is horizontal!

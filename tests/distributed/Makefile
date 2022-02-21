@@ -32,6 +32,9 @@ endif
 ifdef EXCLUDE_BLOCKING
     CXXFLAGS        += -DDFF_EXCLUDE_BLOCKING
 endif
+ifdef PRINT_IR
+    CXXFLAGS += -DPRINT_IR
+endif
 ifdef EXCLUDE_MPI
     CXXFLAGS	    += -DDFF_EXCLUDE_MPI
 else

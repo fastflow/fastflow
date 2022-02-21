@@ -227,7 +227,6 @@ public:
             next_rr_destination = (next_rr_destination + 1) % dest2Socket.size();
         }
 
-        std::cout << "Sender sending out a task!\n";
         sendToSck(dest2Socket[task->chid], task);
         delete task;
         return this->GO_ON;
