@@ -109,8 +109,10 @@ public:
       // qui dovrei creare la rappresentazione intermedia di tutti
       this->prepareIR(parent);
 
+#ifdef PRINT_IR
       this->annotatedGroups[this->runningGroup].print();
-      
+#endif
+
       // buildare il farm dalla rappresentazione intermedia del gruppo che devo rannare
       dGroup2 _grp(this->annotatedGroups[this->runningGroup]);
       // rannere il farm come sotto!
