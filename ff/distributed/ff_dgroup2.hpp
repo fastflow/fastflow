@@ -126,7 +126,7 @@ public:
             }
             // add the Square Box Left, just if we have a receiver!
             if (ir.hasReceiver)
-                firstSet.push_back(new SquareBoxLeft(vector2UMap(ir.inputR))); // ondemand??
+                firstSet.push_back(new SquareBoxLeft(localRightWorkers)); // ondemand??
             
             innerA2A->add_firstset(firstSet); // ondemand ??? clenaup??
             

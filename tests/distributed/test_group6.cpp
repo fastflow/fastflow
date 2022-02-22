@@ -127,7 +127,7 @@ int main(int argc, char*argv[]){
 	//----- defining the distributed groups ------
 
 	auto g1 = a2a1.createGroup("G1");
-	auto g2 = a2a1.createGroup("G2");
+	auto g2 = a2a2.createGroup("G2");
 	
     // -------------------------------------------
 
