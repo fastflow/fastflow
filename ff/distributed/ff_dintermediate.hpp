@@ -11,9 +11,9 @@ namespace ff {
 
 class ff_IR {
     friend class dGroups;
+protected:
     // set to true if the group contains the whole parent building block
     bool wholeParent = false;
-protected:
     void computeCoverage(){
         if (!parentBB->isAll2All()) return;
         ff_a2a* a2a = reinterpret_cast<ff_a2a*>(parentBB);

@@ -49,7 +49,7 @@ protected:
 	
         sz = be64toh(sz);
 
-        std::cout << "Receiving routing table (" << sz << " bytes)" << std::endl;
+        
         char* buff = new char [sz];
 		assert(buff);
 
@@ -71,6 +71,7 @@ protected:
         /*for (const auto& p : m)
             std::cout << p.first << " - "  << p.second << std::endl;
         */
+       ff::cout << "Receiving routing table (" << sz << " bytes)" << ff::endl;
         return 0;
     }
 
@@ -261,12 +262,14 @@ public:
     }
 
     int svc_init() {
-		
+
         sockets.resize(this->dest_endpoints.size());
         for(const auto& endpoint : this->dest_endpoints){
             int sck = tryConnect(endpoint);
-            if (sck <= 0) return -1;
-
+            if (sck <= 0) {
+                error("Error on connecting!\n");
+                return -1;
+            }
             bool isInternal = internalGroupNames.contains(endpoint.groupName);
             if (isInternal) internalSockets.push_back(sck);
             else sockets.push_back(sck);
@@ -274,7 +277,6 @@ public:
         }
 
         rr_iterator = internalDest2Socket.cbegin();
-        std::cout << "SenderH started correctly!\n";
         return 0;
     }
 

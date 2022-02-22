@@ -63,7 +63,7 @@ protected:
         return this->sendRoutingTable(sck, reachableDestinations);
     }
 
-    void registerEOS(int sck){
+    virtual void registerEOS(int sck){
         /*switch(connectionsTypes[sck]){
             case ConnectionType::EXTERNAL: 
                 if (++Eneos == Einput_channels)
@@ -270,15 +270,22 @@ class ff_dreceiverH : public ff_dreceiver {
     std::vector<int> internalDestinations;
     std::map<int, bool> isInternalConnection;
     std::set<std::string> internalGroupsNames;
-    int internalNEos = 0;
+    int internalNEos = 0, externalNEos = 0;
 
     void registerEOS(int sck){
-        if (isInternalConnection[sck] && ++internalNEos == std::count_if(std::begin(isInternalConnection),
-                                                                         std::end  (isInternalConnection),
-                                                                         [](std::pair<int, bool> const &p) {return p.second;}))
+        neos++;
+        int internalConn = std::count_if(std::begin(isInternalConnection),
+                                            std::end  (isInternalConnection),
+                                            [](std::pair<int, bool> const &p) {return p.second;});
+
+        if (!isInternalConnection[sck]){
+            if (++externalNEos == (isInternalConnection.size()-internalConn))
+                for(int i = 0; i < 1; i++) ff_send_out_to(this->EOS, i);
+        } else
+        if (++internalNEos == internalConn)
             ff_send_out_to(this->EOS, this->get_num_outchannels()-1);
         
-        neos++;
+        
     }
 
     virtual int handshakeHandler(const int sck){

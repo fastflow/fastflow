@@ -293,6 +293,22 @@ private:
         runningGroup_IR.isSink = isSnk; runningGroup_IR.isSource = isSrc;
         // populate the set with the names of other groups created from this 1st level BB
         runningGroup_IR.otherGroupsFromSameParentBB = pair.second;
+
+      }
+
+      //
+      if (!runningGroup_IR.isVertical()){
+        ff_a2a* parentA2A = reinterpret_cast<ff_a2a*>(runningGroup_IR.parentBB);
+        {
+          ff::svector<ff_node*> inputs;
+          for(ff_node* child : parentA2A->getSecondSet()) child->get_in_nodes(inputs);
+          runningGroup_IR.rightTotalInputs = inputs.size();
+        }
+        {
+          ff::svector<ff_node*> outputs;
+          for(ff_node* child : parentA2A->getFirstSet()) child->get_out_nodes(outputs);
+          runningGroup_IR.leftTotalOuputs = outputs.size();
+        }
       }
 
       //############# compute the number of excpected input connections
@@ -309,7 +325,7 @@ private:
       if (runningGroup_IR.expectedEOS > 0) runningGroup_IR.hasReceiver = true;
 
       //############ compute the name of the outgoing connection groups
-      if (runningGroup_IR.parentBB->isAll2All() && runningGroup_IR.isVertical() && runningGroup_IR.hasLeftChildren()){
+      if (runningGroup_IR.parentBB->isAll2All() && runningGroup_IR.isVertical() && runningGroup_IR.hasLeftChildren() && !runningGroup_IR.wholeParent){
           // inserisci tutte i gruppi di questo bb a destra
           for(const auto& gName: parentBB2GroupsName[runningGroup_IR.parentBB])
             if (!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasRightChildren())
