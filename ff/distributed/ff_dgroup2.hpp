@@ -43,6 +43,16 @@ class dGroup2 : public ff::ff_farm {
         void* svc(void* input){return input;}
     };
 
+    static ff_node* buildWrapperIN(ff_node* n){
+        if (n->isMultiOutput()) return new ff_comb(new WrapperIN(new ForwarderNode(n->deserializeF)), n, true, false);
+        return new WrapperIN(n);
+    }
+
+    static ff_node* buildWrapperOUT(ff_node* n, int id){
+        if (n->isMultiInput()) return new ff_comb(n, new WrapperOUT(new ForwarderNode(n->serializeF), id, 1, true), false, true);
+        return new WrapperOUT(n, id);
+    }
+
 public:
     dGroup2(ff_IR& ir){
 
@@ -60,21 +70,21 @@ public:
                     if (ir.hasReceiver && ir.hasSender)
                         workers.push_back(new WrapperINOUT(child, getBackAndPop(reverseOutputIndexes)));
                     else if (ir.hasReceiver)
-                        workers.push_back(new WrapperIN(child));
-                    else  workers.push_back(new WrapperOUT(child, getBackAndPop(reverseOutputIndexes)));
+                        workers.push_back(buildWrapperIN(child));
+                    else  workers.push_back(buildWrapperOUT(child, getBackAndPop(reverseOutputIndexes)));
 
                } else {
                    if (ir.hasReceiver){
                         for(ff_node* input : inputs){
                             ff_node* inputParent = getBB(child, input);
-                            if (inputParent) inputParent->change_node(input, new WrapperIN(input), true); //cleanup?? removefromcleanuplist??
+                            if (inputParent) inputParent->change_node(input, buildWrapperIN(input), true); //cleanup?? removefromcleanuplist??
                         }
                    }
 
                    if (ir.hasSender){
                         for(ff_node* output : outputs){
                             ff_node* outputParent = getBB(child, output);
-                            if (outputParent) outputParent->change_node(output, new WrapperOUT(output, getBackAndPop(reverseOutputIndexes)), true); // cleanup?? removefromcleanuplist??
+                            if (outputParent) outputParent->change_node(output, buildWrapperOUT(output, getBackAndPop(reverseOutputIndexes)), true); // cleanup?? removefromcleanuplist??
                         }
                    }
 
@@ -112,7 +122,7 @@ public:
                             input->skipallpop(true);
                         else {
                             ff_node* inputParent = getBB(child, input);
-                            if (inputParent) inputParent->change_node(input, new WrapperIN(input, 1), true); // cleanup??? remove_fromcleanuplist??
+                            if (inputParent) inputParent->change_node(input, buildWrapperIN(input), true); // cleanup??? remove_fromcleanuplist??
                         }
                     }
                     
@@ -128,6 +138,10 @@ public:
             if (ir.hasReceiver)
                 firstSet.push_back(new SquareBoxLeft(localRightWorkers)); // ondemand??
             
+            std::transform(firstSet.begin(), firstSet.end(), firstSet.begin(), [](ff_node* n) -> ff_node* {
+                if (!n->isPipe()) return new ff_Pipe(n); return n;
+            });
+
             innerA2A->add_firstset(firstSet); // ondemand ??? clenaup??
             
 
@@ -150,7 +164,7 @@ public:
                         ff::svector<ff_node*> outputs; child->get_out_nodes(outputs);
                         for(ff_node* output : outputs){
                             ff_node* outputParent = getBB(child, output);
-                            if (outputParent) outputParent->change_node(output, new WrapperOUT(output, getBackAndPop(reverseRightOutputIndexes)), true); //cleanup?? removefromcleanuplist?
+                            if (outputParent) outputParent->change_node(output, buildWrapperOUT(output, getBackAndPop(reverseRightOutputIndexes)), true); //cleanup?? removefromcleanuplist?
                         }
                     }
 
@@ -161,6 +175,10 @@ public:
             // add the SQuareBox Right, iif there is a sender!
             if (ir.hasSender)
                 secondSet.push_back(new SquareBoxRight);
+
+            std::transform(secondSet.begin(), secondSet.end(), secondSet.begin(), [](ff_node* n) -> ff_node* {
+                if (!n->isPipe()) return new ff_Pipe(n); return n;
+            });
 
             innerA2A->add_secondset<ff_node>(secondSet); // cleanup??
             workers.push_back(innerA2A);
