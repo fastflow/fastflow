@@ -84,7 +84,8 @@ public:
 	int svc_init() {
 		if (this->n->isMultiOutput()) {
 			ff_monode* mo = reinterpret_cast<ff_monode*>(this->n);
-			mo->set_running(localWorkersMap.size() + 1); // the last worker is the forwarder to the remote workers
+			//mo->set_running(localWorkersMap.size() + 1); // the last worker is the forwarder to the remote workers
+			mo->set_running(totalWorkers);
 		}
 		return n->svc_init();
 	}

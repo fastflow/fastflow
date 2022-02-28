@@ -1019,7 +1019,7 @@ public:
      */
     inline size_t getOSThreadId() const { if (thread) return thread->getOSThreadId(); return 0; }
 
-    virtual bool change_node(ff_node* old, ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=false) {}
+    virtual bool change_node(ff_node* old, ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=false) { return false;}
 
 #if defined(FF_TASK_CALLBACK)
     virtual void callbackIn(void * =NULL)  { }

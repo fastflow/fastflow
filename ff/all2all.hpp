@@ -200,18 +200,30 @@ protected:
             }
         }
         if (outputNodes.size()) {
-            if (outputNodes.size() != workers2.size()) {
-                error("A2A, prepare, invalid state\n");
+
+            svector<ff_node*> w;
+            for(size_t i=0;i<workers2.size();++i) 
+                workers2[i]->get_out_nodes(w);
+
+            if (outputNodes.size() != w.size()) {
+                error("A2A, prepare, invalid state detected\n");
                 return -1;
             }
+
+            for(size_t i=0;i<w.size(); ++i) {
+                if (w[i]->isMultiOutput()) {
+                    error("A2A, prepare, invalid state, unexpected multi-output node\n");
+                    return -1;
+                }
+
+                assert(outputNodes[i]->get_in_buffer() != nullptr);
+                if (w[i]->set_output_buffer(outputNodes[i]->get_in_buffer()) < 0)  {
+                    error("A2A, prepare, invalid state, setting output buffer\n");
+                    return -1;
+                }
+            }
         }
-        for(size_t i=0;i<outputNodes.size(); ++i) {
-            assert(!workers2[i]->isMultiOutput());
-            assert(outputNodes[i]->get_in_buffer() != nullptr);            
-            assert(workers2[i]->get_out_buffer() == nullptr);
-            if (workers2[i]->set_output_buffer(outputNodes[i]->get_in_buffer()) <0) 
-                return -1;
-        }
+
 
      
         // blocking stuff --------------------------------------------
@@ -498,13 +510,11 @@ public:
     int numThreads() const { return cardinality(); }
 
     int set_output(const svector<ff_node *> & w) {
-        if (outputNodes.size()+w.size() > workers2.size()) return -1;
         outputNodes +=w;
         return 0; 
     }
 
     int set_output(ff_node *node) {
-        if (outputNodes.size()+1 > workers2.size()) return -1;
         outputNodes.push_back(node); 
         return 0;
     }
@@ -735,7 +745,11 @@ protected:
                     ff_node* t = new ff_buffernode(nentries,fixedsize); 
                     t->set_id(id++);
                     internalSupportNodes.push_back(t);
-                    if (workers2[i]->set_output(t)<0) return -1;
+                    if (w[j]->isMultiOutput()) {
+                        if (w[j]->set_output(t)<0) return -1;
+                    } else {
+                        if (workers2[i]->set_output(t)<0) return -1;
+                    }
                 }
             } else{ 
                 if (workers2[i]->create_output_buffer(nentries,fixedsize)==-1) return -1;
