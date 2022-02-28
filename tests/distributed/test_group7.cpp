@@ -42,7 +42,7 @@
  *                                       G3
  */
 
-#include <ff/dff.hpp>
+#include <ff/ff.hpp>
 #include <mutex>
 #include <iostream>
 
@@ -139,11 +139,12 @@ struct S3 : ff_minode_t<std::string>{
 };
 
 int main(int argc, char*argv[]){
+#if 0
 	if (DFF_Init(argc, argv) != 0) {
 		error("DFF_Init\n");
 		return -1;
 	}
-
+#endif
 	int N=10;
 	if (argc==2) N=std::stol(argv[1]);
 
@@ -171,14 +172,24 @@ int main(int argc, char*argv[]){
 	ff_a2a a2a1;	
     a2a1.add_firstset<T1>( {new T1(new T_left, new T_right, true, true),
 								new T2(new T_left, new T_right, true, true)}, 0, true);
-    a2a1.add_secondset<T3>({new T3, new T4}, true);
+
+
+	a2a1.add_secondset<ff_comb>({new ff_comb(new T3, new T_right, true, true), new ff_comb(new T4, new T_right, true, true)}, true);
+	//a2a1.add_secondset<T3>({new T3, new T4}, true);
+
+
 	pipeA2A1.add_stage(&a2a1);
 	
 	ff_pipeline pipeA2A2;
 	ff_a2a a2a2;	
 	a2a2.add_firstset<T1>( {new T1(new T_left, new T_right, true, true),
 						new T2(new T_left, new T_right, true, true)}, 0, true);	
-    a2a2.add_secondset<T3>({new T5, new T6}, true);
+
+
+	a2a2.add_secondset<ff_comb>({new ff_comb(new T5, new T_right, true, true), new ff_comb(new T6, new T_right, true, true)}, true);
+	//a2a2.add_secondset<T3>({new T5, new T6}, true);
+
+
 	pipeA2A2.add_stage(&a2a2);
 	
 	ff_a2a a2a;
@@ -191,7 +202,7 @@ int main(int argc, char*argv[]){
 	pipeMain.add_stage(&pipe0);
 	pipeMain.add_stage(&a2a);
 	pipeMain.add_stage(&s3);
-
+#if 0
 	//----- defining the distributed groups ------
 	auto G1 = pipe0.createGroup("G1");
 	auto G2 = a2a.createGroup("G2");
@@ -202,7 +213,7 @@ int main(int argc, char*argv[]){
 	G3 << &pipe2 << &pipeA2A2;
 	
     // -------------------------------------------
-
+#endif
 	// running the distributed groups
     if (pipeMain.run_and_wait_end()<0) {
 		error("running a2a\n");
