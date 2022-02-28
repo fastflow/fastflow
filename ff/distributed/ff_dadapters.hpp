@@ -20,8 +20,8 @@ public:
 	void* svc(void* in) {return in;}
 
 	void eosnotify(ssize_t id) {
-		if (id == this->get_num_inchannels() - 1) return;   // EOS coming from the SquareLeft, we must ignore it
-		if (++neos == (this->get_num_inchannels() - 1))
+		if (id == (ssize_t)(this->get_num_inchannels() - 1)) return;   // EOS coming from the SquareLeft, we must ignore it
+		if (++neos == (ssize_t)(this->get_num_inchannels() - 1))
 			this->ff_send_out(this->EOS);
 	}
 };

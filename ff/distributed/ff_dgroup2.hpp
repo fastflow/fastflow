@@ -23,13 +23,13 @@ class dGroup2 : public ff::ff_farm {
 
     static inline std::unordered_map<int, int> vector2UMap(const std::vector<int> v){
         std::unordered_map<int,int> output;
-        for(int i = 0; i < v.size(); i++) output[v[i]] = i;
+        for(size_t i = 0; i < v.size(); i++) output[v[i]] = i;
         return output;
     }
 
     static inline std::map<int, int> vector2Map(const std::vector<int> v){
         std::map<int,int> output;
-        for(int i = 0; i < v.size(); i++) output[v[i]] = i;
+        for(size_t i = 0; i < v.size(); i++) output[v[i]] = i;
         return output;
     }
 
@@ -139,7 +139,9 @@ public:
                 firstSet.push_back(new SquareBoxLeft(localRightWorkers)); // ondemand??
             
             std::transform(firstSet.begin(), firstSet.end(), firstSet.begin(), [](ff_node* n) -> ff_node* {
-                if (!n->isPipe()) return new ff_Pipe(n); return n;
+                if (!n->isPipe())
+					return new ff_Pipe(n);
+				return n;
             });
 
             innerA2A->add_firstset(firstSet); // ondemand ??? clenaup??
@@ -177,7 +179,9 @@ public:
                 secondSet.push_back(new SquareBoxRight);
 
             std::transform(secondSet.begin(), secondSet.end(), secondSet.begin(), [](ff_node* n) -> ff_node* {
-                if (!n->isPipe()) return new ff_Pipe(n); return n;
+                if (!n->isPipe())
+					return new ff_Pipe(n);
+				return n;
             });
 
             innerA2A->add_secondset<ff_node>(secondSet); // cleanup??
