@@ -281,7 +281,7 @@ public:
     }
 
     message_t *svc(message_t* task) {
-        if (this->get_channel_id() == (this->get_num_inchannels() - 1)){
+        if (this->get_channel_id() == (ssize_t)(this->get_num_inchannels() - 1)){
             // pick destination from the list of internal connections!
             if (task->chid == -1){ // roundrobin over the destinations
                 task->chid = rr_iterator->first;
@@ -297,7 +297,7 @@ public:
     }
 
      void eosnotify(ssize_t id) {
-         if (id == (this->get_num_inchannels() - 1)){
+         if (id == (ssize_t)(this->get_num_inchannels() - 1)){
             // send the EOS to all the internal connections
             message_t E_O_S(0,0);
             for(const auto& sck : internalSockets) sendToSck(sck, &E_O_S);
