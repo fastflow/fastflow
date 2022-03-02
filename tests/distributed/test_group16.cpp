@@ -49,7 +49,7 @@ struct Node1: ff_node_t<myTask_t>{
 struct Node2: ff_node_t<myTask_t>{
     myTask_t* svc(myTask_t* t){
 		t->str += std::string(" World");		
-		//std::cout << "Node2: " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";
+		std::cout << "Node2: " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";
 
         return t;
     }
@@ -100,18 +100,16 @@ int main(int argc, char*argv[]){
 	ff_pipeline pipe0;
 	pipe0.add_stage(&n1);
 	pipe0.add_stage(&n2);
-	ff_pipeline pipe1;
-	pipe1.add_stage(&n3);
     ff_pipeline pipe2;
 	pipe2.add_stage(&n4);
 	pipe.add_stage(&pipe0);
-	pipe.add_stage(&pipe1);
+	pipe.add_stage(&n3);
     pipe.add_stage(&pipe2);
 
 	//----- defining the distributed groups ------
 	
     auto G1 = pipe0.createGroup("G1");
-    auto G2 = pipe1.createGroup("G2");
+	auto G2 = n3.createGroup("G2");
     auto G3 = pipe2.createGroup("G3");
 
     // -------------------------------------------

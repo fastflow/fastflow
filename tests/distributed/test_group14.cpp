@@ -68,11 +68,6 @@ struct Node3: ff_minode_t<myTask_t>{
 		delete t;
         return GO_ON;
     }
-	void eosnotify(ssize_t id) {
-		printf("Node4 EOS RECEIVED from %ld\n", id);
-		fflush(NULL);
-	}
-
 	void svc_end() {
 		if (processed != ntasks) {
 			abort();

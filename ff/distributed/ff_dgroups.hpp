@@ -289,6 +289,7 @@ private:
 
       // this is meaningful only if the group is horizontal and made of an a2a
       if (!runningGroup_IR.isVertical()){
+		assert(runningGroup_IR.parentBB->isAll2All());
         ff_a2a* parentA2A = reinterpret_cast<ff_a2a*>(runningGroup_IR.parentBB);
         {
           ff::svector<ff_node*> inputs;

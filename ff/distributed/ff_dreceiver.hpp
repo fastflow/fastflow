@@ -270,20 +270,20 @@ class ff_dreceiverH : public ff_dreceiver {
     std::vector<int> internalDestinations;
     std::map<int, bool> isInternalConnection;
     std::set<std::string> internalGroupsNames;
-    int internalNEos = 0, externalNEos = 0;
+    size_t internalNEos = 0, externalNEos = 0;
 
     void registerEOS(int sck){
         neos++;
-        int internalConn = std::count_if(std::begin(isInternalConnection),
+        size_t internalConn = std::count_if(std::begin(isInternalConnection),
                                             std::end  (isInternalConnection),
                                             [](std::pair<int, bool> const &p) {return p.second;});
 
         if (!isInternalConnection[sck]){
             if (++externalNEos == (isInternalConnection.size()-internalConn))
-                for(int i = 0; i < 1; i++) ff_send_out_to(this->EOS, i);
+				for(size_t i = 0; i < this->get_num_outchannels()-1; i++) ff_send_out_to(this->EOS, i);
         } else
-        if (++internalNEos == internalConn)
-            ff_send_out_to(this->EOS, this->get_num_outchannels()-1);
+			if (++internalNEos == internalConn)
+				ff_send_out_to(this->EOS, this->get_num_outchannels()-1);
         
         
     }
