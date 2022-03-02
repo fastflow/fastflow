@@ -9,9 +9,11 @@
  *
  */
 /* ***************************************************************************
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU Lesser General Public License version 3 as 
+ *  FastFlow is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -181,7 +183,7 @@ protected:
                     error("PIPE, init input blocking mode for node %d\n", i);
                     return -1;
                 }                
-                if (!skip_set_output_blocking) // we do not wait to overwrite previous setting
+                if (!skip_set_output_blocking) // we do not want to overwrite previous setting
                     nodes_list[i-1]->set_output_blocking(m,c); 
                 if (!nodes_list[i-1]->init_output_blocking(m,c,false)) {
                     error("PIPE, init output blocking mode for node %d\n", i-1);

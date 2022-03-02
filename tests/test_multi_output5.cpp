@@ -294,9 +294,22 @@ struct Manager: ff_node_t<Command_t> {
 
     Manager(): 
         channel1(100, true, MAX_NUM_THREADS+100),  
-        channel2(100, true, MAX_NUM_THREADS+200) {}
+        channel2(100, true, MAX_NUM_THREADS+200) {
+
+        // The following is needed if the program runs in BLOCKING_MODE
+        // In this case, channel1 and channel2 will not be automatically
+        // initialized so we have to do it manually. Moreover, even if we
+        // want to run in BLOCKING_MODE, channel1 and channel2 cannot be
+        // configured in blocking mode for the output, that is, ff_send_out
+        // has to be non-blocking!!!!
+        channel1.init_blocking_stuff();
+        channel2.init_blocking_stuff();        
+        channel1.reset_blocking_out();
+        channel2.reset_blocking_out();        
+    }
 
     Command_t* svc(Command_t *) {
+        
         Command_t *cmd1 = new Command_t(0, REMOVE);
         channel1.ff_send_out(cmd1);
         Command_t *cmd2 = new Command_t(1, REMOVE);
@@ -328,7 +341,9 @@ struct Manager: ff_node_t<Command_t> {
     }
 
 
-    int run(bool=false) { return ff_node_t<Command_t>::run(); }
+    int run(bool=false) {
+        return ff_node_t<Command_t>::run();
+    }
     int wait() { return ff_node_t<Command_t>::wait(); }
 
 
@@ -342,13 +357,6 @@ struct Manager: ff_node_t<Command_t> {
 
 
 int main(int argc, char* argv[]) {
-#if defined(BLOCKING_MODE)
-
-    //TODO: in blocking mode the manager channel does not work!!!
-    return 0;
-#endif
-    
-    
     unsigned nworkers = 3;
     int ntasks = 1000;
     if (argc>1) {

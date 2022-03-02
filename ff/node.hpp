@@ -16,9 +16,11 @@
 
 /* ***************************************************************************
  *
- *  This program is free software; you can redistribute it and/or modify it
+ *  FastFlow is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -645,6 +647,14 @@ protected:
         FF_IGNORE_UNUSED(m);
         p_cons_c = c;
     }
+
+    // this function is used mainly for combined node where the cond variable must
+    // be shared with the first internal node 
+    virtual inline void  set_cons_c(pthread_cond_t *c) {
+        assert(cons_c == nullptr);
+        assert(cons_m == nullptr);
+        cons_c = c;
+    }        
     virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
 
     /**
@@ -1376,7 +1386,7 @@ private:
             bool skipfirstpop = filter->skipfirstpop(); 
             bool exit=false;            
             bool filter_outpresent = false;
-            ssize_t neos=input_neos;
+            size_t neos=input_neos;
 
             
             // if the node is a combine where the last stage is a multi-output
@@ -1664,6 +1674,8 @@ struct ff_buffernode: ff_node {
         }
         return 0;
     }
+
+    void reset_blocking_out() { blocking_out = false; }
     
     bool ff_send_out(void *ptr, int id=-1,
                      unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {
@@ -1678,7 +1690,6 @@ struct ff_buffernode: ff_node {
     bool gather_task(T *&task, unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {    
         return gather_task((void **)&task, retry, ticks);
     }
-
 
 
 protected:
