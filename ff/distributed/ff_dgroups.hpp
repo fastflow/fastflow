@@ -178,7 +178,6 @@ private:
         std::string name;
         std::string address;
         int port;
-        std::vector<std::string> Oconn;
 
         template <class Archive>
         void load( Archive & ar ){
@@ -190,9 +189,6 @@ private:
                 address = endp[0]; port = std::stoi(endp[1]);
             } catch (cereal::Exception&) {ar.setNextName(nullptr);}
 
-            try {
-                ar(cereal::make_nvp("OConn", Oconn));
-            } catch (cereal::Exception&) {ar.setNextName(nullptr);}
         }
     };
 
