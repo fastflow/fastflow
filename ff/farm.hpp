@@ -434,7 +434,11 @@ protected:
                                 ff_node* t = new ff_buffernode(out_buffer_entries,fixedsizeOUT, idx++);
                                 assert(t);
                                 internalSupportNodes.push_back(t);
-                                workers[i]->set_output(t);
+                                if (w[j]->isMultiOutput()) {
+                                    if (w[j]->set_output(t)<0) return -1;
+                                } else {
+                                    if (workers[i]->set_output(t)<0) return -1;
+                                }
                                 gt->register_worker(t);
                             }                            
                         } else  { // single node multi-output
@@ -1009,6 +1013,48 @@ public:
         return this->add_emitter(e);
     }
 
+    bool change_node(ff_node* old, ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=false) {
+        assert(old!=nullptr);
+        assert(n!=nullptr);
+        if (prepared) {
+            error("FARM, change_node cannot be called because the FARM has already been prepared\n");
+            return false;
+        }
+
+        if (emitter == old) return (change_emitter(n, cleanup)==0);
+
+        if (collector && !collector_removed && collector == old) {
+            if (collector_cleanup) {
+                delete collector;
+                collector_cleanup=false;
+            }
+            gt->reset_filter();
+            collector=nullptr;
+            collector_cleanup=cleanup;
+            return (this->add_collector(n) == 0);
+        }
+        
+        for(size_t i=0; i<workers.size();++i) {
+            if (workers[i] == old) {
+                if (remove_from_cleanuplist) {
+                    int pos=-1;
+                    for(size_t i=0;i<internalSupportNodes.size();++i)
+                        if (internalSupportNodes[i] == old) { pos = i; break; }
+                    if (pos>=0) internalSupportNodes.erase(internalSupportNodes.begin()+pos);            
+                }
+
+                if (worker_cleanup)
+                    internalSupportNodes.push_back(workers[i]);
+                
+                workers[i] = n;
+                if (cleanup && !worker_cleanup) internalSupportNodes.push_back(n);                
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
     /**
      *
      * \brief Set scheduling with on demand polity
@@ -1090,6 +1136,7 @@ public:
     }
     /**
      * replace the workers node. Note, that no cleanup of previous workers will be done.
+     * For more fine-grained control you should use change_node
      */
     int change_workers(const std::vector<ff_node*>& w) {
         workers.clear();

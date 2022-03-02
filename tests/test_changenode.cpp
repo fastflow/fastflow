@@ -26,7 +26,7 @@
  */
 
 /* 
- * Testing the change_node method for the pipeline, all-to-all and combine.
+ * Testing the change_node method for the pipeline, farm all-to-all and combine.
  * 
  */
 
@@ -94,12 +94,19 @@ int main() {
 	ff_comb *c3   = new ff_comb(sette, otto, true, true);
 	W2.push_back(c3);	
 	a2a.add_secondset(W2,true);
-	
+
+    ff_farm farm;
+    moNode* nove  = new moNode;
+    moNode* dieci = new moNode;
+    farm.add_workers({nove, dieci});
+    farm.cleanup_workers();
+    
 	
 	ff_pipeline pipeMain;
 	pipeMain.add_stage(&source);
 	pipeMain.add_stage(&pipe0);
 	pipeMain.add_stage(&a2a);
+    pipeMain.add_stage(&farm);
 	pipeMain.add_stage(&sink);
 
 	// changing some nodes
@@ -119,6 +126,11 @@ int main() {
     assert(t3 == &a2a);
     (reinterpret_cast<ff_a2a*>(t3))->change_node(c2, new ff_comb(new moNode, new moNode, true, true), true, true);
     delete c2;
+
+    ff_node* t4 = getBB(&pipeMain, nove);
+    assert(t4 == &farm);
+    (reinterpret_cast<ff_farm*>(t4))->change_node(nove, new ff_comb(new moNode, new moNode, true, true), true, true);
+    (reinterpret_cast<ff_farm*>(t4))->change_node(dieci, new ff_comb(new moNode, new moNode, true, true), true, true);
     
 	pipeMain.change_node(&source, new Source(100), true);
 
