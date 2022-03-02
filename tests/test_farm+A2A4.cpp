@@ -81,7 +81,7 @@ struct W2: ff_monode_t<std::string> {
 		long outchannels = get_num_outchannels();
 		long idx = next % outchannels;
 
-		ff_send_out_to(new std::string("[Task generated from W2-" + std::to_string(get_my_id()) + " to T" + std::to_string(idx) + "]"), idx);
+		ff_send_out_to(new std::string("[Task generated from W2-" + std::to_string(get_my_id()) + " to T" + ((idx==0 || idx==1)?std::to_string(idx):std::to_string(idx%3)) + "-" + std::to_string(idx) + "]"), idx);
 
 		++next;
 		return GO_ON;
@@ -110,7 +110,7 @@ struct S3 : ff_minode_t<std::string>{
     std::string* svc(std::string* in){
         const std::lock_guard<std::mutex> lock(mtx);
 		
-        std::cout << "[S3 received " << *in << " from T" << (3+get_channel_id()) << "]" << std::endl;
+        std::cout << "[S3 received " << *in << " from T4-" << get_channel_id() << "]" << std::endl;
         delete in;
         return this->GO_ON;
     }

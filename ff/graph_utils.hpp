@@ -127,7 +127,7 @@ static inline ff_node* getBB(ff_node* startnode, ff_node* n) {
         }
         return nullptr;
     }
-    // TODO: ofarm
+    if (startnode->isOFarm()) abort();     // TODO: ofarm
     if (startnode->isFarm()) {
         ff_farm* farm = reinterpret_cast<ff_farm*>(startnode);
         if (farm->getEmitter() == n) return farm;
