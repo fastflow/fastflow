@@ -2,8 +2,7 @@
     "groups" : [
     {   
         "endpoint" : "localhost:9004",
-        "name" : "G1",
-        "OConn" : ["G2"]
+        "name" : "G1"
     },
     { 
         "name" : "G2",

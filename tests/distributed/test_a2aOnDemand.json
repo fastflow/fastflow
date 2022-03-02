@@ -2,13 +2,11 @@
     "groups" : [
     {   
         "endpoint" : "localhost:8003",
-        "name" : "G0",
-        "OConn" : ["G1"]
+        "name" : "G0"
     },
     {   
         "endpoint" : "localhost:8004",
-        "name" : "G1",
-        "OConn" : ["G2"]
+        "name" : "G1"
     },
     { 
         "name" : "G2",

@@ -160,7 +160,10 @@ struct MiNode : ff::ff_minode_t<ExcType>{
 
 int main(int argc, char*argv[]){
     
-    DFF_Init(argc, argv);
+    if (DFF_Init(argc, argv) != 0) {
+		error("DFF_Init\n");
+		return -1;
+	}
 
     if (argc < 8){
         std::cout << "Usage: " << argv[0] << " #items #byteXitem #execTimeSource #execTimeSink #np_sx #np_dx #nwXp"  << std::endl;
@@ -180,8 +183,6 @@ int main(int argc, char*argv[]){
 	
     ff::ff_a2a a2a;
 
-    mainPipe.add_stage(&a2a);
-
     std::vector<MoNode*> sxWorkers;
     std::vector<MiNode*> dxWorkers;
 
@@ -195,20 +196,20 @@ int main(int argc, char*argv[]){
     a2a.add_secondset(dxWorkers);
 
 	for(int i = 0; i < numProcSx; i++){
-		auto& g = a2a.createGroup(std::string("S")+std::to_string(i));
+		auto g = a2a.createGroup(std::string("S")+std::to_string(i));
 		for(int j = i*numWorkerXProcess; j < (i+1)*numWorkerXProcess; j++){
 			g << sxWorkers[j];
 		}
 	}
 
 	for(int i = 0; i < numProcDx; i++){
-		auto& g = a2a.createGroup(std::string("D")+std::to_string(i));
+		auto g = a2a.createGroup(std::string("D")+std::to_string(i));
 		for(int j = i*numWorkerXProcess; j < (i+1)*numWorkerXProcess; j++){
 			g << dxWorkers[j];	
 		}
 	}
     
-    if (mainPipe.run_and_wait_end()<0) {
+    if (a2a.run_and_wait_end()<0) {
       error("running mainPipe\n");
       return -1;
     }
