@@ -16,9 +16,11 @@
 
 /* ***************************************************************************
  *
- *  This program is free software; you can redistribute it and/or modify it
+ *  FastFlow is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -700,7 +702,8 @@ protected:
         // cond variable. This is due to the put_done method in the lb
         // (i.e. the prev node is a multi-output or an emitter node) 
         assert(n->cons_m == nullptr);
-        n->cons_c = c; n->cons_m = nullptr;        
+        n->set_cons_c(c);
+        //n->cons_c = c; n->cons_m = nullptr;        <---- TOGLIERE
         return true;   
     }
     // producer

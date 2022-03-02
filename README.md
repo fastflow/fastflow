@@ -1,4 +1,5 @@
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub tag](https://img.shields.io/github/tag/fastflow/fastflow.svg)](http://github.com/fastflow/fastflow/releases)
 [![GitHub Issues](https://img.shields.io/github/issues/fastflow/fastflow.svg)](http://github.com/fastflow/fastflow/issues)
 
@@ -84,6 +85,9 @@ The FastFlow project started in the beginning of 2010 by Massimo Torquati (Unive
 Marco Aldinucci (University of Turin). 
 Over the years several other people (mainly from the Parallel Computing Groups of the University of Pisa and Turin) contributed with ideas and code to the development of the project. FastFlow has been used as 
 run-time system in three EU founded research projects: ParaPhrase, REPARA and RePhrase.
+
+## About the License
+From version 3.0.1, FastFlow is released with a dual license: <strong>LGPL-3</strong> and <strong>MIT</strong>. 
 
 ## How to cite FastFlow
 Aldinucci, M. , Danelutto, M. , Kilpatrick, P. and Torquati, M. (2017). Fastflow: High‐Level and Efficient Streaming on Multicore. In Programming multi‐core and many‐core computing systems (eds S. Pllana and F. Xhafa).

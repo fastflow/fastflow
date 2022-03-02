@@ -12,9 +12,11 @@
  */
 
 /* ***************************************************************************
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU Lesser General Public License version 3 as 
+ *  FastFlow is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -78,6 +80,7 @@ public:
 protected:
 
     inline void put_done(int id) {
+        // here we access the cond variable of the worker, that must be initialized
         pthread_cond_signal(&workers[id]->get_cons_c());
     }
     
@@ -115,7 +118,12 @@ protected:
                                     bool /*canoverwrite*/=false) {
         assert(1==0);
     }
-
+    
+    virtual inline void  set_cons_c(pthread_cond_t *c) {
+        assert(cons_c == nullptr);
+        assert(cons_m == nullptr);
+        cons_c = c;
+    }        
     virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
     
     /**
@@ -522,7 +530,7 @@ public:
             free(cons_m);
             cons_m = nullptr;
         }
-        if (cons_c) {
+        if (cons_c && cons_m) {
             pthread_cond_destroy(cons_c);
             free(cons_c);
             cons_c = nullptr;

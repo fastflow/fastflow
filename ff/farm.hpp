@@ -31,9 +31,11 @@
 
 /* ***************************************************************************
  *  
- *  This program is free software; you can redistribute it and/or modify it
+ *  FastFlow is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -369,7 +371,7 @@ protected:
                             if (W2[i]->set_output(outputNodes[i])<0) return -1;
                                                                                      }
                     } else {
-                        // TODO: we support only feedback channels and not both feedback and forward channels
+                        // TODO: for the moment we support only feedback channels and not both feedback and forward channels
                         //       for the last stages of the last all-to-all
                         if (lb->masterworker()) {
                             if (a2a_last->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsizeOUT))<0) {
