@@ -203,22 +203,6 @@ private:
         // annotate the listen endpoint for the specified group
         annotatedGroups[g.name].listenEndpoint = endpoint;
       }
-  
-
-      /*auto g = std::find_if(parsedGroups.begin(), parsedGroups.end(), [this](const G& g){return g.name == getRunningGroup();});
-      for(std::string& conn : g->Oconn)
-          // build the list of outgoing connections for each group
-          if (annotatedGroups.find(conn) != annotatedGroups.end())
-              runningGroup_IR.destinationEndpoints.push_back(annotatedGroups[conn].listenEndpoint);
-          else throw FF_Exception("A specified destination has a wrong name! :(");
-      */
-      
-      // compute how many expected EOS the future running must wait before exiting
-      /*size_t expectedEOS = 0;
-      for (const G& g : parsedGroups)
-        if (g.name != this->runningGroup)
-          for (const std::string& conn : g.Oconn)
-            if (conn == this->runningGroup) expectedEOS++;*/
 
       // build the map parentBB -> <groups names>
       std::map<ff_node*, std::set<std::string>> parentBB2GroupsName;
@@ -289,14 +273,21 @@ private:
             // compute the coverage anyway
           }
 
-        // set the isSrc and isSink fields
-        runningGroup_IR.isSink = isSnk; runningGroup_IR.isSource = isSrc;
-        // populate the set with the names of other groups created from this 1st level BB
-        runningGroup_IR.otherGroupsFromSameParentBB = pair.second;
+        for(const std::string& _gName : pair.second){
+          auto& _ir = annotatedGroups[_gName];
+           // set the isSrc and isSink fields
+          _ir.isSink = isSnk; _ir.isSource = isSrc;
+           // populate the set with the names of other groups created from this 1st level BB
+          _ir.otherGroupsFromSameParentBB = pair.second;
+        }
+       
+        //runningGroup_IR.isSink = isSnk; runningGroup_IR.isSource = isSrc;
+       
+        //runningGroup_IR.otherGroupsFromSameParentBB = pair.second;
 
       }
 
-      //
+      // this is meaningful only if the group is horizontal and made of an a2a
       if (!runningGroup_IR.isVertical()){
         ff_a2a* parentA2A = reinterpret_cast<ff_a2a*>(runningGroup_IR.parentBB);
         {
@@ -342,11 +333,20 @@ private:
           for(const auto& gName : inputGroups(parentBB2GroupsName[nextStage]))
             runningGroup_IR.destinationEndpoints.push_back(annotatedGroups[gName].listenEndpoint);
       }
+      
+      
+      runningGroup_IR.buildIndexes();
 
       if (!runningGroup_IR.destinationEndpoints.empty()) runningGroup_IR.hasSender = true;
       
-
-      runningGroup_IR.buildIndexes();
+      // experimental building the expected routing table for the running group offline (i.e., statically)
+      if (runningGroup_IR.hasSender)
+        for(auto& ep : runningGroup_IR.destinationEndpoints){
+            auto& destIR = annotatedGroups[ep.groupName];
+            destIR.buildIndexes();
+            bool internalConnection = runningGroup_IR.parentBB == destIR.parentBB;
+            runningGroup_IR.routingTable[ep.groupName] = std::make_pair(destIR.getInputIndexes(internalConnection), internalConnection);
+        }
 
       //runningGroup_IR.print();
     }
