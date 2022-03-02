@@ -128,7 +128,6 @@ class WrapperINOUT: public internal_mi_transformer {
 
 private:
     int inchannels;	// number of input channels the wrapped node is supposed to have
-    int outchannels; // number of output channels the wrapped node is supposed to have
 	int defaultDestination;
 	int myID;
 public:
@@ -157,7 +156,7 @@ public:
 	}
 
 	int svc_init() {
-		if (this->n->isMultiOutput()) { // ??? what??
+		if (this->n->isMultiInput()) { // ??? what??
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n); // what?????
 			mi->set_running(inchannels);
 		}

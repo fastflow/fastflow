@@ -5,6 +5,8 @@
 #include <ff/distributed/ff_dsender.hpp>
 #include <ff/distributed/ff_dadapters.hpp>
 
+#include <numeric>
+
 #ifdef DFF_MPI
 #include <ff/distributed/ff_dreceiverMPI.hpp>
 #include <ff/distributed/ff_dsenderMPI.hpp>
@@ -48,15 +50,22 @@ class dGroup2 : public ff::ff_farm {
         return new WrapperIN(n);
     }
 
-    static ff_node* buildWrapperOUT(ff_node* n, int id){
+    static ff_node* buildWrapperOUT(ff_node* n, int id, int outputChannels){
         if (n->isMultiInput()) return new ff_comb(n, new WrapperOUT(new ForwarderNode(n->serializeF), id, 1, true), false, true);
-        return new WrapperOUT(n, id);
+        return new WrapperOUT(n, id, outputChannels);
     }
 
 public:
     dGroup2(ff_IR& ir){
 
-        if (ir.isVertical()){ 
+        int outputChannels = 0;
+        if (ir.hasSender){
+            ff::cout << "Size of routintable " << ir.routingTable.size() << std::endl;
+            outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+f.second.first.size();});
+            ff::cout << "Outputchannels: " << outputChannels << std::endl;
+        }
+        if (ir.isVertical()){
+
             std::vector<int> reverseOutputIndexes(ir.hasLeftChildren() ? ir.outputL.rbegin() : ir.outputR.rbegin(), ir.hasLeftChildren() ? ir.outputL.rend() : ir.outputR.rend());
             for(ff_node* child: (ir.hasLeftChildren() ? ir.L : ir.R)){
                 ff::svector<ff_node*> inputs; child->get_in_nodes(inputs);
@@ -71,7 +80,7 @@ public:
                         workers.push_back(new WrapperINOUT(child, getBackAndPop(reverseOutputIndexes)));
                     else if (ir.hasReceiver)
                         workers.push_back(buildWrapperIN(child));
-                    else  workers.push_back(buildWrapperOUT(child, getBackAndPop(reverseOutputIndexes)));
+                    else  workers.push_back(buildWrapperOUT(child, getBackAndPop(reverseOutputIndexes), outputChannels));
 
                } else {
                    if (ir.hasReceiver){
@@ -84,7 +93,7 @@ public:
                    if (ir.hasSender){
                         for(ff_node* output : outputs){
                             ff_node* outputParent = getBB(child, output);
-                            if (outputParent) outputParent->change_node(output, buildWrapperOUT(output, getBackAndPop(reverseOutputIndexes)), true); // cleanup?? removefromcleanuplist??
+                            if (outputParent) outputParent->change_node(output, buildWrapperOUT(output, getBackAndPop(reverseOutputIndexes), outputChannels), true); // cleanup?? removefromcleanuplist??
                         }
                    }
 
@@ -164,7 +173,7 @@ public:
                         ff::svector<ff_node*> outputs; child->get_out_nodes(outputs);
                         for(ff_node* output : outputs){
                             ff_node* outputParent = getBB(child, output);
-                            if (outputParent) outputParent->change_node(output, buildWrapperOUT(output, getBackAndPop(reverseRightOutputIndexes)), true); //cleanup?? removefromcleanuplist?
+                            if (outputParent) outputParent->change_node(output, buildWrapperOUT(output, getBackAndPop(reverseRightOutputIndexes), outputChannels), true); //cleanup?? removefromcleanuplist?
                         }
                     }
 

@@ -70,7 +70,7 @@ public:
     std::set<ff_node*> L, R;
     bool coverageL = false, coverageR = false;
     bool isSource = false, isSink = false;
-    bool hasReceiver = false, hasSender = false; // todo settare qui.
+    bool hasReceiver = false, hasSender = false;
 
     ff_node* parentBB;
 
@@ -81,6 +81,8 @@ public:
 
     // liste degli index dei nodi input/output nel builiding block in the shared memory context. The first list: inputL will become the rouitng table
     std::vector<int> inputL, outputL, inputR, outputR;
+
+    std::map<std::string, std::pair<std::vector<int>, bool>> routingTable;
     
     // TODO: implmentare l'assegnamento di questi campi
     int leftTotalOuputs;
@@ -97,6 +99,11 @@ public:
             case SetEnum::L: L.insert(bb.first); return;
             case SetEnum::R: R.insert(bb.first); return;
         }
+    }
+
+    std::vector<int> getInputIndexes(bool internal){
+        if (internal && !R.empty()) return inputR;
+        return inputL;
     }
 
     void print(){
