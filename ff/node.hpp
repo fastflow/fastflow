@@ -512,7 +512,7 @@ private:
 
 #ifdef DFF_ENABLED
     friend class dGroups;
-    friend class dGroup2;
+    friend class dGroup;
 #endif
 
 private:
