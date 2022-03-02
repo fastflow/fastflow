@@ -15,7 +15,7 @@
 #include <ff/distributed/ff_dprinter.hpp>
 #include <ff/distributed/ff_dutils.hpp>
 #include <ff/distributed/ff_dintermediate.hpp>
-#include <ff/distributed/ff_dgroup2.hpp>
+#include <ff/distributed/ff_dgroup.hpp>
 
 #include <cereal/cereal.hpp>
 #include <cereal/archives/json.hpp>
@@ -114,7 +114,7 @@ public:
 #endif
 
       // buildare il farm dalla rappresentazione intermedia del gruppo che devo rannare
-      dGroup2 _grp(this->annotatedGroups[this->runningGroup]);
+      dGroup _grp(this->annotatedGroups[this->runningGroup]);
       // rannere il farm come sotto!
     if (_grp.run() < 0){
       std::cerr << "Error running the group!" << std::endl;
