@@ -28,6 +28,10 @@
  *  -------------------------      ------------------------
  *           G1                                  G2                G3
  * 
+ * vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+ * REMEMBER: CHECK THAT Node2_i CAN SEND DATA ONLY TO Node3_i (same index)!!!!
+ * ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ *
  */
 
 
@@ -115,13 +119,13 @@ int main(int argc, char*argv[]){
 	if (argc>1) {
 		ntasks = std::stol(argv[1]);
 	}
-		
+
 	ff_farm farm;
 	farm.add_emitter(new Node1(ntasks));
 	farm.add_workers({new Node2, new Node2, new Node2});
 	farm.cleanup_emitter();
 	farm.cleanup_workers();
-
+	
 	ff_a2a      a2a;
 	a2a.add_firstset<Node3>({new Node3, new Node3, new Node3}, 0, true);
     a2a.add_secondset<Node4>({new Node4, new Node4}, true);
