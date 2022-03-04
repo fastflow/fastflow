@@ -23,14 +23,27 @@
 #
 # ---------------------------------------------------------------------------
 
-CXXFLAGS            += -std=c++17 
+CXXFLAGS            += -std=c++20
 ifdef DEBUG
     OPTIMIZE_FLAGS  += -g -fno-inline-functions
 else
     OPTIMIZE_FLAGS  += -O3 -finline-functions -DNDEBUG
 endif
-ifdef BLOCKING_MODE
-    CXXFLAGS        += -DBLOCKING_MODE
+ifdef EXCLUDE_BLOCKING
+    CXXFLAGS        += -DDFF_EXCLUDE_BLOCKING
+endif
+ifdef PRINT_IR
+    CXXFLAGS += -DPRINT_IR
+endif
+ifdef EXCLUDE_MPI
+    CXXFLAGS	    += -DDFF_EXCLUDE_MPI
+else
+ifdef MPI_HOME
+    INCS            += `pkg-config --cflags-only-I $(MPI_HOME)/lib/pkgconfig/ompi-cxx.pc`
+    LIBS            += `pkg-config --libs $(MPI_HOME)/lib/pkgconfig/ompi-cxx.pc`
+else
+    CXXFLAGS	    += -DDFF_EXCLUDE_MPI
+endif
 endif
 ifdef FF_HOME
     INCS            += -I$(FF_HOME)
@@ -45,7 +58,7 @@ endif
 
 
 CXXFLAGS            += -Wall
-LIBS                 = -pthread
+LIBS                += -pthread
 INCLUDES             = $(INCS)
 
 SOURCES              = $(wildcard *.cpp)

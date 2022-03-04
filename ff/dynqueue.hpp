@@ -136,7 +136,8 @@ public:
     dynqueue(int cachesize=DEFAULT_CACHE_SIZE, bool fillcache=false):cache(cachesize) {
         Node * n = (Node *)::malloc(sizeof(Node));
         n->data = NULL; n->next = NULL;
-        head=tail=n;
+        head=n;
+        tail=n;
         cache.init();
         if (fillcache) {
             for(int i=0;i<cachesize;++i) {
@@ -289,7 +290,8 @@ public:
     dynqueue(int cachesize=DEFAULT_CACHE_SIZE, bool fillcache=false):cachesize(cachesize) {
         Node * n = (Node *)::malloc(sizeof(Node));
         n->data = NULL; n->next = NULL;
-        head=tail=n;
+        head=n;
+        tail=n;
 
         cache=(void**)getAlignedMemory(longxCacheLine*sizeof(long),cachesize*sizeof(void*));
         if (!cache) {

@@ -50,6 +50,8 @@
  */
 
 #define FF_BOUNDED_BUFFER
+//#define MAKE_VALGRIND_HAPPY
+//#define MANUAL_SERIALIZATION
 #define DEFAULT_BUFFER_CAPACITY 2048
 #define BYKEY true
 
@@ -63,7 +65,6 @@
 #include <ff/dff.hpp>
 
 using namespace ff;
-using namespace std;
 
 const size_t qlen = DEFAULT_BUFFER_CAPACITY;
 const int MAXLINE=128;
@@ -80,11 +81,29 @@ struct result_t {
     char     key[MAXWORD];  // key word
     uint64_t id;            // id that indicates the current number of occurrences of the key word
     uint64_t ts;            // timestamp
+
+	template<class Archive>
+	void serialize(Archive & archive) {
+		archive(key,id,ts);
+	}
+
 };
 
-vector<tuple_t> dataset;     // contains all the input tuples in memory
-atomic<long> total_lines=0;  // total number of lines processed by the system
-atomic<long> total_bytes=0;  // total number of bytes processed by the system
+#if defined(MANUAL_SERIALIZATION)
+template<typename Buffer>
+void serialize(Buffer&b, result_t* input){
+    b = {reinterpret_cast<char*>(input), sizeof(result_t)};
+}
+
+template<typename Buffer>
+void deserialize(const Buffer&b, result_t*& strPtr){
+    strPtr = reinterpret_cast<result_t*>(b.first);
+}
+#endif
+
+std::vector<tuple_t> dataset;     // contains all the input tuples in memory
+std::atomic<long> total_lines=0;  // total number of lines processed by the system
+std::atomic<long> total_bytes=0;  // total number of bytes processed by the system
 
 /// application run time (source generates the stream for app_run_time seconds, then sends out EOS)
 unsigned long app_run_time = 15;  // time in seconds
@@ -157,10 +176,14 @@ struct Splitter: ff_monode_t<tuple_t, result_t> {
 #endif            
             result_t* r = new result_t;
             assert(r);
+#if defined(MAKE_VALGRIND_HAPPY)
+            bzero(r->key, MAXWORD);
+#endif            
             strncpy(r->key, token, MAXWORD-1);
             r->key[MAXWORD-1]='\0';
             r->ts  = in->ts;
-
+            r->id  = in->id;
+            
             ff_send_out_to(r, ch);
             token = strtok_r(NULL, " ", &tmpstr);
         }
@@ -206,11 +229,11 @@ struct Sink: ff_node_t<result_t> {
  *  
  *  @param file_path the path of the input dataset file
  */ 
-int parse_dataset_and_create_tuples(const string& file_path) {
-    ifstream file(file_path);
+int parse_dataset_and_create_tuples(const std::string& file_path) {
+    std::ifstream file(file_path);
     if (file.is_open()) {
         size_t all_records = 0;         // counter of all records (dataset line) read
-        string line;
+        std::string line;
         while (getline(file, line)) {
             // process file line
             if (!line.empty()) {
@@ -253,11 +276,11 @@ int main(int argc, char* argv[]) {
         int option = 0;    
         while ((option = getopt(argc, argv, "f:p:t:")) != -1) {
             switch (option) {
-            case 'f': file_path=string(optarg);  break;
+            case 'f': file_path=std::string(optarg);  break;
             case 'p': {
-                vector<size_t> par_degs;
-                string pars(optarg);
-                stringstream ss(pars);
+                std::vector<size_t> par_degs;
+                std::string pars(optarg);
+                std::stringstream ss(pars);
                 for (size_t i; ss >> i;) {
                     par_degs.push_back(i);
                     if (ss.peek() == ',')
@@ -272,7 +295,7 @@ int main(int argc, char* argv[]) {
                 }                
             } break;
             case 't': {
-                long t = stol(optarg);
+                long t = std::stol(optarg);
                 if (t<=0 || t > 100) {
                     std::cerr << "Wrong value for the '-t' option, it should be in the range [1,100]\n";
                     return -1;
@@ -303,10 +326,10 @@ int main(int argc, char* argv[]) {
         if (parse_dataset_and_create_tuples(file_path)< 0)
             return -1;
     
-        cout << "Executing WordCount with parameters:" << endl;
-        cout << "  * source/splitter : " << source_par_deg << endl;
-        cout << "  * counter/sink    : " << sink_par_deg << endl;
-        cout << "  * running time    : " << app_run_time << " (s)\n";
+        std::cout << "Executing WordCount with parameters:" << endl;
+        std::cout << "  * source/splitter : " << source_par_deg << endl;
+        std::cout << "  * counter/sink    : " << sink_par_deg << endl;
+        std::cout << "  * running time    : " << app_run_time << " (s)\n";
     }
     
     /// application starting time
@@ -317,21 +340,21 @@ int main(int argc, char* argv[]) {
     std::vector<ff_node*> L;  // left and right workers of the A2A
     std::vector<ff_node*> R;
 
+        
     ff_a2a a2a(false, qlen, qlen, true);
 
     auto G1 = a2a.createGroup("G1");
     auto G2 = a2a.createGroup("G2");
-    
+
     for (size_t i=0;i<source_par_deg; ++i) {        
         ff_pipeline* pipe0 = new ff_pipeline(false, qlen, qlen, true);
         
-        pipe0->add_stage(new Source(app_start_time));
+        pipe0->add_stage(new Source(app_start_time), true);
         Splitter* sp = new Splitter(sink_par_deg);
-        pipe0->add_stage(sp);
+        pipe0->add_stage(sp, true);
         L.push_back(pipe0);
 
-        // using the default serialization since the result_t is contiguous in memory
-        G1.out <<= sp;  
+        G1 << pipe0;
     }
     for (size_t i=0;i<sink_par_deg; ++i) {
         ff_pipeline* pipe1 = new ff_pipeline(false, qlen, qlen, true);
@@ -341,8 +364,7 @@ int main(int argc, char* argv[]) {
         pipe1->add_stage(S[i]);
         R.push_back(pipe1);
 
-        // using the default deserialization 
-        G2.in <<= C[i];
+        G2 << pipe1;
     }
 
     a2a.add_firstset(L, 0, true);
@@ -365,26 +387,29 @@ int main(int argc, char* argv[]) {
         return -1;
     }
     volatile unsigned long end_time_main_usecs = current_time_usecs();
-    cout << "Exiting" << endl;
+    std::cout << "Exiting" << endl;
     double elapsed_time_seconds = (end_time_main_usecs - start_time_main_usecs) / (1000000.0);
-    cout << "elapsed time     : " << elapsed_time_seconds << "(s)\n";
+    std::cout << "elapsed time     : " << elapsed_time_seconds << "(s)\n";
     if (DFF_getMyGroup() == "G1") {    
-        cout << "total_lines sent : " << total_lines << "\n";
-        cout << "total_bytes sent : " << std::setprecision(3) << total_bytes/1048576.0 << "(MB)\n";
+        std::cout << "total_lines sent : " << total_lines << "\n";
+        std::cout << "total_bytes sent : " << std::setprecision(3) << total_bytes/1048576.0 << "(MB)\n";
         //double throughput = total_lines / elapsed_time_seconds;
         //double mbs = (double)((total_bytes / 1048576) / elapsed_time_seconds);
-        //cout << "Measured throughput: " << (int) throughput << " lines/second, " << mbs << " MB/s" << endl;
+        //std::cout << "Measured throughput: " << (int) throughput << " lines/second, " << mbs << " MB/s" << endl;
+
     } else {
         size_t words=0;
         size_t unique=0;
         for(size_t i=0;i<S.size();++i) {
             words += S[i]->words;
             unique+= C[i]->unique();
-            delete S[i];
-            delete C[i];
         }
-        cout << "words            : " << words << "\n";
-        cout << "unique           : " << unique<< "\n";
+        std::cout << "words            : " << words << "\n";
+        std::cout << "unique           : " << unique<< "\n";
+    }
+    for(size_t i=0;i<S.size();++i) {
+        delete S[i];
+        delete C[i];
     }
     
     return 0;

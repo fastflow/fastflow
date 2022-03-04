@@ -29,6 +29,7 @@
 #include <iostream>
 #include <exception>
 #include <string>
+#include <utility>
 #include <sys/socket.h>
 #include <sys/un.h>
 
@@ -36,7 +37,6 @@
 #include <sys/uio.h>
 #include <arpa/inet.h>
 
-//#define LOCAL
 #define REMOTE
 
 #ifdef __APPLE__
@@ -62,14 +62,23 @@ public:
     dataBuffer()
         : std::stringbuf(std::ios::in | std::ios::out | std::ios::binary) {
 	}
+    
     dataBuffer(char p[], size_t len, bool cleanup=false)
         : std::stringbuf(std::ios::in | std::ios::out | std::ios::binary),
 		  len(len),cleanup(cleanup) {
         setg(p, p, p + len);
     }
+
 	~dataBuffer() {
 		if (cleanup) delete [] getPtr();
 	}
+
+    void setBuffer(char p[], size_t len, bool cleanup=true){
+        setg(p, p, p+len);
+        this->len = len;
+        this->cleanup = cleanup;
+    }
+
 	size_t getLen() const {
 		if (len>=0) return len;
 		return str().length();
@@ -87,8 +96,19 @@ protected:
 	bool cleanup = false;
 };
 
+using ffDbuffer = std::pair<char*, size_t>;
+
+struct SMmessage_t {
+    SMmessage_t(){}
+    SMmessage_t(void* t, int s, int d) : task(t), sender(s), dst(d) {}
+    void * task;
+    int sender;
+    int dst;
+};
+
 struct message_t {
 	message_t(){}
+    message_t(int sender, int chid) : sender(sender), chid(chid) {}
 	message_t(char *rd, size_t size, bool cleanup=true) : data(rd,size,cleanup){}
 	
 	int           sender;
@@ -96,9 +116,16 @@ struct message_t {
 	dataBuffer    data;
 };
 
+struct ack_t {
+    char ack = 'A';
+};
 
 struct ff_endpoint {
-	std::string address;
+    ff_endpoint(){}
+    ff_endpoint(std::string addr, int port) : address(std::move(addr)), port(port) {}
+    ff_endpoint(int rank) : port(rank) {}
+    const int getRank() {return port;}
+	std::string address, groupName;
 	int port;
 };
 
@@ -131,6 +158,7 @@ ssize_t readvn(int fd, struct iovec *v, int count){
         v[cur].iov_base = (char *)v[cur].iov_base + rread;
         v[cur].iov_len -= rread;
     }
+	return -1;
 }
 
 ssize_t writen(int fd, const char *ptr, size_t n) {  
@@ -159,6 +187,38 @@ ssize_t writevn(int fd, struct iovec *v, int count){
         v[cur].iov_base = (char *)v[cur].iov_base + written;
         v[cur].iov_len -= written;
     }
+	return -1;
 }
+
+static inline ssize_t recvnnb(int fd, char *buf, size_t size) {
+    size_t left = size;
+    int r;
+    while(left>0) {
+      if ((r=recv(fd ,buf,left,MSG_DONTWAIT)) == -1) {
+	    if (errno == EINTR) continue;
+	    if (left == size) return -1;
+	    break;
+      }
+      
+      if (r == 0) return 0;   // EOF
+      left -= r;
+      buf  += r;
+    }
+    return (size-left);
+}
+
+
+/*
+    MPI DEFINES 
+*/
+#ifdef DFF_MPI
+    #define DFF_ROUTING_TABLE_REQUEST_TAG 9
+    #define DFF_ROUTING_TABLE_TAG 2
+    #define DFF_TASK_TAG 3
+    #define DFF_HEADER_TAG 4
+    #define DFF_ACK_TAG 5
+
+    #define DFF_REQUEST_ROUTING_TABLE 10
+#endif
 
 #endif
