@@ -48,8 +48,22 @@
 #include <ff/barrier.hpp>
 #include <atomic>
 
+#ifdef DFF_ENABLED
+
+#include <ff/distributed/ff_network.hpp>
+#include <ff/distributed/ff_typetraits.hpp>
+#include <cereal/cereal.hpp>
+#include <cereal/types/polymorphic.hpp>
+#include <cereal/archives/portable_binary.hpp>
+
+#endif
+
 
 namespace ff {
+
+#ifdef DFF_ENABLED
+struct GroupInterface; 
+#endif
 
 static void* FF_EOS           = (void*)(ULLONG_MAX);     /// automatically propagated
 static void* FF_EOS_NOFREEZE  = (void*)(ULLONG_MAX-1);   /// not automatically propagated
@@ -497,8 +511,12 @@ private:
     friend class ff_comb;
     friend struct internal_mo_transformer;
     friend struct internal_mi_transformer;
+
+#ifdef DFF_ENABLED
     friend class dGroups;
-    
+    friend class dGroup;
+#endif
+
 private:
     FFBUFFER        * in;           ///< Input buffer, built upon SWSR lock-free (wait-free) 
                                     ///< (un)bounded FIFO queue                                 
@@ -510,6 +528,10 @@ private:
     bool              myoutbuffer;
     bool              myinbuffer;
     bool              skip1pop;
+#ifdef DFF_ENABLED
+    bool _skipallpop;
+#endif
+
     bool              in_active;    // allows to disable/enable input tasks receiving   
     bool              my_own_thread;
 
@@ -646,6 +668,10 @@ protected:
      *
      */
     virtual inline void skipfirstpop(bool sk)   { skip1pop=sk;}
+
+#ifdef DFF_ENABLED
+    virtual inline void skipallpop(bool sk) {_skipallpop = sk;}
+#endif
 
     /** 
      * \brief Gets the status of spontaneous start
@@ -1003,6 +1029,7 @@ public:
      */
     inline size_t getOSThreadId() const { if (thread) return thread->getOSThreadId(); return 0; }
 
+    virtual bool change_node(ff_node* old, ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=false) { return false;}
 
 #if defined(FF_TASK_CALLBACK)
     virtual void callbackIn(void * =NULL)  { }
@@ -1235,6 +1262,17 @@ protected:
        
     virtual void propagateEOS(void* task=FF_EOS) { (void)task; }
     
+#ifdef DFF_ENABLED
+    std::function<void(void*, dataBuffer&)> serializeF;
+    std::function<void*(dataBuffer&)> deserializeF;
+
+    virtual bool isSerializable(){ return (bool)serializeF; }
+    virtual bool isDeserializable(){ return (bool)deserializeF; }
+    virtual decltype(serializeF) getSerializationFunction(){return serializeF;}
+    virtual decltype(deserializeF) getDeserializationFunction(){return deserializeF;}
+
+    GroupInterface createGroup(std::string);
+#endif
     
 protected:
 
@@ -1525,6 +1563,29 @@ struct ff_node_t: ff_node {
         EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
         EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
+#ifdef DFF_ENABLED
+
+    // check on Serialization capabilities on the OUTPUT type!
+    if constexpr (traits::is_serializable_v<OUT_t>){
+        this->serializeF = [](void* o, dataBuffer& b) {std::pair<char*, size_t> p = serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o)); b.setBuffer(p.first, p.second);};
+    } else if constexpr (cereal::traits::is_output_serializable<OUT_t, cereal::PortableBinaryOutputArchive>::value){
+        this->serializeF = [](void* o, dataBuffer& b) -> void { std::ostream oss(&b); cereal::PortableBinaryOutputArchive ar(oss); ar << *reinterpret_cast<OUT_t*>(o); delete reinterpret_cast<OUT_t*>(o);};
+    }
+    
+    // check on Serialization capabilities on the INPUT type!
+    if constexpr (traits::is_deserializable_v<IN_t>){
+        this->deserializeF = [](dataBuffer& b) -> void* {
+            IN_t* ptr = nullptr;
+            b.doNotCleanup();
+            deserializeWrapper<IN_t>(b.getPtr(), b.getLen(), ptr);
+            return ptr;
+        };
+    } else if constexpr(cereal::traits::is_input_serializable<IN_t, cereal::PortableBinaryInputArchive>::value){
+        this->deserializeF = [](dataBuffer& b) -> void* {std::istream iss(&b);cereal::PortableBinaryInputArchive ar(iss); IN_t* o = new IN_t; ar >> *o; return o;};
+    }
+
+#endif
+
 	}
     OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_node_t()  {}

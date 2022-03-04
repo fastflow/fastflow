@@ -41,9 +41,6 @@ namespace ff {
 
 // forward declarations
 static ff_node* ispipe_getlast(ff_node*);
-#ifdef DFF_ENABLED
-class dGroup;
-#endif
     
 class ff_a2a: public ff_node {
     friend class ff_farm;
@@ -470,6 +467,9 @@ public:
         return ret;
     }
     
+#ifdef DFF_ENABLED
+    int run_and_wait_end();
+#else
     int run_and_wait_end() {
         if (isfrozen()) {  // TODO 
             error("A2A: Error: feature not yet supported\n");
@@ -479,6 +479,7 @@ public:
         if (wait()<0) return -1;
         return 0;
     }
+#endif
 
     /**
      * \brief checks if the node is running 
@@ -707,7 +708,17 @@ public:
 #endif
 
 #ifdef DFF_ENABLED
-    ff::dGroup& createGroup(std::string);
+    virtual bool isSerializable(){ 
+        svector<ff_node*> outputs; this->get_out_nodes(outputs);
+        for(ff_node* output: outputs) if (!output->isSerializable()) return false;
+        return true;
+    }
+
+    virtual bool isDeserializable(){ 
+        svector<ff_node*> inputs; this->get_in_nodes(inputs);
+        for(ff_node* input: inputs) if(!input->isDeserializable()) return false;
+        return true; 
+    }
 #endif
 
     
@@ -725,6 +736,7 @@ protected:
     }
 
     int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
+        int id=0;
         size_t nworkers2 = workers2.size();
         for(size_t i=0;i<nworkers2; ++i) {
             if (workers2[i]->isMultiOutput()) {
@@ -733,7 +745,7 @@ protected:
                 assert(w.size());
                 for(size_t j=0;j<w.size();++j) {
                     ff_node* t = new ff_buffernode(nentries,fixedsize); 
-                    t->set_id(j);
+                    t->set_id(id++);
                     internalSupportNodes.push_back(t);
                     if (w[j]->isMultiOutput()) {
                         if (w[j]->set_output(t)<0) return -1;
@@ -741,8 +753,10 @@ protected:
                         if (workers2[i]->set_output(t)<0) return -1;
                     }
                 }
-            } else
+            } else{ 
                 if (workers2[i]->create_output_buffer(nentries,fixedsize)==-1) return -1;
+                id++;
+            }
         }
         return 0;        
     }

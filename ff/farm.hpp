@@ -1859,7 +1859,21 @@ public:
         return diffmsec(getwstoptime(),lb->getwstartime());
     }
 
+#ifdef DFF_ENABLED
+    virtual bool isSerializable(){ 
+        svector<ff_node*> outputs; this->get_out_nodes(outputs);
+        for(ff_node* output: outputs) if (!output->isSerializable()) return false;
+        return true;
+    }
 
+    virtual bool isDeserializable(){ 
+        svector<ff_node*> inputs; this->get_in_nodes(inputs);
+        for(ff_node* input: inputs) if(!input->isDeserializable()) return false;
+        return true; 
+    }
+#endif
+
+    
 #if defined(TRACE_FASTFLOW)
     void ffStats(std::ostream & out) { 
         out << "--- farm:\n";

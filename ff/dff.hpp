@@ -26,9 +26,20 @@
 
 #define DFF_ENABLED
 
+#if !defined(DFF_EXCLUDE_MPI)
+#define DFF_MPI
+#endif
+
+#if !defined(DFF_EXCLUDE_BLOCKING)
+#define BLOCKING_MODE
+#else
+#undef BLOCKING_MODE
+#endif
+
 #include <ff/ff.hpp>
-#include <ff/distributed/ff_dgroups.hpp>
-#include <ff/distributed/ff_dgroup.hpp>
 #include <ff/distributed/ff_network.hpp>
+#include <ff/distributed/ff_dgroups.hpp>
+
+#include<ff/distributed/ff_dinterface.hpp>
 
 #endif /* FF_DFF_HPP */
