@@ -115,8 +115,8 @@ private:
     volatile unsigned long pwrite;
     ALIGN_TO_POST(CACHE_LINE_SIZE)
 #endif
-    const    unsigned long size;
-    void                   ** buf;
+    size_t     size;
+    void    ** buf;
     
 #if defined(SWSR_MULTIPUSH)
     /* massimot: experimental code (see multipush)
@@ -207,6 +207,24 @@ public:
      * \return The size of the buffer.
      */
     inline size_t buffersize() const { return size; };
+
+    /**
+     * It changes the size of the queue WITHOUT reallocating 
+     * the internal buffer. It should be used mainly for 
+     * reducing the size of the queue or to restore it after
+     * is has been previously reduced. 
+     * 
+     * WARNING: this is very a dangerous operation if executed 
+     * while the queue is being used; if wrongly used, it
+     * may lead to data loss or memory corruption!
+     *
+     */
+    size_t changesize(size_t newsz) {
+        size_t tmp=size;
+        size=newsz;
+        return tmp;
+    }
+
     
     /** 
      *  Push method: push the input value into the queue. A Write Memory
