@@ -52,12 +52,17 @@ Emitter(int nworkers, long ntasks):nworkers(nworkers),ntasks(ntasks) {}
 
     int svc_init() {
         //
-        // this is the preferred way to change the output queue capacity
-        // 
+        // This is the preferred way to change the input queue capacity
+        // of the next node.
+        // This action cannot be done directly by the worker because, at
+        // the time of execution of the change_inputqueuesize in the worker,
+        // the previous node (i.e., this node) might have
+        // already pushed some data into the queue we want to modify.
+        //
         svector<ff_node*> w;
         this->get_out_nodes(w);
         size_t oldsz;
-        w[0]->change_outputqueuesize(1, oldsz);   
+        w[0]->change_inputqueuesize(1, oldsz);   
         return 0;
     }
 
@@ -77,7 +82,7 @@ struct Worker: ff_node_t<long> {
             size_t oldsz;
             this->change_outputqueuesize(1,oldsz);
 #else
-            // preferred way to change the output queue capacity
+            // this is the preferred way to change the output queue capacity
             svector<ff_node*> w;
             this->get_out_nodes(w);
             assert(w.size() == 1);

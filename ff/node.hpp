@@ -1041,6 +1041,17 @@ public:
         oldsz = out->changesize(newsz);
         return true;
     }
+    /**
+     * Change the size of the inputchannel. 
+     * WARNING: this method should not be used if the queue is being used!!!!
+     *
+     */
+    virtual bool change_inputqueuesize(size_t newsz, size_t &oldsz) {
+        if (!in) { oldsz=0; return false; }
+        oldsz = in->changesize(newsz);
+        return true;
+    }
+
     
 #if defined(FF_TASK_CALLBACK)
     virtual void callbackIn(void * =NULL)  { }
