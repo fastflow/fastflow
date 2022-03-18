@@ -25,6 +25,9 @@
 #ifndef FF_DSENDER_H
 #define FF_DSENDER_H
 
+#define QUEUEDIM 1
+#define INTERNALQUEUEDIM 1
+
 #include <iostream>
 #include <map>
 #include <ff/ff.hpp>
@@ -49,14 +52,15 @@ using namespace ff;
 class ff_dsender: public ff_minode_t<message_t> { 
 protected:
     size_t neos=0;
-    int next_rr_destination = 0; //next destiation to send for round robin policy
     std::vector<ff_endpoint> dest_endpoints;
     std::map<int, int> dest2Socket;
-    //std::unordered_map<ConnectionType, std::vector<int>> type2sck;
     std::vector<int> sockets;
-	//int internalGateways;
+    int last_rr_socket;
+    std::map<int, unsigned int> socketsCounters;
     std::string gName;
     int coreid;
+    fd_set set, tmpset;
+    int fdmax = -1;
 
     int receiveReachableDestinations(int sck, std::map<int,int>& m){
        
@@ -78,7 +82,7 @@ protected:
 		assert(buff);
 
         if(readn(sck, buff, sz) < 0){
-            error("Error reading from socket\n");
+            error("Error reading from socket in routing table!\n");
             delete [] buff;
             return -1;
         }
@@ -216,6 +220,71 @@ protected:
         return 0;
     }
 
+     int waitAckFrom(int sck){
+        while (socketsCounters[sck] == 0){
+            for(auto& [sck_, counter] : socketsCounters){
+                int r; ack_t a;
+                if ((r = recvnnb(sck_, reinterpret_cast<char*>(&a), sizeof(ack_t))) != sizeof(ack_t)){
+                    if (errno == EWOULDBLOCK){
+                        assert(r == -1);
+                        continue;
+                    }
+                    perror("recvnnb ack");
+                    return -1;
+                } else 
+                    //printf("received ACK from conn %d\n", i);
+                    counter++;
+                
+            }
+			
+            if (socketsCounters[sck] == 0){
+                tmpset = set;
+                if (select(fdmax + 1, &tmpset, NULL, NULL, NULL) == -1){
+                    perror("select");
+                    return -1;
+                }
+            }
+        }
+        return 1;
+    }
+
+    int waitAckFromAny() {
+		tmpset = set;
+		if (select(fdmax + 1, &tmpset, NULL, NULL, NULL) == -1){
+			perror("select");
+			return -1;
+		}
+		// try to receive from all connections in a non blocking way
+        for (auto& [sck, counter] : socketsCounters){
+            int r; ack_t a;
+			if ((r = recvnnb(sck, reinterpret_cast<char*>(&a), sizeof(ack_t))) != sizeof(ack_t)){
+				if (errno == EWOULDBLOCK){
+					//assert(r == -1); // a cosa serve??
+					continue;
+				}
+				perror("recvnnb ack any");
+				return -1;
+			} else {
+				counter++;
+				return sck;
+			}
+        }
+
+        return -1;
+	}
+
+    int getNextReady(){
+        for(size_t i = 0; i < this->sockets.size(); i++){
+            int actualSocketIndex = (last_rr_socket + 1 + i) % this->sockets.size();
+            int sck = sockets[actualSocketIndex];
+            if (socketsCounters[sck] > 0) {
+                last_rr_socket = actualSocketIndex;
+                return sck;
+            }
+        }
+		return waitAckFromAny();		
+    }
+
     
 public:
     ff_dsender(ff_endpoint dest_endpoint, std::string gName = "", int coreid=-1): gName(gName), coreid(coreid) {
@@ -229,35 +298,64 @@ public:
     int svc_init() {
 		if (coreid!=-1)
 			ff_mapThreadToCpu(coreid);
+        
+        FD_ZERO(&set);
+        FD_ZERO(&tmpset);
 		
-        sockets.resize(this->dest_endpoints.size());
+        sockets.resize(dest_endpoints.size());
         for(size_t i=0; i < this->dest_endpoints.size(); i++){
-            if ((sockets[i] = tryConnect(this->dest_endpoints[i])) <= 0 ) return -1;
-            if (handshakeHandler(sockets[i], false) < 0) return -1;
+            int sck = tryConnect(this->dest_endpoints[i]);
+            if (sck <= 0) return -1;
+            sockets[i] = sck;
+            socketsCounters[sck] = QUEUEDIM;
+            if (handshakeHandler(sck, false) < 0) return -1;
+
+            FD_SET(sck, &set);
+            if (sck > fdmax) fdmax = sck;
         }
+
+        // we can erase the list of endpoints
+        this->dest_endpoints.clear();
 
         return 0;
     }
 
     void svc_end() {
+        
+        long totalack = socketsCounters.size()*QUEUEDIM;
+		long currack  = 0;
+        for(const auto& pair : socketsCounters)
+            currack += pair.second;
+		while(currack<totalack) {
+			waitAckFromAny();
+			currack++;
+		}
+
         // close the socket not matter if local or remote
-        for(size_t i=0; i < this->sockets.size(); i++)
-            close(sockets[i]);
+        for (auto& sck : this->sockets) close(sck);
     }
 
     message_t *svc(message_t* task) {
-        /* here i should send the task via socket */
-        if (task->chid == -1){ // roundrobin over the destinations
-            task->chid = next_rr_destination;
-            next_rr_destination = (next_rr_destination + 1) % dest2Socket.size();
-        }
+        int sck;
+        if (task->chid != -1){
+            sck = dest2Socket[task->chid];
+            if (socketsCounters[sck] == 0 && waitAckFrom(sck) == -1){ // blocking call if scheduling is ondemand
+                    error("Error waiting Ack from....\n");
+                    delete task; return this->GO_ON;
+            }
+        } else 
+            sck = getNextReady(); // blocking call if scheduling is ondemand
+    
+        sendToSck(sck, task);
 
-        sendToSck(dest2Socket[task->chid], task);
+        // update the counters
+        socketsCounters[sck]--;
+
         delete task;
         return this->GO_ON;
     }
 
-    void eosnotify(ssize_t id) {
+    virtual void eosnotify(ssize_t id) {
         if (++neos >= this->get_num_inchannels()){
             message_t E_O_S(0,0);
             for(const auto& sck : sockets) sendToSck(sck, &E_O_S);
@@ -270,9 +368,30 @@ public:
 class ff_dsenderH : public ff_dsender {
 
     std::map<int, int> internalDest2Socket;
-    std::map<int, int>::const_iterator rr_iterator;
     std::vector<int> internalSockets;
+    int last_rr_socket_Internal = -1;
     std::set<std::string> internalGroupNames;
+
+    int getNextReadyInternal(){
+        for(size_t i = 0; i < this->internalSockets.size(); i++){
+            int actualSocketIndex = (last_rr_socket_Internal + 1 + i) % this->internalSockets.size();
+            int sck = internalSockets[actualSocketIndex];
+            if (socketsCounters[sck] > 0) {
+                last_rr_socket_Internal = actualSocketIndex;
+                return sck;
+            }
+        }
+
+        int sck;
+        decltype(internalSockets)::iterator it;
+
+        do 
+            sck = waitAckFromAny();
+        while ((it = std::find(internalSockets.begin(), internalSockets.end(), sck)) != internalSockets.end());
+        
+        last_rr_socket_Internal = it - internalSockets.begin();
+        return sck;
+    }
 
 public:
 
@@ -287,8 +406,7 @@ public:
 
     int svc_init() {
 
-        sockets.resize(this->dest_endpoints.size());
-        for(const auto& endpoint : this->dest_endpoints){
+        /* for(const auto& endpoint : this->dest_endpoints){
             int sck = tryConnect(endpoint);
             if (sck <= 0) {
                 error("Error on connecting!\n");
@@ -297,22 +415,53 @@ public:
             bool isInternal = internalGroupNames.contains(endpoint.groupName);
             if (isInternal) internalSockets.push_back(sck);
             else sockets.push_back(sck);
+            socketsCounters[sck] = isInternal ? INTERNALQUEUEDIM  : QUEUEDIM;
             handshakeHandler(sck, isInternal);
         }
 
-        rr_iterator = internalDest2Socket.cbegin();
+        return 0; */
+
+        if (coreid!=-1)
+			ff_mapThreadToCpu(coreid);
+        
+        FD_ZERO(&set);
+        FD_ZERO(&tmpset);
+		
+        for(const auto& endpoint : this->dest_endpoints){
+            int sck = tryConnect(endpoint);
+            if (sck <= 0) return -1;
+            bool isInternal = internalGroupNames.contains(endpoint.groupName);
+            if (isInternal) internalSockets.push_back(sck);
+            else sockets.push_back(sck);
+            socketsCounters[sck] = isInternal ? INTERNALQUEUEDIM : QUEUEDIM;
+            if (handshakeHandler(sck, isInternal) < 0) return -1;
+
+            FD_SET(sck, &set);
+            if (sck > fdmax) fdmax = sck;
+        }
+
+        // we can erase the list of endpoints
+        this->dest_endpoints.clear();
+
         return 0;
     }
 
     message_t *svc(message_t* task) {
         if (this->get_channel_id() == (ssize_t)(this->get_num_inchannels() - 1)){
+            int sck;
+        
             // pick destination from the list of internal connections!
-            if (task->chid == -1){ // roundrobin over the destinations
-                task->chid = rr_iterator->first;
-                if (++rr_iterator == internalDest2Socket.cend()) rr_iterator = internalDest2Socket.cbegin();
-            }
+            if (task->chid != -1){ // roundrobin over the destinations
+                sck = internalDest2Socket[task->chid];
+                 if (socketsCounters[sck] == 0 && waitAckFrom(sck) == -1){ // blocking call if scheduling is ondemand
+                    error("Error waiting Ack from....\n");
+                    delete task; return this->GO_ON;
+                }
+            } else
+                sck = getNextReadyInternal();
 
-            sendToSck(internalDest2Socket[task->chid], task); 
+            sendToSck(sck, task); 
+            socketsCounters[sck]--;
             delete task;
             return this->GO_ON;
         }
@@ -324,8 +473,18 @@ public:
          if (id == (ssize_t)(this->get_num_inchannels() - 1)){
             // send the EOS to all the internal connections
             message_t E_O_S(0,0);
-            for(const auto& sck : internalSockets) sendToSck(sck, &E_O_S);
+            for(const auto& sck : internalSockets) {
+                sendToSck(sck, &E_O_S);
+                FD_CLR(sck, &set);
+                socketsCounters.erase(sck);
+                if (sck == fdmax) {
+                    fdmax = 0;
+                    for(auto& [sck_, _] : socketsCounters) if (sck_ > fdmax && FD_ISSET(sck_, &set)) fdmax = sck_;
+                }
+    
+            }
             ++neos; // count anyway a new EOS received!
+
          } else if (++neos >= this->get_num_inchannels()){
             message_t E_O_S(0,0);
             for(const auto& sck : sockets) sendToSck(sck, &E_O_S);
@@ -333,157 +492,5 @@ public:
      }
 };
 
-
-
-
-
-/*
-    ONDEMAND specification
-*/
-
-class ff_dsenderOD: public ff_dsender { 
-private:
-    int last_rr_socket = 0; //next destiation to send for round robin policy
-    std::map<int, unsigned int> sockCounters;
-    const int queueDim;
-    fd_set set, tmpset;
-    int fdmax = -1;
-
-    
-public:
-    ff_dsenderOD(ff_endpoint dest_endpoint, int queueDim = 1, std::string gName = "", int coreid=-1)
-		: ff_dsender(dest_endpoint, gName, coreid), queueDim(queueDim) {}
-
-    ff_dsenderOD(std::vector<ff_endpoint> dest_endpoints_, int queueDim = 1, std::string gName = "", int coreid=-1)
-		: ff_dsender(dest_endpoints_, gName, coreid), queueDim(queueDim) {}
-
-    int svc_init() {
-		if (coreid!=-1)
-			ff_mapThreadToCpu(coreid);
-		
-        FD_ZERO(&set);
-        FD_ZERO(&tmpset);
-
-		sockets.resize(this->dest_endpoints.size());
-        for(size_t i=0; i < this->dest_endpoints.size(); i++){
-            if ((sockets[i] = tryConnect(this->dest_endpoints[i])) <= 0 ) return -1;
-			if (handshakeHandler(sockets[i], false) < 0) return -1;
-            // execute the following block only if the scheduling is onDemand
-            
-            sockCounters[sockets[i]] = queueDim;
-            FD_SET(sockets[i], &set);
-            if (sockets[i] > fdmax)
-                fdmax = sockets[i];
-            
-        }
-
-        return 0;
-    }
-
-    int waitAckFrom(int sck){
-        while (sockCounters[sck] == 0){
-            for (size_t i = 0; i < this->sockets.size(); ++i){
-                int r; ack_t a;
-                if ((r = recvnnb(sockets[i], reinterpret_cast<char*>(&a), sizeof(ack_t))) != sizeof(ack_t)){
-                    if (errno == EWOULDBLOCK){
-                        assert(r == -1);
-                        continue;
-                    }
-                    perror("recvnnb ack");
-                    return -1;
-                } else 
-                    //printf("received ACK from conn %d\n", i);
-                    sockCounters[sockets[i]]++;
-                
-            }
-			
-            if (sockCounters[sck] == 0){
-                tmpset = set;
-                if (select(fdmax + 1, &tmpset, NULL, NULL, NULL) == -1){
-                    perror("select");
-                    return -1;
-                }
-            }
-        }
-        return 1;
-    }
-
-	int waitAckFromAny() {
-		tmpset = set;
-		if (select(fdmax + 1, &tmpset, NULL, NULL, NULL) == -1){
-			perror("select");
-			return -1;
-		} 
-		// try to receive from all connections in a non blocking way
-		for (size_t i = 0; i < this->sockets.size(); ++i){
-			int r; ack_t a;
-			int sck = sockets[i];
-			if ((r = recvnnb(sck, reinterpret_cast<char*>(&a), sizeof(ack_t))) != sizeof(ack_t)){
-				if (errno == EWOULDBLOCK){
-					assert(r == -1);
-					continue;
-				}
-				perror("recvnnb ack");
-				return -1;
-			} else {
-				sockCounters[sck]++;
-				last_rr_socket = i;
-				return sck;
-			}
-		} 
-		assert(1==0);
-		return -1;
-	}
-
-    int getNextReady(){
-        for(size_t i = 0; i < this->sockets.size(); i++){
-            int actualSocket = (last_rr_socket + 1 + i) % this->sockets.size();
-            int sck = sockets[actualSocket];
-            if (sockCounters[sck] > 0) {
-                last_rr_socket = actualSocket;
-                return sck;
-            }
-        }
-		return waitAckFromAny();		
-    }
-
-
-    void svc_end() {
-		long totalack = sockets.size()*queueDim;
-		long currack  = 0;
-        for(const auto& pair : sockCounters)
-            currack += pair.second;
-		while(currack<totalack) {
-			waitAckFromAny();
-			currack++;
-		}
-
-		// close the socket not matter if local or remote
-        for(size_t i=0; i < this->sockets.size(); i++) {
-	            close(sockets[i]);
-		}
-    }
-    message_t *svc(message_t* task) {
-        int sck;
-        if (task->chid != -1){
-            sck = dest2Socket[task->chid];
-            if (sockCounters[sck] == 0 && waitAckFrom(sck) == -1){ // blocking call if scheduling is ondemand
-                    error("Error waiting Ack from....\n");
-                    delete task; return this->GO_ON;
-            }
-        } else 
-            sck = getNextReady(); // blocking call if scheduling is ondemand
-    
-        sendToSck(sck, task);
-
-        // update the counters
-        sockCounters[sck]--;
-
-        delete task;
-        return this->GO_ON;
-    }
-
-
-};
 
 #endif

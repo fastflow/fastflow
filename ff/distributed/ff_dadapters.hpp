@@ -28,11 +28,16 @@ public:
 
 class SquareBoxLeft : public ff_monode {
 	std::unordered_map<int, int> destinations;
+	int next_rr_destination = 0;
 public:
 	SquareBoxLeft(const std::unordered_map<int, int> localDestinations) : destinations(localDestinations) {}
     
 	void* svc(void* in){
-		this->ff_send_out_to(in, destinations[reinterpret_cast<message_t*>(in)->chid]);
+		if (reinterpret_cast<message_t*>(in)->chid == -1) {
+			ff_send_out_to(in, next_rr_destination);
+			next_rr_destination = (next_rr_destination + 1) % destinations.size();
+		}
+		else this->ff_send_out_to(in, destinations[reinterpret_cast<message_t*>(in)->chid]);
 		return this->GO_ON;
     }
 };
@@ -41,7 +46,7 @@ class EmitterAdapter: public internal_mo_transformer {
 private:
     int totalWorkers, index;
 	std::unordered_map<int, int> localWorkersMap;
-    int nextDestination;
+    int nextDestination = -1;
 public:
 	/** Parameters:
 	 * 	- n: rightmost sequential node of the builiding block representing the left-set worker
@@ -66,9 +71,18 @@ public:
 	}
 
     bool forward(void* task, int destination){
-        if (destination == -1) {
-			destination = nextDestination;
-			nextDestination = (nextDestination + 1) % totalWorkers;
+
+		if (destination == -1){
+			for(int i = 0; i < localWorkersMap.size(); i++){
+				int actualDestination = (nextDestination + 1 + i) % localWorkersMap.size();
+				if (ff_send_out_to(task, actualDestination, 1)){ // non blocking ff_send_out_to, we try just once
+					nextDestination = actualDestination;
+					return true;
+				}
+			}
+			message_t* msg = new message_t(index, destination);
+			this->n->serializeF(task, msg->data);
+			return ff_send_out_to(msg, localWorkersMap.size());
 		}
 
         auto pyshicalDestination = localWorkersMap.find(destination);
@@ -122,7 +136,7 @@ public:
 	}
 
 	int svc_init() {
-		if (this->n->isMultiInput()) { ////???????? MASSIMO???
+		if (this->n->isMultiInput()) {
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
 			mi->set_running(localWorkers.size() + 1);
 		}

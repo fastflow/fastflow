@@ -88,21 +88,12 @@ protected:
     }
 
     virtual void registerEOS(int sck){
-        /*switch(connectionsTypes[sck]){
-            case ConnectionType::EXTERNAL: 
-                if (++Eneos == Einput_channels)
-                    for(auto& c : routingTable) if (c.first >= 0) ff_send_out_to(this->EOS, c.second);    
-                break;
-            case ConnectionType::INTERNAL:
-                if (++Ineos == Iinput_channels)
-                    for(auto & c : routingTable) if (c.first <= -100) ff_send_out(this->EOS, c.second);
-                break;
-        }*/
         neos++;
     }
 
     virtual void forward(message_t* task, int){
-        ff_send_out_to(task, this->routingTable[task->chid]); // assume the routing table is consistent WARNING!!!
+        if (task->chid == -1) ff_send_out(task);
+        else ff_send_out_to(task, this->routingTable[task->chid]); // assume the routing table is consistent WARNING!!!
     }
 
     virtual int handleRequest(int sck){
@@ -131,7 +122,7 @@ protected:
             char* buff = new char [sz];
 			assert(buff);
             if(readn(sck, buff, sz) < 0){
-                error("Error reading from socket\n");
+                error("Error reading from socket in handleRequest\n");
                 delete [] buff;
                 return -1;
             }
@@ -141,6 +132,15 @@ protected:
 			out->chid   = chid;
 
             this->forward(out, sck);
+            
+            // always sending back the acknowledgement
+            if (writen(sck, reinterpret_cast<char*>(&ACK), sizeof(ack_t)) < 0){
+                if (errno != ECONNRESET || errno != EPIPE) {
+                    error("Error sending back ACK to the sender (errno=%d)\n",errno);
+                    return -1;
+                }
+            }
+
             return 0;
         }
 
@@ -286,6 +286,7 @@ protected:
     std::map<int, int> routingTable;
     int last_receive_fd = -1;
 	int coreid;
+    ack_t ACK;
 };
 
 
@@ -295,6 +296,7 @@ class ff_dreceiverH : public ff_dreceiver {
     std::map<int, bool> isInternalConnection;
     std::set<std::string> internalGroupsNames;
     size_t internalNEos = 0, externalNEos = 0;
+    int next_rr_destination = 0;
 
     void registerEOS(int sck){
         neos++;
@@ -340,7 +342,11 @@ class ff_dreceiverH : public ff_dreceiver {
 
     void forward(message_t* task, int sck){
         if (isInternalConnection[sck]) ff_send_out_to(task, this->get_num_outchannels()-1);
-        else ff_dreceiver::forward(task, sck);
+        else if (task->chid != -1) ff_send_out_to(task, this->routingTable[task->chid]);
+        else {
+            ff_send_out_to(task, next_rr_destination);
+            next_rr_destination = ++next_rr_destination % (this->get_num_outchannels()-1);
+        }
     }
 
 public:
