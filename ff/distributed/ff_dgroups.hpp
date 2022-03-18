@@ -249,8 +249,60 @@ private:
         }
         
         // if i'm here it means that from this 1st level building block, multiple groups have been created! (An Error or an A2A or a Farm BB)
-        std::set<std::pair<ff_node*, SetEnum>> children = getChildBB(pair.first);
+
+        if (pair.first->isPipe()){
+
+          // check that all stages were annotated
+          for(ff_node* child : reinterpret_cast<ff_pipeline*>(pair.first)->getStages())
+            if (!annotated.contains(child)){
+              error("Need to abla ");
+              abort();
+            }
+
+           for(auto& gName: pair.second){
+             ff_pipeline* originalPipe = reinterpret_cast<ff_pipeline*>(pair.first);
+             ff_pipeline* mypipe = new ff_pipeline;
+
+              for(ff_node* child : originalPipe->getStages()){
+                if (annotated[child] == gName){
+                  if (mypipe->getStages().size() != 0 && originalPipe->get_stageindex(mypipe->get_laststage())+1 != originalPipe->get_stageindex(child)) {
+                    error("There are some stages missing in the annottation!\n");
+                    abort();
+                  } else 
+                    mypipe->add_stage(child);
+                } 
+              }
+
+              bool head = mypipe->get_firststage() == originalPipe->get_firststage();
+              bool tail = mypipe->get_laststage() == originalPipe->get_laststage();
+             
+              if (((head && isSrc) || mypipe->isDeserializable()) && ((tail && isSnk) || mypipe->isSerializable()))  
+                annotatedGroups[gName].insertInList(std::make_pair(mypipe, SetEnum::L));
+              else {
+                error("The group cannot serialize something!\n");
+                abort();
+              }
+
+              if (head && isSrc) annotatedGroups[gName].isSource = true;
+              if (tail && isSnk) annotatedGroups[gName].isSink = true;
+            
+
+              if (!tail)
+                annotatedGroups[gName].destinationEndpoints.push_back(annotatedGroups[annotated[originalPipe->get_nextstage(mypipe->get_laststage())]].listenEndpoint);
+             
+              if (!head)
+                annotatedGroups[gName].expectedEOS = 1;
+    
+           }
+
+    
+
+        } else {
         
+        // all2all here!
+
+        std::set<std::pair<ff_node*, SetEnum>> children = getChildBB(pair.first);
+
         std::erase_if(children, [&](auto& p){
             if (!annotated.contains(p.first)) return false;
             std::string& groupName = annotated[p.first]; 
@@ -300,7 +352,8 @@ private:
            // populate the set with the names of other groups created from this 1st level BB
           _ir.otherGroupsFromSameParentBB = pair.second;
         }
-       
+        
+        }
         //runningGroup_IR.isSink = isSnk; runningGroup_IR.isSource = isSrc;
        
         //runningGroup_IR.otherGroupsFromSameParentBB = pair.second;
