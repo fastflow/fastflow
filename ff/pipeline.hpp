@@ -661,6 +661,13 @@ public:
         if (cleanup) internalSupportNodes.push_back(node);
     }
 
+    int get_stageindex(const ff_node* stage){
+        if (!stage) return -1;
+        for(size_t i=0; i<nodes_list.size(); ++i) 
+            if(nodes_list[i] == stage) return (int)i;
+        return -1;
+    }
+
     // returns true if the old node has been changed with the new one
     // false in case of error of if the old node has not been found
     bool change_node(ff_node* old, ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=false) {
@@ -1070,7 +1077,7 @@ public:
         return nodes_list[i];
     }
     /**
-     *  \brief returns the last stage of the pipeline. 
+     *  \brief returns the last stage of the pipeline recursively. 
      */
     ff_node* get_lastnode() const {
         if (!nodes_list.size()) return nullptr;
@@ -1082,6 +1089,34 @@ public:
         return nodes_list[last];
     }
 
+     /**
+     *  \brief returns the last stage of the pipeline. 
+     */
+    ff_node* get_laststage() const {
+        if (!nodes_list.size()) return nullptr;
+        const int last = static_cast<int>(nodes_list.size())-1;
+        return nodes_list[last];
+    }
+    
+     /**
+     *  \brief returns the first stage of the pipeline. 
+     */
+    ff_node* get_firststage() const {
+        if (!nodes_list.size()) return nullptr;
+        return nodes_list[0];
+    }
+
+    ff_node* get_nextstage(const ff_node* s){
+        int index = this->get_stageindex(s);
+        if (index == -1 || index == nodes_list.size()-1) return nullptr;
+        return nodes_list[index+1];
+    }
+
+    ff_node* get_prevstage(const ff_node* s){
+        int index = this->get_stageindex(s);
+        if (index <= 0) return nullptr;
+        return nodes_list[index-1];
+    }
     
     inline void get_out_nodes(svector<ff_node*>&w) {
         assert(nodes_list.size()>0);

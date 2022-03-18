@@ -17,6 +17,19 @@ using namespace ff;
 class SquareBoxRight : public ff_minode {
     ssize_t neos = 0;
 public:	
+
+	int svc_init() {
+
+		// change the size of the queue to the Sender, since the distributed-memory communications are all on-demand
+		svector<ff_node*> w;
+        this->get_out_nodes(w);
+        size_t oldsz;
+		assert(w.size() == 1);
+        w[0]->change_inputqueuesize(1, oldsz); 
+
+		return 0;
+	}
+
 	void* svc(void* in) {return in;}
 
 	void eosnotify(ssize_t id) {
@@ -60,7 +73,7 @@ public:
 		this->cleanup = cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
 	}
-	
+
 	void * svc(void* in) {
 		void* out = n->svc(in);
 		if (out > FF_TAG_MIN) return out;					
@@ -101,6 +114,13 @@ public:
 			//mo->set_running(localWorkersMap.size() + 1); // the last worker is the forwarder to the remote workers
 			mo->set_running(totalWorkers);
 		}
+
+		// change the size of the queue to the SquareBoxRight, since the distributed-memory communications are all on-demand
+		svector<ff_node*> w;
+        this->get_out_nodes(w);
+        size_t oldsz;
+        w[localWorkersMap.size()]->change_inputqueuesize(1, oldsz); 
+
 		return n->svc_init();
 	}
 
