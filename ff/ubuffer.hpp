@@ -183,6 +183,25 @@ public:
         while(inuse.pop(&p.b2)) release(p.b1);
     }
 
+    //
+    // WARNING: using this call in the wrong place is very dangerous!!!!
+    //
+    void changesize(size_t newsz) {
+        // the inuse queue should be empty
+        union { INTERNAL_BUFFER_T * b1; void * b2;} p;
+        while (inuse.pop(&p.b2))
+            assert(1==0);
+        dynqueue tmp;        
+        while(bufcache.pop(&p.b2)) {
+            p.b1->changesize(newsz);
+            tmp.push(p.b2);
+        }
+        while(tmp.pop(&p.b2)) {
+            bufcache.push(p.b2);
+        }
+    }
+
+    
 private:
 #if defined(UBUFFER_STATS)
     unsigned long      miss,hit;
@@ -450,6 +469,27 @@ public:
     };
 
     /**
+     * It changes the size of the queue WITHOUT reallocating 
+     * the internal buffers. It should be used mainly for 
+     * reducing the size of the queue or to restore it after
+     * is has been previously reduced. 
+     * 
+     * WARNING: this is very a dangerous operation if executed 
+     * while the queue is being used; if wrongly used, it
+     * may lead to data loss or memory corruption!
+     *
+     */
+    size_t changesize(size_t newsz) {
+        assert(buf_r == buf_w); // just a sanity check that the queue is not being used
+        size_t tmp=buf_w->changesize(newsz);
+        assert(size == tmp);
+        size = newsz;
+        pool.changesize(newsz);
+        return tmp;
+    }
+
+    
+    /**
      * \brief number of elements in the queue
      * \note This is just a rough estimation of the actual queue length. Not really possible
      * to be precise in a lock-free buffer.
@@ -512,7 +552,7 @@ private:
 #endif
 
     unsigned long       in_use_buffers; // used to estimate queue length
-    const unsigned long	size;
+    unsigned long	    size;
     bool			    fixedsize;
     BufferPool			pool;
 };
