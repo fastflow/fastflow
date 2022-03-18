@@ -129,6 +129,15 @@ public:
             return -1;
         }
 
+		bool allDeriveFromParent = true; 
+		for(auto& [name, ir]: annotatedGroups) 
+			if (ir.parentBB != parent) { allDeriveFromParent = false; break; }
+
+		if (allDeriveFromParent) {
+			ff_pipeline *mypipe = new ff_pipeline;
+			mypipe->add_stage(parent);
+			parent = mypipe;
+		}
 
       // qui dovrei creare la rappresentazione intermedia di tutti
       this->prepareIR(parent);

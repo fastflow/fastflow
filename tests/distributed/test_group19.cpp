@@ -90,17 +90,17 @@ int main(int argc, char*argv[]){
 	if (argc>1) {
 		ntasks = std::stol(argv[1]);
 	}
-	ff_pipeline pipeMain;
     ff_pipeline pipe;
 	Node1 n1(ntasks);
 	Node2 n2;
 	Node3 n3;
 	Node4 n4(ntasks);
 	
-
+	pipe.add_stage(&n1);
+	pipe.add_stage(&n2);
+	pipe.add_stage(&n3);
+	pipe.add_stage(&n4);
 	
-	pipeMain.add_stage(&pipe);
-
     //----- defining the distributed groups ------
 	
 	pipe.createGroup("G1") << &n1 << &n2;
@@ -108,7 +108,7 @@ int main(int argc, char*argv[]){
 	
     // -------------------------------------------
 	
-	if (pipeMain.run_and_wait_end()<0) {
+	if (pipe.run_and_wait_end()<0) {
 		error("running the main pipe\n");
 		return -1;
 	}
