@@ -88,11 +88,9 @@ public:
     dGroup(ff_IR& ir){
 
         int outputChannels = 0;
-        if (ir.hasSender){
-            ff::cout << "Size of routintable " << ir.routingTable.size() << std::endl;
+        if (ir.hasSender)
             outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+f.second.first.size();});
-            ff::cout << "Outputchannels: " << outputChannels << std::endl;
-        }
+            
         if (ir.isVertical()){
 
             std::vector<int> reverseOutputIndexes(ir.hasLeftChildren() ? ir.outputL.rbegin() : ir.outputR.rbegin(), ir.hasLeftChildren() ? ir.outputL.rend() : ir.outputR.rend());
