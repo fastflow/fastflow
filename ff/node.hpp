@@ -1031,6 +1031,28 @@ public:
 
     virtual bool change_node(ff_node* old, ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=false) { return false;}
 
+    /**
+     * Change the size of the outputchannel. 
+     * WARNING: this method should not be used if the queue is being used!!!!
+     *
+     */
+    virtual bool change_outputqueuesize(size_t newsz, size_t &oldsz) {
+        if (!out) { oldsz=0; return false; }
+        oldsz = out->changesize(newsz);
+        return true;
+    }
+    /**
+     * Change the size of the inputchannel. 
+     * WARNING: this method should not be used if the queue is being used!!!!
+     *
+     */
+    virtual bool change_inputqueuesize(size_t newsz, size_t &oldsz) {
+        if (!in) { oldsz=0; return false; }
+        oldsz = in->changesize(newsz);
+        return true;
+    }
+
+    
 #if defined(FF_TASK_CALLBACK)
     virtual void callbackIn(void * =NULL)  { }
     virtual void callbackOut(void * =NULL) { }
