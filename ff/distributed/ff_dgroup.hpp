@@ -132,6 +132,13 @@ public:
 
             if (ir.hasSender)
                 this->add_collector(new ff_dsender(ir.destinationEndpoints, ir.listenEndpoint.groupName), true);
+			
+			if (ir.hasRightChildren() && ir.parentBB->isAll2All()) {
+				ff_a2a *a2a = reinterpret_cast<ff_a2a*>(ir.parentBB);
+				if (a2a->ondemand_buffer() > 0) {
+					this->set_scheduling_ondemand(a2a->ondemand_buffer());
+				}
+			}			
         }
         else { // the group is horizontal!
             ff_a2a* innerA2A = new ff_a2a();

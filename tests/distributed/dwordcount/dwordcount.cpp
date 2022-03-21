@@ -67,20 +67,20 @@
 using namespace ff;
 
 const size_t qlen = DEFAULT_BUFFER_CAPACITY;
-const int MAXLINE=128;
+const int MAXLINE=128;    // character per line (CPL), a typically value is 80 CPL
 const int MAXWORD=32;
 
 struct tuple_t {
-    char text_line[MAXLINE];   // line of the parsed dataset (text, book, ...)
-    size_t key;                // line number
-    uint64_t id;               // id set to zero
-    uint64_t ts;               // timestamp
+    char     text_line[MAXLINE];  // parsed line
+    size_t   key;                 // line number
+    uint64_t id;                  // id set to zero
+    uint64_t ts;                  // timestamp
 };
 
 struct result_t {
-    char     key[MAXWORD];  // key word
-    uint64_t id;            // id that indicates the current number of occurrences of the key word
-    uint64_t ts;            // timestamp
+    char     key[MAXWORD];    // key word
+    uint64_t id;              // indicates the current number of occurrences of the word
+    uint64_t ts;              // timestamp
 
 	template<class Archive>
 	void serialize(Archive & archive) {
@@ -158,12 +158,10 @@ struct Source: ff_monode_t<tuple_t> {
 	}
 };
 struct Splitter: ff_monode_t<tuple_t, result_t> {
-    Splitter(long noutch):noutch(noutch) {}
-
-    // int svc_init() {
-    // noutch=get_num_outchannels(); // TODO: this doesn't work, it must be fixed!
-    // /return 0;
-    // }
+    int svc_init() {
+        noutch=get_num_outchannels(); // number of output channels
+        return 0;
+    }
 
     result_t* svc(tuple_t* in) {        
         char *tmpstr;
@@ -197,7 +195,7 @@ struct Splitter: ff_monode_t<tuple_t, result_t> {
 struct Counter: ff_minode_t<result_t> {
     result_t* svc(result_t* in) {
         ++M[std::string(in->key)];
-        // number of occurrences of the string word up to now
+        // number of occurrences of the word up to now
         in->id = M[std::string(in->key)]; 
         return in;
     }
@@ -212,14 +210,13 @@ struct Counter: ff_minode_t<result_t> {
 };
 
 struct Sink: ff_node_t<result_t> {
-    result_t* svc(result_t* in) {        
+    result_t* svc(result_t* in) {    
         ++words;
         delete in;
         return GO_ON;
     }
     size_t words=0; // total number of words received
 };
-
 
 /** 
  *  @brief Parse the input file and create all the tuples
@@ -258,7 +255,6 @@ int parse_dataset_and_create_tuples(const std::string& file_path) {
     }
     return 0;
 }
-
 
 
 int main(int argc, char* argv[]) {
@@ -325,7 +321,8 @@ int main(int argc, char* argv[]) {
         /// data pre-processing
         if (parse_dataset_and_create_tuples(file_path)< 0)
             return -1;
-    
+
+        std::cout << "\n\n";
         std::cout << "Executing WordCount with parameters:" << endl;
         std::cout << "  * source/splitter : " << source_par_deg << endl;
         std::cout << "  * counter/sink    : " << sink_par_deg << endl;
@@ -350,7 +347,7 @@ int main(int argc, char* argv[]) {
         ff_pipeline* pipe0 = new ff_pipeline(false, qlen, qlen, true);
         
         pipe0->add_stage(new Source(app_start_time), true);
-        Splitter* sp = new Splitter(sink_par_deg);
+        Splitter* sp = new Splitter;
         pipe0->add_stage(sp, true);
         L.push_back(pipe0);
 
@@ -379,7 +376,7 @@ int main(int argc, char* argv[]) {
         threadMapper::instance()->setMappingList("12,13,14,15,16,17,18,19,20,21,22,23, 36,37,38,39,40,41,42,43,44,45,46,47");
     }
 #endif        
-    std::cout << "Starting " << pipeMain.numThreads() << " threads\n";
+    std::cout << "Starting " << pipeMain.numThreads() << " threads\n\n";
     /// evaluate topology execution time
     volatile unsigned long start_time_main_usecs = current_time_usecs();
     if (pipeMain.run_and_wait_end()<0) {
