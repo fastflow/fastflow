@@ -86,12 +86,11 @@ class dGroup : public ff::ff_farm {
 
 public:
     dGroup(ff_IR& ir){
-
-        int outputChannels = 0;
-        if (ir.hasSender)
-            outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+f.second.first.size();});
             
         if (ir.isVertical()){
+            int outputChannels = 0;
+            if (ir.hasSender)
+                outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+f.second.first.size();});
 
             std::vector<int> reverseOutputIndexes(ir.hasLeftChildren() ? ir.outputL.rbegin() : ir.outputR.rbegin(), ir.hasLeftChildren() ? ir.outputL.rend() : ir.outputR.rend());
             for(ff_node* child: (ir.hasLeftChildren() ? ir.L : ir.R)){
@@ -182,7 +181,8 @@ public:
 
             innerA2A->add_firstset(firstSet); // ondemand ??? clenaup??
             
-
+            int outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second ? 0 : f.second.first.size());});
+            
             std::vector<int> reverseRightOutputIndexes(ir.outputR.rbegin(), ir.outputR.rend());
             std::vector<ff_node*> secondSet;
             for(ff_node* child : ir.R){
