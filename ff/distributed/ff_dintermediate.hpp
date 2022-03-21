@@ -6,6 +6,7 @@
 #include <list>
 #include <vector>
 #include <map>
+#include <numeric>
 
 namespace ff {
 
@@ -122,7 +123,17 @@ public:
         std::cout << "Destination endpoints: " << std::endl;
         for(ff_endpoint& e : destinationEndpoints)
             std::cout << "\t* " << e.groupName << "\t[[" << e.address << ":" << e.port << "]]" << std::endl;
-        
+
+        std::cout << "Precomputed routing table: \n";
+        for(auto& [gName, p] : routingTable){
+            std::cout << "\t* " << gName << (p.second ? "(Internal) :" : "(External) :");
+            for(auto i : p.first) std::cout << i << " ";
+            std::cout << std::endl;
+        }
+
+        std::cout << "\nPrecomputed external destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second ? 0 : f.second.first.size());}) << std::endl;
+        std::cout << "Precomputed internal destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second ? f.second.first.size() : 0);}) << std::endl;
+
         std::cout << "\n\nIndex Input Left: ";
         for(int i : inputL) std::cout << i << " ";
         std::cout << "\n";

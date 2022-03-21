@@ -232,7 +232,6 @@ protected:
                     perror("recvnnb ack");
                     return -1;
                 } else 
-                    //printf("received ACK from conn %d\n", i);
                     counter++;
                 
             }
@@ -460,12 +459,12 @@ public:
             } else
                 sck = getNextReadyInternal();
 
-            sendToSck(sck, task); 
+            sendToSck(sck, task);
             socketsCounters[sck]--;
             delete task;
             return this->GO_ON;
         }
-
+        
         return ff_dsender::svc(task);
     }
 
