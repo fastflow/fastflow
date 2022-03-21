@@ -11,10 +11,14 @@
  * /<----------- pipeMain ------------->/
  *
  *  distributed version:
- *
- *  G1: MoNode
- *  G2: a2a
- *
+ *                                         G2                  
+ *                     G1             -----------
+ *     G0         --------------     | -> MiNode |
+ *   --------    | -> MoNode -> |    |           |
+ *  | MoNode |-->|              | -->| -> MiNode |
+ *   --------    | -> MoNode -> |    |           |
+ *                --------------     | -> MiNode |
+ *                                    -----------
  */
 
 
@@ -66,14 +70,22 @@ struct MoNode : ff::ff_monode_t<DataType>{
 			}        
 			return this->EOS;
 		}
+		++cnt;
 		return in;
     }
 	void svc_end() {
-		const std::lock_guard<std::mutex> lock(mtx);
-		std::cout << "[MoNode" << this->get_my_id() << "] Generated Items: " << items << std::endl;
+		if (items) {
+			const std::lock_guard<std::mutex> lock(mtx);
+			ff::cout << "[MoNode" << this->get_my_id() << "] Generated Items: " << items << std::endl;
+		}
+		if (cnt) {
+			const std::lock_guard<std::mutex> lock(mtx);
+			ff::cout << "[MoNode" << this->get_my_id() << "] Received Items: " << cnt << std::endl;
+		}
+		
 	}
 
-    long items;
+    long items, cnt=0;
 };
 
 struct MiNode : ff::ff_minode_t<DataType>{
@@ -108,13 +120,9 @@ int main(int argc, char*argv[]){
     int numWorkerDx = atoi(argv[3]);
 	
     ff_pipeline mainPipe;
-	ff_pipeline pipe;   
-    ff::ff_a2a a2a;
-
 	MoNode generator(items);
-	pipe.add_stage(&generator);
-	
-	mainPipe.add_stage(&pipe);
+	mainPipe.add_stage(&generator);
+	ff_a2a a2a;
     mainPipe.add_stage(&a2a);
 
     std::vector<MoNode*> sxWorkers;
@@ -124,21 +132,21 @@ int main(int argc, char*argv[]){
         sxWorkers.push_back(new MoNode(0));
 	
     for(int i = 0; i < numWorkerDx; i++)
-        dxWorkers.push_back(new MiNode(i*100));
+        dxWorkers.push_back(new MiNode((i+1)*10));
 	
     a2a.add_firstset(sxWorkers, 1);  // enabling on-demand distribution policy
     a2a.add_secondset(dxWorkers);
 	
 	//----- defining the distributed groups ------
 
-	auto g0 = generator.createGroup("G0");
-    auto g1 = a2a.createGroup("G1");
-    auto g2 = a2a.createGroup("G2");
+	auto G0 = generator.createGroup("G0");
+    auto G1 = a2a.createGroup("G1");
+    auto G2 = a2a.createGroup("G2");
 
     for(int i = 0; i < numWorkerSx; i++) 
-		g1  << sxWorkers[i];
+		G1  << sxWorkers[i];
     for(int i = 0; i < numWorkerDx; i++) 
-		g2 << dxWorkers[i];
+		G2 << dxWorkers[i];
 
     // -------------------------------------------
 

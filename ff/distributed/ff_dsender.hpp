@@ -259,7 +259,6 @@ protected:
             int r; ack_t a;
 			if ((r = recvnnb(sck, reinterpret_cast<char*>(&a), sizeof(ack_t))) != sizeof(ack_t)){
 				if (errno == EWOULDBLOCK){
-					//assert(r == -1); // a cosa serve??
 					continue;
 				}
 				perror("recvnnb ack any");
@@ -340,8 +339,9 @@ public:
         if (task->chid != -1){
             sck = dest2Socket[task->chid];
             if (socketsCounters[sck] == 0 && waitAckFrom(sck) == -1){ // blocking call if scheduling is ondemand
-                    error("Error waiting Ack from....\n");
-                    delete task; return this->GO_ON;
+				error("Error waiting Ack from....\n");
+				delete task;
+				return this->GO_ON;
             }
         } else 
             sck = getNextReady(); // blocking call if scheduling is ondemand

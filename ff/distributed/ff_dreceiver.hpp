@@ -296,7 +296,7 @@ class ff_dreceiverH : public ff_dreceiver {
     std::map<int, bool> isInternalConnection;
     std::set<std::string> internalGroupsNames;
     size_t internalNEos = 0, externalNEos = 0;
-    int next_rr_destination = 0;
+    long next_rr_destination = 0;
 
     void registerEOS(int sck){
         neos++;
@@ -345,7 +345,7 @@ class ff_dreceiverH : public ff_dreceiver {
         else if (task->chid != -1) ff_send_out_to(task, this->routingTable[task->chid]);
         else {
             ff_send_out_to(task, next_rr_destination);
-            next_rr_destination = ++next_rr_destination % (this->get_num_outchannels()-1);
+            next_rr_destination = (next_rr_destination + 1) % (this->get_num_outchannels()-1);
         }
     }
 

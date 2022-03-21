@@ -41,7 +41,7 @@ public:
 
 class SquareBoxLeft : public ff_monode {
 	std::unordered_map<int, int> destinations;
-	int next_rr_destination = 0;
+	long next_rr_destination = 0;
 public:
 	SquareBoxLeft(const std::unordered_map<int, int> localDestinations) : destinations(localDestinations) {}
     
@@ -86,8 +86,8 @@ public:
     bool forward(void* task, int destination){
 
 		if (destination == -1){
-			for(int i = 0; i < localWorkersMap.size(); i++){
-				int actualDestination = (nextDestination + 1 + i) % localWorkersMap.size();
+			for(size_t i = 0; i < localWorkersMap.size(); i++){
+				long actualDestination = (nextDestination + 1 + i) % localWorkersMap.size();
 				if (ff_send_out_to(task, actualDestination, 1)){ // non blocking ff_send_out_to, we try just once
 					nextDestination = actualDestination;
 					return true;
@@ -115,12 +115,16 @@ public:
 			mo->set_running(totalWorkers);
 		}
 
-		// change the size of the queue to the SquareBoxRight, since the distributed-memory communications are all on-demand
+		// change the size of the queue to the SquareBoxRight (if present),
+		// since the distributed-memory communications are all on-demand
 		svector<ff_node*> w;
         this->get_out_nodes(w);
-        size_t oldsz;
-        w[localWorkersMap.size()]->change_inputqueuesize(1, oldsz); 
-
+		assert(w.size()>0);
+		if (w.size() > localWorkersMap.size()) {
+			assert(w.size() == localWorkersMap.size()+1);
+			size_t oldsz;		
+			w[localWorkersMap.size()]->change_inputqueuesize(1, oldsz);
+		}
 		return n->svc_init();
 	}
 
