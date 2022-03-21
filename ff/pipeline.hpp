@@ -135,7 +135,7 @@ protected:
                     nodes_list[i-1]->get_out_nodes(w1);
                     if (!w1[0]->isMultiOutput()) return true;  // NOTE: we suppose homogeneous workers
                 } if (isa2a_prev) {
-                    const svector<ff_node*>& w1=isa2a_getsecondset(nodes_list[i-1]);
+                    const svector<ff_node*>& w1=isa2a_getsecondset(get_node_last(i-1));
                     assert(w1.size()>0);
                     if (!w1[0]->isMultiOutput()) return true; // NOTE: we suppose homogeneous workers
                 }
@@ -147,7 +147,7 @@ protected:
                     nodes_list[i-1]->get_out_nodes(w1);
                     if (w1[0]->isMultiOutput()) return true; // NOTE: we suppose homogeneous workers
                 } if (isa2a_prev) {
-                    const svector<ff_node*>& w1=isa2a_getsecondset(nodes_list[i-1]);
+                    const svector<ff_node*>& w1=isa2a_getsecondset(get_node_last(i-1));
                     assert(w1.size()>0);
                     if (w1[0]->isMultiOutput()) return true;  // NOTE: we suppose homogeneous workers
                 }
@@ -661,10 +661,10 @@ public:
         if (cleanup) internalSupportNodes.push_back(node);
     }
 
-    int get_stageindex(const ff_node* stage){
+    ssize_t get_stageindex(const ff_node* stage){
         if (!stage) return -1;
-        for(size_t i=0; i<nodes_list.size(); ++i) 
-            if(nodes_list[i] == stage) return (int)i;
+        for(ssize_t i=0; i<(ssize_t)nodes_list.size(); ++i) 
+            if(nodes_list[i] == stage) return i;
         return -1;
     }
 
@@ -1107,13 +1107,14 @@ public:
     }
 
     ff_node* get_nextstage(const ff_node* s){
-        int index = this->get_stageindex(s);
-        if (index == -1 || index == nodes_list.size()-1) return nullptr;
+        ssize_t index = get_stageindex(s);
+        if (index == -1 || (index+1) == (ssize_t)nodes_list.size())
+            return nullptr;
         return nodes_list[index+1];
     }
 
     ff_node* get_prevstage(const ff_node* s){
-        int index = this->get_stageindex(s);
+        ssize_t index = get_stageindex(s);
         if (index <= 0) return nullptr;
         return nodes_list[index-1];
     }
