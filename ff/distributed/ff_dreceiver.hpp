@@ -96,6 +96,32 @@ protected:
         else ff_send_out_to(task, this->routingTable[task->chid]); // assume the routing table is consistent WARNING!!!
     }
 
+    virtual int handleBatch(int sck){
+        int requestSize;
+
+        if (readn(sck, reinterpret_cast<char*>(&requestSize), sizeof(requestSize)) != sizeof(requestSize)){
+            perror("BatchReadn");
+            error("Error receiving the number of tasks in the batch\n");
+            return -1;
+        }
+
+        ff::cout << "Receive a btach of " << requestSize << " items\n";
+
+        for(int i = 0; i < requestSize; i++)
+            handleRequest(sck);
+
+        
+         // always sending back the acknowledgement
+        if (writen(sck, reinterpret_cast<char*>(&ACK), sizeof(ack_t)) < 0){
+            if (errno != ECONNRESET || errno != EPIPE) {
+                error("Error sending back ACK to the sender (errno=%d)\n",errno);
+                return -1;
+            }
+        }
+
+        return 0;
+    }
+
     virtual int handleRequest(int sck){
    		int sender;
 		int chid;
@@ -130,16 +156,8 @@ protected:
 			assert(out);
 			out->sender = sender;
 			out->chid   = chid;
-
+            ff::cout << "Forwarding something of size: " << out->data.getLen() << std::endl;
             this->forward(out, sck);
-            
-            // always sending back the acknowledgement
-            if (writen(sck, reinterpret_cast<char*>(&ACK), sizeof(ack_t)) < 0){
-                if (errno != ECONNRESET || errno != EPIPE) {
-                    error("Error sending back ACK to the sender (errno=%d)\n",errno);
-                    return -1;
-                }
-            }
 
             return 0;
         }
@@ -256,7 +274,7 @@ public:
                     this->last_receive_fd = actualFD;
 
                     
-                    if (this->handleRequest(actualFD) < 0){
+                    if (this->handleBatch(actualFD) < 0){
                         close(actualFD);
                         FD_CLR(actualFD, &set);
 
