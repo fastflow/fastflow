@@ -187,6 +187,7 @@ private:
         std::string name;
         std::string address;
         int port;
+        int batchSize = 1;
 
         template <class Archive>
         void load( Archive & ar ){
@@ -196,6 +197,10 @@ private:
                 std::string endpoint;
                 ar(cereal::make_nvp("endpoint", endpoint)); std::vector endp(split(endpoint, ':'));
                 address = endp[0]; port = std::stoi(endp[1]);
+            } catch (cereal::Exception&) {ar.setNextName(nullptr);}
+
+            try {
+                ar(cereal::make_nvp("batchSize", batchSize));
             } catch (cereal::Exception&) {ar.setNextName(nullptr);}
 
         }
@@ -231,6 +236,8 @@ private:
 
         // annotate the listen endpoint for the specified group
         annotatedGroups[g.name].listenEndpoint = endpoint;
+        // set the batch size for each group
+        if (g.batchSize > 1) annotatedGroups[g.name].outBatchSize = g.batchSize;
       }
 
       // build the map parentBB -> <groups names>

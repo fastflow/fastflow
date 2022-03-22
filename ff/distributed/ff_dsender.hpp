@@ -60,6 +60,7 @@ protected:
     std::map<int, unsigned int> socketsCounters;
     std::map<int, ff_batchBuffer> batchBuffers;
     std::string gName;
+    int batchSize;
     int coreid;
     fd_set set, tmpset;
     int fdmax = -1;
@@ -300,11 +301,11 @@ protected:
 
     
 public:
-    ff_dsender(ff_endpoint dest_endpoint, std::string gName = "", int coreid=-1): gName(gName), coreid(coreid) {
+    ff_dsender(ff_endpoint dest_endpoint, std::string gName = "", int batchSize = 1, int coreid=-1): gName(gName), batchSize(batchSize), coreid(coreid) {
         this->dest_endpoints.push_back(std::move(dest_endpoint));
     }
 
-    ff_dsender( std::vector<ff_endpoint> dest_endpoints_, std::string gName = "", int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), gName(gName), coreid(coreid) {}
+    ff_dsender( std::vector<ff_endpoint> dest_endpoints_, std::string gName = "", int batchSize = 1, int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), gName(gName), batchSize(batchSize), coreid(coreid) {}
 
     
 
@@ -321,7 +322,7 @@ public:
             if (sck <= 0) return -1;
             sockets[i] = sck;
             socketsCounters[sck] = QUEUEDIM;
-            batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(1, [this, sck](struct iovec* v, int size) -> bool {
+            batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(this->batchSize, [this, sck](struct iovec* v, int size) -> bool {
                 
                 if (this->socketsCounters[sck] == 0 && this->waitAckFrom(sck) == -1){
                     error("Errore waiting ack from socket inside the callback\n");
@@ -431,8 +432,8 @@ class ff_dsenderH : public ff_dsender {
 
 public:
 
-    ff_dsenderH(ff_endpoint e, std::string gName  = "", std::set<std::string> internalGroups = {}, int coreid=-1) : ff_dsender(e, gName, coreid), internalGroupNames(internalGroups) {} 
-    ff_dsenderH(std::vector<ff_endpoint> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int coreid=-1) : ff_dsender(dest_endpoints_, gName, coreid), internalGroupNames(internalGroups) {}
+    ff_dsenderH(ff_endpoint e, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = 1, int coreid=-1) : ff_dsender(e, gName, batchSize, coreid), internalGroupNames(internalGroups) {} 
+    ff_dsenderH(std::vector<ff_endpoint> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = 1, int coreid=-1) : ff_dsender(dest_endpoints_, gName, batchSize, coreid), internalGroupNames(internalGroups) {}
     
     int handshakeHandler(const int sck, bool isInternal){
         if (sendGroupName(sck) < 0) return -1;
@@ -455,7 +456,7 @@ public:
             if (isInternal) internalSockets.push_back(sck);
             else sockets.push_back(sck);
             socketsCounters[sck] = isInternal ? INTERNALQUEUEDIM : QUEUEDIM;
-            batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(10, [this, sck](struct iovec* v, int size) -> bool {
+            batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(this->batchSize, [this, sck](struct iovec* v, int size) -> bool {
                 
                 if (this->socketsCounters[sck] == 0 && this->waitAckFrom(sck) == -1){
                     error("Errore waiting ack from socket inside the callback\n");
