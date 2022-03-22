@@ -99,13 +99,12 @@ protected:
     virtual int handleBatch(int sck){
         int requestSize;
 
-        if (readn(sck, reinterpret_cast<char*>(&requestSize), sizeof(requestSize)) != sizeof(requestSize)){
-            perror("BatchReadn");
-            error("Error receiving the number of tasks in the batch\n");
-            return -1;
+        switch(readn(sck, reinterpret_cast<char*>(&requestSize), sizeof(requestSize))) {
+            case -1: error("Something went wrong in receiving the number of tasks!\n");
+            case 0: return -1;
         }
 
-        ff::cout << "Receive a btach of " << requestSize << " items\n";
+        requestSize = ntohl(requestSize);
 
         for(int i = 0; i < requestSize; i++)
             handleRequest(sck);
@@ -156,7 +155,6 @@ protected:
 			assert(out);
 			out->sender = sender;
 			out->chid   = chid;
-            ff::cout << "Forwarding something of size: " << out->data.getLen() << std::endl;
             this->forward(out, sck);
 
             return 0;

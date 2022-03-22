@@ -131,7 +131,7 @@ public:
                 this->add_emitter(new ff_dreceiver(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.hasLeftChildren() ? ir.inputL : ir.inputR)));
 
             if (ir.hasSender)
-                this->add_collector(new ff_dsender(ir.destinationEndpoints, ir.listenEndpoint.groupName), true);
+                this->add_collector(new ff_dsender(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.outBatchSize), true);
 			
 			if (ir.hasRightChildren() && ir.parentBB->isAll2All()) {
 				ff_a2a *a2a = reinterpret_cast<ff_a2a*>(ir.parentBB);
@@ -186,7 +186,7 @@ public:
 				return n;
             });
 
-            innerA2A->add_firstset(firstSet); // ondemand ??? clenaup??
+            innerA2A->add_firstset(firstSet, reinterpret_cast<ff_a2a*>(ir.parentBB)->ondemand_buffer()); // note the ondemand!!
             
             int outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second ? 0 : f.second.first.size());});
             
@@ -235,7 +235,7 @@ public:
                 this->add_emitter(new ff_dreceiverH(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.inputL), ir.inputR, ir.otherGroupsFromSameParentBB));
 
             if (ir.hasSender)
-                this->add_collector(new ff_dsenderH(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.otherGroupsFromSameParentBB) , true);
+                this->add_collector(new ff_dsenderH(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.otherGroupsFromSameParentBB, ir.outBatchSize) , true);
         }  
 
         if (this->getNWorkers() == 0){
