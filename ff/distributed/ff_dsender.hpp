@@ -324,12 +324,12 @@ public:
          if (id == (ssize_t)(this->get_num_inchannels() - 1)){
             // send the EOS to all the internal connections
             message_t E_O_S(0,0);
-            for(const auto& sck : internalSockets) sendToSck(sck, &E_O_S);
-            ++neos; // count anyway a new EOS received!
-         } else if (++neos >= this->get_num_inchannels()){
-            message_t E_O_S(0,0);
-            for(const auto& sck : sockets) sendToSck(sck, &E_O_S);
-        }
+            for(const auto& sck : internalSockets) sendToSck(sck, &E_O_S);            
+         }
+		 if (++neos >= this->get_num_inchannels()){
+			 message_t E_O_S(0,0);
+			 for(const auto& sck : sockets) sendToSck(sck, &E_O_S);
+		 }
      }
 };
 
