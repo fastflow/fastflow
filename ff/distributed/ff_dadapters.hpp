@@ -29,6 +29,9 @@ public:
 class SquareBoxLeft : public ff_monode {
 	std::unordered_map<int, int> destinations;
 public:
+	/*
+	 *  - localWorkers: list of pairs <logical_destination, physical_destination> where logical_destination is the original destination of the shared-memory graph
+	 */
 	SquareBoxLeft(const std::unordered_map<int, int> localDestinations) : destinations(localDestinations) {}
     
 	void* svc(void* in){
@@ -47,7 +50,7 @@ public:
 	 * 	- n: rightmost sequential node of the builiding block representing the left-set worker
 	 * 	- totalWorkers: number of the workers on the right set (i.e., all the possible destinations) of the original entire a2a
 	 *  - index: index of nodde n in the output list of the left set of the orgiginal entire a2a
-	 *  - localWorkers: list of pairs <logical_destination, physical_destination> where logical_destination
+	 *  - localWorkers: list of pairs <logical_destination, physical_destination> where logical_destination is the original destination of the shared-memory graph
 	 *  - cleanup 
 	 **/
 	EmitterAdapter(ff_node* n, int totalWorkers, int index, std::unordered_map<int, int> localWorkers = {0,0}, bool cleanup=false): internal_mo_transformer(this, false), totalWorkers(totalWorkers), index(index), localWorkersMap(localWorkers) {
@@ -111,7 +114,10 @@ class CollectorAdapter: public internal_mi_transformer {
 private:
 	std::vector<int> localWorkers;
 public:
-
+	/* localWorkers: contains the ids of "real" (square boxes not included) left-workers 
+	 *               connected with this node
+	 *
+	 */
 	CollectorAdapter(ff_node* n, std::vector<int> localWorkers, bool cleanup=false): internal_mi_transformer(this, false), localWorkers(localWorkers) {
 		this->n       = n;
 		this->cleanup = cleanup;
