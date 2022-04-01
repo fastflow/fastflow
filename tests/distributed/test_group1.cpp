@@ -47,6 +47,10 @@ struct Source : ff_monode_t<int>{
         
         return EOS;
     }
+
+    void svc_end(){
+        ff::cout << "Source ended!\n"; 
+    }
 };
 
 struct MoNode : ff_monode_t<int>{
@@ -58,7 +62,7 @@ struct MoNode : ff_monode_t<int>{
 
     void svc_end(){
         const std::lock_guard<std::mutex> lock(mtx);
-        std::cout << "[SxNode" << this->get_my_id() << "] Processed Items: " << processedItems << std::endl;
+        ff::cout << "[SxNode" << this->get_my_id() << "] Processed Items: " << processedItems << std::endl;
     }
 };
 
@@ -71,7 +75,7 @@ struct MiNode : ff_minode_t<int>{
 
     void svc_end(){
         const std::lock_guard<std::mutex> lock(mtx);
-        std::cout << "[DxNode" << this->get_my_id() << "] Processed Items: " << processedItems << std::endl;
+        ff::cout << "[DxNode" << this->get_my_id() << "] Processed Items: " << processedItems << std::endl;
     }
 };
 
@@ -87,7 +91,7 @@ struct Sink : ff_minode_t<int>{
         int local_sum = 0;
         for(int i = 0; i < ITEMS; i++) local_sum += i;
         const std::lock_guard<std::mutex> lock(mtx);
-        std::cout << "Sum: " << sum << " (Expected: " << local_sum << ")" << std::endl;
+        ff::cout << "Sum: " << sum << " (Expected: " << local_sum << ")" << std::endl;
     }
 };
 
