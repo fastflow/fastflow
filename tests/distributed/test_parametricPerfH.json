@@ -3,7 +3,7 @@
      {   
         "endpoint" : "localhost:8000",
          "name" : "M",
-	 "internalMessageOTF" : 10
+	 "internalMessageOTF" : 1
      },
      {   
         "endpoint" : "localhost:8002",

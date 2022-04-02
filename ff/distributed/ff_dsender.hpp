@@ -351,7 +351,8 @@ public:
 
     void svc_end() {
         // close the socket not matter if local or remote
-        for (auto& sck : this->sockets) close(sck);
+        for (auto& sck : this->sockets)
+			shutdown(sck, SHUT_WR); 			//close(sck);
     }
 
     message_t *svc(message_t* task) {
