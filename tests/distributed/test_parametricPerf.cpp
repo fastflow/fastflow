@@ -166,7 +166,7 @@ int main(int argc, char*argv[]){
 		return -1;
 	}
 
-    if (argc < 8){
+    if (argc < 9){
         std::cout << "Usage: " << argv[0] << " #items #byteXitem #execTimeSource #execTimeSink #np_sx #np_dx #nwXp"  << std::endl;
         return -1;
     }
@@ -177,7 +177,8 @@ int main(int argc, char*argv[]){
     int execTimeSink = atoi(argv[4]);
     int numProcSx = atoi(argv[5]);
     int numProcDx = atoi(argv[6]);
-	int numWorkerXProcess = atoi(argv[7]);
+	int numWorkerXProcessSx = atoi(argv[7]);
+	int numWorkerXProcessDx = atoi(argv[8]);
 	char* p=nullptr;
 	if ((p=getenv("CHECK_DATA"))!=nullptr) check=true;
 	printf("chackdata = %s\n", p);
@@ -187,10 +188,10 @@ int main(int argc, char*argv[]){
     std::vector<MoNode*> sxWorkers;
     std::vector<MiNode*> dxWorkers;
 
-    for(int i = 0; i < (numProcSx*numWorkerXProcess); i++)
-        sxWorkers.push_back(new MoNode(ceil((double)items/(numProcSx*numWorkerXProcess)), execTimeSource, bytexItem, check));
+    for(int i = 0; i < (numProcSx*numWorkerXProcessSx); i++)
+        sxWorkers.push_back(new MoNode(ceil((double)items/(numProcSx*numWorkerXProcessSx)), execTimeSource, bytexItem, check));
 
-    for(int i = 0; i < (numProcDx*numWorkerXProcess); i++)
+    for(int i = 0; i < (numProcDx*numWorkerXProcessDx); i++)
         dxWorkers.push_back(new MiNode(execTimeSink, check));
 
     a2a.add_firstset(sxWorkers);
@@ -198,14 +199,14 @@ int main(int argc, char*argv[]){
 
 	for(int i = 0; i < numProcSx; i++){
 		auto g = a2a.createGroup(std::string("S")+std::to_string(i));
-		for(int j = i*numWorkerXProcess; j < (i+1)*numWorkerXProcess; j++){
+		for(int j = i*numWorkerXProcessSx; j < (i+1)*numWorkerXProcessSx; j++){
 			g << sxWorkers[j];
 		}
 	}
 
 	for(int i = 0; i < numProcDx; i++){
 		auto g = a2a.createGroup(std::string("D")+std::to_string(i));
-		for(int j = i*numWorkerXProcess; j < (i+1)*numWorkerXProcess; j++){
+		for(int j = i*numWorkerXProcessDx; j < (i+1)*numWorkerXProcessDx; j++){
 			g << dxWorkers[j];	
 		}
 	}
