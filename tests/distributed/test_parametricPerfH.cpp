@@ -136,21 +136,22 @@ struct MiNode : ff::ff_minode_t<ExcType>{
     MiNode(int execTime, bool checkdata=false): execTime(execTime),checkdata(checkdata) {}
 
     ExcType* svc(ExcType* in){
-      if (execTime) active_delay(this->execTime);
-      ++processedItems;
-	  if (checkdata) {
-		  myassert(in->C[0]     == 'c');
-		  if (in->clen>10) 
-			  myassert(in->C[10]  == 'i');
-		  if (in->clen>100)
-			  myassert(in->C[100] == 'a');
-		  if (in->clen>500)
-			  myassert(in->C[500] == 'o');
-		  ff::cout << "MiNode" << get_my_id() << " input data " << processedItems << " OK\n";
-	  }
-	  myassert(in->C[in->clen-1] == 'F');
-	  delete in;
-      return this->GO_ON;
+		if (execTime) active_delay(this->execTime);
+		
+		++processedItems;
+		if (checkdata) {
+			myassert(in->C[0]     == 'c');
+			if (in->clen>10) 
+				myassert(in->C[10]  == 'i');
+			if (in->clen>100)
+				myassert(in->C[100] == 'a');
+			if (in->clen>500)
+				myassert(in->C[500] == 'o');
+			ff::cout << "MiNode" << get_my_id() << " input data " << processedItems << " OK\n";
+		}
+		myassert(in->C[in->clen-1] == 'F');
+		delete in;
+		return this->GO_ON;
     }
 
     void svc_end(){
@@ -166,8 +167,8 @@ int main(int argc, char*argv[]){
 		return -1;
 	}
 
-    if (argc < 8){
-        std::cout << "Usage: " << argv[0] << " #items #byteXitem #execTimeSource #execTimeSink #np_dx #nwXp"  << std::endl;
+    if (argc < 7){
+        std::cout << "Usage: " << argv[0] << " #items #byteXitem #execTimeSource #execTimeSink #np_dx #nwXpDx"  << std::endl;
         return -1;
     }
 	bool check = false;
@@ -176,8 +177,7 @@ int main(int argc, char*argv[]){
     int execTimeSource = atoi(argv[3]);
     int execTimeSink = atoi(argv[4]);
     int numProcDx = atoi(argv[5]);
-	int numWorkerXProcessSx = atoi(argv[6]);
-	int numWorkerXProcessDx = atoi(argv[7]);
+	int numWorkerXProcessDx = atoi(argv[6]);
 	char* p=nullptr;
 	if ((p=getenv("CHECK_DATA"))!=nullptr) check=true;
 	printf("chackdata = %s\n", p);
@@ -192,7 +192,7 @@ int main(int argc, char*argv[]){
     for(int i = 0; i < ((numProcDx+1)*numWorkerXProcessDx); i++)
         dxWorkers.push_back(new MiNode(execTimeSink, check));
 
-    a2a.add_firstset(sxWorkers, 1); //ondemand on!!
+    a2a.add_firstset(sxWorkers, 10); //ondemand on!!
     a2a.add_secondset(dxWorkers);
 
 	auto master = a2a.createGroup("M");

@@ -148,8 +148,13 @@ protected:
             }
         } 
         for(size_t i=0;i<workers1.size();++i) {
-            if (ondemand_chunk && (workers1[i]->ondemand_buffer()==0))
-                workers1[i]->set_scheduling_ondemand(ondemand_chunk);
+            if (ondemand_chunk && (workers1[i]->ondemand_buffer()==0)) {
+                svector<ff_node*> w;
+                workers1[i]->get_out_nodes(w);
+                for(size_t k=0;k<w.size(); ++k)
+                    w[k]->set_scheduling_ondemand(ondemand_chunk);                
+                //workers1[i]->set_scheduling_ondemand(ondemand_chunk);
+            }
             workers1[i]->set_id(int(i));
         }
         // checking R-Workers

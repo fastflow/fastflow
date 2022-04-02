@@ -98,14 +98,13 @@ protected:
 
     virtual int handleBatch(int sck){
         int requestSize;
-
         switch(readn(sck, reinterpret_cast<char*>(&requestSize), sizeof(requestSize))) {
             case -1: error("Something went wrong in receiving the number of tasks!\n");
             case 0: return -1;
         }
 		// always sending back the acknowledgement
         if (writen(sck, reinterpret_cast<char*>(&ACK), sizeof(ack_t)) < 0){
-            if (errno != ECONNRESET || errno != EPIPE) {
+            if (errno != ECONNRESET && errno != EPIPE) {
                 error("Error sending back ACK to the sender (errno=%d)\n",errno);
                 return -1;
             }
@@ -370,11 +369,10 @@ public:
 
 };
 
+#if 0
 /*
     ONDEMAND specification
 */
-
-
 class ff_dreceiverOD: public ff_dreceiver { 
 protected:
     virtual int handleRequest(int sck) override {
@@ -441,5 +439,6 @@ public:
 private:
     ack_t ACK;
 };
+#endif // if 0
 
 #endif

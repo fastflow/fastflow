@@ -242,6 +242,7 @@ protected:
                                       unsigned long ticks=TICKS2WAIT) {
         unsigned long cnt;
         if (blocking_out) {
+            unsigned long r = 0;
             do {
                 cnt=0;
                 do {
@@ -259,6 +260,8 @@ protected:
                     ++cnt;
                     if (cnt == nattempts()) break; 
                 } while(1);
+
+                if (++r >= retry) return false;
                 
                 struct timespec tv;
                 timedwait_timeout(tv);                
@@ -718,12 +721,14 @@ public:
                                unsigned long retry=((unsigned long)-1),
                                unsigned long ticks=(TICKS2WAIT)) {        
         if (blocking_out) {
+            unsigned long r=0;
         _retry:
             bool empty=workers[id]->get_in_buffer()->empty();
             if (workers[id]->put(task)) {
                 FFTRACE(++taskcnt);
                 if (empty) put_done(id);
             } else {
+                if (++r >= retry) return false;
                 struct timespec tv;
                 timedwait_timeout(tv);
                 pthread_mutex_lock(prod_m);

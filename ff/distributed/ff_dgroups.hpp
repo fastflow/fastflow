@@ -25,14 +25,15 @@
 #ifndef FF_DGROUPS_H
 #define FF_DGROUPS_H
 
+#include <signal.h>
+#include <getopt.h>
+
 #include <string>
 #include <map>
 #include <set>
 #include <vector>
 #include <sstream>
 #include <algorithm>
-
-#include <getopt.h>
 
 #include <ff/ff.hpp>
 
@@ -187,9 +188,9 @@ private:
         std::string name;
         std::string address;
         int port;
-        int batchSize = 1;
-        int internalMessageOTF = 10;
-        int messageOTF = 100;
+        int batchSize          = DEFAULT_BATCH_SIZE;
+        int internalMessageOTF = DEFAULT_INTERNALMSG_OTF;
+        int messageOTF         = DEFAULT_MESSAGE_OTF;
 
         template <class Archive>
         void load( Archive & ar ){
@@ -470,7 +471,16 @@ private:
 
 
 static inline int DFF_Init(int& argc, char**& argv){
-    std::string configFile, groupName;  
+    struct sigaction s;
+    memset(&s,0,sizeof(s));    
+    s.sa_handler=SIG_IGN;
+    if ( (sigaction(SIGPIPE,&s,NULL) ) == -1 ) {   
+		perror("sigaction");
+		return -1;
+    } 
+
+
+	std::string configFile, groupName;  
 
     for(int i = 0; i < argc; i++){
       if (strstr(argv[i], "--DFF_Config") != NULL){

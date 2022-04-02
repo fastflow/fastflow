@@ -1661,7 +1661,14 @@ protected:
         return nodes_list[last]->set_output_buffer(node->get_out_buffer());
     }
 
-
+    inline int ondemand_buffer() const {
+        int last = static_cast<int>(nodes_list.size())-1;
+        
+        svector<ff_node*> w;
+        nodes_list[last]->get_out_nodes(w);
+        return w[0]->ondemand_buffer();  // NOTE: we suppose that all others are the same !!!!!
+    }
+              
 private:
     bool has_input_channel; // for accelerator
     bool node_cleanup;
