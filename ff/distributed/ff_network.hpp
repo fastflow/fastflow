@@ -98,14 +98,6 @@ protected:
 
 using ffDbuffer = std::pair<char*, size_t>;
 
-struct SMmessage_t {
-    SMmessage_t(){}
-    SMmessage_t(void* t, int s, int d) : task(t), sender(s), dst(d) {}
-    void * task;
-    int sender;
-    int dst;
-};
-
 struct message_t {
 	message_t(){}
     message_t(int sender, int chid) : sender(sender), chid(chid) {}
@@ -217,6 +209,7 @@ static inline ssize_t recvnnb(int fd, char *buf, size_t size) {
     #define DFF_TASK_TAG 3
     #define DFF_HEADER_TAG 4
     #define DFF_ACK_TAG 5
+    #define DFF_GROUP_NAME_TAG 6
 
     #define DFF_REQUEST_ROUTING_TABLE 10
 #endif

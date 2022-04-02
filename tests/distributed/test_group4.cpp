@@ -33,7 +33,7 @@ struct Source : ff_monode_t<std::string>{
 
     std::string* svc(std::string* in){
 		long outchannels = get_num_outchannels();
-		
+		ff::cout << "Expected out channels: " << outchannels << std::endl;
         for(long i = 0; i < outchannels; i++)
             ff_send_out_to(new std::string("Task generated from " + std::to_string(get_my_id()) + " for " + std::to_string(i)), i);
         
@@ -45,7 +45,7 @@ struct Source : ff_monode_t<std::string>{
 struct Sink : ff_minode_t<std::string>{
     std::string* svc(std::string* in){
         const std::lock_guard<std::mutex> lock(mtx);
-        std::cout << *in << " received by Sink " << get_my_id() << " from " << get_channel_id() << std::endl;
+        ff::cout << *in << " received by Sink " << get_my_id() << " from " << get_channel_id() << std::endl;
         delete in;
         return this->GO_ON;
     }

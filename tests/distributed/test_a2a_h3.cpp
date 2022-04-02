@@ -102,22 +102,15 @@ int main(int argc, char*argv[]){
     ff_farm gFarm;
     ff_a2a a2a;
 
-    a2a.createGroup("G1");
-    a2a.createGroup("G2");
-    ff_pipeline dummypipe; dummypipe.createGroup("G3"); dummypipe.createGroup("G0"); 
-
-
     if (atoi(argv[1]) == 0){
-        dGroups::Instance()->setRunningGroup("G0");
-        gFarm.add_collector(new ff_dsender({g1, g2}));
+        gFarm.add_collector(new ff_dsender({g1, g2}, "G0"));
         gFarm.add_workers({new WrapperOUT(new RealSource(), 1, true)});
 
         gFarm.run_and_wait_end();
         return 0;
     } else if (atoi(argv[1]) == 1){
-        dGroups::Instance()->setRunningGroup("G1");
-        gFarm.add_emitter(new ff_dreceiverH(g1, 2, {{0, 0}}, {0}));
-        gFarm.add_collector(new ff_dsenderH({g2,g3}));
+        gFarm.add_emitter(new ff_dreceiverH(g1, 2, {{0, 0}}, {0}, {"G2"}));
+        gFarm.add_collector(new ff_dsenderH({g2,g3}, "G1", {"G2"}));
 
 		auto s = new Source(2,0);
         auto ea = new ff_comb(new WrapperIN(new ForwarderNode(s->deserializeF)), new EmitterAdapter(s, 2, 0, {{0,0}}, true), true, true);
@@ -127,9 +120,8 @@ int main(int argc, char*argv[]){
         a2a.add_secondset<ff_node>({new ff_comb(new CollectorAdapter(sink, {0}, true), new WrapperOUT(new ForwarderNode(sink->serializeF), 1, true)), new SquareBoxRight});
 
     } else if (atoi(argv[1]) == 2) {
-        dGroups::Instance()->setRunningGroup("G2");
-        gFarm.add_emitter(new ff_dreceiverH(g2, 2, {{1, 0}}, {1}));
-        gFarm.add_collector(new ff_dsenderH({g1, g3}));
+        gFarm.add_emitter(new ff_dreceiverH(g2, 2, {{1, 0}}, {1}, {"G1"}));
+        gFarm.add_collector(new ff_dsenderH({g1, g3}, "G2", {"G1"}));
 		gFarm.cleanup_emitter();
 		gFarm.cleanup_collector();
 
@@ -148,7 +140,6 @@ int main(int argc, char*argv[]){
 		
         
     } else {
-        dGroups::Instance()->setRunningGroup("G3");
         gFarm.add_emitter(new ff_dreceiver(g3, 2));
          gFarm.add_workers({new WrapperIN(new StringPrinter(), 1, true)});
 

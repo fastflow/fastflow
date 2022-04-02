@@ -5,8 +5,8 @@ ITEMS=1000
 BYTExITEM=1000
 EXECTIMESOURCE=10
 EXECTIMESINK=10
-WORKERSXPROCESS=1
-
+WORKERSXPROCESSSX=1
+WORKERSXPROCESSDX=20
 
 
 ## this scripts allow to run a solution in the cluster automatically assigning addresses and ports ##
@@ -24,14 +24,6 @@ if [ -z ${4+x} ]; then start_node=1; else start_node=$4; fi
 echo "Running $1 with $2 Sx processes and $3 Dx processes starting from node $start_node"
 
 rm tmpFilePP.json
-connString=""
-
-for (( i=0; i<$3-1; i++))
-do
-    connString+="\"D${i}\", "
-done
-
-connString+="\"D$(($3-1))\""
 
 echo "{
     \"groups\" : [" >> tmpFilePP.json
@@ -41,8 +33,7 @@ for (( i=0; i<$2; i++))
 do
     echo "     {   
         \"endpoint\" : \"compute$(($start_node+$i)):8000\",
-        \"name\" : \"S${i}\",
-        \"OConn\" : [${connString}]
+        \"name\" : \"S${i}\"
      }
      ," >> tmpFilePP.json
 done
@@ -67,8 +58,7 @@ echo "    ]
 ##  #items #byteXitem #execTimeSource #execTimeSink #nw_sx #nw_dx
 ###
 
-DFF_RUN_HOME=../../ff/distributed/loader
-$DFF_RUN_HOME/dff_run -V -f tmpFilePP.json $1 $ITEMS $BYTExITEM $EXECTIMESOURCE $EXECTIMESINK $2 $3 $WORKERSXPROCESS
+dff_run -V -f tmpFilePP.json $1 $ITEMS $BYTExITEM $EXECTIMESOURCE $EXECTIMESINK $2 $3 $WORKERSXPROCESSSX $WORKERSXPROCESSDX
 
 #rm tmpFilePP.json
 #exiting just for testin purpose
