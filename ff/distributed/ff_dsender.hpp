@@ -25,8 +25,8 @@
 #ifndef FF_DSENDER_H
 #define FF_DSENDER_H
 
-#define QUEUEDIM 1
-#define INTERNALQUEUEDIM 1
+#define QUEUEDIM 100
+#define INTERNALQUEUEDIM 10
 
 #include <iostream>
 #include <map>
@@ -517,10 +517,11 @@ public:
                 }
     
             }
-            ++neos; // count anyway a new EOS received!
+            //++neos; // count anyway a new EOS received!
 
-         } else if (++neos >= this->get_num_inchannels())
-            for(const auto& sck : sockets) batchBuffers[sck].sendEOS();
+         }
+		 if (++neos >= this->get_num_inchannels())
+			 for(const auto& sck : sockets) batchBuffers[sck].sendEOS();
      }
 };
 

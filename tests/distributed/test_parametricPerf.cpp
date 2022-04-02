@@ -20,7 +20,7 @@
 #include <mutex>
 #include <chrono>
 
-//#define MANUAL_SERIALIZATION 1
+#define MANUAL_SERIALIZATION 1
 
 // ------------------------------------------------------
 std::mutex mtx;  // used only for pretty printing
@@ -82,6 +82,7 @@ template<typename Buffer>
 void deserialize(const Buffer&b, ExcType*& Ptr){
     ExcType* p = new (b.first) ExcType(true);
 	p->clen = b.second - sizeof(ExcType);
+	p->C = (char*)p + sizeof(ExcType);
 	Ptr = p;
 }
 #endif

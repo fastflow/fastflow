@@ -103,21 +103,18 @@ protected:
             case -1: error("Something went wrong in receiving the number of tasks!\n");
             case 0: return -1;
         }
-
-        requestSize = ntohl(requestSize);
-
-        for(int i = 0; i < requestSize; i++)
-            handleRequest(sck);
-
-        
-         // always sending back the acknowledgement
+		// always sending back the acknowledgement
         if (writen(sck, reinterpret_cast<char*>(&ACK), sizeof(ack_t)) < 0){
             if (errno != ECONNRESET || errno != EPIPE) {
                 error("Error sending back ACK to the sender (errno=%d)\n",errno);
                 return -1;
             }
         }
-
+		
+        requestSize = ntohl(requestSize);
+        for(int i = 0; i < requestSize; i++)
+            handleRequest(sck);
+        
         return 0;
     }
 
