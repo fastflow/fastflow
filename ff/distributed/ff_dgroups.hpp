@@ -188,6 +188,8 @@ private:
         std::string address;
         int port;
         int batchSize = 1;
+        int internalMessageOTF = 10;
+        int messageOTF = 100;
 
         template <class Archive>
         void load( Archive & ar ){
@@ -201,6 +203,14 @@ private:
 
             try {
                 ar(cereal::make_nvp("batchSize", batchSize));
+            } catch (cereal::Exception&) {ar.setNextName(nullptr);}
+
+             try {
+                ar(cereal::make_nvp("internalMessageOTF", internalMessageOTF));
+            } catch (cereal::Exception&) {ar.setNextName(nullptr);}
+
+             try {
+                ar(cereal::make_nvp("messageOTF", messageOTF));
             } catch (cereal::Exception&) {ar.setNextName(nullptr);}
 
         }
@@ -238,6 +248,8 @@ private:
         annotatedGroups[g.name].listenEndpoint = endpoint;
         // set the batch size for each group
         if (g.batchSize > 1) annotatedGroups[g.name].outBatchSize = g.batchSize;
+        if (g.messageOTF) annotatedGroups[g.name].messageOTF = g.messageOTF;
+        if (g.internalMessageOTF) annotatedGroups[g.name].internalMessageOTF = g.internalMessageOTF;
       }
 
       // build the map parentBB -> <groups names>

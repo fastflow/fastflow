@@ -61,6 +61,7 @@ protected:
     std::map<int, ff_batchBuffer> batchBuffers;
     std::string gName;
     int batchSize;
+    int messageOTF;
     int coreid;
     fd_set set, tmpset;
     int fdmax = -1;
@@ -301,11 +302,11 @@ protected:
 
     
 public:
-    ff_dsender(ff_endpoint dest_endpoint, std::string gName = "", int batchSize = 1, int coreid=-1): gName(gName), batchSize(batchSize), coreid(coreid) {
+    ff_dsender(ff_endpoint dest_endpoint, std::string gName = "", int batchSize = 1, int messageOTF = 100, int coreid=-1): gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {
         this->dest_endpoints.push_back(std::move(dest_endpoint));
     }
 
-    ff_dsender( std::vector<ff_endpoint> dest_endpoints_, std::string gName = "", int batchSize = 1, int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), gName(gName), batchSize(batchSize), coreid(coreid) {}
+    ff_dsender( std::vector<ff_endpoint> dest_endpoints_, std::string gName = "", int batchSize = 1, int messageOTF = 100, int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {}
 
     
 
@@ -321,7 +322,7 @@ public:
             int sck = tryConnect(this->dest_endpoints[i]);
             if (sck <= 0) return -1;
             sockets[i] = sck;
-            socketsCounters[sck] = QUEUEDIM;
+            socketsCounters[sck] = messageOTF;
             batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(this->batchSize, [this, sck](struct iovec* v, int size) -> bool {
                 
                 if (this->socketsCounters[sck] == 0 && this->waitAckFrom(sck) == -1){
@@ -392,6 +393,7 @@ class ff_dsenderH : public ff_dsender {
     std::vector<int> internalSockets;
     int last_rr_socket_Internal = -1;
     std::set<std::string> internalGroupNames;
+    int internalMessageOTF;
 
     int getNextReadyInternal(){
         for(size_t i = 0; i < this->internalSockets.size(); i++){
@@ -432,8 +434,8 @@ class ff_dsenderH : public ff_dsender {
 
 public:
 
-    ff_dsenderH(ff_endpoint e, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = 1, int coreid=-1) : ff_dsender(e, gName, batchSize, coreid), internalGroupNames(internalGroups) {} 
-    ff_dsenderH(std::vector<ff_endpoint> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = 1, int coreid=-1) : ff_dsender(dest_endpoints_, gName, batchSize, coreid), internalGroupNames(internalGroups) {}
+    ff_dsenderH(ff_endpoint e, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = 1, int messageOTF = 100, int internalMessageOTF = 10, int coreid=-1) : ff_dsender(e, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {} 
+    ff_dsenderH(std::vector<ff_endpoint> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = 1, int messageOTF = 100, int internalMessageOTF = 10, int coreid=-1) : ff_dsender(dest_endpoints_, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {}
     
     int handshakeHandler(const int sck, bool isInternal){
         if (sendGroupName(sck) < 0) return -1;
