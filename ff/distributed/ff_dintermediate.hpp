@@ -80,6 +80,7 @@ public:
     std::set<std::string> otherGroupsFromSameParentBB;
     size_t expectedEOS = 0;
     int outBatchSize = 1;
+    int messageOTF, internalMessageOTF;
     // liste degli index dei nodi input/output nel builiding block in the shared memory context. The first list: inputL will become the rouitng table
     std::vector<int> inputL, outputL, inputR, outputR;
 

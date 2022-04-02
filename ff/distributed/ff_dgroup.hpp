@@ -131,7 +131,7 @@ public:
                 this->add_emitter(new ff_dreceiver(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.hasLeftChildren() ? ir.inputL : ir.inputR)));
 
             if (ir.hasSender)
-                this->add_collector(new ff_dsender(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.outBatchSize), true);
+                this->add_collector(new ff_dsender(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
 			
 			if (ir.hasRightChildren() && ir.parentBB->isAll2All()) {
 				ff_a2a *a2a = reinterpret_cast<ff_a2a*>(ir.parentBB);
@@ -235,7 +235,7 @@ public:
                 this->add_emitter(new ff_dreceiverH(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.inputL), ir.inputR, ir.otherGroupsFromSameParentBB));
 
             if (ir.hasSender)
-                this->add_collector(new ff_dsenderH(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.otherGroupsFromSameParentBB, ir.outBatchSize) , true);
+                this->add_collector(new ff_dsenderH(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.otherGroupsFromSameParentBB, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF) , true);
         }  
 
         if (this->getNWorkers() == 0){
