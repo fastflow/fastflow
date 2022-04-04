@@ -100,7 +100,7 @@ protected:
         /*for (const auto& p : m)
             std::cout << p.first << " - "  << p.second << std::endl;
         */
-       ff::cout << "Receiving routing table (" << sz << " bytes)" << ff::endl;
+		//ff::cout << "Receiving routing table (" << sz << " bytes)" << ff::endl;
         return 0;
     }
 
@@ -349,12 +349,6 @@ public:
         return 0;
     }
 
-    void svc_end() {
-        // close the socket not matter if local or remote
-        for (auto& sck : this->sockets)
-			shutdown(sck, SHUT_WR); 			//close(sck);
-    }
-
     message_t *svc(message_t* task) {
         int sck;
         if (task->chid != -1)
@@ -367,11 +361,40 @@ public:
         return this->GO_ON;
     }
 
-    virtual void eosnotify(ssize_t id) {
-        if (++neos >= this->get_num_inchannels())
-            for(const auto& sck : sockets) batchBuffers[sck].sendEOS();
+    void eosnotify(ssize_t id) {
+		if (++neos >= this->get_num_inchannels()) {
+			// all input EOS received, now sending the EOS to all connections
+            for(const auto& sck : sockets) {
+				batchBuffers[sck].sendEOS();
+				shutdown(sck, SHUT_WR);
+			}
+		}
     }
 
+	void svc_end() {
+		// here we wait all acks from all connections
+		size_t totalack = sockets.size()*messageOTF;
+		size_t currentack = 0;
+		for(const auto& [_, counter] : socketsCounters)
+			currentack += counter;
+
+		ack_t a;
+		while(currentack<totalack) {		
+			for(auto& [sck, counter] : socketsCounters) {
+				switch(readn(sck, (char*)&a, sizeof(a))) {
+				case 0:
+				case -1:
+					currentack += (messageOTF-counter);
+					break;
+				default: {
+					currentack++;
+					counter++;
+				}
+				}
+			}
+		}
+		for(auto& sck : sockets) close(sck);
+	}
 };
 
 
@@ -499,23 +522,50 @@ public:
             message_t E_O_S(0,0);
             for(const auto& sck : internalSockets) {
                 batchBuffers[sck].sendEOS();
+				shutdown(sck, SHUT_WR);
+			}
+		 }
+		 if (++neos >= this->get_num_inchannels()) {
+			 // all input EOS received, now sending the EOS to all
+			 // others connections
+			 for(const auto& sck : sockets) {
+				 batchBuffers[sck].sendEOS();
+				 shutdown(sck, SHUT_WR);
+			 }
+		 }
+	 }
 
-                //while(socketsCounters[sck] == internalMessageOTF) waitAckFrom(sck);
-				
-                FD_CLR(sck, &set);
-                socketsCounters.erase(sck);
-                if (sck == fdmax) {
-                    fdmax = 0;
-                    for(auto& [sck_, _] : socketsCounters) if (sck_ > fdmax && FD_ISSET(sck_, &set)) fdmax = sck_;
-                }
-    
-            }
-            //++neos; // count anyway a new EOS received!
+	void svc_end() {
+		// here we wait all acks from all connections
+		size_t totalack  = internalSockets.size()*internalMessageOTF;
+		totalack        += sockets.size()*messageOTF;
+		size_t currentack = 0;
+		for(const auto& [_, counter] : socketsCounters)
+			currentack += counter;
 
-         }
-		 if (++neos >= this->get_num_inchannels())
-			 for(const auto& sck : sockets) batchBuffers[sck].sendEOS();
-     }
+		ack_t a;
+		while(currentack<totalack) {		
+			for(auto& [sck, counter] : socketsCounters) {
+				switch(readn(sck, (char*)&a, sizeof(a))) {
+				case 0:
+				case -1: {
+					decltype(internalSockets)::iterator it;
+					it = std::find(internalSockets.begin(), internalSockets.end(), sck);
+					if (it != internalSockets.end())
+						currentack += (internalMessageOTF-counter);
+					else
+						currentack += (messageOTF-counter);
+				} break;
+				default: {
+					currentack++;
+					counter++;
+				}
+				}
+			}
+		}
+		for(const auto& [sck, _] : socketsCounters) close(sck);
+	}
+	
 };
 
 
