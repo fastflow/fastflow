@@ -14,13 +14,17 @@
  *
  */
 
+// running the tests with limited buffer capacity
+#define FF_BOUNDED_BUFFER
+#define DEFAULT_BUFFER_CAPACITY 128
+
 
 #include <ff/dff.hpp>
 #include <iostream>
 #include <mutex>
 #include <chrono>
 
-#define MANUAL_SERIALIZATION 1
+//#define MANUAL_SERIALIZATION 1
 
 // ------------------------------------------------------
 std::mutex mtx;  // used only for pretty printing
