@@ -98,14 +98,17 @@ protected:
 
     virtual int handleBatch(int sck){
         int requestSize;
-
         switch(readn(sck, reinterpret_cast<char*>(&requestSize), sizeof(requestSize))) {
-            case -1: error("Something went wrong in receiving the number of tasks!\n");
-            case 0: return -1;
+		case -1: {			
+			perror("readn");
+			error("Something went wrong in receiving the number of tasks!\n");
+			return -1;
+		} break;
+		case 0: return -1;
         }
 		// always sending back the acknowledgement
         if (writen(sck, reinterpret_cast<char*>(&ACK), sizeof(ack_t)) < 0){
-            if (errno != ECONNRESET || errno != EPIPE) {
+            if (errno != ECONNRESET && errno != EPIPE) {
                 error("Error sending back ACK to the sender (errno=%d)\n",errno);
                 return -1;
             }
@@ -215,11 +218,10 @@ public:
     }
 
     void svc_end() {
-        close(this->listen_sck);
-
-        #ifdef LOCAL
-            unlink(this->acceptAddr.address.c_str());
-        #endif
+        close(this->listen_sck);		
+#ifdef LOCAL
+		unlink(this->acceptAddr.address.c_str());
+#endif
     }
     /* 
         Here i should not care of input type nor input data since they come from a socket listener.
@@ -368,78 +370,6 @@ public:
 
     }
 
-};
-
-/*
-    ONDEMAND specification
-*/
-
-
-class ff_dreceiverOD: public ff_dreceiver { 
-protected:
-    virtual int handleRequest(int sck) override {
-		int sender;
-		int chid;
-        size_t sz;
-        struct iovec iov[3];
-        iov[0].iov_base = &sender;
-        iov[0].iov_len = sizeof(sender);
-        iov[1].iov_base = &chid;
-        iov[1].iov_len = sizeof(chid);
-        iov[2].iov_base = &sz;
-        iov[2].iov_len = sizeof(sz);
-
-        switch (readvn(sck, iov, 3)) {
-           case -1: error("Error reading from socket\n"); // fatal error
-           case  0: return -1; // connection close
-        }
-
-        // convert values to host byte order
-        sender = ntohl(sender);
-        chid   = ntohl(chid);
-        sz     = be64toh(sz);
-
-        if (sz > 0){
-            char* buff = new char [sz];
-			assert(buff);
-            if(readn(sck, buff, sz) < 0){
-                error("Error reading from socket\n");
-                delete [] buff;
-                return -1;
-            }
-			message_t* out = new message_t(buff, sz, true);
-			assert(out);
-			out->sender = sender;
-			out->chid   = chid;
-
-            if (chid != -1)
-                ff_send_out_to(out, this->routingTable[chid]); // assume the routing table is consistent WARNING!!!
-            else
-                ff_send_out(out);
-
-          
-            if (writen(sck, reinterpret_cast<char*>(&ACK),sizeof(ack_t)) < 0){
-                if (errno != ECONNRESET || errno != EPIPE) {
-                    error("Error sending back ACK to the sender (errno=%d)\n",errno);
-                    return -1;
-                }
-            }
-		
-
-            return 0;
-        }
-
-        registerEOS(sck);
-
-        return -1;
-    }
-
-public:
-    ff_dreceiverOD(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
-		: ff_dreceiver(acceptAddr, input_channels, routingTable, coreid) {}
-
-private:
-    ack_t ACK;
 };
 
 #endif
