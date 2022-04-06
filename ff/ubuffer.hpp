@@ -471,8 +471,9 @@ public:
     /**
      * It changes the size of the queue WITHOUT reallocating 
      * the internal buffers. It should be used mainly for 
-     * reducing the size of the queue or to restore it after
-     * is has been previously reduced. 
+     * reducing the size of the queue or to restore after
+     * it has been previously reduced. 
+     * NOTE: it forces the queue to behave as bounded queue!
      * 
      * WARNING: this is very a dangerous operation if executed 
      * while the queue is being used; if wrongly used, it
@@ -484,7 +485,8 @@ public:
         size_t tmp=buf_w->changesize(newsz);
         assert(size == tmp);
         size = newsz;
-        pool.changesize(newsz);
+        pool.changesize(newsz); 
+        fixedsize=true;
         return tmp;
     }
 

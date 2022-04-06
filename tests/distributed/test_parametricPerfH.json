@@ -2,7 +2,8 @@
     "groups" : [
      {   
         "endpoint" : "localhost:8000",
-        "name" : "M"
+         "name" : "M",
+	 "internalMessageOTF" : 1
      },
      {   
         "endpoint" : "localhost:8002",

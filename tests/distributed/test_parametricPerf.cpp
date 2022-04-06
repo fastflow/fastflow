@@ -14,13 +14,17 @@
  *
  */
 
+// running the tests with limited buffer capacity
+#define FF_BOUNDED_BUFFER
+#define DEFAULT_BUFFER_CAPACITY 128
+
 
 #include <ff/dff.hpp>
 #include <iostream>
 #include <mutex>
 #include <chrono>
 
-#define MANUAL_SERIALIZATION 1
+//#define MANUAL_SERIALIZATION 1
 
 // ------------------------------------------------------
 std::mutex mtx;  // used only for pretty printing
@@ -39,11 +43,11 @@ static inline float active_delay(int msecs) {
   return x;
 }
 // this assert will not be removed by -DNDEBUG
-#define myassert(c) {													      \
+#define myassert(c) {													\
 		if (!(c)) {														\
-			std::cerr << "ERROR: assert at line " << __LINE__ << " failed\n"; \
-			abort();													      \
-		}																      \
+			std::cerr << "ERROR: myassert at line " << __LINE__ << " failed\n"; \
+			abort();													\
+		}																\
 	}
 // -----------------------------------------------------
 struct ExcType {
@@ -146,9 +150,12 @@ struct MiNode : ff::ff_minode_t<ExcType>{
 			  myassert(in->C[100] == 'a');
 		  if (in->clen>500)
 			  myassert(in->C[500] == 'o');
-		  ff::cout << "MiNode" << get_my_id() << " input data " << processedItems << " OK\n";
+		  //ff::cout << "MiNode" << get_my_id() << " input data " << processedItems << " OK\n";
 	  }
-	  myassert(in->C[in->clen-1] == 'F');
+	  if (in->C[in->clen-1] != 'F') {
+	      ff::cout << "ERROR: " << in->C[in->clen-1] << " != 'F'\n";
+		  myassert(in->C[in->clen-1] == 'F');
+	  }
 	  delete in;
       return this->GO_ON;
     }
@@ -167,7 +174,7 @@ int main(int argc, char*argv[]){
 	}
 
     if (argc < 9){
-        std::cout << "Usage: " << argv[0] << " #items #byteXitem #execTimeSource #execTimeSink #np_sx #np_dx #nwXp"  << std::endl;
+        std::cout << "Usage: " << argv[0] << " #items #byteXitem #execTimeSource #execTimeSink #np_sx #np_dx #nwXpsx #nwXpdx"  << std::endl;
         return -1;
     }
 	bool check = false;
@@ -210,10 +217,11 @@ int main(int argc, char*argv[]){
 			g << dxWorkers[j];	
 		}
 	}
-    
+	auto t0=getusec();
     if (a2a.run_and_wait_end()<0) {
       error("running mainPipe\n");
       return -1;
-    }
+    }	
+	ff::cout << "Time (ms) = " << (getusec()-t0)/1000.0 << "\n";
     return 0;
 }

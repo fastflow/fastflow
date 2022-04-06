@@ -19,18 +19,17 @@ class SquareBoxRight : public ff_minode {
 public:	
 
 	int svc_init() {
-
-		// change the size of the queue to the Sender, since the distributed-memory communications are all on-demand
-		svector<ff_node*> w;
-        this->get_out_nodes(w);
-        size_t oldsz;
-		assert(w.size() == 1);
-        w[0]->change_inputqueuesize(1, oldsz); 
-
+		// change the size of the queue towards the Sender
+		// forcing the queue to be bounded of capacity 1
+		size_t oldsz;
+		change_outputqueuesize(1, oldsz);
+		assert(oldsz != 0);		
 		return 0;
 	}
 
-	void* svc(void* in) {return in;}
+	void* svc(void* in) {
+		return in;
+	}
 
 	void eosnotify(ssize_t id) {
 		if (id == (ssize_t)(this->get_num_inchannels() - 1)) return;   // EOS coming from the SquareLeft, we must ignore it
@@ -74,6 +73,26 @@ public:
 		registerCallback(ff_send_out_to_cbk, this);
 	}
 
+	int svc_init() {
+		if (this->n->isMultiOutput()) {
+			ff_monode* mo = reinterpret_cast<ff_monode*>(this->n);
+			//mo->set_running(localWorkersMap.size() + 1); // the last worker is the forwarder to the remote workers
+			mo->set_running(totalWorkers);
+		}
+
+		// change the size of the queue to the SquareBoxRight (if present),
+		// since the distributed-memory communications are all on-demand
+		svector<ff_node*> w;
+        this->get_out_nodes(w);
+		assert(w.size()>0);
+		if (w.size() > localWorkersMap.size()) {
+			assert(w.size() == localWorkersMap.size()+1);
+			size_t oldsz;		
+			w[localWorkersMap.size()]->change_inputqueuesize(1, oldsz);
+		}
+		return n->svc_init();
+	}
+	
 	void * svc(void* in) {
 		void* out = n->svc(in);
 		if (out > FF_TAG_MIN) return out;					
@@ -107,26 +126,6 @@ public:
 			return ff_send_out_to(msg, localWorkersMap.size());
 		}
     }
-
-	int svc_init() {
-		if (this->n->isMultiOutput()) {
-			ff_monode* mo = reinterpret_cast<ff_monode*>(this->n);
-			//mo->set_running(localWorkersMap.size() + 1); // the last worker is the forwarder to the remote workers
-			mo->set_running(totalWorkers);
-		}
-
-		// change the size of the queue to the SquareBoxRight (if present),
-		// since the distributed-memory communications are all on-demand
-		svector<ff_node*> w;
-        this->get_out_nodes(w);
-		assert(w.size()>0);
-		if (w.size() > localWorkersMap.size()) {
-			assert(w.size() == localWorkersMap.size()+1);
-			size_t oldsz;		
-			w[localWorkersMap.size()]->change_inputqueuesize(1, oldsz);
-		}
-		return n->svc_init();
-	}
 
 	void svc_end(){n->svc_end();}
 	

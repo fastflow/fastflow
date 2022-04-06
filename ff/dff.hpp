@@ -36,6 +36,18 @@
 #undef BLOCKING_MODE
 #endif
 
+
+#if !defined(DEFAULT_BATCH_SIZE)
+#define DEFAULT_BATCH_SIZE        1
+#endif
+#if !defined(DEFAULT_INTERNALMSG_OTF)
+#define DEFAULT_INTERNALMSG_OTF  10
+#endif
+#if !defined(DEFAULT_MESSAGE_OTF)
+#define DEFAULT_MESSAGE_OTF     100
+#endif
+
+
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_dgroups.hpp>

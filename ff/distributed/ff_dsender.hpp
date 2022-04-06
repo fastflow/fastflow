@@ -25,9 +25,6 @@
 #ifndef FF_DSENDER_H
 #define FF_DSENDER_H
 
-#define QUEUEDIM 100
-#define INTERNALQUEUEDIM 10
-
 #include <iostream>
 #include <map>
 #include <ff/ff.hpp>
@@ -103,7 +100,7 @@ protected:
         /*for (const auto& p : m)
             std::cout << p.first << " - "  << p.second << std::endl;
         */
-       ff::cout << "Receiving routing table (" << sz << " bytes)" << ff::endl;
+		//ff::cout << "Receiving routing table (" << sz << " bytes)" << ff::endl;
         return 0;
     }
 
@@ -302,11 +299,11 @@ protected:
 
     
 public:
-    ff_dsender(ff_endpoint dest_endpoint, std::string gName = "", int batchSize = 1, int messageOTF = 100, int coreid=-1): gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {
+    ff_dsender(ff_endpoint dest_endpoint, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1): gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {
         this->dest_endpoints.push_back(std::move(dest_endpoint));
     }
 
-    ff_dsender( std::vector<ff_endpoint> dest_endpoints_, std::string gName = "", int batchSize = 1, int messageOTF = 100, int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {}
+    ff_dsender( std::vector<ff_endpoint> dest_endpoints_, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {}
 
     
 
@@ -352,21 +349,6 @@ public:
         return 0;
     }
 
-    void svc_end() {
-        
-        long totalack = socketsCounters.size()*QUEUEDIM;
-		long currack  = 0;
-        for(const auto& pair : socketsCounters)
-            currack += pair.second;
-		while(currack<totalack) {
-			waitAckFromAny();
-			currack++;
-		}
-
-        // close the socket not matter if local or remote
-        for (auto& sck : this->sockets) close(sck);
-    }
-
     message_t *svc(message_t* task) {
         int sck;
         if (task->chid != -1)
@@ -379,11 +361,40 @@ public:
         return this->GO_ON;
     }
 
-    virtual void eosnotify(ssize_t id) {
-        if (++neos >= this->get_num_inchannels())
-            for(const auto& sck : sockets) batchBuffers[sck].sendEOS();
+    void eosnotify(ssize_t id) {
+		if (++neos >= this->get_num_inchannels()) {
+			// all input EOS received, now sending the EOS to all connections
+            for(const auto& sck : sockets) {
+				batchBuffers[sck].sendEOS();
+				shutdown(sck, SHUT_WR);
+			}
+		}
     }
 
+	void svc_end() {
+		// here we wait all acks from all connections
+		size_t totalack = sockets.size()*messageOTF;
+		size_t currentack = 0;
+		for(const auto& [_, counter] : socketsCounters)
+			currentack += counter;
+
+		ack_t a;
+		while(currentack<totalack) {		
+			for(auto& [sck, counter] : socketsCounters) {
+				switch(readn(sck, (char*)&a, sizeof(a))) {
+				case 0:
+				case -1:
+					currentack += (messageOTF-counter);
+					break;
+				default: {
+					currentack++;
+					counter++;
+				}
+				}
+			}
+		}
+		for(auto& sck : sockets) close(sck);
+	}
 };
 
 
@@ -429,13 +440,13 @@ class ff_dsenderH : public ff_dsender {
         if (sckMax > 0) return sckMax;
 
         last_rr_socket_Internal = (last_rr_socket_Internal + 1) % this->internalSockets.size();
-        return sockets[last_rr_socket_Internal];
+        return internalSockets[last_rr_socket_Internal];
     }
 
 public:
 
-    ff_dsenderH(ff_endpoint e, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = 1, int messageOTF = 100, int internalMessageOTF = 10, int coreid=-1) : ff_dsender(e, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {} 
-    ff_dsenderH(std::vector<ff_endpoint> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = 1, int messageOTF = 100, int internalMessageOTF = 10, int coreid=-1) : ff_dsender(dest_endpoints_, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {}
+    ff_dsenderH(ff_endpoint e, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsender(e, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {} 
+    ff_dsenderH(std::vector<ff_endpoint> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsender(dest_endpoints_, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {}
     
     int handshakeHandler(const int sck, bool isInternal){
         if (sendGroupName(sck) < 0) return -1;
@@ -447,7 +458,7 @@ public:
 
         if (coreid!=-1)
 			ff_mapThreadToCpu(coreid);
-        
+
         FD_ZERO(&set);
         FD_ZERO(&tmpset);
 		
@@ -457,7 +468,7 @@ public:
             bool isInternal = internalGroupNames.contains(endpoint.groupName);
             if (isInternal) internalSockets.push_back(sck);
             else sockets.push_back(sck);
-            socketsCounters[sck] = isInternal ? INTERNALQUEUEDIM : QUEUEDIM;
+            socketsCounters[sck] = isInternal ? internalMessageOTF: messageOTF;
             batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(this->batchSize, [this, sck](struct iovec* v, int size) -> bool {
                 
                 if (this->socketsCounters[sck] == 0 && this->waitAckFrom(sck) == -1){
@@ -496,6 +507,7 @@ public:
             } else
                 sck = getMostFilledInternalBufferSck();
 
+
             batchBuffers[sck].push(task);
 
             return this->GO_ON;
@@ -510,21 +522,50 @@ public:
             message_t E_O_S(0,0);
             for(const auto& sck : internalSockets) {
                 batchBuffers[sck].sendEOS();
-                while(socketsCounters[sck] == INTERNALQUEUEDIM) waitAckFrom(sck);
-                FD_CLR(sck, &set);
-                socketsCounters.erase(sck);
-                if (sck == fdmax) {
-                    fdmax = 0;
-                    for(auto& [sck_, _] : socketsCounters) if (sck_ > fdmax && FD_ISSET(sck_, &set)) fdmax = sck_;
-                }
-    
-            }
-            //++neos; // count anyway a new EOS received!
+				shutdown(sck, SHUT_WR);
+			}
+		 }
+		 if (++neos >= this->get_num_inchannels()) {
+			 // all input EOS received, now sending the EOS to all
+			 // others connections
+			 for(const auto& sck : sockets) {
+				 batchBuffers[sck].sendEOS();
+				 shutdown(sck, SHUT_WR);
+			 }
+		 }
+	 }
 
-         }
-		 if (++neos >= this->get_num_inchannels())
-			 for(const auto& sck : sockets) batchBuffers[sck].sendEOS();
-     }
+	void svc_end() {
+		// here we wait all acks from all connections
+		size_t totalack  = internalSockets.size()*internalMessageOTF;
+		totalack        += sockets.size()*messageOTF;
+		size_t currentack = 0;
+		for(const auto& [_, counter] : socketsCounters)
+			currentack += counter;
+
+		ack_t a;
+		while(currentack<totalack) {		
+			for(auto& [sck, counter] : socketsCounters) {
+				switch(readn(sck, (char*)&a, sizeof(a))) {
+				case 0:
+				case -1: {
+					decltype(internalSockets)::iterator it;
+					it = std::find(internalSockets.begin(), internalSockets.end(), sck);
+					if (it != internalSockets.end())
+						currentack += (internalMessageOTF-counter);
+					else
+						currentack += (messageOTF-counter);
+				} break;
+				default: {
+					currentack++;
+					counter++;
+				}
+				}
+			}
+		}
+		for(const auto& [sck, _] : socketsCounters) close(sck);
+	}
+	
 };
 
 
