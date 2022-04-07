@@ -387,6 +387,14 @@ protected:
         ff_node::skipfirstpop(sk);
     }
 
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk) {
+        getFirst()->skipallpop(sk);
+        ff_node::skipallpop(sk);
+    }
+#endif
+
+
     bool  put(void * ptr) { 
         return ff_node::put(ptr);
     }
@@ -510,7 +518,11 @@ protected:
         if (comp_nodes[0]->isComp())
             ret = comp_nodes[0]->svc(task);
         else {
-            if (task || comp_nodes[0]->skipfirstpop()) {
+#ifdef DFF_ENABLED
+            if (task || comp_nodes[0]->skipfirstpop() || comp_nodes[0]->skipallpop()) {
+#else
+            if (task || comp_nodes[0]->skipfirstpop())
+#endif
                 r1= comp_nodes[0]->svc(task);
                 if (!(r1 == FF_GO_ON || r1 == FF_GO_OUT || r1 == FF_EOS_NOFREEZE)) {
                     comp_nodes[0]->ff_send_out(r1);
