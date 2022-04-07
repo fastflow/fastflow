@@ -116,7 +116,7 @@ protected:
 		
         requestSize = ntohl(requestSize);
         for(int i = 0; i < requestSize; i++)
-            handleRequest(sck);
+            if (handleRequest(sck)<0) return -1;
         
         return 0;
     }
@@ -134,8 +134,8 @@ protected:
         iov[2].iov_len = sizeof(sz);
 
         switch (readvn(sck, iov, 3)) {
-           case -1: error("Error reading from socket\n"); // fatal error
-           case  0: return -1; // connection close
+		case -1: error("Error reading from socket errno=%d\n",errno); // fatal error
+		case  0: return -1; // connection close
         }
 
         // convert values to host byte order
@@ -160,9 +160,7 @@ protected:
             return 0;
         }
 
-
         registerEOS(sck);
-
         return -1;
     }
 
@@ -289,7 +287,7 @@ public:
                 }
             }
         }
-
+		
         return this->EOS;
     }
 

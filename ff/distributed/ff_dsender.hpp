@@ -379,16 +379,22 @@ public:
 			currentack += counter;
 
 		ack_t a;
-		while(currentack<totalack) {		
-			for(auto& [sck, counter] : socketsCounters) {
-				switch(readn(sck, (char*)&a, sizeof(a))) {
+		while(currentack<totalack) {
+			for(auto scit = socketsCounters.begin(); scit != socketsCounters.end();) {
+				auto sck      = scit->first;
+				auto& counter = scit->second;
+				
+				switch(recvnnb(sck, (char*)&a, sizeof(a))) {
 				case 0:
 				case -1:
+					if (errno==EWOULDBLOCK) { ++scit; continue; }
 					currentack += (messageOTF-counter);
+					socketsCounters.erase(scit++);
 					break;
 				default: {
 					currentack++;
 					counter++;
+					++scit;
 				}
 				}
 			}
@@ -420,7 +426,7 @@ class ff_dsenderH : public ff_dsender {
         decltype(internalSockets)::iterator it;
 
         do 
-            sck = waitAckFromAny();
+            sck = waitAckFromAny();   // FIX: error management!
         while ((it = std::find(internalSockets.begin(), internalSockets.end(), sck)) != internalSockets.end());
         
         last_rr_socket_Internal = it - internalSockets.begin();
@@ -540,26 +546,36 @@ public:
 		size_t totalack  = internalSockets.size()*internalMessageOTF;
 		totalack        += sockets.size()*messageOTF;
 		size_t currentack = 0;
-		for(const auto& [_, counter] : socketsCounters)
+		for(const auto& [sck, counter] : socketsCounters) {
 			currentack += counter;
-
+		}
+		
 		ack_t a;
-		while(currentack<totalack) {		
-			for(auto& [sck, counter] : socketsCounters) {
-				switch(readn(sck, (char*)&a, sizeof(a))) {
+		while(currentack<totalack) {
+			for(auto scit = socketsCounters.begin(); scit != socketsCounters.end();) {
+				auto sck      = scit->first;
+				auto& counter = scit->second;
+
+				switch(recvnnb(sck, (char*)&a, sizeof(a))) {
 				case 0:
 				case -1: {
+					if (errno == EWOULDBLOCK) {
+						++scit;
+						continue;
+					}
 					decltype(internalSockets)::iterator it;
 					it = std::find(internalSockets.begin(), internalSockets.end(), sck);
 					if (it != internalSockets.end())
 						currentack += (internalMessageOTF-counter);
 					else
 						currentack += (messageOTF-counter);
+					socketsCounters.erase(scit++);
 				} break;
 				default: {
 					currentack++;
 					counter++;
-				}
+					++scit;					
+				}					
 				}
 			}
 		}
