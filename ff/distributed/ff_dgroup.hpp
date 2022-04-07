@@ -151,18 +151,19 @@ public:
                 if (isSeq(child))
                     if (ir.isSource){
                         ff_node* wrapped = new EmitterAdapter(child, ir.rightTotalInputs, getBackAndPop(reverseLeftOutputIndexes) , localRightWorkers);
-                        wrapped->skipallpop(true);
+                        if (ir.hasReceiver)
+                            wrapped->skipallpop(true);
                         firstSet.push_back(wrapped);
                     } else {
                         firstSet.push_back(new ff_comb(new WrapperIN(new ForwarderNode(child->getDeserializationFunction()), 1, true), new EmitterAdapter(child, ir.rightTotalInputs, getBackAndPop(reverseLeftOutputIndexes) , localRightWorkers), true, true));
                     }
                 else {
                     
-                    ff::svector<ff_node*> inputs; child->get_in_nodes(inputs);
-                    for(ff_node* input : inputs){
-                        if (ir.isSource)
-                            input->skipallpop(true);
-                        else {
+                    if (ir.isSource){
+                        if (ir.hasReceiver) child->skipallpop(true);
+                    } else {
+                        ff::svector<ff_node*> inputs; child->get_in_nodes(inputs);
+                        for(ff_node* input : inputs){
                             ff_node* inputParent = getBB(child, input);
                             if (inputParent) inputParent->change_node(input, buildWrapperIN(input), true); // cleanup??? remove_fromcleanuplist??
                         }
@@ -178,8 +179,8 @@ public:
             }
             // add the Square Box Left, just if we have a receiver!
             if (ir.hasReceiver)
-                firstSet.push_back(new SquareBoxLeft(localRightWorkers)); // ondemand??
-            
+                firstSet.push_back(new SquareBoxLeft(localRightWorkers)); 
+
             std::transform(firstSet.begin(), firstSet.end(), firstSet.begin(), [](ff_node* n) -> ff_node* {
                 if (!n->isPipe())
 					return new ff_Pipe(n);

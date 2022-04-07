@@ -685,6 +685,11 @@ protected:
      * Example: \ref l1_ff_nodes_graph.cpp
      */
     bool skipfirstpop() const { return skip1pop; }
+
+#ifdef DFF_ENABLED
+    bool skipallpop() {return _skipallpop;}
+#endif
+
     
     /** 
      * \brief Creates the input channel 
@@ -1417,7 +1422,11 @@ private:
             }
             gettimeofday(&filter->wtstart,NULL);
             do {
+#ifdef DFF_ENABLED
+                if (!filter->skipallpop() && inpresent){
+#else
                 if (inpresent) {
+#endif
                     if (!skipfirstpop) pop(&task); 
                     else skipfirstpop=false;
                     if ((task == FF_EOS) || (task == FF_EOSW) ||
