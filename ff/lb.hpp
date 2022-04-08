@@ -660,6 +660,10 @@ public:
             workers[i]->skipfirstpop(false);
     }
 
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk) { _skipallpop = sk; }
+#endif
+
 
     void blocking_mode(bool blk=true) {
         blocking_in = blocking_out = blk;
@@ -903,7 +907,7 @@ public:
             
             do {
 #ifdef DFF_ENABLED
-                if (!skipallpop && inpresent){
+                if (!_skipallpop && inpresent){
 #else
                 if (inpresent) {
 #endif
@@ -1489,7 +1493,7 @@ private:
     bool               blocking_out;
 
 #ifdef DFF_ENABLED
-    bool               skipallpop = false;    
+    bool               _skipallpop = false;    
 #endif
 
 #if defined(TRACE_FASTFLOW)

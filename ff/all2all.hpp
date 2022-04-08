@@ -395,6 +395,14 @@ public:
         skip1pop=sk;
     }
 
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk)   { 
+        for(size_t i=0;i<workers1.size(); ++i)
+            workers1[i]->skipallpop(sk);
+        ff_node::skipallpop(sk);
+    }
+#endif
+
     void blocking_mode(bool blk=true) {
         blocking_in = blocking_out = blk;
     }

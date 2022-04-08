@@ -1143,6 +1143,12 @@ public:
             nodes_list[i]->skipfirstpop(false);            
     }
 
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk)   { 
+        get_node(0)->skipallpop(sk);       
+    }
+#endif
+
     
     /* WARNING: these methods must be called before the run() method */
     void blocking_mode(bool blk=true) {
