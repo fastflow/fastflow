@@ -672,6 +672,14 @@ protected:
         skip1pop=sk;
     }
 
+ 
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk)   { 
+        lb->skipallpop(sk);
+        ff_node::skipallpop(sk);
+    }
+#endif   
+
 
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,

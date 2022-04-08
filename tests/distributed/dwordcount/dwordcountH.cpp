@@ -41,7 +41,7 @@
  *                        | --> Counter --> Sink
  *   Source-->Splitter -->| 
  *
- *  /<---- pipe1 ---->/        /<--- pipe2 --->/
+ *  /<---- combine ---->/   /<--- combine --->/
  *  /<----------------- a2a ------------------>/
  *
  *  G1: pipe1
@@ -347,29 +347,41 @@ int main(int argc, char* argv[]) {
     auto G1 = a2a.createGroup("G1");
     auto G2 = a2a.createGroup("G2");
 
-    for (size_t i=0;i<source_par_deg; ++i) {        
-        auto* combine = new ff_comb(new Source(app_start_time), new Splitter, true, true);
-        L.push_back(combine);
-        G1 << combine;
+    for (size_t i=0;i<source_par_deg; ++i) {  
+        auto* child = new ff_pipeline(false, qlen, qlen, true);
+        child->add_stage(new Source(app_start_time));
+        child->add_stage(new Splitter);   
+        //auto* combine = new ff_comb(new Source(app_start_time), new Splitter, true, true);
+        L.push_back(child);
+        G1 << child;
     }
 
     for (size_t i=0;i<sink_par_deg; ++i) {
-        auto* combine = new ff_comb(new Counter, new Sink, true, true);
-        R.push_back(combine);
-        G1 << combine;
+        auto child = new ff_pipeline(false, qlen, qlen, true);
+        child->add_stage(new Counter);
+        child->add_stage(new Sink);
+        //auto* combine = new ff_comb(new Counter, new Sink, true, true);
+        R.push_back(child);
+        G1 << child;
     }
 
 
     for (size_t i=0;i<source_par_deg; ++i) {        
-        auto* combine = new ff_comb(new Source(app_start_time), new Splitter, true, true);
-        L.push_back(combine);
-        G2 << combine;
+         auto* child = new ff_pipeline(false, qlen, qlen, true);
+        child->add_stage(new Source(app_start_time));
+        child->add_stage(new Splitter);   
+        //auto* combine = new ff_comb(new Source(app_start_time), new Splitter, true, true);
+        L.push_back(child);
+        G2 << child;
     }
 
     for (size_t i=0;i<sink_par_deg; ++i) {
-        auto* combine = new ff_comb(new Counter, new Sink, true, true);
-        R.push_back(combine);
-        G2 << combine;
+         auto child = new ff_pipeline(false, qlen, qlen, true);
+        child->add_stage(new Counter);
+        child->add_stage(new Sink);
+        //auto* combine = new ff_comb(new Counter, new Sink, true, true);
+        R.push_back(child);
+        G2 << child;
     }
 
     a2a.add_firstset(L, 0, true);
@@ -382,7 +394,7 @@ int main(int argc, char* argv[]) {
         threadMapper::instance()->setMappingList("12,13,14,15,16,17,18,19,20,21,22,23, 36,37,38,39,40,41,42,43,44,45,46,47");
     }
 #endif      
-  
+
     ff::cout << "Starting \n\n";
     /// evaluate topology execution time
     volatile unsigned long start_time_main_usecs = current_time_usecs();

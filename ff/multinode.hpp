@@ -314,6 +314,13 @@ public:
         ff_node::skipfirstpop(sk);
     }
 
+#ifdef DFF_ENABLED
+    inline void skipallpop(bool sk) {
+        gt->skipallpop(sk);
+        ff_node::skipallpop(sk);
+    }
+#endif
+
     /**
      * \brief run
      *
@@ -657,7 +664,7 @@ public:
 
 #ifdef DFF_ENABLED
     inline void skipallpop(bool sk) {
-        lb->skipallpop = sk;
+        lb->skipallpop(sk);
         ff_node::skipallpop(sk);
     }
 #endif

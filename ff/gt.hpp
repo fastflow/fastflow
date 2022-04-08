@@ -486,6 +486,10 @@ public:
      */
     void skipfirstpop(bool sk=true) { skip1pop=sk; }
 
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk = true) { _skipallpop = sk;}
+#endif
+
     /**
      * \brief Gets the ouput buffer
      *
@@ -567,7 +571,7 @@ public:
         // In this case we want to call notifyeos only when we have received EOS from all
         // input channel.
         bool notify_each_eos = filter ? (filter->neos==1): false;
-        
+        // TODO: inserire skipallpop!
         gettimeofday(&wtstart,NULL);
         do {
             task = NULL;
@@ -870,8 +874,11 @@ private:
     ff_node         * filter;
     svector<ff_node*> workers;
     svector<bool>     offline;
-    FFBUFFER        * buffer;
+    FFBUFFER        * buffer; 
     bool              skip1pop;
+#ifdef DFF_ENABLED
+    bool             _skipallpop;
+#endif
     bool              frominput;
     int  (*ag_callback)(void *,void **, void*);
     void  * ag_callback_arg;
