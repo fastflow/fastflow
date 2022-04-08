@@ -411,6 +411,7 @@ class ff_dsenderH : public ff_dsender {
     int last_rr_socket_Internal = -1;
     std::set<std::string> internalGroupNames;
     int internalMessageOTF;
+    bool squareBoxEOS = false;
 
     int getNextReadyInternal(){
         for(size_t i = 0; i < this->internalSockets.size(); i++){
@@ -483,6 +484,7 @@ public:
                 }
 
                 if (writevn(sck, v, size) < 0){
+                    perror("Writevn: ");
                     error("Error sending the iovector inside the callback!\n");
                     return false;
                 }
@@ -525,7 +527,8 @@ public:
      void eosnotify(ssize_t id) {
          if (id == (ssize_t)(this->get_num_inchannels() - 1)){
             // send the EOS to all the internal connections
-            message_t E_O_S(0,0);
+            if (squareBoxEOS) return;
+            squareBoxEOS = true;
             for(const auto& sck : internalSockets) {
                 batchBuffers[sck].sendEOS();
 				shutdown(sck, SHUT_WR);
