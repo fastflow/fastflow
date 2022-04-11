@@ -521,7 +521,7 @@ protected:
 #ifdef DFF_ENABLED
             if (task || comp_nodes[0]->skipfirstpop() || comp_nodes[0]->skipallpop()) {
 #else
-            if (task || comp_nodes[0]->skipfirstpop())
+            if (task || comp_nodes[0]->skipfirstpop()){
 #endif
                 r1= comp_nodes[0]->svc(task);
                 if (!(r1 == FF_GO_ON || r1 == FF_GO_OUT || r1 == FF_EOS_NOFREEZE)) {

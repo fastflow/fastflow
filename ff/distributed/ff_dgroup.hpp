@@ -186,7 +186,7 @@ public:
 					return new ff_Pipe(n);
 				return n;
             });
-            innerA2A->add_firstset(firstSet, 1 /*reinterpret_cast<ff_a2a*>(ir.parentBB)->ondemand_buffer()*/); // note the ondemand!!
+            innerA2A->add_firstset(firstSet, reinterpret_cast<ff_a2a*>(ir.parentBB)->ondemand_buffer()); // note the ondemand!!
             
             int outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second ? 0 : f.second.first.size());});
             
