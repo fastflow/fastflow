@@ -16,6 +16,8 @@
 #include <cereal/types/vector.hpp>
 #include <cereal/types/polymorphic.hpp>
 
+#include <ff/distributed/ff_batchbuffer.hpp>
+
 
 using namespace ff;
 
@@ -25,8 +27,11 @@ protected:
     int last_rr_rank = 0; //next destiation to send for round robin policy
     std::map<int, int> dest2Rank;
     std::map<int, unsigned int> rankCounters;
+    std::map<int, ff_batchBuffer> batchBuffers;
     std::vector<ff_endpoint> destRanks;
     std::string gName;
+    int batchSize;
+    int messageOTF;
 	int coreid;
 
     static int receiveReachableDestinations(int rank, std::map<int, int>& m){
@@ -93,13 +98,13 @@ protected:
     }
 
 public:
-    ff_dsenderMPI(ff_endpoint destRank, std::string gName = "", int coreid=-1)
-		: gName(gName), coreid(coreid) {
+    ff_dsenderMPI(ff_endpoint destRank, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1)
+		: gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {
         this->destRanks.push_back(std::move(destRank));
     }
 
-    ff_dsenderMPI( std::vector<ff_endpoint> destRanks_, std::string gName = "", int coreid=-1)
-		: destRanks(std::move(destRanks_)), gName(gName), coreid(coreid) {}
+    ff_dsenderMPI( std::vector<ff_endpoint> destRanks_, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1)
+		: destRanks(std::move(destRanks_)), gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {}
 
     int svc_init() {
 		if (coreid!=-1)
@@ -107,7 +112,7 @@ public:
 
         for(ff_endpoint& ep: this->destRanks){
            handshakeHandler(ep.getRank(), false);
-           rankCounters[ep.getRank()] = QUEUEDIM;
+           rankCounters[ep.getRank()] = messageOTF;
 
         }
 
@@ -115,7 +120,7 @@ public:
     }
 
     void svc_end(){
-        long totalack = destRanks.size()*QUEUEDIM;
+        long totalack = destRanks.size() * messageOTF;
 		long currack  = 0;
         
         for(const auto& pair : rankCounters) currack += pair.second;

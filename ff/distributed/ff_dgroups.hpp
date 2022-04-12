@@ -52,9 +52,7 @@
 #endif
 
 namespace ff {
-
-enum Proto {TCP , MPI};
-
+  
 class dGroups {
 public:
     friend struct GroupInterface;
@@ -233,6 +231,7 @@ private:
 
     void prepareIR(ff_pipeline* parentPipe){
       ff::ff_IR& runningGroup_IR = annotatedGroups[this->runningGroup];
+      runningGroup_IR.protocol = this->usedProtocol; // set the protocol
       ff_node* previousStage = getPreviousStage(parentPipe, runningGroup_IR.parentBB);
       ff_node* nextStage = getNextStage(parentPipe, runningGroup_IR.parentBB);
       // TODO: check coverage all 1st level
