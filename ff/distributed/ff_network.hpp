@@ -57,6 +57,8 @@
     #define le64toh(x) OSSwapLittleToHostInt64(x)
 #endif
 
+enum Proto {TCP , MPI};
+
 class dataBuffer: public std::stringbuf {
 public:	
     dataBuffer()
