@@ -35,13 +35,9 @@
 #include <cereal/types/string.hpp>
 #include <cereal/types/vector.hpp>
 
-#if(defined(_MSC_VER) or (defined(__GNUC__) and (7 <= __GNUC_MAJOR__)))
-    #include <filesystem>
-    namespace n_fs = std::filesystem;
-#else
-    #include <experimental/filesystem>
-    namespace n_fs = std::experimental::filesystem;    
-#endif
+
+#include <filesystem>
+namespace n_fs = std::filesystem;
 
 enum Proto {TCP = 1 , MPI};
 
@@ -184,7 +180,7 @@ int main(int argc, char** argv) {
 					usage(argv[0]);
 					exit(EXIT_FAILURE);
 				}
-				configFile = std::string(argv[++i]);
+				configFile = n_fs::current_path().string() + "/" + std::string(argv[++i]);
 			} break;
 			case 'V': {
 				seeAll=true;
@@ -207,12 +203,17 @@ int main(int argc, char** argv) {
 		usage(argv[0]);
 		exit(EXIT_FAILURE);
 	}
-	if (!n_fs::exists(std::string(argv[optind]))) {
+
+    executable = n_fs::current_path().string() + "/" + std::string(argv[optind]);
+
+	if (!n_fs::exists(executable)) {
 		std::cerr << "ERROR: Unable to find the executable file (we found as executable \'" << argv[optind] << "\')\n";
 		exit(EXIT_FAILURE);
-	}	
+	}
+
+    executable += " ";
 		
-    for (int index = optind; index < argc; index++) {
+    for (int index = optind+1 ; index < argc; index++) {
         executable += std::string(argv[index]) + " ";
 	}
 	
