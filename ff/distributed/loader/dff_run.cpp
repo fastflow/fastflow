@@ -180,7 +180,7 @@ int main(int argc, char** argv) {
 					usage(argv[0]);
 					exit(EXIT_FAILURE);
 				}
-				configFile = n_fs::current_path().string() + "/" + std::string(argv[++i]);
+				configFile = n_fs::absolute(n_fs::path(argv[++i])).string();
 			} break;
 			case 'V': {
 				seeAll=true;
@@ -204,7 +204,7 @@ int main(int argc, char** argv) {
 		exit(EXIT_FAILURE);
 	}
 
-    executable = n_fs::current_path().string() + "/" + std::string(argv[optind]);
+    executable = n_fs::absolute(n_fs::path(argv[optind])).string();
 
 	if (!n_fs::exists(executable)) {
 		std::cerr << "ERROR: Unable to find the executable file (we found as executable \'" << argv[optind] << "\')\n";
