@@ -23,7 +23,7 @@
 #
 # ---------------------------------------------------------------------------
 
-CXXFLAGS            += -std=c++17
+CXXFLAGS            += -std=c++20
 ifdef DEBUG
     OPTIMIZE_FLAGS  += -g -fno-inline-functions
 else
@@ -38,7 +38,6 @@ endif
 
 
 CXXFLAGS            += -Wall
-LIBS                 = -pthread -lstdc++fs
 INCLUDES             = $(INCS)
 
 SOURCES              = $(wildcard *.cpp)
