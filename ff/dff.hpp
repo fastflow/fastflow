@@ -37,9 +37,12 @@
 #endif
 
 
+// default size of the batching buffer
 #if !defined(DEFAULT_BATCH_SIZE)
 #define DEFAULT_BATCH_SIZE        1
 #endif
+
+// default number of On-The-Fly messages
 #if !defined(DEFAULT_INTERNALMSG_OTF)
 #define DEFAULT_INTERNALMSG_OTF  10
 #endif

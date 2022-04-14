@@ -129,7 +129,7 @@ protected:
     int create_connect(const ff_endpoint& destination){
         int socketFD;
 
-        #ifdef LOCAL
+#ifdef LOCAL
             socketFD = socket(AF_LOCAL, SOCK_STREAM, 0);
             if (socketFD < 0){
                 error("\nError creating socket \n");
@@ -145,9 +145,9 @@ protected:
                 close(socketFD);
                 return -1;
             }
-        #endif
+#endif
 
-        #ifdef REMOTE
+#ifdef REMOTE
             struct addrinfo hints;
             struct addrinfo *result, *rp;
 
@@ -175,13 +175,12 @@ protected:
            }
 		   free(result);
 			
-           if (rp == NULL)            /* No address succeeded */
+           if (rp == NULL)  {          /* No address succeeded */
                return -1;
-        #endif
-
+		   }
+#endif
 
         // receive the reachable destination from this sockets
-
         return socketFD;
     }
 
@@ -337,7 +336,10 @@ public:
                 return true;
             })); // change with the correct size
 
-            if (handshakeHandler(sck, false) < 0) return -1;
+            if (handshakeHandler(sck, false) < 0) {
+				error("svc_init ff_dsender failed");
+				return -1;
+			}
 
             FD_SET(sck, &set);
             if (sck > fdmax) fdmax = sck;
@@ -365,7 +367,9 @@ public:
 		if (++neos >= this->get_num_inchannels()) {
 			// all input EOS received, now sending the EOS to all connections
             for(const auto& sck : sockets) {
-				batchBuffers[sck].sendEOS();
+				if (batchBuffers[sck].sendEOS()<0) {
+					error("sending EOS to external connections (ff_dsender)\n");
+				}										 
 				shutdown(sck, SHUT_WR);
 			}
 		}
@@ -426,9 +430,13 @@ class ff_dsenderH : public ff_dsender {
         int sck;
         decltype(internalSockets)::iterator it;
 
-        do 
+        do {
             sck = waitAckFromAny();   // FIX: error management!
-        while ((it = std::find(internalSockets.begin(), internalSockets.end(), sck)) != internalSockets.end());
+			if (sck < 0) {
+				error("waitAckFromAny failed in getNextReadyInternal");
+				return -1;
+			}
+		} while ((it = std::find(internalSockets.begin(), internalSockets.end(), sck)) != internalSockets.end());
         
         last_rr_socket_Internal = it - internalSockets.begin();
         return sck;
@@ -484,8 +492,7 @@ public:
                 }
 
                 if (writevn(sck, v, size) < 0){
-                    perror("Writevn: ");
-                    error("Error sending the iovector inside the callback!\n");
+                    error("Error sending the iovector inside the callback (errno=%d) %s\n", errno);
                     return false;
                 }
 
@@ -530,7 +537,9 @@ public:
             if (squareBoxEOS) return;
             squareBoxEOS = true;
             for(const auto& sck : internalSockets) {
-                batchBuffers[sck].sendEOS();
+                if (batchBuffers[sck].sendEOS()<0) {
+					error("sending EOS to internal connections\n");
+				}					
 				shutdown(sck, SHUT_WR);
 			}
 		 }
@@ -538,7 +547,9 @@ public:
 			 // all input EOS received, now sending the EOS to all
 			 // others connections
 			 for(const auto& sck : sockets) {
-				 batchBuffers[sck].sendEOS();
+				 if (batchBuffers[sck].sendEOS()<0) {
+					 error("sending EOS to external connections (ff_dsenderH)\n");
+				 }										 
 				 shutdown(sck, SHUT_WR);
 			 }
 		 }
