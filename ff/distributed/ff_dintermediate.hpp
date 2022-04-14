@@ -72,6 +72,7 @@ public:
     bool coverageL = false, coverageR = false;
     bool isSource = false, isSink = false;
     bool hasReceiver = false, hasSender = false;
+    Proto protocol;
 
     ff_node* parentBB;
 

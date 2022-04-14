@@ -35,13 +35,9 @@
 #include <cereal/types/string.hpp>
 #include <cereal/types/vector.hpp>
 
-#if(defined(_MSC_VER) or (defined(__GNUC__) and (7 <= __GNUC_MAJOR__)))
-    #include <filesystem>
-    namespace n_fs = std::filesystem;
-#else
-    #include <experimental/filesystem>
-    namespace n_fs = std::experimental::filesystem;    
-#endif
+
+#include <filesystem>
+namespace n_fs = std::filesystem;
 
 enum Proto {TCP = 1 , MPI};
 
@@ -101,7 +97,7 @@ struct G {
     void run(){
         char b[1024]; // ssh -t // trovare MAX ARGV
         
-        sprintf(b, " %s %s %s %s %s --DFF_Config=%s --DFF_GName=%s %s 2>&1 %s", (isRemote() ? "ssh -t " : ""), (isRemote() ? host.c_str() : ""), (isRemote() ? "'" : ""), this->preCmd.c_str(),  executable.c_str(), configFile.c_str(), this->name.c_str(), toBePrinted(this->name) ? "" : "> /dev/null", (isRemote() ? "'" : ""));
+        sprintf(b, " %s %s %s %s %s --DFF_Config=%s --DFF_GName=%s %s 2>&1 %s", (isRemote() ? "ssh -T " : ""), (isRemote() ? host.c_str() : ""), (isRemote() ? "'" : ""), this->preCmd.c_str(),  executable.c_str(), configFile.c_str(), this->name.c_str(), toBePrinted(this->name) ? "" : "> /dev/null", (isRemote() ? "'" : ""));
        std::cout << "Executing the following command: " << b << std::endl;
         file = popen(b, "r");
         fd = fileno(file);
@@ -184,7 +180,7 @@ int main(int argc, char** argv) {
 					usage(argv[0]);
 					exit(EXIT_FAILURE);
 				}
-				configFile = std::string(argv[++i]);
+				configFile = n_fs::absolute(n_fs::path(argv[++i])).string();
 			} break;
 			case 'V': {
 				seeAll=true;
@@ -207,12 +203,17 @@ int main(int argc, char** argv) {
 		usage(argv[0]);
 		exit(EXIT_FAILURE);
 	}
-	if (!n_fs::exists(std::string(argv[optind]))) {
+
+    executable = n_fs::absolute(n_fs::path(argv[optind])).string();
+
+	if (!n_fs::exists(executable)) {
 		std::cerr << "ERROR: Unable to find the executable file (we found as executable \'" << argv[optind] << "\')\n";
 		exit(EXIT_FAILURE);
-	}	
+	}
+
+    executable += " ";
 		
-    for (int index = optind; index < argc; index++) {
+    for (int index = optind+1 ; index < argc; index++) {
         executable += std::string(argv[index]) + " ";
 	}
 	

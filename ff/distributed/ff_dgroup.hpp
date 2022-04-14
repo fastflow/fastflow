@@ -127,11 +127,25 @@ public:
                }
             }
 
-            if (ir.hasReceiver)
-                this->add_emitter(new ff_dreceiver(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.hasLeftChildren() ? ir.inputL : ir.inputR)));
+            if (ir.hasReceiver){
+                if (ir.protocol == Proto::TCP)
+                    this->add_emitter(new ff_dreceiver(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.hasLeftChildren() ? ir.inputL : ir.inputR)));
+                
+#ifdef DFF_MPI
+                else
+                   this->add_emitter(new ff_dreceiverMPI(ir.expectedEOS, vector2Map(ir.hasLeftChildren() ? ir.inputL : ir.inputR)));
+#endif 
+            }
 
-            if (ir.hasSender)
-                this->add_collector(new ff_dsender(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
+            if (ir.hasSender){
+                if(ir.protocol == Proto::TCP)
+                    this->add_collector(new ff_dsender(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
+               
+#ifdef DFF_MPI
+                else
+                   this->add_collector(new ff_dsenderMPI(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
+#endif      
+            }
 			
 			if (ir.hasRightChildren() && ir.parentBB->isAll2All()) {
 				ff_a2a *a2a = reinterpret_cast<ff_a2a*>(ir.parentBB);
@@ -186,7 +200,7 @@ public:
 					return new ff_Pipe(n);
 				return n;
             });
-            innerA2A->add_firstset(firstSet, 1 /*reinterpret_cast<ff_a2a*>(ir.parentBB)->ondemand_buffer()*/); // note the ondemand!!
+            innerA2A->add_firstset(firstSet, reinterpret_cast<ff_a2a*>(ir.parentBB)->ondemand_buffer()); // note the ondemand!!
             
             int outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second ? 0 : f.second.first.size());});
             
