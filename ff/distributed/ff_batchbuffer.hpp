@@ -19,7 +19,7 @@ public:
         iov[0].iov_len = sizeof(int);
     }
 
-    void push(message_t* m){
+    int push(message_t* m){
         m->sender = htonl(m->sender);
         m->chid = htonl(m->chid);
         size_t* sz = new size_t(htobe64(m->data.getLen()));
@@ -38,32 +38,36 @@ public:
         toCleanup.emplace_back(sz, m);
 
         if (++size == batchSize)
-            this->flush();
-            
+            return this->flush();
+		return 0;
     }
 
-    void sendEOS(){
-        push(new message_t(0,0));
-        flush();
+    int sendEOS(){
+        if (push(new message_t(0,0))<0) {
+			error("pushing EOS");
+		}
+        return flush();
     }
 
-    void flush(){
-        if (size == 0) return;
+    int flush(){
+        if (size == 0) return 0;
 
         int size_ = size;
         size = htonl(size);
         
-        if (!callback(iov, size_*4+1))
+        if (!callback(iov, size_*4+1)) {
             error("Callback of the batchbuffer got something wrong!\n");
+			return -1;
+		}
 
-         while (!toCleanup.empty()){
+		while (!toCleanup.empty()){
             delete toCleanup.back().first;
             delete toCleanup.back().second;
             toCleanup.pop_back();
         }
-    
 
         size = 0;
+		return 0;
     }
 
 };
