@@ -358,7 +358,9 @@ public:
         else 
             sck = getMostFilledBufferSck(); // get the most filled buffer socket or a rr socket
     
-        batchBuffers[sck].push(task);
+        if (batchBuffers[sck].push(task) == -1) {
+			return EOS;
+		}
 
         return this->GO_ON;
     }
@@ -523,7 +525,9 @@ public:
                 sck = getMostFilledInternalBufferSck();
 
 
-            batchBuffers[sck].push(task);
+            if (batchBuffers[sck].push(task) == -1) {
+				return EOS;
+			}
 
             return this->GO_ON;
         }

@@ -2,11 +2,11 @@
 
 ## Configure the parametric perf
 ITEMS=1000
-BYTExITEM=1000
-EXECTIMESOURCE=10
-EXECTIMESINK=10
+BYTExITEM=100    # 0
+EXECTIMESOURCE=0 #10
+EXECTIMESINK=0   #10
 WORKERSXPROCESSSX=1
-WORKERSXPROCESSDX=20
+WORKERSXPROCESSDX= 1 #20
 
 
 ## this scripts allow to run a solution in the cluster automatically assigning addresses and ports ##

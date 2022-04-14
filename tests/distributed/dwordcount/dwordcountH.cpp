@@ -152,11 +152,15 @@ struct Source: ff_node_t<tuple_t> {
             t->ts = current_time - app_start_time;
             ff_send_out(t);
             ++next_tuple_idx;
+
             next_tuple_idx %= dataset.size();
             // EOS reached
             if (current_time - app_start_time >= (app_run_time*1000000000L) && next_tuple_idx == 0)
                 break;
         }
+
+        std::cout << "Time expired\n";
+        
         total_lines.fetch_add(generated_tuples);
         total_bytes.fetch_add(generated_bytes);
         return EOS;

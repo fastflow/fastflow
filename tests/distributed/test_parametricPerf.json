@@ -12,12 +12,17 @@
      ,
      {   
         "endpoint" : "localhost:8002",
-        "name" : "D0"
+        "name" : "S2"
      }
-     ,
+	,
      {   
         "endpoint" : "localhost:8003",
-        "name" : "D1"
+        "name" : "S3"
+     }
+	,
+     {   
+        "endpoint" : "localhost:8004",
+        "name" : "D0"
      }
     ]
 }

@@ -246,12 +246,9 @@ public:
                 case  0: continue;
             }
 
-            // iterate over the file descriptor to see which one is active
-            int fixed_last = (this->last_receive_fd + 1) % (fdmax +1);
-            for(int i=0; i <= fdmax; i++){
-                int actualFD = (fixed_last + i) % (fdmax +1);
-	            if (FD_ISSET(actualFD, &tmpset)){
-                    if (actualFD == this->listen_sck) {
+            for(int idx=0; idx <= fdmax; idx++){
+	            if (FD_ISSET(idx, &tmpset)){
+                    if (idx == this->listen_sck) {
                         int connfd = accept(this->listen_sck, (struct sockaddr*)NULL ,NULL);
                         if (connfd == -1){
                             error("Error accepting client\n");
@@ -264,26 +261,20 @@ public:
                         continue;
                     }
                     
-                    // it is not a new connection, call receive and handle possible errors
-                    // save the last socket i
-                    this->last_receive_fd = actualFD;
-
-                    
-                    if (this->handleBatch(actualFD) < 0){
-                        close(actualFD);
-                        FD_CLR(actualFD, &set);
+                    if (this->handleBatch(idx) < 0){
+                        close(idx);
+                        FD_CLR(idx, &set);
 
                         // update the maximum file descriptor
-                        if (actualFD == fdmax)
+                        if (idx == fdmax)
                             for(int ii=(fdmax-1);ii>=0;--ii)
                                 if (FD_ISSET(ii, &set)){
                                     fdmax = ii;
-                                    this->last_receive_fd = -1;
                                     break;
                                 }
-                                    
+						
                     }
-                   
+					
                 }
             }
         }
@@ -297,7 +288,6 @@ protected:
     int listen_sck;
     ff_endpoint acceptAddr;	
     std::map<int, int> routingTable;
-    int last_receive_fd = -1;
 	int coreid;
     ack_t ACK;
 };
