@@ -1,3 +1,5 @@
+#ifndef FF_BATCHBUFFER_H
+#define FF_BATCHBUFFER_H
 #include "ff_network.hpp"
 #include <sys/uio.h>
 using namespace ff;
@@ -71,3 +73,8 @@ public:
     }
 
 };
+<<<<<<< HEAD
+=======
+
+#endif
+>>>>>>> 2c43050473ca06168aa54f5c84072cfe2b8e2924

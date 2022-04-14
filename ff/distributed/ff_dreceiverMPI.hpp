@@ -61,8 +61,6 @@ public:
   		if (coreid!=-1)
 			ff_mapThreadToCpu(coreid);
         
-        int r;
-
         for(size_t i = 0; i < input_channels; i++)
             handshakeHandler();
 
