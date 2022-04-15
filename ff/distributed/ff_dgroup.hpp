@@ -245,11 +245,23 @@ public:
             workers.push_back(innerA2A);
 
             
-            if (ir.hasReceiver)
-                this->add_emitter(new ff_dreceiverH(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.inputL), ir.inputR, ir.otherGroupsFromSameParentBB));
-
-            if (ir.hasSender)
-                this->add_collector(new ff_dsenderH(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.otherGroupsFromSameParentBB, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF) , true);
+            if (ir.hasReceiver){
+                if (ir.protocol == Proto::TCP)
+                    this->add_emitter(new ff_dreceiverH(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.inputL), ir.inputR, ir.otherGroupsFromSameParentBB));
+#ifdef DFF_MPI
+                else
+                   this->add_emitter(new ff_dreceiverHMPI(ir.expectedEOS, vector2Map(ir.inputL), ir.inputR, ir.otherGroupsFromSameParentBB));
+#endif 
+            }
+            
+            if (ir.hasSender){
+                if(ir.protocol == Proto::TCP)
+                    this->add_collector(new ff_dsenderH(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.otherGroupsFromSameParentBB, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF) , true);
+#ifdef DFF_MPI
+                else
+                   this->add_collector(new ff_dsenderHMPI(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.otherGroupsFromSameParentBB, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF), true);
+#endif   
+            }
         }  
 
         if (this->getNWorkers() == 0){

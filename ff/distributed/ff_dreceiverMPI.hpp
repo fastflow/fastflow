@@ -61,6 +61,7 @@ public:
   		if (coreid!=-1)
 			ff_mapThreadToCpu(coreid);
         
+
         for(size_t i = 0; i < input_channels; i++)
             handshakeHandler();
 
@@ -163,7 +164,7 @@ class ff_dreceiverHMPI : public ff_dreceiverMPI {
         else if (task->chid != -1) ff_send_out_to(task, this->routingTable[task->chid]);
         else {
             ff_send_out_to(task, next_rr_destination);
-            next_rr_destination = ++next_rr_destination % (this->get_num_outchannels()-1);
+            next_rr_destination = ((next_rr_destination + 1) % (this->get_num_outchannels()-1));
         }
     }
 
