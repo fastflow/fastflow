@@ -28,6 +28,7 @@ protected:
     std::map<int, int> dest2Rank;
     std::map<int, unsigned int> rankCounters;
     std::map<int, ff_batchBuffer> batchBuffers;
+    std::vector<int> ranks;
     std::vector<ff_endpoint> destRanks;
     std::string gName;
     int batchSize;
@@ -59,9 +60,13 @@ protected:
         return 0;
     }
 
-    virtual int handshakeHandler(const int rank, bool){
+    int sendGroupName(const int rank){    
         MPI_Send(gName.c_str(), gName.size(), MPI_BYTE, rank, DFF_GROUP_NAME_TAG, MPI_COMM_WORLD);
+        return 0;
+    }
 
+    virtual int handshakeHandler(const int rank, bool){
+        sendGroupName(rank);
         return receiveReachableDestinations(rank, dest2Rank);
     }
 
@@ -86,15 +91,40 @@ protected:
     }
 
     int getNextReady(){
-        for(size_t i = 0; i < this->destRanks.size(); i++){
-            int rankIndex = (last_rr_rank + 1 + i) % this->destRanks.size();
-            int rank = destRanks[rankIndex].getRank();
+        for(size_t i = 0; i < this->ranks.size(); i++){
+            int rankIndex = (last_rr_rank + 1 + i) % this->ranks.size();
+            int rank = ranks[rankIndex];
             if (rankCounters[rank] > 0) {
                 last_rr_rank = rankIndex;
                 return rank;
             }
         }
 		return waitAckFromAny();		
+    }
+
+    int sendToRank(const int rank, const message_t* task){
+        size_t sz = task->data.getLen();
+        
+        long header[3] = {(long)sz, task->sender, task->chid};
+
+        MPI_Send(header, 3, MPI_LONG, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
+    
+        MPI_Send(task->data.getPtr(), sz, MPI_BYTE, rank, DFF_TASK_TAG, MPI_COMM_WORLD);
+
+        return 0;
+
+    }
+
+    int getMostFilledBufferRank(){
+        int rankMax = 0;
+        int sizeMax = 0;
+        for(auto& [rank, buffer] : batchBuffers){
+            if (buffer.size > sizeMax) rankMax = rank;
+        }
+        if (rankMax > 0) return rankMax;
+
+        last_rr_rank = (last_rr_rank + 1) % this->destRanks.size();
+        return this->destRanks[last_rr_rank].getRank(); 
     }
 
 public:
@@ -113,14 +143,17 @@ public:
         for(ff_endpoint& ep: this->destRanks){
            handshakeHandler(ep.getRank(), false);
            rankCounters[ep.getRank()] = messageOTF;
+           ranks.push_back(ep.getRank());
 
         }
+
+         this->destRanks.clear();
 
         return 0;
     }
 
     void svc_end(){
-        long totalack = destRanks.size() * messageOTF;
+        long totalack = ranks.size() * messageOTF;
 		long currack  = 0;
         
         for(const auto& pair : rankCounters) currack += pair.second;
@@ -141,14 +174,8 @@ public:
             }
         } else 
             rank = getNextReady();
-
-        size_t sz = task->data.getLen();
         
-        long header[3] = {(long)sz, task->sender, task->chid};
-
-        MPI_Send(header, 3, MPI_LONG, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
-    
-        MPI_Send(task->data.getPtr(), sz, MPI_BYTE, rank, DFF_TASK_TAG, MPI_COMM_WORLD);
+        sendToRank(rank, task);
 
         rankCounters[rank]--;
 
@@ -160,11 +187,163 @@ public:
 	    if (++neos >= this->get_num_inchannels()){
             long header[3] = {0,0,0};
             
-            for(auto& ep : destRanks)
-                MPI_Send(header, 3, MPI_LONG, ep.getRank(), DFF_HEADER_TAG, MPI_COMM_WORLD);
+            for(auto& rank : ranks)
+                MPI_Send(header, 3, MPI_LONG, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
 
         }
     }
+};
+
+
+class ff_dsenderHMPI : public ff_dsenderMPI {
+
+    std::map<int, int> internalDest2Rank;
+    std::vector<int> internalRanks;
+    int last_rr_rank_Internal = -1;
+    std::set<std::string> internalGroupNames;
+    int internalMessageOTF;
+    bool squareBoxEOS = false;
+
+    int getNextReadyInternal(){
+        for(size_t i = 0; i < this->internalRanks.size(); i++){
+            int actualRankIndex = (last_rr_rank_Internal + 1 + i) % this->internalRanks.size();
+            int sck = internalRanks[actualRankIndex];
+            if (rankCounters[sck] > 0) {
+                last_rr_rank_Internal = actualRankIndex;
+                return sck;
+            }
+        }
+
+        int rank;
+        decltype(internalRanks)::iterator it;
+
+        do 
+            rank = waitAckFromAny();   // FIX: error management!
+        while ((it = std::find(internalRanks.begin(), internalRanks.end(), rank)) != internalRanks.end());
+        
+        last_rr_rank_Internal = it - internalRanks.begin();
+        return rank;
+    }
+
+    int getMostFilledInternalBufferRank(){
+         int rankMax = 0;
+        int sizeMax = 0;
+        for(int rank : internalRanks){
+            auto& b = batchBuffers[rank];
+            if (b.size > sizeMax) {
+                rankMax = rank;
+                sizeMax = b.size;
+            }
+        }
+        if (rankMax > 0) return rankMax;
+
+        last_rr_rank_Internal = (last_rr_rank_Internal + 1) % this->internalRanks.size();
+        return internalRanks[last_rr_rank_Internal];
+    }
+
+public:
+
+    ff_dsenderHMPI(ff_endpoint e, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsenderMPI(e, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {} 
+    ff_dsenderHMPI(std::vector<ff_endpoint> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsenderMPI(dest_endpoints_, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {}
+    
+    int handshakeHandler(const int rank, bool isInternal){
+        sendGroupName(rank);
+
+        return receiveReachableDestinations(rank, isInternal ? internalDest2Rank : dest2Rank);
+    }
+
+    int svc_init() {
+
+        if (coreid!=-1)
+			ff_mapThreadToCpu(coreid);
+		
+        for(auto& endpoint : this->destRanks){
+            int rank = endpoint.getRank();
+            bool isInternal = internalGroupNames.contains(endpoint.groupName);
+            if (isInternal) 
+                internalRanks.push_back(rank);
+            else
+                ranks.push_back(rank);
+            rankCounters[rank] = isInternal ? internalMessageOTF: messageOTF;
+            /*batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(this->batchSize, [this, sck](struct iovec* v, int size) -> bool {
+                
+                if (this->socketsCounters[sck] == 0 && this->waitAckFrom(sck) == -1){
+                    error("Errore waiting ack from socket inside the callback\n");
+                    return false;
+                }
+
+                if (writevn(sck, v, size) < 0){
+                    perror("Writevn: ");
+                    error("Error sending the iovector inside the callback!\n");
+                    return false;
+                }
+
+                this->socketsCounters[sck]--;
+
+                return true;
+            })); // change with the correct size*/
+            if (handshakeHandler(rank, isInternal) < 0) return -1;
+
+        }
+
+        this->destRanks.clear();
+
+        return 0;
+    }
+
+    message_t *svc(message_t* task) {
+        if (this->get_channel_id() == (ssize_t)(this->get_num_inchannels() - 1)){
+            int rank;
+        
+            // pick destination from the list of internal connections!
+            if (task->chid != -1){ // roundrobin over the destinations
+                rank = internalDest2Rank[task->chid];
+            } else
+                rank = getMostFilledInternalBufferRank();
+
+
+            // boh!!
+            //batchBuffers[rank].push(task);
+            sendToRank(rank, task);
+            return this->GO_ON;
+        }
+        
+        return ff_dsenderMPI::svc(task);
+    }
+
+     void eosnotify(ssize_t id) {
+         if (id == (ssize_t)(this->get_num_inchannels() - 1)){
+            // send the EOS to all the internal connections
+            if (squareBoxEOS) return;
+            squareBoxEOS = true;
+            long header[3] = {0,0,0};
+            for(const auto&rank : internalRanks) 
+                MPI_Send(header, 3, MPI_LONG, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
+
+		 }
+		 if (++neos >= this->get_num_inchannels()) {
+			 // all input EOS received, now sending the EOS to all
+			 // others connections
+             long header[3] = {0,0,0};
+			 for(const auto& rank : ranks) 
+				MPI_Send(header, 3, MPI_LONG, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
+			 
+		 }
+	 }
+
+	void svc_end() {
+		// here we wait all acks from all connections
+		long totalack = ranks.size() * messageOTF + internalRanks.size() * internalMessageOTF;
+		long currack  = 0;
+        
+        for(const auto& pair : rankCounters) currack += pair.second;
+		
+        while(currack<totalack) {
+			waitAckFromAny();
+			currack++;
+		}
+	}
+	
 };
 
 #endif
