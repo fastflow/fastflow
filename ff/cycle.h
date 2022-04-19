@@ -81,6 +81,34 @@
 #ifndef FF_CYCLE_H
 #define FF_CYCLE_H
 
+// Marco Aldinucci: RISCV Apr 2022
+
+#if defined(__linux__) && defined(__riscv) && !defined(HAVE_TICK_COUNTER)
+#pragma message "RISCV detected - experimental"
+extern __inline
+    unsigned long 
+    __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+rdcycle(void) {
+    unsigned long dst;
+    // output into any register, likely a0
+    // regular instruction:
+    asm volatile ("csrrs %0, 0xc00, x0" : "=r" (dst) );
+    // regular instruction with symbolic csr and register names
+    // asm volatile ("csrrs %0, cycle, zero" : "=r" (dst) );
+    // pseudo-instruction:
+    // asm volatile ("csrr %0, cycle" : "=r" (dst) );
+    // pseudo-instruction:
+    //asm volatile ("rdcycle %0" : "=r" (dst) );
+    return dst;
+}
+typedef unsigned long ticks;
+
+static __inline ticks getticks(void) {
+  return (rdcycle());
+}
+#define HAVE_TICK_COUNTER  
+#endif
+
 // Mauro Mulatero: ARM
 #if defined(__linux__) && (defined(__arm__) || defined(__aarch64__) )
   #define TIME_WITH_SYS_TIME 1
@@ -258,6 +286,9 @@ INLINE_ELAPSED(__inline__)
 #define HAVE_TICK_COUNTER
 #define TIME_MIN 5000.0
 #endif
+
+// RISCV Linux
+
 
 /*----------------------------------------------------------------
  generic Windows platform 
