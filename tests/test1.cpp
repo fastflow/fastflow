@@ -79,7 +79,7 @@ private:
 int main(int argc, char * argv[]) {
     int nworkers = 1;
     int streamlen = 10;
-
+    
     if (argc>1) {
         if (argc!=3) {
             std::cerr << "use: " 
@@ -90,7 +90,7 @@ int main(int argc, char * argv[]) {
         nworkers=atoi(argv[1]);
         streamlen=atoi(argv[2]);
     }
-
+    
     if (!nworkers || !streamlen) {
         std::cerr << "Wrong parameters values\n";
         return -1;

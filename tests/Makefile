@@ -1,3 +1,4 @@
+
 # ---------------------------------------------------------------------------
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License version 2 as 
@@ -70,7 +71,8 @@ endif
 #LINK_OPT            = 
 #VERSION             = 
 #CFLAGS              =
-#LDFLAGS             = 
+#LDFLAGS             =
+TRACE_FASTFLOW =1 
 CXXFLAGS            += -std=c++17
 ifdef DEBUG
     OPTIMIZE_FLAGS  += -g -fno-inline-functions
@@ -157,9 +159,13 @@ tests: test
 test: all
 	@echo "*****************************************************"
 	@echo "*                                                   *"
-	@echo "* make test(s) is rather naive at moment, it just   *"
-	@echo "* checks compilation and execution with default     *"
-	@echo "* argument parameters                               *"
+#	@echo "* make test(s) is rather naive at moment, it just   *"
+#	@echo "* checks compilation and execution with default     *"
+#	@echo "* argument parameters                               *"	
+	@echo "* FastFlow - efficient parallel streaming runtime   *"
+	@echo "* https://github.com/fastflow                       *"
+	@echo "* uname -m: riscv, nproc: 4                         *"
+	@echo "* running test suite with 2-8 threads               *"
 	@echo "*                                                   *"
 	@echo "*****************************************************"
 	@./runtests.sh
