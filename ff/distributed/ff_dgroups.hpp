@@ -52,7 +52,7 @@
 #endif
 
 namespace ff {
-  
+
 class dGroups {
 public:
     friend struct GroupInterface;
@@ -118,25 +118,35 @@ public:
         this->runningGroup = parsedGroups[rank].name;
     }
 
+    /*
+    * Set the thread mapping if specified in the configuration file. Otherwise use the default mapping specified in the legacy FastFlow config.hpp file.
+    * In config file the mapping can be specified for each group through the key "threadMapping"
+    */
+    void setThreadMapping(){
+      auto g = std::find_if(parsedGroups.begin(), parsedGroups.end(), [this](auto& g){return g.name == this->runningGroup;});
+      if (g != parsedGroups.end() && !g->threadMapping.empty())
+        threadMapper::instance()->setMappingList(g->threadMapping.c_str());
+    }
+
 	  const std::string& getRunningGroup() const { return runningGroup; }
 
     void forceProtocol(Proto p){this->usedProtocol = p;}
 	
     int run_and_wait_end(ff_pipeline* parent){
         if (annotatedGroups.find(runningGroup) == annotatedGroups.end()){
-            ff::error("The group specified is not found nor implemented!\n");
+            ff::error("The group %s is not found nor implemented!\n", runningGroup.c_str());
             return -1;
         }
 
-		bool allDeriveFromParent = true; 
-		for(auto& [name, ir]: annotatedGroups) 
-			if (ir.parentBB != parent) { allDeriveFromParent = false; break; }
+      bool allDeriveFromParent = true; 
+      for(auto& [name, ir]: annotatedGroups) 
+        if (ir.parentBB != parent) { allDeriveFromParent = false; break; }
 
-		if (allDeriveFromParent) {
-			ff_pipeline *mypipe = new ff_pipeline;
-			mypipe->add_stage(parent);
-			parent = mypipe;
-		}
+      if (allDeriveFromParent) {
+        ff_pipeline *mypipe = new ff_pipeline;
+        mypipe->add_stage(parent);
+        parent = mypipe;
+      }
 
       // qui dovrei creare la rappresentazione intermedia di tutti
       this->prepareIR(parent);
@@ -185,6 +195,7 @@ private:
     struct G {
         std::string name;
         std::string address;
+        std::string threadMapping;
         int port;
         int batchSize          = DEFAULT_BATCH_SIZE;
         int internalMessageOTF = DEFAULT_INTERNALMSG_OTF;
@@ -210,6 +221,10 @@ private:
 
              try {
                 ar(cereal::make_nvp("messageOTF", messageOTF));
+            } catch (cereal::Exception&) {ar.setNextName(nullptr);}
+
+            try {
+                ar(cereal::make_nvp("threadMapping", threadMapping));
             } catch (cereal::Exception&) {ar.setNextName(nullptr);}
 
         }
@@ -559,7 +574,10 @@ static inline int DFF_Init(int& argc, char**& argv){
       std::cout << "Running group: " << dGroups::Instance()->getRunningGroup() << " on rank: " <<  myrank << "\n";
     }
 
-  #endif  
+  #endif 
+
+    // set the mapping if specified
+    dGroups::Instance()->setThreadMapping();
 
     // set the name for the printer
     ff::cout.setPrefix(dGroups::Instance()->getRunningGroup());
