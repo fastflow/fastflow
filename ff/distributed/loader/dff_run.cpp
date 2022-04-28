@@ -298,7 +298,7 @@ int main(int argc, char** argv) {
 
         char command[350];
      
-        sprintf(command, "mpirun --hostfile %s %s --DFF_Config=%s", hostFile.c_str(), executable.c_str(), configFile.c_str());
+        sprintf(command, "mpirun -np %lu --hostfile %s %s --DFF_Config=%s", parsedGroups.size(), hostFile.c_str(), executable.c_str(), configFile.c_str());
 
         FILE *fp;
         char buff[1024];
