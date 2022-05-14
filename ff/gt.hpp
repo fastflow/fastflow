@@ -580,30 +580,30 @@ public:
             else skipfirstpop=false;
 
             if (task == FF_GO_ON) continue;
+            channelid = (nextr-feedbackid);
+            frominput=true;
+            if (feedbackid>0) { // there are feedback channels
+                if (nextr<feedbackid)  {
+                    frominput=false;
+                    channelid=nextr;
+                }
+            }
+
             if ((task == FF_EOS) || (task == FF_EOSW)) {
-                if (filter && notify_each_eos)
-                    filter->eosnotify(workers[nextr]->get_my_id());
+                if (filter && notify_each_eos) 
+                    filter->eosnotify(channelid); //workers[nextr]->get_my_id());                
                 offline[nextr]=true;
                 ++neos;
                 ret=task;
             } else if (task == FF_EOS_NOFREEZE) {
                 if (filter && notify_each_eos)
-                        filter->eosnotify(workers[nextr]->get_my_id());
+                    filter->eosnotify(channelid); //workers[nextr]->get_my_id());
                 offline[nextr]=true;
                 ++neosnofreeze;
                 ret = task;
             } else {
                 FFTRACE(++taskcnt);
-                if (filter)  {
-                    channelid = (nextr-feedbackid);
-                    frominput=true;
-                    if (feedbackid>0) { // there are feedback channels
-                        if (nextr<feedbackid)  {
-                            frominput=false;
-                            channelid=nextr;
-                        }
-                    }
-
+                if (filter)  {                    
                     FFTRACE(ticks t0 = getticks());
 
 #if defined(FF_TASK_CALLBACK)
