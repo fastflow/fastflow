@@ -72,7 +72,13 @@ public:
     }
 
 	~dataBuffer() {
-		if (cleanup) delete [] getPtr();
+		if (cleanup) {
+			cleanup = false;
+			if (freetaskF) {
+				freetaskF(getPtr());
+			} else
+				delete [] getPtr();
+		}		
 	}
 
     void setBuffer(char p[], size_t len, bool cleanup=true){
@@ -93,6 +99,8 @@ public:
 		cleanup = false;
 	}
 
+	std::function<void(void*)> freetaskF;
+	
 protected:	
 	ssize_t len=-1;
 	bool cleanup = false;
