@@ -64,10 +64,8 @@ public:
 		}
 		return n->svc_init();
 	}
-
-	void svc_end(){this->n->svc_end();}
 	
-		void * svc(void* in) {
+	void * svc(void* in) {
 		message_t* msg = (message_t*)in;	   
 		
 		if (this->n->isMultiInput()) {
@@ -75,12 +73,15 @@ public:
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
 			mi->set_input_channelid(channelid, true);
 		}
-		void* inputData = this->n->deserializeF(msg->data);
-
+		bool datacopied=true;
+		void* inputData = this->n->deserializeF(msg->data, datacopied);
+		if (!datacopied) msg->data.doNotCleanup();
 		delete msg;	
 		return n->svc(inputData);
 	}
 
+	void svc_end(){this->n->svc_end();}
+	
 	ff_node* getOriginal(){ return this->n;	}
 };
 
@@ -107,12 +108,13 @@ public:
 
 		message_t* msg = new message_t;
 
-
-		this->n->serializeF(in, msg->data);
+		bool datacopied = this->n->serializeF(in, msg->data);
 		msg->sender = myID; // da cambiare con qualcosa di reale!
 		msg->chid   = id;
-
-		return this->ff_send_out(msg);
+		if (!datacopied)  msg->data.freetaskF = this->n->freetaskF;
+		this->ff_send_out(msg);
+		if (datacopied) this->n->freetaskF(in);
+		return true;
 	}
 
 	void * svc(void* in) {
@@ -172,11 +174,13 @@ public:
 		message_t* msg = new message_t;
 
 	
-		this->n->serializeF(in, msg->data);
-		msg->sender = myID; // da cambiare con qualcosa di reale!
+		bool datacopied= this->n->serializeF(in, msg->data);
+		msg->sender = myID;          // FIX!
 		msg->chid   = id;
-
-		return ff_node::ff_send_out(msg);
+		if (!datacopied)  msg->data.freetaskF = this->n->freetaskF;
+		ff_node::ff_send_out(msg);
+		if (datacopied) this->n->freetaskF(in);
+		return true;
 	}
 
 	int svc_init() {
@@ -197,7 +201,9 @@ public:
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
 			mi->set_input_channelid(channelid, true);
 		}
-		void* out = n->svc(this->n->deserializeF(msg->data));
+		bool datacopied=true;
+		void* out = n->svc(this->n->deserializeF(msg->data, datacopied));
+		if (!datacopied) msg->data.doNotCleanup();
         delete msg;
 
         serialize(out, defaultDestination);

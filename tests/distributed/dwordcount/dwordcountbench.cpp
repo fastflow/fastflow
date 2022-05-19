@@ -25,36 +25,9 @@
  ****************************************************************************
  */
 
-/*  
- * The Source produces a continuous stream of lines of a text file. 
- * The Splitter tokenizes each line producing a new output item for each 
- * word extracted. The Counter receives single words from the line
- * splitter and counts how many occurrences of the same word appeared
- * on the stream until that moment. The Sink node receives every result 
- * produced by the word counter and counts the total number of words.
- *            
- * One possible FastFlow graph is the following:
- *
- *   Source-->Splitter -->| 
- *                        | --> Counter --> Sink           
- *   Source-->Splitter -->| 
- *                        | --> Counter --> Sink
- *   Source-->Splitter -->| 
- *
- *  /<---- pipe1 ---->/        /<--- pipe2 --->/
- *  /<----------------- a2a ------------------>/
- *
- * If -g is N then the groups G1...GN will be created. Each group will have n Source-Splitter and m Counter-Sink where n and m are the 
- * values set with -p (i.e, -p n,m). This means that the FastFlow graph will have:
- *  n*N Source-Sink replicas and  m*N Counter-Sink replicas.  
- *
- */
 
 #define FF_BOUNDED_BUFFER
-//#define MAKE_VALGRIND_HAPPY
-//#define MANUAL_SERIALIZATION
 #define DEFAULT_BUFFER_CAPACITY 2048
-#define BYKEY true
 
 #include <iostream>
 #include <iomanip> 
@@ -63,13 +36,16 @@
 #include <vector>
 #include <atomic>
 #include <map>
+
+
 #include <ff/dff.hpp>
+
 
 using namespace ff;
 
 const size_t qlen = DEFAULT_BUFFER_CAPACITY;
-const int MAXLINE=128;    // character per line (CPL), a typically value is 80 CPL
-const int MAXWORD=32;
+const int MAXLINE=280; // character per line (CPL), a typically value is 80 CPL
+
 
 struct tuple_t {
     char     text_line[MAXLINE];  // parsed line
@@ -79,28 +55,24 @@ struct tuple_t {
 };
 
 struct result_t {
-    char     key[MAXWORD];    // key word
+    std::string key;
     uint64_t id;              // indicates the current number of occurrences of the word
     uint64_t ts;              // timestamp
-
+    
 	template<class Archive>
 	void serialize(Archive & archive) {
 		archive(key,id,ts);
 	}
+};
+struct Result_t {
+    std::vector<result_t> keys;
 
+	template<class Archive>
+	void serialize(Archive & archive) {
+		archive(keys);
+	}
 };
 
-#if defined(MANUAL_SERIALIZATION)
-template<typename Buffer>
-void serialize(Buffer&b, result_t* input){
-    b = {reinterpret_cast<char*>(input), sizeof(result_t)};
-}
-
-template<typename Buffer>
-void deserialize(const Buffer&b, result_t*& strPtr){
-    strPtr = reinterpret_cast<result_t*>(b.first);
-}
-#endif
 
 std::vector<tuple_t> dataset;     // contains all the input tuples in memory
 std::atomic<long> total_lines=0;  // total number of lines processed by the system
@@ -121,10 +93,10 @@ static inline unsigned long current_time_nsecs() {
 }
 
 struct Source: ff_monode_t<tuple_t> {
-    size_t next_tuple_idx = 0;          // index of the next tuple to be sent
-    int generations       = 0;          // counts the times the file is generated
-    long generated_tuples = 0;          // tuples counter
-    long generated_bytes  = 0;          // bytes counter
+    size_t next_tuple_idx = 0;      // index of the next tuple to be sent
+    int generations       = 0;      // counts the times the file is generated
+    long generated_tuples = 0;      // tuples counter
+    long generated_bytes  = 0;      // bytes counter
 
     // time variables
     unsigned long app_start_time;   // application start time
@@ -139,7 +111,9 @@ struct Source: ff_monode_t<tuple_t> {
             tuple_t* t = new tuple_t;
             assert(t);
 
-            if (generated_tuples > 0) current_time = current_time_nsecs();
+            if (generated_tuples > 0) {
+                current_time = current_time_nsecs();
+            }
             if (next_tuple_idx == 0) generations++;         // file generations counter
             generated_tuples++;                             // tuples counter
             // put a timestamp and send the tuple
@@ -147,59 +121,87 @@ struct Source: ff_monode_t<tuple_t> {
             generated_bytes += sizeof(tuple_t);
             t->ts = current_time - app_start_time;
             ff_send_out(t);
+            
             ++next_tuple_idx;
             next_tuple_idx %= dataset.size();
             // EOS reached
-            if (current_time - app_start_time >= (app_run_time*1000000000L) && next_tuple_idx == 0)
+            if (current_time - app_start_time >= (app_run_time*1000000000L) && next_tuple_idx == 0) {
                 break;
+            }
         }
         total_lines.fetch_add(generated_tuples);
         total_bytes.fetch_add(generated_bytes);
+
         return EOS;
 	}
 };
-struct Splitter: ff_monode_t<tuple_t, result_t> {
+struct Splitter: ff_monode_t<tuple_t, Result_t> {
+    Splitter(long buffered_lines):buffered_lines(buffered_lines) { }
+
     int svc_init() {
         noutch=get_num_outchannels(); // number of output channels
+        outV.resize(noutch,nullptr);
         return 0;
     }
 
-    result_t* svc(tuple_t* in) {        
+    Result_t* svc(tuple_t* in) {        
         char *tmpstr;
         char *token = strtok_r(in->text_line, " ", &tmpstr);
         while (token) {
-#if defined(BYKEY)
             int ch = std::hash<std::string>()(std::string(token)) % noutch;
-#else            
-            int ch = ++idx % noutch;
-#endif            
-            result_t* r = new result_t;
-            assert(r);
-#if defined(MAKE_VALGRIND_HAPPY)
-            bzero(r->key, MAXWORD);
-#endif            
-            strncpy(r->key, token, MAXWORD-1);
-            r->key[MAXWORD-1]='\0';
-            r->ts  = in->ts;
-            r->id  = in->id;
             
-            ff_send_out_to(r, ch);
+            if (outV[ch] == nullptr) {            
+                Result_t* r = new Result_t;
+                assert(r);
+                outV[ch] = r;
+            }
+            result_t r;
+            r.key = std::string(token);
+            r.ts  = in->ts;
+            r.id  = in->id;
+
+            outV[ch]->keys.push_back(r);
+            
             token = strtok_r(NULL, " ", &tmpstr);
+        }
+        ++nmsgs;
+        if (nmsgs>=buffered_lines) {
+            for(long i=0;i<noutch; ++i) {
+                if (outV[i]) {
+                    ff_send_out(outV[i]);  // here the destination is one of the many available not the one associated with the key!
+                }
+                outV[i] = nullptr;
+            }
+            nmsgs=0;            
         }
         delete in;        
         return GO_ON;
 	}
+
+    void eosnotify(ssize_t) {        
+        for(long i=0;i<noutch; ++i) {
+            if (outV[i]) ff_send_out(outV[i]); // here the destination is one of the many available not the one associated with the key!
+            outV[i] = nullptr;
+        }
+    }
     long noutch=0;
     long idx=-1;
+    long nmsgs=0;
+    long buffered_lines;
+    std::vector<Result_t*> outV;
 };
 
-struct Counter: ff_minode_t<result_t> {
-    result_t* svc(result_t* in) {
-        ++M[std::string(in->key)];
-        // number of occurrences of the word up to now
-        in->id = M[std::string(in->key)]; 
+struct Counter: ff_minode_t<Result_t> {
+    Result_t* svc(Result_t* in) {
+        for(size_t i=0;i<in->keys.size();++i) {
+            ++M[in->keys[i].key];
+            // number of occurrences of the string word up to now
+            in->keys[i].id = M[in->keys[i].key];
+        }
+
         return in;
     }
+
     size_t unique() {
         // std::cout << "Counter:\n";
         //  for (const auto& kv : M)  {
@@ -210,14 +212,17 @@ struct Counter: ff_minode_t<result_t> {
     std::map<std::string,size_t> M;
 };
 
-struct Sink: ff_node_t<result_t> {
-    result_t* svc(result_t* in) {    
-        ++words;
+
+struct Sink: ff_node_t<Result_t> {
+    Result_t* svc(Result_t* in) {        
+        words+= in->keys.size();
         delete in;
         return GO_ON;
     }
+
     size_t words=0; // total number of words received
 };
+
 
 /** 
  *  @brief Parse the input file and create all the tuples
@@ -237,7 +242,8 @@ int parse_dataset_and_create_tuples(const std::string& file_path) {
             if (!line.empty()) {
                 if (line.length() > MAXLINE) {
                     std::cerr << "ERROR INCREASE MAXLINE\n";
-                    exit(EXIT_FAILURE);
+                    std::cerr << line << "\n";
+                    //exit(EXIT_FAILURE);                    
                 }
                 tuple_t t;
                 strncpy(t.text_line, line.c_str(), MAXLINE-1);
@@ -258,21 +264,23 @@ int parse_dataset_and_create_tuples(const std::string& file_path) {
 }
 
 
+
 int main(int argc, char* argv[]) {
     if (DFF_Init(argc, argv) != 0) {
 		error("DFF_Init\n");
 		return -1;
 	}
-    
+
     /// parse arguments from command line
     std::string file_path("");
     size_t source_par_deg = 0;
     size_t sink_par_deg = 0;
     size_t ngroups = 0;
+    size_t buffered_lines = 1;
     
     if (argc >= 3 || argc == 1) {
         int option = 0;    
-        while ((option = getopt(argc, argv, "f:p:g:t:")) != -1) {
+        while ((option = getopt(argc, argv, "f:p:g:t:b:")) != -1) {
             switch (option) {
             case 'f': file_path=std::string(optarg);  break;
             case 'p': {
@@ -292,6 +300,13 @@ int main(int argc, char* argv[]) {
                     sink_par_deg = par_degs[1];
                 }                
             } break;
+            case 'g': {
+                ngroups = std::stol(optarg);
+                if (ngroups<=0) {
+                    std::cerr << "Wrong value for the '-g' option\n";
+                    return -1;
+                }
+            } break;
             case 't': {
                 long t = std::stol(optarg);
                 if (t<=0 || t > 100) {
@@ -300,6 +315,13 @@ int main(int argc, char* argv[]) {
                 }
                 app_run_time = t;
             } break;
+            case 'b': {
+                buffered_lines = std::stol(optarg);
+                if (buffered_lines<=0 || buffered_lines>100000) {
+                    std::cerr << "Wrong value for the '-b' option\n";
+                    return -1;
+                }
+            } break;
             default: {
                 std::cerr << "Error in parsing the input arguments\n";
                 return -1;
@@ -307,7 +329,7 @@ int main(int argc, char* argv[]) {
             }
         }
     } else {
-        std::cerr << "Parameters:  -p  <nSource/nSplitter,nCounter/nSink> -f <filepath>\n";
+        std::cerr << "Parameters:  -p  <nSource/nSplitter,nCounter/nSink> -f <filepath> -t <time-in-seconds> -b <buffered-lines>\n";
         return -1;
     }
     if (file_path.length()==0) {
@@ -318,20 +340,20 @@ int main(int argc, char* argv[]) {
         std::cerr << "Wrong values for the parallelism degree, please use option -p <nSource/nSplitter, nCounter/nSink>\n";
         return -1;
     }
-    if (ngroups <=0 ) {
-        std::cerr << "Wrong values for the ngroups, please use option -g <nGroups>\n";
+
+    /// data pre-processing
+    if (parse_dataset_and_create_tuples(file_path)< 0)
         return -1;
-    }
 
-    if (DFF_getMyGroup() == "G1") {
-        /// data pre-processing
-        if (parse_dataset_and_create_tuples(file_path)< 0)
-            return -1;
-
+    
+    if (DFF_getMyGroup() == "G0")
+    {
         std::cout << "\n\n";
-        std::cout << "Executing WordCount with parameters:" << endl;
-        std::cout << "  * source/splitter : " << source_par_deg << endl;
-        std::cout << "  * counter/sink    : " << sink_par_deg << endl;
+        std::cout << "Executing WordCount with parameters:" << std::endl;
+        std::cout << "  * source/splitter : " << source_par_deg << std::endl;
+        std::cout << "  * counter/sink    : " << sink_par_deg << std::endl;
+        std::cout << "  * buffered lines  : " << buffered_lines << std::endl;
+        std::cout << "  * n. of groups    : " << ngroups << std::endl;
         std::cout << "  * running time    : " << app_run_time << " (s)\n";
     }
     
@@ -343,38 +365,39 @@ int main(int argc, char* argv[]) {
     std::vector<ff_node*> L;  // left and right workers of the A2A
     std::vector<ff_node*> R;
 
-        
     ff_a2a a2a(false, qlen, qlen, true);
-
-    auto G1 = a2a.createGroup("G1");
-    auto G2 = a2a.createGroup("G2");
-
-    for (size_t i=0;i<source_par_deg; ++i) {        
-        ff_pipeline* pipe0 = new ff_pipeline(false, qlen, qlen, true);
+    
+    for(size_t i=0; i < ngroups; ++i) {
         
-        pipe0->add_stage(new Source(app_start_time), true);
-        Splitter* sp = new Splitter;
-        pipe0->add_stage(sp, true);
-        L.push_back(pipe0);
-
-        G1 << pipe0;
+        auto G = a2a.createGroup("G"+std::to_string(i));
+        
+        for (size_t i=0;i<source_par_deg; ++i) {        
+            ff_pipeline* pipe0 = new ff_pipeline(false, qlen, qlen, true);
+            pipe0->add_stage(new Source(app_start_time));
+            pipe0->add_stage(new Splitter(buffered_lines));
+            
+            L.push_back(pipe0);
+            
+            G << pipe0;
+        }
+        for (size_t i=0;i<sink_par_deg; ++i) {        
+            ff_pipeline* pipe1 = new ff_pipeline(false, qlen, qlen, true);
+            C[i] = new Counter;
+            S[i] = new Sink;
+            pipe1->add_stage(C[i]);
+            pipe1->add_stage(S[i]);
+            
+            R.push_back(pipe1);
+            
+            G << pipe1;
+        }
     }
-    for (size_t i=0;i<sink_par_deg; ++i) {
-        ff_pipeline* pipe1 = new ff_pipeline(false, qlen, qlen, true);
-        S[i] = new Sink;
-        C[i] = new Counter;
-        pipe1->add_stage(C[i]);
-        pipe1->add_stage(S[i]);
-        R.push_back(pipe1);
-
-        G2 << pipe1;
-    }
-
-    a2a.add_firstset(L, 0, true);
-    a2a.add_secondset(R, true);
+    
+    
+    a2a.add_firstset(L, 1, true);   // 1 for ondemand
+    a2a.add_secondset(R);
     ff_pipeline pipeMain(false, qlen, qlen, true);
     pipeMain.add_stage(&a2a);
-
 
     std::cout << "Starting " << pipeMain.numThreads() << " threads\n\n";
     /// evaluate topology execution time
@@ -384,30 +407,15 @@ int main(int argc, char* argv[]) {
         return -1;
     }
     volatile unsigned long end_time_main_usecs = current_time_usecs();
-    std::cout << "Exiting" << endl;
+    std::cout << "Exiting" << std::endl;
     double elapsed_time_seconds = (end_time_main_usecs - start_time_main_usecs) / (1000000.0);
     std::cout << "elapsed time     : " << elapsed_time_seconds << "(s)\n";
-    if (DFF_getMyGroup() == "G1") {    
-        std::cout << "total_lines sent : " << total_lines << "\n";
-        std::cout << "total_bytes sent : " << std::setprecision(3) << total_bytes/1048576.0 << "(MB)\n";
-        //double throughput = total_lines / elapsed_time_seconds;
-        //double mbs = (double)((total_bytes / 1048576) / elapsed_time_seconds);
-        //std::cout << "Measured throughput: " << (int) throughput << " lines/second, " << mbs << " MB/s" << endl;
 
-    } else {
-        size_t words=0;
-        size_t unique=0;
-        for(size_t i=0;i<S.size();++i) {
-            words += S[i]->words;
-            unique+= C[i]->unique();
-        }
-        std::cout << "words            : " << words << "\n";
-        std::cout << "unique           : " << unique<< "\n";
-    }
-    for(size_t i=0;i<S.size();++i) {
-        delete S[i];
-        delete C[i];
-    }
-    
+    std::cout << "total_lines sent : " << total_lines << "\n";
+    std::cout << "total_bytes sent : " << std::setprecision(5) << total_bytes/1048576.0 << "(MB)\n";
+    //double throughput = total_lines / elapsed_time_seconds;
+    //double mbs = (double)((total_bytes / 1048576) / elapsed_time_seconds);
+    //std::cout << "Measured throughput: " << (int) throughput << " lines/second, " << mbs << " MB/s" << endl;
+
     return 0;
 }

@@ -104,17 +104,33 @@ public:
 
     bool forward(void* task, int destination){
 
-		if (destination == -1){
-			for(size_t i = 0; i < localWorkersMap.size(); i++){
-				long actualDestination = (nextDestination + 1 + i) % localWorkersMap.size();
-				if (ff_send_out_to(task, actualDestination, 1)){ // non blocking ff_send_out_to, we try just once
-					nextDestination = actualDestination;
+		if (destination == -1) {
+			message_t* msg = nullptr;
+			bool datacopied = true;
+			do {
+				for(size_t i = 0; i < localWorkersMap.size(); i++){
+					long actualDestination = (nextDestination + 1 + i) % localWorkersMap.size();
+					if (ff_send_out_to(task, actualDestination, 1)){ // non blcking ff_send_out_to, we try just once                                                         
+                        nextDestination = actualDestination;
+                        if (msg) {
+							if (!datacopied) msg->data.doNotCleanup();
+							delete msg;
+						}
+                        return true;
+					}
+				}
+				if (!msg) {
+					msg = new message_t(index, destination);
+					datacopied = this->n->serializeF(task, msg->data);
+					if (!datacopied) {
+						msg->data.freetaskF = this->n->freetaskF;
+					}
+				}
+				if (ff_send_out_to(msg, localWorkersMap.size(), 1)) {
+					if (datacopied) this->n->freetaskF(task);
 					return true;
 				}
-			}
-			message_t* msg = new message_t(index, destination);
-			this->n->serializeF(task, msg->data);
-			return ff_send_out_to(msg, localWorkersMap.size());
+			} while(1);
 		}
 
         auto pyshicalDestination = localWorkersMap.find(destination);
@@ -122,8 +138,13 @@ public:
 			return ff_send_out_to(task, pyshicalDestination->second);
 		} else {
 			message_t* msg = new message_t(index, destination);
-			this->n->serializeF(task, msg->data);
-			return ff_send_out_to(msg, localWorkersMap.size());
+			bool datacopied = this->n->serializeF(task, msg->data);
+			if (!datacopied) {
+				msg->data.freetaskF = this->n->freetaskF;
+			}
+			ff_send_out_to(msg, localWorkersMap.size());
+			if (datacopied) this->n->freetaskF(task);
+			return true;
 		}
     }
 
@@ -173,10 +194,12 @@ public:
 
 		// if the results come from the "square box", it is a result from a remote workers so i have to read from which worker it come from 
 		if ((size_t)get_channel_id() == localWorkers.size()){
-			message_t * m = reinterpret_cast<message_t*>(in);
-            channel = m->sender;
-			in = this->n->deserializeF(m->data);
-			delete m;
+			message_t * msg = reinterpret_cast<message_t*>(in);
+            channel = msg->sender;
+			bool datacopied = true;
+			in = this->n->deserializeF(msg->data, datacopied);
+			if (!datacopied) msg->data.doNotCleanup();
+			delete msg;
 		} else {  // the result come from a local worker, just pass it to collector and compute the right worker id
             channel = localWorkers.at(get_channel_id());
 		}

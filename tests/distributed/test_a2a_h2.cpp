@@ -57,10 +57,10 @@ struct Sink : ff_minode_t<std::string>{
 
 
 struct ForwarderNode : ff_node{ 
-        ForwarderNode(std::function<void(void*, dataBuffer&)> f){
+        ForwarderNode(std::function<bool(void*, dataBuffer&)> f){
             this->serializeF = f;
         }
-        ForwarderNode(std::function<void*(dataBuffer&)> f){
+    	ForwarderNode(std::function<void*(dataBuffer&, bool&)> f){
             this->deserializeF = f;
         }
         void* svc(void* input){return input;}
