@@ -199,7 +199,7 @@ protected:
 
     int getMostFilledBufferRank(){
         int rankMax = -1;
-        int sizeMax = 0;
+        size_t sizeMax = 0;
         for(int rank : ranks){
             auto& batchBB = buffers[rank];
             size_t sz = batchBB.second[batchBB.first]->size();
@@ -302,8 +302,8 @@ class ff_dsenderHMPI : public ff_dsenderMPI {
     }
 
     int getMostFilledInternalBufferRank(){
-         int rankMax = -1;
-        int sizeMax = 0;
+        int rankMax = -1;
+        size_t sizeMax = 0;
         for(int rank : internalRanks){
             auto& batchBB = buffers[rank];
             size_t sz = batchBB.second[batchBB.first]->size();
