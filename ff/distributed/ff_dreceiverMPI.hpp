@@ -73,37 +73,54 @@ public:
         Everything will be handled inside a while true in the body of this node where data is pulled from network
     */
     message_t *svc(message_t* task) {
-        MPI_Request tmpAckReq;
         MPI_Status status;
-        long header[3];
         while(neos < input_channels){
+            
+            int headersLen;
+            MPI_Probe(MPI_ANY_SOURCE, DFF_HEADER_TAG, MPI_COMM_WORLD, &status);
+            MPI_Get_count(&status, MPI_LONG, &headersLen);
+            long headers[headersLen];
 
-            if (MPI_Recv(header, 3, MPI_LONG, MPI_ANY_SOURCE, DFF_HEADER_TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS)
+            if (MPI_Recv(headers, headersLen, MPI_LONG, status.MPI_SOURCE, DFF_HEADER_TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS)
                 error("Error on Recv Receiver primo in alto\n");
             
-            
-            size_t sz = header[0];
+            assert(headers[0]*3+1 == headersLen);
+            if (headers[0] == 1){
+                 size_t sz = headers[3];
 
-            if (sz == 0){
-                registerEOS(status.MPI_SOURCE);
-                continue;
+                if (sz == 0){
+                    registerEOS(status.MPI_SOURCE);
+                    continue;
+                }
+                char* buff = new char[sz];
+                if (MPI_Recv(buff,sz,MPI_BYTE, status.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE) != MPI_SUCCESS)
+                    error("Error on Recv Receiver Payload\n");
+                
+                message_t* out = new message_t(buff, sz, true);
+                out->sender = headers[1];
+                out->chid   = headers[2];
+
+                this->forward(out, status.MPI_SOURCE);
+            } else {
+                int size;
+                MPI_Probe(status.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, &status);
+                MPI_Get_count(&status, MPI_BYTE, &size);
+                char* buff = new char[size]; // this can be reused!! 
+                MPI_Recv(buff, size, MPI_BYTE, status.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                size_t head = 0;
+                for (size_t i = 0; i < headers[0]; i++){
+                    size_t sz = headers[3*i+3];
+                    char* outBuff = new char[sz];
+                    memcpy(outBuff, buff+head, sz);
+                    head += sz;
+                    message_t* out = new message_t(outBuff, sz, true);
+                    out->sender = headers[3*i+1];
+                    out->chid = headers[3*i+2];
+
+                    this->forward(out, status.MPI_SOURCE);
+                }
+                delete [] buff;
             }
-
-            char* buff = new char[sz];
-            assert(buff);
-            
-            if (MPI_Recv(buff,sz,MPI_BYTE, status.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE) != MPI_SUCCESS)
-                error("Error on Recv Receiver Payload\n");
-
-            message_t* out = new message_t(buff, sz, true);
-            assert(out);
-            out->sender = header[1];
-            out->chid   = header[2];
-		
-            this->forward(out, status.MPI_SOURCE);
-
-            MPI_Isend(&ACK, sizeof(ack_t), MPI_BYTE, status.MPI_SOURCE, DFF_ACK_TAG, MPI_COMM_WORLD, &tmpAckReq);
-            MPI_Request_free(&tmpAckReq);
             
         }
         
@@ -115,7 +132,6 @@ protected:
     size_t input_channels;
     std::map<int, int> routingTable;
 	int coreid;
-    ack_t ACK;
 };
 
 

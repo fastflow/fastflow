@@ -2,8 +2,6 @@
 #define FF_DPRINTER_H
 
 #include <iostream>
-#include <ff/distributed/ff_dgroups.hpp>
-
 namespace ff {
     class prefixbuf : public std::streambuf
     {
