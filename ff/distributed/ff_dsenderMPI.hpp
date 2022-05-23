@@ -16,18 +16,100 @@
 #include <cereal/types/vector.hpp>
 #include <cereal/types/polymorphic.hpp>
 
-#include <ff/distributed/ff_batchbuffer.hpp>
-
-
 using namespace ff;
 
 class ff_dsenderMPI: public ff_minode_t<message_t> { 
 protected:
+    class batchBuffer {
+    protected:    
+        int rank;
+        bool blocked = false;
+        size_t size_, actualSize = 0;
+        std::vector<char> buffer;
+        std::vector<long> headers;
+        MPI_Request headersR, datasR;
+    public:
+        batchBuffer(size_t size_, int rank) : rank(rank), size_(size_){
+            headers.reserve(size_*3+1);
+        }
+        virtual void waitCompletion(){
+            if (blocked){
+                MPI_Wait(&headersR, MPI_STATUS_IGNORE);
+                MPI_Wait(&datasR, MPI_STATUS_IGNORE);
+                headers.clear();
+                buffer.clear();
+                blocked = false;
+            }
+        }
+
+        virtual size_t size() {return actualSize;}
+        virtual int push(message_t* m){
+            waitCompletion();
+            int idx = 3*actualSize++;
+            headers[idx+1] = m->sender;
+            headers[idx+2] = m->chid;
+            headers[idx+3] = m->data.getLen();
+
+            buffer.insert(buffer.end(), m->data.getPtr(), m->data.getPtr() + m->data.getLen());
+
+            delete m;
+            if (actualSize == size_) {
+                this->flush();
+                return 1;
+            }
+            return 0;
+        }
+
+        virtual void flush(){
+            headers[0] = actualSize;
+            MPI_Isend(headers.data(), actualSize*3+1, MPI_LONG, rank, DFF_HEADER_TAG, MPI_COMM_WORLD, &headersR);
+            MPI_Isend(buffer.data(), buffer.size(), MPI_BYTE, rank, DFF_TASK_TAG, MPI_COMM_WORLD, &datasR);
+            blocked = true;
+            actualSize = 0;
+        }
+
+        virtual void pushEOS(){
+            int idx = 3*actualSize++;
+            headers[idx+1] = 0; headers[idx+2] = 0; headers[idx+3] = 0;
+
+            this->flush();
+        }
+    };
+
+    class directBatchBuffer : public batchBuffer {
+            message_t* currData = NULL;
+            long currHeader[4] = {1, 0, 0, 0}; 
+        public:
+            directBatchBuffer(int rank) : batchBuffer(0, rank){}
+            void pushEOS(){
+                waitCompletion();
+                currHeader[1] = 0; currHeader[2] = 0; currHeader[3] = 0;
+                MPI_Send(currHeader, 4, MPI_LONG, this->rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
+            }
+            void flush() {}
+            void waitCompletion(){
+                if (blocked){
+                    MPI_Wait(&headersR, MPI_STATUS_IGNORE);
+                    MPI_Wait(&datasR, MPI_STATUS_IGNORE);
+                    if (currData) delete currData;
+                    blocked = false;
+                }
+            }
+            int push(message_t* m){
+                waitCompletion();
+                currHeader[1] = m->sender; currHeader[2] = m->chid; currHeader[3] = m->data.getLen();
+                MPI_Isend(currHeader, 4, MPI_LONG, this->rank, DFF_HEADER_TAG, MPI_COMM_WORLD, &this->headersR);
+                MPI_Isend(m->data.getPtr(), m->data.getLen(), MPI_BYTE, rank, DFF_TASK_TAG, MPI_COMM_WORLD, &datasR);
+                currData = m;
+                blocked = true;
+                return 1;
+            }
+    };
     size_t neos=0;
     int last_rr_rank = 0; //next destiation to send for round robin policy
     std::map<int, int> dest2Rank;
     std::map<int, unsigned int> rankCounters;
-    std::map<int, ff_batchBuffer> batchBuffers;
+    std::map<int, std::pair<int, std::vector<batchBuffer*>>> buffers;
     std::vector<int> ranks;
     std::vector<ff_endpoint> destRanks;
     std::string gName;
@@ -116,15 +198,20 @@ protected:
     }
 
     int getMostFilledBufferRank(){
-        int rankMax = 0;
+        int rankMax = -1;
         int sizeMax = 0;
-        for(auto& [rank, buffer] : batchBuffers){
-            if (buffer.size > sizeMax) rankMax = rank;
+        for(int rank : ranks){
+            auto& batchBB = buffers[rank];
+            size_t sz = batchBB.second[batchBB.first]->size();
+            if (sz > sizeMax) {
+                rankMax = rank;
+                sizeMax = sz;
+            }
         }
-        if (rankMax > 0) return rankMax;
+        if (rankMax >= 0) return rankMax;
 
-        last_rr_rank = (last_rr_rank + 1) % this->destRanks.size();
-        return this->destRanks[last_rr_rank].getRank(); 
+        last_rr_rank = (last_rr_rank + 1) % this->ranks.size();
+        return this->ranks[last_rr_rank]; 
     }
 
 public:
@@ -142,9 +229,11 @@ public:
 
         for(ff_endpoint& ep: this->destRanks){
            handshakeHandler(ep.getRank(), false);
-           rankCounters[ep.getRank()] = messageOTF;
+           //rankCounters[ep.getRank()] = messageOTF;
            ranks.push_back(ep.getRank());
-
+           std::vector<batchBuffer*> appo;
+           for(int i = 0; i < messageOTF; i++) appo.push_back(batchSize == 1 ? new directBatchBuffer(ep.getRank()) : new batchBuffer(batchSize, ep.getRank()));
+           buffers.emplace(std::make_pair(ep.getRank(), std::make_pair(0, std::move(appo))));
         }
 
          this->destRanks.clear();
@@ -153,44 +242,31 @@ public:
     }
 
     void svc_end(){
-        long totalack = ranks.size() * messageOTF;
-		long currack  = 0;
-        
-        for(const auto& pair : rankCounters) currack += pair.second;
-		
-        while(currack<totalack) {
-			waitAckFromAny();
-			currack++;
-		}
+        for(auto& [rank, bb] : buffers)
+            for(auto& b : bb.second) b->waitCompletion();
     }
   
     message_t *svc(message_t* task) {
         int rank;
-        if (task->chid != -1){
-            rank = dest2Rank[task->chid];
-            if (rankCounters[rank] == 0 && waitAckFrom(rank) == -1){
-                error("Error waiting ACK\n");
-                delete task; return this->GO_ON;
-            }
-        } else 
-            rank = getNextReady();
+        if (task->chid != -1)
+            rank = dest2Rank[task->chid]; 
+        else 
+            rank = getMostFilledBufferRank();
         
-        sendToRank(rank, task);
-
-        rankCounters[rank]--;
-
-        delete task;
+        auto& buffs = buffers[rank];
+        assert(buffs.second.size() > 0);
+        if (buffs.second[buffs.first]->push(task)) // the push triggered a flush, so we must go ion the next buffer
+            buffs.first = (buffs.first + 1) % buffs.second.size(); // increment the used buffer of 1
+    
         return this->GO_ON;
     }
 
      void eosnotify(ssize_t) {
-	    if (++neos >= this->get_num_inchannels()){
-            long header[3] = {0,0,0};
-            
-            for(auto& rank : ranks)
-                MPI_Send(header, 3, MPI_LONG, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
-
-        }
+	    if (++neos >= this->get_num_inchannels())
+            for(auto& rank : ranks){
+                auto& buffs = buffers[rank];
+                buffs.second[buffs.first]->pushEOS();
+            }       
     }
 };
 
@@ -226,16 +302,17 @@ class ff_dsenderHMPI : public ff_dsenderMPI {
     }
 
     int getMostFilledInternalBufferRank(){
-         int rankMax = 0;
+         int rankMax = -1;
         int sizeMax = 0;
         for(int rank : internalRanks){
-            auto& b = batchBuffers[rank];
-            if (b.size > sizeMax) {
+            auto& batchBB = buffers[rank];
+            size_t sz = batchBB.second[batchBB.first]->size();
+            if (sz > sizeMax) {
                 rankMax = rank;
-                sizeMax = b.size;
+                sizeMax = sz;
             }
         }
-        if (rankMax > 0) return rankMax;
+        if (rankMax >= 0) return rankMax;
 
         last_rr_rank_Internal = (last_rr_rank_Internal + 1) % this->internalRanks.size();
         return internalRanks[last_rr_rank_Internal];
@@ -264,24 +341,11 @@ public:
                 internalRanks.push_back(rank);
             else
                 ranks.push_back(rank);
-            rankCounters[rank] = isInternal ? internalMessageOTF: messageOTF;
-            /*batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(this->batchSize, [this, sck](struct iovec* v, int size) -> bool {
-                
-                if (this->socketsCounters[sck] == 0 && this->waitAckFrom(sck) == -1){
-                    error("Errore waiting ack from socket inside the callback\n");
-                    return false;
-                }
 
-                if (writevn(sck, v, size) < 0){
-                    perror("Writevn: ");
-                    error("Error sending the iovector inside the callback!\n");
-                    return false;
-                }
-
-                this->socketsCounters[sck]--;
-
-                return true;
-            })); // change with the correct size*/
+            std::vector<batchBuffer*> appo;
+            for(int i = 0; i < (isInternal ? internalMessageOTF : messageOTF); i++) appo.push_back(batchSize == 1 ? new directBatchBuffer(rank) : new batchBuffer(batchSize, rank));
+            buffers.emplace(std::make_pair(rank, std::make_pair(0, std::move(appo))));
+            
             if (handshakeHandler(rank, isInternal) < 0) return -1;
 
         }
@@ -302,9 +366,10 @@ public:
                 rank = getMostFilledInternalBufferRank();
 
 
-            // boh!!
-            //batchBuffers[rank].push(task);
-            sendToRank(rank, task);
+            auto& buffs = buffers[rank];
+            if (buffs.second[buffs.first]->push(task)) // the push triggered a flush, so we must go ion the next buffer
+                buffs.first = (buffs.first + 1) % buffs.second.size(); // increment the used buffer of 1
+
             return this->GO_ON;
         }
         
@@ -316,33 +381,25 @@ public:
             // send the EOS to all the internal connections
             if (squareBoxEOS) return;
             squareBoxEOS = true;
-            long header[3] = {0,0,0};
-            for(const auto&rank : internalRanks) 
-                MPI_Send(header, 3, MPI_LONG, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
-
+            for(const auto&rank : internalRanks){
+                auto& buffs = buffers[rank];
+                buffs.second[buffs.first]->pushEOS();
+            }
 		 }
 		 if (++neos >= this->get_num_inchannels()) {
 			 // all input EOS received, now sending the EOS to all
 			 // others connections
-             long header[3] = {0,0,0};
-			 for(const auto& rank : ranks) 
-				MPI_Send(header, 3, MPI_LONG, rank, DFF_HEADER_TAG, MPI_COMM_WORLD);
-			 
+			 for(const auto& rank : ranks){
+                auto& buffs = buffers[rank];
+                buffs.second[buffs.first]->pushEOS();
+             }
 		 }
 	 }
 
-	void svc_end() {
-		// here we wait all acks from all connections
-		long totalack = ranks.size() * messageOTF + internalRanks.size() * internalMessageOTF;
-		long currack  = 0;
-        
-        for(const auto& pair : rankCounters) currack += pair.second;
-		
-        while(currack<totalack) {
-			waitAckFromAny();
-			currack++;
-		}
-	}
+	void svc_end(){
+        for(auto& [rank, bb] : buffers)
+            for(auto& b : bb.second) b->waitCompletion();
+    }
 	
 };
 

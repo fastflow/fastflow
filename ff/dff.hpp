@@ -20,6 +20,7 @@
  *
  ****************************************************************************
  */
+#ifndef DISABLE_FF_DISTRIBUTED
 
 #ifndef FF_DFF_HPP
 #define FF_DFF_HPP
@@ -58,3 +59,12 @@
 #include<ff/distributed/ff_dinterface.hpp>
 
 #endif /* FF_DFF_HPP */
+#else /* DISABLE_FF_DISTRIBUTED */
+#include <ff/ff.hpp>
+#include <ff/distributed/ff_dinterface.hpp>
+#include <iostream>
+namespace ff {
+    std::ostream& cout = std::cout;
+}
+static inline int DFF_Init(int& argc, char**& argv){ return 0; }
+#endif /* DISABLE_FF_DISTRIBUTED */

@@ -29,6 +29,9 @@ ifdef DEBUG
 else
     OPTIMIZE_FLAGS  += -O3 -finline-functions -DNDEBUG
 endif
+ifdef DISABLE_FF_DISTRIBUTED
+    CXXFLAGS += -DDISABLE_FF_DISTRIBUTED
+endif
 ifdef EXCLUDE_BLOCKING
     CXXFLAGS        += -DDFF_EXCLUDE_BLOCKING
 endif
