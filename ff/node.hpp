@@ -61,9 +61,9 @@
 
 namespace ff {
 
-#ifdef DFF_ENABLED
+// distributed rts related type, but always defined
 struct GroupInterface; 
-#endif
+
 
 static void* FF_EOS           = (void*)(ULLONG_MAX);     /// automatically propagated
 static void* FF_EOS_NOFREEZE  = (void*)(ULLONG_MAX-1);   /// not automatically propagated
@@ -1298,8 +1298,9 @@ protected:
     virtual decltype(serializeF) getSerializationFunction(){return serializeF;}
     virtual decltype(deserializeF) getDeserializationFunction(){return deserializeF;}
 
-    GroupInterface createGroup(std::string);
 #endif
+    // always defined, the body will implement a no-op if the distributed runtime is disabled
+    GroupInterface createGroup(std::string);
     
 protected:
 
