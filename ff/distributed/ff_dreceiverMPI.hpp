@@ -108,7 +108,7 @@ public:
                 char* buff = new char[size]; // this can be reused!! 
                 MPI_Recv(buff, size, MPI_BYTE, status.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 size_t head = 0;
-                for (size_t i = 0; i < headers[0]; i++){
+                for (size_t i = 0; i < (size_t)headers[0]; i++){
                     size_t sz = headers[3*i+3];
                     char* outBuff = new char[sz];
                     memcpy(outBuff, buff+head, sz);

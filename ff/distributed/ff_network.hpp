@@ -55,6 +55,10 @@
     #define htole64(x) OSSwapHostToLittleInt64(x)
     #define be64toh(x) OSSwapBigToHostInt64(x)
     #define le64toh(x) OSSwapLittleToHostInt64(x)
+
+    #ifndef UIO_MAXIOV
+    #define UIO_MAXIOV 1023
+    #endif
 #endif
 
 enum Proto {TCP , MPI};
