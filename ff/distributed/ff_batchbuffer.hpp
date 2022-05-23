@@ -4,16 +4,17 @@
 #include <sys/uio.h>
 using namespace ff;
 
-class ff_batchBuffer {
+class ff_batchBuffer {	
     std::function<bool(struct iovec*, int)> callback;
     int batchSize;
-    struct iovec iov[1024];
+    struct iovec iov[UIO_MAXIOV];
     std::vector<std::pair<size_t*, message_t*>> toCleanup;
 public:
     int size = 0;
-    ff_batchBuffer() {}
+    ff_batchBuffer() {
+	}
     ff_batchBuffer(int _size, std::function<bool(struct iovec*, int)> cbk) : callback(cbk), batchSize(_size) {
-        if (_size*4+1 > 1024){
+		if (_size*4+1 > UIO_MAXIOV){
             error("Size too big!\n");
             abort();
         }

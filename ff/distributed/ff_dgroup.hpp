@@ -51,7 +51,7 @@ T getBackAndPop(std::vector<T>& v){
 
 namespace ff{
 class dGroup : public ff::ff_farm {
-
+	
     static inline std::unordered_map<int, int> vector2UMap(const std::vector<int> v){
         std::unordered_map<int,int> output;
         for(size_t i = 0; i < v.size(); i++) output[v[i]] = i;
@@ -65,22 +65,27 @@ class dGroup : public ff::ff_farm {
     }
 
     struct ForwarderNode : ff_node { 
-        ForwarderNode(std::function<void(void*, dataBuffer&)> f){
+        ForwarderNode(std::function<bool(void*, dataBuffer&)> f,
+					  std::function<void(void*)> d) {			
             this->serializeF = f;
+			this->freetaskF  = d;
         }
-        ForwarderNode(std::function<void*(dataBuffer&)> f){
+        ForwarderNode(std::function<void*(dataBuffer&,bool&)> f,
+					  std::function<void*(char*,size_t)> a) {
+			this->alloctaskF   = a;
             this->deserializeF = f;
         }
-        void* svc(void* input){return input;}
+        void* svc(void* input){ return input;}
     };
 
     static ff_node* buildWrapperIN(ff_node* n){
-        if (n->isMultiOutput()) return new ff_comb(new WrapperIN(new ForwarderNode(n->deserializeF)), n, true, false);
+        if (n->isMultiOutput())
+			return new ff_comb(new WrapperIN(new ForwarderNode(n->deserializeF, n->alloctaskF)), n, true, false);
         return new WrapperIN(n);
     }
 
     static ff_node* buildWrapperOUT(ff_node* n, int id, int outputChannels){
-        if (n->isMultiInput()) return new ff_comb(n, new WrapperOUT(new ForwarderNode(n->serializeF), id, 1, true), false, true);
+        if (n->isMultiInput()) return new ff_comb(n, new WrapperOUT(new ForwarderNode(n->serializeF, n->freetaskF), id, 1, true), false, true);
         return new WrapperOUT(n, id, outputChannels);
     }
 
@@ -169,7 +174,8 @@ public:
                             wrapped->skipallpop(true);
                         firstSet.push_back(wrapped);
                     } else {
-                        firstSet.push_back(new ff_comb(new WrapperIN(new ForwarderNode(child->getDeserializationFunction()), 1, true), new EmitterAdapter(child, ir.rightTotalInputs, getBackAndPop(reverseLeftOutputIndexes) , localRightWorkers), true, true));
+						auto d = child->getDeserializationFunction();
+                        firstSet.push_back(new ff_comb(new WrapperIN(new ForwarderNode(d.first,d.second), 1, true), new EmitterAdapter(child, ir.rightTotalInputs, getBackAndPop(reverseLeftOutputIndexes) , localRightWorkers), true, true));
                     }
                 else {
                     
@@ -207,12 +213,13 @@ public:
             std::vector<int> reverseRightOutputIndexes(ir.outputR.rbegin(), ir.outputR.rend());
             std::vector<ff_node*> secondSet;
             for(ff_node* child : ir.R){
-                if (isSeq(child))
+                if (isSeq(child)) {
+					auto s = child->getSerializationFunction();
                     secondSet.push_back(
                         (ir.isSink) ? (ff_node*)new CollectorAdapter(child, ir.outputL) 
-                                    : (ff_node*)new ff_comb(new CollectorAdapter(child, ir.outputL), new WrapperOUT(new ForwarderNode(child->getSerializationFunction()), getBackAndPop(reverseRightOutputIndexes), 1, true), true, true)
+						: (ff_node*)new ff_comb(new CollectorAdapter(child, ir.outputL), new WrapperOUT(new ForwarderNode(s.first, s.second), getBackAndPop(reverseRightOutputIndexes), 1, true), true, true)
                     );
-                else {
+				} else {
                     ff::svector<ff_node*> inputs; child->get_in_nodes(inputs);
                     for(ff_node* input : inputs){
                         ff_node* inputParent = getBB(child, input);

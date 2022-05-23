@@ -53,7 +53,7 @@ protected:
     std::vector<ff_endpoint> dest_endpoints;
     std::map<int, int> dest2Socket;
     std::vector<int> sockets;
-    int last_rr_socket;
+    int last_rr_socket = -1;
     std::map<int, unsigned int> socketsCounters;
     std::map<int, ff_batchBuffer> batchBuffers;
     std::string gName;

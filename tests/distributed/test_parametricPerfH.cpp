@@ -9,8 +9,8 @@
  *
  * /<------- a2a ------>/
  *
- * S: all left-hand side nodes
- * D: all righ-hand side nodes
+ * distributed group names: 
+ *
  *
  */
 
@@ -20,7 +20,8 @@
 #include <mutex>
 #include <chrono>
 
-//#define MANUAL_SERIALIZATION 1
+// to test serialization without using Cereal
+#define MANUAL_SERIALIZATION 1
 
 // ------------------------------------------------------
 std::mutex mtx;  // used only for pretty printing
@@ -39,11 +40,11 @@ static inline float active_delay(int msecs) {
   return x;
 }
 // this assert will not be removed by -DNDEBUG
-#define myassert(c) {													      \
+#define myassert(c) {													\
 		if (!(c)) {														\
-			std::cerr << "ERROR: assert at line " << __LINE__ << " failed\n"; \
-			abort();													      \
-		}																      \
+			std::cerr << "ERROR: myassert at line " << __LINE__ << " failed\n"; \
+			abort();													\
+		}																\
 	}
 // -----------------------------------------------------
 struct ExcType {
@@ -70,31 +71,40 @@ struct ExcType {
 	}
 	
 };
+template<typename T>
+void serializefreetask(T *o, ExcType* input) {
+	input->~ExcType();
+	free(o);
+}
 
 
 #ifdef MANUAL_SERIALIZATION
 template<typename Buffer>
-void serialize(Buffer&b, ExcType* input){
+bool serialize(Buffer&b, ExcType* input){
 	b = {(char*)input, input->clen+sizeof(ExcType)};
+	return false;  // 'false' means no data copy
 }
 
 template<typename Buffer>
-void deserialize(const Buffer&b, ExcType*& Ptr){
-    ExcType* p = new (b.first) ExcType(true);
-	p->C = (char*)p + sizeof(ExcType);
+void deserializealloctask(const Buffer& b, ExcType*& p) {
+	p = new (b.first) ExcType(true);
+};
+
+template<typename Buffer>
+bool deserialize(const Buffer&b, ExcType* p){
 	p->clen = b.second - sizeof(ExcType);
-	Ptr = p;
+	p->C = (char*)p + sizeof(ExcType);
+	return false; // 'false' means no data copy
 }
 #endif
 
 static ExcType* allocateExcType(size_t size, bool setdata=false) {
-	char* _p = (char*)malloc(size+sizeof(ExcType));	
+	char* _p = (char*)calloc(size+sizeof(ExcType), 1 ); // to make valgrind happy !
 	ExcType* p = new (_p) ExcType(true);  // contiguous allocation
 	
 	p->clen    = size;
 	p->C       = (char*)p+sizeof(ExcType);
 	if (setdata) {
-		bzero(p->C, p->clen);
 		p->C[0]       = 'c';
 		if (size>10) 
 			p->C[10]  = 'i';
@@ -136,22 +146,28 @@ struct MiNode : ff::ff_minode_t<ExcType>{
     MiNode(int execTime, bool checkdata=false): execTime(execTime),checkdata(checkdata) {}
 
     ExcType* svc(ExcType* in){
-		if (execTime) active_delay(this->execTime);
-		
-		++processedItems;
-		if (checkdata) {
-			myassert(in->C[0]     == 'c');
-			if (in->clen>10) 
-				myassert(in->C[10]  == 'i');
-			if (in->clen>100)
-				myassert(in->C[100] == 'a');
-			if (in->clen>500)
-				myassert(in->C[500] == 'o');
-			ff::cout << "MiNode" << get_my_id() << " input data " << processedItems << " OK\n";
-		}
-		myassert(in->C[in->clen-1] == 'F');
-		delete in;
-		return this->GO_ON;
+      if (execTime) active_delay(this->execTime);
+      ++processedItems;
+	  if (checkdata) {
+		  myassert(in->C[0]     == 'c');
+		  if (in->clen>10) 
+			  myassert(in->C[10]  == 'i');
+		  if (in->clen>100)
+			  myassert(in->C[100] == 'a');
+		  if (in->clen>500)
+			  myassert(in->C[500] == 'o');
+		  //ff::cout << "MiNode" << get_my_id() << " input data " << processedItems << " OK\n";
+	  }
+	  if (in->C[in->clen-1] != 'F') {
+	      ff::cout << "ERROR: " << in->C[in->clen-1] << " != 'F'\n";
+		  myassert(in->C[in->clen-1] == 'F');
+	  }
+#ifdef MANUAL_SERIALIZATION
+	  in->~ExcType(); free(in);
+#else
+	  delete in;
+#endif	  
+      return this->GO_ON;
     }
 
     void svc_end(){
@@ -192,8 +208,8 @@ int main(int argc, char*argv[]){
     for(int i = 0; i < ((numProcDx+1)*numWorkerXProcessDx); i++)
         dxWorkers.push_back(new MiNode(execTimeSink, check));
 
-    a2a.add_firstset(sxWorkers, 10); //ondemand on!!
-    a2a.add_secondset(dxWorkers);
+    a2a.add_firstset(sxWorkers, 1, true); //ondemand on!!
+    a2a.add_secondset(dxWorkers, true);
 
 	auto master = a2a.createGroup("M");
 	master << sxWorkers.front();
