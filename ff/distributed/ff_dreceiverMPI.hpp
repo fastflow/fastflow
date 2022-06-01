@@ -103,13 +103,19 @@ public:
                 this->forward(out, status.MPI_SOURCE);
             } else {
                 int size;
-                MPI_Probe(status.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, &status);
-                MPI_Get_count(&status, MPI_BYTE, &size);
+                MPI_Status localStatus;
+                MPI_Probe(status.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, &localStatus);
+                MPI_Get_count(&localStatus, MPI_BYTE, &size);
                 char* buff = new char[size]; // this can be reused!! 
-                MPI_Recv(buff, size, MPI_BYTE, status.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                MPI_Recv(buff, size, MPI_BYTE, localStatus.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 size_t head = 0;
                 for (size_t i = 0; i < (size_t)headers[0]; i++){
                     size_t sz = headers[3*i+3];
+                    if (sz == 0){
+                        registerEOS(status.MPI_SOURCE);
+                        assert(i+1 == (size_t)headers[0]);
+                        break;
+                    }
                     char* outBuff = new char[sz];
                     memcpy(outBuff, buff+head, sz);
                     head += sz;
