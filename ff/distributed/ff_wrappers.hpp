@@ -48,31 +48,35 @@ class WrapperIN: public internal_mi_transformer {
 
 private:
     int inchannels;	// number of input channels the wrapped node is supposed to have
+	int feedbackChannels = 0;
 public:
 
 
-	WrapperIN(ff_node* n, int inchannels=1, bool cleanup=false): internal_mi_transformer(this, false), inchannels(inchannels) {this->n = n; this->cleanup= cleanup;}
+	WrapperIN(ff_node* n, int inchannels=1, bool cleanup=false): internal_mi_transformer(this, false), inchannels(inchannels){this->n = n; this->cleanup= cleanup;}
 
 	void registerCallback(bool (*cb)(void *,int,unsigned long,unsigned long,void *), void * arg) {
 		internal_mi_transformer::registerCallback(cb,arg);
 	}
 
 	int svc_init() {
-		if (this->n->isMultiOutput()) {
+		if (this->n->isMultiInput()) {
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
 			mi->set_running(inchannels);
+			this->feedbackChannels = this->get_num_feedbackchannels();
 		}
 		return n->svc_init();
 	}
 	
 	void * svc(void* in) {
-		message_t* msg = (message_t*)in;	   
+		message_t* msg = (message_t*)in;
 		
 		if (this->n->isMultiInput()) {
+			if (this->get_channel_id() < feedbackChannels) return in;
             int channelid = msg->sender; 
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
 			mi->set_input_channelid(channelid, true);
 		}
+
 		bool datacopied=true;
 		void* inputData = this->n->deserializeF(msg->data, datacopied);
 		if (!datacopied) msg->data.doNotCleanup();
@@ -95,9 +99,11 @@ private:
     int outchannels; // number of output channels the wrapped node is supposed to have
 	int defaultDestination;
 	int myID;
+	int feedbackChannels;
+	int senderChannel = 0;
 public:
 	
-	WrapperOUT(ff_node* n, int id, int outchannels=1, bool cleanup=false, int defaultDestination = -1): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), myID(id) {
+	WrapperOUT(ff_node* n, int id, int outchannels=1, bool cleanup=false, int defaultDestination = -1): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), myID(id){
 		this->n = n;
 		this->cleanup= cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
@@ -105,14 +111,20 @@ public:
 	
 	bool serialize(void* in, int id) {
 		if ((void*)in > FF_TAG_MIN) return this->ff_send_out(in);
+		
+		if (feedbackChannels){
+			// TODO: se id==-1 round robin sui canali di feedback
+			if (id < feedbackChannels) return this->ff_send_out(in, id);
+			else id -= feedbackChannels;
+		}
 
 		message_t* msg = new message_t;
 
 		bool datacopied = this->n->serializeF(in, msg->data);
-		msg->sender = myID; // da cambiare con qualcosa di reale!
+		msg->sender = myID;
 		msg->chid   = id;
 		if (!datacopied)  msg->data.freetaskF = this->n->freetaskF;
-		this->ff_send_out(msg);
+		this->ff_send_out_to(msg, senderChannel);
 		if (datacopied) this->n->freetaskF(in);
 		return true;
 	}
@@ -124,6 +136,10 @@ public:
 	}
 
 	int svc_init() {
+		// save the channel id fo the sender, useful for when there are feedbacks in the application
+		this->feedbackChannels = this->get_num_feedbackchannels();
+		senderChannel = this->get_num_outchannels() - 1;
+
 		if (this->n->isMultiOutput()) {
 			ff_monode* mo = reinterpret_cast<ff_monode*>(this->n);
 			mo->set_running(outchannels);
