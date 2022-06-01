@@ -1,9 +1,9 @@
 /*  
- *                           |-> Node31 -->|             
- *             |-> Node21 -->|             |
- *   Node1---->|             |-> Node32 -->| ----> Node4    
- *             |-> Node22 -->|             |
- *                           |-> Node33 -->|
+ *                           		  |-> Node31 FdbOutput -->|             
+ *             |-> FdbInput Node21 -->|             	      |
+ *   Node1---->|             		  |-> Node32 FdbOutput -->| ----> Node4    
+ *             |-> FdbInput Node22 -->|                		  |
+ *                           		  |-> Node33 FdbOutput -->|
  *
  *             /<--------- a2a0 ---------->/
  *   /<--------------------- pipe --------------------->/
@@ -124,7 +124,7 @@ int main(int argc, char*argv[]){
 		error("DFF_Init\n");
 		return -1;
 	}
-	long ntasks = 1000;
+	long ntasks = 1;
 	if (argc>1) {
 		ntasks = std::stol(argv[1]);
 	}
@@ -135,8 +135,8 @@ int main(int argc, char*argv[]){
 	Node3  n31, n32, n33;
 	Node4  n4(ntasks*2);
 	ff_a2a      a2a;
-	a2a.add_firstset<ff_node>({new ff_comb(new FdbInput(3), &n21),new ff_comb(new FdbInput(3), &n22)});
-    a2a.add_secondset<ff_node>({new ff_comb(&n31,new FdbOutput(2)), new ff_comb( &n32, new FdbOutput(2)), new ff_comb(&n33, new FdbOutput(2))});
+	a2a.add_firstset<ff_node>({new ff_comb(new FdbInput(1), &n21)});
+    a2a.add_secondset<ff_node>({new ff_comb(&n31,new FdbOutput(1))});
 	a2a.wrap_around();
 
 	pipe.add_stage(&n1);

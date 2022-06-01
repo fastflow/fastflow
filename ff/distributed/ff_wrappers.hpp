@@ -71,10 +71,10 @@ public:
 		message_t* msg = (message_t*)in;
 		
 		if (this->n->isMultiInput()) {
-			if (this->get_channel_id() < feedbackChannels) return in;
             int channelid = msg->sender; 
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
-			mi->set_input_channelid(channelid, true);
+			mi->set_input_channelid(channelid, fromInput());
+			if (!this->fromInput()) return n->svc(in);
 		}
 
 		bool datacopied=true;
@@ -129,12 +129,6 @@ public:
 		return true;
 	}
 
-	void * svc(void* in) {
-		void* out = n->svc(in);					
-		serialize(out, defaultDestination);
-		return GO_ON;
-	}
-
 	int svc_init() {
 		// save the channel id fo the sender, useful for when there are feedbacks in the application
 		this->feedbackChannels = this->get_num_feedbackchannels();
@@ -146,6 +140,12 @@ public:
 		}
 
 		return n->svc_init();
+	}
+
+	void * svc(void* in) {
+		void* out = n->svc(in);					
+		serialize(out, defaultDestination);
+		return GO_ON;
 	}
 
 	void svc_end(){n->svc_end();}
