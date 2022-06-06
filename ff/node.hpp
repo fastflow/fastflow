@@ -1067,6 +1067,7 @@ public:
     virtual inline void get_out_nodes_feedback(svector<ff_node*>&) {}
     virtual inline void get_in_nodes(svector<ff_node*>&w) { w.push_back(this); }
     virtual inline void get_in_nodes_feedback(svector<ff_node*>&) {}
+
     
     /**
      * \brief Force ff_node-to-core pinning
@@ -1286,7 +1287,14 @@ protected:
         abort();  // to be removed, just for debugging purposes
     }
 
-       
+
+    virtual inline ssize_t get_channel_id() const           { return -1; }
+    /** returns the total number of output channels */
+    virtual inline size_t  get_num_outchannels() const      { return 0; }
+    /** returns the total number of input channels */
+    virtual inline size_t  get_num_inchannels() const       { return 0; } //(in?1:0); }
+    virtual inline size_t  get_num_feedbackchannels() const { return 0; } //(out?1:0);}
+    
     virtual void propagateEOS(void* task=FF_EOS) { (void)task; }
     
 #ifdef DFF_ENABLED

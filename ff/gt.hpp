@@ -452,6 +452,17 @@ public:
      */
     ssize_t get_channel_id() const { return channelid;}
 
+    size_t get_num_inchannels()  const { return (size_t)(running); }
+    size_t get_num_outchannels() const {
+        if (filter && (filter != (ff_node*)this))
+            return filter->get_num_outchannels();
+        return (buffer?1:0);
+    }
+
+    size_t get_num_feedbackchannels() const {
+        return feedbackid;
+    }
+    
     /**
      * \brief Gets the number of worker threads currently running.
      *
@@ -556,8 +567,7 @@ public:
         bool outpresent  = (buffer != NULL);
         bool skipfirstpop = skip1pop;
 
-        // the following case is possible when the collector is a dnode or there is a
-        // filter that is a composition
+        // the following case is possible when the there is a filter that is a composition
         if ( filter && 
              ( (filter->get_out_buffer()!=NULL)  || filter->isMultiOutput() ) ) {
 

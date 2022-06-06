@@ -107,14 +107,27 @@ public:
                     child = inputs[0];
 
                if (isSeq(child)){
-                    if (ir.hasReceiver && ir.hasSender)
-                        workers.push_back(new WrapperINOUT(child, getBackAndPop(reverseOutputIndexes)));
-                    else if (ir.hasReceiver)
-                        workers.push_back(buildWrapperIN(child));
-                    else  workers.push_back(buildWrapperOUT(child, getBackAndPop(reverseOutputIndexes), outputChannels));
-
+				   ff_node* wrapper = nullptr;
+				   if (ir.hasReceiver && ir.hasSender) {
+					   wrapper = new WrapperINOUT(child, getBackAndPop(reverseOutputIndexes));
+					   workers.push_back(wrapper);
+				   } else if (ir.hasReceiver) {
+					   wrapper = buildWrapperIN(child);
+					   workers.push_back(wrapper);
+				   } else  {
+					   wrapper = buildWrapperOUT(child, getBackAndPop(reverseOutputIndexes), outputChannels);
+					   workers.push_back(wrapper);
+				   }
+				   // TODO: in case there are feedback channels we cannot skip all pops!
+				   if (ir.isSource)
+					   wrapper->skipallpop(true);
                } else {
-                    if (ir.hasReceiver){
+
+				   // TODO: in case there are feedback channels we cannot skip all pops!
+				    if (ir.isSource)
+					    child->skipallpop(true);
+				   
+				    if (ir.hasReceiver){
                         for(ff_node* input : inputs){
                             ff_node* inputParent = getBB(child, input);
                             if (inputParent) inputParent->change_node(input, buildWrapperIN(input), true); //cleanup?? removefromcleanuplist??
@@ -170,8 +183,8 @@ public:
                 if (isSeq(child))
                     if (ir.isSource){
                         ff_node* wrapped = new EmitterAdapter(child, ir.rightTotalInputs, getBackAndPop(reverseLeftOutputIndexes) , localRightWorkers);
-                        if (ir.hasReceiver)
-                            wrapped->skipallpop(true);
+                        //if (ir.hasReceiver)
+						wrapped->skipallpop(true);
                         firstSet.push_back(wrapped);
                     } else {
 						auto d = child->getDeserializationFunction();
@@ -180,7 +193,8 @@ public:
                 else {
                     
                     if (ir.isSource){
-                        if (ir.hasReceiver) child->skipallpop(true);
+                        //if (ir.hasReceiver)
+						child->skipallpop(true);
                     } else {
                         ff::svector<ff_node*> inputs; child->get_in_nodes(inputs);
                         for(ff_node* input : inputs){
