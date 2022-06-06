@@ -114,20 +114,20 @@ public:
                     else  workers.push_back(buildWrapperOUT(child, getBackAndPop(reverseOutputIndexes), outputChannels));
 
                } else {
-                   if (ir.hasReceiver){
+                    if (ir.hasReceiver){
                         for(ff_node* input : inputs){
                             ff_node* inputParent = getBB(child, input);
                             if (inputParent) inputParent->change_node(input, buildWrapperIN(input), true); //cleanup?? removefromcleanuplist??
                         }
-                   }
+                    }
 
-                   if (ir.hasSender){
+                    if (ir.hasSender){
                         for(ff_node* output : outputs){
                             ff_node* outputParent = getBB(child, output);
                             if (outputParent) outputParent->change_node(output, buildWrapperOUT(output, getBackAndPop(reverseOutputIndexes), outputChannels), true); // cleanup?? removefromcleanuplist??
                         }
-                   }
-
+                    }
+                    
                    workers.push_back(child);
                }
             }
