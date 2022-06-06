@@ -26,7 +26,7 @@
 #include <chrono>
 
 // to test serialization without using Cereal
-#define MANUAL_SERIALIZATION 1
+//#define MANUAL_SERIALIZATION 1
 
 // ------------------------------------------------------
 std::mutex mtx;  // used only for pretty printing

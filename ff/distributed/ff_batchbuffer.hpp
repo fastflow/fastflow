@@ -53,6 +53,7 @@ public:
     }
 
     int flush(){
+		
         if (size == 0) return 0;
 
         int size_ = size;

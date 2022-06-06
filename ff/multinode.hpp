@@ -380,14 +380,16 @@ public:
      */
     ssize_t get_channel_id() const { return gt->get_channel_id();}
 
-    
-    /**
-     * \brief Gets the number of input channels
-     */
-    
-    size_t get_num_inchannels()       const { return gt->getrunning(); }
-
-    size_t get_num_feedbackchannels() const { return inputNodesFeedback.size(); }
+    size_t get_num_inchannels()       const { return gt->get_num_inchannels();  } 
+    size_t get_num_outchannels()      const {
+        if (gt->get_filter() == (ff_node*)this)
+            return (gt->get_out_buffer()?1:0);
+            
+        return gt->get_num_outchannels();
+    }
+    size_t get_num_feedbackchannels() const {
+        return gt->get_num_feedbackchannels();
+    }
     
     /**
      * For a multi-input node the number of EOS to receive before terminating is equal to 
@@ -663,10 +665,17 @@ public:
     }
 
 #ifdef DFF_ENABLED
-    inline void skipallpop(bool sk) {
+    void skipallpop(bool sk) {
         lb->skipallpop(sk);
         ff_node::skipallpop(sk);
     }
+    void set_virtual_outchannels(int n){
+        noutchannels=n;
+    }
+    void set_virtual_feedbackchannels(int n) {
+        nfeedbackchannels=n;
+    }
+    
 #endif
 
     /**
@@ -776,9 +785,20 @@ public:
      */
     ssize_t get_channel_id() const { return lb->get_channel_id();}
     
-    size_t get_num_feedbackchannels() const { return outputNodesFeedback.size(); }
-    size_t get_num_outchannels() const      { return lb->getnworkers(); }
-
+    size_t get_num_feedbackchannels() const {
+#ifdef DFF_ENABLED        
+        if (nfeedbackchannels!=-1) return nfeedbackchannels;
+#endif        
+        return lb->get_num_feedbackchannels();
+    }
+    size_t get_num_outchannels() const      {
+#ifdef DFF_ENABLED        
+        if (noutchannels!=-1) return noutchannels;
+#endif        
+        return lb->get_num_outchannels();
+    }
+    size_t get_num_inchannels()  const      { return lb->get_num_inchannels(); }
+    
     const struct timeval getstarttime() const { return lb->getstarttime();}
     const struct timeval getstoptime()  const { return lb->getstoptime();}
     const struct timeval getwstartime() const { return lb->getwstartime();}
@@ -806,6 +826,10 @@ protected:
     ff_loadbalancer* lb;
     bool myownlb;
     int  ondemand=0;
+#ifdef DFF_ENABLED    
+    int  noutchannels=-1;
+    int  nfeedbackchannels=-1;
+#endif     
     svector<ff_node*> outputNodes;
     svector<ff_node*> outputNodesFeedback;
     svector<ff_node*> internalSupportNodes;    
@@ -1044,8 +1068,10 @@ struct internal_mo_transformer: ff_monode {
             n=nullptr;
         }
     }
+    
+    inline int svc_init() { return n->svc_init(); }
     inline void* svc(void* task) { return n->svc(task);}
-
+    inline void svc_end() { return n->svc_end(); }
     inline void eosnotify(ssize_t id) { n->eosnotify(id); }
 
     int create_input_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
@@ -1054,7 +1080,6 @@ struct internal_mo_transformer: ff_monode {
         ff_monode::getlb()->get_filter()->set_input_buffer(ff_monode::get_in_buffer());
         return 0;
     }    
-
     
     void set_id(ssize_t id) {
         if (n) n->set_id(id);
@@ -1070,6 +1095,10 @@ struct internal_mo_transformer: ff_monode {
         if (n) {
             if (!n->callback)
                 n->registerCallback(ff_send_out_motransformer, this);
+            if (n->isMultiOutput()) {
+                assert(!n->isComp());
+                n->setlb(ff_monode::getlb(), false);
+            }
         }
         return ff_monode::dryrun();
     }
@@ -1089,7 +1118,6 @@ struct internal_mo_transformer: ff_monode {
         return ff_monode::run(skip_init);
     }
 
-       
     static inline bool ff_send_out_motransformer(void * task, int id, 
                                                  unsigned long retry,
                                                  unsigned long ticks, void *obj) {
@@ -1134,8 +1162,9 @@ struct internal_mi_transformer: ff_minode {
         if (cleanup && n)
             delete n;
     }
+    inline int svc_init() { return n->svc_init(); }
     inline void* svc(void*task) { return n->svc(task);  }
-
+    inline void svc_end() { return n->svc_end(); }
     int set_input(const svector<ff_node *> & w) {
         n->neos += w.size();
         return ff_minode::set_input(w);
@@ -1145,9 +1174,11 @@ struct internal_mi_transformer: ff_minode {
         n->neos+=1;
         return ff_minode::set_input(node);
     }
+#if 0
     int set_output(ff_node *node) {
         return ff_minode::set_output(node);
     }
+#endif
     
     int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         if (ff_minode::getgt()->get_out_buffer()) return -1;
@@ -1192,6 +1223,17 @@ struct internal_mi_transformer: ff_minode {
         ff_minode::set_id(id);
     }
 
+    int dryrun() {
+        if (prepared) return 0;
+        if (n) {
+            if (n->isMultiInput()) {
+                assert(!n->isComp());
+                n->setgt(ff_minode::getgt(), false);
+            }
+        }
+        return ff_minode::dryrun();
+    }
+
     int run(bool skip_init=false) {
         assert(n);
         if (!prepared) {
@@ -1208,6 +1250,7 @@ struct internal_mi_transformer: ff_minode {
         ff_minode::getgt()->get_filter()->set_id(get_my_id());
         return ff_minode::run(skip_init);
     }
+
     bool cleanup;
     ff_node *n=nullptr;
 };
