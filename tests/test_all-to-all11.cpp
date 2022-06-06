@@ -141,7 +141,7 @@ struct MultiInputHelper: ff_minode_t<long> {
 
 struct Worker: ff_monode_t<long> {
     long* svc(long* in) {
-        //std::cout << "Worker" << get_my_id() << " got " << *in << "\n";
+        std::cout << "Worker" << get_my_id() << " got " << *in << "\n";
 
         // Here we know that we have only one output channel
         // and we have 'get_num_feedbackchannels()' feedback channels.
@@ -149,27 +149,39 @@ struct Worker: ff_monode_t<long> {
         // and then the output ones .....
         ff_send_out_to(in, get_num_feedbackchannels() ); // to Last
 
+        //std::cout << "Worker" << get_my_id() << " sending ack back\n";
+        
         ff_send_out((long*)0x1); // sends it back
 
         return GO_ON;
     }
 
     void eosnotify(ssize_t) {
-        broadcast_task(EOS);
+        //broadcast_task(EOS); // sending EOS back
         ff_send_out_to(EOS, get_num_feedbackchannels());
     }
 };
 
 struct Last: ff_minode_t<long> {
+    Last(size_t nt):nt(nt) {}
     long* svc(long* in) {
         std::cout << "Last: received " << *in << " from " << get_channel_id() << "\n";
+        --nt;
         delete in;
         return GO_ON;
     }
+    void svc_end() {
+        if (nt != 0) {
+            std::cerr << "Test FAILED\n";
+            exit(-1);
+        }
+        std::cout << "Test OK\n";
+    }
+    size_t nt;
 };
 
 int main() {
-    int nworkers = 2;
+    int nworkers = 3;
     ntasks.store(100);
 
     // ---- first stage
@@ -201,7 +213,7 @@ int main() {
     a2a.wrap_around();
 
     // ---- last stage
-    Last last;
+    Last last(ntasks.load());
 
     // ---- building the topology
     ff_Pipe<> pipe(first, E, a2a, last);

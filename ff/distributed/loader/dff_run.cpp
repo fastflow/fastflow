@@ -28,7 +28,9 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/wait.h>
+#include <sys/param.h>
 #include <fcntl.h>
+
 
 #include <cereal/cereal.hpp>
 #include <cereal/archives/json.hpp>
@@ -41,18 +43,19 @@ namespace n_fs = std::filesystem;
 
 enum Proto {TCP = 1 , MPI};
 
+Proto usedProtocol;
+bool seeAll = false;
+std::vector<std::string> viewGroups;
+char hostname[HOST_NAME_MAX];
+std::string configFile("");
+std::string executable;
+
+
 static inline unsigned long getusec() {
     struct timeval tv;
     gettimeofday(&tv,NULL);
     return (unsigned long)(tv.tv_sec*1e6+tv.tv_usec);
 }
-
-Proto usedProtocol;
-bool seeAll = false;
-std::vector<std::string> viewGroups;
-char hostname[100];
-std::string configFile("");
-std::string executable;
 
 bool toBePrinted(std::string gName){
     return (seeAll || (find(viewGroups.begin(), viewGroups.end(), gName) != viewGroups.end()));
@@ -130,6 +133,7 @@ static inline void usage(char* progname) {
 			  << "\t -v <g1>,...,<g2> \t Prints the output of the specified groups\n"
 			  << "\t -V               \t Print the output of all groups\n"
 			  << "\t -p \"TCP|MPI\"   \t Force communication protocol\n";
+	std::cout << "\n";
 		
 }
 
@@ -148,13 +152,17 @@ std::string generateHostFile(std::vector<G>& parsedGroups){
 
 int main(int argc, char** argv) {
 
-    if (strcmp(argv[0], "--help") == 0 || strcmp(argv[0], "-help") == 0 || strcmp(argv[0], "-h") == 0){
+    if (argc == 1 ||
+		strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-help") == 0 || strcmp(argv[1], "-h") == 0){
 		usage(argv[0]);
         exit(EXIT_SUCCESS);
     }
 
     // get the hostname
-    gethostname(hostname, 100);
+    if (gethostname(hostname, HOST_NAME_MAX) != 0) {
+		perror("gethostname");
+		exit(EXIT_FAILURE);
+	}
 
 	int optind=0;
 	for(int i=1;i<argc;++i) {
@@ -300,6 +308,8 @@ int main(int argc, char** argv) {
      
         sprintf(command, "mpirun -np %lu --hostfile %s %s --DFF_Config=%s", parsedGroups.size(), hostFile.c_str(), executable.c_str(), configFile.c_str());
 
+		std::cout << "mpicommand: " << command << "\n";
+		
         FILE *fp;
         char buff[1024];
         fp = popen(command, "r");
@@ -315,7 +325,7 @@ int main(int argc, char** argv) {
 
         pclose(fp);
 
-        std::remove(hostFile.c_str());
+        //std::remove(hostFile.c_str());
     }
     
     
