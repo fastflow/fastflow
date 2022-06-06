@@ -67,7 +67,7 @@ int main(int argc, char*argv[]){
 	Sink    sink1;
 	Sink    sink2;
     a2a.add_firstset<Source>({&source1, &source2, &source3});
-    a2a.add_secondset<Sink>({&sink1, &sink2});
+	a2a.add_secondset<Sink>({&sink1, &sink2});
 
 	//----- defining the distributed groups ------
 

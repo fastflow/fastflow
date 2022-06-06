@@ -75,7 +75,323 @@ class ff_pipeline: public ff_node {
     friend inline int combine_with_laststage(ff_pipeline&,T*,bool);        
     
 protected:
+
+    int prepare_wraparound() {
+        const int last = static_cast<int>(nodes_list.size())-1;
+
+        bool isa2a_first  = get_node(0)->isAll2All();
+        bool isa2a_last   = get_lastnode()->isAll2All();
+        bool isfarm_last  = get_lastnode()->isFarm();
+        // possible cases:                                                                       [captured by]
+        //
+        // the last stage is a standard node   (the first stage can also be a multi-input node)  [last_single_standard]
+        // the first stage is a standard node  (the last stage can also be a multi-output node)  [first_single_standard]
+        //
+        //
+        // the last stage is a multi-output node:
+        //          - it's a farm with a multi-output collector                                  [last_single_multioutput]
+        //          - it's a farm without collector and workers are standard nodes                 [last_multi_standard]
+        //          - it's a farm without collector with multi-output workers                    [last_multi_multioutput]
+        //          - it's a all2all with standard nodes                                         [last_multi_standard]
+        //          - it's a all2all with multi-output nodes                                     [last_multi_multioutput]
+        //          - it's a singolo nodo (comp or pipeline) with the last stage multi-output    [last_single_multioutput]
+        //
+        //
+        // the first stage is multi-input
+        //          - it's a farm (the emettitore is multi-input by default)                     [first_single_multiinput]
+        //          - it's a single multi-input node                                             [first_single_multiinput]
+        //          - it's all2all with standard nodes                                           [first_multi_standard]
+        //          - its' all2all with multi-input nodes                                        [first_multi_multiinput]
+        //
+
+        bool last_isfarm_nocollector   = get_lastnode()->isFarm() && !isfarm_withcollector(get_lastnode()); 
+        bool last_isfarm_withcollector = get_lastnode()->isFarm() && !last_isfarm_nocollector;
+
+        bool first_single_standard     = (!nodes_list[0]->isMultiInput());
+        // the farm is considered single_multiinput
+        bool first_single_multiinput   = (nodes_list[0]->isMultiInput() && !isa2a_first);
+        bool first_multi_standard      = [&]() {
+            if (!isa2a_first) return false;
+            const svector<ff_node*>& w1=isa2a_getfirstset(get_node(0));
+            assert(w1.size()>0);
+            if (w1[0]->isMultiInput()) return false; // NOTE: we suppose homogeneous first set
+            return true;
+        }();
+        bool first_multi_multiinput    = [&]() {
+            if (!isa2a_first) return false;
+            const svector<ff_node*>& w1=isa2a_getfirstset(get_node(0));
+            assert(w1.size()>0);
+            if (w1[0]->isMultiInput()) return true; // NOTE: we suppose homogeneous first set
+            return false;
+        } ();
+
+        bool last_single_standard      = (!nodes_list[last]->isMultiOutput());
+        bool last_single_multioutput   = ((nodes_list[last]->isMultiOutput() && !isa2a_last && !isfarm_last) ||
+                                          (last_isfarm_withcollector && nodes_list[last]->isMultiOutput()));        
+        bool last_multi_standard       = [&]() {            
+            if (last_isfarm_nocollector) {
+                return !isfarm_multimultioutput(get_lastnode());
+            } if (isa2a_last) {                
+                const svector<ff_node*>& w1=isa2a_getsecondset(nodes_list[last]);
+                assert(w1.size()>0);
+                if (!w1[0]->isMultiOutput()) return true; // NOTE: we suppose homogeneous second set
+            }
+            return false;
+        } ();
+        bool last_multi_multioutput    = [&]() {
+            if (last_isfarm_nocollector) {
+                return isfarm_multimultioutput(get_lastnode());
+            } if (isa2a_last) {
+                const svector<ff_node*>& w1=isa2a_getsecondset(nodes_list[last]);
+                assert(w1.size()>0);
+                if (w1[0]->isMultiOutput()) return true; // NOTE: we suppose homogeneous second set
+            }
+            return false;
+        } ();      
+
+        // first stage: standard node
+        if (first_single_standard) {
+            if (create_input_buffer(out_buffer_entries, false)<0) return -1;
+            if (last_single_standard) {
+                if (set_output_buffer(get_in_buffer())<0)  return -1;
+
+                // blocking stuff ------
+                pthread_mutex_t   *m        = NULL;
+                pthread_cond_t    *c        = NULL;
+                if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
+                if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
+                nodes_list[last]->set_output_blocking(m,c);
+                // ---------------------
+            } else {
+                if (last_single_multioutput) {
+                    ff_node *t = new ff_buffernode(last, get_in_buffer(), get_in_buffer());
+                    internalSupportNodes.push_back(t);
+                    assert(t);                   
+                    nodes_list[last]->set_output_feedback(t);
+                    
+                    // blocking stuff ------
+                    pthread_mutex_t   *m        = NULL;
+                    pthread_cond_t    *c        = NULL;
+                    if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
+                    if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
+                    // NOTE: if the node0 is multi-input, then the init_input_blocking
+                    //       method already calls set_output_blocking
+                    t->set_output_blocking(m,c);
+                    // ---------------------
+                    
+                } else {
+                    error("PIPE, cannot connect stage %d with node %d\n", last, 0);
+                    return -1;                                        
+                }
+            }
+            nodes_list[0]->skipfirstpop(true);
+        }
+        // first stage: multi-input
+        if (first_single_multiinput) {
+
+            if (last_single_standard) {
+                if (nodes_list[last]->create_output_buffer(out_buffer_entries,false)<0) return -1;
+                nodes_list[0]->set_input_feedback(nodes_list[last]);
+
+                // blocking stuff ......
+                pthread_mutex_t   *m        = NULL;
+                pthread_cond_t    *c        = NULL;
+                if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
+                // multi-input nodes execute set_output_blocking
+                if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
+                // ---------------------
+            } else {
+                if (last_single_multioutput) {
+                    ff_node *t = new ff_buffernode(out_buffer_entries,false, last); 
+                    assert(t);
+                    internalSupportNodes.push_back(t);
+                    nodes_list[last]->set_output_feedback(t);
+                    nodes_list[0]->set_input_feedback(t);
+
+                    // blocking stuff ......
+                    pthread_mutex_t   *m        = NULL;
+                    pthread_cond_t    *c        = NULL;
+                    if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
+                    // multi-input nodes execute set_output_blocking
+                    if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
+                    // ---------------------
+                } else {
+                    if (last_multi_standard) {
+                        if (nodes_list[last]->create_output_buffer(out_buffer_entries, false) <0)
+                            return -1;
+                        svector<ff_node*> w(MAX_NUM_THREADS);
+                        nodes_list[last]->get_out_nodes(w);
+                        assert(w.size());
+                        for(size_t j=0;j<w.size();++j)
+                            nodes_list[0]->set_input_feedback(w[j]);
+
+                        // blocking stuff ......
+                        pthread_mutex_t   *m        = NULL;
+                        pthread_cond_t    *c        = NULL;
+                        if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
+                        // multi-input nodes execute set_output_blocking
+                        if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
+                        // ---------------------
+                    } else {
+                        if (last_multi_multioutput) {
+                            svector<ff_node*> w(MAX_NUM_THREADS);
+                            nodes_list[last]->get_out_nodes(w);
+                            assert(w.size());
+                            
+                            for(size_t j=0;j<w.size();++j) {
+                                ff_node* t = new ff_buffernode(out_buffer_entries,false, j);
+                                assert(t);
+                                internalSupportNodes.push_back(t);
+                                nodes_list[0]->set_input_feedback(t);
+                                w[j]->set_output_feedback(t);
+                            }                            
+
+                            // blocking stuff ......
+                            pthread_mutex_t   *m        = NULL;
+                            pthread_cond_t    *c        = NULL;
+                            if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
+                            // multi-input nodes execute set_output_blocking
+                            if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
+                            // ---------------------                            
+                        } else {
+                            error("PIPE, wrap_around invalid stage\n");
+                            return -1;
+                        }
+                    }
+                }
+            }
+            nodes_list[0]->skipfirstpop(true);
+        }
+        // first stage: multi standard
+        if (first_multi_standard) {  // all-to-all
+            assert(get_node(0)->isAll2All());
+            ff_node* a2a = nodes_list[0];
+            const svector<ff_node*>& firstSet=isa2a_getfirstset(a2a);
+            assert(firstSet.size()>0);
+             
+            if (last_single_standard) {
+                error("PIPE, wrap_around, cannot connect last with first stage\n");
+                return -1;
+            }
+            if (last_single_multioutput) {
+                for(size_t j=0;j<firstSet.size();++j) {
+                    ff_node* t = new ff_buffernode(out_buffer_entries,false, j);
+                    assert(t);
+                    internalSupportNodes.push_back(t);
+                    firstSet[j]->set_input(t);
+                    nodes_list[last]->set_output_feedback(t);
+                    
+                    // blocking stuff ......
+                    pthread_mutex_t   *m        = NULL;
+                    pthread_cond_t    *c        = NULL;                    
+                    if (!firstSet[j]->init_input_blocking(m,c)) return -1;
+                    t->set_output_blocking(m,c);
+                    // ---------------------                            
+                }
+                // blocking stuff ......
+                pthread_mutex_t   *m        = NULL;
+                pthread_cond_t    *c        = NULL;
+                nodes_list[last]->init_output_blocking(m,c);
+                // ---------------------                            
+            }
+            if (last_multi_standard) {
+                svector<ff_node*> w(MAX_NUM_THREADS);
+                nodes_list[last]->get_out_nodes(w);
+                assert(w.size());
+                assert(w.size() == firstSet.size());
+
+                if (a2a->create_input_buffer(in_buffer_entries, false)<0) return -1;
+                for(size_t j=0;j<w.size();++j)
+                    w[j]->set_output_buffer(firstSet[j]->get_in_buffer());
+
+                // blocking stuff ......
+                pthread_mutex_t   *m        = NULL;
+                pthread_cond_t    *c        = NULL;
+                if (!a2a->init_output_blocking(m,c)) return -1;
+                for(size_t j=0;j<w.size();++j) {
+                    if (!firstSet[j]->init_input_blocking(m,c)) return -1;
+                    w[j]->set_output_blocking(m,c);
+                }
+                // ---------------------                                            
+            }
+            if (last_multi_multioutput) {
+                error("PIPE, wrap_around, cannot connect last stage with first stage\n");
+                return -1;                
+            }
+            nodes_list[0]->skipfirstpop(true);
+        }
+        // first stage: multi multi-input
+        if (first_multi_multiinput) { 
+            assert(get_node(0)->isAll2All());
+            const svector<ff_node*>& firstSet=isa2a_getfirstset(nodes_list[0]);
+            assert(firstSet.size()>0);
+            
+            if (last_single_standard) {
+                error("PIPE, wrap_around, cannot connect last with first stage\n");
+                return -1;
+            }
+            if (last_single_multioutput) {
+                for(size_t j=0;j<firstSet.size();++j) {
+                    ff_node* t = new ff_buffernode(out_buffer_entries,false, j);
+                    assert(t);
+                    internalSupportNodes.push_back(t);
+                    firstSet[j]->set_input_feedback(t);
+                    nodes_list[last]->set_output_feedback(t);
+                }                                                         
+            }
+            if (last_multi_standard) {
+                svector<ff_node*> w(MAX_NUM_THREADS);
+                nodes_list[last]->get_out_nodes(w);
+                assert(w.size());
+                assert(w.size() == firstSet.size());
+
+                for(size_t i=0;i<firstSet.size(); ++i) {
+                    ff_node* t = new ff_buffernode(out_buffer_entries,false, i);
+                    assert(t);
+                    internalSupportNodes.push_back(t);
+                    firstSet[i]->set_input_feedback(t);
+                    w[i]->set_output(t);
+                }
+            }
+            if (last_multi_multioutput) {
+                svector<ff_node*> w(MAX_NUM_THREADS);
+                nodes_list[last]->get_out_nodes(w);
+                assert(w.size());
+
+                // here we have to create all connections
+                for(size_t i=0;i<firstSet.size(); ++i) {
+                    for(size_t j=0;j<w.size();++j) {
+                        ff_node* t = new ff_buffernode(out_buffer_entries,false, j);
+                        assert(t);
+                        internalSupportNodes.push_back(t);
+                        firstSet[i]->set_input_feedback(t);
+                        w[j]->set_output_feedback(t);
+                    }
+                }
+            }
+            // blocking stuff ......
+            pthread_mutex_t   *m        = NULL;
+            pthread_cond_t    *c        = NULL;
+            if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
+            if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
+            // ---------------------              
+            nodes_list[0]->skipfirstpop(true);
+        }        
+        return 0;    
+    }
     inline int prepare() {
+
+        if (wraparound) {
+            if (nodes_list.size()<2) {
+                error("PIPE, too few pipeline nodes\n");
+                return -1;
+            }
+            if (prepare_wraparound()<0) {
+                error("PIPE, prepare_wraparound failed\n");
+                return -1;
+            }
+        }        
+        
         const int nstages=static_cast<int>(nodes_list.size());
 
         // possible cases:                                                                       [captured by]
@@ -332,8 +648,10 @@ protected:
                     }
                 }
             }
-            if (curr_multi_multiinput) {
-                ff_node* a2a = nodes_list[i];
+            // it could be an all-to-all or a pipeline containing as first stage an all-to-all
+            if (curr_multi_multiinput) { 
+                ff_node* a2a = get_node(i);
+                assert(a2a->isAll2All());
                 const svector<ff_node*>& W1 = isa2a_getfirstset(a2a);
                 assert(W1.size()>0);
 
@@ -715,314 +1033,8 @@ public:
      * The last stage output stream will be connected to the first stage 
      * input stream in a cycle (feedback channel)
      */
-    int wrap_around() {
-        if (nodes_list.size()<2) {
-            error("PIPE, too few pipeline nodes\n");
-            return -1;
-        }
-        const int last = static_cast<int>(nodes_list.size())-1;
-
-        bool isa2a_first  = get_node(0)->isAll2All();
-        bool isa2a_last   = get_lastnode()->isAll2All();
-        bool isfarm_last  = get_lastnode()->isFarm();
-        // possible cases:                                                                       [captured by]
-        //
-        // the last stage is a standard node   (the first stage can also be a multi-input node)  [last_single_standard]
-        // the first stage is a standard node  (the last stage can also be a multi-output node)  [first_single_standard]
-        //
-        //
-        // the last stage is a multi-output node:
-        //          - it's a farm with a multi-output collector                                  [last_single_multioutput]
-        //          - it's a farm without collector and workers are standard nodes                 [last_multi_standard]
-        //          - it's a farm without collector with multi-output workers                    [last_multi_multioutput]
-        //          - it's a all2all with standard nodes                                         [last_multi_standard]
-        //          - it's a all2all with multi-output nodes                                     [last_multi_multioutput]
-        //          - it's a singolo nodo (comp or pipeline) with the last stage multi-output    [last_single_multioutput]
-        //
-        //
-        // the first stage is multi-input
-        //          - it's a farm (the emettitore is multi-input by default)                     [first_single_multiinput]
-        //          - it's a single multi-input node                                             [first_single_multiinput]
-        //          - it's all2all with standard nodes                                           [first_multi_standard]
-        //          - its' all2all with multi-input nodes                                        [first_multi_multiinput]
-        //
-
-        bool last_isfarm_nocollector   = get_lastnode()->isFarm() && !isfarm_withcollector(get_lastnode()); 
-        bool last_isfarm_withcollector = get_lastnode()->isFarm() && !last_isfarm_nocollector;
-
-        bool first_single_standard     = (!nodes_list[0]->isMultiInput());
-        // the farm is considered single_multiinput
-        bool first_single_multiinput   = (nodes_list[0]->isMultiInput() && !isa2a_first);
-        bool first_multi_standard      = [&]() {
-            if (!isa2a_first) return false;
-            const svector<ff_node*>& w1=isa2a_getfirstset(get_node(0));
-            assert(w1.size()>0);
-            if (w1[0]->isMultiInput()) return false; // NOTE: we suppose homogeneous first set
-            return true;
-        }();
-        bool first_multi_multiinput    = [&]() {
-            if (!isa2a_first) return false;
-            const svector<ff_node*>& w1=isa2a_getfirstset(get_node(0));
-            assert(w1.size()>0);
-            if (w1[0]->isMultiInput()) return true; // NOTE: we suppose homogeneous first set
-            return false;
-        } ();
-
-        bool last_single_standard      = (!nodes_list[last]->isMultiOutput());
-        bool last_single_multioutput   = ((nodes_list[last]->isMultiOutput() && !isa2a_last && !isfarm_last) ||
-                                          (last_isfarm_withcollector && nodes_list[last]->isMultiOutput()));        
-        bool last_multi_standard       = [&]() {            
-            if (last_isfarm_nocollector) {
-                return !isfarm_multimultioutput(get_lastnode());
-            } if (isa2a_last) {                
-                const svector<ff_node*>& w1=isa2a_getsecondset(nodes_list[last]);
-                assert(w1.size()>0);
-                if (!w1[0]->isMultiOutput()) return true; // NOTE: we suppose homogeneous second set
-            }
-            return false;
-        } ();
-        bool last_multi_multioutput    = [&]() {
-            if (last_isfarm_nocollector) {
-                return isfarm_multimultioutput(get_lastnode());
-            } if (isa2a_last) {
-                const svector<ff_node*>& w1=isa2a_getsecondset(nodes_list[last]);
-                assert(w1.size()>0);
-                if (w1[0]->isMultiOutput()) return true; // NOTE: we suppose homogeneous second set
-            }
-            return false;
-        } ();      
-
-        // first stage: standard node
-        if (first_single_standard) {
-            if (create_input_buffer(out_buffer_entries, false)<0) return -1;
-            if (last_single_standard) {
-                if (set_output_buffer(get_in_buffer())<0)  return -1;
-
-                // blocking stuff ------
-                pthread_mutex_t   *m        = NULL;
-                pthread_cond_t    *c        = NULL;
-                if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
-                if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
-                nodes_list[last]->set_output_blocking(m,c);
-                // ---------------------
-            } else {
-                if (last_single_multioutput) {
-                    ff_node *t = new ff_buffernode(last, get_in_buffer(), get_in_buffer());
-                    internalSupportNodes.push_back(t);
-                    assert(t);                   
-                    nodes_list[last]->set_output_feedback(t);
-                    
-                    // blocking stuff ------
-                    pthread_mutex_t   *m        = NULL;
-                    pthread_cond_t    *c        = NULL;
-                    if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
-                    if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
-                    // NOTE: if the node0 is multi-input, then the init_input_blocking
-                    //       method already calls set_output_blocking
-                    t->set_output_blocking(m,c);
-                    // ---------------------
-                    
-                } else {
-                    error("PIPE, cannot connect stage %d with node %d\n", last, 0);
-                    return -1;                                        
-                }
-            }
-            nodes_list[0]->skipfirstpop(true);
-        }
-        // first stage: multi-input
-        if (first_single_multiinput) {
-
-            if (last_single_standard) {
-                if (nodes_list[last]->create_output_buffer(out_buffer_entries,false)<0) return -1;
-                nodes_list[0]->set_input_feedback(nodes_list[last]);
-
-                // blocking stuff ......
-                pthread_mutex_t   *m        = NULL;
-                pthread_cond_t    *c        = NULL;
-                if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
-                // multi-input nodes execute set_output_blocking
-                if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
-                // ---------------------
-            } else {
-                if (last_single_multioutput) {
-                    ff_node *t = new ff_buffernode(out_buffer_entries,false, last); 
-                    assert(t);
-                    internalSupportNodes.push_back(t);
-                    nodes_list[last]->set_output_feedback(t);
-                    nodes_list[0]->set_input_feedback(t);
-
-                    // blocking stuff ......
-                    pthread_mutex_t   *m        = NULL;
-                    pthread_cond_t    *c        = NULL;
-                    if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
-                    // multi-input nodes execute set_output_blocking
-                    if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
-                    // ---------------------
-                } else {
-                    if (last_multi_standard) {
-                        if (nodes_list[last]->create_output_buffer(out_buffer_entries, false) <0)
-                            return -1;
-                        svector<ff_node*> w(MAX_NUM_THREADS);
-                        nodes_list[last]->get_out_nodes(w);
-                        assert(w.size());
-                        for(size_t j=0;j<w.size();++j)
-                            nodes_list[0]->set_input_feedback(w[j]);
-
-                        // blocking stuff ......
-                        pthread_mutex_t   *m        = NULL;
-                        pthread_cond_t    *c        = NULL;
-                        if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
-                        // multi-input nodes execute set_output_blocking
-                        if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
-                        // ---------------------
-                    } else {
-                        if (last_multi_multioutput) {
-                            svector<ff_node*> w(MAX_NUM_THREADS);
-                            nodes_list[last]->get_out_nodes(w);
-                            assert(w.size());
-                            
-                            for(size_t j=0;j<w.size();++j) {
-                                ff_node* t = new ff_buffernode(out_buffer_entries,false, j);
-                                assert(t);
-                                internalSupportNodes.push_back(t);
-                                nodes_list[0]->set_input_feedback(t);
-                                w[j]->set_output_feedback(t);
-                            }                            
-
-                            // blocking stuff ......
-                            pthread_mutex_t   *m        = NULL;
-                            pthread_cond_t    *c        = NULL;
-                            if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
-                            // multi-input nodes execute set_output_blocking
-                            if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
-                            // ---------------------                            
-                        } else {
-                            error("PIPE, wrap_around invalid stage\n");
-                            return -1;
-                        }
-                    }
-                }
-            }
-            nodes_list[0]->skipfirstpop(true);
-        }
-        // first stage: multi standard
-        if (first_multi_standard) {  // all-to-all
-            assert(get_node(0)->isAll2All());
-            ff_node* a2a = nodes_list[0];
-            const svector<ff_node*>& firstSet=isa2a_getfirstset(a2a);
-            assert(firstSet.size()>0);
-             
-            if (last_single_standard) {
-                error("PIPE, wrap_around, cannot connect last with first stage\n");
-                return -1;
-            }
-            if (last_single_multioutput) {
-                for(size_t j=0;j<firstSet.size();++j) {
-                    ff_node* t = new ff_buffernode(out_buffer_entries,false, j);
-                    assert(t);
-                    internalSupportNodes.push_back(t);
-                    firstSet[j]->set_input(t);
-                    nodes_list[last]->set_output_feedback(t);
-                    
-                    // blocking stuff ......
-                    pthread_mutex_t   *m        = NULL;
-                    pthread_cond_t    *c        = NULL;                    
-                    if (!firstSet[j]->init_input_blocking(m,c)) return -1;
-                    t->set_output_blocking(m,c);
-                    // ---------------------                            
-                }
-                // blocking stuff ......
-                pthread_mutex_t   *m        = NULL;
-                pthread_cond_t    *c        = NULL;
-                nodes_list[last]->init_output_blocking(m,c);
-                // ---------------------                            
-            }
-            if (last_multi_standard) {
-                svector<ff_node*> w(MAX_NUM_THREADS);
-                nodes_list[last]->get_out_nodes(w);
-                assert(w.size());
-                assert(w.size() == firstSet.size());
-
-                if (a2a->create_input_buffer(in_buffer_entries, false)<0) return -1;
-                for(size_t j=0;j<w.size();++j)
-                    w[j]->set_output_buffer(firstSet[j]->get_in_buffer());
-
-                // blocking stuff ......
-                pthread_mutex_t   *m        = NULL;
-                pthread_cond_t    *c        = NULL;
-                if (!a2a->init_output_blocking(m,c)) return -1;
-                for(size_t j=0;j<w.size();++j) {
-                    if (!firstSet[j]->init_input_blocking(m,c)) return -1;
-                    w[j]->set_output_blocking(m,c);
-                }
-                // ---------------------                                            
-            }
-            if (last_multi_multioutput) {
-                error("PIPE, wrap_around, cannot connect last stage with first stage\n");
-                return -1;                
-            }
-            nodes_list[0]->skipfirstpop(true);
-        }
-        // first stage: multi multi-input
-        if (first_multi_multiinput) { 
-            assert(get_node(0)->isAll2All());
-            const svector<ff_node*>& firstSet=isa2a_getfirstset(nodes_list[0]);
-            assert(firstSet.size()>0);
-            
-            if (last_single_standard) {
-                error("PIPE, wrap_around, cannot connect last with first stage\n");
-                return -1;
-            }
-            if (last_single_multioutput) {
-                for(size_t j=0;j<firstSet.size();++j) {
-                    ff_node* t = new ff_buffernode(out_buffer_entries,false, j);
-                    assert(t);
-                    internalSupportNodes.push_back(t);
-                    firstSet[j]->set_input_feedback(t);
-                    nodes_list[last]->set_output_feedback(t);
-                }                                                         
-            }
-            if (last_multi_standard) {
-                svector<ff_node*> w(MAX_NUM_THREADS);
-                nodes_list[last]->get_out_nodes(w);
-                assert(w.size());
-                assert(w.size() == firstSet.size());
-
-                for(size_t i=0;i<firstSet.size(); ++i) {
-                    ff_node* t = new ff_buffernode(out_buffer_entries,false, i);
-                    assert(t);
-                    internalSupportNodes.push_back(t);
-                    firstSet[i]->set_input_feedback(t);
-                    w[i]->set_output(t);
-                }
-            }
-            if (last_multi_multioutput) {
-                svector<ff_node*> w(MAX_NUM_THREADS);
-                nodes_list[last]->get_out_nodes(w);
-                assert(w.size());
-
-                // here we have to create all connections
-                for(size_t i=0;i<firstSet.size(); ++i) {
-                    for(size_t j=0;j<w.size();++j) {
-                        ff_node* t = new ff_buffernode(out_buffer_entries,false, j);
-                        assert(t);
-                        internalSupportNodes.push_back(t);
-                        firstSet[i]->set_input_feedback(t);
-                        w[j]->set_output_feedback(t);
-                    }
-                }
-            }
-            // blocking stuff ......
-            pthread_mutex_t   *m        = NULL;
-            pthread_cond_t    *c        = NULL;
-            if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
-            if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
-            // ---------------------              
-            nodes_list[0]->skipfirstpop(true);
-        }        
-
-        return 0;
-    }
+    int wrap_around() { wraparound=true; return 0; };
+    bool isset_wraparound() { return wraparound; }
     
     bool isset_cleanup_nodes() const { return node_cleanup; }
     
@@ -1355,7 +1367,8 @@ public:
         return nodes_list[last]->isMultiOutput();
     }
     
-    // remove internal pipeline 
+    // remove internal pipeline
+    // WARNING: if there are feedback channels calling this method is dangerous!
     void flatten() {
         const svector<std::pair<ff_node*,bool>>& W = this->get_and_remove_nodes();
         assert(get_pipeline_nodes().size() == 0);
@@ -1679,6 +1692,7 @@ private:
     bool has_input_channel; // for accelerator
     bool node_cleanup;
     bool fixedsizeIN, fixedsizeOUT;
+    bool wraparound=false;
     int in_buffer_entries;
     int out_buffer_entries;
     svector<ff_node *> nodes_list;

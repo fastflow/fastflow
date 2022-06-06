@@ -77,7 +77,7 @@ public:
 		if (this->n->isMultiOutput()) {
 			ff_monode* mo = reinterpret_cast<ff_monode*>(this->n);
 			//mo->set_running(localWorkersMap.size() + 1); // the last worker is the forwarder to the remote workers
-			mo->set_running(totalWorkers);
+			mo->set_virtual_outchannels(totalWorkers);
 		}
 
 		// change the size of the queue to the SquareBoxRight (if present),

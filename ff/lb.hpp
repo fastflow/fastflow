@@ -483,7 +483,7 @@ public:
      *  \param max_num_workers The max number of workers allowed
      */
     ff_loadbalancer(size_t max_num_workers): 
-        running(-1),max_nworkers(max_num_workers),nextw(-1),feedbackid(-1),
+        running(-1),max_nworkers(max_num_workers),nextw(-1),feedbackid(0),
         channelid(-2),input_channelid(-1),
         filter(NULL),workers(max_num_workers),
         buffer(NULL),skip1pop(false),master_worker(false),parallel_workers(false),
@@ -609,6 +609,17 @@ public:
      */
     ssize_t get_channel_id() const { return channelid;}
 
+    size_t get_num_inchannels() const {
+        size_t nw=multi_input.size();
+        if (manager) nw +=1;
+        if (multi_input.size()==0 && (get_in_buffer()!=NULL)) nw+=1;
+        return nw;
+    }
+    size_t get_num_outchannels() const { return workers.size(); }
+    size_t get_num_feedbackchannels() const {
+        return feedbackid;
+    }
+    
     /**
      * \brief Resets the channel id
      *
@@ -890,12 +901,10 @@ public:
         bool inpresent  = (get_in_buffer() != NULL);
         bool skipfirstpop = skip1pop;
 
-        // the following case is possible when the emitter is a dnode
         if (!inpresent && filter && (filter->get_in_buffer()!=NULL)) {
             inpresent = true;
             set_in_buffer(filter->get_in_buffer());
         }
-        
 
         gettimeofday(&wtstart,NULL);
         if (!master_worker && (multi_input.size()==0) && (inputNodesFeedback.size()==0)) {
@@ -1135,10 +1144,14 @@ public:
     }
 
     int dryrun() {
+        // if there are feedback channels, we want ff_send_out will do
+        // a round-robin on those channels, whereas ff_send_out_to could be
+        // used to target forward channels
+        // by setting running=feedbackid, then selectworkers will skip forward channels
         if (feedbackid>0)
             running = feedbackid;
         else 
-            running=workers.size();
+            running = workers.size();
         
         if (filter) {
             // WARNING: If the last node of a composition is a multi-output node, then the
