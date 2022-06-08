@@ -36,9 +36,13 @@ else
     INCS            += -I ~/cereal/include
 endif
 
+OS                   = $(shell uname)
 
 CXXFLAGS            += -Wall
-LIBS                 = -pthread -lstdc++fs
+LIBS	             = -pthread -lstdc++fs
+ifeq ($(strip $(OS)),Darwin)
+	LIBS         = -pthread 
+endif
 INCLUDES             = $(INCS)
 
 SOURCES              = $(wildcard *.cpp)
