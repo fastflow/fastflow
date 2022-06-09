@@ -96,10 +96,6 @@ protected:
                 }
             }
             int push(message_t* m){
-
-				std::cerr << "directBatchBuffer PUSH\n";
-
-				
                 waitCompletion();
                 currHeader[1] = m->sender; currHeader[2] = m->chid; currHeader[3] = m->data.getLen();
                 MPI_Isend(currHeader, 4, MPI_LONG, this->rank, DFF_HEADER_TAG, MPI_COMM_WORLD, &this->headersR);
