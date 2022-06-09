@@ -62,6 +62,7 @@
 #endif
 
 enum Proto {TCP , MPI};
+enum ChannelType {FWD, INT, FBK};
 
 class dataBuffer: public std::stringbuf {
 public:	

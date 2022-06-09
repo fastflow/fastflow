@@ -111,7 +111,7 @@ protected:
     std::map<int, unsigned int> rankCounters;
     std::map<int, std::pair<int, std::vector<batchBuffer*>>> buffers;
     std::vector<int> ranks;
-    std::vector<ff_endpoint> destRanks;
+    std::vector<std::pair<ChannelType, ff_endpoint>> destRanks;
     std::string gName;
     int batchSize;
     int messageOTF;
@@ -215,19 +215,19 @@ protected:
     }
 
 public:
-    ff_dsenderMPI(ff_endpoint destRank, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1)
+    ff_dsenderMPI(std::pair<ChannelType, ff_endpoint> destRank, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1)
 		: gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {
         this->destRanks.push_back(std::move(destRank));
     }
 
-    ff_dsenderMPI( std::vector<ff_endpoint> destRanks_, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1)
+    ff_dsenderMPI( std::vector<std::pair<ChannelType, ff_endpoint>> destRanks_, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1)
 		: destRanks(std::move(destRanks_)), gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {}
 
     int svc_init() {
 		if (coreid!=-1)
 			ff_mapThreadToCpu(coreid);
 
-        for(ff_endpoint& ep: this->destRanks){
+        for(auto& [ct, ep]: this->destRanks){
            handshakeHandler(ep.getRank(), false);
            //rankCounters[ep.getRank()] = messageOTF;
            ranks.push_back(ep.getRank());
@@ -320,8 +320,8 @@ class ff_dsenderHMPI : public ff_dsenderMPI {
 
 public:
 
-    ff_dsenderHMPI(ff_endpoint e, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsenderMPI(e, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {} 
-    ff_dsenderHMPI(std::vector<ff_endpoint> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsenderMPI(dest_endpoints_, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {}
+    ff_dsenderHMPI(std::pair<ChannelType, ff_endpoint> e, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsenderMPI(e, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {} 
+    ff_dsenderHMPI(std::vector<std::pair<ChannelType, ff_endpoint>> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsenderMPI(dest_endpoints_, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {}
     
     int handshakeHandler(const int rank, bool isInternal){
         sendGroupName(rank);
@@ -334,7 +334,7 @@ public:
         if (coreid!=-1)
 			ff_mapThreadToCpu(coreid);
 		
-        for(auto& endpoint : this->destRanks){
+        for(auto& [ct, endpoint] : this->destRanks){
             int rank = endpoint.getRank();
             bool isInternal = internalGroupNames.contains(endpoint.groupName);
             if (isInternal) 
@@ -364,7 +364,6 @@ public:
                 rank = internalDest2Rank[task->chid];
             } else
                 rank = getMostFilledInternalBufferRank();
-
 
             auto& buffs = buffers[rank];
             if (buffs.second[buffs.first]->push(task)) // the push triggered a flush, so we must go ion the next buffer

@@ -50,7 +50,7 @@ using namespace ff;
 class ff_dsender: public ff_minode_t<message_t> { 
 protected:
     size_t neos=0;
-    std::vector<ff_endpoint> dest_endpoints;
+    std::vector<std::pair<ChannelType, ff_endpoint>> dest_endpoints;
     std::map<int, int> dest2Socket;
     std::vector<int> sockets;
     int last_rr_socket = -1;
@@ -298,11 +298,11 @@ protected:
 
     
 public:
-    ff_dsender(ff_endpoint dest_endpoint, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1): gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {
+    ff_dsender(std::pair<ChannelType, ff_endpoint> dest_endpoint, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1): gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {
         this->dest_endpoints.push_back(std::move(dest_endpoint));
     }
 
-    ff_dsender( std::vector<ff_endpoint> dest_endpoints_, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {}
+    ff_dsender( std::vector<std::pair<ChannelType, ff_endpoint>> dest_endpoints_, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {}
 
     
 
@@ -315,7 +315,7 @@ public:
 		
         sockets.resize(dest_endpoints.size());
         for(size_t i=0; i < this->dest_endpoints.size(); i++){
-            int sck = tryConnect(this->dest_endpoints[i]);
+            int sck = tryConnect(this->dest_endpoints[i].second);
             if (sck <= 0) return -1;
             sockets[i] = sck;
             socketsCounters[sck] = messageOTF;
@@ -462,8 +462,8 @@ class ff_dsenderH : public ff_dsender {
 
 public:
 
-    ff_dsenderH(ff_endpoint e, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsender(e, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {} 
-    ff_dsenderH(std::vector<ff_endpoint> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsender(dest_endpoints_, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {}
+    ff_dsenderH(std::pair<ChannelType, ff_endpoint> e, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsender(e, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {} 
+    ff_dsenderH(std::vector<std::pair<ChannelType, ff_endpoint>> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsender(dest_endpoints_, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {}
     
     int handshakeHandler(const int sck, bool isInternal){
         if (sendGroupName(sck) < 0) return -1;
@@ -479,7 +479,7 @@ public:
         FD_ZERO(&set);
         FD_ZERO(&tmpset);
 		
-        for(const auto& endpoint : this->dest_endpoints){
+        for(const auto& [ct, endpoint] : this->dest_endpoints){
             int sck = tryConnect(endpoint);
             if (sck <= 0) return -1;
             bool isInternal = internalGroupNames.contains(endpoint.groupName);
