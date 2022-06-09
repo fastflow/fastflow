@@ -1,4 +1,6 @@
 /*
+ * FastFlow concurrent network:
+ *
  *        ----------------------------------------------------------------
  *       |                                                             |  |
  *       |   | FdbInput-Node2 ->|                 | Node3->FdbOutput ->|  |          
@@ -61,8 +63,8 @@ struct Node1: ff_monode_t<myTask_t>{
 };
 
 struct Node2: ff_monode_t<myTask_t>{
-    myTask_t* svc(myTask_t* t){
-		t->str += std::string(" World") + std::to_string(get_my_id());
+	myTask_t* svc(myTask_t* t){
+		t->str += std::string(" World");
         return t;
     }
 };
@@ -85,6 +87,21 @@ struct Node3: ff_minode_t<myTask_t>{
     }
 };
 
+
+struct FdbInput : ff_minode_t<myTask_t>{
+	FdbInput(long ntasks) : ntasks(ntasks) {}
+	
+	myTask_t * svc(myTask_t* t){
+		if (fromInput()) return t;
+		--ntasks;
+		//ff::cout << "FdbInput" << get_my_id() << " received from feedback channel: " << t->str << "\n";
+		ff_send_out(t);
+		return (ntasks>0 ? GO_ON : EOS);
+	}
+	
+	long ntasks;
+};
+
 struct FdbOutput : ff_monode_t<myTask_t>{
 	int svc_init() {
 		feedbacks = get_num_feedbackchannels();
@@ -105,28 +122,13 @@ struct FdbOutput : ff_monode_t<myTask_t>{
 		ff_send_out_to(t, feedbacks);
 		return this->GO_ON;
 	}
-
 	int feedbacks=0;
 };
-
-struct FdbInput : ff_minode_t<myTask_t>{
-	FdbInput(long ntasks) : ntasks(ntasks) {}
-
-	myTask_t * svc(myTask_t* t){
-		if (fromInput()) return t;
-		--ntasks;
-		//ff::cout << "FdbInput" << get_my_id() << " received from feedback channel: " << t->str << "\n";
-		ff_send_out(t);
-		return (ntasks>0 ? GO_ON : EOS);
-	}
-	long ntasks;
-};
-
 
 struct Node4: ff_minode_t<myTask_t>{
 	Node4(long ntasks):ntasks(ntasks) {}
     myTask_t* svc(myTask_t* t){
-	ff::cout << "Node4: from (" << get_channel_id() << ") " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";	
+		ff::cout << "Node4: from (" << get_channel_id() << ") " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";	
 		++processed;
 		delete t;
         return GO_ON;

@@ -58,6 +58,7 @@ static bool isfarm_withcollector(ff_node*);
 static bool isfarm_multimultioutput(ff_node*);
 static const svector<ff_node*>& isa2a_getfirstset(ff_node*);
 static const svector<ff_node*>& isa2a_getsecondset(ff_node*);
+static const svector<ff_node*>& isfarm_getworkers(ff_node*);
     
 /**
  * \class ff_pipeline
@@ -90,7 +91,7 @@ protected:
         //
         // the last stage is a multi-output node:
         //          - it's a farm with a multi-output collector                                  [last_single_multioutput]
-        //          - it's a farm without collector and workers are standard nodes                 [last_multi_standard]
+        //          - it's a farm without collector and workers are standard nodes               [last_multi_standard]
         //          - it's a farm without collector with multi-output workers                    [last_multi_multioutput]
         //          - it's a all2all with standard nodes                                         [last_multi_standard]
         //          - it's a all2all with multi-output nodes                                     [last_multi_multioutput]
@@ -184,7 +185,6 @@ protected:
                     return -1;                                        
                 }
             }
-            nodes_list[0]->skipfirstpop(true);
         }
         // first stage: multi-input
         if (first_single_multiinput) {
@@ -234,8 +234,14 @@ protected:
                         // ---------------------
                     } else {
                         if (last_multi_multioutput) {
-                            svector<ff_node*> w(MAX_NUM_THREADS);
-                            nodes_list[last]->get_out_nodes(w);
+                            svector<ff_node*> w;
+                            ff_node *lastbb = get_lastnode();
+                            if (lastbb->isAll2All()) 
+                                w = isa2a_getsecondset(lastbb);
+                            else {
+                                assert(lastbb->isFarm());
+                                w = isfarm_getworkers(lastbb);
+                            }
                             assert(w.size());
                             
                             for(size_t j=0;j<w.size();++j) {
@@ -260,7 +266,6 @@ protected:
                     }
                 }
             }
-            nodes_list[0]->skipfirstpop(true);
         }
         // first stage: multi standard
         if (first_multi_standard) {  // all-to-all
@@ -318,7 +323,6 @@ protected:
                 error("PIPE, wrap_around, cannot connect last stage with first stage\n");
                 return -1;                
             }
-            nodes_list[0]->skipfirstpop(true);
         }
         // first stage: multi multi-input
         if (first_multi_multiinput) { 
@@ -354,8 +358,14 @@ protected:
                 }
             }
             if (last_multi_multioutput) {
-                svector<ff_node*> w(MAX_NUM_THREADS);
-                nodes_list[last]->get_out_nodes(w);
+                svector<ff_node*> w;
+                ff_node *lastbb = get_lastnode();
+                if (lastbb->isAll2All()) 
+                    w = isa2a_getsecondset(lastbb);
+                else {
+                    assert(lastbb->isFarm());
+                    w = isfarm_getworkers(lastbb);
+                }
                 assert(w.size());
 
                 // here we have to create all connections
@@ -375,7 +385,6 @@ protected:
             if (!nodes_list[last]->init_output_blocking(m,c)) return -1;
             if (!nodes_list[0]->init_input_blocking(m,c)) return -1;
             // ---------------------              
-            nodes_list[0]->skipfirstpop(true);
         }        
         return 0;    
     }
