@@ -267,6 +267,8 @@ private:
         if (g.internalMessageOTF) annotatedGroups[g.name].internalMessageOTF = g.internalMessageOTF;
       }
 
+      // TODO check first level pipeline before strting building the groups.
+
       // build the map parentBB -> <groups names>
       std::map<ff_node*, std::set<std::string>> parentBB2GroupsName;
       for(auto& p: annotatedGroups) parentBB2GroupsName[p.second.parentBB].insert(p.first);
@@ -275,8 +277,8 @@ private:
       for(const auto& pair : parentBB2GroupsName){
 
         //just build the current previous the current and the next stage of the parentbuilding block i'm going to exeecute  //// TODO: reprhase this comment!
-        if (!(pair.first == previousStage || pair.first == runningGroup_IR.parentBB || pair.first == nextStage))
-          continue;
+        //if (!(pair.first == previousStage || pair.first == runningGroup_IR.parentBB || pair.first == nextStage))
+        //  continue;
 
         bool isSrc = isSource(pair.first, parentPipe);
         bool isSnk = isSink(pair.first, parentPipe);
@@ -331,7 +333,7 @@ private:
             
 
               if (!tail)
-                annotatedGroups[gName].destinationEndpoints.push_back(annotatedGroups[annotated[originalPipe->get_nextstage(mypipe->get_laststage())]].listenEndpoint);
+                annotatedGroups[gName].destinationEndpoints.push_back({ChannelType::FWD, annotatedGroups[annotated[originalPipe->get_nextstage(mypipe->get_laststage())]].listenEndpoint});
              
               if (!head)
                 annotatedGroups[gName].expectedEOS = 1;
@@ -403,9 +405,11 @@ private:
 
       }
 
+
+      // compute routing for horizzontally splitted A2A
       // this is meaningful only if the group is horizontal and made of an a2a
       if (!runningGroup_IR.isVertical()){
-		assert(runningGroup_IR.parentBB->isAll2All());
+		    assert(runningGroup_IR.parentBB->isAll2All());
         ff_a2a* parentA2A = reinterpret_cast<ff_a2a*>(runningGroup_IR.parentBB);
         {
           ff::svector<ff_node*> inputs;
@@ -419,7 +423,10 @@ private:
         }
       }
 
+      
       //############# compute the number of excpected input connections
+      
+      // handle horizontal groups 
       if (runningGroup_IR.hasRightChildren()){
         auto& currentGroups = parentBB2GroupsName[runningGroup_IR.parentBB];
         runningGroup_IR.expectedEOS = std::count_if(currentGroups.cbegin(), currentGroups.cend(), [&](auto& gName){return (!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasLeftChildren());});
@@ -429,6 +436,12 @@ private:
       // if the previousStage exists, count all the ouput groups pointing to the one i'm going to run
       if (previousStage && runningGroup_IR.hasLeftChildren())
         runningGroup_IR.expectedEOS += outputGroups(parentBB2GroupsName[previousStage]).size();
+      
+      // FEEDBACK RELATED (wrap around of the main pipe!)
+      // if the main pipe is wrapped-around i take all the outputgroups of the last stage of the pipeline and the cardinality must set to the expected input connections
+      if (!previousStage && parentPipe->isset_wraparound())
+        runningGroup_IR.expectedEOS += outputGroups(parentBB2GroupsName[parentPipe->getStages().back()]).size();
+
 
       if (runningGroup_IR.expectedEOS > 0) runningGroup_IR.hasReceiver = true;
 
@@ -437,18 +450,24 @@ private:
           // inserisci tutte i gruppi di questo bb a destra
           for(const auto& gName: parentBB2GroupsName[runningGroup_IR.parentBB])
             if (!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasRightChildren())
-              runningGroup_IR.destinationEndpoints.push_back(annotatedGroups[gName].listenEndpoint);
+              runningGroup_IR.destinationEndpoints.push_back({ChannelType::FWD, annotatedGroups[gName].listenEndpoint});
       } else {
         if (!runningGroup_IR.isVertical()){
           // inserisci tutti i gruppi come sopra
           for(const auto& gName: parentBB2GroupsName[runningGroup_IR.parentBB])
             if ((!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasRightChildren()) && gName != runningGroup)
-              runningGroup_IR.destinationEndpoints.push_back(annotatedGroups[gName].listenEndpoint);
+              runningGroup_IR.destinationEndpoints.push_back({ChannelType::INT, annotatedGroups[gName].listenEndpoint});
         }
 
         if (nextStage)
           for(const auto& gName : inputGroups(parentBB2GroupsName[nextStage]))
-            runningGroup_IR.destinationEndpoints.push_back(annotatedGroups[gName].listenEndpoint);
+            runningGroup_IR.destinationEndpoints.push_back({ChannelType::FWD, annotatedGroups[gName].listenEndpoint});
+        else
+          // FEEDBACK RELATED (wrap around of the main pipe!)
+          if (parentPipe->isset_wraparound()){
+            for(const auto& gName : inputGroups(parentBB2GroupsName[parentPipe->getStages().front()]))
+              runningGroup_IR.destinationEndpoints.push_back({ChannelType::FBK, annotatedGroups[gName].listenEndpoint});
+          }
       }
       
       
@@ -458,14 +477,13 @@ private:
       
       // experimental building the expected routing table for the running group offline (i.e., statically)
       if (runningGroup_IR.hasSender)
-        for(auto& ep : runningGroup_IR.destinationEndpoints){
+        for(auto& [ct, ep] : runningGroup_IR.destinationEndpoints){
             auto& destIR = annotatedGroups[ep.groupName];
             destIR.buildIndexes();
-            bool internalConnection = runningGroup_IR.parentBB == destIR.parentBB;
-            runningGroup_IR.routingTable[ep.groupName] = std::make_pair(destIR.getInputIndexes(internalConnection), internalConnection);
+            bool internalConnection = ct == ChannelType::INT; //runningGroup_IR.parentBB == destIR.parentBB;
+            runningGroup_IR.routingTable[ep.groupName] = std::make_pair(destIR.getInputIndexes(internalConnection), ct);
         }
 
-      //runningGroup_IR.print();
     }
 
   std::set<std::string> outputGroups(std::set<std::string> groupNames){

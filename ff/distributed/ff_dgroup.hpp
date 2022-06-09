@@ -111,7 +111,9 @@ public:
 				   if (ir.hasReceiver && ir.hasSender) {
 					   wrapper = new WrapperINOUT(child, getBackAndPop(reverseOutputIndexes));
 					   workers.push_back(wrapper);
+                       if (ir.isSource) wrapper->skipfirstpop(true);
 				   } else if (ir.hasReceiver) {
+                       if (ir.isSource) wrapper->skipfirstpop(true);
 					   wrapper = buildWrapperIN(child);
 					   workers.push_back(wrapper);
 				   } else  {
@@ -119,13 +121,13 @@ public:
 					   workers.push_back(wrapper);
 				   }
 				   // TODO: in case there are feedback channels we cannot skip all pops!
-				   if (ir.isSource)
-					   wrapper->skipallpop(true);
+				   /*if (ir.isSource)
+					   wrapper->skip(true);*/
                } else {
 
 				   // TODO: in case there are feedback channels we cannot skip all pops!
-				    if (ir.isSource)
-					    child->skipallpop(true);
+				   /* if (ir.isSource)
+					    child->skipallpop(true);*/
 				   
 				    if (ir.hasReceiver){
                         for(ff_node* input : inputs){

@@ -45,8 +45,12 @@ struct myTask_t {
 	}
 };
 
-struct Node1: ff_monode_t<myTask_t>{
+struct Node1: ff_node_t<myTask_t>{
 	Node1(long ntasks):ntasks(ntasks),cnt(ntasks) {}
+	int svc_init(){
+		ff::cout << "Node1 initialized!\n";
+		return 0;
+	}
     myTask_t* svc(myTask_t*in){
 		long min = std::min(cnt,appbatch);
 		for(long i=0; i < min; i++) {
@@ -75,6 +79,10 @@ struct Node1: ff_monode_t<myTask_t>{
 
 struct Node2: ff_minode_t<myTask_t>{
 	Node2(long ntasks):ntasks(ntasks) {}
+	int svc_init(){
+		ff::cout << "Node2 initialized!\n";
+		return 0;
+	}
 	myTask_t* svc(myTask_t* t){
 		if (fromInput()) {
 			t->str += std::string(" World");
@@ -96,6 +104,10 @@ struct Node2: ff_minode_t<myTask_t>{
 	bool eosreceived=false;
 };
 struct Node3: ff_monode_t<myTask_t>{ 
+	int svc_init(){
+		ff::cout << "Node3 initialized!\n";
+		return 0;
+	}
     myTask_t* svc(myTask_t* t){
 		if (t->str == "Hello World") {
 			t->str   = "Feedback!";
@@ -109,8 +121,12 @@ struct Node3: ff_monode_t<myTask_t>{
     }
 };
 
-struct Node4: ff_minode_t<myTask_t>{
+struct Node4: ff_node_t<myTask_t>{
 	Node4(long ntasks):ntasks(ntasks) {}
+	int svc_init(){
+		ff::cout << "Node4 initialized!\n";
+		return 0;
+	}
     myTask_t* svc(myTask_t* t){
 		ff::cout << "Node4: from (" << get_channel_id() << ") " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";	
 		++processed;
