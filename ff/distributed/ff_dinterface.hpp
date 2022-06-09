@@ -29,6 +29,10 @@ struct GroupInterface {
 #endif
         return *this;
     }
+	
+    GroupInterface& operator<<(ff_node& node){
+		return *this << &node;
+	}   
 };
 
 
