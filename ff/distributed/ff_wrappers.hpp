@@ -226,18 +226,21 @@ public:
 	void svc_end(){this->n->svc_end();}
 	
 	void * svc(void* in) {
-		message_t* msg = (message_t*)in;
-
-		if (this->n->isMultiInput()) {
-            int channelid = msg->sender; 
-			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
-			mi->set_input_channelid(channelid, true);
-		}
-		bool datacopied=true;
-		void* out = n->svc(this->n->deserializeF(msg->data, datacopied));
-		if (!datacopied) msg->data.doNotCleanup();
-        delete msg;
-
+		void* out;
+		if (in != nullptr) {
+			message_t* msg = (message_t*)in;
+			
+			if (this->n->isMultiInput()) {
+				int channelid = msg->sender; 
+				ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
+				mi->set_input_channelid(channelid, true);
+			}
+			bool datacopied=true;
+			out = n->svc(this->n->deserializeF(msg->data, datacopied));
+			if (!datacopied) msg->data.doNotCleanup();
+			delete msg;
+		}  else // it can happen if we have a feedback channel
+			out = n->svc(nullptr);
         serialize(out, defaultDestination);
         return GO_ON;
 	}

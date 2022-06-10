@@ -9,11 +9,11 @@
         "name" : "G2"
      },
      {   
-        "endpoint" : "localhost:8001",
+        "endpoint" : "localhost:8002",
         "name" : "G3"
-     },
+     }
      {   
-        "endpoint" : "localhost:8006",
+        "endpoint" : "localhost:8010",
         "name" : "G0"
      }
     ]

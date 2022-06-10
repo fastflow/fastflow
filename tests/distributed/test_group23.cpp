@@ -113,6 +113,9 @@ struct Node3: ff_monode_t<myTask_t>{
 			t->str   = "Feedback!";
 			t->S.t  += 1;
 			t->S.f  += 1.0;
+
+			std::cerr << "Node3, sending task back\n";
+			
 			ff_send_out_to(t, 0);  // sends it back
 			return GO_ON;
 		}
