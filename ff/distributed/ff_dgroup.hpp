@@ -111,10 +111,10 @@ public:
 				   if (ir.hasReceiver && ir.hasSender) {
 					   wrapper = new WrapperINOUT(child, getBackAndPop(reverseOutputIndexes));
 					   workers.push_back(wrapper);
-                       if (ir.isSource) wrapper->skipfirstpop(true);
+                       if (ir.isSource && ir.isVertical() && ir.hasLeftChildren()) wrapper->skipfirstpop(true);
 				   } else if (ir.hasReceiver) {
 					   wrapper = buildWrapperIN(child);
-					   if (ir.isSource) wrapper->skipfirstpop(true);
+					   if (ir.isSource && ir.isVertical() && ir.hasLeftChildren()) wrapper->skipfirstpop(true);
 					   workers.push_back(wrapper);
 				   } else  {
 					   wrapper = buildWrapperOUT(child, getBackAndPop(reverseOutputIndexes), outputChannels);
