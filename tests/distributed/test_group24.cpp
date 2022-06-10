@@ -1,23 +1,35 @@
 /*
  * FastFlow concurrent network:
  *
- *     Client ->|
- *              | -> level1Gatherer ->|
- *     Client ->|                     |
- *                                    |
- *        ....                        | --> level0Gatherer
- *                                    |
- *     Client ->|                     |
- *              | -> level1Gatherer ->|
- *     Client ->|
+ *  -----------------------------------------------------------
+ * |  /<------------ a2a(0)----------->/                        |
+ * |   -------------------------------                          |
+ * |  |                               |                         |
+ * |  |  Client ->|                   |                         |
+ * |  |           | -> level1Gatherer | ->|                     |
+ * |  |  Client ->|                   |   |                     |
+ * |  |                               |   |                     |
+ * |   -------------------------------    |                     |
+ * |       ....                           | --> level0Gatherer  |
+ * |                                      |                     |
+ * |   -------------------------------    |                     |
+ * |  |                               |   |                     |
+ * |  |  Client ->|                   |   |                     |
+ * |  |           | -> level1Gatherer | ->|                     |
+ * |  |  Client ->|                   |                         |
+ * |  |                               |                         |
+ * |   -------------------------------                          |
+ * |  /<------------ a2a(n)----------->/                        |
+ * |                                                            |
+ *  ------------------------------------------------------------
+ * /<-------------------------- mainA2A ----------------------->/
  *
  *
  * distributed version:
  *
- *                                              
- * G1: Node1 
- * G2: a2a
- * G3: Node4
+ *  each a2a(i) is a group, a2a(i) --> Gi i>0
+ *  level0Gatherer: G0
+ *
  */
 
 
@@ -104,7 +116,7 @@ int main(int argc, char*argv[]){
 	std::vector<ff_node*> globalLeft;
 
 	for(size_t i=0;i<nL; ++i) {
-		ff_pipeline* pipe = new ff_pipeline;
+		ff_pipeline* pipe = new ff_pipeline;   // <---- To be removed and automatically added
 		ff_a2a* a2a = new ff_a2a;
 		pipe->add_stage(a2a, true);
 		std::vector<ff_node*> localLeft;
@@ -115,14 +127,18 @@ int main(int argc, char*argv[]){
 
 		globalLeft.push_back(pipe);
 
+		// create here Gi groups for each a2a(i) i>0  
 		auto g = mainA2A.createGroup("G"+std::to_string(i+1));
-		g << pipe;
+		g << pipe;  
+		// ----------------------------------------
 	}
 
 	mainA2A.add_firstset(globalLeft, true);
 	mainA2A.add_secondset<ff_node>({&root});
 
+	// adding the root node as G0
 	mainA2A.createGroup("G0") << root;
+	// -------------------------------
 	
 	if (mainA2A.run_and_wait_end()<0) {
 		error("running the main All-to-All\n");

@@ -113,8 +113,8 @@ public:
 					   workers.push_back(wrapper);
                        if (ir.isSource) wrapper->skipfirstpop(true);
 				   } else if (ir.hasReceiver) {
-                       if (ir.isSource) wrapper->skipfirstpop(true);
 					   wrapper = buildWrapperIN(child);
+					   if (ir.isSource) wrapper->skipfirstpop(true);
 					   workers.push_back(wrapper);
 				   } else  {
 					   wrapper = buildWrapperOUT(child, getBackAndPop(reverseOutputIndexes), outputChannels);
