@@ -103,14 +103,14 @@ int main(int argc, char*argv[]){
     ff_a2a a2a;
 
     if (atoi(argv[1]) == 0){
-        gFarm.add_collector(new ff_dsender({g1, g2}, "G0"));
+        gFarm.add_collector(new ff_dsender({{ChannelType::FWD, g1}, {ChannelType::FWD, g2}}, "G0"));
         gFarm.add_workers({new WrapperOUT(new RealSource(), 1, true)});
 
         gFarm.run_and_wait_end();
         return 0;
     } else if (atoi(argv[1]) == 1){
         gFarm.add_emitter(new ff_dreceiverH(g1, 2, {{0, 0}}, {0}, {"G2"}));
-        gFarm.add_collector(new ff_dsenderH({g2,g3}, "G1", {"G2"}));
+        gFarm.add_collector(new ff_dsenderH({{ChannelType::INT, g2},{ChannelType::FWD, g3}}, "G1", {"G2"}));
 
 		auto s = new Source(2,0);
         auto ea = new ff_comb(new WrapperIN(new ForwarderNode(s->deserializeF)), new EmitterAdapter(s, 2, 0, {{0,0}}, true), true, true);
@@ -121,7 +121,7 @@ int main(int argc, char*argv[]){
 
     } else if (atoi(argv[1]) == 2) {
         gFarm.add_emitter(new ff_dreceiverH(g2, 2, {{1, 0}}, {1}, {"G1"}));
-        gFarm.add_collector(new ff_dsenderH({g1, g3}, "G2", {"G1"}));
+        gFarm.add_collector(new ff_dsenderH({{ChannelType::INT, g1}, {ChannelType::FWD, g3}}, "G2", {"G1"}));
 		gFarm.cleanup_emitter();
 		gFarm.cleanup_collector();
 

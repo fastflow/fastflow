@@ -114,7 +114,7 @@ int main(int argc, char*argv[]){
 
     if (atoi(argv[1]) == 0){
         dGroups::Instance()->setRunningGroup("G0");
-        gFarm.add_collector(new ff_dsender({g1, g3}));
+        gFarm.add_collector(new ff_dsender({{ChannelType::FWD, g1}, {ChannelType::FWD, g3}}));
         gFarm.add_workers({new WrapperOUT(new RealSource(), 1, true)});
 
         gFarm.run_and_wait_end();
@@ -122,7 +122,7 @@ int main(int argc, char*argv[]){
     } else if (atoi(argv[1]) == 1){
         dGroups::Instance()->setRunningGroup("G1");
         gFarm.add_emitter(new ff_dreceiver(g1, 1, {{0, 0}}));
-        gFarm.add_collector(new ff_dsender({g2,g3}));
+        gFarm.add_collector(new ff_dsender({{ChannelType::FWD, g2}, {ChannelType::FWD, g3}}));
 
         gFarm.add_workers({new WrapperINOUT(new Source(2,0), 1, true)});
         
@@ -132,7 +132,7 @@ int main(int argc, char*argv[]){
     } else if (atoi(argv[1]) == 2){
         dGroups::Instance()->setRunningGroup("G2");
         gFarm.add_emitter(new ff_dreceiver(g2, 2, {{0, 0}}));
-        gFarm.add_collector(new ff_dsender(g4));
+        gFarm.add_collector(new ff_dsender({ChannelType::FWD, g4}));
 
         gFarm.add_workers({new WrapperINOUT(new Sink(0), 1, true)});
 		
@@ -142,7 +142,7 @@ int main(int argc, char*argv[]){
     } else if (atoi(argv[1]) == 3) {
         dGroups::Instance()->setRunningGroup("G3");
         gFarm.add_emitter(new ff_dreceiverH(g3, 2, {{1, 0}}, {1}));
-        gFarm.add_collector(new ff_dsenderH({g2, g4}));
+        gFarm.add_collector(new ff_dsenderH({{ChannelType::FWD, g2}, {ChannelType::FWD, g4}}));
 		gFarm.cleanup_emitter();
 		gFarm.cleanup_collector();
 

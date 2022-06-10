@@ -11,7 +11,7 @@
      {   
         "endpoint" : "localhost:8002",
         "name" : "G3"
-     }
+     },
      {   
         "endpoint" : "localhost:8010",
         "name" : "G0"

@@ -450,7 +450,7 @@ private:
           // inserisci tutte i gruppi di questo bb a destra
           for(const auto& gName: parentBB2GroupsName[runningGroup_IR.parentBB])
             if (!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasRightChildren())
-              runningGroup_IR.destinationEndpoints.push_back({ChannelType::FWD, annotatedGroups[gName].listenEndpoint});
+              runningGroup_IR.destinationEndpoints.push_back({ChannelType::INT, annotatedGroups[gName].listenEndpoint});
       } else {
         if (!runningGroup_IR.isVertical()){
           // inserisci tutti i gruppi come sopra

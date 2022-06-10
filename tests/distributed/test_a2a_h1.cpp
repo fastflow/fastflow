@@ -71,7 +71,7 @@ int main(int argc, char*argv[]){
     if (atoi(argv[1]) == 0){
         dGroups::Instance()->setRunningGroup("G1");
         gFarm.add_emitter(new ff_dreceiverH(g1, 1, {{0, 0}}, {0}));
-        gFarm.add_collector(new ff_dsenderH(g2));
+        gFarm.add_collector(new ff_dsenderH({ChannelType::INT, g2}));
 
         auto ea1 = new EmitterAdapter(new Source(2,0), 2, 0, {{0,0}}, true); ea1->skipallpop(true);
         auto ea2 = new EmitterAdapter(new Source(2,1), 2, 1, {{0,0}}, true); ea2->skipallpop(true);
@@ -82,7 +82,7 @@ int main(int argc, char*argv[]){
     } else {
         dGroups::Instance()->setRunningGroup("G2");
         gFarm.add_emitter(new ff_dreceiverH(g2, 1, {{0, 0}}, {1}));
-        gFarm.add_collector(new ff_dsenderH(g1));
+        gFarm.add_collector(new ff_dsenderH({ChannelType::INT, g1}));
 
         auto ea = new EmitterAdapter(new Source(2,2), 2, 2, {{1,0}}, true); ea->skipallpop(true);
 
