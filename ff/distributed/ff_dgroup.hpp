@@ -132,7 +132,12 @@ public:
 				    if (ir.hasReceiver){
                         for(ff_node* input : inputs){
                             ff_node* inputParent = getBB(child, input);
-                            if (inputParent) inputParent->change_node(input, buildWrapperIN(input), true); //cleanup?? removefromcleanuplist??
+                            if (inputParent) {
+								ff_node* wrapper = buildWrapperIN(input);							
+								inputParent->change_node(input, wrapper, true); //cleanup?? removefromcleanuplist??
+								if (ir.isSource && ir.isVertical() && ir.hasLeftChildren())
+									inputParent->skipfirstpop(true);
+							}
                         }
                     }
 

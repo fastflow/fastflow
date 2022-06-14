@@ -343,6 +343,30 @@ public:
                                  in_buffer_entries(in_buffer_entries),
                                  out_buffer_entries(out_buffer_entries)
     {}
+
+    ff_a2a(const ff_a2a& p):prepared(false) {
+        if (p.prepared) {
+            error("ff_a2a, copy constructor, the input all-to-all has already been prepared\n");
+            return;
+        }
+
+        workers1             = p.workers1;
+        workers2             = p.workers2;
+        workers1_cleanup     = p.workers1_cleanup;
+        workers2_cleanup     = p.workers2_cleanup;
+        fixedsizeIN          = p.fixedsizeIN;
+        fixedsizeOUT         = p.fixedsizeOUT;
+        in_buffer_entries    = p.in_buffer_entries;
+        out_buffer_entries   = p.out_buffer_entries;
+        wraparound           = p.wraparound;
+        ondemand_chunk       = p.ondemand_chunk;
+        outputNodes          = p.outputNodes;
+        internalSupportNodes = p.internalSupportNodes;
+
+        // this is a dirty part, we modify a const object.....
+        ff_a2a* dirty= const_cast<ff_a2a*>(&p);
+        dirty->internalSupportNodes.resize(0);
+    }
     
     virtual ~ff_a2a() {
         if (barrier) delete barrier;
@@ -350,9 +374,8 @@ public:
             workers1[i] = nullptr;        
         for(size_t i=0;i<workers2.size();++i) 
             workers2[i] = nullptr;
-        for(size_t i=0;i<internalSupportNodes.size();++i) {            
+        for(size_t i=0;i<internalSupportNodes.size();++i) {
             delete internalSupportNodes[i];
-            internalSupportNodes[i] = nullptr;
         }
     }
 
