@@ -581,7 +581,9 @@ public:
         // In this case we want to call notifyeos only when we have received EOS from all
         // input channel.
         bool notify_each_eos = filter ? (filter->neos==1): false;
-        // TODO: inserire skipallpop!
+
+        // TODO: skipallpop missing!
+
         gettimeofday(&wtstart,NULL);
         do {
             task = NULL;

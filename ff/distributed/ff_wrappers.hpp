@@ -70,15 +70,17 @@ public:
 	}
 	
 	void * svc(void* in) {
+		// with feedback channels in might be null
+		if (in == nullptr) return n->svc(nullptr);
 		message_t* msg = (message_t*)in;
 		
 		if (this->n->isMultiInput()) {
-            int channelid = msg->sender; 
+			int channelid = msg->sender; 
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
 			mi->set_input_channelid(channelid, fromInput());
 			if (!this->fromInput()) return n->svc(in);
 		}
-
+		
 		bool datacopied=true;
 		void* inputData = this->n->deserializeF(msg->data, datacopied);
 		if (!datacopied) msg->data.doNotCleanup();

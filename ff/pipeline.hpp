@@ -866,6 +866,7 @@ public:
         node_cleanup = p.node_cleanup;
         fixedsizeIN    = p.fixedsizeIN;
         fixedsizeOUT   = p.fixedsizeOUT;
+        wraparound     = p.wraparound;
         in_buffer_entries  = p.in_buffer_entries;
         out_buffer_entries = p.out_buffer_entries;
         nodes_list = p.nodes_list;

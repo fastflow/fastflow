@@ -47,10 +47,6 @@ struct myTask_t {
 
 struct Node1: ff_node_t<myTask_t>{
 	Node1(long ntasks):ntasks(ntasks),cnt(ntasks) {}
-	int svc_init(){
-		ff::cout << "Node1 initialized!\n";
-		return 0;
-	}
     myTask_t* svc(myTask_t*in){
 		long min = std::min(cnt,appbatch);
 		for(long i=0; i < min; i++) {
@@ -79,10 +75,6 @@ struct Node1: ff_node_t<myTask_t>{
 
 struct Node2: ff_minode_t<myTask_t>{
 	Node2(long ntasks):ntasks(ntasks) {}
-	int svc_init(){
-		ff::cout << "Node2 initialized!\n";
-		return 0;
-	}
 	myTask_t* svc(myTask_t* t){
 		if (fromInput()) {
 			t->str += std::string(" World");
@@ -104,10 +96,6 @@ struct Node2: ff_minode_t<myTask_t>{
 	bool eosreceived=false;
 };
 struct Node3: ff_monode_t<myTask_t>{ 
-	int svc_init(){
-		ff::cout << "Node3 initialized!\n";
-		return 0;
-	}
     myTask_t* svc(myTask_t* t){
 		if (t->str == "Hello World") {
 			t->str   = "Feedback!";
@@ -126,10 +114,6 @@ struct Node3: ff_monode_t<myTask_t>{
 
 struct Node4: ff_node_t<myTask_t>{
 	Node4(long ntasks):ntasks(ntasks) {}
-	int svc_init(){
-		ff::cout << "Node4 initialized!\n";
-		return 0;
-	}
     myTask_t* svc(myTask_t* t){
 		ff::cout << "Node4: from (" << get_channel_id() << ") " << t->str << " (" << t->S.t << ", " << t->S.f << ")\n";	
 		++processed;
@@ -180,11 +164,18 @@ int main(int argc, char*argv[]){
 	pipe.wrap_around();
 	
     //----- defining the distributed groups ------
+	// option 1
+	n1.createGroup("G1");
+	pipe1.createGroup("G2");
+	n4.createGroup("G3");
 
-    auto G1 = n1.createGroup("G1");
-	auto G2 = pipe1.createGroup("G2");
-	auto G3 = n4.createGroup("G3");
-	
+	// option 2
+	//auto G1 = pipe.createGroup("G1");
+	//G1 << n1;
+	//auto G2 = pipe.createGroup("G2");
+	//G2 << pipe1;
+	//auto G3 = pipe.createGroup("G3");
+	//G3 << n4;	
     // -------------------------------------------	
 
 	if (pipe.run_and_wait_end()<0) {
