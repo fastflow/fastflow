@@ -120,6 +120,7 @@ struct message_t {
 	
 	int           sender;
 	int           chid;
+    bool          feedback = false;
 	dataBuffer    data;
 };
 
@@ -225,6 +226,7 @@ static inline ssize_t recvnnb(int fd, char *buf, size_t size) {
     #define DFF_HEADER_TAG 4
     #define DFF_ACK_TAG 5
     #define DFF_GROUP_NAME_TAG 6
+    #define DFF_CHANNEL_TYPE_TAG 7
 
     #define DFF_REQUEST_ROUTING_TABLE 10
 #endif

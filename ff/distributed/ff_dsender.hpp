@@ -46,12 +46,13 @@
 
 
 using namespace ff;
-
+using precomputedRT_t = std::map<std::string, std::pair<std::vector<int>, ChannelType>>;
 class ff_dsender: public ff_minode_t<message_t> { 
 protected:
     size_t neos=0;
     std::vector<std::pair<ChannelType, ff_endpoint>> dest_endpoints;
-    std::map<int, int> dest2Socket;
+    precomputedRT_t* precomputedRT;
+    std::map<std::pair<int, ChannelType>, int> dest2Socket;
     std::vector<int> sockets;
     int last_rr_socket = -1;
     std::map<int, unsigned int> socketsCounters;
@@ -63,67 +64,22 @@ protected:
     fd_set set, tmpset;
     int fdmax = -1;
 
-    int receiveReachableDestinations(int sck, std::map<int,int>& m){
-       
-        size_t sz;
-        ssize_t r;
-
-        if ((r=readn(sck, (char*)&sz, sizeof(sz)))!=sizeof(sz)) {
-            if (r==0)
-                error("Error unexpected connection closed by receiver\n");
-            else			
-                error("Error reading size (errno=%d)");
-            return -1;
-        }
-	
-        sz = be64toh(sz);
-
-        
-        char* buff = new char [sz];
-		assert(buff);
-
-        if(readn(sck, buff, sz) < 0){
-            error("Error reading from socket in routing table!\n");
-            delete [] buff;
-            return -1;
-        }
-
-        dataBuffer dbuff(buff, sz, true);
-        std::istream iss(&dbuff);
-		cereal::PortableBinaryInputArchive iarchive(iss);
-        std::vector<int> destinationsList;
-
-        iarchive >> destinationsList;
-
-        for (const int& d : destinationsList) m[d] = sck;
-
-        /*for (const auto& p : m)
-            std::cout << p.first << " - "  << p.second << std::endl;
-        */
-		//ff::cout << "Receiving routing table (" << sz << " bytes)" << ff::endl;
-        return 0;
-    }
-
-    int sendGroupName(const int sck){    
+    virtual int handshakeHandler(const int sck, ChannelType t){
         size_t sz = htobe64(gName.size());
-        struct iovec iov[2];
-        iov[0].iov_base = &sz;
-        iov[0].iov_len = sizeof(sz);
-        iov[1].iov_base = (char*)(gName.c_str());
-        iov[1].iov_len = gName.size();
+        struct iovec iov[3];
+        iov[0].iov_base = &t;
+        iov[0].iov_len = sizeof(ChannelType);
+        iov[1].iov_base = &sz;
+        iov[1].iov_len = sizeof(sz);
+        iov[2].iov_base = (char*)(gName.c_str());
+        iov[2].iov_len = gName.size();
 
-        if (writevn(sck, iov, 2) < 0){
+        if (writevn(sck, iov, 3) < 0){
             error("Error writing on socket\n");
             return -1;
         }
 
         return 0;
-    }
-
-    virtual int handshakeHandler(const int sck, bool){
-        if (sendGroupName(sck) < 0) return -1;
-
-        return receiveReachableDestinations(sck, dest2Socket);
     }
 	
     int create_connect(const ff_endpoint& destination){
@@ -247,62 +203,30 @@ protected:
         return 1;
     }
 
-    int waitAckFromAny() {
-		tmpset = set;
-		if (select(fdmax + 1, &tmpset, NULL, NULL, NULL) == -1){
-			perror("select");
-			return -1;
-		}
-		// try to receive from all connections in a non blocking way
-        for (auto& [sck, counter] : socketsCounters){
-            int r; ack_t a;
-			if ((r = recvnnb(sck, reinterpret_cast<char*>(&a), sizeof(ack_t))) != sizeof(ack_t)){
-				if (errno == EWOULDBLOCK){
-					continue;
-				}
-				perror("recvnnb ack any");
-				return -1;
-			} else {
-				counter++;
-				return sck;
-			}
-        }
-
-        return -1;
-	}
-
-    int getNextReady(){
-        for(size_t i = 0; i < this->sockets.size(); i++){
-            int actualSocketIndex = (last_rr_socket + 1 + i) % this->sockets.size();
-            int sck = sockets[actualSocketIndex];
-            if (socketsCounters[sck] > 0) {
-                last_rr_socket = actualSocketIndex;
-                return sck;
-            }
-        }
-		return waitAckFromAny();		
-    }
-
-    int getMostFilledBufferSck(){
+    int getMostFilledBufferSck(bool feedback){
         int sckMax = 0;
         int sizeMax = 0;
         for(auto& [sck, buffer] : batchBuffers){
+            if ((feedback && buffer.ct != ChannelType::FBK) || (!feedback && buffer.ct != ChannelType::FWD)) continue; 
             if (buffer.size > sizeMax) sckMax = sck;
         }
+    
         if (sckMax > 0) return sckMax;
-
+        
+        do {
         last_rr_socket = (last_rr_socket + 1) % this->sockets.size();
+        } while (batchBuffers[sockets[last_rr_socket]].ct != (feedback ? ChannelType::FBK : ChannelType::FWD));
         return sockets[last_rr_socket];
         
     }
 
     
 public:
-    ff_dsender(std::pair<ChannelType, ff_endpoint> dest_endpoint, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1): gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {
+    ff_dsender(std::pair<ChannelType, ff_endpoint> dest_endpoint, precomputedRT_t* rt, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1): precomputedRT(rt), gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {
         this->dest_endpoints.push_back(std::move(dest_endpoint));
     }
 
-    ff_dsender( std::vector<std::pair<ChannelType, ff_endpoint>> dest_endpoints_, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {}
+    ff_dsender( std::vector<std::pair<ChannelType, ff_endpoint>> dest_endpoints_, precomputedRT_t* rt, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), precomputedRT(rt), gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {}
 
     
 
@@ -313,13 +237,13 @@ public:
         FD_ZERO(&set);
         FD_ZERO(&tmpset);
 		
-        sockets.resize(dest_endpoints.size());
-        for(size_t i=0; i < this->dest_endpoints.size(); i++){
-            int sck = tryConnect(this->dest_endpoints[i].second);
+        //sockets.resize(dest_endpoints.size());
+        for(auto& [ct, ep] : this->dest_endpoints){
+            int sck = tryConnect(ep);
             if (sck <= 0) return -1;
-            sockets[i] = sck;
+            sockets.push_back(sck);
             socketsCounters[sck] = messageOTF;
-            batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(this->batchSize, [this, sck](struct iovec* v, int size) -> bool {
+            batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(this->batchSize, ct, [this, sck](struct iovec* v, int size) -> bool {
                 
                 if (this->socketsCounters[sck] == 0 && this->waitAckFrom(sck) == -1){
                     error("Errore waiting ack from socket inside the callback\n");
@@ -334,9 +258,13 @@ public:
                 this->socketsCounters[sck]--;
 
                 return true;
-            })); // change with the correct size
+            }));
 
-            if (handshakeHandler(sck, false) < 0) {
+            // compute the routing table!
+            for(int dest : precomputedRT->operator[](ep.groupName).first)
+                dest2Socket[std::make_pair(dest, ct)] = sck;
+
+            if (handshakeHandler(sck, ct) < 0) {
 				error("svc_init ff_dsender failed");
 				return -1;
 			}
@@ -353,11 +281,13 @@ public:
 
     message_t *svc(message_t* task) {
         int sck;
+        //if (task->chid == -1) task->chid = 0;
         if (task->chid != -1)
-            sck = dest2Socket[task->chid];
-        else 
-            sck = getMostFilledBufferSck(); // get the most filled buffer socket or a rr socket
-    
+            sck = dest2Socket[{task->chid, (task->feedback ? ChannelType::FBK : ChannelType::FWD)}];
+        else {
+            sck = getMostFilledBufferSck(task->feedback); // get the most filled buffer socket or a rr socket
+        }
+
         if (batchBuffers[sck].push(task) == -1) {
 			return EOS;
 		}
@@ -412,14 +342,12 @@ public:
 
 class ff_dsenderH : public ff_dsender {
 
-    std::map<int, int> internalDest2Socket;
     std::vector<int> internalSockets;
     int last_rr_socket_Internal = -1;
-    std::set<std::string> internalGroupNames;
     int internalMessageOTF;
     bool squareBoxEOS = false;
 
-    int getNextReadyInternal(){
+    /*int getNextReadyInternal(){
         for(size_t i = 0; i < this->internalSockets.size(); i++){
             int actualSocketIndex = (last_rr_socket_Internal + 1 + i) % this->internalSockets.size();
             int sck = internalSockets[actualSocketIndex];
@@ -442,7 +370,7 @@ class ff_dsenderH : public ff_dsender {
         
         last_rr_socket_Internal = it - internalSockets.begin();
         return sck;
-    }
+    }*/
 
     int getMostFilledInternalBufferSck(){
          int sckMax = 0;
@@ -462,14 +390,8 @@ class ff_dsenderH : public ff_dsender {
 
 public:
 
-    ff_dsenderH(std::pair<ChannelType, ff_endpoint> e, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsender(e, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {} 
-    ff_dsenderH(std::vector<std::pair<ChannelType, ff_endpoint>> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsender(dest_endpoints_, gName, batchSize, messageOTF, coreid), internalGroupNames(internalGroups), internalMessageOTF(internalMessageOTF) {}
-    
-    int handshakeHandler(const int sck, bool isInternal){
-        if (sendGroupName(sck) < 0) return -1;
-
-        return receiveReachableDestinations(sck, isInternal ? internalDest2Socket : dest2Socket);
-    }
+    ff_dsenderH(std::pair<ChannelType, ff_endpoint> e, precomputedRT_t* rt, std::string gName  = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsender(e, rt, gName, batchSize, messageOTF, coreid), internalMessageOTF(internalMessageOTF) {} 
+    ff_dsenderH(std::vector<std::pair<ChannelType, ff_endpoint>> dest_endpoints_, precomputedRT_t* rt, std::string gName  = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsender(dest_endpoints_, rt, gName, batchSize, messageOTF, coreid), internalMessageOTF(internalMessageOTF) {}
 
     int svc_init() {
 
@@ -482,11 +404,11 @@ public:
         for(const auto& [ct, endpoint] : this->dest_endpoints){
             int sck = tryConnect(endpoint);
             if (sck <= 0) return -1;
-            bool isInternal = internalGroupNames.contains(endpoint.groupName);
+            bool isInternal = ct == ChannelType::INT;
             if (isInternal) internalSockets.push_back(sck);
             else sockets.push_back(sck);
-            socketsCounters[sck] = isInternal ? internalMessageOTF: messageOTF;
-            batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(this->batchSize, [this, sck](struct iovec* v, int size) -> bool {
+            socketsCounters[sck] = isInternal ? internalMessageOTF : messageOTF;
+            batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(this->batchSize, ct, [this, sck](struct iovec* v, int size) -> bool {
                 
                 if (this->socketsCounters[sck] == 0 && this->waitAckFrom(sck) == -1){
                     error("Errore waiting ack from socket inside the callback\n");
@@ -502,7 +424,11 @@ public:
 
                 return true;
             })); // change with the correct size
-            if (handshakeHandler(sck, isInternal) < 0) return -1;
+
+             for(int dest : precomputedRT->operator[](endpoint.groupName).first)
+                dest2Socket[std::make_pair(dest, ct)] = sck;
+
+            if (handshakeHandler(sck, ct) < 0) return -1;
 
             FD_SET(sck, &set);
             if (sck > fdmax) fdmax = sck;
@@ -517,10 +443,9 @@ public:
     message_t *svc(message_t* task) {
         if (this->get_channel_id() == (ssize_t)(this->get_num_inchannels() - 1)){
             int sck;
-        
             // pick destination from the list of internal connections!
             if (task->chid != -1){ // roundrobin over the destinations
-                sck = internalDest2Socket[task->chid];
+                sck = dest2Socket[{task->chid, ChannelType::INT}];
             } else
                 sck = getMostFilledInternalBufferSck();
 
@@ -531,7 +456,7 @@ public:
 
             return this->GO_ON;
         }
-        
+
         return ff_dsender::svc(task);
     }
 

@@ -84,9 +84,9 @@ class dGroup : public ff::ff_farm {
         return new WrapperIN(n);
     }
 
-    static ff_node* buildWrapperOUT(ff_node* n, int id, int outputChannels){
-        if (n->isMultiInput()) return new ff_comb(n, new WrapperOUT(new ForwarderNode(n->serializeF, n->freetaskF), id, 1, true), false, true);
-        return new WrapperOUT(n, id, outputChannels);
+    static ff_node* buildWrapperOUT(ff_node* n, int id, int outputChannels, int feedbackChannels = 0){
+        if (n->isMultiInput()) return new ff_comb(n, new WrapperOUT(new ForwarderNode(n->serializeF, n->freetaskF), id, outputChannels, feedbackChannels, true), false, true);
+        return new WrapperOUT(n, id, outputChannels, feedbackChannels);
     }
 
 public:
@@ -94,8 +94,11 @@ public:
             
         if (ir.isVertical()){
             int outputChannels = 0;
-            if (ir.hasSender)
-                outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+f.second.first.size();});
+            int feedbacksChannels = 0;
+            if (ir.hasSender){
+                outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+ (f.second.second != ChannelType::FBK ? f.second.first.size() : 0);});
+                feedbacksChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second == ChannelType::FBK ? f.second.first.size() : 0);});
+            }
 
             std::vector<int> reverseOutputIndexes(ir.hasLeftChildren() ? ir.outputL.rbegin() : ir.outputR.rbegin(), ir.hasLeftChildren() ? ir.outputL.rend() : ir.outputR.rend());
             for(ff_node* child: (ir.hasLeftChildren() ? ir.L : ir.R)){
@@ -109,7 +112,7 @@ public:
                if (isSeq(child)){
 				   ff_node* wrapper = nullptr;
 				   if (ir.hasReceiver && ir.hasSender) {
-					   wrapper = new WrapperINOUT(child, getBackAndPop(reverseOutputIndexes));
+					   wrapper = new WrapperINOUT(child, getBackAndPop(reverseOutputIndexes), 1, feedbacksChannels);
 					   workers.push_back(wrapper);
                        if (ir.isSource && ir.isVertical() && ir.hasLeftChildren()) wrapper->skipfirstpop(true);
 				   } else if (ir.hasReceiver) {
@@ -117,7 +120,7 @@ public:
 					   if (ir.isSource && ir.isVertical() && ir.hasLeftChildren()) wrapper->skipfirstpop(true);
 					   workers.push_back(wrapper);
 				   } else  {
-					   wrapper = buildWrapperOUT(child, getBackAndPop(reverseOutputIndexes), outputChannels);
+					   wrapper = buildWrapperOUT(child, getBackAndPop(reverseOutputIndexes), outputChannels, feedbacksChannels);
 					   workers.push_back(wrapper);
 				   }
 				   // TODO: in case there are feedback channels we cannot skip all pops!
@@ -144,7 +147,7 @@ public:
                     if (ir.hasSender){
                         for(ff_node* output : outputs){
                             ff_node* outputParent = getBB(child, output);
-                            if (outputParent) outputParent->change_node(output, buildWrapperOUT(output, getBackAndPop(reverseOutputIndexes), outputChannels), true); // cleanup?? removefromcleanuplist??
+                            if (outputParent) outputParent->change_node(output, buildWrapperOUT(output, getBackAndPop(reverseOutputIndexes), outputChannels, feedbacksChannels), true); // cleanup?? removefromcleanuplist??
                         }
                     }
                     
@@ -164,11 +167,11 @@ public:
 
             if (ir.hasSender){
                 if(ir.protocol == Proto::TCP)
-                    this->add_collector(new ff_dsender(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
+                    this->add_collector(new ff_dsender(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
                
 #ifdef DFF_MPI
                 else
-                   this->add_collector(new ff_dsenderMPI(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
+                   this->add_collector(new ff_dsenderMPI(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
 #endif      
             }
 			
@@ -229,7 +232,8 @@ public:
             });
             innerA2A->add_firstset(firstSet, reinterpret_cast<ff_a2a*>(ir.parentBB)->ondemand_buffer()); // note the ondemand!!
             
-            int outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second ? 0 : f.second.first.size());});
+            int outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+ (f.second.second == ChannelType::FWD ? f.second.first.size() : 0);});
+            int feedbacksChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second == ChannelType::FBK ? f.second.first.size() : 0);});
             
             std::vector<int> reverseRightOutputIndexes(ir.outputR.rbegin(), ir.outputR.rend());
             std::vector<ff_node*> secondSet;
@@ -238,7 +242,7 @@ public:
 					auto s = child->getSerializationFunction();
                     secondSet.push_back(
                         (ir.isSink) ? (ff_node*)new CollectorAdapter(child, ir.outputL) 
-						: (ff_node*)new ff_comb(new CollectorAdapter(child, ir.outputL), new WrapperOUT(new ForwarderNode(s.first, s.second), getBackAndPop(reverseRightOutputIndexes), 1, true), true, true)
+						: (ff_node*)new ff_comb(new CollectorAdapter(child, ir.outputL), new WrapperOUT(new ForwarderNode(s.first, s.second), getBackAndPop(reverseRightOutputIndexes), outputChannels, feedbacksChannels, true), true, true)
                     );
 				} else {
                     ff::svector<ff_node*> inputs; child->get_in_nodes(inputs);
@@ -251,7 +255,7 @@ public:
                         ff::svector<ff_node*> outputs; child->get_out_nodes(outputs);
                         for(ff_node* output : outputs){
                             ff_node* outputParent = getBB(child, output);
-                            if (outputParent) outputParent->change_node(output, buildWrapperOUT(output, getBackAndPop(reverseRightOutputIndexes), outputChannels), true); //cleanup?? removefromcleanuplist?
+                            if (outputParent) outputParent->change_node(output, buildWrapperOUT(output, getBackAndPop(reverseRightOutputIndexes), outputChannels, feedbacksChannels), true); //cleanup?? removefromcleanuplist?
                         }
                     }
 
@@ -275,19 +279,19 @@ public:
             
             if (ir.hasReceiver){
                 if (ir.protocol == Proto::TCP)
-                    this->add_emitter(new ff_dreceiverH(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.inputL), ir.inputR, ir.otherGroupsFromSameParentBB));
+                    this->add_emitter(new ff_dreceiverH(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.inputL)));
 #ifdef DFF_MPI
                 else
-                   this->add_emitter(new ff_dreceiverHMPI(ir.expectedEOS, vector2Map(ir.inputL), ir.inputR, ir.otherGroupsFromSameParentBB));
+                   this->add_emitter(new ff_dreceiverHMPI(ir.expectedEOS, vector2Map(ir.inputL)));
 #endif 
             }
             
             if (ir.hasSender){
                 if(ir.protocol == Proto::TCP)
-                    this->add_collector(new ff_dsenderH(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.otherGroupsFromSameParentBB, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF) , true);
+                    this->add_collector(new ff_dsenderH(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF) , true);
 #ifdef DFF_MPI
                 else
-                   this->add_collector(new ff_dsenderHMPI(ir.destinationEndpoints, ir.listenEndpoint.groupName, ir.otherGroupsFromSameParentBB, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF), true);
+                   this->add_collector(new ff_dsenderHMPI(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF), true);
 #endif   
             }
         }  
