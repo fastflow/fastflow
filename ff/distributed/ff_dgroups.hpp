@@ -167,11 +167,6 @@ public:
         std::cerr << "Error waiting the group!" << std::endl;
         return -1;
       }
-      
-        //ff_node* runningGroup = this->groups[this->runningGroup];
-        
-        //if (runningGroup->run(parent) < 0) return -1;
-        //if (runningGroup->wait() < 0) return -1;
 
       #ifdef DFF_MPI
         if (usedProtocol == Proto::MPI)
@@ -293,23 +288,30 @@ private:
           continue; // skip anyway
         }
         
-        // if i'm here it means that from this 1st level building block, multiple groups have been created! (An Error or an A2A or a Farm BB)
+        // if i'm here it means that from this 1st level building block, multiple groups have been created! (An Error or an A2A or a Pipe BB)
 
+
+        // multiple groups created from a pipeline!
         if (pair.first->isPipe()){
+          bool isMainPipe = pair.first == parentPipe;
+          ff_pipeline* originalPipe = reinterpret_cast<ff_pipeline*>(pair.first);
+          
+          // if the pipe coincide with the main Pipe, just ignore the fact that is wrapped around, since it will be handled later on!
+          bool iswrappedAround = isMainPipe ? false : originalPipe->isset_wraparound();
 
           // check that all stages were annotated
-          for(ff_node* child : reinterpret_cast<ff_pipeline*>(pair.first)->getStages())
+          for(ff_node* child : originalPipe->getStages())
             if (!annotated.contains(child)){
-              error("Need to abla ");
+              error("When create a group from a pipeline, all the stages must be annotated on a group!");
               abort();
             }
 
            for(auto& gName: pair.second){
-             ff_pipeline* originalPipe = reinterpret_cast<ff_pipeline*>(pair.first);
              ff_pipeline* mypipe = new ff_pipeline;
 
               for(ff_node* child : originalPipe->getStages()){
                 if (annotated[child] == gName){
+                  // if the current builiding pipe has a stages, and the last one is not the previous i'm currently including there is a problem!
                   if (mypipe->getStages().size() != 0 && originalPipe->get_stageindex(mypipe->get_laststage())+1 != originalPipe->get_stageindex(child)) {
                     error("There are some stages missing in the annottation!\n");
                     abort();
@@ -321,7 +323,7 @@ private:
               bool head = mypipe->get_firststage() == originalPipe->get_firststage();
               bool tail = mypipe->get_laststage() == originalPipe->get_laststage();
              
-              if (((head && isSrc) || mypipe->isDeserializable()) && ((tail && isSnk) || mypipe->isSerializable()))  
+              if (((head && isSrc && !iswrappedAround) || mypipe->isDeserializable()) && ((tail && isSnk && !iswrappedAround) || mypipe->isSerializable()))  
                 annotatedGroups[gName].insertInList(std::make_pair(mypipe, SetEnum::L));
               else {
                 error("The group cannot serialize something!\n");
@@ -334,17 +336,17 @@ private:
 
               if (!tail)
                 annotatedGroups[gName].destinationEndpoints.push_back({ChannelType::FWD, annotatedGroups[annotated[originalPipe->get_nextstage(mypipe->get_laststage())]].listenEndpoint});
+              else if (iswrappedAround)
+                // if this is the last stage & the pipe is wrapper around i connect tot he "head" groups of this pipeline
+                annotatedGroups[gName].destinationEndpoints.push_back({ChannelType::FBK, annotatedGroups[annotated[originalPipe->get_firststage()]].listenEndpoint});
              
-              if (!head)
+              // add a new expected connection if i'm not the head or i'm the head and the pipeline is wrapped around
+              if (!head || iswrappedAround)
                 annotatedGroups[gName].expectedEOS = 1;
     
            }
 
-    
-
-        } else {
-        
-        // all2all here!
+        } else { // multiple groups created from an all2all!
 
         std::set<std::pair<ff_node*, SetEnum>> children = getChildBB(pair.first);
 
@@ -433,8 +435,10 @@ private:
         // if the current group is horizontal count out itsleft from the all horizontals
         if (!runningGroup_IR.isVertical()) runningGroup_IR.expectedEOS -= 1;
       }
+
       // if the previousStage exists, count all the ouput groups pointing to the one i'm going to run
-      if (previousStage && runningGroup_IR.hasLeftChildren())
+      // if the runningGroup comes from a pipe, make sure i'm the head 
+      if (previousStage && runningGroup_IR.hasLeftChildren() && (!runningGroup_IR.parentBB->isPipe() || inputGroups(parentBB2GroupsName[runningGroup_IR.parentBB]).contains(runningGroup)))
         runningGroup_IR.expectedEOS += outputGroups(parentBB2GroupsName[previousStage]).size();
       
       // FEEDBACK RELATED (wrap around of the main pipe!)
@@ -450,8 +454,14 @@ private:
           // inserisci tutte i gruppi di questo bb a destra
           for(const auto& gName: parentBB2GroupsName[runningGroup_IR.parentBB])
             if (!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasRightChildren())
-              runningGroup_IR.destinationEndpoints.push_back({ChannelType::INT, annotatedGroups[gName].listenEndpoint});
-      } else {
+              runningGroup_IR.destinationEndpoints.push_back({ChannelType::FWD, annotatedGroups[gName].listenEndpoint});
+      } 
+      else if (runningGroup_IR.parentBB->isPipe() && runningGroup_IR.parentBB != parentPipe){
+        if (nextStage && outputGroups(parentBB2GroupsName[runningGroup_IR.parentBB]).contains(runningGroup))
+          for(const auto& gName : inputGroups(parentBB2GroupsName[nextStage]))
+            runningGroup_IR.destinationEndpoints.push_back({ChannelType::FWD, annotatedGroups[gName].listenEndpoint});
+      }
+      else {
         if (!runningGroup_IR.isVertical()){
           // inserisci tutti i gruppi come sopra
           for(const auto& gName: parentBB2GroupsName[runningGroup_IR.parentBB])
@@ -480,7 +490,7 @@ private:
         for(auto& [ct, ep] : runningGroup_IR.destinationEndpoints){
             auto& destIR = annotatedGroups[ep.groupName];
             destIR.buildIndexes();
-            bool internalConnection = ct == ChannelType::INT; //runningGroup_IR.parentBB == destIR.parentBB;
+            bool internalConnection = ct == ChannelType::INT || (ct == ChannelType::FWD && runningGroup_IR.parentBB == destIR.parentBB); //runningGroup_IR.parentBB == destIR.parentBB;
             runningGroup_IR.routingTable[ep.groupName] = std::make_pair(destIR.getInputIndexes(internalConnection), ct);
         }
 
@@ -488,13 +498,19 @@ private:
 
   std::set<std::string> outputGroups(std::set<std::string> groupNames){
     if (groupNames.size() > 1)
-      std::erase_if(groupNames, [this](const auto& gName){return (annotatedGroups[gName].isVertical() && annotatedGroups[gName].hasLeftChildren());});
+      std::erase_if(groupNames, [this](const auto& gName){
+        ff_IR& ir = annotatedGroups[gName];
+        return ((ir.parentBB->isAll2All() && ir.isVertical() && ir.hasLeftChildren()) || (ir.parentBB->isPipe() && annotated[reinterpret_cast<ff_pipeline*>(ir.parentBB)->get_laststage()] != gName));
+      });
     return groupNames;
   }
 
   std::set<std::string> inputGroups(std::set<std::string> groupNames){
     if (groupNames.size() > 1) 
-      std::erase_if(groupNames,[this](const auto& gName){return (annotatedGroups[gName].isVertical() && annotatedGroups[gName].hasRightChildren());});
+      std::erase_if(groupNames,[this](const auto& gName){
+        ff_IR& ir = annotatedGroups[gName];
+        return ((ir.parentBB->isAll2All() && ir.isVertical() && annotatedGroups[gName].hasRightChildren()) || (ir.parentBB->isPipe() && annotated[reinterpret_cast<ff_pipeline*>(ir.parentBB)->get_firststage()] != gName));
+      });
     return groupNames;
   }
 

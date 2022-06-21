@@ -11,9 +11,9 @@ class ff_batchBuffer {
     std::vector<std::pair<size_t*, message_t*>> toCleanup;
 public:
     int size = 0;
-    ff_batchBuffer() {
-	}
-    ff_batchBuffer(int _size, std::function<bool(struct iovec*, int)> cbk) : callback(cbk), batchSize(_size) {
+    ChannelType ct;
+    ff_batchBuffer() {}
+    ff_batchBuffer(int _size, ChannelType ct, std::function<bool(struct iovec*, int)> cbk) : callback(cbk), batchSize(_size), ct(ct) {
 		if (_size*4+1 > UIO_MAXIOV){
             error("Size too big!\n");
             abort();
@@ -37,8 +37,8 @@ public:
         iov[indexBase+3].iov_len = sizeof(size_t);
         iov[indexBase+4].iov_base = m->data.getPtr();
         iov[indexBase+4].iov_len = m->data.getLen();
-
-        toCleanup.emplace_back(sz, m);
+    
+        toCleanup.push_back(std::make_pair(sz, m));
 
         if (++size == batchSize)
             return this->flush();

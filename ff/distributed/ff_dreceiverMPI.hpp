@@ -17,7 +17,7 @@ using namespace ff;
 class ff_dreceiverMPI: public ff_monode_t<message_t> { 
 protected:
 
-    static int sendRoutingTable(const int rank, const std::vector<int>& dest){
+    /*static int sendRoutingTable(const int rank, const std::vector<int>& dest){
         dataBuffer buff; std::ostream oss(&buff);
 		cereal::PortableBinaryOutputArchive oarchive(oss);
 		oarchive << dest;
@@ -27,23 +27,27 @@ protected:
         }
 
         return 0;
-    }
+    }*/
 
     virtual int handshakeHandler(){
         int sz;
+        ChannelType ct;
         MPI_Status status;
         MPI_Probe(MPI_ANY_SOURCE, DFF_GROUP_NAME_TAG, MPI_COMM_WORLD, &status);
         MPI_Get_count(&status, MPI_BYTE, &sz);
         char* buff = new char [sz];
         MPI_Recv(buff, sz, MPI_BYTE, status.MPI_SOURCE, DFF_GROUP_NAME_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&ct, sizeof(ct), MPI_BYTE, status.MPI_SOURCE, DFF_CHANNEL_TYPE_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-        std::vector<int> reachableDestinations;
-        for(const auto& [key, value] : this->routingTable) reachableDestinations.push_back(key);
+        rank2ChannelType[status.MPI_SOURCE] = ct;
 
-        return this->sendRoutingTable(status.MPI_SOURCE, reachableDestinations);
+        return 0;
     }
 
     virtual void registerEOS(int rank){
+        // logical EOS sent to nodes
+        for(int i = 0; i < this->get_num_outchannels(); i++)
+            ff_send_out(new message_t(0,0), i);
         neos++;
     }
 
@@ -83,7 +87,7 @@ public:
 
             if (MPI_Recv(headers, headersLen, MPI_LONG, status.MPI_SOURCE, DFF_HEADER_TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS)
                 error("Error on Recv Receiver primo in alto\n");
-            
+            bool feedback = ChannelType::FBK == rank2ChannelType[status.MPI_SOURCE];
             assert(headers[0]*3+1 == headersLen);
             if (headers[0] == 1){
                  size_t sz = headers[3];
@@ -99,6 +103,7 @@ public:
                 message_t* out = new message_t(buff, sz, true);
                 out->sender = headers[1];
                 out->chid   = headers[2];
+                out->feedback = feedback;
 
                 this->forward(out, status.MPI_SOURCE);
             } else {
@@ -122,6 +127,7 @@ public:
                     message_t* out = new message_t(outBuff, sz, true);
                     out->sender = headers[3*i+1];
                     out->chid = headers[3*i+2];
+                    out->feedback = feedback;
 
                     this->forward(out, status.MPI_SOURCE);
                 }
@@ -137,52 +143,35 @@ protected:
     size_t neos = 0;
     size_t input_channels;
     std::map<int, int> routingTable;
+    std::map<int, ChannelType> rank2ChannelType;
 	int coreid;
 };
 
 
 
 class ff_dreceiverHMPI : public ff_dreceiverMPI {
-    std::vector<int> internalDestinations;
-    std::set<std::string> internalGroupNames;
-    std::set<int> internalRanks;
     size_t internalNEos = 0, externalNEos = 0;
     int next_rr_destination = 0;
 
 
     virtual void registerEOS(int rank){
         neos++;
+
+        size_t internalConn = std::count_if(std::begin(rank2ChannelType),
+                                            std::end  (rank2ChannelType),
+                                            [](std::pair<int, ChannelType> const &p) {return p.second == ChannelType::INT;});
+
   
-        if (!internalRanks.contains(rank)){
-            if (++externalNEos == (input_channels-internalRanks.size()))
+        if (rank2ChannelType[rank] != ChannelType::INT){
+            if (++externalNEos == (rank2ChannelType.size()-internalConn))
 				for(size_t i = 0; i < this->get_num_outchannels()-1; i++) ff_send_out_to(this->EOS, i);
         } else
-			if (++internalNEos == internalRanks.size())
+			if (++internalNEos == internalConn)
 				ff_send_out_to(this->EOS, this->get_num_outchannels()-1);
     }
 
-    virtual int handshakeHandler(){
-        int sz;
-        MPI_Status status;
-        MPI_Probe(MPI_ANY_SOURCE, DFF_GROUP_NAME_TAG, MPI_COMM_WORLD, &status);
-        MPI_Get_count(&status, MPI_BYTE, &sz);
-        char* buff = new char [sz];
-        MPI_Recv(buff, sz, MPI_BYTE, status.MPI_SOURCE, DFF_GROUP_NAME_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        
-        // the connection is internal!
-        if (internalGroupNames.contains(std::string(buff, sz))) {
-            internalRanks.insert(status.MPI_SOURCE);
-            return this->sendRoutingTable(status.MPI_SOURCE, internalDestinations);
-        }
-
-        std::vector<int> reachableDestinations;
-        for(const auto& [key, value] : this->routingTable) reachableDestinations.push_back(key);
-
-        return this->sendRoutingTable(status.MPI_SOURCE, reachableDestinations);
-    }
-
     void forward(message_t* task, int rank){
-        if (internalRanks.contains(rank)) ff_send_out_to(task, this->get_num_outchannels()-1);
+        if (rank2ChannelType[rank] == ChannelType::INT) ff_send_out_to(task, this->get_num_outchannels()-1);
         else if (task->chid != -1) ff_send_out_to(task, this->routingTable[task->chid]);
         else {
             ff_send_out_to(task, next_rr_destination);
@@ -191,8 +180,8 @@ class ff_dreceiverHMPI : public ff_dreceiverMPI {
     }
 
 public:
-    ff_dreceiverHMPI(size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, std::vector<int> internalRoutingTable = {0}, std::set<std::string> internalGroups = {}, int coreid=-1)
-		: ff_dreceiverMPI(input_channels, routingTable, coreid), internalDestinations(internalRoutingTable), internalGroupNames(internalGroups)  {}
+    ff_dreceiverHMPI(size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
+		: ff_dreceiverMPI(input_channels, routingTable, coreid)  {}
 
 };
 

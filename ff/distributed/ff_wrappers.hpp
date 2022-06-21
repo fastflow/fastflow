@@ -73,12 +73,19 @@ public:
 		// with feedback channels in might be null
 		if (in == nullptr) return n->svc(nullptr);
 		message_t* msg = (message_t*)in;
+
 		
 		if (this->n->isMultiInput()) {
 			int channelid = msg->sender; 
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
 			mi->set_input_channelid(channelid, fromInput());
 			if (!this->fromInput()) return n->svc(in);
+		}
+
+		// received a logical EOS ------> must be inserted also in the wrapperIN!!!!!
+		if (msg->data.getLen() == 0){
+			this->n->eosnotify(msg->sender); //msg->sender here is not consistent... always 0
+			return GO_ON;
 		}
 		
 		bool datacopied=true;
@@ -103,35 +110,39 @@ private:
     int outchannels; // number of output channels the wrapped node is supposed to have
 	int defaultDestination;
 	int myID;
-	int feedbackChannels;
+	int feedbackChannels, localFeedbacks, remoteFeedbacks;
 public:
 	
-	WrapperOUT(ff_node* n, int id, int outchannels=-1, bool cleanup=false, int defaultDestination = -1): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), myID(id){
+	WrapperOUT(ff_node* n, int id, int outchannels=-1, int remoteFeedbacks = 0, bool cleanup=false, int defaultDestination = -1): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), myID(id), remoteFeedbacks(remoteFeedbacks){
 		this->n = n;
 		this->cleanup= cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
 	}
 	
 	bool serialize(void* in, int id) {
-		if (feedbackChannels){
-			if (id < feedbackChannels) {
+		if (localFeedbacks){
+			if (id < localFeedbacks) {
 				if (id == -1) return ff_send_out(in);
 				return ff_send_out_to(in, id);
 			}
 			// from 0 to feedbackChannels-1 are feedback channels
 			// from feedbackChannels to outchannels-1 are forward channels
-			id -= feedbackChannels; 
+			id -= localFeedbacks; 
 		}
 
-		message_t* msg = new message_t;
+		
 
+		message_t* msg = new message_t;
+		msg->feedback = (id < remoteFeedbacks && remoteFeedbacks);
+		if (!msg->feedback) id -= remoteFeedbacks;
+		
 		bool datacopied = this->n->serializeF(in, msg->data);
 		msg->sender = myID;
 		msg->chid   = id;
 		if (!datacopied)  msg->data.freetaskF = this->n->freetaskF;
-		if (feedbackChannels) {
-			// all forward channels are multiplexed in feedbackChannels
-			ff_send_out_to(msg, feedbackChannels);
+		if (localFeedbacks) {
+			// all forward channels are multiplexed in feedbackChannels which coicide with the sender node!
+			ff_send_out_to(msg, localFeedbacks);
 		} else
 			ff_send_out(msg);
 		if (datacopied) this->n->freetaskF(in);
@@ -142,12 +153,13 @@ public:
 		// save the channel id fo the sender, useful for when there are feedbacks in the application
 
 		// these are local feedback channels
-		feedbackChannels = internal_mo_transformer::get_num_feedbackchannels();
+		localFeedbacks = internal_mo_transformer::get_num_feedbackchannels();
+		feedbackChannels = localFeedbacks + remoteFeedbacks;
 
 		if (this->n->isMultiOutput()) {
 			ff_monode* mo = reinterpret_cast<ff_monode*>(this->n);
 			mo->set_virtual_outchannels(outchannels);
-			mo->set_virtual_feedbackchannels(-1);
+			mo->set_virtual_feedbackchannels(feedbackChannels); // maybe... must be checked!
 		}
 
 		return n->svc_init();
@@ -169,7 +181,7 @@ public:
 
     /** returns the total number of output channels */
     size_t  get_num_outchannels() const      { return outchannels; }
-    size_t  get_num_feedbackchannels() const { return 0; } // TODO <---------
+    size_t  get_num_feedbackchannels() const { return feedbackChannels; }
 
 	
 	ff::ff_node* getOriginal(){return this->n;}
@@ -190,9 +202,10 @@ private:
     int inchannels;	// number of input channels the wrapped node is supposed to have
 	int defaultDestination;
 	int myID;
+	int remoteFeedbacks;
 public:
 
-	WrapperINOUT(ff_node* n, int id, int inchannels=1, bool cleanup=false, int defaultDestination = -1): internal_mi_transformer(this, false), inchannels(inchannels), defaultDestination(defaultDestination), myID(id){
+	WrapperINOUT(ff_node* n, int id, int inchannels=1, int remoteFeedbacks = 0, bool cleanup=false, int defaultDestination = -1): internal_mi_transformer(this, false), inchannels(inchannels), defaultDestination(defaultDestination), myID(id), remoteFeedbacks(remoteFeedbacks){
 		this->n       = n;
 		this->cleanup = cleanup;
         registerCallback(ff_send_out_to_cbk, this);
@@ -207,10 +220,14 @@ public:
 		
 		message_t* msg = new message_t;
 
+		
+		msg->feedback = (id < remoteFeedbacks && remoteFeedbacks);
+
 	
 		bool datacopied= this->n->serializeF(in, msg->data);
 		msg->sender = myID;          // FIX!
 		msg->chid   = id;
+		if (!msg->feedback) msg->chid -= remoteFeedbacks;
 		if (!datacopied)  msg->data.freetaskF = this->n->freetaskF;
 		ff_node::ff_send_out(msg);
 		if (datacopied) this->n->freetaskF(in);
@@ -218,10 +235,10 @@ public:
 	}
 
 	int svc_init() {
-		if (this->n->isMultiInput()) { // ??? what??
+		/*if (this->n->isMultiInput()) { // ??? what??
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n); // what?????
 			mi->set_running(inchannels);
-		}
+		}*/
 		return n->svc_init();
 	}
 
@@ -232,10 +249,16 @@ public:
 		if (in != nullptr) {
 			message_t* msg = (message_t*)in;
 			
+			// received a logical EOS ------> must be inserted also in the wrapperIN!!!!!
+			if (msg->data.getLen() == 0){
+				this->n->eosnotify(msg->sender); //msg->sender here is not consistent... always 0
+				return GO_ON;
+			}
+			
 			if (this->n->isMultiInput()) {
 				int channelid = msg->sender; 
 				ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
-				mi->set_input_channelid(channelid, true);
+				mi->set_input_channelid(channelid, !msg->feedback);
 			}
 			bool datacopied=true;
 			out = n->svc(this->n->deserializeF(msg->data, datacopied));

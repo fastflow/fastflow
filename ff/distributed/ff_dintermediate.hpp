@@ -28,6 +28,18 @@ protected:
     void buildIndexes(){
 
         if (!L.empty()){
+            if (parentBB->isPipe() && !wholeParent){
+                assert(L.size() == 1);
+                ff::svector<ff_node*> inputs, outputs;
+                for (ff_node* n : L){
+                    n->get_in_nodes(inputs);
+                    n->get_out_nodes(outputs);
+                }
+                for (int i = 0; i < inputs.size(); i++) inputL.push_back(i);
+                for (int i = 0; i < outputs.size(); i++) outputL.push_back(i);
+                return;
+            }
+            
             ff::svector<ff_node*> parentInputs;
             parentBB->get_in_nodes(parentInputs);
 
@@ -86,7 +98,7 @@ public:
     // liste degli index dei nodi input/output nel builiding block in the shared memory context. The first list: inputL will become the rouitng table
     std::vector<int> inputL, outputL, inputR, outputR;
 
-    
+    // pre computed routing table for the sender module (shoud coincide with the one exchanged actually at runtime)
     std::map<std::string, std::pair<std::vector<int>, ChannelType>> routingTable;
     
     // TODO: implmentare l'assegnamento di questi campi
@@ -107,7 +119,7 @@ public:
     }
 
     std::vector<int> getInputIndexes(bool internal){
-        if (internal && !R.empty()) return inputR;
+        if ((isVertical() && hasRightChildren()) || (internal && !R.empty())) return inputR;
         return inputL;
     }
 
