@@ -92,8 +92,6 @@ protected:
     }
 
     virtual void registerEOS(int sck){
-        for(int i = 0; i < this->get_num_outchannels(); i++)
-            ff_send_out(new message_t(0,0), i);
         neos++;
     }
 
@@ -166,7 +164,14 @@ protected:
 
             return 0;
         }
+        //logical EOS
+        if (chid == -2){
+            for(int i = 0; i < this->get_num_outchannels(); i++)
+                ff_send_out_to(new message_t(sender, i), i);
+            return 0;
+        }
 
+        //pyshical EOS
         registerEOS(sck);
         return -1;
     }

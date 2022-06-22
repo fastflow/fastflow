@@ -192,7 +192,12 @@ public:
         return this->GO_ON;
     }
 
-     void eosnotify(ssize_t) {
+     void eosnotify(ssize_t id) {
+        for (auto& [rank, _] : ranks){
+             auto& buffs = buffers[rank];
+            buffs.second[buffs.first]->push(new message_t(id, -2));
+        }
+        
 	    if (++neos >= this->get_num_inchannels())
             for(auto& [rank, ct] : ranks){
                 auto& buffs = buffers[rank];
@@ -289,7 +294,11 @@ public:
                 buffs.second[buffs.first]->pushEOS();
             }
 		 }
-         ff_dsenderMPI::eosnotify(id);
+        if (++neos >= this->get_num_inchannels())
+            for(auto& [rank, ct] : ranks){
+                auto& buffs = buffers[rank];
+                buffs.second[buffs.first]->pushEOS();
+            }      
 	 }
 	
 };
