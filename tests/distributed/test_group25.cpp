@@ -126,19 +126,35 @@ int main(int argc, char*argv[]){
 	a2a.add_firstset<ff_node>({new Node2, new Node2}, 0, true);
 	a2a.add_secondset<ff_node>({new Node3, new Node3, new Node3}, true); 
 
-	pipe.add_stage(&n1);
-	pipe.add_stage(&a2a);
+#if defined(POINTER_BASED_VERSION)
+	// it creates the distributed groups from level1 nodes of the skeleton tree
+ 
+	pipe.add_stage(&n1);  // the default pointer-based add_stage 
+	pipe.add_stage(&a2a); // the default pointer-based add_stage 
 	pipe.wrap_around();
 
     //----- defining the distributed groups ------
-    //auto G0 = pipe.createGroup("G1");
-	//G0 << pipe.get_firststage(); 
-	//auto G1 = pipe.createGroup("G2");
-	//G1 << pipe.get_laststage();
 	n1.createGroup("G1");
 	a2a.createGroup("G2");
     // -------------------------------------------	
+#else 
+	// it creates the distributed groups from the level0 main pipeline
+	
+	// this version of add_stage adds the stage to the pipeline by using references to the nodes
+	// it means the reference cannot used in the '<<' operator to add the node to the distributed group
+	// because of the copies
+	pipe.add_stage(n1);    // a copy of n1 is added to the pipeline as first stage
+	pipe.add_stage(a2a);   // a copy of the a2a is added to the pipeline as second stage
+	pipe.wrap_around();
+	
+    //----- defining the distributed groups ------
+	auto G0 = pipe.createGroup("G1");
+	G0 << pipe.get_firststage(); 
+	auto G1 = pipe.createGroup("G2");
+	G1 << pipe.get_laststage();
+	// -------------------------------------------	
 
+#endif	
 
 	if (pipe.run_and_wait_end()<0) {
 		error("running the main pipe\n");
