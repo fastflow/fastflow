@@ -90,7 +90,8 @@ protected:
             void waitCompletion(){
                 if (blocked){
                     MPI_Wait(&headersR, MPI_STATUS_IGNORE);
-                    MPI_Wait(&datasR, MPI_STATUS_IGNORE);
+                    if (currData->data.getLen() > 0)
+                        MPI_Wait(&datasR, MPI_STATUS_IGNORE);
                     if (currData) delete currData;
                     blocked = false;
                 }
@@ -99,7 +100,8 @@ protected:
                 waitCompletion();
                 currHeader[1] = m->sender; currHeader[2] = m->chid; currHeader[3] = m->data.getLen();
                 MPI_Isend(currHeader, 4, MPI_LONG, this->rank, DFF_HEADER_TAG, MPI_COMM_WORLD, &this->headersR);
-                MPI_Isend(m->data.getPtr(), m->data.getLen(), MPI_BYTE, rank, DFF_TASK_TAG, MPI_COMM_WORLD, &datasR);
+                if (m->data.getLen() > 0)
+                    MPI_Isend(m->data.getPtr(), m->data.getLen(), MPI_BYTE, rank, DFF_TASK_TAG, MPI_COMM_WORLD, &datasR);
                 currData = m;
                 blocked = true;
                 return 1;
