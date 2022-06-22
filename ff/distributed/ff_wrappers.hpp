@@ -70,7 +70,7 @@ public:
 	}
 	
 	void * svc(void* in) {
-		// with feedback channels in might be null
+		// with feedback channels it might be null
 		if (in == nullptr) return n->svc(nullptr);
 		message_t* msg = (message_t*)in;
 
@@ -82,9 +82,9 @@ public:
 			if (!this->fromInput()) return n->svc(in);
 		}
 
-		// received a logical EOS ------> must be inserted also in the wrapperIN!!!!!
+		// received a logical EOS
 		if (msg->data.getLen() == 0){
-			this->n->eosnotify(msg->sender); //msg->sender here is not consistent... always 0
+			this->n->eosnotify(msg->sender);
 			return GO_ON;
 		}
 		

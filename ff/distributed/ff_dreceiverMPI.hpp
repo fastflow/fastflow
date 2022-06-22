@@ -44,10 +44,12 @@ protected:
         return 0;
     }
 
-    virtual void registerEOS(int rank){
-        // logical EOS sent to nodes
+    virtual void registerLogicalEOS(int sender){
         for(int i = 0; i < this->get_num_outchannels(); i++)
-            ff_send_out(new message_t(0,0), i);
+            ff_send_out_to(new message_t(sender, i), i);
+    }
+
+    virtual void registerEOS(int rank){
         neos++;
     }
 
@@ -93,6 +95,10 @@ public:
                  size_t sz = headers[3];
 
                 if (sz == 0){
+                    if (headers[2] == -2){
+                        registerLogicalEOS(headers[1]);
+                        continue;
+                    }
                     registerEOS(status.MPI_SOURCE);
                     continue;
                 }
@@ -117,6 +123,10 @@ public:
                 for (size_t i = 0; i < (size_t)headers[0]; i++){
                     size_t sz = headers[3*i+3];
                     if (sz == 0){
+                        if (headers[3*i+2] == -2){
+                            registerLogicalEOS(headers[3*i+1]);
+                            continue;
+                        }
                         registerEOS(status.MPI_SOURCE);
                         assert(i+1 == (size_t)headers[0]);
                         break;
@@ -153,6 +163,10 @@ class ff_dreceiverHMPI : public ff_dreceiverMPI {
     size_t internalNEos = 0, externalNEos = 0;
     int next_rr_destination = 0;
 
+    virtual void registerLogicalEOS(int sender){
+        for(int i = 0; i < this->get_num_outchannels()-1; i++)
+            ff_send_out_to(new message_t(sender, i), i);
+    }
 
     virtual void registerEOS(int rank){
         neos++;
