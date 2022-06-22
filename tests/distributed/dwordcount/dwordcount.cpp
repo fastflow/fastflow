@@ -44,7 +44,8 @@
  *  /<---- pipe1 ---->/        /<--- pipe2 --->/
  *  /<----------------- a2a ------------------>/
  *
- * If -g is N then the groups G1...GN will be created. Each group will have n Source-Splitter and m Counter-Sink where n and m are the 
+ * If -g is N then the groups G1...GN will be created. Each group will have n Source-Splitter 
+ * and m Counter-Sink where n and m are the 
  * values set with -p (i.e, -p n,m). This means that the FastFlow graph will have:
  *  n*N Source-Sink replicas and  m*N Counter-Sink replicas.  
  *

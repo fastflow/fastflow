@@ -35,8 +35,8 @@ protected:
                     n->get_in_nodes(inputs);
                     n->get_out_nodes(outputs);
                 }
-                for (int i = 0; i < inputs.size(); i++) inputL.push_back(i);
-                for (int i = 0; i < outputs.size(); i++) outputL.push_back(i);
+                for (size_t i = 0; i < inputs.size(); i++) inputL.push_back(i);
+                for (size_t i = 0; i < outputs.size(); i++) outputL.push_back(i);
                 return;
             }
             
