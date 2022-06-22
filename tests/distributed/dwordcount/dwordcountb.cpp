@@ -399,13 +399,6 @@ int main(int argc, char* argv[]) {
     a2a.add_secondset(R, true);
     ff_pipeline pipeMain(false, qlen, qlen, true);
     pipeMain.add_stage(&a2a);
-#if 0    
-    if (DFF_getMyGroup() == "G1") {
-        threadMapper::instance()->setMappingList("0,1,2,3,4,5,6,7,8,9,10,11, 24,25,26,27,28,29,30,31,32,33,34,35");        
-    } else {
-        threadMapper::instance()->setMappingList("12,13,14,15,16,17,18,19,20,21,22,23, 36,37,38,39,40,41,42,43,44,45,46,47");
-    }
-#endif     
     
     std::cout << "Starting " << pipeMain.numThreads() << " threads\n\n";
     /// evaluate topology execution time
