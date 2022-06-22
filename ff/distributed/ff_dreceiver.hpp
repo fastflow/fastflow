@@ -91,6 +91,11 @@ protected:
         return 0; //this->sendRoutingTable(sck, reachableDestinations);
     }
 
+    virtual void registerLogicalEOS(int sender){
+        for(int i = 0; i < this->get_num_outchannels(); i++)
+                ff_send_out_to(new message_t(sender, i), i);
+    }
+
     virtual void registerEOS(int sck){
         neos++;
     }
@@ -166,8 +171,7 @@ protected:
         }
         //logical EOS
         if (chid == -2){
-            for(int i = 0; i < this->get_num_outchannels(); i++)
-                ff_send_out_to(new message_t(sender, i), i);
+            registerLogicalEOS(sender);
             return 0;
         }
 
@@ -310,6 +314,11 @@ class ff_dreceiverH : public ff_dreceiver {
     //std::map<int, bool> isInternalConnection;
     size_t internalNEos = 0, externalNEos = 0;
     long next_rr_destination = 0;
+
+    void registerLogicalEOS(int sender){
+        for(int i = 0; i < this->get_num_outchannels()-1; i++)
+                ff_send_out_to(new message_t(sender, i), i);
+    }
 
     void registerEOS(int sck){
         neos++;
