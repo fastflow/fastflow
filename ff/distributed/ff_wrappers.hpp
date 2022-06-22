@@ -82,9 +82,9 @@ public:
 			if (!this->fromInput()) return n->svc(in);
 		}
 
-		// received a logical EOS ------> must be inserted also in the wrapperIN!!!!!
+		// received a logical EOS
 		if (msg->data.getLen() == 0){
-			this->n->eosnotify(msg->sender); //msg->sender here is not consistent... always 0
+			this->n->eosnotify(msg->sender); // TODO: msg->sender here is not consistent... always 0
 			return GO_ON;
 		}
 		
@@ -130,8 +130,6 @@ public:
 			id -= localFeedbacks; 
 		}
 
-		
-
 		message_t* msg = new message_t;
 		msg->feedback = (id < remoteFeedbacks && remoteFeedbacks);
 		if (!msg->feedback) id -= remoteFeedbacks;
@@ -159,7 +157,7 @@ public:
 		if (this->n->isMultiOutput()) {
 			ff_monode* mo = reinterpret_cast<ff_monode*>(this->n);
 			mo->set_virtual_outchannels(outchannels);
-			mo->set_virtual_feedbackchannels(feedbackChannels); // maybe... must be checked!
+			mo->set_virtual_feedbackchannels(feedbackChannels); 
 		}
 
 		return n->svc_init();
@@ -249,9 +247,9 @@ public:
 		if (in != nullptr) {
 			message_t* msg = (message_t*)in;
 			
-			// received a logical EOS ------> must be inserted also in the wrapperIN!!!!!
+			// received a logical EOS
 			if (msg->data.getLen() == 0){
-				this->n->eosnotify(msg->sender); //msg->sender here is not consistent... always 0
+				this->n->eosnotify(msg->sender); // TODO: msg->sender here is not consistent... always 0
 				return GO_ON;
 			}
 			

@@ -92,7 +92,7 @@ protected:
     }
 
     virtual void registerEOS(int sck){
-        for(int i = 0; i < this->get_num_outchannels(); i++)
+        for(size_t i = 0; i < this->get_num_outchannels(); i++)
             ff_send_out(new message_t(0,0), i);
         neos++;
     }
