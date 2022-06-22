@@ -84,11 +84,7 @@ public:
 
 		// received a logical EOS
 		if (msg->data.getLen() == 0){
-<<<<<<< HEAD
 			this->n->eosnotify(msg->sender);
-=======
-			this->n->eosnotify(msg->sender); // TODO: msg->sender here is not consistent... always 0
->>>>>>> 779239c837bbee1b9a41ebf19e955ad296503b7f
 			return GO_ON;
 		}
 		

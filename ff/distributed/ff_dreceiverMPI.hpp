@@ -45,7 +45,7 @@ protected:
     }
 
     virtual void registerLogicalEOS(int sender){
-        for(int i = 0; i < this->get_num_outchannels(); i++)
+        for(size_t i = 0; i < this->get_num_outchannels(); i++)
             ff_send_out_to(new message_t(sender, i), i);
     }
 
@@ -164,7 +164,7 @@ class ff_dreceiverHMPI : public ff_dreceiverMPI {
     int next_rr_destination = 0;
 
     virtual void registerLogicalEOS(int sender){
-        for(int i = 0; i < this->get_num_outchannels()-1; i++)
+        for(size_t i = 0; i < this->get_num_outchannels()-1; i++)
             ff_send_out_to(new message_t(sender, i), i);
     }
 
