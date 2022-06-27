@@ -296,7 +296,6 @@ struct Source : ff_node_t<tuple_t> {
 	        }
 	        current_time = current_time_nsecs(); // get the new current time
     	}
-        std::cout << "Sent EOS from Source!\n";
         return EOS;
     }
 
@@ -331,12 +330,7 @@ struct MapMatcher : ff_node_t<tuple_t, result_t> {
         min_lat = (_monitored_city == DUBLIN) ? dublin_lat_min : beijing_lat_min;
     }
 
-    void eosnotify(ssize_t){
-        cout << "[MapMatcher] EOS notify called\n";
-    }
-
     result_t* svc(tuple_t* t){
-        cout << "[MapMatcher] recdived task!  " << processed << std::endl;
         if (t->speed >= 0 && t->longitude <= max_lon && t->longitude >= min_lon && t->latitude <= max_lat && t->latitude >= min_lat){
             OGRPoint p(t->longitude, t->latitude);
             int road_id = road_grid_list.fetch_road_ID(p);
@@ -360,9 +354,6 @@ struct MapMatcher : ff_node_t<tuple_t, result_t> {
         return GO_ON;
     }
 
-    void svc_end(){
-        cout << "[MapMatcher] Ended\n";
-    }
 };
 
 /**
@@ -433,10 +424,6 @@ struct SpeedCalculator : ff_node_t<result_t> {
         processed++;
         return r;
     }
-
-    void svc_end(){
-        cout << "[SpeedClaculator] Ended\n";
-    }
 };
 
 /**
@@ -451,9 +438,6 @@ struct Sink : ff_node_t<result_t> {
             return GO_ON;
     }
 
-    void svc_end(){
-        cout << "[Sink] Ended\n";
-    }
 };
 
 
