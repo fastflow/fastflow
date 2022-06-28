@@ -146,8 +146,8 @@ std::string generateRankFile(std::vector<G>& parsedGroups){
 
     std::ofstream tmpFile(name, std::ofstream::out);
     
-    for(int i = 0; i < parsedGroups.size(); i++)
-        tmpFile << "rank " << i << "=" << parsedGroups[i].host << " slot=0";
+    for(size_t i = 0; i < parsedGroups.size(); i++)
+        tmpFile << "rank " << i << "=" << parsedGroups[i].host << " slot=0\n";
     /*for (const G& group : parsedGroups)
         tmpFile << group.host << std::endl;*/
 
