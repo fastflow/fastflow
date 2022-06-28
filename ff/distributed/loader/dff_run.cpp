@@ -41,6 +41,10 @@
 #include <filesystem>
 namespace n_fs = std::filesystem;
 
+#ifndef HOST_NAME_MAX
+#define HOST_NAME_MAX 255
+#endif
+
 enum Proto {TCP = 1 , MPI};
 
 Proto usedProtocol;
@@ -137,13 +141,15 @@ static inline void usage(char* progname) {
 		
 }
 
-std::string generateHostFile(std::vector<G>& parsedGroups){
-    std::string name = "/tmp/dffHostfile" + std::to_string(getpid());
+std::string generateRankFile(std::vector<G>& parsedGroups){
+    std::string name = "/tmp/dffRankfile" + std::to_string(getpid());
 
     std::ofstream tmpFile(name, std::ofstream::out);
-  
-    for (const G& group : parsedGroups)
-        tmpFile << group.host << std::endl;
+    
+    for(int i = 0; i < parsedGroups.size(); i++)
+        tmpFile << "rank " << i << "=" << parsedGroups[i].host << " slot=0";
+    /*for (const G& group : parsedGroups)
+        tmpFile << group.host << std::endl;*/
 
     tmpFile.close();
     // return the name of the temporary file just created; remember to remove it after the usage
@@ -300,13 +306,13 @@ int main(int argc, char** argv) {
     }
 
     if (usedProtocol == Proto::MPI){
-        std::string hostFile = generateHostFile(parsedGroups);
-        std::cout << "Hostfile: " << hostFile << std::endl;
+        std::string rankFile = generateRankFile(parsedGroups);
+        std::cout << "RankFile: " << rankFile << std::endl;
         // invoke mpirun using the just created hostfile
 
         char command[350];
      
-        sprintf(command, "mpirun -np %lu --hostfile %s --map-by node %s --DFF_Config=%s", parsedGroups.size(), hostFile.c_str(), executable.c_str(), configFile.c_str());
+        sprintf(command, "mpirun -np %lu --rankfile %s %s --DFF_Config=%s", parsedGroups.size(), rankFile.c_str(), executable.c_str(), configFile.c_str());
 
 		std::cout << "mpicommand: " << command << "\n";
 		
