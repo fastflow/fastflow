@@ -85,6 +85,7 @@ public:
 		// received a logical EOS
 		if (msg->data.getLen() == 0){
 			this->n->eosnotify(msg->sender);
+			delete msg;
 			return GO_ON;
 		}
 		
@@ -250,6 +251,7 @@ public:
 			// received a logical EOS
 			if (msg->data.getLen() == 0){
 				this->n->eosnotify(msg->sender); // TODO: msg->sender here is not consistent... always 0
+				delete msg;
 				return GO_ON;
 			}
 			
