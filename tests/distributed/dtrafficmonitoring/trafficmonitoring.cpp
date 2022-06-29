@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
-#include <ff/ff.hpp>
+#include <ff/dff.hpp>
 #include <getopt.h>
 #include "geo_model.hpp"
 
@@ -12,7 +12,7 @@ using namespace std;
 using namespace ff;
 
 /// application run time (source generates the stream for app_run_time seconds, then sends out EOS)
-unsigned long app_run_time = 1 * 1000000000L; // 60 seconds
+unsigned long app_run_time = 1 * 10000000L; // 60 seconds
 const size_t qlen = 2048;
 
 
@@ -71,6 +71,11 @@ struct tuple_t {
     // constructor
     tuple_t(double _latitude, double _longitude, double _speed, int _direction, size_t _key) :
         latitude(_latitude), longitude(_longitude), speed(_speed), direction(_direction), key(_key) {}
+
+    template<class Archive>
+	void serialize(Archive & archive) {
+		archive(latitude,longitude,speed, direction, key, ts);
+	}
 };
 
 struct result_t {
@@ -83,6 +88,11 @@ struct result_t {
 
     // constructor
     result_t(double _speed, size_t _key, uint64_t _id, uint64_t _ts): speed(_speed), key(_key) {}
+
+    template<class Archive>
+	void serialize(Archive & archive) {
+		archive(speed,key,ts);
+	}
 };
 
 static inline unsigned long current_time_usecs() {
@@ -254,7 +264,7 @@ void read_shapefile() {
  * SOURCE NODE 
  **/
 
-struct Source : ff_node_t<tuple_t> {
+struct Source : ff_monode_t<tuple_t> {
     int rate = 0;  
     size_t next_tuple_idx = 0;          // index of the next tuple to be sent
     int generations = 0;                // counts the times the file is generated
@@ -263,6 +273,8 @@ struct Source : ff_node_t<tuple_t> {
      // time variables
     unsigned long app_start_time;   // application start time
     unsigned long current_time;
+
+    Source(int rate) : rate(rate) {}
     
     void active_delay(unsigned long waste_time) {
         auto start_time = current_time_nsecs();
@@ -310,7 +322,7 @@ struct Source : ff_node_t<tuple_t> {
  **/
 
 
-struct MapMatcher : ff_node_t<tuple_t, result_t> {
+struct MapMatcher : ff_monode_t<tuple_t, result_t> {
     size_t processed = 0;                            // counter of processed tuples
     size_t valid_points = 0;                         // counter of tuples containing GPS coordinates (points) laying inside the city bounding box
     size_t emitted = 0;                              // counter of tuples containing points that correspond to a valid road_id
@@ -323,11 +335,18 @@ struct MapMatcher : ff_node_t<tuple_t, result_t> {
     double max_lat;
     double min_lat;
 
+    int next_stage_par_deg = 0;
+
     MapMatcher(Road_Grid_List& _road_grid_list) : road_grid_list(_road_grid_list){
         max_lon = (_monitored_city == DUBLIN) ? dublin_lon_max : beijing_lon_max;
         min_lon = (_monitored_city == DUBLIN) ? dublin_lon_min : beijing_lon_min;
         max_lat = (_monitored_city == DUBLIN) ? dublin_lat_max : beijing_lat_max;
         min_lat = (_monitored_city == DUBLIN) ? dublin_lat_min : beijing_lat_min;
+    }
+
+    int svc_init(){
+        next_stage_par_deg = this->get_num_outchannels();
+        return 0;
     }
 
     result_t* svc(tuple_t* t){
@@ -343,7 +362,7 @@ struct MapMatcher : ff_node_t<tuple_t, result_t> {
                 r->speed = t->speed;
                 r->key = road_id;
                 r->ts = t->ts;
-                ff_send_out(r);
+                ff_send_out_to(r, road_id % next_stage_par_deg);
                 emitted++;
 
             }
@@ -360,7 +379,7 @@ struct MapMatcher : ff_node_t<tuple_t, result_t> {
  * SPEED CALCULATOR
  **/
 
-struct SpeedCalculator : ff_node_t<result_t> {
+struct SpeedCalculator : ff_minode_t<result_t> {
     
     struct Road_Speed {
         int road_id;
@@ -430,14 +449,13 @@ struct SpeedCalculator : ff_node_t<result_t> {
  * SINK
  **/
 
-struct Sink : ff_node_t<result_t> {
+struct Sink : ff_minode_t<result_t> {
     size_t processed = 0;
     result_t* svc(result_t* r){
             processed++;        // tuples counter
             delete r;
             return GO_ON;
     }
-
 };
 
 
@@ -459,6 +477,9 @@ const struct option long_opts[] = {
 
 // Main
 int main(int argc, char* argv[]) {
+
+    DFF_Init(argc, argv);
+
     /// parse arguments from command line
     int option = 0;
     int index = 0;
@@ -539,38 +560,58 @@ int main(int argc, char* argv[]) {
     parse_dataset(file_path);
     create_tuples();
     read_shapefile();
-    /// application starting time
-    unsigned long app_start_time = current_time_nsecs();
-    cout << "Executing TrafficMonitoring with parameters:" << endl;
-    if (rate != 0) {
-        cout << "  * rate: " << rate << " tuples/second" << endl;
-    }
-    else {
-        cout << "  * rate: full_speed tupes/second" << endl;
-    }
-    cout << "  * batch size: " << batch_size << endl;
-    cout << "  * sampling: " << sampling << endl;
-    cout << "  * source: " << source_par_deg << endl;
-    cout << "  * map-matcher: " << matcher_par_deg << endl;
-    cout << "  * speed-calculator: " << calculator_par_deg << endl;
-    cout << "  * sink: " << sink_par_deg << endl;
-    cout << "  * topology: source -> map-matcher -> speed-calculator -> sink" << endl;
-    
-    ff_pipeline p(false, qlen, qlen, true);
-    p.add_stage(new Source);
-    p.add_stage(new MapMatcher(road_grid_list));
-    p.add_stage(new SpeedCalculator);
-    p.add_stage(new Sink);
 
-    cout << "Executing topology" << endl;
+    if (DFF_getMyGroup() == "Source"){
+        ff::cout << "Executing TrafficMonitoring with parameters:" << ff::endl;
+        if (rate != 0) {
+            ff::cout << "  * rate: " << rate << " tuples/second" << ff::endl;
+        }
+        else {
+            ff::cout << "  * rate: full_speed tupes/second" << ff::endl;
+        }
+        ff::cout << "  * batch size: " << batch_size << ff::endl;
+        ff::cout << "  * sampling: " << sampling << ff::endl;
+        ff::cout << "  * source: " << source_par_deg << ff::endl;
+        ff::cout << "  * map-matcher: " << matcher_par_deg << ff::endl;
+        ff::cout << "  * speed-calculator: " << calculator_par_deg << ff::endl;
+        ff::cout << "  * sink: " << sink_par_deg << ff::endl;
+        ff::cout << "  * topology: source -> map-matcher -> speed-calculator -> sink" << ff::endl;
+    }
+
+    ff_pipeline p(false, qlen, qlen, true);
+    Source source(rate);
+    source.createGroup("Source");
+    p.add_stage(&source);
+    ff_a2a internalA2A(false, qlen, qlen, true);
+    vector<ff_node*> matchers;
+    for(size_t i = 0; i < matcher_par_deg; i++)
+        matchers.push_back(new MapMatcher(road_grid_list));
+    
+    vector<ff_node*> calculators;
+    for(size_t i = 0; i < calculator_par_deg; i++)
+        calculators.push_back(new SpeedCalculator);
+
+    internalA2A.add_firstset(matchers, 0, true); // ondemand????
+    internalA2A.add_secondset(calculators, true);
+
+    internalA2A.createGroup("A2A");
+
+    p.add_stage(&internalA2A);
+    Sink sink;
+    sink.createGroup("Sink");
+    p.add_stage(&sink);
+
     /// evaluate topology execution time
     volatile unsigned long start_time_main_usecs = current_time_usecs();
     p.run_and_wait_end();
     volatile unsigned long end_time_main_usecs = current_time_usecs();
-    cout << "Exiting" << endl;
+ 
     double elapsed_time_seconds = (end_time_main_usecs - start_time_main_usecs) / (1000000.0);
     double throughput = sent_tuples / elapsed_time_seconds;
-    cout << "Measured throughput: " << (int) throughput << " tuples/second" << endl;
-
+    ff::cout << "Actual execution time (s): " << elapsed_time_seconds << ff::endl;
+    if (DFF_getMyGroup() == "Source"){
+        ff::cout << "Tuples sent by source: " << sent_tuples << ff::endl;
+        ff::cout << "Measured throughput: " << (int) throughput << " tuples/second" << ff::endl;
+    }
     return 0;
 }
