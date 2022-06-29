@@ -223,7 +223,7 @@ public:
         // open the input OGR data source (in this case the shapefile) and use a vector driver
         GDALDataset *dataset = static_cast<GDALDataset*>(GDALOpenEx(shapefile_path.c_str(), GDAL_OF_VECTOR, nullptr, nullptr, nullptr));
         if (dataset == nullptr) {
-            cout << "Failed opening GDAL dataset " << shapefile_path << endl;
+            ff::cout << "Failed opening GDAL dataset " << shapefile_path << ff::endl;
             return -1;
         }
         //cout << "Successfully opened GDAL dataset " << dataset->GetDescription() << endl;
