@@ -12,7 +12,7 @@ using namespace std;
 using namespace ff;
 
 /// application run time (source generates the stream for app_run_time seconds, then sends out EOS)
-unsigned long app_run_time = 1 * 10000000L; // 60 seconds
+unsigned long app_run_time = 60 * 1000000000L; // 60 seconds
 const size_t qlen = 2048;
 
 
@@ -561,7 +561,7 @@ int main(int argc, char* argv[]) {
     create_tuples();
     read_shapefile();
 
-    if (DFF_getMyGroup() == "Source"){
+    if (DFF_getMyGroup() == "G0"){
         ff::cout << "Executing TrafficMonitoring with parameters:" << ff::endl;
         if (rate != 0) {
             ff::cout << "  * rate: " << rate << " tuples/second" << ff::endl;
@@ -578,40 +578,38 @@ int main(int argc, char* argv[]) {
         ff::cout << "  * topology: source -> map-matcher -> speed-calculator -> sink" << ff::endl;
     }
 
-    ff_pipeline p(false, qlen, qlen, true);
-    Source source(rate);
-    source.createGroup("Source");
-    p.add_stage(&source);
+  
     ff_a2a internalA2A(false, qlen, qlen, true);
-    vector<ff_node*> matchers;
-    for(size_t i = 0; i < matcher_par_deg; i++)
-        matchers.push_back(new MapMatcher(road_grid_list));
-    
-    vector<ff_node*> calculators;
-    for(size_t i = 0; i < calculator_par_deg; i++)
-        calculators.push_back(new SpeedCalculator);
+    vector<ff_node*> sx;
+    vector<ff_node*> dx;
+    for(size_t i = 0; i < matcher_par_deg; i++){
+        auto* sxp = new ff_pipeline(false, qlen, qlen, true);
+        sxp->add_stage(new Source(rate));
+        sxp->add_stage(new MapMatcher(road_grid_list));
+        sx.push_back(sxp);
 
-    internalA2A.add_firstset(matchers, 0, true); // ondemand????
-    internalA2A.add_secondset(calculators, true);
+        auto* dxp = new ff_pipeline(false, qlen, qlen, true);
+        dxp->add_stage(new SpeedCalculator);
+        dxp->add_stage(new Sink);
 
-    internalA2A.createGroup("A2A");
+        dx.push_back(dxp);
+        internalA2A.createGroup("G"+std::to_string(i)) << sxp << dxp;
+    }
 
-    p.add_stage(&internalA2A);
-    Sink sink;
-    sink.createGroup("Sink");
-    p.add_stage(&sink);
+    internalA2A.add_firstset(sx, 0, true); // ondemand????
+    internalA2A.add_secondset(dx, true);
+
 
     /// evaluate topology execution time
     volatile unsigned long start_time_main_usecs = current_time_usecs();
-    p.run_and_wait_end();
+    internalA2A.run_and_wait_end();
     volatile unsigned long end_time_main_usecs = current_time_usecs();
  
     double elapsed_time_seconds = (end_time_main_usecs - start_time_main_usecs) / (1000000.0);
     double throughput = sent_tuples / elapsed_time_seconds;
     ff::cout << "Actual execution time (s): " << elapsed_time_seconds << ff::endl;
-    if (DFF_getMyGroup() == "Source"){
-        ff::cout << "Tuples sent by source: " << sent_tuples << ff::endl;
-        ff::cout << "Measured throughput: " << (int) throughput << " tuples/second" << ff::endl;
-    }
+    ff::cout << "Tuples sent by source: " << sent_tuples << ff::endl;
+    ff::cout << "Measured throughput: " << (int) throughput << " tuples/second" << ff::endl;
+    
     return 0;
 }
