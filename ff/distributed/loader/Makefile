@@ -36,6 +36,7 @@ else
     INCS            += -I ~/cereal/include
 endif
 
+OS                   = $(shell uname)
 
 CXXFLAGS            += -Wall
 INCLUDES             = $(INCS)
