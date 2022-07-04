@@ -59,12 +59,23 @@
 #include<ff/distributed/ff_dinterface.hpp>
 
 #endif /* FF_DFF_HPP */
+
 #else /* DISABLE_FF_DISTRIBUTED */
+
+#if !defined(DFF_EXCLUDE_BLOCKING)
+#define BLOCKING_MODE
+#else
+#undef BLOCKING_MODE
+#endif
+
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_dinterface.hpp>
 #include <iostream>
 namespace ff {
     std::ostream& cout = std::cout;
+
+    template<class CharT, class Traits>
+    auto& endl(std::basic_ostream<CharT, Traits>& os){return std::endl(os);}
 }
 static inline int DFF_Init(int& argc, char**& argv){ return 0; }
 #endif /* DISABLE_FF_DISTRIBUTED */
