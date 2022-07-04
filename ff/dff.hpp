@@ -20,6 +20,7 @@
  *
  ****************************************************************************
  */
+#ifndef DISABLE_FF_DISTRIBUTED
 
 #ifndef FF_DFF_HPP
 #define FF_DFF_HPP
@@ -36,6 +37,21 @@
 #undef BLOCKING_MODE
 #endif
 
+
+// default size of the batching buffer
+#if !defined(DEFAULT_BATCH_SIZE)
+#define DEFAULT_BATCH_SIZE        1
+#endif
+
+// default number of On-The-Fly messages
+#if !defined(DEFAULT_INTERNALMSG_OTF)
+#define DEFAULT_INTERNALMSG_OTF  10
+#endif
+#if !defined(DEFAULT_MESSAGE_OTF)
+#define DEFAULT_MESSAGE_OTF     100
+#endif
+
+
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_dgroups.hpp>
@@ -43,3 +59,23 @@
 #include<ff/distributed/ff_dinterface.hpp>
 
 #endif /* FF_DFF_HPP */
+
+#else /* DISABLE_FF_DISTRIBUTED */
+
+#if !defined(DFF_EXCLUDE_BLOCKING)
+#define BLOCKING_MODE
+#else
+#undef BLOCKING_MODE
+#endif
+
+#include <ff/ff.hpp>
+#include <ff/distributed/ff_dinterface.hpp>
+#include <iostream>
+namespace ff {
+    std::ostream& cout = std::cout;
+
+    template<class CharT, class Traits>
+    auto& endl(std::basic_ostream<CharT, Traits>& os){return std::endl(os);}
+}
+static inline int DFF_Init(int& argc, char**& argv){ return 0; }
+#endif /* DISABLE_FF_DISTRIBUTED */
