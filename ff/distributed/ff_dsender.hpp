@@ -298,7 +298,7 @@ public:
     void eosnotify(ssize_t id) {
         for (const auto& sck : sockets)
             batchBuffers[sck].push(new message_t(id, -2));
-            
+
 		if (++neos >= this->get_num_inchannels()) {
 			// all input EOS received, now sending the EOS to all connections
             for(const auto& sck : sockets) {
