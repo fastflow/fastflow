@@ -17,7 +17,19 @@ using namespace ff;
 class SquareBoxRight : public ff_minode {
     ssize_t neos = 0;
 public:	
-	void* svc(void* in) {return in;}
+
+	int svc_init() {
+		// change the size of the queue towards the Sender
+		// forcing the queue to be bounded of capacity 1
+		size_t oldsz;
+		change_outputqueuesize(1, oldsz);
+		assert(oldsz != 0);		
+		return 0;
+	}
+
+	void* svc(void* in) {
+		return in;
+	}
 
 	void eosnotify(ssize_t id) {
 		if (id == (ssize_t)(this->get_num_inchannels() - 1)) return;   // EOS coming from the SquareLeft, we must ignore it
@@ -28,6 +40,7 @@ public:
 
 class SquareBoxLeft : public ff_monode {
 	std::unordered_map<int, int> destinations;
+	long next_rr_destination = 0;
 public:
 	/*
 	 *  - localWorkers: list of pairs <logical_destination, physical_destination> where logical_destination is the original destination of the shared-memory graph
@@ -35,7 +48,11 @@ public:
 	SquareBoxLeft(const std::unordered_map<int, int> localDestinations) : destinations(localDestinations) {}
     
 	void* svc(void* in){
-		this->ff_send_out_to(in, destinations[reinterpret_cast<message_t*>(in)->chid]);
+		if (reinterpret_cast<message_t*>(in)->chid == -1) {
+			ff_send_out_to(in, next_rr_destination);
+			next_rr_destination = (next_rr_destination + 1) % destinations.size();
+		}
+		else this->ff_send_out_to(in, destinations[reinterpret_cast<message_t*>(in)->chid]);
 		return this->GO_ON;
     }
 };
@@ -44,7 +61,7 @@ class EmitterAdapter: public internal_mo_transformer {
 private:
     int totalWorkers, index;
 	std::unordered_map<int, int> localWorkersMap;
-    int nextDestination;
+    int nextDestination = -1;
 public:
 	/** Parameters:
 	 * 	- n: rightmost sequential node of the builiding block representing the left-set worker
@@ -58,6 +75,26 @@ public:
 		this->cleanup = cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
 	}
+
+	int svc_init() {
+		if (this->n->isMultiOutput()) {
+			ff_monode* mo = reinterpret_cast<ff_monode*>(this->n);
+			//mo->set_running(localWorkersMap.size() + 1); // the last worker is the forwarder to the remote workers
+			mo->set_virtual_outchannels(totalWorkers);
+		}
+
+		// change the size of the queue to the SquareBoxRight (if present),
+		// since the distributed-memory communications are all on-demand
+		svector<ff_node*> w;
+        this->get_out_nodes(w);
+		assert(w.size()>0);
+		if (w.size() > localWorkersMap.size()) {
+			assert(w.size() == localWorkersMap.size()+1);
+			size_t oldsz;		
+			w[localWorkersMap.size()]->change_inputqueuesize(1, oldsz);
+		}
+		return n->svc_init();
+	}
 	
 	void * svc(void* in) {
 		void* out = n->svc(in);
@@ -69,9 +106,34 @@ public:
 	}
 
     bool forward(void* task, int destination){
-        if (destination == -1) {
-			destination = nextDestination;
-			nextDestination = (nextDestination + 1) % totalWorkers;
+
+		if (destination == -1) {
+			message_t* msg = nullptr;
+			bool datacopied = true;
+			do {
+				for(size_t i = 0; i < localWorkersMap.size(); i++){
+					long actualDestination = (nextDestination + 1 + i) % localWorkersMap.size();
+					if (ff_send_out_to(task, actualDestination, 1)){ // non blcking ff_send_out_to, we try just once                                                         
+                        nextDestination = actualDestination;
+                        if (msg) {
+							if (!datacopied) msg->data.doNotCleanup();
+							delete msg;
+						}
+                        return true;
+					}
+				}
+				if (!msg) {
+					msg = new message_t(index, destination);
+					datacopied = this->n->serializeF(task, msg->data);
+					if (!datacopied) {
+						msg->data.freetaskF = this->n->freetaskF;
+					}
+				}
+				if (ff_send_out_to(msg, localWorkersMap.size(), 1)) {
+					if (datacopied) this->n->freetaskF(task);
+					return true;
+				}
+			} while(1);
 		}
 
         auto pyshicalDestination = localWorkersMap.find(destination);
@@ -79,19 +141,15 @@ public:
 			return ff_send_out_to(task, pyshicalDestination->second);
 		} else {
 			message_t* msg = new message_t(index, destination);
-			this->n->serializeF(task, msg->data);
-			return ff_send_out_to(msg, localWorkersMap.size());
+			bool datacopied = this->n->serializeF(task, msg->data);
+			if (!datacopied) {
+				msg->data.freetaskF = this->n->freetaskF;
+			}
+			ff_send_out_to(msg, localWorkersMap.size());
+			if (datacopied) this->n->freetaskF(task);
+			return true;
 		}
     }
-
-	int svc_init() {
-		if (this->n->isMultiOutput()) {
-			ff_monode* mo = reinterpret_cast<ff_monode*>(this->n);
-			//mo->set_running(localWorkersMap.size() + 1); // the last worker is the forwarder to the remote workers
-			mo->set_running(totalWorkers);
-		}
-		return n->svc_init();
-	}
 
 	void svc_end(){n->svc_end();}
 	
@@ -128,7 +186,7 @@ public:
 	}
 
 	int svc_init() {
-		if (this->n->isMultiInput()) { ////???????? MASSIMO???
+		if (this->n->isMultiInput()) {
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
 			mi->set_running(localWorkers.size() + 1);
 		}
@@ -142,10 +200,12 @@ public:
 
 		// if the results come from the "square box", it is a result from a remote workers so i have to read from which worker it come from 
 		if ((size_t)get_channel_id() == localWorkers.size()){
-			message_t * m = reinterpret_cast<message_t*>(in);
-            channel = m->sender;
-			in = this->n->deserializeF(m->data);
-			delete m;
+			message_t * msg = reinterpret_cast<message_t*>(in);
+            channel = msg->sender;
+			bool datacopied = true;
+			in = this->n->deserializeF(msg->data, datacopied);
+			if (!datacopied) msg->data.doNotCleanup();
+			delete msg;
 		} else {  // the result come from a local worker, just pass it to collector and compute the right worker id
             channel = localWorkers.at(get_channel_id());
 		}

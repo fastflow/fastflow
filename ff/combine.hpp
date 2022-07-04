@@ -316,8 +316,9 @@ public:
 #ifdef DFF_ENABLED
     virtual bool isSerializable(){ return comp_nodes[1]->isSerializable(); }
     virtual bool isDeserializable(){ return comp_nodes[0]->isDeserializable(); }
-    virtual decltype(serializeF) getSerializationFunction(){ return comp_nodes[1]->getSerializationFunction(); }
-    virtual decltype(deserializeF) getDeserializationFunction(){ return comp_nodes[0]->getDeserializationFunction(); }
+    virtual std::pair<decltype(serializeF), decltype(freetaskF)> getSerializationFunction(){ return comp_nodes[1]->getSerializationFunction(); }
+    virtual std::pair<decltype(deserializeF), decltype(alloctaskF)> getDeserializationFunction(){ return comp_nodes[0]->getDeserializationFunction(); }
+
 #endif
     
 protected:
@@ -386,6 +387,14 @@ protected:
         getFirst()->skipfirstpop(sk);
         ff_node::skipfirstpop(sk);
     }
+
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk) {
+        getFirst()->skipallpop(sk);
+        ff_node::skipallpop(sk);
+    }
+#endif
+
 
     bool  put(void * ptr) { 
         return ff_node::put(ptr);
@@ -510,7 +519,11 @@ protected:
         if (comp_nodes[0]->isComp())
             ret = comp_nodes[0]->svc(task);
         else {
-            if (task || comp_nodes[0]->skipfirstpop()) {
+#ifdef DFF_ENABLED
+            if (task || comp_nodes[0]->skipfirstpop() || comp_nodes[0]->skipallpop()) {
+#else
+            if (task || comp_nodes[0]->skipfirstpop()){
+#endif
                 r1= comp_nodes[0]->svc(task);
                 if (!(r1 == FF_GO_ON || r1 == FF_GO_OUT || r1 == FF_EOS_NOFREEZE)) {
                     comp_nodes[0]->ff_send_out(r1);

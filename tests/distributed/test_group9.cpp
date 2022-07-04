@@ -7,6 +7,9 @@
  *
  *  G1: pipe0
  *  G2: pipe1
+ *
+ * See also test_group19, which contains a simplified version.
+ *  
  */
 
 

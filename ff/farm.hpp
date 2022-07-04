@@ -672,6 +672,14 @@ protected:
         skip1pop=sk;
     }
 
+ 
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk)   { 
+        lb->skipallpop(sk);
+        ff_node::skipallpop(sk);
+    }
+#endif   
+
 
     // consumer
     virtual inline bool init_input_blocking(pthread_mutex_t   *&m,
@@ -1367,7 +1375,7 @@ public:
                 assert(blocking_in==blocking_out);
                 workers[i]->blocking_mode(blocking_in);
                 if (!default_mapping) workers[i]->no_mapping();
-                workers[i]->skipfirstpop(false);
+                //workers[i]->skipfirstpop(false);
                  if (workers[i]->freeze_and_run(true)<0) {
                     error("FARM, spawning worker thread\n");
                     return -1;
@@ -1380,7 +1388,7 @@ public:
                 assert(blocking_in==blocking_out);
                 workers[i]->blocking_mode(blocking_in);
                 if (!default_mapping) workers[i]->no_mapping();
-                workers[i]->skipfirstpop(false);
+                //workers[i]->skipfirstpop(false);
                  if (workers[i]->run(true)<0) {
                     error("FARM, spawning worker thread\n");
                     return -1;

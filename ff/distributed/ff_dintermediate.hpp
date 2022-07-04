@@ -6,6 +6,7 @@
 #include <list>
 #include <vector>
 #include <map>
+#include <numeric>
 
 namespace ff {
 
@@ -27,6 +28,18 @@ protected:
     void buildIndexes(){
 
         if (!L.empty()){
+            if (parentBB->isPipe() && !wholeParent){
+                assert(L.size() == 1);
+                ff::svector<ff_node*> inputs, outputs;
+                for (ff_node* n : L){
+                    n->get_in_nodes(inputs);
+                    n->get_out_nodes(outputs);
+                }
+                for (size_t i = 0; i < inputs.size(); i++) inputL.push_back(i);
+                for (size_t i = 0; i < outputs.size(); i++) outputL.push_back(i);
+                return;
+            }
+            
             ff::svector<ff_node*> parentInputs;
             parentBB->get_in_nodes(parentInputs);
 
@@ -71,18 +84,22 @@ public:
     bool coverageL = false, coverageR = false;
     bool isSource = false, isSink = false;
     bool hasReceiver = false, hasSender = false;
+    Proto protocol;
 
     ff_node* parentBB;
 
     ff_endpoint listenEndpoint;
-    std::vector<ff_endpoint> destinationEndpoints;
+    std::vector<std::pair<ChannelType, ff_endpoint>> destinationEndpoints;
+
     std::set<std::string> otherGroupsFromSameParentBB;
     size_t expectedEOS = 0;
-
+    int outBatchSize = 1;
+    int messageOTF, internalMessageOTF;
     // liste degli index dei nodi input/output nel builiding block in the shared memory context. The first list: inputL will become the rouitng table
     std::vector<int> inputL, outputL, inputR, outputR;
 
-    std::map<std::string, std::pair<std::vector<int>, bool>> routingTable;
+    // pre computed routing table for the sender module (shoud coincide with the one exchanged actually at runtime)
+    std::map<std::string, std::pair<std::vector<int>, ChannelType>> routingTable;
     
     // TODO: implmentare l'assegnamento di questi campi
     int leftTotalOuputs;
@@ -102,44 +119,55 @@ public:
     }
 
     std::vector<int> getInputIndexes(bool internal){
-        if (internal && !R.empty()) return inputR;
+        if ((isVertical() && hasRightChildren()) || (internal && !R.empty())) return inputR;
         return inputL;
     }
 
     void print(){
-        std::cout << "###### BEGIN GROUP ######\n";
-        std::cout << "Group Orientation: " << (isVertical() ? "vertical" : "horizontal") << std::endl;
-        std::cout << std::boolalpha << "Source group: " << isSource << std::endl;
-        std::cout << std::boolalpha << "Sink group: " << isSink << std::endl;
-        std::cout << std::boolalpha << "Coverage Left: " << coverageL << std::endl;
-        std::cout << std::boolalpha << "Coverage Right: " << coverageR << std::endl << std::endl;
+        ff::cout << "###### BEGIN GROUP ######\n";
+        ff::cout << "Group Orientation: " << (isVertical() ? "vertical" : "horizontal") << std::endl;
+        ff::cout << std::boolalpha << "Source group: " << isSource << std::endl;
+        ff::cout << std::boolalpha << "Sink group: " << isSink << std::endl;
+        ff::cout << std::boolalpha << "Coverage Left: " << coverageL << std::endl;
+        ff::cout << std::boolalpha << "Coverage Right: " << coverageR << std::endl << std::endl;
 
-        std::cout << std::boolalpha << "Has Receiver: " << hasReceiver << std::endl;
-        std::cout << "Expected input connections: " << expectedEOS << std::endl;
-        std::cout << "Listen endpoint: " << listenEndpoint.address << ":" << listenEndpoint.port << std::endl << std::endl;
+        ff::cout << std::boolalpha << "Has Receiver: " << hasReceiver << std::endl;
+        ff::cout << "Expected input connections: " << expectedEOS << std::endl;
+        ff::cout << "Listen endpoint: " << listenEndpoint.address << ":" << listenEndpoint.port << std::endl << std::endl;
 
-        std::cout << std::boolalpha << "Has Sender: " << hasSender << std::endl;
-        std::cout << "Destination endpoints: " << std::endl;
-        for(ff_endpoint& e : destinationEndpoints)
-            std::cout << "\t* " << e.groupName << "\t[[" << e.address << ":" << e.port << "]]" << std::endl;
+        ff::cout << std::boolalpha << "Has Sender: " << hasSender << std::endl;
+        ff::cout << "Destination endpoints: " << std::endl;
+        for(auto& [ct, e] : destinationEndpoints)
+            ff::cout << "\t* " << e.groupName << "\t[[" << e.address << ":" << e.port << "]]  - " << (ct==ChannelType::FBK ? "Feedback" : (ct==ChannelType::INT ? "Internal" : "Forward")) << std::endl;
+
+        ff::cout << "Precomputed routing table: \n";
+        for(auto& [gName, p] : routingTable){
+            ff::cout << "\t* " << gName << (p.second==ChannelType::FBK ? "Feedback" : (p.second==ChannelType::INT ? "Internal" : "Forward")) << ":";
+            for(auto i : p.first) ff::cout << i << " ";
+            ff::cout << std::endl;
+        }
+
+        ff::cout << "\nPrecomputed FWD destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second == ChannelType::FWD ? f.second.first.size() : 0);}) << std::endl;
+        ff::cout << "Precomputed INT destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second == ChannelType::INT ? f.second.first.size() : 0);}) << std::endl;
+        ff::cout << "Precomputed FBK destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second == ChannelType::FBK ? f.second.first.size() : 0);}) << std::endl;
+
+        ff::cout << "\n\nIndex Input Left: ";
+        for(int i : inputL) ff::cout << i << " ";
+        ff::cout << "\n";
+
+        ff::cout << "Index Output Left: ";
+        for(int i : outputL) ff::cout << i << " ";
+        ff::cout << "\n";
+
+        ff::cout << "Index Input Right: ";
+        for(int i : inputR) ff::cout << i << " ";
+        ff::cout << "\n";
+
+        ff::cout << "Index Output Right: ";
+        for(int i : outputR) ff::cout << i << " ";
+        ff::cout << "\n";
         
-        std::cout << "\n\nIndex Input Left: ";
-        for(int i : inputL) std::cout << i << " ";
-        std::cout << "\n";
-
-        std::cout << "Index Output Left: ";
-        for(int i : outputL) std::cout << i << " ";
-        std::cout << "\n";
-
-        std::cout << "Index Input Right: ";
-        for(int i : inputR) std::cout << i << " ";
-        std::cout << "\n";
-
-        std::cout << "Index Output Right: ";
-        for(int i : outputR) std::cout << i << " ";
-        std::cout << "\n";
-        
-        std::cout << "######  END GROUP  ######\n";
+        ff::cout << "######  END GROUP  ######\n";
     }
 
 

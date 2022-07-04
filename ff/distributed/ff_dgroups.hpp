@@ -25,14 +25,15 @@
 #ifndef FF_DGROUPS_H
 #define FF_DGROUPS_H
 
+#include <signal.h>
+#include <getopt.h>
+
 #include <string>
 #include <map>
 #include <set>
 #include <vector>
 #include <sstream>
 #include <algorithm>
-
-#include <getopt.h>
 
 #include <ff/ff.hpp>
 
@@ -51,8 +52,6 @@
 #endif
 
 namespace ff {
-
-enum Proto {TCP , MPI};
 
 class dGroups {
 public:
@@ -119,16 +118,35 @@ public:
         this->runningGroup = parsedGroups[rank].name;
     }
 
+    /*
+    * Set the thread mapping if specified in the configuration file. Otherwise use the default mapping specified in the legacy FastFlow config.hpp file.
+    * In config file the mapping can be specified for each group through the key "threadMapping"
+    */
+    void setThreadMapping(){
+      auto g = std::find_if(parsedGroups.begin(), parsedGroups.end(), [this](auto& g){return g.name == this->runningGroup;});
+      if (g != parsedGroups.end() && !g->threadMapping.empty())
+        threadMapper::instance()->setMappingList(g->threadMapping.c_str());
+    }
+
 	  const std::string& getRunningGroup() const { return runningGroup; }
 
     void forceProtocol(Proto p){this->usedProtocol = p;}
 	
     int run_and_wait_end(ff_pipeline* parent){
         if (annotatedGroups.find(runningGroup) == annotatedGroups.end()){
-            ff::error("The group specified is not found nor implemented!\n");
+            ff::error("The group %s is not found nor implemented!\n", runningGroup.c_str());
             return -1;
         }
 
+      bool allDeriveFromParent = true; 
+      for(auto& [name, ir]: annotatedGroups) 
+        if (ir.parentBB != parent) { allDeriveFromParent = false; break; }
+
+      if (allDeriveFromParent) {
+        ff_pipeline *mypipe = new ff_pipeline;
+        mypipe->add_stage(parent);
+        parent = mypipe;
+      }
 
       // qui dovrei creare la rappresentazione intermedia di tutti
       this->prepareIR(parent);
@@ -149,11 +167,6 @@ public:
         std::cerr << "Error waiting the group!" << std::endl;
         return -1;
       }
-      
-        //ff_node* runningGroup = this->groups[this->runningGroup];
-        
-        //if (runningGroup->run(parent) < 0) return -1;
-        //if (runningGroup->wait() < 0) return -1;
 
       #ifdef DFF_MPI
         if (usedProtocol == Proto::MPI)
@@ -177,7 +190,11 @@ private:
     struct G {
         std::string name;
         std::string address;
+        std::string threadMapping;
         int port;
+        int batchSize          = DEFAULT_BATCH_SIZE;
+        int internalMessageOTF = DEFAULT_INTERNALMSG_OTF;
+        int messageOTF         = DEFAULT_MESSAGE_OTF;
 
         template <class Archive>
         void load( Archive & ar ){
@@ -187,6 +204,22 @@ private:
                 std::string endpoint;
                 ar(cereal::make_nvp("endpoint", endpoint)); std::vector endp(split(endpoint, ':'));
                 address = endp[0]; port = std::stoi(endp[1]);
+            } catch (cereal::Exception&) {ar.setNextName(nullptr);}
+
+            try {
+                ar(cereal::make_nvp("batchSize", batchSize));
+            } catch (cereal::Exception&) {ar.setNextName(nullptr);}
+
+             try {
+                ar(cereal::make_nvp("internalMessageOTF", internalMessageOTF));
+            } catch (cereal::Exception&) {ar.setNextName(nullptr);}
+
+             try {
+                ar(cereal::make_nvp("messageOTF", messageOTF));
+            } catch (cereal::Exception&) {ar.setNextName(nullptr);}
+
+            try {
+                ar(cereal::make_nvp("threadMapping", threadMapping));
             } catch (cereal::Exception&) {ar.setNextName(nullptr);}
 
         }
@@ -208,6 +241,7 @@ private:
 
     void prepareIR(ff_pipeline* parentPipe){
       ff::ff_IR& runningGroup_IR = annotatedGroups[this->runningGroup];
+      runningGroup_IR.protocol = this->usedProtocol; // set the protocol
       ff_node* previousStage = getPreviousStage(parentPipe, runningGroup_IR.parentBB);
       ff_node* nextStage = getNextStage(parentPipe, runningGroup_IR.parentBB);
       // TODO: check coverage all 1st level
@@ -222,7 +256,13 @@ private:
 
         // annotate the listen endpoint for the specified group
         annotatedGroups[g.name].listenEndpoint = endpoint;
+        // set the batch size for each group
+        if (g.batchSize > 1) annotatedGroups[g.name].outBatchSize = g.batchSize;
+        if (g.messageOTF) annotatedGroups[g.name].messageOTF = g.messageOTF;
+        if (g.internalMessageOTF) annotatedGroups[g.name].internalMessageOTF = g.internalMessageOTF;
       }
+
+      // TODO check first level pipeline before strting building the groups.
 
       // build the map parentBB -> <groups names>
       std::map<ff_node*, std::set<std::string>> parentBB2GroupsName;
@@ -232,8 +272,8 @@ private:
       for(const auto& pair : parentBB2GroupsName){
 
         //just build the current previous the current and the next stage of the parentbuilding block i'm going to exeecute  //// TODO: reprhase this comment!
-        if (!(pair.first == previousStage || pair.first == runningGroup_IR.parentBB || pair.first == nextStage))
-          continue;
+        //if (!(pair.first == previousStage || pair.first == runningGroup_IR.parentBB || pair.first == nextStage))
+        //  continue;
 
         bool isSrc = isSource(pair.first, parentPipe);
         bool isSnk = isSink(pair.first, parentPipe);
@@ -248,9 +288,68 @@ private:
           continue; // skip anyway
         }
         
-        // if i'm here it means that from this 1st level building block, multiple groups have been created! (An Error or an A2A or a Farm BB)
+        // if i'm here it means that from this 1st level building block, multiple groups have been created! (An Error or an A2A or a Pipe BB)
+
+
+        // multiple groups created from a pipeline!
+        if (pair.first->isPipe()){
+          bool isMainPipe = pair.first == parentPipe;
+          ff_pipeline* originalPipe = reinterpret_cast<ff_pipeline*>(pair.first);
+          
+          // if the pipe coincide with the main Pipe, just ignore the fact that is wrapped around, since it will be handled later on!
+          bool iswrappedAround = isMainPipe ? false : originalPipe->isset_wraparound();
+
+          // check that all stages were annotated
+          for(ff_node* child : originalPipe->getStages())
+            if (!annotated.contains(child)){
+              error("When create a group from a pipeline, all the stages must be annotated on a group!");
+              abort();
+            }
+
+           for(auto& gName: pair.second){
+             ff_pipeline* mypipe = new ff_pipeline;
+
+              for(ff_node* child : originalPipe->getStages()){
+                if (annotated[child] == gName){
+                  // if the current builiding pipe has a stages, and the last one is not the previous i'm currently including there is a problem!
+                  if (mypipe->getStages().size() != 0 && originalPipe->get_stageindex(mypipe->get_laststage())+1 != originalPipe->get_stageindex(child)) {
+                    error("There are some stages missing in the annottation!\n");
+                    abort();
+                  } else 
+                    mypipe->add_stage(child);
+                } 
+              }
+
+              bool head = mypipe->get_firststage() == originalPipe->get_firststage();
+              bool tail = mypipe->get_laststage() == originalPipe->get_laststage();
+             
+              if (((head && isSrc && !iswrappedAround) || mypipe->isDeserializable()) && ((tail && isSnk && !iswrappedAround) || mypipe->isSerializable()))  
+                annotatedGroups[gName].insertInList(std::make_pair(mypipe, SetEnum::L));
+              else {
+                error("The group cannot serialize something!\n");
+                abort();
+              }
+
+              if (head && isSrc) annotatedGroups[gName].isSource = true;
+              if (tail && isSnk) annotatedGroups[gName].isSink = true;
+            
+
+              if (!tail)
+                annotatedGroups[gName].destinationEndpoints.push_back({ChannelType::FWD, annotatedGroups[annotated[originalPipe->get_nextstage(mypipe->get_laststage())]].listenEndpoint});
+              else if (iswrappedAround)
+                // if this is the last stage & the pipe is wrapper around i connect tot he "head" groups of this pipeline
+                annotatedGroups[gName].destinationEndpoints.push_back({ChannelType::FBK, annotatedGroups[annotated[originalPipe->get_firststage()]].listenEndpoint});
+             
+              // add a new expected connection if i'm not the head or i'm the head and the pipeline is wrapped around
+              if (!head || iswrappedAround)
+                annotatedGroups[gName].expectedEOS = 1;
+    
+           }
+
+        } else { // multiple groups created from an all2all!
+
         std::set<std::pair<ff_node*, SetEnum>> children = getChildBB(pair.first);
-        
+
         std::erase_if(children, [&](auto& p){
             if (!annotated.contains(p.first)) return false;
             std::string& groupName = annotated[p.first]; 
@@ -300,16 +399,19 @@ private:
            // populate the set with the names of other groups created from this 1st level BB
           _ir.otherGroupsFromSameParentBB = pair.second;
         }
-       
+        
+        }
         //runningGroup_IR.isSink = isSnk; runningGroup_IR.isSource = isSrc;
        
         //runningGroup_IR.otherGroupsFromSameParentBB = pair.second;
 
       }
 
+
+      // compute routing for horizzontally splitted A2A
       // this is meaningful only if the group is horizontal and made of an a2a
       if (!runningGroup_IR.isVertical()){
-		assert(runningGroup_IR.parentBB->isAll2All());
+		    assert(runningGroup_IR.parentBB->isAll2All());
         ff_a2a* parentA2A = reinterpret_cast<ff_a2a*>(runningGroup_IR.parentBB);
         {
           ff::svector<ff_node*> inputs;
@@ -323,16 +425,27 @@ private:
         }
       }
 
+      
       //############# compute the number of excpected input connections
+      
+      // handle horizontal groups 
       if (runningGroup_IR.hasRightChildren()){
         auto& currentGroups = parentBB2GroupsName[runningGroup_IR.parentBB];
         runningGroup_IR.expectedEOS = std::count_if(currentGroups.cbegin(), currentGroups.cend(), [&](auto& gName){return (!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasLeftChildren());});
         // if the current group is horizontal count out itsleft from the all horizontals
         if (!runningGroup_IR.isVertical()) runningGroup_IR.expectedEOS -= 1;
       }
+
       // if the previousStage exists, count all the ouput groups pointing to the one i'm going to run
-      if (previousStage && runningGroup_IR.hasLeftChildren())
+      // if the runningGroup comes from a pipe, make sure i'm the head 
+      if (previousStage && runningGroup_IR.hasLeftChildren() && (!runningGroup_IR.parentBB->isPipe() || inputGroups(parentBB2GroupsName[runningGroup_IR.parentBB]).contains(runningGroup)))
         runningGroup_IR.expectedEOS += outputGroups(parentBB2GroupsName[previousStage]).size();
+      
+      // FEEDBACK RELATED (wrap around of the main pipe!)
+      // if the main pipe is wrapped-around i take all the outputgroups of the last stage of the pipeline and the cardinality must set to the expected input connections
+      if (!previousStage && parentPipe->isset_wraparound())
+        runningGroup_IR.expectedEOS += outputGroups(parentBB2GroupsName[parentPipe->getStages().back()]).size();
+
 
       if (runningGroup_IR.expectedEOS > 0) runningGroup_IR.hasReceiver = true;
 
@@ -341,18 +454,30 @@ private:
           // inserisci tutte i gruppi di questo bb a destra
           for(const auto& gName: parentBB2GroupsName[runningGroup_IR.parentBB])
             if (!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasRightChildren())
-              runningGroup_IR.destinationEndpoints.push_back(annotatedGroups[gName].listenEndpoint);
-      } else {
+              runningGroup_IR.destinationEndpoints.push_back({ChannelType::FWD, annotatedGroups[gName].listenEndpoint});
+      } 
+      else if (runningGroup_IR.parentBB->isPipe() && runningGroup_IR.parentBB != parentPipe){
+        if (nextStage && outputGroups(parentBB2GroupsName[runningGroup_IR.parentBB]).contains(runningGroup))
+          for(const auto& gName : inputGroups(parentBB2GroupsName[nextStage]))
+            runningGroup_IR.destinationEndpoints.push_back({ChannelType::FWD, annotatedGroups[gName].listenEndpoint});
+      }
+      else {
         if (!runningGroup_IR.isVertical()){
           // inserisci tutti i gruppi come sopra
           for(const auto& gName: parentBB2GroupsName[runningGroup_IR.parentBB])
             if ((!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasRightChildren()) && gName != runningGroup)
-              runningGroup_IR.destinationEndpoints.push_back(annotatedGroups[gName].listenEndpoint);
+              runningGroup_IR.destinationEndpoints.push_back({ChannelType::INT, annotatedGroups[gName].listenEndpoint});
         }
 
         if (nextStage)
           for(const auto& gName : inputGroups(parentBB2GroupsName[nextStage]))
-            runningGroup_IR.destinationEndpoints.push_back(annotatedGroups[gName].listenEndpoint);
+            runningGroup_IR.destinationEndpoints.push_back({ChannelType::FWD, annotatedGroups[gName].listenEndpoint});
+        else
+          // FEEDBACK RELATED (wrap around of the main pipe!)
+          if (parentPipe->isset_wraparound()){
+            for(const auto& gName : inputGroups(parentBB2GroupsName[parentPipe->getStages().front()]))
+              runningGroup_IR.destinationEndpoints.push_back({ChannelType::FBK, annotatedGroups[gName].listenEndpoint});
+          }
       }
       
       
@@ -362,25 +487,30 @@ private:
       
       // experimental building the expected routing table for the running group offline (i.e., statically)
       if (runningGroup_IR.hasSender)
-        for(auto& ep : runningGroup_IR.destinationEndpoints){
+        for(auto& [ct, ep] : runningGroup_IR.destinationEndpoints){
             auto& destIR = annotatedGroups[ep.groupName];
             destIR.buildIndexes();
-            bool internalConnection = runningGroup_IR.parentBB == destIR.parentBB;
-            runningGroup_IR.routingTable[ep.groupName] = std::make_pair(destIR.getInputIndexes(internalConnection), internalConnection);
+            bool internalConnection = ct == ChannelType::INT || (ct == ChannelType::FWD && runningGroup_IR.parentBB == destIR.parentBB); //runningGroup_IR.parentBB == destIR.parentBB;
+            runningGroup_IR.routingTable[ep.groupName] = std::make_pair(destIR.getInputIndexes(internalConnection), ct);
         }
 
-      //runningGroup_IR.print();
     }
 
   std::set<std::string> outputGroups(std::set<std::string> groupNames){
     if (groupNames.size() > 1)
-      std::erase_if(groupNames, [this](const auto& gName){return (annotatedGroups[gName].isVertical() && annotatedGroups[gName].hasLeftChildren());});
+      std::erase_if(groupNames, [this](const auto& gName){
+        ff_IR& ir = annotatedGroups[gName];
+        return ((ir.parentBB->isAll2All() && ir.isVertical() && ir.hasLeftChildren()) || (ir.parentBB->isPipe() && annotated[reinterpret_cast<ff_pipeline*>(ir.parentBB)->get_laststage()] != gName));
+      });
     return groupNames;
   }
 
   std::set<std::string> inputGroups(std::set<std::string> groupNames){
     if (groupNames.size() > 1) 
-      std::erase_if(groupNames,[this](const auto& gName){return (annotatedGroups[gName].isVertical() && annotatedGroups[gName].hasRightChildren());});
+      std::erase_if(groupNames,[this](const auto& gName){
+        ff_IR& ir = annotatedGroups[gName];
+        return ((ir.parentBB->isAll2All() && ir.isVertical() && annotatedGroups[gName].hasRightChildren()) || (ir.parentBB->isPipe() && annotated[reinterpret_cast<ff_pipeline*>(ir.parentBB)->get_firststage()] != gName));
+      });
     return groupNames;
   }
 
@@ -389,7 +519,16 @@ private:
 
 
 static inline int DFF_Init(int& argc, char**& argv){
-    std::string configFile, groupName;  
+    struct sigaction s;
+    memset(&s,0,sizeof(s));    
+    s.sa_handler=SIG_IGN;
+    if ( (sigaction(SIGPIPE,&s,NULL) ) == -1 ) {   
+		perror("sigaction");
+		return -1;
+    } 
+
+
+	std::string configFile, groupName;  
 
     for(int i = 0; i < argc; i++){
       if (strstr(argv[i], "--DFF_Config") != NULL){
@@ -469,7 +608,10 @@ static inline int DFF_Init(int& argc, char**& argv){
       std::cout << "Running group: " << dGroups::Instance()->getRunningGroup() << " on rank: " <<  myrank << "\n";
     }
 
-  #endif  
+  #endif 
+
+    // set the mapping if specified
+    dGroups::Instance()->setThreadMapping();
 
     // set the name for the printer
     ff::cout.setPrefix(dGroups::Instance()->getRunningGroup());

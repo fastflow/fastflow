@@ -242,6 +242,7 @@ protected:
                                       unsigned long ticks=TICKS2WAIT) {
         unsigned long cnt;
         if (blocking_out) {
+            unsigned long r = 0;
             do {
                 cnt=0;
                 do {
@@ -259,6 +260,8 @@ protected:
                     ++cnt;
                     if (cnt == nattempts()) break; 
                 } while(1);
+
+                if (++r >= retry) return false;
                 
                 struct timespec tv;
                 timedwait_timeout(tv);                
@@ -480,7 +483,7 @@ public:
      *  \param max_num_workers The max number of workers allowed
      */
     ff_loadbalancer(size_t max_num_workers): 
-        running(-1),max_nworkers(max_num_workers),nextw(-1),feedbackid(-1),
+        running(-1),max_nworkers(max_num_workers),nextw(-1),feedbackid(0),
         channelid(-2),input_channelid(-1),
         filter(NULL),workers(max_num_workers),
         buffer(NULL),skip1pop(false),master_worker(false),parallel_workers(false),
@@ -606,6 +609,17 @@ public:
      */
     ssize_t get_channel_id() const { return channelid;}
 
+    size_t get_num_inchannels() const {
+        size_t nw=multi_input.size();
+        if (manager) nw +=1;
+        if (multi_input.size()==0 && (get_in_buffer()!=NULL)) nw+=1;
+        return nw;
+    }
+    size_t get_num_outchannels() const { return workers.size(); }
+    size_t get_num_feedbackchannels() const {
+        return feedbackid;
+    }
+    
     /**
      * \brief Resets the channel id
      *
@@ -656,6 +670,10 @@ public:
         for(size_t i=0;i<workers.size();++i)
             workers[i]->skipfirstpop(false);
     }
+
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk) { _skipallpop = sk; }
+#endif
 
 
     void blocking_mode(bool blk=true) {
@@ -718,12 +736,14 @@ public:
                                unsigned long retry=((unsigned long)-1),
                                unsigned long ticks=(TICKS2WAIT)) {        
         if (blocking_out) {
+            unsigned long r=0;
         _retry:
             bool empty=workers[id]->get_in_buffer()->empty();
             if (workers[id]->put(task)) {
                 FFTRACE(++taskcnt);
                 if (empty) put_done(id);
             } else {
+                if (++r >= retry) return false;
                 struct timespec tv;
                 timedwait_timeout(tv);
                 pthread_mutex_lock(prod_m);
@@ -881,12 +901,10 @@ public:
         bool inpresent  = (get_in_buffer() != NULL);
         bool skipfirstpop = skip1pop;
 
-        // the following case is possible when the emitter is a dnode
         if (!inpresent && filter && (filter->get_in_buffer()!=NULL)) {
             inpresent = true;
             set_in_buffer(filter->get_in_buffer());
         }
-        
 
         gettimeofday(&wtstart,NULL);
         if (!master_worker && (multi_input.size()==0) && (inputNodesFeedback.size()==0)) {
@@ -898,7 +916,7 @@ public:
             
             do {
 #ifdef DFF_ENABLED
-                if (!skipallpop && inpresent){
+                if (!_skipallpop && inpresent){
 #else
                 if (inpresent) {
 #endif
@@ -1126,10 +1144,14 @@ public:
     }
 
     int dryrun() {
+        // if there are feedback channels, we want ff_send_out will do
+        // a round-robin on those channels, whereas ff_send_out_to could be
+        // used to target forward channels
+        // by setting running=feedbackid, then selectworkers will skip forward channels
         if (feedbackid>0)
             running = feedbackid;
         else 
-            running=workers.size();
+            running = workers.size();
         
         if (filter) {
             // WARNING: If the last node of a composition is a multi-output node, then the
@@ -1174,7 +1196,7 @@ public:
                 assert(blocking_in==blocking_out);
                 workers[i]->blocking_mode(blocking_in);
                 if (!default_mapping) workers[i]->no_mapping();
-                workers[i]->skipfirstpop(false);
+                //workers[i]->skipfirstpop(false);
                 if (workers[i]->freeze_and_run(true)<0) {
                     error("LB, spawning worker thread\n");
                     return -1;
@@ -1187,7 +1209,7 @@ public:
                 assert(blocking_in==blocking_out);
                 workers[i]->blocking_mode(blocking_in);
                 if (!default_mapping) workers[i]->no_mapping();
-                workers[i]->skipfirstpop(false);
+                //workers[i]->skipfirstpop(false);
                 if (workers[i]->run(true)<0) {
                     error("LB, spawning worker thread\n");
                     return -1;
@@ -1484,7 +1506,7 @@ private:
     bool               blocking_out;
 
 #ifdef DFF_ENABLED
-    bool               skipallpop = false;    
+    bool               _skipallpop = false;    
 #endif
 
 #if defined(TRACE_FASTFLOW)

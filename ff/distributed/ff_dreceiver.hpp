@@ -45,8 +45,9 @@ using namespace ff;
 
 class ff_dreceiver: public ff_monode_t<message_t> { 
 protected:
+    std::map<int, ChannelType> sck2ChannelType;
 
-    static int sendRoutingTable(const int sck, const std::vector<int>& dest){
+    /*static int sendRoutingTable(const int sck, const std::vector<int>& dest){
         dataBuffer buff; std::ostream oss(&buff);
 		cereal::PortableBinaryOutputArchive oarchive(oss);
 		oarchive << dest;
@@ -64,13 +65,16 @@ protected:
         }
 
         return 0;
-    }
+    }*/
 
     virtual int handshakeHandler(const int sck){
         // ricevo l'handshake e mi salvo che tipo di connessione è
         size_t size;
-        struct iovec iov; iov.iov_base = &size; iov.iov_len = sizeof(size);
-        switch (readvn(sck, &iov, 1)) {
+        ChannelType t;
+        struct iovec iov[2]; 
+        iov[0].iov_base = &t; iov[0].iov_len = sizeof(ChannelType);
+        iov[1].iov_base = &size; iov[1].iov_len = sizeof(size);
+        switch (readvn(sck, iov, 2)) {
            case -1: error("Error reading from socket\n"); // fatal error
            case  0: return -1; // connection close
         }
@@ -81,31 +85,52 @@ protected:
         if (readn(sck, groupName, size) < 0){
             error("Error reading from socket groupName\n"); return -1;
         }
-        std::vector<int> reachableDestinations;
-        for(const auto& [key, value] : this->routingTable) reachableDestinations.push_back(key);
+        
+        sck2ChannelType[sck] = t;
 
-        return this->sendRoutingTable(sck, reachableDestinations);
+        return 0; //this->sendRoutingTable(sck, reachableDestinations);
+    }
+
+    virtual void registerLogicalEOS(int sender){
+        for(size_t i = 0; i < this->get_num_outchannels(); i++)
+                ff_send_out_to(new message_t(sender, i), i);
     }
 
     virtual void registerEOS(int sck){
-        /*switch(connectionsTypes[sck]){
-            case ConnectionType::EXTERNAL: 
-                if (++Eneos == Einput_channels)
-                    for(auto& c : routingTable) if (c.first >= 0) ff_send_out_to(this->EOS, c.second);    
-                break;
-            case ConnectionType::INTERNAL:
-                if (++Ineos == Iinput_channels)
-                    for(auto & c : routingTable) if (c.first <= -100) ff_send_out(this->EOS, c.second);
-                break;
-        }*/
         neos++;
     }
 
     virtual void forward(message_t* task, int){
-        ff_send_out_to(task, this->routingTable[task->chid]); // assume the routing table is consistent WARNING!!!
+        if (task->chid == -1) ff_send_out(task);
+        else ff_send_out_to(task, this->routingTable[task->chid]); // assume the routing table is consistent WARNING!!!
     }
 
-    virtual int handleRequest(int sck){
+    virtual int handleBatch(int sck){
+        int requestSize;
+        switch(readn(sck, reinterpret_cast<char*>(&requestSize), sizeof(requestSize))) {
+		case -1: {			
+			perror("readn");
+			error("Something went wrong in receiving the number of tasks!\n");
+			return -1;
+		} break;
+		case 0: return -1;
+        }
+		// always sending back the acknowledgement
+        if (writen(sck, reinterpret_cast<char*>(&ACK), sizeof(ack_t)) < 0){
+            if (errno != ECONNRESET && errno != EPIPE) {
+                error("Error sending back ACK to the sender (errno=%d)\n",errno);
+                return -1;
+            }
+        }
+		ChannelType t = sck2ChannelType[sck];
+        requestSize = ntohl(requestSize);
+        for(int i = 0; i < requestSize; i++)
+            if (handleRequest(sck, t)<0) return -1;
+        
+        return 0;
+    }
+
+    virtual int handleRequest(int sck, ChannelType t){
    		int sender;
 		int chid;
         size_t sz;
@@ -118,8 +143,8 @@ protected:
         iov[2].iov_len = sizeof(sz);
 
         switch (readvn(sck, iov, 3)) {
-           case -1: error("Error reading from socket\n"); // fatal error
-           case  0: return -1; // connection close
+		case -1: error("Error reading from socket errno=%d\n",errno); // fatal error
+		case  0: return -1; // connection close
         }
 
         // convert values to host byte order
@@ -131,22 +156,27 @@ protected:
             char* buff = new char [sz];
 			assert(buff);
             if(readn(sck, buff, sz) < 0){
-                error("Error reading from socket\n");
+                error("Error reading from socket in handleRequest\n");
                 delete [] buff;
                 return -1;
             }
 			message_t* out = new message_t(buff, sz, true);
 			assert(out);
+            out->feedback = t == ChannelType::FBK;
 			out->sender = sender;
 			out->chid   = chid;
-
             this->forward(out, sck);
+
+            return 0;
+        }
+        //logical EOS
+        if (chid == -2){
+            registerLogicalEOS(sender);
             return 0;
         }
 
-
+        //pyshical EOS
         registerEOS(sck);
-
         return -1;
     }
 
@@ -202,11 +232,10 @@ public:
     }
 
     void svc_end() {
-        close(this->listen_sck);
-
-        #ifdef LOCAL
-            unlink(this->acceptAddr.address.c_str());
-        #endif
+        close(this->listen_sck);		
+#ifdef LOCAL
+		unlink(this->acceptAddr.address.c_str());
+#endif
     }
     /* 
         Here i should not care of input type nor input data since they come from a socket listener.
@@ -233,12 +262,9 @@ public:
                 case  0: continue;
             }
 
-            // iterate over the file descriptor to see which one is active
-            int fixed_last = (this->last_receive_fd + 1) % (fdmax +1);
-            for(int i=0; i <= fdmax; i++){
-                int actualFD = (fixed_last + i) % (fdmax +1);
-	            if (FD_ISSET(actualFD, &tmpset)){
-                    if (actualFD == this->listen_sck) {
+            for(int idx=0; idx <= fdmax; idx++){
+	            if (FD_ISSET(idx, &tmpset)){
+                    if (idx == this->listen_sck) {
                         int connfd = accept(this->listen_sck, (struct sockaddr*)NULL ,NULL);
                         if (connfd == -1){
                             error("Error accepting client\n");
@@ -251,30 +277,24 @@ public:
                         continue;
                     }
                     
-                    // it is not a new connection, call receive and handle possible errors
-                    // save the last socket i
-                    this->last_receive_fd = actualFD;
-
-                    
-                    if (this->handleRequest(actualFD) < 0){
-                        close(actualFD);
-                        FD_CLR(actualFD, &set);
+                    if (this->handleBatch(idx) < 0){
+                        close(idx);
+                        FD_CLR(idx, &set);
 
                         // update the maximum file descriptor
-                        if (actualFD == fdmax)
+                        if (idx == fdmax)
                             for(int ii=(fdmax-1);ii>=0;--ii)
                                 if (FD_ISSET(ii, &set)){
                                     fdmax = ii;
-                                    this->last_receive_fd = -1;
                                     break;
                                 }
-                                    
+						
                     }
-                   
+					
                 }
             }
         }
-
+		
         return this->EOS;
     }
 
@@ -284,35 +304,47 @@ protected:
     int listen_sck;
     ff_endpoint acceptAddr;	
     std::map<int, int> routingTable;
-    int last_receive_fd = -1;
 	int coreid;
+    ack_t ACK;
 };
 
 
 class ff_dreceiverH : public ff_dreceiver {
 
-    std::vector<int> internalDestinations;
-    std::map<int, bool> isInternalConnection;
-    std::set<std::string> internalGroupsNames;
+    //std::map<int, bool> isInternalConnection;
     size_t internalNEos = 0, externalNEos = 0;
+    long next_rr_destination = 0;
+
+    void registerLogicalEOS(int sender){
+        for(size_t i = 0; i < this->get_num_outchannels()-1; i++)
+                ff_send_out_to(new message_t(sender, i), i);
+    }
 
     void registerEOS(int sck){
         neos++;
-        size_t internalConn = std::count_if(std::begin(isInternalConnection),
-                                            std::end  (isInternalConnection),
-                                            [](std::pair<int, bool> const &p) {return p.second;});
+        size_t internalConn = std::count_if(std::begin(sck2ChannelType),
+                                            std::end  (sck2ChannelType),
+                                            [](std::pair<int, ChannelType> const &p) {return p.second == ChannelType::INT;});
 
-        if (!isInternalConnection[sck]){
-            if (++externalNEos == (isInternalConnection.size()-internalConn))
+        if (sck2ChannelType[sck] != ChannelType::INT){
+            // logical EOS!!
+            /*for(int i = 0; i < this->get_num_outchannels()-1; i++)
+                ff_send_out(new message_t(0,0), i);*/
+
+            if (++externalNEos == (sck2ChannelType.size()-internalConn))
 				for(size_t i = 0; i < this->get_num_outchannels()-1; i++) ff_send_out_to(this->EOS, i);
-        } else
-			if (++internalNEos == internalConn)
+        } else{
+            /// logical EOS!
+            //ff_send_out_to(new message_t(0,0), this->get_num_outchannels()-1); 
+			
+            if (++internalNEos == internalConn)
 				ff_send_out_to(this->EOS, this->get_num_outchannels()-1);
+        }
         
         
     }
 
-    virtual int handshakeHandler(const int sck){
+    /*virtual int handshakeHandler(const int sck){
         size_t size;
         struct iovec iov; iov.iov_base = &size; iov.iov_len = sizeof(size);
         switch (readvn(sck, &iov, 1)) {
@@ -337,90 +369,23 @@ class ff_dreceiverH : public ff_dreceiver {
         for(const auto& [key, value] :  this->routingTable) reachableDestinations.push_back(key);
         return this->sendRoutingTable(sck, reachableDestinations);
     }
+    */
 
     void forward(message_t* task, int sck){
-        if (isInternalConnection[sck]) ff_send_out_to(task, this->get_num_outchannels()-1);
-        else ff_dreceiver::forward(task, sck);
+        if (sck2ChannelType[sck] == ChannelType::INT) ff_send_out_to(task, this->get_num_outchannels()-1);
+        else if (task->chid != -1) ff_send_out_to(task, this->routingTable[task->chid]);
+        else {
+            ff_send_out_to(task, next_rr_destination);
+            next_rr_destination = (next_rr_destination + 1) % (this->get_num_outchannels()-1);
+        }
     }
 
 public:
-    ff_dreceiverH(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {{0,0}}, std::vector<int> internalRoutingTable = {0}, std::set<std::string> internalGroups = {}, int coreid=-1) 
-    : ff_dreceiver(acceptAddr, input_channels, routingTable, coreid), internalDestinations(internalRoutingTable), internalGroupsNames(internalGroups) {
+    ff_dreceiverH(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {{0,0}}, int coreid=-1) 
+    : ff_dreceiver(acceptAddr, input_channels, routingTable, coreid){
 
     }
 
-};
-
-/*
-    ONDEMAND specification
-*/
-
-
-class ff_dreceiverOD: public ff_dreceiver { 
-protected:
-    virtual int handleRequest(int sck) override {
-		int sender;
-		int chid;
-        size_t sz;
-        struct iovec iov[3];
-        iov[0].iov_base = &sender;
-        iov[0].iov_len = sizeof(sender);
-        iov[1].iov_base = &chid;
-        iov[1].iov_len = sizeof(chid);
-        iov[2].iov_base = &sz;
-        iov[2].iov_len = sizeof(sz);
-
-        switch (readvn(sck, iov, 3)) {
-           case -1: error("Error reading from socket\n"); // fatal error
-           case  0: return -1; // connection close
-        }
-
-        // convert values to host byte order
-        sender = ntohl(sender);
-        chid   = ntohl(chid);
-        sz     = be64toh(sz);
-
-        if (sz > 0){
-            char* buff = new char [sz];
-			assert(buff);
-            if(readn(sck, buff, sz) < 0){
-                error("Error reading from socket\n");
-                delete [] buff;
-                return -1;
-            }
-			message_t* out = new message_t(buff, sz, true);
-			assert(out);
-			out->sender = sender;
-			out->chid   = chid;
-
-            if (chid != -1)
-                ff_send_out_to(out, this->routingTable[chid]); // assume the routing table is consistent WARNING!!!
-            else
-                ff_send_out(out);
-
-          
-            if (writen(sck, reinterpret_cast<char*>(&ACK),sizeof(ack_t)) < 0){
-                if (errno != ECONNRESET || errno != EPIPE) {
-                    error("Error sending back ACK to the sender (errno=%d)\n",errno);
-                    return -1;
-                }
-            }
-		
-
-            return 0;
-        }
-
-        registerEOS(sck);
-
-        return -1;
-    }
-
-public:
-    ff_dreceiverOD(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
-		: ff_dreceiver(acceptAddr, input_channels, routingTable, coreid) {}
-
-private:
-    ack_t ACK;
 };
 
 #endif

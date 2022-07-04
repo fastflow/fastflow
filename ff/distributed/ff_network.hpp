@@ -55,7 +55,14 @@
     #define htole64(x) OSSwapHostToLittleInt64(x)
     #define be64toh(x) OSSwapBigToHostInt64(x)
     #define le64toh(x) OSSwapLittleToHostInt64(x)
+
+    #ifndef UIO_MAXIOV
+    #define UIO_MAXIOV 1023
+    #endif
 #endif
+
+enum Proto {TCP , MPI};
+enum ChannelType {FWD, INT, FBK};
 
 class dataBuffer: public std::stringbuf {
 public:	
@@ -70,7 +77,13 @@ public:
     }
 
 	~dataBuffer() {
-		if (cleanup) delete [] getPtr();
+		if (cleanup) {
+			cleanup = false;
+			if (freetaskF) {
+				freetaskF(getPtr());
+			} else
+				delete [] getPtr();
+		}		
 	}
 
     void setBuffer(char p[], size_t len, bool cleanup=true){
@@ -91,20 +104,14 @@ public:
 		cleanup = false;
 	}
 
+	std::function<void(void*)> freetaskF;
+	
 protected:	
 	ssize_t len=-1;
 	bool cleanup = false;
 };
 
 using ffDbuffer = std::pair<char*, size_t>;
-
-struct SMmessage_t {
-    SMmessage_t(){}
-    SMmessage_t(void* t, int s, int d) : task(t), sender(s), dst(d) {}
-    void * task;
-    int sender;
-    int dst;
-};
 
 struct message_t {
 	message_t(){}
@@ -113,6 +120,7 @@ struct message_t {
 	
 	int           sender;
 	int           chid;
+    bool          feedback = false;
 	dataBuffer    data;
 };
 
@@ -124,7 +132,7 @@ struct ff_endpoint {
     ff_endpoint(){}
     ff_endpoint(std::string addr, int port) : address(std::move(addr)), port(port) {}
     ff_endpoint(int rank) : port(rank) {}
-    const int getRank() {return port;}
+    int getRank() const {return port;}
 	std::string address, groupName;
 	int port;
 };
@@ -217,6 +225,8 @@ static inline ssize_t recvnnb(int fd, char *buf, size_t size) {
     #define DFF_TASK_TAG 3
     #define DFF_HEADER_TAG 4
     #define DFF_ACK_TAG 5
+    #define DFF_GROUP_NAME_TAG 6
+    #define DFF_CHANNEL_TYPE_TAG 7
 
     #define DFF_REQUEST_ROUTING_TABLE 10
 #endif

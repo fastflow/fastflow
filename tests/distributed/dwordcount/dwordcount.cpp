@@ -44,8 +44,10 @@
  *  /<---- pipe1 ---->/        /<--- pipe2 --->/
  *  /<----------------- a2a ------------------>/
  *
- *  G1: pipe1
- *  G2: pipe2
+ * If -g is N then the groups G1...GN will be created. Each group will have n Source-Splitter 
+ * and m Counter-Sink where n and m are the 
+ * values set with -p (i.e, -p n,m). This means that the FastFlow graph will have:
+ *  n*N Source-Sink replicas and  m*N Counter-Sink replicas.  
  *
  */
 
@@ -67,20 +69,20 @@
 using namespace ff;
 
 const size_t qlen = DEFAULT_BUFFER_CAPACITY;
-const int MAXLINE=128;
+const int MAXLINE=128;    // character per line (CPL), a typically value is 80 CPL
 const int MAXWORD=32;
 
 struct tuple_t {
-    char text_line[MAXLINE];   // line of the parsed dataset (text, book, ...)
-    size_t key;                // line number
-    uint64_t id;               // id set to zero
-    uint64_t ts;               // timestamp
+    char     text_line[MAXLINE];  // parsed line
+    size_t   key;                 // line number
+    uint64_t id;                  // id set to zero
+    uint64_t ts;                  // timestamp
 };
 
 struct result_t {
-    char     key[MAXWORD];  // key word
-    uint64_t id;            // id that indicates the current number of occurrences of the key word
-    uint64_t ts;            // timestamp
+    char     key[MAXWORD];    // key word
+    uint64_t id;              // indicates the current number of occurrences of the word
+    uint64_t ts;              // timestamp
 
 	template<class Archive>
 	void serialize(Archive & archive) {
@@ -158,12 +160,10 @@ struct Source: ff_monode_t<tuple_t> {
 	}
 };
 struct Splitter: ff_monode_t<tuple_t, result_t> {
-    Splitter(long noutch):noutch(noutch) {}
-
-    // int svc_init() {
-    // noutch=get_num_outchannels(); // TODO: this doesn't work, it must be fixed!
-    // /return 0;
-    // }
+    int svc_init() {
+        noutch=get_num_outchannels(); // number of output channels
+        return 0;
+    }
 
     result_t* svc(tuple_t* in) {        
         char *tmpstr;
@@ -197,7 +197,7 @@ struct Splitter: ff_monode_t<tuple_t, result_t> {
 struct Counter: ff_minode_t<result_t> {
     result_t* svc(result_t* in) {
         ++M[std::string(in->key)];
-        // number of occurrences of the string word up to now
+        // number of occurrences of the word up to now
         in->id = M[std::string(in->key)]; 
         return in;
     }
@@ -212,14 +212,13 @@ struct Counter: ff_minode_t<result_t> {
 };
 
 struct Sink: ff_node_t<result_t> {
-    result_t* svc(result_t* in) {        
+    result_t* svc(result_t* in) {    
         ++words;
         delete in;
         return GO_ON;
     }
     size_t words=0; // total number of words received
 };
-
 
 /** 
  *  @brief Parse the input file and create all the tuples
@@ -260,7 +259,6 @@ int parse_dataset_and_create_tuples(const std::string& file_path) {
 }
 
 
-
 int main(int argc, char* argv[]) {
     if (DFF_Init(argc, argv) != 0) {
 		error("DFF_Init\n");
@@ -271,10 +269,11 @@ int main(int argc, char* argv[]) {
     std::string file_path("");
     size_t source_par_deg = 0;
     size_t sink_par_deg = 0;
+    size_t ngroups = 0;
     
     if (argc >= 3 || argc == 1) {
         int option = 0;    
-        while ((option = getopt(argc, argv, "f:p:t:")) != -1) {
+        while ((option = getopt(argc, argv, "f:p:g:t:")) != -1) {
             switch (option) {
             case 'f': file_path=std::string(optarg);  break;
             case 'p': {
@@ -320,12 +319,17 @@ int main(int argc, char* argv[]) {
         std::cerr << "Wrong values for the parallelism degree, please use option -p <nSource/nSplitter, nCounter/nSink>\n";
         return -1;
     }
+    if (ngroups <=0 ) {
+        std::cerr << "Wrong values for the ngroups, please use option -g <nGroups>\n";
+        return -1;
+    }
 
     if (DFF_getMyGroup() == "G1") {
         /// data pre-processing
         if (parse_dataset_and_create_tuples(file_path)< 0)
             return -1;
-    
+
+        std::cout << "\n\n";
         std::cout << "Executing WordCount with parameters:" << endl;
         std::cout << "  * source/splitter : " << source_par_deg << endl;
         std::cout << "  * counter/sink    : " << sink_par_deg << endl;
@@ -350,7 +354,7 @@ int main(int argc, char* argv[]) {
         ff_pipeline* pipe0 = new ff_pipeline(false, qlen, qlen, true);
         
         pipe0->add_stage(new Source(app_start_time), true);
-        Splitter* sp = new Splitter(sink_par_deg);
+        Splitter* sp = new Splitter;
         pipe0->add_stage(sp, true);
         L.push_back(pipe0);
 
@@ -372,14 +376,8 @@ int main(int argc, char* argv[]) {
     ff_pipeline pipeMain(false, qlen, qlen, true);
     pipeMain.add_stage(&a2a);
 
-#if 0    
-    if (DFF_getMyGroup() == "G1") {
-        threadMapper::instance()->setMappingList("0,1,2,3,4,5,6,7,8,9,10,11, 24,25,26,27,28,29,30,31,32,33,34,35");        
-    } else {
-        threadMapper::instance()->setMappingList("12,13,14,15,16,17,18,19,20,21,22,23, 36,37,38,39,40,41,42,43,44,45,46,47");
-    }
-#endif        
-    std::cout << "Starting " << pipeMain.numThreads() << " threads\n";
+
+    std::cout << "Starting " << pipeMain.numThreads() << " threads\n\n";
     /// evaluate topology execution time
     volatile unsigned long start_time_main_usecs = current_time_usecs();
     if (pipeMain.run_and_wait_end()<0) {

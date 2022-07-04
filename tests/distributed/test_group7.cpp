@@ -42,7 +42,7 @@
  *                                       G3
  */
 
-#include <ff/ff.hpp>
+#include <ff/dff.hpp>
 #include <mutex>
 #include <iostream>
 
@@ -139,12 +139,12 @@ struct S3 : ff_minode_t<std::string>{
 };
 
 int main(int argc, char*argv[]){
-#if 0
+
 	if (DFF_Init(argc, argv) != 0) {
 		error("DFF_Init\n");
 		return -1;
 	}
-#endif
+
 	int N=10;
 	if (argc==2) N=std::stol(argv[1]);
 
@@ -202,7 +202,6 @@ int main(int argc, char*argv[]){
 	pipeMain.add_stage(&pipe0);
 	pipeMain.add_stage(&a2a);
 	pipeMain.add_stage(&s3);
-#if 0
 	//----- defining the distributed groups ------
 	auto G1 = pipe0.createGroup("G1");
 	auto G2 = a2a.createGroup("G2");
@@ -213,7 +212,7 @@ int main(int argc, char*argv[]){
 	G3 << &pipe2 << &pipeA2A2;
 	
     // -------------------------------------------
-#endif
+
 	// running the distributed groups
     if (pipeMain.run_and_wait_end()<0) {
 		error("running a2a\n");

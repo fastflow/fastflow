@@ -153,7 +153,7 @@ int main() {
         new ff_comb(helper2,w2)
     };
 
-    assert(firstSet.size() == NWORKER2);
+    assert(secondSet.size() == NWORKER2);
     ff_a2a a2a;
     a2a.add_firstset(firstSet, 1000, false);
     a2a.add_secondset(secondSet, true);

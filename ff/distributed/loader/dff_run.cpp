@@ -28,35 +28,38 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/wait.h>
+#include <sys/param.h>
 #include <fcntl.h>
+
 
 #include <cereal/cereal.hpp>
 #include <cereal/archives/json.hpp>
 #include <cereal/types/string.hpp>
 #include <cereal/types/vector.hpp>
 
-#if(defined(_MSC_VER) or (defined(__GNUC__) and (7 <= __GNUC_MAJOR__)))
-    #include <filesystem>
-    namespace n_fs = std::filesystem;
-#else
-    #include <experimental/filesystem>
-    namespace n_fs = std::experimental::filesystem;    
+
+#include <filesystem>
+namespace n_fs = std::filesystem;
+
+#ifndef HOST_NAME_MAX
+#define HOST_NAME_MAX 255
 #endif
 
 enum Proto {TCP = 1 , MPI};
+
+Proto usedProtocol;
+bool seeAll = false;
+std::vector<std::string> viewGroups;
+char hostname[HOST_NAME_MAX];
+std::string configFile("");
+std::string executable;
+
 
 static inline unsigned long getusec() {
     struct timeval tv;
     gettimeofday(&tv,NULL);
     return (unsigned long)(tv.tv_sec*1e6+tv.tv_usec);
 }
-
-Proto usedProtocol;
-bool seeAll = false;
-std::vector<std::string> viewGroups;
-char hostname[100];
-std::string configFile("");
-std::string executable;
 
 bool toBePrinted(std::string gName){
     return (seeAll || (find(viewGroups.begin(), viewGroups.end(), gName) != viewGroups.end()));
@@ -101,7 +104,7 @@ struct G {
     void run(){
         char b[1024]; // ssh -t // trovare MAX ARGV
         
-        sprintf(b, " %s %s %s %s --DFF_Config=%s --DFF_GName=%s %s 2>&1 %s", (isRemote() ? "ssh -t '" : ""), (isRemote() ? host.c_str() : "") , this->preCmd.c_str(),  executable.c_str(), configFile.c_str(), this->name.c_str(), toBePrinted(this->name) ? "" : "> /dev/null", (isRemote() ? "'" : ""));
+        sprintf(b, " %s %s %s %s %s --DFF_Config=%s --DFF_GName=%s %s 2>&1 %s", (isRemote() ? "ssh -T " : ""), (isRemote() ? host.c_str() : ""), (isRemote() ? "'" : ""), this->preCmd.c_str(),  executable.c_str(), configFile.c_str(), this->name.c_str(), toBePrinted(this->name) ? "" : "> /dev/null", (isRemote() ? "'" : ""));
        std::cout << "Executing the following command: " << b << std::endl;
         file = popen(b, "r");
         fd = fileno(file);
@@ -134,16 +137,19 @@ static inline void usage(char* progname) {
 			  << "\t -v <g1>,...,<g2> \t Prints the output of the specified groups\n"
 			  << "\t -V               \t Print the output of all groups\n"
 			  << "\t -p \"TCP|MPI\"   \t Force communication protocol\n";
+	std::cout << "\n";
 		
 }
 
-std::string generateHostFile(std::vector<G>& parsedGroups){
-    std::string name = "/tmp/dffHostfile" + std::to_string(getpid());
+std::string generateRankFile(std::vector<G>& parsedGroups){
+    std::string name = "/tmp/dffRankfile" + std::to_string(getpid());
 
     std::ofstream tmpFile(name, std::ofstream::out);
-  
-    for (const G& group : parsedGroups)
-        tmpFile << group.host << std::endl;
+    
+    for(size_t i = 0; i < parsedGroups.size(); i++)
+        tmpFile << "rank " << i << "=" << parsedGroups[i].host << " slot=0\n";
+    /*for (const G& group : parsedGroups)
+        tmpFile << group.host << std::endl;*/
 
     tmpFile.close();
     // return the name of the temporary file just created; remember to remove it after the usage
@@ -152,13 +158,17 @@ std::string generateHostFile(std::vector<G>& parsedGroups){
 
 int main(int argc, char** argv) {
 
-    if (strcmp(argv[0], "--help") == 0 || strcmp(argv[0], "-help") == 0 || strcmp(argv[0], "-h") == 0){
+    if (argc == 1 ||
+		strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-help") == 0 || strcmp(argv[1], "-h") == 0){
 		usage(argv[0]);
         exit(EXIT_SUCCESS);
     }
 
     // get the hostname
-    gethostname(hostname, 100);
+    if (gethostname(hostname, HOST_NAME_MAX) != 0) {
+		perror("gethostname");
+		exit(EXIT_FAILURE);
+	}
 
 	int optind=0;
 	for(int i=1;i<argc;++i) {
@@ -184,7 +194,7 @@ int main(int argc, char** argv) {
 					usage(argv[0]);
 					exit(EXIT_FAILURE);
 				}
-				configFile = std::string(argv[++i]);
+				configFile = n_fs::absolute(n_fs::path(argv[++i])).string();
 			} break;
 			case 'V': {
 				seeAll=true;
@@ -207,12 +217,17 @@ int main(int argc, char** argv) {
 		usage(argv[0]);
 		exit(EXIT_FAILURE);
 	}
-	if (!n_fs::exists(std::string(argv[optind]))) {
+
+    executable = n_fs::absolute(n_fs::path(argv[optind])).string();
+
+	if (!n_fs::exists(executable)) {
 		std::cerr << "ERROR: Unable to find the executable file (we found as executable \'" << argv[optind] << "\')\n";
 		exit(EXIT_FAILURE);
-	}	
+	}
+
+    executable += " ";
 		
-    for (int index = optind; index < argc; index++) {
+    for (int index = optind+1 ; index < argc; index++) {
         executable += std::string(argv[index]) + " ";
 	}
 	
@@ -291,14 +306,16 @@ int main(int argc, char** argv) {
     }
 
     if (usedProtocol == Proto::MPI){
-        std::string hostFile = generateHostFile(parsedGroups);
-        std::cout << "Hostfile: " << hostFile << std::endl;
-        // invoke mpirun using the just created hostfile
+        std::string rankFile = generateRankFile(parsedGroups);
+        std::cout << "RankFile: " << rankFile << std::endl;
+        // invoke mpirun using the just created rankfile
 
         char command[350];
      
-        sprintf(command, "mpirun --hostfile %s %s --DFF_Config=%s", hostFile.c_str(), executable.c_str(), configFile.c_str());
+        sprintf(command, "mpirun -np %lu --rankfile %s %s --DFF_Config=%s", parsedGroups.size(), rankFile.c_str(), executable.c_str(), configFile.c_str());
 
+		std::cout << "mpicommand: " << command << "\n";
+		
         FILE *fp;
         char buff[1024];
         fp = popen(command, "r");
@@ -314,7 +331,7 @@ int main(int argc, char** argv) {
 
         pclose(fp);
 
-        std::remove(hostFile.c_str());
+        std::remove(rankFile.c_str());
     }
     
     

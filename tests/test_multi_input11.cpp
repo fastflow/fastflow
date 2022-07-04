@@ -78,7 +78,7 @@ struct Collector: ff_monode_t<long> {
     long* svc(long* in) {
         ff_send_out_to(in, 0);  // backward
         ff_send_out_to(in, next + 1);  // forward
-        next = ((next + 1) % get_num_outchannels());
+        next = ((next + 1) % (get_num_outchannels() - 1)); // get_num_outchannels() comprises also feedback channels
         return GO_ON;
     }
     void eosnotify(ssize_t) {

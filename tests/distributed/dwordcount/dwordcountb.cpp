@@ -66,20 +66,20 @@
 using namespace ff;
 
 const size_t qlen = DEFAULT_BUFFER_CAPACITY;
-const int MAXLINE=128;
+const int MAXLINE=128;    // character per line (CPL), a typically value is 80 CPL
 const int MAXWORD=32;
 
 struct tuple_t {
-    char text_line[MAXLINE];   // line of the parsed dataset (text, book, ...)
-    size_t key;                // line number
-    uint64_t id;               // id set to zero
-    uint64_t ts;               // timestamp
+    char     text_line[MAXLINE];  // parsed line
+    size_t   key;                 // line number
+    uint64_t id;                  // id set to zero
+    uint64_t ts;                  // timestamp
 };
 
 struct result_t {
-    char     key[MAXWORD];  // key word
-    uint64_t id;            // id that indicates the current number of occurrences of the key word
-    uint64_t ts;            // timestamp
+    char     key[MAXWORD];    // key word
+    uint64_t id;              // indicates the current number of occurrences of the word
+    uint64_t ts;              // timestamp
 
 	template<class Archive>
 	void serialize(Archive & archive) {
@@ -153,12 +153,13 @@ struct Source: ff_monode_t<tuple_t> {
 	}
 };
 struct Splitter: ff_monode_t<tuple_t, Result_t> {
-    Splitter(long noutch, long buffered_lines):noutch(noutch),buffered_lines(buffered_lines), outV(noutch,nullptr) { }
+    Splitter(long buffered_lines):buffered_lines(buffered_lines) { }
 
-    // int svc_init() {
-    // noutch=get_num_outchannels(); // TODO: this doesn't work, it must be fixed!
-    // /return 0;
-    // }
+    int svc_init() {
+        noutch=get_num_outchannels(); // number of output channels
+        outV.resize(noutch,nullptr);
+        return 0;
+    }
 
     Result_t* svc(tuple_t* in) {        
         char *tmpstr;
@@ -351,10 +352,12 @@ int main(int argc, char* argv[]) {
         /// data pre-processing
         if (parse_dataset_and_create_tuples(file_path)< 0)
             return -1;
-    
+
+        std::cout << "\n\n";
         std::cout << "Executing WordCount with parameters:" << endl;
         std::cout << "  * source/splitter : " << source_par_deg << endl;
         std::cout << "  * counter/sink    : " << sink_par_deg << endl;
+        std::cout << "  * buffered lines  : " << buffered_lines << endl;
         std::cout << "  * running time    : " << app_run_time << " (s)\n";
     }
     
@@ -375,11 +378,11 @@ int main(int argc, char* argv[]) {
         ff_pipeline* pipe0 = new ff_pipeline(false, qlen, qlen, true);
         
         pipe0->add_stage(new Source(app_start_time));
-        Splitter* sp = new Splitter(sink_par_deg, buffered_lines);
+        Splitter* sp = new Splitter(buffered_lines);
         pipe0->add_stage(sp);
         L.push_back(pipe0);
 
-        G1.out << sp;
+        G1 << pipe0;
     }
     for (size_t i=0;i<sink_par_deg; ++i) {
         ff_pipeline* pipe1 = new ff_pipeline(false, qlen, qlen, true);
@@ -389,22 +392,15 @@ int main(int argc, char* argv[]) {
         pipe1->add_stage(S[i]);
         R.push_back(pipe1);
 
-        G2.in << C[i];
+        G2 << pipe1;
     }
 
     a2a.add_firstset(L, 0, true);
     a2a.add_secondset(R, true);
     ff_pipeline pipeMain(false, qlen, qlen, true);
     pipeMain.add_stage(&a2a);
-#if 0    
-    if (DFF_getMyGroup() == "G1") {
-        threadMapper::instance()->setMappingList("0,1,2,3,4,5,6,7,8,9,10,11, 24,25,26,27,28,29,30,31,32,33,34,35");        
-    } else {
-        threadMapper::instance()->setMappingList("12,13,14,15,16,17,18,19,20,21,22,23, 36,37,38,39,40,41,42,43,44,45,46,47");
-    }
-#endif     
     
-    std::cout << "Starting " << pipeMain.numThreads() << " threads\n";
+    std::cout << "Starting " << pipeMain.numThreads() << " threads\n\n";
     /// evaluate topology execution time
     volatile unsigned long start_time_main_usecs = current_time_usecs();
     if (pipeMain.run_and_wait_end()<0) {

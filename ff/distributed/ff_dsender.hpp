@@ -29,6 +29,7 @@
 #include <map>
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
+#include <ff/distributed/ff_batchbuffer.hpp>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
@@ -45,86 +46,46 @@
 
 
 using namespace ff;
-
+using precomputedRT_t = std::map<std::string, std::pair<std::vector<int>, ChannelType>>;
 class ff_dsender: public ff_minode_t<message_t> { 
 protected:
     size_t neos=0;
-    int next_rr_destination = 0; //next destiation to send for round robin policy
-    std::vector<ff_endpoint> dest_endpoints;
-    std::map<int, int> dest2Socket;
-    //std::unordered_map<ConnectionType, std::vector<int>> type2sck;
+    std::vector<std::pair<ChannelType, ff_endpoint>> dest_endpoints;
+    precomputedRT_t* precomputedRT;
+    std::map<std::pair<int, ChannelType>, int> dest2Socket;
     std::vector<int> sockets;
-	//int internalGateways;
+    int last_rr_socket = -1;
+    std::map<int, unsigned int> socketsCounters;
+    std::map<int, ff_batchBuffer> batchBuffers;
     std::string gName;
+    int batchSize;
+    int messageOTF;
     int coreid;
+    fd_set set, tmpset;
+    int fdmax = -1;
 
-    int receiveReachableDestinations(int sck, std::map<int,int>& m){
-       
-        size_t sz;
-        ssize_t r;
-
-        if ((r=readn(sck, (char*)&sz, sizeof(sz)))!=sizeof(sz)) {
-            if (r==0)
-                error("Error unexpected connection closed by receiver\n");
-            else			
-                error("Error reading size (errno=%d)");
-            return -1;
-        }
-	
-        sz = be64toh(sz);
-
-        
-        char* buff = new char [sz];
-		assert(buff);
-
-        if(readn(sck, buff, sz) < 0){
-            error("Error reading from socket\n");
-            delete [] buff;
-            return -1;
-        }
-
-        dataBuffer dbuff(buff, sz, true);
-        std::istream iss(&dbuff);
-		cereal::PortableBinaryInputArchive iarchive(iss);
-        std::vector<int> destinationsList;
-
-        iarchive >> destinationsList;
-
-        for (const int& d : destinationsList) m[d] = sck;
-
-        /*for (const auto& p : m)
-            std::cout << p.first << " - "  << p.second << std::endl;
-        */
-       ff::cout << "Receiving routing table (" << sz << " bytes)" << ff::endl;
-        return 0;
-    }
-
-    int sendGroupName(const int sck){    
+    virtual int handshakeHandler(const int sck, ChannelType t){
         size_t sz = htobe64(gName.size());
-        struct iovec iov[2];
-        iov[0].iov_base = &sz;
-        iov[0].iov_len = sizeof(sz);
-        iov[1].iov_base = (char*)(gName.c_str());
-        iov[1].iov_len = gName.size();
+        struct iovec iov[3];
+        iov[0].iov_base = &t;
+        iov[0].iov_len = sizeof(ChannelType);
+        iov[1].iov_base = &sz;
+        iov[1].iov_len = sizeof(sz);
+        iov[2].iov_base = (char*)(gName.c_str());
+        iov[2].iov_len = gName.size();
 
-        if (writevn(sck, iov, 2) < 0){
+        if (writevn(sck, iov, 3) < 0){
             error("Error writing on socket\n");
             return -1;
         }
 
         return 0;
     }
-
-    virtual int handshakeHandler(const int sck, bool){
-        if (sendGroupName(sck) < 0) return -1;
-
-        return receiveReachableDestinations(sck, dest2Socket);
-    }
 	
     int create_connect(const ff_endpoint& destination){
         int socketFD;
 
-        #ifdef LOCAL
+#ifdef LOCAL
             socketFD = socket(AF_LOCAL, SOCK_STREAM, 0);
             if (socketFD < 0){
                 error("\nError creating socket \n");
@@ -140,9 +101,9 @@ protected:
                 close(socketFD);
                 return -1;
             }
-        #endif
+#endif
 
-        #ifdef REMOTE
+#ifdef REMOTE
             struct addrinfo hints;
             struct addrinfo *result, *rp;
 
@@ -170,13 +131,12 @@ protected:
            }
 		   free(result);
 			
-           if (rp == NULL)            /* No address succeeded */
+           if (rp == NULL)  {          /* No address succeeded */
                return -1;
-        #endif
-
+		   }
+#endif
 
         // receive the reachable destination from this sockets
-
         return socketFD;
     }
 
@@ -216,175 +176,11 @@ protected:
         return 0;
     }
 
-    
-public:
-    ff_dsender(ff_endpoint dest_endpoint, std::string gName = "", int coreid=-1): gName(gName), coreid(coreid) {
-        this->dest_endpoints.push_back(std::move(dest_endpoint));
-    }
-
-    ff_dsender( std::vector<ff_endpoint> dest_endpoints_, std::string gName = "", int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), gName(gName), coreid(coreid) {}
-
-    
-
-    int svc_init() {
-		if (coreid!=-1)
-			ff_mapThreadToCpu(coreid);
-		
-        sockets.resize(this->dest_endpoints.size());
-        for(size_t i=0; i < this->dest_endpoints.size(); i++){
-            if ((sockets[i] = tryConnect(this->dest_endpoints[i])) <= 0 ) return -1;
-            if (handshakeHandler(sockets[i], false) < 0) return -1;
-        }
-
-        return 0;
-    }
-
-    void svc_end() {
-        // close the socket not matter if local or remote
-        for(size_t i=0; i < this->sockets.size(); i++)
-            close(sockets[i]);
-    }
-
-    message_t *svc(message_t* task) {
-        /* here i should send the task via socket */
-        if (task->chid == -1){ // roundrobin over the destinations
-            task->chid = next_rr_destination;
-            next_rr_destination = (next_rr_destination + 1) % dest2Socket.size();
-        }
-
-        sendToSck(dest2Socket[task->chid], task);
-        delete task;
-        return this->GO_ON;
-    }
-
-    void eosnotify(ssize_t id) {
-        if (++neos >= this->get_num_inchannels()){
-            message_t E_O_S(0,0);
-            for(const auto& sck : sockets) sendToSck(sck, &E_O_S);
-        }
-    }
-
-};
-
-
-class ff_dsenderH : public ff_dsender {
-
-    std::map<int, int> internalDest2Socket;
-    std::map<int, int>::const_iterator rr_iterator;
-    std::vector<int> internalSockets;
-    std::set<std::string> internalGroupNames;
-
-public:
-
-    ff_dsenderH(ff_endpoint e, std::string gName  = "", std::set<std::string> internalGroups = {}, int coreid=-1) : ff_dsender(e, gName, coreid), internalGroupNames(internalGroups) {} 
-    ff_dsenderH(std::vector<ff_endpoint> dest_endpoints_, std::string gName  = "", std::set<std::string> internalGroups = {}, int coreid=-1) : ff_dsender(dest_endpoints_, gName, coreid), internalGroupNames(internalGroups) {}
-    
-    int handshakeHandler(const int sck, bool isInternal){
-        if (sendGroupName(sck) < 0) return -1;
-
-        return receiveReachableDestinations(sck, isInternal ? internalDest2Socket : dest2Socket);
-    }
-
-    int svc_init() {
-
-        sockets.resize(this->dest_endpoints.size());
-        for(const auto& endpoint : this->dest_endpoints){
-            int sck = tryConnect(endpoint);
-            if (sck <= 0) {
-                error("Error on connecting!\n");
-                return -1;
-            }
-            bool isInternal = internalGroupNames.contains(endpoint.groupName);
-            if (isInternal) internalSockets.push_back(sck);
-            else sockets.push_back(sck);
-            handshakeHandler(sck, isInternal);
-        }
-
-        rr_iterator = internalDest2Socket.cbegin();
-        return 0;
-    }
-
-    message_t *svc(message_t* task) {
-        if (this->get_channel_id() == (ssize_t)(this->get_num_inchannels() - 1)){
-            // pick destination from the list of internal connections!
-            if (task->chid == -1){ // roundrobin over the destinations
-                task->chid = rr_iterator->first;
-                if (++rr_iterator == internalDest2Socket.cend()) rr_iterator = internalDest2Socket.cbegin();
-            }
-
-            sendToSck(internalDest2Socket[task->chid], task); 
-            delete task;
-            return this->GO_ON;
-        }
-
-        return ff_dsender::svc(task);
-    }
-
-     void eosnotify(ssize_t id) {
-         if (id == (ssize_t)(this->get_num_inchannels() - 1)){
-            // send the EOS to all the internal connections
-            message_t E_O_S(0,0);
-            for(const auto& sck : internalSockets) sendToSck(sck, &E_O_S);            
-         }
-		 if (++neos >= this->get_num_inchannels()){
-			 message_t E_O_S(0,0);
-			 for(const auto& sck : sockets) sendToSck(sck, &E_O_S);
-		 }
-     }
-};
-
-
-
-
-
-/*
-    ONDEMAND specification
-*/
-
-class ff_dsenderOD: public ff_dsender { 
-private:
-    int last_rr_socket = 0; //next destiation to send for round robin policy
-    std::map<int, unsigned int> sockCounters;
-    const int queueDim;
-    fd_set set, tmpset;
-    int fdmax = -1;
-
-    
-public:
-    ff_dsenderOD(ff_endpoint dest_endpoint, int queueDim = 1, std::string gName = "", int coreid=-1)
-		: ff_dsender(dest_endpoint, gName, coreid), queueDim(queueDim) {}
-
-    ff_dsenderOD(std::vector<ff_endpoint> dest_endpoints_, int queueDim = 1, std::string gName = "", int coreid=-1)
-		: ff_dsender(dest_endpoints_, gName, coreid), queueDim(queueDim) {}
-
-    int svc_init() {
-		if (coreid!=-1)
-			ff_mapThreadToCpu(coreid);
-		
-        FD_ZERO(&set);
-        FD_ZERO(&tmpset);
-
-		sockets.resize(this->dest_endpoints.size());
-        for(size_t i=0; i < this->dest_endpoints.size(); i++){
-            if ((sockets[i] = tryConnect(this->dest_endpoints[i])) <= 0 ) return -1;
-			if (handshakeHandler(sockets[i], false) < 0) return -1;
-            // execute the following block only if the scheduling is onDemand
-            
-            sockCounters[sockets[i]] = queueDim;
-            FD_SET(sockets[i], &set);
-            if (sockets[i] > fdmax)
-                fdmax = sockets[i];
-            
-        }
-
-        return 0;
-    }
-
-    int waitAckFrom(int sck){
-        while (sockCounters[sck] == 0){
-            for (size_t i = 0; i < this->sockets.size(); ++i){
+     int waitAckFrom(int sck){
+        while (socketsCounters[sck] == 0){
+            for(auto& [sck_, counter] : socketsCounters){
                 int r; ack_t a;
-                if ((r = recvnnb(sockets[i], reinterpret_cast<char*>(&a), sizeof(ack_t))) != sizeof(ack_t)){
+                if ((r = recvnnb(sck_, reinterpret_cast<char*>(&a), sizeof(ack_t))) != sizeof(ack_t)){
                     if (errno == EWOULDBLOCK){
                         assert(r == -1);
                         continue;
@@ -392,12 +188,11 @@ public:
                     perror("recvnnb ack");
                     return -1;
                 } else 
-                    //printf("received ACK from conn %d\n", i);
-                    sockCounters[sockets[i]]++;
+                    counter++;
                 
             }
 			
-            if (sockCounters[sck] == 0){
+            if (socketsCounters[sck] == 0){
                 tmpset = set;
                 if (select(fdmax + 1, &tmpset, NULL, NULL, NULL) == -1){
                     perror("select");
@@ -408,82 +203,334 @@ public:
         return 1;
     }
 
-	int waitAckFromAny() {
-		tmpset = set;
-		if (select(fdmax + 1, &tmpset, NULL, NULL, NULL) == -1){
-			perror("select");
-			return -1;
-		} 
-		// try to receive from all connections in a non blocking way
-		for (size_t i = 0; i < this->sockets.size(); ++i){
-			int r; ack_t a;
-			int sck = sockets[i];
-			if ((r = recvnnb(sck, reinterpret_cast<char*>(&a), sizeof(ack_t))) != sizeof(ack_t)){
-				if (errno == EWOULDBLOCK){
-					assert(r == -1);
-					continue;
-				}
-				perror("recvnnb ack");
-				return -1;
-			} else {
-				sockCounters[sck]++;
-				last_rr_socket = i;
-				return sck;
-			}
-		} 
-		assert(1==0);
-		return -1;
-	}
-
-    int getNextReady(){
-        for(size_t i = 0; i < this->sockets.size(); i++){
-            int actualSocket = (last_rr_socket + 1 + i) % this->sockets.size();
-            int sck = sockets[actualSocket];
-            if (sockCounters[sck] > 0) {
-                last_rr_socket = actualSocket;
-                return sck;
-            }
+    int getMostFilledBufferSck(bool feedback){
+        int sckMax = 0;
+        int sizeMax = 0;
+        for(auto& [sck, buffer] : batchBuffers){
+            if ((feedback && buffer.ct != ChannelType::FBK) || (!feedback && buffer.ct != ChannelType::FWD)) continue; 
+            if (buffer.size > sizeMax) sckMax = sck;
         }
-		return waitAckFromAny();		
+    
+        if (sckMax > 0) return sckMax;
+        
+        do {
+        last_rr_socket = (last_rr_socket + 1) % this->sockets.size();
+        } while (batchBuffers[sockets[last_rr_socket]].ct != (feedback ? ChannelType::FBK : ChannelType::FWD));
+        return sockets[last_rr_socket];
+        
     }
 
-
-    void svc_end() {
-		long totalack = sockets.size()*queueDim;
-		long currack  = 0;
-        for(const auto& pair : sockCounters)
-            currack += pair.second;
-		while(currack<totalack) {
-			waitAckFromAny();
-			currack++;
-		}
-
-		// close the socket not matter if local or remote
-        for(size_t i=0; i < this->sockets.size(); i++) {
-	            close(sockets[i]);
-		}
+    
+public:
+    ff_dsender(std::pair<ChannelType, ff_endpoint> dest_endpoint, precomputedRT_t* rt, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1): precomputedRT(rt), gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {
+        this->dest_endpoints.push_back(std::move(dest_endpoint));
     }
+
+    ff_dsender( std::vector<std::pair<ChannelType, ff_endpoint>> dest_endpoints_, precomputedRT_t* rt, std::string gName = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1) : dest_endpoints(std::move(dest_endpoints_)), precomputedRT(rt), gName(gName), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {}
+
+    
+
+    int svc_init() {
+		if (coreid!=-1)
+			ff_mapThreadToCpu(coreid);
+        
+        FD_ZERO(&set);
+        FD_ZERO(&tmpset);
+		
+        //sockets.resize(dest_endpoints.size());
+        for(auto& [ct, ep] : this->dest_endpoints){
+            int sck = tryConnect(ep);
+            if (sck <= 0) return -1;
+            sockets.push_back(sck);
+            socketsCounters[sck] = messageOTF;
+            batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(this->batchSize, ct, [this, sck](struct iovec* v, int size) -> bool {
+                
+                if (this->socketsCounters[sck] == 0 && this->waitAckFrom(sck) == -1){
+                    error("Errore waiting ack from socket inside the callback\n");
+                    return false;
+                }
+
+                if (writevn(sck, v, size) < 0){
+                    error("Error sending the iovector inside the callback!\n");
+                    return false;
+                }
+
+                this->socketsCounters[sck]--;
+
+                return true;
+            }));
+
+            // compute the routing table!
+            for(int dest : precomputedRT->operator[](ep.groupName).first)
+                dest2Socket[std::make_pair(dest, ct)] = sck;
+
+            if (handshakeHandler(sck, ct) < 0) {
+				error("svc_init ff_dsender failed");
+				return -1;
+			}
+
+            FD_SET(sck, &set);
+            if (sck > fdmax) fdmax = sck;
+        }
+
+        // we can erase the list of endpoints
+        this->dest_endpoints.clear();
+
+        return 0;
+    }
+
     message_t *svc(message_t* task) {
         int sck;
-        if (task->chid != -1){
-            sck = dest2Socket[task->chid];
-            if (sockCounters[sck] == 0 && waitAckFrom(sck) == -1){ // blocking call if scheduling is ondemand
-                    error("Error waiting Ack from....\n");
-                    delete task; return this->GO_ON;
-            }
-        } else 
-            sck = getNextReady(); // blocking call if scheduling is ondemand
-    
-        sendToSck(sck, task);
+        //if (task->chid == -1) task->chid = 0;
+        if (task->chid != -1)
+            sck = dest2Socket[{task->chid, (task->feedback ? ChannelType::FBK : ChannelType::FWD)}];
+        else {
+            sck = getMostFilledBufferSck(task->feedback); // get the most filled buffer socket or a rr socket
+        }
 
-        // update the counters
-        sockCounters[sck]--;
+        if (batchBuffers[sck].push(task) == -1) {
+			return EOS;
+		}
 
-        delete task;
         return this->GO_ON;
     }
 
+    void eosnotify(ssize_t id) {
+        for (const auto& sck : sockets)
+            batchBuffers[sck].push(new message_t(id, -2));
 
+		if (++neos >= this->get_num_inchannels()) {
+			// all input EOS received, now sending the EOS to all connections
+            for(const auto& sck : sockets) {
+				if (batchBuffers[sck].sendEOS()<0) {
+					error("sending EOS to external connections (ff_dsender)\n");
+				}										 
+				shutdown(sck, SHUT_WR);
+			}
+		}
+    }
+
+	void svc_end() {
+		// here we wait all acks from all connections
+		size_t totalack = sockets.size()*messageOTF;
+		size_t currentack = 0;
+		for(const auto& [_, counter] : socketsCounters)
+			currentack += counter;
+
+		ack_t a;
+		while(currentack<totalack) {
+			for(auto scit = socketsCounters.begin(); scit != socketsCounters.end();) {
+				auto sck      = scit->first;
+				auto& counter = scit->second;
+				
+				switch(recvnnb(sck, (char*)&a, sizeof(a))) {
+				case 0:
+				case -1:
+					if (errno==EWOULDBLOCK) { ++scit; continue; }
+					currentack += (messageOTF-counter);
+					socketsCounters.erase(scit++);
+					break;
+				default: {
+					currentack++;
+					counter++;
+					++scit;
+				}
+				}
+			}
+		}
+		for(auto& sck : sockets) close(sck);
+	}
 };
+
+
+class ff_dsenderH : public ff_dsender {
+
+    std::vector<int> internalSockets;
+    int last_rr_socket_Internal = -1;
+    int internalMessageOTF;
+    bool squareBoxEOS = false;
+
+    /*int getNextReadyInternal(){
+        for(size_t i = 0; i < this->internalSockets.size(); i++){
+            int actualSocketIndex = (last_rr_socket_Internal + 1 + i) % this->internalSockets.size();
+            int sck = internalSockets[actualSocketIndex];
+            if (socketsCounters[sck] > 0) {
+                last_rr_socket_Internal = actualSocketIndex;
+                return sck;
+            }
+        }
+
+        int sck;
+        decltype(internalSockets)::iterator it;
+
+        do {
+            sck = waitAckFromAny();   // FIX: error management!
+			if (sck < 0) {
+				error("waitAckFromAny failed in getNextReadyInternal");
+				return -1;
+			}
+		} while ((it = std::find(internalSockets.begin(), internalSockets.end(), sck)) != internalSockets.end());
+        
+        last_rr_socket_Internal = it - internalSockets.begin();
+        return sck;
+    }*/
+
+    int getMostFilledInternalBufferSck(){
+         int sckMax = 0;
+        int sizeMax = 0;
+        for(int sck : internalSockets){
+            auto& b = batchBuffers[sck];
+            if (b.size > sizeMax) {
+                sckMax = sck;
+                sizeMax = b.size;
+            }
+        }
+        if (sckMax > 0) return sckMax;
+
+        last_rr_socket_Internal = (last_rr_socket_Internal + 1) % this->internalSockets.size();
+        return internalSockets[last_rr_socket_Internal];
+    }
+
+public:
+
+    ff_dsenderH(std::pair<ChannelType, ff_endpoint> e, precomputedRT_t* rt, std::string gName  = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsender(e, rt, gName, batchSize, messageOTF, coreid), internalMessageOTF(internalMessageOTF) {} 
+    ff_dsenderH(std::vector<std::pair<ChannelType, ff_endpoint>> dest_endpoints_, precomputedRT_t* rt, std::string gName  = "", int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int internalMessageOTF = DEFAULT_INTERNALMSG_OTF, int coreid=-1) : ff_dsender(dest_endpoints_, rt, gName, batchSize, messageOTF, coreid), internalMessageOTF(internalMessageOTF) {}
+
+    int svc_init() {
+
+        if (coreid!=-1)
+			ff_mapThreadToCpu(coreid);
+
+        FD_ZERO(&set);
+        FD_ZERO(&tmpset);
+		
+        for(const auto& [ct, endpoint] : this->dest_endpoints){
+            int sck = tryConnect(endpoint);
+            if (sck <= 0) return -1;
+            bool isInternal = ct == ChannelType::INT;
+            if (isInternal) internalSockets.push_back(sck);
+            else sockets.push_back(sck);
+            socketsCounters[sck] = isInternal ? internalMessageOTF : messageOTF;
+            batchBuffers.emplace(std::piecewise_construct, std::forward_as_tuple(sck), std::forward_as_tuple(this->batchSize, ct, [this, sck](struct iovec* v, int size) -> bool {
+                
+                if (this->socketsCounters[sck] == 0 && this->waitAckFrom(sck) == -1){
+                    error("Errore waiting ack from socket inside the callback\n");
+                    return false;
+                }
+
+                if (writevn(sck, v, size) < 0){
+                    error("Error sending the iovector inside the callback (errno=%d) %s\n", errno);
+                    return false;
+                }
+
+                this->socketsCounters[sck]--;
+
+                return true;
+            })); // change with the correct size
+
+             for(int dest : precomputedRT->operator[](endpoint.groupName).first)
+                dest2Socket[std::make_pair(dest, ct)] = sck;
+
+            if (handshakeHandler(sck, ct) < 0) return -1;
+
+            FD_SET(sck, &set);
+            if (sck > fdmax) fdmax = sck;
+        }
+
+        // we can erase the list of endpoints
+        this->dest_endpoints.clear();
+
+        return 0;
+    }
+
+    message_t *svc(message_t* task) {
+        if (this->get_channel_id() == (ssize_t)(this->get_num_inchannels() - 1)){
+            int sck;
+            // pick destination from the list of internal connections!
+            if (task->chid != -1){ // roundrobin over the destinations
+                sck = dest2Socket[{task->chid, ChannelType::INT}];
+            } else
+                sck = getMostFilledInternalBufferSck();
+
+
+            if (batchBuffers[sck].push(task) == -1) {
+				return EOS;
+			}
+
+            return this->GO_ON;
+        }
+
+        return ff_dsender::svc(task);
+    }
+
+     void eosnotify(ssize_t id) {
+         if (id == (ssize_t)(this->get_num_inchannels() - 1)){
+            // send the EOS to all the internal connections
+            if (squareBoxEOS) return;
+            squareBoxEOS = true;
+            for(const auto& sck : internalSockets) {
+                if (batchBuffers[sck].sendEOS()<0) {
+					error("sending EOS to internal connections\n");
+				}					
+				shutdown(sck, SHUT_WR);
+			}
+		 }
+		 if (++neos >= this->get_num_inchannels()) {
+			 // all input EOS received, now sending the EOS to all
+			 // others connections
+			 for(const auto& sck : sockets) {
+				 if (batchBuffers[sck].sendEOS()<0) {
+					 error("sending EOS to external connections (ff_dsenderH)\n");
+				 }										 
+				 shutdown(sck, SHUT_WR);
+			 }
+		 }
+
+        
+	 }
+
+	void svc_end() {
+		// here we wait all acks from all connections
+		size_t totalack  = internalSockets.size()*internalMessageOTF;
+		totalack        += sockets.size()*messageOTF;
+		size_t currentack = 0;
+		for(const auto& [sck, counter] : socketsCounters) {
+			currentack += counter;
+		}
+		
+		ack_t a;
+		while(currentack<totalack) {
+			for(auto scit = socketsCounters.begin(); scit != socketsCounters.end();) {
+				auto sck      = scit->first;
+				auto& counter = scit->second;
+
+				switch(recvnnb(sck, (char*)&a, sizeof(a))) {
+				case 0:
+				case -1: {
+					if (errno == EWOULDBLOCK) {
+						++scit;
+						continue;
+					}
+					decltype(internalSockets)::iterator it;
+					it = std::find(internalSockets.begin(), internalSockets.end(), sck);
+					if (it != internalSockets.end())
+						currentack += (internalMessageOTF-counter);
+					else
+						currentack += (messageOTF-counter);
+					socketsCounters.erase(scit++);
+				} break;
+				default: {
+					currentack++;
+					counter++;
+					++scit;					
+				}					
+				}
+			}
+		}
+		for(const auto& [sck, _] : socketsCounters) close(sck);
+	}
+	
+};
+
 
 #endif
