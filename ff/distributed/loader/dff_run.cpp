@@ -308,7 +308,7 @@ int main(int argc, char** argv) {
     if (usedProtocol == Proto::MPI){
         std::string rankFile = generateRankFile(parsedGroups);
         std::cout << "RankFile: " << rankFile << std::endl;
-        // invoke mpirun using the just created hostfile
+        // invoke mpirun using the just created rankfile
 
         char command[350];
      
@@ -331,7 +331,7 @@ int main(int argc, char** argv) {
 
         pclose(fp);
 
-        //std::remove(hostFile.c_str());
+        std::remove(rankFile.c_str());
     }
     
     
