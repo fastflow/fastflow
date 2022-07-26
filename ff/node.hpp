@@ -1646,7 +1646,7 @@ struct ff_node_t: ff_node {
     if constexpr (traits::is_serializable_v<OUT_t>){
         this->serializeF = [](void* o, dataBuffer& b) -> bool {
                                bool datacopied = true;
-                               std::pair<char*, size_t> p = serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o,datacopied));
+                               std::pair<char*, size_t> p = serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o),datacopied);
                                b.setBuffer(p.first, p.second);
                                return datacopied;
                            };
