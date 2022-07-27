@@ -443,7 +443,7 @@ private:
       
       // FEEDBACK RELATED (wrap around of the main pipe!)
       // if the main pipe is wrapped-around i take all the outputgroups of the last stage of the pipeline and the cardinality must set to the expected input connections
-      if (!previousStage && parentPipe->isset_wraparound())
+      if (!previousStage && parentPipe->isset_wraparound() && inputGroups(parentBB2GroupsName[runningGroup_IR.parentBB]).contains(this->runningGroup))
         runningGroup_IR.expectedEOS += outputGroups(parentBB2GroupsName[parentPipe->getStages().back()]).size();
 
 
