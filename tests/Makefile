@@ -73,7 +73,7 @@ endif
 #CFLAGS              =
 #LDFLAGS             =
 TRACE_FASTFLOW =1 
-CXXFLAGS            += -std=c++17
+CXXFLAGS            += -std=c++20
 ifdef DEBUG
     OPTIMIZE_FLAGS  += -g -fno-inline-functions
 else
