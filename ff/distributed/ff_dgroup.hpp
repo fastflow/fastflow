@@ -96,8 +96,8 @@ public:
             int outputChannels = 0;
             int feedbacksChannels = 0;
             if (ir.hasSender){
-                outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+ (f.second.second != ChannelType::FBK ? f.second.first.size() : 0);});
-                feedbacksChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second == ChannelType::FBK ? f.second.first.size() : 0);});
+                outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+ (f.first.second != ChannelType::FBK ? f.second.size() : 0);});
+                feedbacksChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.first.second == ChannelType::FBK ? f.second.size() : 0);});
             }
 
             std::vector<int> reverseOutputIndexes(ir.hasLeftChildren() ? ir.outputL.rbegin() : ir.outputR.rbegin(), ir.hasLeftChildren() ? ir.outputL.rend() : ir.outputR.rend());
@@ -191,26 +191,32 @@ public:
             std::vector<ff_node*> firstSet;
             for(ff_node* child : ir.L){
                 if (isSeq(child))
-                    if (ir.isSource){
+                    if (ir.isSource && !ir.hasInputFeedbacks){
                         ff_node* wrapped = new EmitterAdapter(child, ir.rightTotalInputs, getBackAndPop(reverseLeftOutputIndexes) , localRightWorkers);
-                        //if (ir.hasReceiver)
 						wrapped->skipallpop(true);
                         firstSet.push_back(wrapped);
                     } else {
 						auto d = child->getDeserializationFunction();
-                        firstSet.push_back(new ff_comb(new WrapperIN(new ForwarderNode(d.first,d.second), 1, true), new EmitterAdapter(child, ir.rightTotalInputs, getBackAndPop(reverseLeftOutputIndexes) , localRightWorkers), true, true));
+                        auto combinedNode = new ff_comb(new WrapperIN(new ForwarderNode(d.first,d.second), 1, true), new EmitterAdapter(child, ir.rightTotalInputs, getBackAndPop(reverseLeftOutputIndexes) , localRightWorkers), true, true);
+                        if (ir.isSource) combinedNode->skipfirstpop(true);
+                        firstSet.push_back(combinedNode);
                     }
                 else {
                     
-                    if (ir.isSource){
+                    if (ir.isSource && !ir.hasInputFeedbacks){
                         //if (ir.hasReceiver)
 						child->skipallpop(true);
                     } else {
                         ff::svector<ff_node*> inputs; child->get_in_nodes(inputs);
                         for(ff_node* input : inputs){
                             ff_node* inputParent = getBB(child, input);
-                            if (inputParent) inputParent->change_node(input, buildWrapperIN(input), true); // cleanup??? remove_fromcleanuplist??
+                            if (inputParent) {
+                                inputParent->change_node(input, buildWrapperIN(input), true); // cleanup??? remove_fromcleanuplist??
+                                std::cout << std::boolalpha << "inputparent is a combine: " << inputParent->isComp() << std::endl;
+                                if (ir.isSource) inputParent->skipfirstpop(true);
+                            }
                         }
+                        
                     }
                     
                     ff::svector<ff_node*> outputs; child->get_out_nodes(outputs);
@@ -232,8 +238,8 @@ public:
             });
             innerA2A->add_firstset(firstSet, reinterpret_cast<ff_a2a*>(ir.parentBB)->ondemand_buffer()); // note the ondemand!!
             
-            int outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+ (f.second.second == ChannelType::FWD ? f.second.first.size() : 0);});
-            int feedbacksChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second == ChannelType::FBK ? f.second.first.size() : 0);});
+            int outputChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+ (f.first.second == ChannelType::FWD ? f.second.size() : 0);});
+            int feedbacksChannels = std::accumulate(ir.routingTable.begin(), ir.routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.first.second == ChannelType::FBK ? f.second.size() : 0);});
             
             std::vector<int> reverseRightOutputIndexes(ir.outputR.rbegin(), ir.outputR.rend());
             std::vector<ff_node*> secondSet;
@@ -251,7 +257,7 @@ public:
                         if (inputParent) inputParent->change_node(input, new CollectorAdapter(input, ir.outputL), true); //cleanup?? remove_fromcleanuplist??
                     }
 
-                    if (!ir.isSink){
+                    if (outputChannels > 0 || feedbacksChannels > 0){
                         ff::svector<ff_node*> outputs; child->get_out_nodes(outputs);
                         for(ff_node* output : outputs){
                             ff_node* outputParent = getBB(child, output);

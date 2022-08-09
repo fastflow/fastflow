@@ -235,7 +235,6 @@ public:
 			out->sender = header[1];
 			out->chid   = header[2];
 
-            //std::cout << "received something from " << sender << " directed to " << chid << std::endl;
             if (out->chid != -1)
                 ff_send_out_to(out, this->routingTable[out->chid]); // assume the routing table is consistent WARNING!!!
             else

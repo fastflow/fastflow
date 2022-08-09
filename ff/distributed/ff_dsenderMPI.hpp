@@ -17,7 +17,7 @@
 #include <cereal/types/polymorphic.hpp>
 
 using namespace ff;
-using precomputedRT_t = std::map<std::string, std::pair<std::vector<int>, ChannelType>>;
+using precomputedRT_t = std::map<std::pair<std::string, ChannelType>, std::vector<int>>;
 class ff_dsenderMPI: public ff_minode_t<message_t> { 
 protected:
     class batchBuffer {
@@ -164,9 +164,12 @@ public:
            std::vector<batchBuffer*> appo;
            for(int i = 0; i < messageOTF; i++) appo.push_back(batchSize == 1 ? new directBatchBuffer(ep.getRank()) : new batchBuffer(batchSize, ep.getRank()));
            buffers.emplace(std::make_pair(ep.getRank(), std::make_pair(0, std::move(appo))));
-
-           for(int dest : rt->operator[](ep.groupName).first)
-                dest2Rank[std::make_pair(dest, ct)] = ep.getRank();
+           for(auto& [k,v] : *rt){
+            if (k.first != ep.groupName) continue;
+            for(int dest : v)
+                dest2Rank[std::make_pair(dest, k.second)] = ep.getRank();
+           }
+           
         }
 
          this->destRanks.clear();
@@ -256,8 +259,11 @@ public:
             
             if (handshakeHandler(rank, ct) < 0) return -1;
 
-            for(int dest : rt->operator[](endpoint.groupName).first)
-                dest2Rank[std::make_pair(dest, ct)] = rank;
+            for(auto& [k,v] : *rt){
+                if (k.first != endpoint.groupName) continue;
+                for(int dest : v)
+                    dest2Rank[std::make_pair(dest, k.second)] = endpoint.getRank();
+            }
 
         }
 

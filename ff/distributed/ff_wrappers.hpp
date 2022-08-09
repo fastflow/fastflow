@@ -132,7 +132,7 @@ public:
 		}
 
 		message_t* msg = new message_t;
-		msg->feedback = (id < remoteFeedbacks && remoteFeedbacks);
+		msg->feedback = ((id < remoteFeedbacks && remoteFeedbacks) || outchannels == 0);
 		if (!msg->feedback) id -= remoteFeedbacks;
 		
 		bool datacopied = this->n->serializeF(in, msg->data);

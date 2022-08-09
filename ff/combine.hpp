@@ -320,6 +320,18 @@ public:
     virtual std::pair<decltype(deserializeF), decltype(alloctaskF)> getDeserializationFunction(){ return comp_nodes[0]->getDeserializationFunction(); }
 
 #endif
+
+ void skipfirstpop(bool sk)   {
+        getFirst()->skipfirstpop(sk);
+        ff_node::skipfirstpop(sk);
+    }
+
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk) {
+        getFirst()->skipallpop(sk);
+        ff_node::skipallpop(sk);
+    }
+#endif
     
 protected:
     ff_comb():ff_minode() {}
@@ -382,18 +394,6 @@ protected:
         cleanup_stages.push_back(node1);
         add_node(*node1, n2);
     }
-
-    void skipfirstpop(bool sk)   {
-        getFirst()->skipfirstpop(sk);
-        ff_node::skipfirstpop(sk);
-    }
-
-#ifdef DFF_ENABLED
-    void skipallpop(bool sk) {
-        getFirst()->skipallpop(sk);
-        ff_node::skipallpop(sk);
-    }
-#endif
 
 
     bool  put(void * ptr) { 

@@ -46,7 +46,7 @@
 
 
 using namespace ff;
-using precomputedRT_t = std::map<std::string, std::pair<std::vector<int>, ChannelType>>;
+using precomputedRT_t = std::map<std::pair<std::string, ChannelType>, std::vector<int>>;
 class ff_dsender: public ff_minode_t<message_t> { 
 protected:
     size_t neos=0;
@@ -261,8 +261,11 @@ public:
             }));
 
             // compute the routing table!
-            for(int dest : precomputedRT->operator[](ep.groupName).first)
-                dest2Socket[std::make_pair(dest, ct)] = sck;
+            for(auto& [k,v] : *precomputedRT){
+                if (k.first != ep.groupName) continue;
+                for(int dest : v)
+                    dest2Socket[std::make_pair(dest, k.second)] = sck;
+            }
 
             if (handshakeHandler(sck, ct) < 0) {
 				error("svc_init ff_dsender failed");
@@ -428,8 +431,11 @@ public:
                 return true;
             })); // change with the correct size
 
-             for(int dest : precomputedRT->operator[](endpoint.groupName).first)
-                dest2Socket[std::make_pair(dest, ct)] = sck;
+            for(auto& [k,v] : *precomputedRT){
+                if (k.first != endpoint.groupName) continue;
+                for(int dest : v)
+                    dest2Socket[std::make_pair(dest, k.second)] = sck;
+            }
 
             if (handshakeHandler(sck, ct) < 0) return -1;
 

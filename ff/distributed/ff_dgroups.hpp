@@ -443,8 +443,13 @@ private:
       
       // FEEDBACK RELATED (wrap around of the main pipe!)
       // if the main pipe is wrapped-around i take all the outputgroups of the last stage of the pipeline and the cardinality must set to the expected input connections
-      if (!previousStage && parentPipe->isset_wraparound() && inputGroups(parentBB2GroupsName[runningGroup_IR.parentBB]).contains(this->runningGroup))
-        runningGroup_IR.expectedEOS += outputGroups(parentBB2GroupsName[parentPipe->getStages().back()]).size();
+      // i'm the first in the pipeline, the pipeline was wrapped around and the group i'm running is actually an input group! 
+      if (!previousStage && parentPipe->isset_wraparound() && inputGroups(parentBB2GroupsName[runningGroup_IR.parentBB]).contains(this->runningGroup)){
+        auto outGroups = outputGroups(parentBB2GroupsName[parentPipe->getStages().back()]);
+        if (outGroups.contains(this->runningGroup)) outGroups.erase(this->runningGroup);
+        runningGroup_IR.expectedEOS += outGroups.size();
+        if (outGroups.size() > 0) runningGroup_IR.hasInputFeedbacks = true;
+      }
 
 
       if (runningGroup_IR.expectedEOS > 0) runningGroup_IR.hasReceiver = true;
@@ -476,7 +481,8 @@ private:
           // FEEDBACK RELATED (wrap around of the main pipe!)
           if (parentPipe->isset_wraparound()){
             for(const auto& gName : inputGroups(parentBB2GroupsName[parentPipe->getStages().front()]))
-              runningGroup_IR.destinationEndpoints.push_back({ChannelType::FBK, annotatedGroups[gName].listenEndpoint});
+              if (gName != this->runningGroup)
+                runningGroup_IR.destinationEndpoints.push_back({ChannelType::FBK, annotatedGroups[gName].listenEndpoint});
           }
       }
       
@@ -490,8 +496,8 @@ private:
         for(auto& [ct, ep] : runningGroup_IR.destinationEndpoints){
             auto& destIR = annotatedGroups[ep.groupName];
             destIR.buildIndexes();
-            bool internalConnection = ct == ChannelType::INT || (ct == ChannelType::FWD && runningGroup_IR.parentBB == destIR.parentBB); //runningGroup_IR.parentBB == destIR.parentBB;
-            runningGroup_IR.routingTable[ep.groupName] = std::make_pair(destIR.getInputIndexes(internalConnection), ct);
+            bool internalConnection = ct != ChannelType::FBK && (ct == ChannelType::INT || (ct == ChannelType::FWD && runningGroup_IR.parentBB == destIR.parentBB)); //runningGroup_IR.parentBB == destIR.parentBB;
+            runningGroup_IR.routingTable[std::make_pair(ep.groupName, ct)] = destIR.getInputIndexes(internalConnection);
         }
 
     }

@@ -15,6 +15,7 @@ class ff_IR {
 protected:
     // set to true if the group contains the whole parent building block
     bool wholeParent = false;
+    bool alreadyBuilt = false;
     void computeCoverage(){
         if (!parentBB->isAll2All()) return;
         ff_a2a* a2a = reinterpret_cast<ff_a2a*>(parentBB);
@@ -26,6 +27,8 @@ protected:
     }
 
     void buildIndexes(){
+        if (alreadyBuilt) return;
+        alreadyBuilt = true;
 
         if (!L.empty()){
             if (parentBB->isPipe() && !wholeParent){
@@ -93,13 +96,14 @@ public:
 
     std::set<std::string> otherGroupsFromSameParentBB;
     size_t expectedEOS = 0;
+    bool hasInputFeedbacks = false;
     int outBatchSize = 1;
     int messageOTF, internalMessageOTF;
     // liste degli index dei nodi input/output nel builiding block in the shared memory context. The first list: inputL will become the rouitng table
     std::vector<int> inputL, outputL, inputR, outputR;
 
     // pre computed routing table for the sender module (shoud coincide with the one exchanged actually at runtime)
-    std::map<std::string, std::pair<std::vector<int>, ChannelType>> routingTable;
+    std::map<std::pair<std::string, ChannelType>, std::vector<int>> routingTable;
     
     // TODO: implmentare l'assegnamento di questi campi
     int leftTotalOuputs;
@@ -141,15 +145,15 @@ public:
             ff::cout << "\t* " << e.groupName << "\t[[" << e.address << ":" << e.port << "]]  - " << (ct==ChannelType::FBK ? "Feedback" : (ct==ChannelType::INT ? "Internal" : "Forward")) << std::endl;
 
         ff::cout << "Precomputed routing table: \n";
-        for(auto& [gName, p] : routingTable){
-            ff::cout << "\t* " << gName << (p.second==ChannelType::FBK ? "Feedback" : (p.second==ChannelType::INT ? "Internal" : "Forward")) << ":";
-            for(auto i : p.first) ff::cout << i << " ";
+        for(auto& [p, d] : routingTable){
+            ff::cout << "\t* " << p.first << (p.second==ChannelType::FBK ? "Feedback" : (p.second==ChannelType::INT ? "Internal" : "Forward")) << ":";
+            for(auto i : d) ff::cout << i << " ";
             ff::cout << std::endl;
         }
 
-        ff::cout << "\nPrecomputed FWD destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second == ChannelType::FWD ? f.second.first.size() : 0);}) << std::endl;
-        ff::cout << "Precomputed INT destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second == ChannelType::INT ? f.second.first.size() : 0);}) << std::endl;
-        ff::cout << "Precomputed FBK destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.second.second == ChannelType::FBK ? f.second.first.size() : 0);}) << std::endl;
+        ff::cout << "\nPrecomputed FWD destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.first.second == ChannelType::FWD ? f.second.size() : 0);}) << std::endl;
+        ff::cout << "Precomputed INT destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.first.second == ChannelType::INT ? f.second.size() : 0);}) << std::endl;
+        ff::cout << "Precomputed FBK destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.first.second == ChannelType::FBK ? f.second.size() : 0);}) << std::endl;
 
         ff::cout << "\n\nIndex Input Left: ";
         for(int i : inputL) ff::cout << i << " ";
