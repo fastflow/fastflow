@@ -212,7 +212,6 @@ public:
                             ff_node* inputParent = getBB(child, input);
                             if (inputParent) {
                                 inputParent->change_node(input, buildWrapperIN(input), true); // cleanup??? remove_fromcleanuplist??
-                                std::cout << std::boolalpha << "inputparent is a combine: " << inputParent->isComp() << std::endl;
                                 if (ir.isSource) inputParent->skipfirstpop(true);
                             }
                         }
