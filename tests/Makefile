@@ -119,8 +119,11 @@ ifeq ($(ARCH),-march=x86_64)
 endif
 
 ifeq ($(strip $(OS)),Darwin)
+  CXXFLAGS        += -DNO_DEFAULT_MAPPING -DBLOCKING_MODE
   ifeq  ($(strip $(ARCH)),x86_64 )
   ARCH = -march=core2
+  else ifeq ($(strip $(ARCH)),arm64 )
+  ARCH = -arch arm64
   else
   ARCH = -arch ppc
   endif

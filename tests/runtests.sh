@@ -9,8 +9,8 @@
 #
 # 
 
-system=`uname -mo`
-arch=`uname -o`
+system=`uname -m`
+arch=`uname`
 if [ $arch = "Darwin" ]; then
     execfiles="$(find . -maxdepth 1 -type f -perm -a=x| grep -v runtests.sh| grep -v mytime.h)"
 else
