@@ -43,6 +43,6 @@ GroupInterface ff_node::createGroup(std::string name){
     return GroupInterface(name);
 }
 
-}
+} // namespace
 
 #endif

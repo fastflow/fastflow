@@ -70,11 +70,4 @@ static inline ff_node* getNextStage(ff_pipeline* p, ff_node* s){
     return nullptr;
 }
 
-
-
-
-
-
-
-
-}
+} // namespace

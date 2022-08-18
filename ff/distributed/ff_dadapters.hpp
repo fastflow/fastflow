@@ -10,9 +10,9 @@
 #include <cereal/types/polymorphic.hpp>
 #include <cereal/archives/portable_binary.hpp>
 
-#define FARM_GATEWAY -10
 
-using namespace ff;
+namespace ff {
+
 
 class SquareBoxRight : public ff_minode {
     ssize_t neos = 0;
@@ -222,4 +222,5 @@ public:
 	ff_node* getOriginal(){ return this->n;	}
 };
 
+} // namespace
 #endif

@@ -42,15 +42,17 @@
 #endif
 
 
-template<typename T>
-T getBackAndPop(std::vector<T>& v){
-    T b = v.back();
-    v.pop_back();
-    return b;
-}
 
 namespace ff{
 class dGroup : public ff::ff_farm {
+
+	template<typename T>
+	T getBackAndPop(std::vector<T>& v){
+		T b = v.back();
+		v.pop_back();
+		return b;
+	}
+	
 	
     static inline std::unordered_map<int, int> vector2UMap(const std::vector<int> v){
         std::unordered_map<int,int> output;
@@ -309,6 +311,6 @@ public:
          
 
 };
-}
+} // namespace
 #endif
 

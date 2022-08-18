@@ -16,7 +16,8 @@
 #include <cereal/types/vector.hpp>
 #include <cereal/types/polymorphic.hpp>
 
-using namespace ff;
+namespace ff {
+	
 using precomputedRT_t = std::map<std::pair<std::string, ChannelType>, std::vector<int>>;
 class ff_dsenderMPI: public ff_minode_t<message_t> { 
 protected:
@@ -311,4 +312,5 @@ public:
 	
 };
 
+} // namespace
 #endif

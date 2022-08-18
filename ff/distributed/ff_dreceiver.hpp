@@ -41,7 +41,8 @@
 #include <cereal/types/vector.hpp>
 #include <cereal/types/polymorphic.hpp>
 
-using namespace ff;
+
+namespace ff {
 
 class ff_dreceiver: public ff_monode_t<message_t> { 
 protected:
@@ -388,4 +389,5 @@ public:
 
 };
 
+} // namespace 
 #endif

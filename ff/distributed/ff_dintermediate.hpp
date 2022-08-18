@@ -174,10 +174,8 @@ public:
         ff::cout << "######  END GROUP  ######\n";
     }
 
-
 };
 
-
-}
+} // namespace
 
 #endif

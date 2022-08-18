@@ -34,7 +34,7 @@
 #include <cereal/types/polymorphic.hpp>
 #include <cereal/archives/portable_binary.hpp>
 
-using namespace ff;
+namespace ff {
 
 template<typename Tin, typename Tout = Tin>
 struct DummyNode : public ff_node_t<Tin, Tout> {
@@ -291,4 +291,5 @@ public:
 	}
 };
 
+} // namespace
 #endif

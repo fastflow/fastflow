@@ -12,7 +12,7 @@
 #include <cereal/types/vector.hpp>
 #include <cereal/types/polymorphic.hpp>
 
-using namespace ff;
+namespace ff {
 
 class ff_dreceiverMPI: public ff_monode_t<message_t> { 
 protected:
@@ -251,4 +251,5 @@ private:
     ack_t ACK;
 };
 
+} // namespace
 #endif
