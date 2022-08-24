@@ -57,6 +57,10 @@ struct MoNode : ff_monode_t<int>{
     int processedItems = 0;
     int* svc(int* i){
         ++processedItems;
+
+		for(volatile long i=0;i<10000000; ++i);
+
+		
         return i;
     }
 
@@ -70,6 +74,9 @@ struct MiNode : ff_minode_t<int>{
     int processedItems = 0;
     int* svc(int* i){
         ++processedItems;
+
+		for(volatile long i=0;i<50000000; ++i);
+		
         return i;
     }
 
