@@ -188,7 +188,7 @@ std::string generateRankFile(std::vector<G>& parsedGroups){
     std::ofstream tmpFile(name, std::ofstream::out);
     
     for(size_t i = 0; i < parsedGroups.size(); i++)
-        tmpFile << "rank " << i << "=" << parsedGroups[i].host << " slot=0\n";
+        tmpFile << "rank " << i << "=" << parsedGroups[i].host << " slot=0:*\n";  // TODO: to use the "threadMapping" attribute
     /*for (const G& group : parsedGroups)
         tmpFile << group.host << std::endl;*/
 
