@@ -119,12 +119,9 @@ ifeq ($(ARCH),-march=x86_64)
 endif
 
 ifeq ($(strip $(OS)),Darwin)
-  ifeq  ($(strip $(ARCH)),x86_64 )
-  ARCH = -march=core2
-  else
-  ARCH = -arch ppc
-  endif
+        CXX += -DNO_DEFAULT_MAPPING
 endif
+
 
 #INCLUDES            = -I. $(INCS)
 INCLUDES             = $(INCS)
