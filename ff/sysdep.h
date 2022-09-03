@@ -160,7 +160,7 @@ static inline int xchg(volatile int *ptr, int x)
 
 static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size)
 {
-  unsigned long ret;
+  unsigned long ret = 0;
   // MA: updated 12/08/22 unsigned int ==> unsignet long
   unsigned long tmp;
 
