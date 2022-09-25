@@ -238,7 +238,7 @@ INLINE_ELAPSED(__inline__)
  */
 #if (defined(__GNUC__) || defined(__ICC)) && defined(__linux__) && (defined(__arm__) || defined(__aarch64__)) && !defined(HAVE_TICK_COUNTER)
 
-typedef unsigned long ticks;
+typedef size_t ticks;
 
 
 /****
@@ -285,9 +285,9 @@ static __inline__ ticks getticks(void)
   ticks ret = 0;
   timespec time_tick;
   if( clock_gettime(CLOCK_MONOTONIC_RAW, &time_tick) == 0 ) {
-    ret = time_tick.tv_nsec;        // time in nanoseconds
+    ret = (ticks) (time_tick.tv_sec*1000000000L) + (ticks) time_tick.tv_nsec;        // time in nanoseconds
   }
-  return ret;
+  return (512*ret);
 }
 
 INLINE_ELAPSED(__inline__)
