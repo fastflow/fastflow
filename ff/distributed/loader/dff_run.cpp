@@ -30,6 +30,12 @@
 #include <sys/wait.h>
 #include <sys/param.h>
 #include <fcntl.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 
 
 #include <cereal/cereal.hpp>
@@ -61,11 +67,11 @@ static inline unsigned long getusec() {
     return (unsigned long)(tv.tv_sec*1e6+tv.tv_usec);
 }
 
-bool toBePrinted(std::string gName){
+static inline bool toBePrinted(std::string gName){
     return (seeAll || (find(viewGroups.begin(), viewGroups.end(), gName) != viewGroups.end()));
 }
 
-std::vector<std::string> split (const std::string &s, char delim) {
+static inline std::vector<std::string> split (const std::string &s, char delim) {
     std::vector<std::string> result;
     std::stringstream ss(s);
     std::string item;
@@ -75,6 +81,33 @@ std::vector<std::string> split (const std::string &s, char delim) {
 
     return result;
 }
+
+static inline void convertToIP(const char *host, char *ip) {
+	struct addrinfo hints;
+	struct addrinfo *result, *rp;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;    /* Allow IPv4 or IPv6 */
+	hints.ai_socktype = SOCK_STREAM; /* Stream socket */
+	hints.ai_flags = 0;
+	hints.ai_protocol = IPPROTO_TCP;          /* Allow only TCP */
+	if (getaddrinfo(host, NULL, NULL, &result) != 0) {
+		perror("getaddrinfo");
+		std::cerr << "FATAL ERROR\n";							
+		return;
+	}	
+	for (rp = result; rp != NULL; rp = rp->ai_next) {
+		struct sockaddr_in *h = (struct sockaddr_in *) rp->ai_addr;
+		if (inet_ntop(AF_INET, &(h->sin_addr), ip, INET_ADDRSTRLEN) == NULL) {
+			perror("inet_ntop");
+			continue;
+		}		
+		free(result);
+		return;
+	}
+	free(result);
+	std::cerr << "FATAL ERROR\n";
+}
+
 
 struct G {
     std::string name, host, preCmd;
@@ -119,9 +152,17 @@ struct G {
         fcntl(fd, F_SETFL, flags);
     }
 
-    bool isRemote(){return !(!host.compare("127.0.0.1") || !host.compare("localhost") || !host.compare(hostname));}
-
-
+    bool isRemote(){
+		if (!host.compare("127.0.0.1") || !host.compare("localhost") || !host.compare(hostname))
+			return false;
+		
+		char ip1[INET_ADDRSTRLEN];
+		char ip2[INET_ADDRSTRLEN];
+		convertToIP(host.c_str(), ip1);
+		convertToIP(hostname, ip2);
+		if (strncmp(ip1,ip2,INET_ADDRSTRLEN)==0) return false;
+		return true;  // remote
+	}
 };
 
 bool allTerminated(std::vector<G>& groups){
@@ -147,7 +188,7 @@ std::string generateRankFile(std::vector<G>& parsedGroups){
     std::ofstream tmpFile(name, std::ofstream::out);
     
     for(size_t i = 0; i < parsedGroups.size(); i++)
-        tmpFile << "rank " << i << "=" << parsedGroups[i].host << " slot=0\n";
+        tmpFile << "rank " << i << "=" << parsedGroups[i].host << " slot=0:*\n";  // TODO: to use the "threadMapping" attribute
     /*for (const G& group : parsedGroups)
         tmpFile << group.host << std::endl;*/
 

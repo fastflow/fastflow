@@ -22,7 +22,7 @@
  * Each R-Worker has to receive a partition of size 2 (size/nRight).
  * The number of chunks (i.e., the n. of partitions to be sent as seen by all L-Workers) is nRight.
  * The L-Worker with id 0 should send 2 chunks, chunk_0 to the L-Worker_0, chunk_1 to the L-Worker_1.
- * The L-Worker with id 1 should send 2 chunks, chunk_2 to the L-Worker_2, chunk_3 to the L-Worker_4.
+ * The L-Worker with id 1 should send 2 chunks, chunk_2 to the L-Worker_2, chunk_3 to the L-Worker_3.
  * The L-Worker with id 2 should send 1 chunk, chunk_4 to the L-Worker_4.
  * 
  */

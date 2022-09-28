@@ -160,17 +160,18 @@ static inline int xchg(volatile int *ptr, int x)
 
 static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size)
 {
-  unsigned long ret;
-  unsigned int tmp;
+  unsigned long ret = 0;
+  // MA: updated 12/08/22 unsigned int ==> unsignet long
+  unsigned long tmp;
 
   smp_mb();
-
+  // MA: updated 12/08/22 teq %1, #0 ==>  teq %w1, #0
   switch (size) {
   case 1:
     asm volatile("@ __xchg1\n"
     "1: ldrexb  %0, [%3]\n"
     " strexb  %1, %2, [%3]\n"
-    " teq %1, #0\n"
+    " teq %w1, #0\n"            
     " bne 1b"
       : "=&r" (ret), "=&r" (tmp)
       : "r" (x), "r" (ptr)

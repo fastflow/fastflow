@@ -192,13 +192,22 @@ INLINE_ELAPSED(__inline__)
 #endif
 
 /* MacOS/Mach (Darwin) time-base register interface (unlike UpTime,
-   from Carbon, requires no additional libraries to be linked). */
-#if defined(HAVE_MACH_ABSOLUTE_TIME) && defined(HAVE_MACH_MACH_TIME_H) && !defined(HAVE_TICK_COUNTER)
+   from Carbon, requires no additional libraries to be linked). 
+   13 July 2022 (MarcoA): Reviewed for M1 Macs
+   256 is an empirich costant to match the sensistivity of x86 tick counter
+   */  
+#if defined(__APPLE__)
 #include <mach/mach_time.h>
+//#if defined(_MACH_ABSOLUTE_TIME_H_) && defined(_MACH_MACH_TIME_H_)
+#if !defined(HAVE_TICK_COUNTER)
 typedef uint64_t ticks;
-#define getticks mach_absolute_time
+static __inline__ ticks getticks(void) {
+  return (256*mach_continuous_time()); 
+}
+//#define getticks mach_absolute_time
 INLINE_ELAPSED(__inline__)
 #define HAVE_TICK_COUNTER
+#endif
 #endif
 
 /*----------------------------------------------------------------*/
@@ -229,7 +238,7 @@ INLINE_ELAPSED(__inline__)
  */
 #if (defined(__GNUC__) || defined(__ICC)) && defined(__linux__) && (defined(__arm__) || defined(__aarch64__)) && !defined(HAVE_TICK_COUNTER)
 
-typedef unsigned long ticks;
+typedef size_t ticks;
 
 
 /****
@@ -276,9 +285,9 @@ static __inline__ ticks getticks(void)
   ticks ret = 0;
   timespec time_tick;
   if( clock_gettime(CLOCK_MONOTONIC_RAW, &time_tick) == 0 ) {
-    ret = time_tick.tv_nsec;        // time in nanoseconds
+    ret = (ticks) (time_tick.tv_sec*1000000000L) + (ticks) time_tick.tv_nsec;        // time in nanoseconds
   }
-  return ret;
+  return (512*ret);
 }
 
 INLINE_ELAPSED(__inline__)

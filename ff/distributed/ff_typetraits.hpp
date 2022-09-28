@@ -107,5 +107,5 @@ void alloctaskWrapper(char* c, size_t s, T*& p){
 }
 
 
-}
+} // namespace
 #endif

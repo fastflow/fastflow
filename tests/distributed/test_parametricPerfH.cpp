@@ -20,6 +20,8 @@
 #include <mutex>
 #include <chrono>
 
+using namespace ff;
+
 // to test serialization without using Cereal
 #define MANUAL_SERIALIZATION 1
 

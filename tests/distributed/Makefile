@@ -59,6 +59,12 @@ else
     INCS            += -I ~/cereal
 endif
 
+OS                   = $(shell uname)
+
+ifeq ($(strip $(OS)),Darwin)
+	CXX += -DNO_DEFAULT_MAPPING
+endif
+
 
 CXXFLAGS            += -Wall
 LIBS                += -pthread

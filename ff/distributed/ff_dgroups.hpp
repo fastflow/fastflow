@@ -649,9 +649,6 @@ int ff_a2a::run_and_wait_end(){
   dGroups::Instance()->run_and_wait_end(&p);
   return 0;
 }
-
-
-
 	
-}
+} // namespace
 #endif

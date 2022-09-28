@@ -61,6 +61,8 @@
     #endif
 #endif
 
+namespace ff {
+
 enum Proto {TCP , MPI};
 enum ChannelType {FWD, INT, FBK};
 
@@ -231,4 +233,6 @@ static inline ssize_t recvnnb(int fd, char *buf, size_t size) {
     #define DFF_REQUEST_ROUTING_TABLE 10
 #endif
 
+} // namespace
+	
 #endif

@@ -2,7 +2,8 @@
 #define FF_BATCHBUFFER_H
 #include "ff_network.hpp"
 #include <sys/uio.h>
-using namespace ff;
+
+namespace ff {
 
 class ff_batchBuffer {	
     std::function<bool(struct iovec*, int)> callback;
@@ -75,5 +76,6 @@ public:
     }
 
 };
+} // namespace
 
 #endif

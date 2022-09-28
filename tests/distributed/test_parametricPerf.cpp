@@ -25,8 +25,10 @@
 #include <mutex>
 #include <chrono>
 
+using namespace ff;
+
 // to test serialization without using Cereal
-//#define MANUAL_SERIALIZATION 1
+#define MANUAL_SERIALIZATION 1
 
 // ------------------------------------------------------
 std::mutex mtx;  // used only for pretty printing
@@ -64,7 +66,7 @@ struct ExcType {
 	char*  C    = nullptr;
 	bool contiguous;
 	
-
+#if !defined(MANUAL_SERIALIZATION)
 	template<class Archive>
 	void serialize(Archive & archive) {
 	  archive(clen);
@@ -74,6 +76,7 @@ struct ExcType {
 	  }
 	  archive(cereal::binary_data(C, clen));
 	}
+#endif	
 		
 };
 
@@ -88,18 +91,24 @@ void serializefreetask(T *o, ExcType* input) {
 template<typename Buffer>
 bool serialize(Buffer&b, ExcType* input){
 	b = {(char*)input, input->clen+sizeof(ExcType)};
+
+	printf("MY SERIALIZE\n");
 	return false;
 }
 
 template<typename Buffer>
 void deserializealloctask(const Buffer& b, ExcType*& p) {
 	p = new (b.first) ExcType(true);
+
 };
 
 template<typename Buffer>
 bool deserialize(const Buffer&b, ExcType* p){
 	p->clen = b.second - sizeof(ExcType);
 	p->C = (char*)p + sizeof(ExcType);
+
+	printf("MY DESERIALIZE\n");
+
 	return false;
 }
 #endif
@@ -152,7 +161,10 @@ struct MiNode : ff::ff_minode_t<ExcType>{
     MiNode(int execTime, bool checkdata=false): execTime(execTime),checkdata(checkdata) {}
 
     ExcType* svc(ExcType* in){
-      if (execTime) active_delay(this->execTime);
+
+		std::cout << "SERIALIZABLE? " << isSerializable() << "\n";
+		
+	  if (execTime) active_delay(this->execTime);
       ++processedItems;
 	  if (checkdata) {
 		  myassert(in->C[0]     == 'c');
@@ -205,7 +217,7 @@ int main(int argc, char*argv[]){
 	if ((p=getenv("CHECK_DATA"))!=nullptr) check=true;
 	printf("chackdata = %s\n", p);
 	
-    ff::ff_a2a a2a;
+    ff_a2a a2a;
 
     std::vector<MoNode*> sxWorkers;
     std::vector<MiNode*> dxWorkers;
