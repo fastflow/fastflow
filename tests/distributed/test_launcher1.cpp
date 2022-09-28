@@ -37,6 +37,9 @@ struct Node1: ff_node_t<std::string>{
 			if (r>0) *out += buf;
 			if (feof(in)) break;
 		}
+		char hostname[256];
+		gethostname(hostname, 256);
+		std::cout << "G1[" << hostname << "]: file " << filename << " read from disk, now sending it to G2\n";		
 		ff_send_out(out);
 		fclose(in);
         return EOS;
@@ -47,6 +50,9 @@ struct Node1: ff_node_t<std::string>{
 struct Node2: ff_node_t<std::string>{
 	Node2(std::string& filename):filename(filename) {}
     std::string* svc(std::string* out){
+		char hostname[256];
+		gethostname(hostname, 256);		
+		std::cout << "G2[" << hostname << "]: received file from G1\n";
 		FILE* in = fopen(filename.c_str(), "r");
 		if (in == NULL) {
 			perror("fopen");
@@ -63,6 +69,7 @@ struct Node2: ff_node_t<std::string>{
 			if (r>0) *out += buf;
 			if (feof(in)) break;
 		}
+		std::cout << "G2[" << hostname << "]: file " << filename << " read, and appended, sending it to G3\n";		
 		ff_send_out(out);
 		fclose(in);
         return GO_ON;
@@ -73,6 +80,9 @@ struct Node2: ff_node_t<std::string>{
 struct Node3: ff_node_t<std::string>{ 
 	Node3(std::string& filename):filename(filename) {}
     std::string* svc(std::string* in){
+		char hostname[256];
+		gethostname(hostname, 256);
+		std::cout << "G3[" << hostname << "]: received file from G2\n";
 		FILE* out = fopen(filename.c_str(), "w+");
 		if (out == NULL) {
 			perror("fopen");
@@ -83,6 +93,7 @@ struct Node3: ff_node_t<std::string>{
 			perror("fwrite");
 			std::cerr << "Problem when writing data into " << filename << "\n";
 		}
+		std::cout << "G3[" << hostname << "]: output wrote into " << filename << "\n";
         return GO_ON;
     }
 	const std::string &filename;
