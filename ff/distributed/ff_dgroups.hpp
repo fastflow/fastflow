@@ -529,8 +529,8 @@ static inline int DFF_Init(int& argc, char**& argv){
     memset(&s,0,sizeof(s));    
     s.sa_handler=SIG_IGN;
     if ( (sigaction(SIGPIPE,&s,NULL) ) == -1 ) {   
-		perror("sigaction");
-		return -1;
+      perror("sigaction");
+      return -1;
     } 
 
 
@@ -616,7 +616,7 @@ static inline int DFF_Init(int& argc, char**& argv){
 
   #endif 
 
-    // set the mapping if specified
+    // trig the mapping set if specified
     dGroups::Instance()->setThreadMapping();
 
     // set the name for the printer
