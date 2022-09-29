@@ -12,7 +12,41 @@
 #include <cereal/types/vector.hpp>
 #include <cereal/types/polymorphic.hpp>
 
+#define MPI_SLEEPTIME 200000 //nanoseconds
+
+#ifdef BLOCKING_MODE
+#define MPI_RECV_CALL MPI_Recv_NB
+#define MPI_PROBE_CALL MPI_Probe_NB
+#else
+#define MPI_RECV_CALL MPI_Recv
+#define MPI_PROBE_CALL MPI_Probe
+#endif
+
 namespace ff {
+
+    const struct timespec mpiSleepTime = {0, MPI_SLEEPTIME};
+
+    inline int MPI_Recv_NB(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status *status){
+        MPI_Request r;
+        int returnValue = MPI_Irecv(buf, count, datatype, source, tag, comm, &r);
+        if (returnValue != MPI_SUCCESS) return returnValue;
+        int flag = 0;
+        while(!flag){
+            returnValue = MPI_Test(&r, &flag, status);
+            nanosleep(&ff::mpiSleepTime, NULL);
+        }
+        return returnValue;
+    }
+
+    inline int MPI_Probe_NB(int source, int tag, MPI_Comm comm, MPI_Status * status){
+        int flag = 0, returnValue;
+        while(!flag) {
+            returnValue = MPI_Iprobe(source, tag, comm, &flag, status);
+            nanosleep(&ff::mpiSleepTime, NULL);
+        }
+        return returnValue;
+    }
+
 
 class ff_dreceiverMPI: public ff_monode_t<message_t> { 
 protected:
@@ -83,12 +117,12 @@ public:
         while(neos < input_channels){
             
             int headersLen;
-            MPI_Probe(MPI_ANY_SOURCE, DFF_HEADER_TAG, MPI_COMM_WORLD, &status);
+            MPI_PROBE_CALL(MPI_ANY_SOURCE, DFF_HEADER_TAG, MPI_COMM_WORLD, &status);
             MPI_Get_count(&status, MPI_LONG, &headersLen);
             long headers[headersLen];
 
-            if (MPI_Recv(headers, headersLen, MPI_LONG, status.MPI_SOURCE, DFF_HEADER_TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS)
-                error("Error on Recv Receiver primo in alto\n");
+            if (MPI_RECV_CALL(headers, headersLen, MPI_LONG, status.MPI_SOURCE, DFF_HEADER_TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS)
+                error("Error on Recv Receiver\n");
             bool feedback = ChannelType::FBK == rank2ChannelType[status.MPI_SOURCE];
             assert(headers[0]*3+1 == headersLen);
             if (headers[0] == 1){
@@ -103,7 +137,7 @@ public:
                     continue;
                 }
                 char* buff = new char[sz];
-                if (MPI_Recv(buff,sz,MPI_BYTE, status.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE) != MPI_SUCCESS)
+                if (MPI_RECV_CALL(buff,sz,MPI_BYTE, status.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE) != MPI_SUCCESS)
                     error("Error on Recv Receiver Payload\n");
                 
                 message_t* out = new message_t(buff, sz, true);
@@ -115,10 +149,10 @@ public:
             } else {
                 int size;
                 MPI_Status localStatus;
-                MPI_Probe(status.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, &localStatus);
+                MPI_PROBE_CALL(status.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, &localStatus);
                 MPI_Get_count(&localStatus, MPI_BYTE, &size);
                 char* buff = new char[size]; // this can be reused!! 
-                MPI_Recv(buff, size, MPI_BYTE, localStatus.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                MPI_RECV_CALL(buff, size, MPI_BYTE, localStatus.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 size_t head = 0;
                 for (size_t i = 0; i < (size_t)headers[0]; i++){
                     size_t sz = headers[3*i+3];
@@ -197,58 +231,6 @@ public:
     ff_dreceiverHMPI(size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
 		: ff_dreceiverMPI(input_channels, routingTable, coreid)  {}
 
-};
-
-
-
-
-/** versione Ondemand */
-class ff_dreceiverMPIOD: public ff_dreceiverMPI { 
-public:
-    ff_dreceiverMPIOD(size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
-		: ff_dreceiverMPI(input_channels, routingTable, coreid) {}
-    /* 
-        Here i should not care of input type nor input data since they come from a socket listener.
-        Everything will be handled inside a while true in the body of this node where data is pulled from network
-    */
-    message_t *svc(message_t* task) {
-        MPI_Request tmpAckReq;
-        MPI_Status status;
-        long header[3];
-        while(neos < input_channels){
-            MPI_Recv(header, 3, MPI_LONG, MPI_ANY_SOURCE, DFF_HEADER_TAG, MPI_COMM_WORLD, &status);
-
-            size_t sz = header[0];
-
-            if (sz == 0){
-                neos++;
-                continue;
-            }
-
-            char* buff = new char [sz];
-			assert(buff);
-
-            MPI_Recv(buff,sz,MPI_BYTE, status.MPI_SOURCE, DFF_TASK_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-            message_t* out = new message_t(buff, sz, true);
-			assert(out);
-			out->sender = header[1];
-			out->chid   = header[2];
-
-            if (out->chid != -1)
-                ff_send_out_to(out, this->routingTable[out->chid]); // assume the routing table is consistent WARNING!!!
-            else
-                ff_send_out(out);
-
-            MPI_Isend(&ACK, sizeof(ack_t), MPI_BYTE, status.MPI_SOURCE, DFF_ACK_TAG, MPI_COMM_WORLD, &tmpAckReq);
-            MPI_Request_free(&tmpAckReq);
-        }
-        
-        return this->EOS;
-    }
-
-private:
-    ack_t ACK;
 };
 
 } // namespace
