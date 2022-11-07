@@ -21,9 +21,9 @@ protected:
         ff_a2a* a2a = reinterpret_cast<ff_a2a*>(parentBB);
         coverageL = coverageR = true;
         for(ff_node* n : a2a->getFirstSet())
-            if (!L.contains(n)) {coverageL = false; break;}
+            if (!L.count(n)) {coverageL = false; break;}
         for(ff_node* n : a2a->getSecondSet())
-            if (!R.contains(n)) {coverageR = false; break;}
+            if (!R.count(n)) {coverageR = false; break;}
     }
 
     void buildIndexes(){

@@ -104,7 +104,7 @@ public:
     }
 
     void annotateGroup(std::string name, ff_node* parentBB){
-      if (annotatedGroups.contains(name)){
+      if (annotatedGroups.count(name)){
         std::cerr << "Group " << name << " created twice. Error!\n"; abort();
       }
       annotatedGroups[name].parentBB = parentBB;
@@ -250,7 +250,7 @@ private:
         const G & g = parsedGroups[i];
 
         // throw an error if a group in the configuration has not been annotated in the current program
-        if (!annotatedGroups.contains(g.name)) throw FF_Exception("present in the configuration file has not been implemented! :(");
+        if (!annotatedGroups.count(g.name)) throw FF_Exception("present in the configuration file has not been implemented! :(");
         auto endpoint = this->usedProtocol == Proto::TCP ? ff_endpoint(g.address, g.port) : ff_endpoint(i);
         endpoint.groupName = g.name;
 
@@ -301,7 +301,7 @@ private:
 
           // check that all stages were annotated
           for(ff_node* child : originalPipe->getStages())
-            if (!annotated.contains(child)){
+            if (!annotated.count(child)){
               error("When create a group from a pipeline, all the stages must be annotated on a group!");
               abort();
             }
@@ -350,8 +350,8 @@ private:
 
         std::set<std::pair<ff_node*, SetEnum>> children = getChildBB(pair.first);
 
-        std::erase_if(children, [&](auto& p){
-            if (!annotated.contains(p.first)) return false;
+        ff::erase_if(children, [&](auto& p){
+            if (!annotated.count(p.first)) return false;
             std::string& groupName = annotated[p.first]; 
             if (((isSrc && p.second == SetEnum::L) || p.first->isDeserializable()) && (isSnk || p.first->isSerializable())){
               annotatedGroups[groupName].insertInList(std::make_pair(p.first, p.second)); return true;
@@ -365,7 +365,7 @@ private:
             ff_IR& ir = annotatedGroups[gName];
             ir.computeCoverage();
             if (ir.coverageL)
-              std::erase_if(children, [&](auto& p){
+              ff::erase_if(children, [&](auto& p){
                 if (p.second == SetEnum::R && (isSnk || p.first->isSerializable()) && p.first->isDeserializable()){
                   ir.insertInList(std::make_pair(p.first, SetEnum::R)); return true;
                 }
@@ -373,7 +373,7 @@ private:
               });
 
             if (ir.coverageR)
-              std::erase_if(children, [&](auto& p){
+              ff::erase_if(children, [&](auto& p){
                 if (p.second == SetEnum::L && (isSrc || p.first->isDeserializable()) && p.first->isSerializable()){
                   ir.insertInList(std::make_pair(p.first, SetEnum::L)); return true;
                 }
@@ -438,15 +438,15 @@ private:
 
       // if the previousStage exists, count all the ouput groups pointing to the one i'm going to run
       // if the runningGroup comes from a pipe, make sure i'm the head 
-      if (previousStage && runningGroup_IR.hasLeftChildren() && (!runningGroup_IR.parentBB->isPipe() || inputGroups(parentBB2GroupsName[runningGroup_IR.parentBB]).contains(runningGroup)))
+      if (previousStage && runningGroup_IR.hasLeftChildren() && (!runningGroup_IR.parentBB->isPipe() || inputGroups(parentBB2GroupsName[runningGroup_IR.parentBB]).count(runningGroup)))
         runningGroup_IR.expectedEOS += outputGroups(parentBB2GroupsName[previousStage]).size();
       
       // FEEDBACK RELATED (wrap around of the main pipe!)
       // if the main pipe is wrapped-around i take all the outputgroups of the last stage of the pipeline and the cardinality must set to the expected input connections
       // i'm the first in the pipeline, the pipeline was wrapped around and the group i'm running is actually an input group! 
-      if (!previousStage && parentPipe->isset_wraparound() && inputGroups(parentBB2GroupsName[runningGroup_IR.parentBB]).contains(this->runningGroup)){
+      if (!previousStage && parentPipe->isset_wraparound() && inputGroups(parentBB2GroupsName[runningGroup_IR.parentBB]).count(this->runningGroup)){
         auto outGroups = outputGroups(parentBB2GroupsName[parentPipe->getStages().back()]);
-        if (outGroups.contains(this->runningGroup)) outGroups.erase(this->runningGroup);
+        if (outGroups.count(this->runningGroup)) outGroups.erase(this->runningGroup);
         runningGroup_IR.expectedEOS += outGroups.size();
         if (outGroups.size() > 0) runningGroup_IR.hasInputFeedbacks = true;
       }
@@ -462,7 +462,7 @@ private:
               runningGroup_IR.destinationEndpoints.push_back({ChannelType::FWD, annotatedGroups[gName].listenEndpoint});
       } 
       else if (runningGroup_IR.parentBB->isPipe() && runningGroup_IR.parentBB != parentPipe){
-        if (nextStage && outputGroups(parentBB2GroupsName[runningGroup_IR.parentBB]).contains(runningGroup))
+        if (nextStage && outputGroups(parentBB2GroupsName[runningGroup_IR.parentBB]).count(runningGroup))
           for(const auto& gName : inputGroups(parentBB2GroupsName[nextStage]))
             runningGroup_IR.destinationEndpoints.push_back({ChannelType::FWD, annotatedGroups[gName].listenEndpoint});
       }
@@ -504,7 +504,7 @@ private:
 
   std::set<std::string> outputGroups(std::set<std::string> groupNames){
     if (groupNames.size() > 1)
-      std::erase_if(groupNames, [this](const auto& gName){
+      ff::erase_if(groupNames, [this](const auto& gName){
         ff_IR& ir = annotatedGroups[gName];
         return ((ir.parentBB->isAll2All() && ir.isVertical() && ir.hasLeftChildren()) || (ir.parentBB->isPipe() && annotated[reinterpret_cast<ff_pipeline*>(ir.parentBB)->get_laststage()] != gName));
       });
@@ -513,7 +513,7 @@ private:
 
   std::set<std::string> inputGroups(std::set<std::string> groupNames){
     if (groupNames.size() > 1) 
-      std::erase_if(groupNames,[this](const auto& gName){
+      ff::erase_if(groupNames,[this](const auto& gName){
         ff_IR& ir = annotatedGroups[gName];
         return ((ir.parentBB->isAll2All() && ir.isVertical() && annotatedGroups[gName].hasRightChildren()) || (ir.parentBB->isPipe() && annotated[reinterpret_cast<ff_pipeline*>(ir.parentBB)->get_firststage()] != gName));
       });

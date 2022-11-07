@@ -49,6 +49,7 @@
 #include <cstring>
 #include <string>
 #include <fstream>
+#include <set>
 
 #include <ff/cycle.h>
 #include <ff/spin-lock.hpp>
@@ -259,6 +260,15 @@ static inline double ffTime(int tag/*, bool lock=false*/) {
         res=0;
     }    
     return res;
+}
+
+template <class K, class C, class A, class Predicate>
+void erase_if(std::set<K, C, A>& c, Predicate pred) {
+    for (auto i = c.begin(), last = c.end(); i != last; )
+        if (pred(*i))
+            i = c.erase(i);
+        else
+            ++i;
 }
 
 } // namespace ff

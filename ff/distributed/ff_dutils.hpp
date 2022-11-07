@@ -13,7 +13,7 @@ enum SetEnum {L, R};
 static inline bool checkCoverageFirstLevel(ff_pipeline* mainPipe, const std::set<ff_node*>& groupBuildingBlock) {
     ff::svector<ff_node*> stages = mainPipe->getStages();
     for(size_t i = 0; i< stages.size(); i++)
-        if (!groupBuildingBlock.contains(stages[i])){
+        if (!groupBuildingBlock.count(stages[i])){
             std::cerr << "Stage #" << i << " was not annotated in any group! Aborting!\n";
             abort();
         }
