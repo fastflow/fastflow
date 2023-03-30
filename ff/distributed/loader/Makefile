@@ -23,7 +23,7 @@
 #
 # ---------------------------------------------------------------------------
 
-CXXFLAGS            += -std=c++17
+CXXFLAGS            += -std=c++20
 ifdef DEBUG
     OPTIMIZE_FLAGS  += -g -fno-inline-functions
 else
@@ -36,9 +36,9 @@ else
     INCS            += -I ~/cereal/include
 endif
 
+OS                   = $(shell uname)
 
 CXXFLAGS            += -Wall
-LIBS                 = -pthread -lstdc++fs
 INCLUDES             = $(INCS)
 
 SOURCES              = $(wildcard *.cpp)

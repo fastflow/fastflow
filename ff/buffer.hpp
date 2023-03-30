@@ -30,9 +30,11 @@
 
 /* ***************************************************************************
  *
- *  This program is free software; you can redistribute it and/or modify it
+ *  FastFlow is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -113,8 +115,8 @@ private:
     volatile unsigned long pwrite;
     ALIGN_TO_POST(CACHE_LINE_SIZE)
 #endif
-    const    unsigned long size;
-    void                   ** buf;
+    size_t     size;
+    void    ** buf;
     
 #if defined(SWSR_MULTIPUSH)
     /* massimot: experimental code (see multipush)
@@ -205,6 +207,24 @@ public:
      * \return The size of the buffer.
      */
     inline size_t buffersize() const { return size; };
+
+    /**
+     * It changes the size of the queue WITHOUT reallocating 
+     * the internal buffer. It should be used mainly for 
+     * reducing the size of the queue or to restore it after
+     * is has been previously reduced. 
+     * 
+     * WARNING: this is very a dangerous operation if executed 
+     * while the queue is being used; if wrongly used, it
+     * may lead to data loss or memory corruption!
+     *
+     */
+    size_t changesize(size_t newsz) {
+        size_t tmp=size;
+        size=newsz;
+        return tmp;
+    }
+
     
     /** 
      *  Push method: push the input value into the queue. A Write Memory
@@ -233,7 +253,7 @@ public:
             WMB(); 
             //std::atomic_thread_fence(std::memory_order_release);
             buf[pwrite] = data;
-            pwrite += (pwrite+1 >=  size) ? (1-size): 1; // circular buffer
+            pwrite = pwrite + ((pwrite+1 >=  size) ? (1-size): 1); // circular buffer
             return true;
         }
         return false;
@@ -263,7 +283,7 @@ public:
                     buf[pwrite+i] = data[i];
             
             WMB();
-            pwrite = (last+1 >= size) ? 0 : (last+1);
+            pwrite = pwrite + ((last+1 >= size) ? 0 : (last+1));
 #if defined(SWSR_MULTIPUSH)
             mcnt = 0; // reset mpush counter
 #endif
@@ -312,7 +332,7 @@ public:
      */
     inline bool  inc() {
         buf[pread]=NULL;
-        pread += (pread+1 >= size) ? (1-size): 1; // circular buffer       
+        pread = pread + ((pread+1 >= size) ? (1-size): 1); // circular buffer     
         return true;
     }           
 
@@ -352,7 +372,8 @@ public:
             pwrite = longxCacheLine-1;
             pread  = longxCacheLine-1;
         } else {
-            pread=pwrite=0; 
+            pread=0;
+            pwrite=0; 
         }
 #if defined(SWSR_MULTIPUSH)        
         mcnt   = 0;
@@ -487,7 +508,7 @@ public:
 
         if (empty()) return false;
         *data = buf[pread];
-        pread += (pread+1 >= size) ? (1-size): 1;
+        pread = pread + ((pread+1 >= size) ? (1-size): 1);
         return true;
     }    
     
@@ -495,7 +516,8 @@ public:
      * TODO
      */
     inline void reset() { 
-        pread=pwrite=0; 
+        pread=0;
+        pwrite=0; 
         if (size<=512) for(unsigned long i=0;i<size;++i) buf[i]=0;
         else memset(buf,0,size*sizeof(void*));
     }

@@ -1,0 +1,20 @@
+{
+    "groups" : [
+     {   
+        "endpoint" : "localhost:8000",
+         "name" : "G1"
+     },
+     {   
+        "endpoint" : "localhost:8001",
+        "name" : "G2"
+     },
+     {   
+        "endpoint" : "localhost:8002",
+        "name" : "G3"
+     },
+     {   
+        "endpoint" : "localhost:8010",
+        "name" : "G0"
+     }
+    ]
+}

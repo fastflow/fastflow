@@ -1,24 +1,20 @@
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub tag](https://img.shields.io/github/tag/fastflow/fastflow.svg)](http://github.com/fastflow/fastflow/releases)
 [![GitHub Issues](https://img.shields.io/github/issues/fastflow/fastflow.svg)](http://github.com/fastflow/fastflow/issues)
 
 # FastFlow: high-performance parallel patterns and building blocks in C++
 
-FastFlow is a programming library implemented in modern C++ and targeting
-multi/many-cores (there exists an experimental version based on ZeroMQ targeting
-distributed systems). It offers both a set of high-level ready-to-use parallel
-patterns and a set of mechanisms and composable components
-(called building blocks) to support low-latency and high-throughput data-flow
-streaming networks.
+FastFlow is a programming library implemented in modern C++ targeting
+multi/many-cores and distributed systems (the distributed run-time is experimental).
+It offers both a set of high-level ready-to-use parallel patterns and a set
+of mechanisms and composable components (called building blocks) to support low-latency and high-throughput data-flow streaming networks.
 
 FastFlow simplifies the development of parallel applications modelled as a
 structured directed graph of processing nodes.
 The graph of concurrent nodes is constructed by the assembly of sequential
-and parallel building blocks as well as higher-level easy-to-use components
-(i.e. parallel patterns) modelling typical schemas of parallel computations
-(e.g., pipeline, task-farm, parallel-for, etc.).
-FastFlow efficiency stems from the optimized implementation of the base communication
-and synchronization mechanisms and from its layered software design.
+and parallel building blocks as well as higher-level parallel patterns modelling typical schemas of parallel computations (e.g., pipeline, task-farm, parallel-for, etc.).
+FastFlow efficiency stems from the optimized implementation of the base communication and synchronization mechanisms and from its layered software design.
 
 ## FastFlow's Building Blocks
 
@@ -68,22 +64,35 @@ they are added to the high-level layer and provided to the user.
 
 
 ## Building the library
-FastFlow is header-only, no need for building.
+
+FastFlow is a header-only library, for the shared-memory run-time, there are basically no dependencies.
+For the distributed-memory run-time, you need to install:
+ - Cereal for (automatic) serialization/deserialization purposes (https://uscilab.github.io/cereal/)
+ - OpenMPI for experimenting with the MPI communication back-end (https://www.open-mpi.org/software/ompi)
+
+While Cereal is mandatory, OpenMPI installation is optional and can be disabled at compile-time by compiling the
+code with '-DDFF_EXCLUDE_MPI'. To compile tests with the distributed run-time you need a recent compiler
+supporting the -std=c++20 standard.
 
 See the [BUILD.ME](BUILD.ME) file for instructions about building unit tests and examples.
+NOTES: currently, the cmake-based compilation of distributed tests has been disabled. 
 
 ## Supported Platforms
 FastFlow is currently actively supported for Linux with gcc >4.8, x86_64 and ARM
 Since version 2.0.4, FastFlow is expected to work on any platform with a C++11 compiler. 
 
 ## FastFlow Maintainer
-Massimo Torquati <torquati@di.unipi.it> (University of Pisa)
+Massimo Torquati (University of Pisa)
+<torquati@di.unipi.it> <massimo.torquati@unipi.it>
 
 ## FastFlow History
 The FastFlow project started in the beginning of 2010 by Massimo Torquati (University of Pisa) and 
 Marco Aldinucci (University of Turin). 
 Over the years several other people (mainly from the Parallel Computing Groups of the University of Pisa and Turin) contributed with ideas and code to the development of the project. FastFlow has been used as 
 run-time system in three EU founded research projects: ParaPhrase, REPARA and RePhrase.
+
+## About the License
+From version 3.0.1, FastFlow is released with a dual license: <strong>LGPL-3</strong> and <strong>MIT</strong>. 
 
 ## How to cite FastFlow
 Aldinucci, M. , Danelutto, M. , Kilpatrick, P. and Torquati, M. (2017). Fastflow: High‐Level and Efficient Streaming on Multicore. In Programming multi‐core and many‐core computing systems (eds S. Pllana and F. Xhafa).

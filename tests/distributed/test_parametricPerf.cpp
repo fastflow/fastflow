@@ -8,8 +8,16 @@
  *           |--> MiNode 
  *
  * /<------- a2a ------>/
- * /<---- pipeMain ---->/
+ *
+ * distributed group names: 
+ *  S*: all left-hand side nodes
+ *  D*: all righ-hand side nodes
+ *
  */
+
+// running the tests with limited buffer capacity
+#define FF_BOUNDED_BUFFER
+#define DEFAULT_BUFFER_CAPACITY 128
 
 
 #include <ff/dff.hpp>
@@ -17,7 +25,8 @@
 #include <mutex>
 #include <chrono>
 
-#define MANUAL_SERIALIZATION 1
+// to test serialization without using Cereal
+//#define MANUAL_SERIALIZATION 1
 
 // ------------------------------------------------------
 std::mutex mtx;  // used only for pretty printing
@@ -36,11 +45,11 @@ static inline float active_delay(int msecs) {
   return x;
 }
 // this assert will not be removed by -DNDEBUG
-#define myassert(c) {													      \
+#define myassert(c) {													\
 		if (!(c)) {														\
-			std::cerr << "ERROR: assert at line " << __LINE__ << " failed\n"; \
-			abort();													      \
-		}																      \
+			std::cerr << "ERROR: myassert at line " << __LINE__ << " failed\n"; \
+			abort();													\
+		}																\
 	}
 // -----------------------------------------------------
 struct ExcType {
@@ -65,17 +74,43 @@ struct ExcType {
 	  }
 	  archive(cereal::binary_data(C, clen));
 	}
-	
+		
 };
 
+template<typename T>
+void serializefreetask(T *o, ExcType* input) {
+	input->~ExcType();
+	free(o);
+}
+
+
+#ifdef MANUAL_SERIALIZATION
+template<typename Buffer>
+bool serialize(Buffer&b, ExcType* input){
+	b = {(char*)input, input->clen+sizeof(ExcType)};
+	return false;
+}
+
+template<typename Buffer>
+void deserializealloctask(const Buffer& b, ExcType*& p) {
+	p = new (b.first) ExcType(true);
+};
+
+template<typename Buffer>
+bool deserialize(const Buffer&b, ExcType* p){
+	p->clen = b.second - sizeof(ExcType);
+	p->C = (char*)p + sizeof(ExcType);
+	return false;
+}
+#endif
+
 static ExcType* allocateExcType(size_t size, bool setdata=false) {
-	char* _p = (char*)malloc(size+sizeof(ExcType));	
+	char* _p = (char*)calloc(size+sizeof(ExcType), 1);	// to make valgrind happy !
 	ExcType* p = new (_p) ExcType(true);  // contiguous allocation
 	
 	p->clen    = size;
 	p->C       = (char*)p+sizeof(ExcType);
 	if (setdata) {
-		bzero(p->C, p->clen);
 		p->C[0]       = 'c';
 		if (size>10) 
 			p->C[10]  = 'i';
@@ -106,8 +141,8 @@ struct MoNode : ff::ff_monode_t<ExcType>{
 
     void svc_end(){
         const std::lock_guard<std::mutex> lock(mtx);
-        std::cout << "[MoNode" << this->get_my_id() << "] Generated Items: " << items << std::endl;
-    }
+        ff::cout << "[MoNode" << this->get_my_id() << "] Generated Items: " << items << ff::endl;
+    }	
 };
 
 struct MiNode : ff::ff_minode_t<ExcType>{
@@ -127,25 +162,34 @@ struct MiNode : ff::ff_minode_t<ExcType>{
 			  myassert(in->C[100] == 'a');
 		  if (in->clen>500)
 			  myassert(in->C[500] == 'o');
-		  std::cout << "MiNode" << get_my_id() << " input data " << processedItems << " OK\n";
 	  }
-	  myassert(in->C[in->clen-1] == 'F');
+	  if (in->C[in->clen-1] != 'F') {
+	      ff::cout << "ERROR: " << in->C[in->clen-1] << " != 'F'\n";
+		  myassert(in->C[in->clen-1] == 'F');
+	  }
+#ifdef MANUAL_SERIALIZATION
+	  in->~ExcType(); free(in);
+#else	  
 	  delete in;
+#endif	  
       return this->GO_ON;
     }
 
     void svc_end(){
         const std::lock_guard<std::mutex> lock(mtx);
-        std::cout << "[MiNode" << this->get_my_id() << "] Processed Items: " << processedItems << std::endl;
+        ff::cout << "[MiNode" << this->get_my_id() << "] Processed Items: " << processedItems << ff::endl;
     }
 };
 
 int main(int argc, char*argv[]){
     
-    DFF_Init(argc, argv);
+    if (DFF_Init(argc, argv) != 0) {
+		error("DFF_Init\n");
+		return -1;
+	}
 
-    if (argc < 7){
-        std::cout << "Usage: " << argv[0] << " #items #byteXitem #execTimeSource #execTimeSink #nw_sx #nw_dx"  << std::endl;
+    if (argc < 9){
+        std::cout << "Usage: " << argv[0] << " #items #byteXitem #execTimeSource #execTimeSink #np_sx #np_dx #nwXpsx #nwXpdx"  << std::endl;
         return -1;
     }
 	bool check = false;
@@ -153,59 +197,46 @@ int main(int argc, char*argv[]){
     long bytexItem = atol(argv[2]);
     int execTimeSource = atoi(argv[3]);
     int execTimeSink = atoi(argv[4]);
-    int numWorkerSx = atoi(argv[5]);
-    int numWorkerDx = atoi(argv[6]);
-
+    int numProcSx = atoi(argv[5]);
+    int numProcDx = atoi(argv[6]);
+	int numWorkerXProcessSx = atoi(argv[7]);
+	int numWorkerXProcessDx = atoi(argv[8]);
 	char* p=nullptr;
 	if ((p=getenv("CHECK_DATA"))!=nullptr) check=true;
 	printf("chackdata = %s\n", p);
 	
-    ff_pipeline mainPipe;
     ff::ff_a2a a2a;
-
-    mainPipe.add_stage(&a2a);
 
     std::vector<MoNode*> sxWorkers;
     std::vector<MiNode*> dxWorkers;
 
-    for(int i = 0; i < numWorkerSx; i++)
-        sxWorkers.push_back(new MoNode(ceil((double)items/numWorkerSx), execTimeSource, bytexItem, check));
+    for(int i = 0; i < (numProcSx*numWorkerXProcessSx); i++)
+        sxWorkers.push_back(new MoNode(ceil((double)items/(numProcSx*numWorkerXProcessSx)), execTimeSource, bytexItem, check));
 
-    for(int i = 0; i < numWorkerDx; i++)
+    for(int i = 0; i < (numProcDx*numWorkerXProcessDx); i++)
         dxWorkers.push_back(new MiNode(execTimeSink, check));
 
-    a2a.add_firstset(sxWorkers);
-    a2a.add_secondset(dxWorkers);
+    a2a.add_firstset(sxWorkers, 0, true);
+    a2a.add_secondset(dxWorkers, true);
 
-    //mainPipe.run_and_wait_end();
+	for(int i = 0; i < numProcSx; i++){
+		auto g = a2a.createGroup(std::string("S")+std::to_string(i));
+		for(int j = i*numWorkerXProcessSx; j < (i+1)*numWorkerXProcessSx; j++){
+			g << sxWorkers[j];
+		}
+	}
 
-    auto g1 = a2a.createGroup("G1");
-    auto g2 = a2a.createGroup("G2");
-
-
-    for(int i = 0; i < numWorkerSx; i++) {
-#if defined(MANUAL_SERIALIZATION)				
-		g1.out <<= packup(sxWorkers[i], [](ExcType* in) -> std::pair<char*,size_t> {return std::make_pair((char*)in, in->clen+sizeof(ExcType)); });
-#else
-		g1.out << sxWorkers[i];
-#endif
-    }
-    for(int i = 0; i < numWorkerDx; i++) {
-#if defined(MANUAL_SERIALIZATION)						
-		g2.in  <<= packup(dxWorkers[i], [](char* in, size_t len) -> ExcType* {
-											ExcType* p = new (in) ExcType(true);
-											p->C = in + sizeof(ExcType);
-											p->clen = len - sizeof(ExcType);
-											return p;
-										});
-#else
-		g2.in << dxWorkers[i];
-#endif		
-    }
-    
-    if (mainPipe.run_and_wait_end()<0) {
+	for(int i = 0; i < numProcDx; i++){
+		auto g = a2a.createGroup(std::string("D")+std::to_string(i));
+		for(int j = i*numWorkerXProcessDx; j < (i+1)*numWorkerXProcessDx; j++){
+			g << dxWorkers[j];	
+		}
+	}
+	auto t0=getusec();
+    if (a2a.run_and_wait_end()<0) {
       error("running mainPipe\n");
       return -1;
-    }
+    }	
+	ff::cout << "Time (ms) = " << (getusec()-t0)/1000.0 << "\n";
     return 0;
 }

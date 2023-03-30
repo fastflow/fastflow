@@ -16,9 +16,11 @@
 
 /* ***************************************************************************
  *
- *  This program is free software; you can redistribute it and/or modify it
+ *  FastFlow is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -39,9 +41,6 @@ namespace ff {
 
 // forward declarations
 static ff_node* ispipe_getlast(ff_node*);
-#ifdef DFF_ENABLED
-class dGroup;
-#endif
     
 class ff_a2a: public ff_node {
     friend class ff_farm;
@@ -58,6 +57,88 @@ protected:
     }
 
     inline int prepare() {
+        /* ----------------------- */
+        if (wraparound) {   
+            if (workers2[0]->isMultiOutput()) { // NOTE: we suppose that all others are the same
+                if (workers1[0]->isMultiInput()) { // NOTE: we suppose that all others are the same
+                    for(size_t i=0;i<workers2.size(); ++i) {
+                        for(size_t j=0;j<workers1.size();++j) {
+                            ff_node* t = new ff_buffernode(in_buffer_entries,false);
+                            t->set_id(i);
+                            internalSupportNodes.push_back(t);
+                            workers2[i]->set_output_feedback(t);
+                            workers1[j]->set_input_feedback(t);
+                        }                    
+                    }
+                } else {
+                    // the cardinatlity of the first and second set of workers must be the same
+                    if (workers1.size() != workers2.size()) {
+                        error("A2A, wrap_around, the workers of the second set are not multi-output nodes so the cardinatlity of the first and second set must be the same\n");
+                        return -1;
+                    }
+                    
+                    if (create_input_buffer(in_buffer_entries, false) <0) {
+                        error("A2A, error creating input buffers\n");
+                        return -1;
+                    }
+                    
+                    for(size_t i=0;i<workers2.size(); ++i)
+                        workers2[i]->set_output_feedback(workers1[i]);
+                    
+                }
+            } else {
+                // the cardinatlity of the first and second set of workers must be the same
+                if (workers1.size() != workers2.size()) {
+                    error("A2A, wrap_around, the workers of the second set are not multi-output nodes so the cardinatlity of the first and second set must be the same\n");
+                    return -1;
+                }
+                if (!workers1[0]->isMultiInput()) {  // we suppose that all others are the same
+                    if (create_input_buffer(in_buffer_entries, false) <0) {
+                        error("A2A, error creating input buffers\n");
+                        return -1;
+                    }
+                    
+                    for(size_t i=0;i<workers2.size(); ++i)
+                        workers2[i]->set_output_buffer(workers1[i]->get_in_buffer());
+                    
+                } else {
+                    if (create_output_buffer(out_buffer_entries, false) <0) {
+                        error("A2A, error creating output buffers\n");
+                        return -1;
+                    }
+                    
+                    for(size_t i=0;i<workers1.size(); ++i)
+                        if (workers1[i]->set_input_feedback(workers2[i])<0) {
+                            error("A2A, wrap_around, the nodes of the first set are not multi-input\n");
+                            return -1;
+                        }
+                }
+            }
+
+            // blocking stuff --------------------------------------------
+            pthread_mutex_t   *m        = NULL;
+            pthread_cond_t    *c        = NULL;
+            for(size_t i=0;i<workers2.size(); ++i) {
+                if (!workers2[i]->init_output_blocking(m,c)) return -1;
+            }
+            if (!workers2[0]->isMultiOutput()) {
+                assert(workers1.size() == workers2.size());
+            }
+            if (workers1[0]->isMultiInput()) {
+                for(size_t i=0;i<workers1.size();++i) {
+                    if (!workers1[i]->init_input_blocking(m,c)) return -1;
+                }
+            } else {
+                assert(workers1.size() == workers2.size());
+                for(size_t i=0;i<workers1.size();++i) {
+                    if (!workers1[i]->init_input_blocking(m,c)) return -1;
+                    workers2[i]->set_output_blocking(m,c);
+                }
+            }
+            // -----------------------------------------------------------
+        } // wraparound
+
+        
         if (workers1[0]->isFarm() || workers1[0]->isAll2All()) {
             error("A2A, nodes of the first set cannot be farm or all-to-all\n");
             return -1;
@@ -149,8 +230,13 @@ protected:
             }
         } 
         for(size_t i=0;i<workers1.size();++i) {
-            if (ondemand_chunk && (workers1[i]->ondemand_buffer()==0))
-                workers1[i]->set_scheduling_ondemand(ondemand_chunk);
+            if (ondemand_chunk && (workers1[i]->ondemand_buffer()==0)) {
+                svector<ff_node*> w;
+                workers1[i]->get_out_nodes(w);
+                for(size_t k=0;k<w.size(); ++k)
+                    w[k]->set_scheduling_ondemand(ondemand_chunk);                
+                //workers1[i]->set_scheduling_ondemand(ondemand_chunk);
+            }
             workers1[i]->set_id(int(i));
         }
         // checking R-Workers
@@ -203,18 +289,30 @@ protected:
             }
         }
         if (outputNodes.size()) {
-            if (outputNodes.size() != workers2.size()) {
-                error("A2A, prepare, invalid state\n");
+
+            svector<ff_node*> w;
+            for(size_t i=0;i<workers2.size();++i) 
+                workers2[i]->get_out_nodes(w);
+
+            if (outputNodes.size() != w.size()) {
+                error("A2A, prepare, invalid state detected\n");
                 return -1;
             }
+
+            for(size_t i=0;i<w.size(); ++i) {
+                if (w[i]->isMultiOutput()) {
+                    error("A2A, prepare, invalid state, unexpected multi-output node\n");
+                    return -1;
+                }
+
+                assert(outputNodes[i]->get_in_buffer() != nullptr);
+                if (w[i]->set_output_buffer(outputNodes[i]->get_in_buffer()) < 0)  {
+                    error("A2A, prepare, invalid state, setting output buffer\n");
+                    return -1;
+                }
+            }
         }
-        for(size_t i=0;i<outputNodes.size(); ++i) {
-            assert(!workers2[i]->isMultiOutput());
-            assert(outputNodes[i]->get_in_buffer() != nullptr);            
-            assert(workers2[i]->get_out_buffer() == nullptr);
-            if (workers2[i]->set_output_buffer(outputNodes[i]->get_in_buffer()) <0) 
-                return -1;
-        }
+
 
      
         // blocking stuff --------------------------------------------
@@ -245,6 +343,30 @@ public:
                                  in_buffer_entries(in_buffer_entries),
                                  out_buffer_entries(out_buffer_entries)
     {}
+
+    ff_a2a(const ff_a2a& p):prepared(false) {
+        if (p.prepared) {
+            error("ff_a2a, copy constructor, the input all-to-all has already been prepared\n");
+            return;
+        }
+
+        workers1             = p.workers1;
+        workers2             = p.workers2;
+        workers1_cleanup     = p.workers1_cleanup;
+        workers2_cleanup     = p.workers2_cleanup;
+        fixedsizeIN          = p.fixedsizeIN;
+        fixedsizeOUT         = p.fixedsizeOUT;
+        in_buffer_entries    = p.in_buffer_entries;
+        out_buffer_entries   = p.out_buffer_entries;
+        wraparound           = p.wraparound;
+        ondemand_chunk       = p.ondemand_chunk;
+        outputNodes          = p.outputNodes;
+        internalSupportNodes = p.internalSupportNodes;
+
+        // this is a dirty part, we modify a const object.....
+        ff_a2a* dirty= const_cast<ff_a2a*>(&p);
+        dirty->internalSupportNodes.resize(0);
+    }
     
     virtual ~ff_a2a() {
         if (barrier) delete barrier;
@@ -252,9 +374,8 @@ public:
             workers1[i] = nullptr;        
         for(size_t i=0;i<workers2.size();++i) 
             workers2[i] = nullptr;
-        for(size_t i=0;i<internalSupportNodes.size();++i) {            
+        for(size_t i=0;i<internalSupportNodes.size();++i) {
             delete internalSupportNodes[i];
-            internalSupportNodes[i] = nullptr;
         }
     }
 
@@ -379,6 +500,14 @@ public:
         skip1pop=sk;
     }
 
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk)   { 
+        for(size_t i=0;i<workers1.size(); ++i)
+            workers1[i]->skipallpop(sk);
+        ff_node::skipallpop(sk);
+    }
+#endif
+
     void blocking_mode(bool blk=true) {
         blocking_in = blocking_out = blk;
     }
@@ -456,6 +585,9 @@ public:
         return ret;
     }
     
+#ifdef DFF_ENABLED
+    int run_and_wait_end();
+#else
     int run_and_wait_end() {
         if (isfrozen()) {  // TODO 
             error("A2A: Error: feature not yet supported\n");
@@ -465,6 +597,7 @@ public:
         if (wait()<0) return -1;
         return 0;
     }
+#endif
 
     /**
      * \brief checks if the node is running 
@@ -497,13 +630,11 @@ public:
     int numThreads() const { return cardinality(); }
 
     int set_output(const svector<ff_node *> & w) {
-        if (outputNodes.size()+w.size() > workers2.size()) return -1;
         outputNodes +=w;
         return 0; 
     }
 
     int set_output(ff_node *node) {
-        if (outputNodes.size()+1 > workers2.size()) return -1;
         outputNodes.push_back(node); 
         return 0;
     }
@@ -536,89 +667,9 @@ public:
      * The last stage output stream will be connected to the first stage 
      * input stream in a cycle (feedback channel)
      */
-    int wrap_around() {
-
-        if (workers2[0]->isMultiOutput()) { // NOTE: we suppose that all others are the same
-            if (workers1[0]->isMultiInput()) { // NOTE: we suppose that all others are the same
-                for(size_t i=0;i<workers2.size(); ++i) {
-                    for(size_t j=0;j<workers1.size();++j) {
-                        ff_node* t = new ff_buffernode(in_buffer_entries,false);
-                        t->set_id(i);
-                        internalSupportNodes.push_back(t);
-                        workers2[i]->set_output_feedback(t);
-                        workers1[j]->set_input_feedback(t);
-                    }                    
-                }
-            } else {
-                // the cardinatlity of the first and second set of workers must be the same
-                if (workers1.size() != workers2.size()) {
-                    error("A2A, wrap_around, the workers of the second set are not multi-output nodes so the cardinatlity of the first and second set must be the same\n");
-                    return -1;
-                }
-
-                if (create_input_buffer(in_buffer_entries, false) <0) {
-                    error("A2A, error creating input buffers\n");
-                    return -1;
-                }
-                
-                for(size_t i=0;i<workers2.size(); ++i)
-                    workers2[i]->set_output_feedback(workers1[i]);
-                               
-            }
-            skipfirstpop(true);                
-        } else {
-            // the cardinatlity of the first and second set of workers must be the same
-            if (workers1.size() != workers2.size()) {
-                error("A2A, wrap_around, the workers of the second set are not multi-output nodes so the cardinatlity of the first and second set must be the same\n");
-                return -1;
-            }
-            if (!workers1[0]->isMultiInput()) {  // we suppose that all others are the same
-                if (create_input_buffer(in_buffer_entries, false) <0) {
-                    error("A2A, error creating input buffers\n");
-                    return -1;
-                }
-                
-                for(size_t i=0;i<workers2.size(); ++i)
-                    workers2[i]->set_output_buffer(workers1[i]->get_in_buffer());
-                
-            } else {
-                if (create_output_buffer(out_buffer_entries, false) <0) {
-                    error("A2A, error creating output buffers\n");
-                    return -1;
-                }
-                
-                for(size_t i=0;i<workers1.size(); ++i)
-                    if (workers1[i]->set_input_feedback(workers2[i])<0) {
-                        error("A2A, wrap_around, the nodes of the first set are not multi-input\n");
-                        return -1;
-                    }
-            }
-        }
-
-        // blocking stuff --------------------------------------------
-        pthread_mutex_t   *m        = NULL;
-        pthread_cond_t    *c        = NULL;
-        for(size_t i=0;i<workers2.size(); ++i) {
-            if (!workers2[i]->init_output_blocking(m,c)) return -1;
-        }
-        if (!workers2[0]->isMultiOutput()) {
-            assert(workers1.size() == workers2.size());
-        }
-        if (workers1[0]->isMultiInput()) {
-            for(size_t i=0;i<workers1.size();++i) {
-                if (!workers1[i]->init_input_blocking(m,c)) return -1;
-            }
-        } else {
-            assert(workers1.size() == workers2.size());
-            for(size_t i=0;i<workers1.size();++i) {
-                if (!workers1[i]->init_input_blocking(m,c)) return -1;
-                workers2[i]->set_output_blocking(m,c);
-            }
-        }
-        // -----------------------------------------------------------
-        return 0;
-    }
-
+    int wrap_around() { wraparound=true; return 0;} 
+    bool isset_wraparound() { return wraparound; }
+    
     /*  WARNING: if these methods are called after prepare (i.e. after having called
      *  run_and_wait_end/run_then_freeze/run/....) they have no effect.     
      *
@@ -695,7 +746,17 @@ public:
 #endif
 
 #ifdef DFF_ENABLED
-    ff::dGroup& createGroup(std::string);
+    virtual bool isSerializable(){ 
+        svector<ff_node*> outputs; this->get_out_nodes(outputs);
+        for(ff_node* output: outputs) if (!output->isSerializable()) return false;
+        return true;
+    }
+
+    virtual bool isDeserializable(){ 
+        svector<ff_node*> inputs; this->get_in_nodes(inputs);
+        for(ff_node* input: inputs) if(!input->isDeserializable()) return false;
+        return true; 
+    }
 #endif
 
     
@@ -713,6 +774,7 @@ protected:
     }
 
     int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
+        int id=0;
         size_t nworkers2 = workers2.size();
         for(size_t i=0;i<nworkers2; ++i) {
             if (workers2[i]->isMultiOutput()) {
@@ -721,12 +783,18 @@ protected:
                 assert(w.size());
                 for(size_t j=0;j<w.size();++j) {
                     ff_node* t = new ff_buffernode(nentries,fixedsize); 
-                    t->set_id(j);
+                    t->set_id(id++);
                     internalSupportNodes.push_back(t);
-                    if (workers2[i]->set_output(t)<0) return -1;
+                    if (w[j]->isMultiOutput()) {
+                        if (w[j]->set_output(t)<0) return -1;
+                    } else {
+                        if (workers2[i]->set_output(t)<0) return -1;
+                    }
                 }
-            } else
+            } else{ 
                 if (workers2[i]->create_output_buffer(nentries,fixedsize)==-1) return -1;
+                id++;
+            }
         }
         return 0;        
     }
@@ -767,6 +835,7 @@ protected:
     bool workers1_cleanup=false;
     bool workers2_cleanup=false;
     bool prepared, fixedsizeIN, fixedsizeOUT;
+    bool wraparound=false;
     int in_buffer_entries, out_buffer_entries;
     int ondemand_chunk=0;
     svector<ff_node*>  workers1;  // first set, nodes must be multi-output

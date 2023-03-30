@@ -16,9 +16,11 @@
 
 /* ***************************************************************************
  *
- *  This program is free software; you can redistribute it and/or modify it
+ *  FastFlow is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -312,6 +314,13 @@ public:
         ff_node::skipfirstpop(sk);
     }
 
+#ifdef DFF_ENABLED
+    inline void skipallpop(bool sk) {
+        gt->skipallpop(sk);
+        ff_node::skipallpop(sk);
+    }
+#endif
+
     /**
      * \brief run
      *
@@ -371,14 +380,16 @@ public:
      */
     ssize_t get_channel_id() const { return gt->get_channel_id();}
 
-    
-    /**
-     * \brief Gets the number of input channels
-     */
-    
-    size_t get_num_inchannels()       const { return gt->getrunning(); }
-
-    size_t get_num_feedbackchannels() const { return inputNodesFeedback.size(); }
+    size_t get_num_inchannels()       const { return gt->get_num_inchannels();  } 
+    size_t get_num_outchannels()      const {
+        if (gt->get_filter() == (ff_node*)this)
+            return (gt->get_out_buffer()?1:0);
+            
+        return gt->get_num_outchannels();
+    }
+    size_t get_num_feedbackchannels() const {
+        return gt->get_num_feedbackchannels();
+    }
     
     /**
      * For a multi-input node the number of EOS to receive before terminating is equal to 
@@ -517,6 +528,9 @@ protected:
         ff_node::set_output_blocking(m,c, canoverwrite);
     }
 
+    virtual inline void  set_cons_c(pthread_cond_t *c) {
+        lb->set_cons_c(c);
+    }        
     virtual inline pthread_cond_t    &get_cons_c()        { return lb->get_cons_c();}
 
 public:
@@ -650,6 +664,20 @@ public:
         ff_node::skipfirstpop(sk);
     }
 
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk) {
+        lb->skipallpop(sk);
+        ff_node::skipallpop(sk);
+    }
+    void set_virtual_outchannels(int n){
+        noutchannels=n;
+    }
+    void set_virtual_feedbackchannels(int n) {
+        nfeedbackchannels=n;
+    }
+    
+#endif
+
     /**
      * \brief Provides the next channel id that will be selected for sending out the task
      *  
@@ -757,9 +785,20 @@ public:
      */
     ssize_t get_channel_id() const { return lb->get_channel_id();}
     
-    size_t get_num_feedbackchannels() const { return outputNodesFeedback.size(); }
-    size_t get_num_outchannels() const      { return lb->getnworkers(); }
-
+    size_t get_num_feedbackchannels() const {
+#ifdef DFF_ENABLED        
+        if (nfeedbackchannels!=-1) return nfeedbackchannels;
+#endif        
+        return lb->get_num_feedbackchannels();
+    }
+    size_t get_num_outchannels() const      {
+#ifdef DFF_ENABLED        
+        if (noutchannels!=-1) return noutchannels;
+#endif        
+        return lb->get_num_outchannels();
+    }
+    size_t get_num_inchannels()  const      { return lb->get_num_inchannels(); }
+    
     const struct timeval getstarttime() const { return lb->getstarttime();}
     const struct timeval getstoptime()  const { return lb->getstoptime();}
     const struct timeval getwstartime() const { return lb->getwstartime();}
@@ -787,6 +826,10 @@ protected:
     ff_loadbalancer* lb;
     bool myownlb;
     int  ondemand=0;
+#ifdef DFF_ENABLED    
+    int  noutchannels=-1;
+    int  nfeedbackchannels=-1;
+#endif     
     svector<ff_node*> outputNodes;
     svector<ff_node*> outputNodesFeedback;
     svector<ff_node*> internalSupportNodes;    
@@ -816,6 +859,75 @@ struct ff_minode_t: ff_minode {
         EOS((OUT_t*)FF_EOS),EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
         EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
+#ifdef DFF_ENABLED
+
+        /* WARNING: 
+         *    the definition of functions alloctaskF, freetaskF, serializeF, deserializeF
+         *    IS DUPLICATED for the ff_node_t (see file node.hpp).
+         *
+         */        
+     if constexpr (traits::has_alloctask_v<IN_t>) {        
+         this->alloctaskF = [](char* ptr, size_t sz) -> void* {
+                                IN_t* p = nullptr;
+                                alloctaskWrapper<IN_t>(ptr, sz, p);
+                                assert(p);
+                                return p;
+                           };
+     } else {
+         this->alloctaskF = [](char*, size_t ) -> void* {
+                               IN_t* o = new IN_t;
+                               assert(o);
+                               return o;
+                           };
+     }
+        
+     if constexpr (traits::has_freetask_v<OUT_t>) {
+        this->freetaskF = [](void* o) {
+                              freetaskWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o));
+                          };
+
+     } else {
+         this->freetaskF = [](void* o) { delete reinterpret_cast<OUT_t*>(o); };
+     }
+
+        
+     // check on Serialization capabilities on the OUTPUT type!
+     if constexpr (traits::is_serializable_v<OUT_t>){
+        this->serializeF = [](void* o, dataBuffer& b) -> bool {
+                               bool datacopied=true;
+                               std::pair<char*, size_t> p = serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o), datacopied);
+                               b.setBuffer(p.first, p.second);
+                               return datacopied;
+                           };
+    } else if constexpr (cereal::traits::is_output_serializable<OUT_t, cereal::PortableBinaryOutputArchive>::value) {
+        this->serializeF = [](void* o, dataBuffer& b) -> bool {
+                               std::ostream oss(&b);
+                               cereal::PortableBinaryOutputArchive ar(oss);
+                               ar << *reinterpret_cast<OUT_t*>(o);
+                               return true;
+                           };
+    }
+    
+    // check on Serialization capabilities on the INPUT type!
+    if constexpr (traits::is_deserializable_v<IN_t>){
+        this->deserializeF = [this](dataBuffer& b, bool& datacopied) -> void* {
+                                 IN_t* ptr=(IN_t*)this->alloctaskF(b.getPtr(), b.getLen());
+                                 datacopied = deserializeWrapper<IN_t>(b.getPtr(), b.getLen(), ptr);
+                                 assert(ptr);
+                                 return ptr;
+                             };
+    } else if constexpr(cereal::traits::is_input_serializable<IN_t, cereal::PortableBinaryInputArchive>::value) {
+            this->deserializeF = [this](dataBuffer& b, bool& datacopied) -> void* {
+                                     std::istream iss(&b);
+                                     cereal::PortableBinaryInputArchive ar(iss);
+                                     IN_t* o = (IN_t*)this->alloctaskF(nullptr,0);
+                                     assert(o);
+                                     ar >> *o;
+                                     datacopied = true;
+                                     return o;
+                                 };
+    }
+#endif
 	}
     OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_minode_t()  {}
@@ -854,6 +966,69 @@ struct ff_monode_t: ff_monode {
         EOS((OUT_t*)FF_EOS),EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
         EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
+#ifdef DFF_ENABLED
+
+     if constexpr (traits::has_alloctask_v<IN_t>) {        
+        this->alloctaskF = [](char* ptr, size_t sz) -> void* {
+                               IN_t* p = nullptr;
+                               alloctaskWrapper<IN_t>(ptr, sz, p);
+                               assert(p);
+                               return p;
+                           };
+     } else {
+         this->alloctaskF = [](char*, size_t) -> void* {
+                               IN_t* o = new IN_t;
+                               assert(o);
+                               return o;
+                           };
+     }
+        
+     if constexpr (traits::has_freetask_v<OUT_t>) {
+        this->freetaskF = [](void* o) {
+                              freetaskWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o));
+                          };
+
+     } else {
+         this->freetaskF = [](void* o) { delete reinterpret_cast<OUT_t*>(o); };
+     }
+
+        
+    // check on Serialization capabilities on the OUTPUT type!
+    if constexpr (traits::is_serializable_v<OUT_t>){
+        this->serializeF = [](void* o, dataBuffer& b) -> bool {
+                               bool datacopied=true;
+                               std::pair<char*, size_t> p = serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o),datacopied);
+                               b.setBuffer(p.first, p.second);
+                               return datacopied;
+                           };
+    } else if constexpr (cereal::traits::is_output_serializable<OUT_t, cereal::PortableBinaryOutputArchive>::value) {
+            this->serializeF = [](void* o, dataBuffer& b) -> bool {
+                                   std::ostream oss(&b);
+                                   cereal::PortableBinaryOutputArchive ar(oss);
+                                   ar << *reinterpret_cast<OUT_t*>(o);
+                                   return true;
+                               };
+        }
+    
+    // check on Serialization capabilities on the INPUT type!
+    if constexpr (traits::is_deserializable_v<IN_t>){
+        this->deserializeF = [this](dataBuffer& b, bool& datacopied) -> void* {
+                                 IN_t* ptr=(IN_t*)this->alloctaskF(b.getPtr(), b.getLen());
+                                 datacopied = deserializeWrapper<IN_t>(b.getPtr(), b.getLen(), ptr);
+                                 assert(ptr);
+                                 return ptr;
+                             };
+    } else if constexpr(cereal::traits::is_input_serializable<IN_t, cereal::PortableBinaryInputArchive>::value){
+            this->deserializeF = [this](dataBuffer& b, bool& datacopied) -> void* {
+                                     std::istream iss(&b);cereal::PortableBinaryInputArchive ar(iss);
+                                     IN_t* o = (IN_t*)this->alloctaskF(nullptr,0);
+                                     assert(o);
+                                     ar >> *o;
+                                     datacopied = true;
+                                     return o;
+                                 };
+    }
+#endif
 	}
     OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_monode_t()  {}
@@ -893,8 +1068,10 @@ struct internal_mo_transformer: ff_monode {
             n=nullptr;
         }
     }
+    
+    inline int svc_init() { return n->svc_init(); }
     inline void* svc(void* task) { return n->svc(task);}
-
+    inline void svc_end() { return n->svc_end(); }
     inline void eosnotify(ssize_t id) { n->eosnotify(id); }
 
     int create_input_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
@@ -903,7 +1080,6 @@ struct internal_mo_transformer: ff_monode {
         ff_monode::getlb()->get_filter()->set_input_buffer(ff_monode::get_in_buffer());
         return 0;
     }    
-
     
     void set_id(ssize_t id) {
         if (n) n->set_id(id);
@@ -919,6 +1095,10 @@ struct internal_mo_transformer: ff_monode {
         if (n) {
             if (!n->callback)
                 n->registerCallback(ff_send_out_motransformer, this);
+            if (n->isMultiOutput()) {
+                assert(!n->isComp());
+                n->setlb(ff_monode::getlb(), false);
+            }
         }
         return ff_monode::dryrun();
     }
@@ -938,7 +1118,6 @@ struct internal_mo_transformer: ff_monode {
         return ff_monode::run(skip_init);
     }
 
-       
     static inline bool ff_send_out_motransformer(void * task, int id, 
                                                  unsigned long retry,
                                                  unsigned long ticks, void *obj) {
@@ -983,8 +1162,9 @@ struct internal_mi_transformer: ff_minode {
         if (cleanup && n)
             delete n;
     }
+    inline int svc_init() { return n->svc_init(); }
     inline void* svc(void*task) { return n->svc(task);  }
-
+    inline void svc_end() { return n->svc_end(); }
     int set_input(const svector<ff_node *> & w) {
         n->neos += w.size();
         return ff_minode::set_input(w);
@@ -994,9 +1174,11 @@ struct internal_mi_transformer: ff_minode {
         n->neos+=1;
         return ff_minode::set_input(node);
     }
+#if 0
     int set_output(ff_node *node) {
         return ff_minode::set_output(node);
     }
+#endif
     
     int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         if (ff_minode::getgt()->get_out_buffer()) return -1;
@@ -1041,6 +1223,17 @@ struct internal_mi_transformer: ff_minode {
         ff_minode::set_id(id);
     }
 
+    int dryrun() {
+        if (prepared) return 0;
+        if (n) {
+            if (n->isMultiInput()) {
+                assert(!n->isComp());
+                n->setgt(ff_minode::getgt(), false);
+            }
+        }
+        return ff_minode::dryrun();
+    }
+
     int run(bool skip_init=false) {
         assert(n);
         if (!prepared) {
@@ -1057,6 +1250,7 @@ struct internal_mi_transformer: ff_minode {
         ff_minode::getgt()->get_filter()->set_id(get_my_id());
         return ff_minode::run(skip_init);
     }
+
     bool cleanup;
     ff_node *n=nullptr;
 };

@@ -25,9 +25,11 @@
 
 /* ***************************************************************************
  *
- *  This program is free software; you can redistribute it and/or modify it
+ *  FastFlow is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -134,7 +136,8 @@ public:
     dynqueue(int cachesize=DEFAULT_CACHE_SIZE, bool fillcache=false):cache(cachesize) {
         Node * n = (Node *)::malloc(sizeof(Node));
         n->data = NULL; n->next = NULL;
-        head=tail=n;
+        head=n;
+        tail=n;
         cache.init();
         if (fillcache) {
             for(int i=0;i<cachesize;++i) {
@@ -287,7 +290,8 @@ public:
     dynqueue(int cachesize=DEFAULT_CACHE_SIZE, bool fillcache=false):cachesize(cachesize) {
         Node * n = (Node *)::malloc(sizeof(Node));
         n->data = NULL; n->next = NULL;
-        head=tail=n;
+        head=n;
+        tail=n;
 
         cache=(void**)getAlignedMemory(longxCacheLine*sizeof(long),cachesize*sizeof(void*));
         if (!cache) {

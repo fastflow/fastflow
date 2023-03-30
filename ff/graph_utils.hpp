@@ -9,9 +9,11 @@
 
 /* ***************************************************************************
  *
- *  This program is free software; you can redistribute it and/or modify it
+ *  FastFlow is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -125,7 +127,7 @@ static inline ff_node* getBB(ff_node* startnode, ff_node* n) {
         }
         return nullptr;
     }
-    // TODO: ofarm
+    if (startnode->isOFarm()) abort();     // TODO: ofarm
     if (startnode->isFarm()) {
         ff_farm* farm = reinterpret_cast<ff_farm*>(startnode);
         if (farm->getEmitter() == n) return farm;
