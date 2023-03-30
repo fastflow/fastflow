@@ -1,3 +1,27 @@
+/* ***************************************************************************
+ *
+ *  FastFlow is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU Lesser General Public License version 3 as
+ *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
+ *
+ *  This program is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
+ *  License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public License
+ *  along with this program; if not, write to the Free Software Foundation,
+ *  Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ ****************************************************************************
+ */
+/* Authors: 
+ *   Nicolo' Tonci
+ *   Massimo Torquati
+ */
+
 #ifndef WRAPPER_H
 #define WRAPPER_H
 
@@ -12,178 +36,139 @@
 
 using namespace ff;
 
+template<typename Tin, typename Tout = Tin>
+struct DummyNode : public ff_node_t<Tin, Tout> {
+    Tout* svc(Tin* in){ return nullptr;}
+};
 
 /*
 	Wrapper IN class
 */
-template<bool Serialization, typename Tin, typename Tout = Tin>
 class WrapperIN: public internal_mi_transformer {
 
 private:
     int inchannels;	// number of input channels the wrapped node is supposed to have
+	int feedbackChannels = 0;
 public:
-	using ff_deserialize_F_t = 	std::function<std::add_pointer_t<Tin>(char*,size_t)>;
 
-	WrapperIN(ff_node_t<Tin, Tout>* n, int inchannels=1, bool cleanup=false, const ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; })): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer) {
-		this->n       = n;
-		this->cleanup = cleanup;
-	}
-	WrapperIN(ff_node* n, int inchannels=1, bool cleanup=false, const ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; })): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer) {
-		this->n       = n;
-		this->cleanup = cleanup;
-	}
-	WrapperIN(ff_minode_t<Tin, Tout>* n, int inchannels, bool cleanup=false, const ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; })): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer) {
-		this->n       = n;
-		this->cleanup = cleanup;
-	}
 
-	WrapperIN(ff_monode_t<Tin, Tout>* n, int inchannels, bool cleanup=false, const ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; })): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer) {
-		this->n       = n;
-		this->cleanup = cleanup;
-	}
-
-	template <typename T>
-	WrapperIN(ff_comb_t<Tin, T, Tout>* n, int inchannels=1, bool cleanup=false, const ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; })): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer) {
-		this->n       = n;
-		this->cleanup = cleanup;
+	WrapperIN(ff_node* n, int inchannels=1, bool cleanup=false): internal_mi_transformer(this, false), inchannels(inchannels){
+		this->n = n;
+		this->cleanup= cleanup;
 	}
 
 	void registerCallback(bool (*cb)(void *,int,unsigned long,unsigned long,void *), void * arg) {
 		internal_mi_transformer::registerCallback(cb,arg);
 	}
 
-	Tin* deserialize(void* buffer) {
-		message_t* msg = (message_t*)buffer;
-		Tin* data = nullptr;
-		if constexpr (Serialization) {
-			// deserialize the buffer into a heap allocated buffer		
-			
-			std::istream iss(&msg->data);
-			cereal::PortableBinaryInputArchive iarchive(iss);
-
-			data = new Tin;
-			iarchive >> *data;
-				
-		} else {
-			// deserialize the buffer into a heap allocated buffer		
-			
-			msg->data.doNotCleanup(); // to not delete the area of memory during the delete of the message_t wrapper
-			data = finalizer_(msg->data.getPtr(), msg->data.getLen());
-		}
-
-		delete msg;	
-		return data;
-	}
-
 	int svc_init() {
-		if (this->n->isMultiOutput()) {
+		if (this->n->isMultiInput()) {
 			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
-			mi->set_running(inchannels);
+			mi->set_running(get_num_feedbackchannels()+1);
 		}
 		return n->svc_init();
+	}
+	
+	void * svc(void* in) {
+		// with feedback channels it might be null
+		if (in == nullptr) return n->svc(nullptr);
+		message_t* msg = (message_t*)in;
+
+		
+		if (this->n->isMultiInput()) {
+			int channelid = msg->sender; 
+			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
+			mi->set_input_channelid(channelid, fromInput());
+			if (!this->fromInput()) return n->svc(in);
+		}
+
+		// received a logical EOS
+		if (msg->data.getLen() == 0){
+			this->n->eosnotify(msg->sender);
+			delete msg;
+			return GO_ON;
+		}
+		
+		bool datacopied=true;
+		void* inputData = this->n->deserializeF(msg->data, datacopied);
+		if (!datacopied) msg->data.doNotCleanup();
+		delete msg;	
+		return n->svc(inputData);
 	}
 
 	void svc_end(){this->n->svc_end();}
 	
-	void * svc(void* in) {
-		message_t* msg = (message_t*)in;	   
-		int channelid = msg->sender; 
-		if (this->n->isMultiInput()) {
-			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
-			mi->set_input_channelid(channelid, true);
-		}		
-		return n->svc(deserialize(in));
-	}
-
 	ff_node* getOriginal(){ return this->n;	}
-
-	ff_deserialize_F_t finalizer_;
-	ff_deserialize_F_t getFinalizer() {return this->finalizer_;}
 };
 
 
 /*
 	Wrapper OUT class
 */
-template<bool Serialization, typename Tin, typename Tout = Tin>
+
 class WrapperOUT: public internal_mo_transformer {
 private:
     int outchannels; // number of output channels the wrapped node is supposed to have
+	int defaultDestination;
+	int myID;
+	int feedbackChannels, localFeedbacks, remoteFeedbacks;
 public:
-
-	typedef Tout T_out;
-	using ff_serialize_F_t   = std::function<std::pair<char*,size_t>(std::add_pointer_t<Tout>)>;
 	
-	WrapperOUT(ff_node_t<Tin, Tout>* n, int outchannels=1, bool cleanup=false, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), transform_(transform) {
-		this->n       = n;
-		this->cleanup = cleanup;
-		registerCallback(ff_send_out_to_cbk, this);
-	}
-	WrapperOUT(ff_node* n, int outchannels=1, bool cleanup=false, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), transform_(transform) {
-		this->n       = n;
-		this->cleanup = cleanup;
+	WrapperOUT(ff_node* n, int id, int outchannels=-1, int remoteFeedbacks = 0, bool cleanup=false, int defaultDestination = -1): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), myID(id), remoteFeedbacks(remoteFeedbacks){
+		this->n = n;
+		this->cleanup= cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
 	}
 	
-	WrapperOUT(ff_monode_t<Tin, Tout>* n, int outchannels=1, bool cleanup=false, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), transform_(transform) {
-		this->n       = n;
-		this->cleanup = cleanup;
-		registerCallback(ff_send_out_to_cbk, this);
-	}
-
-	WrapperOUT(ff_minode_t<Tin, Tout>* n, int outchannels=1, bool cleanup=false, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), transform_(transform) {
-		this->n       = n;
-		this->cleanup = cleanup;
-		registerCallback(ff_send_out_to_cbk, this);
-	}
-
-	template <typename T>
-	WrapperOUT(ff_comb_t<Tin, T, Tout>* n, int outchannels=1, bool cleanup=false, ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mo_transformer(this, false), outchannels(outchannels), transform_(transform) {
-		this->n       = n;
-		this->cleanup = cleanup;
-		registerCallback(ff_send_out_to_cbk, this);
-	}
-	
-	bool serialize(Tout* in, int id) {
-		if ((void*)in > FF_TAG_MIN) return this->ff_send_out(in);
-		
-		message_t* msg = nullptr;
-
-		if constexpr (Serialization){
-			msg = new message_t;
-			assert(msg);
-			msg->sender = this->n->get_my_id();
-			msg->chid   = id;
-			std::ostream oss(&msg->data);
-			cereal::PortableBinaryOutputArchive oarchive(oss);
-			oarchive << *in;
-			delete in;
-		} else {
-			std::pair<char*, size_t> raw_data = transform_(in); 
-
-			msg = new message_t(raw_data.first, raw_data.second, true);
-			assert(msg);
-			msg->sender = this->n->get_my_id();
-			msg->chid   = id;
+	bool serialize(void* in, int id) {
+		if (localFeedbacks){
+			if (id < localFeedbacks) {
+				if (id == -1) return ff_send_out(in);
+				return ff_send_out_to(in, id);
+			}
+			// from 0 to feedbackChannels-1 are feedback channels
+			// from feedbackChannels to outchannels-1 are forward channels
+			id -= localFeedbacks; 
 		}
 
-		return this->ff_send_out(msg);
+		message_t* msg = new message_t;
+		msg->feedback = (id < remoteFeedbacks && remoteFeedbacks);
+		if (!msg->feedback) id -= remoteFeedbacks;
+		
+		bool datacopied = this->n->serializeF(in, msg->data);
+		msg->sender = myID;
+		msg->chid   = id;
+		if (!datacopied)  msg->data.freetaskF = this->n->freetaskF;
+		if (localFeedbacks) {
+			// all forward channels are multiplexed in feedbackChannels which coicide with the sender node!
+			ff_send_out_to(msg, localFeedbacks);
+		} else
+			ff_send_out(msg);
+		if (datacopied) this->n->freetaskF(in);
+		return true;
+	}
 
+	int svc_init() {
+		// save the channel id fo the sender, useful for when there are feedbacks in the application
+
+		// these are local feedback channels
+		localFeedbacks = internal_mo_transformer::get_num_feedbackchannels();
+		feedbackChannels = localFeedbacks + remoteFeedbacks;
+
+		if (this->n->isMultiOutput()) {
+			ff_monode* mo = reinterpret_cast<ff_monode*>(this->n);
+			mo->set_virtual_outchannels(outchannels);
+			mo->set_virtual_feedbackchannels(feedbackChannels); 
+		}
+
+		return n->svc_init();
 	}
 
 	void * svc(void* in) {
 		void* out = n->svc(in);
-		if (out > FF_TAG_MIN) return out;					
-		serialize(reinterpret_cast<Tout*>(out), -1);
+		if (out > FF_TAG_MIN) return out;
+		serialize(out, defaultDestination);
 		return GO_ON;
-	}
-
-	int svc_init() {
-		if (this->n->isMultiOutput()) {
-			ff_monode* mo = reinterpret_cast<ff_monode*>(this->n);
-			mo->set_running(outchannels);
-		}
-		return n->svc_init();
 	}
 
 	void svc_end(){n->svc_end();}
@@ -193,54 +178,33 @@ public:
 	}
 
 
-	ff_serialize_F_t transform_;
-	ff_serialize_F_t getTransform() { return this->transform_;}
+    /** returns the total number of output channels */
+    size_t  get_num_outchannels() const      { return outchannels; }
+    size_t  get_num_feedbackchannels() const { return feedbackChannels; }
+
 	
 	ff::ff_node* getOriginal(){return this->n;}
 	
 	static inline bool ff_send_out_to_cbk(void* task, int id,
 										  unsigned long retry,
 										  unsigned long ticks, void* obj) {		
-		return ((WrapperOUT*)obj)->serialize(reinterpret_cast<WrapperOUT::T_out*>(task), id);
+		return ((WrapperOUT*)obj)->serialize(task, id);
 	}
 };
-
 
 /*
 	Wrapper INOUT class
 */
-template<bool SerializationIN, bool SerializationOUT, typename Tin, typename Tout = Tin>
 class WrapperINOUT: public internal_mi_transformer {
 
 private:
     int inchannels;	// number of input channels the wrapped node is supposed to have
-    int outchannels; // number of output channels the wrapped node is supposed to have
+	int defaultDestination;
+	int myID;
+	int remoteFeedbacks;
 public:
 
-    typedef Tout T_out;
-	using ff_serialize_F_t   = std::function<std::pair<char*,size_t>(std::add_pointer_t<Tout>)>;
-	using ff_deserialize_F_t = 	std::function<std::add_pointer_t<Tin>(char*,size_t)>;
-
-	WrapperINOUT(ff_node_t<Tin, Tout>* n, int inchannels=1, bool cleanup=false, ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; }), ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer), transform_(transform) {
-		this->n       = n;
-		this->cleanup = cleanup;
-        registerCallback(ff_send_out_to_cbk, this);
-	}	
-
-	WrapperINOUT(ff_minode_t<Tin, Tout>* n, int inchannels=1, bool cleanup=false, ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; }), ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer), transform_(transform) {
-		this->n       = n;
-		this->cleanup = cleanup;
-        registerCallback(ff_send_out_to_cbk, this);
-	}
-
-	WrapperINOUT(ff_monode_t<Tin, Tout>* n, int inchannels=1, bool cleanup=false, ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; }), ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer), transform_(transform) {
-		this->n       = n;
-		this->cleanup = cleanup;
-        registerCallback(ff_send_out_to_cbk, this);
-	}
-
-	template <typename T>
-	WrapperINOUT(ff_comb_t<Tin, T, Tout>* n, int inchannels=1, bool cleanup=false, ff_deserialize_F_t finalizer=([](char* p, size_t){ return new (p) Tin; }), ff_serialize_F_t transform=([](Tout* in){return std::make_pair((char*)in, sizeof(Tout));})): internal_mi_transformer(this, false), inchannels(inchannels), finalizer_(finalizer), transform_(transform){
+	WrapperINOUT(ff_node* n, int id, int inchannels=1, int remoteFeedbacks = 0, bool cleanup=false, int defaultDestination = -1): internal_mi_transformer(this, false), inchannels(inchannels), defaultDestination(defaultDestination), myID(id), remoteFeedbacks(remoteFeedbacks){
 		this->n       = n;
 		this->cleanup = cleanup;
         registerCallback(ff_send_out_to_cbk, this);
@@ -250,89 +214,80 @@ public:
 		internal_mi_transformer::registerCallback(cb,arg);
 	}
 
-	
-	Tin* deserialize(void* buffer) {
-		message_t* msg = (message_t*)buffer;
-		Tin* data = nullptr;
-		if constexpr (SerializationIN) {
-			// deserialize the buffer into a heap allocated buffer		
-			
-			std::istream iss(&msg->data);
-			cereal::PortableBinaryInputArchive iarchive(iss);
-
-			data = new Tin;
-			iarchive >> *data;
-				
-		} else {
-			// deserialize the buffer into a heap allocated buffer		
-			
-			msg->data.doNotCleanup(); // to not delete the area of memory during the delete of the message_t wrapper
-			data = finalizer_(msg->data.getPtr(), msg->data.getLen());
-		}
-
-		delete msg;	
-		return data;
-	}
-
-    bool serialize(Tout* in, int id) {
+    bool serialize(void* in, int id) {
 		if ((void*)in > FF_TAG_MIN) return ff_node::ff_send_out(in);
 		
-		message_t* msg = nullptr;
+		message_t* msg = new message_t;
 
-		if constexpr (SerializationOUT){
-			msg = new message_t;
-			assert(msg);
-			msg->sender = this->get_my_id();
-			msg->chid   = id;
-			std::ostream oss(&msg->data);
-			cereal::PortableBinaryOutputArchive oarchive(oss);
-			oarchive << *in;
-			delete in;
-		} else {
-			std::pair<char*, size_t> raw_data = transform_(in); 
+		
+		msg->feedback = (id < remoteFeedbacks && remoteFeedbacks);
 
-			msg = new message_t(raw_data.first, raw_data.second, true);
-			assert(msg);
-			msg->sender = this->get_my_id();
-			msg->chid   = id;
-		}
-
-		return ff_node::ff_send_out(msg);
+	
+		bool datacopied= this->n->serializeF(in, msg->data);
+		msg->sender = myID;          // FIX!
+		msg->chid   = id;
+		if (!msg->feedback) msg->chid -= remoteFeedbacks;
+		if (!datacopied)  msg->data.freetaskF = this->n->freetaskF;
+		ff_node::ff_send_out(msg);
+		if (datacopied) this->n->freetaskF(in);
+		return true;
 	}
 
 	int svc_init() {
-		if (this->n->isMultiOutput()) {
-			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
+		/*if (this->n->isMultiInput()) { // ??? what??
+			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n); // what?????
 			mi->set_running(inchannels);
-		}
+		}*/
 		return n->svc_init();
 	}
 
 	void svc_end(){this->n->svc_end();}
 	
 	void * svc(void* in) {
-		message_t* msg = (message_t*)in;	   
-		int channelid = msg->sender; 
-		if (this->n->isMultiInput()) {
-			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
-			mi->set_input_channelid(channelid, true);
-		}		
-
-		void* out = n->svc(deserialize(in));
-        if (out > FF_TAG_MIN) return out;
-        serialize(reinterpret_cast<Tout*>(out), -1);
+		void* out;
+		if (in != nullptr) {
+			message_t* msg = (message_t*)in;
+			
+			// received a logical EOS
+			if (msg->data.getLen() == 0){
+				this->n->eosnotify(msg->sender); // TODO: msg->sender here is not consistent... always 0
+				delete msg;
+				return GO_ON;
+			}
+			
+			if (this->n->isMultiInput()) {
+				int channelid = msg->sender; 
+				ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
+				mi->set_input_channelid(channelid, !msg->feedback);
+			}
+			bool datacopied=true;
+			out = n->svc(this->n->deserializeF(msg->data, datacopied));
+			if (!datacopied) msg->data.doNotCleanup();
+			delete msg;
+		}  else // it can happen if we have a feedback channel
+			out = n->svc(nullptr);
+        serialize(out, defaultDestination);
         return GO_ON;
 	}
-	
-	ff_deserialize_F_t finalizer_;
-	std::function<std::pair<char*,size_t>(Tout*)> transform_;
+
+	bool init_output_blocking(pthread_mutex_t   *&m,
+							  pthread_cond_t    *&c,
+							  bool feedback=true) {
+        return ff_node::init_output_blocking(m,c,feedback);
+    }
+
+    void set_output_blocking(pthread_mutex_t   *&m,
+							 pthread_cond_t    *&c,
+							 bool canoverwrite=false) {
+		ff_node::set_output_blocking(m,c,canoverwrite);
+	}
 
 	ff_node* getOriginal(){ return this->n;	}
 	
     static inline bool ff_send_out_to_cbk(void* task, int id,
 										  unsigned long retry,
 										  unsigned long ticks, void* obj) {		
-		return ((WrapperINOUT*)obj)->serialize(reinterpret_cast<WrapperINOUT::T_out*>(task), id);
+		return ((WrapperINOUT*)obj)->serialize(task, id);
 	}
 };
 

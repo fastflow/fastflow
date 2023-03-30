@@ -11,9 +11,11 @@
 
 /* ***************************************************************************
  *
- *  This program is free software; you can redistribute it and/or modify it
+ *  FastFlow is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -60,11 +62,7 @@ namespace ff {
 
 template <typename T>
 class svector {
-
-    /**
-     * TODO
-     */
-    enum {SVECTOR_CHUNK=1024};
+    enum {SVECTOR_CHUNK=512};
 public:
     typedef T* iterator;
     typedef const T* const_iterator;
@@ -74,7 +72,7 @@ public:
      *
      * @param chunk is the allocation chunk
      */
-    svector(size_t chunk=SVECTOR_CHUNK):first(NULL),len(0),cap(0),chunk(chunk) {
+    svector(size_t chunk=SVECTOR_CHUNK):first(NULL),len(0),cap(0),chunk(chunk?chunk:1) {
         reserve(chunk);
     }
 
@@ -131,12 +129,10 @@ public:
      * Copy
      */
     svector& operator=(const svector & v) {
-        if(!v.len) clear();
-        else {
+        if (this != &v) {
+            clear();
             const_iterator i1=v.begin();
             const_iterator i2=v.end();
-            if (first) { clear(); ::free(first); }
-            first=(vector_type*)::malloc((i2-i1)*sizeof(vector_type));
             while(i1!=i2) push_back(*(i1++));
         }
         return *this;
@@ -194,13 +190,15 @@ public:
      */
     inline void push_back(const vector_type & elem) {
         if (len==cap) reserve(cap+chunk);	    
-        new (first + len++) vector_type(elem); 
+        new (first + len++) vector_type(elem);
     }
     
     /**
      * pop_back
      */
-    inline void pop_back() { (first + --len)->~vector_type();  }
+    inline void pop_back() {
+        (first + --len)->~vector_type();
+    }
 
     /**
      * back
@@ -323,7 +321,7 @@ public:
     const vector_type& operator[](size_t n) const { return first[n]; }
     
 private:
-    vector_type * first;
+    vector_type*  first;
     size_t        len;   
     size_t        cap;   
     size_t        chunk;

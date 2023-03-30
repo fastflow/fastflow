@@ -1,16 +1,17 @@
 FastFlow has been originally designed by: 
-Massimo Torquati (<torquati@di.unipi.it> <massimotor@gmail.com>) and 
+
+Massimo Torquati (<massimo.torquati@unipi.it> <massimotor@gmail.com>) and 
 Marco Aldinucci  (<aldinuc@di.unito.it>).
 
+Starting from version 3.0.1 FastFlow is released under the dual license
+model LGPL-v3 and MIT. 
+
 -------------
-Massimo Torquati is the current mantainer (2010-)
-Send any patches or fixes to the mantainer. Thanks.
+Massimo Torquati is the mantainer and developer of the FastFlow library.
+Send any improvements or fixes to the mantainer. Thanks.
 
 
-Contributions
+Contributors
 -------------
-
-Fedor Sakharov           -- <sakharov@lvk.cs.msu.su>
-Mehdi Goli               -- <m.goli@rgu.ac.uk>
-Maurizio Drocco          -- <maurizio.drocco@gmail.com>
-Guilherme Peretti Pezzi  -- <peretti@di.unito.it>
+Over the years many people contributed in different ways to the development
+of the FastFlow library. Thanks to all of them!

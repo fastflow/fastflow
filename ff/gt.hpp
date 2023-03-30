@@ -15,9 +15,11 @@
 
 /* ***************************************************************************
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU Lesser General Public License version 3 as 
+ *  FastFlow is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -450,6 +452,17 @@ public:
      */
     ssize_t get_channel_id() const { return channelid;}
 
+    size_t get_num_inchannels()  const { return (size_t)(running); }
+    size_t get_num_outchannels() const {
+        if (filter && (filter != (ff_node*)this))
+            return filter->get_num_outchannels();
+        return (buffer?1:0);
+    }
+
+    size_t get_num_feedbackchannels() const {
+        return feedbackid;
+    }
+    
     /**
      * \brief Gets the number of worker threads currently running.
      *
@@ -483,6 +496,10 @@ public:
      * \return Always \true is returned.
      */
     void skipfirstpop(bool sk=true) { skip1pop=sk; }
+
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk = true) { _skipallpop = sk;}
+#endif
 
     /**
      * \brief Gets the ouput buffer
@@ -550,8 +567,7 @@ public:
         bool outpresent  = (buffer != NULL);
         bool skipfirstpop = skip1pop;
 
-        // the following case is possible when the collector is a dnode or there is a
-        // filter that is a composition
+        // the following case is possible when the there is a filter that is a composition
         if ( filter && 
              ( (filter->get_out_buffer()!=NULL)  || filter->isMultiOutput() ) ) {
 
@@ -565,7 +581,9 @@ public:
         // In this case we want to call notifyeos only when we have received EOS from all
         // input channel.
         bool notify_each_eos = filter ? (filter->neos==1): false;
-        
+
+        // TODO: skipallpop missing!
+
         gettimeofday(&wtstart,NULL);
         do {
             task = NULL;
@@ -574,30 +592,30 @@ public:
             else skipfirstpop=false;
 
             if (task == FF_GO_ON) continue;
+            channelid = (nextr-feedbackid);
+            frominput=true;
+            if (feedbackid>0) { // there are feedback channels
+                if (nextr<feedbackid)  {
+                    frominput=false;
+                    channelid=nextr;
+                }
+            }
+
             if ((task == FF_EOS) || (task == FF_EOSW)) {
-                if (filter && notify_each_eos)
-                    filter->eosnotify(workers[nextr]->get_my_id());
+                if (filter && notify_each_eos) 
+                    filter->eosnotify(channelid); //workers[nextr]->get_my_id());                
                 offline[nextr]=true;
                 ++neos;
                 ret=task;
             } else if (task == FF_EOS_NOFREEZE) {
                 if (filter && notify_each_eos)
-                        filter->eosnotify(workers[nextr]->get_my_id());
+                    filter->eosnotify(channelid); //workers[nextr]->get_my_id());
                 offline[nextr]=true;
                 ++neosnofreeze;
                 ret = task;
             } else {
                 FFTRACE(++taskcnt);
-                if (filter)  {
-                    channelid = (nextr-feedbackid);
-                    frominput=true;
-                    if (feedbackid>0) { // there are feedback channels
-                        if (nextr<feedbackid)  {
-                            frominput=false;
-                            channelid=nextr;
-                        }
-                    }
-
+                if (filter)  {                    
                     FFTRACE(ticks t0 = getticks());
 
 #if defined(FF_TASK_CALLBACK)
@@ -868,8 +886,11 @@ private:
     ff_node         * filter;
     svector<ff_node*> workers;
     svector<bool>     offline;
-    FFBUFFER        * buffer;
+    FFBUFFER        * buffer; 
     bool              skip1pop;
+#ifdef DFF_ENABLED
+    bool             _skipallpop;
+#endif
     bool              frominput;
     int  (*ag_callback)(void *,void **, void*);
     void  * ag_callback_arg;

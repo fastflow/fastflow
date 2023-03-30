@@ -31,9 +31,11 @@
 
 /* ***************************************************************************
  *  
- *  This program is free software; you can redistribute it and/or modify it
+ *  FastFlow is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -369,12 +371,14 @@ protected:
                             if (W2[i]->set_output(outputNodes[i])<0) return -1;
                                                                                      }
                     } else {
-                        // NOTE: the following call might fail because the buffers were already created for example by
-                        // the pipeline that contains this stage
-                        if (a2a_last->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsizeOUT))<0) {
-                            if (lb->masterworker()) return -1; // something went wrong
-                        }
+                        // TODO: for the moment we support only feedback channels and not both feedback and forward channels
+                        //       for the last stages of the last all-to-all
                         if (lb->masterworker()) {
+                            if (a2a_last->create_output_buffer(out_buffer_entries,(lb->masterworker()?false:fixedsizeOUT))<0) {
+                                error("FARM failed to create feedback channels\n");
+                                return -1;
+                            }
+
                             for(size_t i=0;i<W2.size();++i) {
                                 svector<ff_node*> w(1);
                                 W2[i]->get_out_nodes(w);
@@ -430,7 +434,11 @@ protected:
                                 ff_node* t = new ff_buffernode(out_buffer_entries,fixedsizeOUT, idx++);
                                 assert(t);
                                 internalSupportNodes.push_back(t);
-                                workers[i]->set_output(t);
+                                if (w[j]->isMultiOutput()) {
+                                    if (w[j]->set_output(t)<0) return -1;
+                                } else {
+                                    if (workers[i]->set_output(t)<0) return -1;
+                                }
                                 gt->register_worker(t);
                             }                            
                         } else  { // single node multi-output
@@ -663,6 +671,14 @@ protected:
         lb->skipfirstpop(sk);
         skip1pop=sk;
     }
+
+ 
+#ifdef DFF_ENABLED
+    void skipallpop(bool sk)   { 
+        lb->skipallpop(sk);
+        ff_node::skipallpop(sk);
+    }
+#endif   
 
 
     // consumer
@@ -1005,6 +1021,48 @@ public:
         return this->add_emitter(e);
     }
 
+    bool change_node(ff_node* old, ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=false) {
+        assert(old!=nullptr);
+        assert(n!=nullptr);
+        if (prepared) {
+            error("FARM, change_node cannot be called because the FARM has already been prepared\n");
+            return false;
+        }
+
+        if (emitter == old) return (change_emitter(n, cleanup)==0);
+
+        if (collector && !collector_removed && collector == old) {
+            if (collector_cleanup) {
+                delete collector;
+                collector_cleanup=false;
+            }
+            gt->reset_filter();
+            collector=nullptr;
+            collector_cleanup=cleanup;
+            return (this->add_collector(n) == 0);
+        }
+        
+        for(size_t i=0; i<workers.size();++i) {
+            if (workers[i] == old) {
+                if (remove_from_cleanuplist) {
+                    int pos=-1;
+                    for(size_t i=0;i<internalSupportNodes.size();++i)
+                        if (internalSupportNodes[i] == old) { pos = i; break; }
+                    if (pos>=0) internalSupportNodes.erase(internalSupportNodes.begin()+pos);            
+                }
+
+                if (worker_cleanup)
+                    internalSupportNodes.push_back(workers[i]);
+                
+                workers[i] = n;
+                if (cleanup && !worker_cleanup) internalSupportNodes.push_back(n);                
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
     /**
      *
      * \brief Set scheduling with on demand polity
@@ -1086,6 +1144,7 @@ public:
     }
     /**
      * replace the workers node. Note, that no cleanup of previous workers will be done.
+     * For more fine-grained control you should use change_node
      */
     int change_workers(const std::vector<ff_node*>& w) {
         workers.clear();
@@ -1316,7 +1375,7 @@ public:
                 assert(blocking_in==blocking_out);
                 workers[i]->blocking_mode(blocking_in);
                 if (!default_mapping) workers[i]->no_mapping();
-                workers[i]->skipfirstpop(false);
+                //workers[i]->skipfirstpop(false);
                  if (workers[i]->freeze_and_run(true)<0) {
                     error("FARM, spawning worker thread\n");
                     return -1;
@@ -1329,7 +1388,7 @@ public:
                 assert(blocking_in==blocking_out);
                 workers[i]->blocking_mode(blocking_in);
                 if (!default_mapping) workers[i]->no_mapping();
-                workers[i]->skipfirstpop(false);
+                //workers[i]->skipfirstpop(false);
                  if (workers[i]->run(true)<0) {
                     error("FARM, spawning worker thread\n");
                     return -1;
@@ -1808,7 +1867,21 @@ public:
         return diffmsec(getwstoptime(),lb->getwstartime());
     }
 
+#ifdef DFF_ENABLED
+    virtual bool isSerializable(){ 
+        svector<ff_node*> outputs; this->get_out_nodes(outputs);
+        for(ff_node* output: outputs) if (!output->isSerializable()) return false;
+        return true;
+    }
 
+    virtual bool isDeserializable(){ 
+        svector<ff_node*> inputs; this->get_in_nodes(inputs);
+        for(ff_node* input: inputs) if(!input->isDeserializable()) return false;
+        return true; 
+    }
+#endif
+
+    
 #if defined(TRACE_FASTFLOW)
     void ffStats(std::ostream & out) { 
         out << "--- farm:\n";

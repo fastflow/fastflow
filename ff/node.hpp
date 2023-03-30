@@ -16,9 +16,11 @@
 
 /* ***************************************************************************
  *
- *  This program is free software; you can redistribute it and/or modify it
+ *  FastFlow is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU Lesser General Public License version 3 as
  *  published by the Free Software Foundation.
+ *  Starting from version 3.0.1 FastFlow is dual licensed under the GNU LGPLv3
+ *  or MIT License (https://github.com/ParaGroup/WindFlow/blob/vers3.x/LICENSE.MIT)
  *
  *  This program is distributed in the hope that it will be useful, but WITHOUT
  *  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -46,8 +48,22 @@
 #include <ff/barrier.hpp>
 #include <atomic>
 
+#ifdef DFF_ENABLED
+
+#include <ff/distributed/ff_network.hpp>
+#include <ff/distributed/ff_typetraits.hpp>
+#include <cereal/cereal.hpp>
+#include <cereal/types/polymorphic.hpp>
+#include <cereal/archives/portable_binary.hpp>
+
+#endif
+
 
 namespace ff {
+
+// distributed rts related type, but always defined
+struct GroupInterface; 
+
 
 static void* FF_EOS           = (void*)(ULLONG_MAX);     /// automatically propagated
 static void* FF_EOS_NOFREEZE  = (void*)(ULLONG_MAX-1);   /// not automatically propagated
@@ -495,8 +511,12 @@ private:
     friend class ff_comb;
     friend struct internal_mo_transformer;
     friend struct internal_mi_transformer;
+
+#ifdef DFF_ENABLED
     friend class dGroups;
-    
+    friend class dGroup;
+#endif
+
 private:
     FFBUFFER        * in;           ///< Input buffer, built upon SWSR lock-free (wait-free) 
                                     ///< (un)bounded FIFO queue                                 
@@ -508,6 +528,10 @@ private:
     bool              myoutbuffer;
     bool              myinbuffer;
     bool              skip1pop;
+#ifdef DFF_ENABLED
+    bool _skipallpop;
+#endif
+
     bool              in_active;    // allows to disable/enable input tasks receiving   
     bool              my_own_thread;
 
@@ -623,6 +647,14 @@ protected:
         FF_IGNORE_UNUSED(m);
         p_cons_c = c;
     }
+
+    // this function is used mainly for combined node where the cond variable must
+    // be shared with the first internal node 
+    virtual inline void  set_cons_c(pthread_cond_t *c) {
+        assert(cons_c == nullptr);
+        assert(cons_m == nullptr);
+        cons_c = c;
+    }        
     virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
 
     /**
@@ -637,6 +669,10 @@ protected:
      */
     virtual inline void skipfirstpop(bool sk)   { skip1pop=sk;}
 
+#ifdef DFF_ENABLED
+    virtual inline void skipallpop(bool sk) {_skipallpop = sk;}
+#endif
+
     /** 
      * \brief Gets the status of spontaneous start
      * 
@@ -649,6 +685,11 @@ protected:
      * Example: \ref l1_ff_nodes_graph.cpp
      */
     bool skipfirstpop() const { return skip1pop; }
+
+#ifdef DFF_ENABLED
+    bool skipallpop() {return _skipallpop;}
+#endif
+
     
     /** 
      * \brief Creates the input channel 
@@ -993,7 +1034,30 @@ public:
      */
     inline size_t getOSThreadId() const { if (thread) return thread->getOSThreadId(); return 0; }
 
+    virtual bool change_node(ff_node* old, ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=false) { return false;}
 
+    /**
+     * Change the size of the outputchannel. 
+     * WARNING: this method should not be used if the queue is being used!!!!
+     *
+     */
+    virtual bool change_outputqueuesize(size_t newsz, size_t &oldsz) {
+        if (!out) { oldsz=0; return false; }
+        oldsz = out->changesize(newsz);
+        return true;
+    }
+    /**
+     * Change the size of the inputchannel. 
+     * WARNING: this method should not be used if the queue is being used!!!!
+     *
+     */
+    virtual bool change_inputqueuesize(size_t newsz, size_t &oldsz) {
+        if (!in) { oldsz=0; return false; }
+        oldsz = in->changesize(newsz);
+        return true;
+    }
+
+    
 #if defined(FF_TASK_CALLBACK)
     virtual void callbackIn(void * =NULL)  { }
     virtual void callbackOut(void * =NULL) { }
@@ -1003,6 +1067,7 @@ public:
     virtual inline void get_out_nodes_feedback(svector<ff_node*>&) {}
     virtual inline void get_in_nodes(svector<ff_node*>&w) { w.push_back(this); }
     virtual inline void get_in_nodes_feedback(svector<ff_node*>&) {}
+
     
     /**
      * \brief Force ff_node-to-core pinning
@@ -1222,9 +1287,31 @@ protected:
         abort();  // to be removed, just for debugging purposes
     }
 
-       
+
+    virtual inline ssize_t get_channel_id() const           { return -1; }
+    /** returns the total number of output channels */
+    virtual inline size_t  get_num_outchannels() const      { return 0; }
+    /** returns the total number of input channels */
+    virtual inline size_t  get_num_inchannels() const       { return 0; } //(in?1:0); }
+    virtual inline size_t  get_num_feedbackchannels() const { return 0; } //(out?1:0);}
+    
     virtual void propagateEOS(void* task=FF_EOS) { (void)task; }
     
+#ifdef DFF_ENABLED
+    std::function<bool(void*, dataBuffer&)> serializeF;
+    std::function<void(void*)> freetaskF;
+    std::function<void*(dataBuffer&, bool&)> deserializeF;
+    std::function<void*(char*, size_t)> alloctaskF;
+
+    
+    virtual bool isSerializable(){ return (bool)serializeF; }
+    virtual bool isDeserializable(){ return (bool)deserializeF; }
+    virtual std::pair<decltype(serializeF), decltype(freetaskF)> getSerializationFunction(){return std::make_pair(serializeF,freetaskF);}
+    virtual std::pair<decltype(deserializeF), decltype(alloctaskF)> getDeserializationFunction(){ return std::make_pair(deserializeF,alloctaskF);}
+
+#endif
+    // always defined, the body will implement a no-op if the distributed runtime is disabled
+    GroupInterface createGroup(std::string);
     
 protected:
 
@@ -1338,7 +1425,7 @@ private:
             bool skipfirstpop = filter->skipfirstpop(); 
             bool exit=false;            
             bool filter_outpresent = false;
-            ssize_t neos=input_neos;
+            size_t neos=input_neos;
 
             
             // if the node is a combine where the last stage is a multi-output
@@ -1347,7 +1434,11 @@ private:
             }
             gettimeofday(&filter->wtstart,NULL);
             do {
+#ifdef DFF_ENABLED
+                if (!filter->skipallpop() && inpresent){
+#else
                 if (inpresent) {
+#endif
                     if (!skipfirstpop) pop(&task); 
                     else skipfirstpop=false;
                     if ((task == FF_EOS) || (task == FF_EOSW) ||
@@ -1515,6 +1606,80 @@ struct ff_node_t: ff_node {
         EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
         EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
+#ifdef DFF_ENABLED
+
+        /* WARNING: 
+         *    the definition of functions alloctaskF, freetaskF, serializeF, deserializeF
+         *    IS DUPLICATED for the ff_minode_t and ff_monode_t (see file multinode.hpp).
+         *
+         */
+     if constexpr (traits::has_alloctask_v<IN_t>) {        
+         this->alloctaskF = [](char* ptr, size_t sz) -> void* {
+                                IN_t* p = nullptr;
+                                alloctaskWrapper<IN_t>(ptr, sz, p);
+                                assert(p);
+                                return p;
+                           };
+     } else {
+         this->alloctaskF = [](char*, size_t ) -> void* {
+                               IN_t* o = new IN_t;
+                               assert(o);
+                               return o;
+                           };
+     }
+        
+     if constexpr (traits::has_freetask_v<OUT_t>) {
+        this->freetaskF = [](void* o) {
+                              freetaskWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o));
+                          };
+
+     } else {
+         this->freetaskF = [](void* o) {
+                               if constexpr (!std::is_void_v<OUT_t>) {
+                                       OUT_t* obj = reinterpret_cast<OUT_t*>(o);
+                                       delete obj;
+                               }
+                           };
+     }
+        
+    // check on Serialization capabilities on the OUTPUT type!
+    if constexpr (traits::is_serializable_v<OUT_t>){
+        this->serializeF = [](void* o, dataBuffer& b) -> bool {
+                               bool datacopied = true;
+                               std::pair<char*, size_t> p = serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o,datacopied));
+                               b.setBuffer(p.first, p.second);
+                               return datacopied;
+                           };
+    } else if constexpr (cereal::traits::is_output_serializable<OUT_t, cereal::PortableBinaryOutputArchive>::value){
+        this->serializeF = [](void* o, dataBuffer& b) -> bool {
+                               std::ostream oss(&b);
+                               cereal::PortableBinaryOutputArchive ar(oss);
+                               ar << *reinterpret_cast<OUT_t*>(o);
+                               return true;
+                           };
+    }
+    
+    // check on Serialization capabilities on the INPUT type!
+    if constexpr (traits::is_deserializable_v<IN_t>) {
+        this->deserializeF = [this](dataBuffer& b, bool& datacopied) -> void* {
+                                 IN_t* ptr=(IN_t*)this->alloctaskF(b.getPtr(), b.getLen());
+                                 datacopied = deserializeWrapper<IN_t>(b.getPtr(), b.getLen(), ptr);
+                                 assert(ptr);
+                                 return ptr;
+                             };
+    } else if constexpr(cereal::traits::is_input_serializable<IN_t, cereal::PortableBinaryInputArchive>::value){
+            this->deserializeF = [this](dataBuffer& b, bool& datacopied) -> void* {
+                                     std::istream iss(&b);
+                                     cereal::PortableBinaryInputArchive ar(iss);
+                                     IN_t* o = (IN_t*)this->alloctaskF(nullptr,0);
+                                     assert(o);
+                                     ar >> *o;
+                                     datacopied = true;
+                                     return o;
+                                 };
+        }
+#endif
+
 	}
     OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
     virtual ~ff_node_t()  {}
@@ -1603,6 +1768,8 @@ struct ff_buffernode: ff_node {
         }
         return 0;
     }
+
+    void reset_blocking_out() { blocking_out = false; }
     
     bool ff_send_out(void *ptr, int id=-1,
                      unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {
@@ -1617,7 +1784,6 @@ struct ff_buffernode: ff_node {
     bool gather_task(T *&task, unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {    
         return gather_task((void **)&task, retry, ticks);
     }
-
 
 
 protected:

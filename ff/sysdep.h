@@ -46,6 +46,35 @@
  * Various types of memory barriers and atomic operations
 \***********************************************************/
 
+/* RISCV
+   Marco Aldinucci 
+   10/04/2022 02:08
+   RISC-V-Linux/linux/arch/riscv/include/asm/barrier.h
+*/
+
+#if defined(__riscv)
+#pragma message "RISCV detected - experimental"
+
+#define nop()		__asm__ __volatile__ ("nop")
+
+#define RISCV_FENCE(p, s) \
+	__asm__ __volatile__ ("fence " #p "," #s : : : "memory")
+
+/* These barriers need to enforce ordering on both devices or memory. */
+#define mb()		RISCV_FENCE(iorw,iorw)
+#define rmb()		RISCV_FENCE(ir,ir)
+#define wmb()		RISCV_FENCE(ow,ow)
+
+/* These barriers do not need to enforce ordering on devices, just memory. */
+#define __smp_mb()	RISCV_FENCE(rw,rw)
+#define __smp_rmb()	RISCV_FENCE(r,r)
+#define __smp_wmb()	RISCV_FENCE(w,w)
+
+#define WMB() __smp_wmb()
+#define PAUSE() 
+
+#endif  
+  
 /*------------------------
        POWERPC 
  ------------------------*/
@@ -132,16 +161,17 @@ static inline int xchg(volatile int *ptr, int x)
 static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size)
 {
   unsigned long ret;
-  unsigned int tmp;
+  // MA: updated 12/08/22 unsigned int ==> unsignet long
+  unsigned long tmp;
 
   smp_mb();
-
+  // MA: updated 12/08/22 teq %1, #0 ==>  teq %w1, #0
   switch (size) {
   case 1:
     asm volatile("@ __xchg1\n"
     "1: ldrexb  %0, [%3]\n"
     " strexb  %1, %2, [%3]\n"
-    " teq %1, #0\n"
+    " teq %w1, #0\n"            
     " bne 1b"
       : "=&r" (ret), "=&r" (tmp)
       : "r" (x), "r" (ptr)

@@ -1,0 +1,16 @@
+{
+    "groups" : [
+    {   
+        "endpoint" : "localhost:9004",
+        "name" : "G1",
+	"batchSize": 2,
+	"messageOTF": 1
+    },
+    { 
+        "name" : "G2",
+        "endpoint": "localhost:9005",
+	"batchSize": 2,
+	"messageOTF": 1
+    }
+    ]
+}

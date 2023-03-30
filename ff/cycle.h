@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2003, 2007 Matteo Frigo
  * Copyright (c) 2003, 2007 Massachusetts Institute of Technology
- *
+ * 
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
  * "Software"), to deal in the Software without restriction, including
@@ -80,6 +80,34 @@
 
 #ifndef FF_CYCLE_H
 #define FF_CYCLE_H
+
+// Marco Aldinucci: RISCV Apr 2022
+
+#if defined(__linux__) && defined(__riscv) && !defined(HAVE_TICK_COUNTER)
+#pragma message "RISCV detected - experimental"
+extern __inline
+    unsigned long 
+    __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+rdcycle(void) {
+    unsigned long dst;
+    // output into any register, likely a0
+    // regular instruction:
+    asm volatile ("csrrs %0, 0xc00, x0" : "=r" (dst) );
+    // regular instruction with symbolic csr and register names
+    // asm volatile ("csrrs %0, cycle, zero" : "=r" (dst) );
+    // pseudo-instruction:
+    // asm volatile ("csrr %0, cycle" : "=r" (dst) );
+    // pseudo-instruction:
+    //asm volatile ("rdcycle %0" : "=r" (dst) );
+    return dst;
+}
+typedef unsigned long ticks;
+
+static __inline ticks getticks(void) {
+  return (rdcycle());
+}
+#define HAVE_TICK_COUNTER  
+#endif
 
 // Mauro Mulatero: ARM
 #if defined(__linux__) && (defined(__arm__) || defined(__aarch64__) )
@@ -164,13 +192,18 @@ INLINE_ELAPSED(__inline__)
 #endif
 
 /* MacOS/Mach (Darwin) time-base register interface (unlike UpTime,
-   from Carbon, requires no additional libraries to be linked). */
-#if defined(HAVE_MACH_ABSOLUTE_TIME) && defined(HAVE_MACH_MACH_TIME_H) && !defined(HAVE_TICK_COUNTER)
+   from Carbon, requires no additional libraries to be linked). 
+   13 July 2022 (MarcoA): Reviewed for M1 Macs
+   */  
+#if defined(__APPLE__)
 #include <mach/mach_time.h>
+//#if defined(_MACH_ABSOLUTE_TIME_H_) && defined(_MACH_MACH_TIME_H_)
+#if !defined(HAVE_TICK_COUNTER)
 typedef uint64_t ticks;
 #define getticks mach_absolute_time
 INLINE_ELAPSED(__inline__)
 #define HAVE_TICK_COUNTER
+#endif
 #endif
 
 /*----------------------------------------------------------------*/
@@ -258,6 +291,9 @@ INLINE_ELAPSED(__inline__)
 #define HAVE_TICK_COUNTER
 #define TIME_MIN 5000.0
 #endif
+
+// RISCV Linux
+
 
 /*----------------------------------------------------------------
  generic Windows platform 
