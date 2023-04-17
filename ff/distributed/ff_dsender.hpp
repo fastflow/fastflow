@@ -265,7 +265,7 @@ public:
             for(auto& [k,v] : *precomputedRT){
                 if (k.first != ep.groupName) continue;
                 for(int dest : v)
-                    dest2Socket[std::make_pair(dest, k.second)] = sck;
+                    dest2Socket[std::make_pair(dest, ct)] = sck;
             }
 
             if (handshakeHandler(sck, ct) < 0) {
@@ -435,7 +435,7 @@ public:
             for(auto& [k,v] : *precomputedRT){
                 if (k.first != endpoint.groupName) continue;
                 for(int dest : v)
-                    dest2Socket[std::make_pair(dest, k.second)] = sck;
+                    dest2Socket[std::make_pair(dest, ct)] = sck;
             }
 
             if (handshakeHandler(sck, ct) < 0) return -1;

@@ -76,6 +76,8 @@ namespace ff {
 
     template<class CharT, class Traits>
     auto& endl(std::basic_ostream<CharT, Traits>& os){return std::endl(os);}
+
+    static inline int DFF_Init(int& argc, char**& argv){ return 0; }
 }
-static inline int DFF_Init(int& argc, char**& argv){ return 0; }
+
 #endif /* DISABLE_FF_DISTRIBUTED */

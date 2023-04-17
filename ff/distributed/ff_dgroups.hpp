@@ -481,8 +481,9 @@ private:
           // FEEDBACK RELATED (wrap around of the main pipe!)
           if (parentPipe->isset_wraparound()){
             for(const auto& gName : inputGroups(parentBB2GroupsName[parentPipe->getStages().front()]))
-              if (gName != this->runningGroup)
+              //if (gName != this->runningGroup)
                 runningGroup_IR.destinationEndpoints.push_back({ChannelType::FBK, annotatedGroups[gName].listenEndpoint});
+            runningGroup_IR.expectedEOS++;
           }
       }
       
