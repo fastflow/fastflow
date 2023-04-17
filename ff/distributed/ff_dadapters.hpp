@@ -98,14 +98,23 @@ public:
 	
 	void * svc(void* in) {
 		void* out = n->svc(in);
-		if (out > FF_TAG_MIN) return out;					
-		
-        this->forward(out, -1);
+							
 
+        if (!this->forward(out, -1)) return out;
+		
 		return GO_ON;
 	}
 
     bool forward(void* task, int destination){
+		if (task > FF_TAG_MIN){
+			if (task == FF_FLUSH){
+				message_t* mout = new message_t(-2, -2);
+				ff_send_out_to(mout, localWorkersMap.size());
+				return true;
+			}
+			return false;
+		}
+
 
 		if (destination == -1) {
 			message_t* msg = nullptr;

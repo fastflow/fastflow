@@ -121,6 +121,15 @@ public:
 	}
 	
 	bool serialize(void* in, int id) {
+		if (in > FF_TAG_MIN){
+			if (in == FF_FLUSH){
+				message_t* mout = new message_t(-2, -2);
+				ff_send_out(mout);
+				return true;
+			}
+			return false;
+		}
+
 		if (localFeedbacks){
 			if (id < localFeedbacks) {
 				if (id == -1) return ff_send_out(in);
@@ -166,8 +175,9 @@ public:
 
 	void * svc(void* in) {
 		void* out = n->svc(in);
-		if (out > FF_TAG_MIN) return out;
-		serialize(out, defaultDestination);
+		//if (out > FF_TAG_MIN) return out;
+		if (!this->serialize(out, defaultDestination)) return out;
+		//serialize(out, defaultDestination);
 		return GO_ON;
 	}
 

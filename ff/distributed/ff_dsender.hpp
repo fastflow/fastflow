@@ -451,8 +451,18 @@ public:
     }
 
     message_t *svc(message_t* task) {
+        // flush of buffers
+            if (task->chid == -2 && task->sender == -2){
+                ff::cout << "FLUSHING!\n";
+                for(auto& bb : batchBuffers)
+                    bb.second.flush();
+                delete task;
+                return this->GO_ON;
+            }
+        
         if (this->get_channel_id() == (ssize_t)(this->get_num_inchannels() - 1)){
             int sck;
+
             // pick destination from the list of internal connections!
             if (task->chid != -1){ // roundrobin over the destinations
                 sck = dest2Socket[{task->chid, ChannelType::INT}];

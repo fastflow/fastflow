@@ -70,6 +70,9 @@ static void* FF_EOS_NOFREEZE  = (void*)(ULLONG_MAX-1);   /// not automatically p
 static void* FF_EOSW          = (void*)(ULLONG_MAX-2);   /// propagated only by farm's stages
 static void* FF_GO_ON         = (void*)(ULLONG_MAX-3);   /// not automatically propagated
 static void* FF_GO_OUT        = (void*)(ULLONG_MAX-4);   /// not automatically propagated
+#ifdef DFF_ENABLED
+static void* FF_FLUSH         = (void*)(ULLONG_MAX-9);
+#endif
 static void* FF_TAG_MIN       = (void*)(ULLONG_MAX-10);  /// just a lower bound mark
 // The FF_GO_OUT is quite similar to the FF_EOS_NOFREEZE. Both of them are not propagated automatically to
 // the next stage, but while the first one is used to exit the main computation loop and, if this is the case, to be frozen,
@@ -923,6 +926,7 @@ public:
     void *const EOS_NOFREEZE = FF_EOS_NOFREEZE;
     void *const EOS          = FF_EOS;
     void *const EOSW         = FF_EOSW;
+    void *const FLUSH = FF_FLUSH;
 
     
     ff_node(const ff_node&):ff_node() {}
