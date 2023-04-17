@@ -926,8 +926,9 @@ public:
     void *const EOS_NOFREEZE = FF_EOS_NOFREEZE;
     void *const EOS          = FF_EOS;
     void *const EOSW         = FF_EOSW;
+#ifdef DFF_ENABLED    
     void *const FLUSH = FF_FLUSH;
-
+#endif
     
     ff_node(const ff_node&):ff_node() {}
  
