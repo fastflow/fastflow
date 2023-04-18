@@ -453,7 +453,6 @@ public:
     message_t *svc(message_t* task) {
         // flush of buffers
             if (task->chid == -2 && task->sender == -2){
-                ff::cout << "FLUSHING!\n";
                 for(auto& bb : batchBuffers)
                     bb.second.flush();
                 delete task;
