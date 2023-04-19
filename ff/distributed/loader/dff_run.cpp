@@ -153,7 +153,7 @@ struct G {
     }
 
     bool isRemote(){
-		if (!host.compare("127.0.0.1") || !host.compare("localhost") || !host.compare(hostname))
+		if (!host.compare("127.0.0.1") || !host.compare("localhost") || !host.compare(hostname) || host.compare(std::getenv("DFF_RUN_HOSTNAME")))
 			return false;
 		
 		char ip1[INET_ADDRSTRLEN];
