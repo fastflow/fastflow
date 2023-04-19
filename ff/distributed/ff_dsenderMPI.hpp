@@ -274,6 +274,15 @@ public:
     }
 
     message_t *svc(message_t* task) {
+
+         if (task->chid == -2 && task->sender == -2){
+                for(auto& [a,b] : buffers)
+                    b.second[b.first]->flush();
+                delete task;
+                return this->GO_ON;
+            }
+
+
         if (this->get_channel_id() == (ssize_t)(this->get_num_inchannels() - 1)){
             int rank;
         
