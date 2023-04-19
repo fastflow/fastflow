@@ -276,8 +276,10 @@ public:
     message_t *svc(message_t* task) {
 
          if (task->chid == -2 && task->sender == -2){
-                for(auto& [a,b] : buffers)
+                for(auto& [a,b] : buffers){
                     b.second[b.first]->flush();
+                    b.first = (b.first + 1) % b.second.size();
+                }
                 delete task;
                 return this->GO_ON;
             }
