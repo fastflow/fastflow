@@ -78,6 +78,8 @@ namespace ff {
     auto& endl(std::basic_ostream<CharT, Traits>& os){return std::endl(os);}
 
     static inline int DFF_Init(int& argc, char**& argv){ return 0; }
+
+    std::string DFF_getMyGroup() {return "";}
 }
 
 #endif /* DISABLE_FF_DISTRIBUTED */
