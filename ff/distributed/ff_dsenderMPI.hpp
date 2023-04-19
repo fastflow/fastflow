@@ -168,7 +168,7 @@ public:
            for(auto& [k,v] : *rt){
             if (k.first != ep.groupName) continue;
             for(int dest : v)
-                dest2Rank[std::make_pair(dest, k.second)] = ep.getRank();
+                dest2Rank[std::make_pair(dest, ct)] = ep.getRank();
            }
            
         }
@@ -263,7 +263,7 @@ public:
             for(auto& [k,v] : *rt){
                 if (k.first != endpoint.groupName) continue;
                 for(int dest : v)
-                    dest2Rank[std::make_pair(dest, k.second)] = endpoint.getRank();
+                    dest2Rank[std::make_pair(dest, ct)] = endpoint.getRank();
             }
 
         }
