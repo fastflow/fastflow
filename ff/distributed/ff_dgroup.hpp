@@ -185,6 +185,7 @@ public:
 			}			
         }
         else { // the group is horizontal!
+		this->setInputQueueLength(1, false);
             ff_a2a* innerA2A = new ff_a2a();
             
             std::vector<int> reverseLeftOutputIndexes(ir.outputL.rbegin(), ir.outputL.rend());

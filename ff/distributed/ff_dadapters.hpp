@@ -21,6 +21,7 @@ public:
 	int svc_init() {
 		// change the size of the queue towards the Sender
 		// forcing the queue to be bounded of capacity equal to inchannels (excluded squareboxleft)
+		if(this->get_out_buffer()->buffersize() < this->get_num_inchannels()-1) return 0;
 		size_t oldsz;
 		change_outputqueuesize(this->get_num_inchannels()-1, oldsz);
 		assert(oldsz != 0);		
@@ -28,6 +29,7 @@ public:
 	}
 
 	void* svc(void* in) {
+		//std::cout << "P: " << in << std::endl;
 		return in;
 	}
 
@@ -55,6 +57,7 @@ public:
 		else this->ff_send_out_to(in, destinations[reinterpret_cast<message_t*>(in)->chid]);
 		return this->GO_ON;
     }
+
 };
 
 class EmitterAdapter: public internal_mo_transformer {
