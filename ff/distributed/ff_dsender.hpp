@@ -433,7 +433,7 @@ public:
             })); // change with the correct size
 
             for(auto& [k,v] : *precomputedRT){
-                if (k.first != endpoint.groupName) continue;
+                if (k.first != endpoint.groupName || k.second != ct) continue;
                 for(int dest : v)
                     dest2Socket[std::make_pair(dest, ct)] = sck;
             }
@@ -451,6 +451,7 @@ public:
     }
 
     message_t *svc(message_t* task) {
+	   // std::cout << "C: " << task << std::endl;    
         // flush of buffers
             if (task->chid == -2 && task->sender == -2){
                 for(auto& bb : batchBuffers)

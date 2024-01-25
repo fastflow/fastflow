@@ -17,14 +17,6 @@ namespace ff {
 class SquareBoxRight : public ff_minode {
     ssize_t neos = 0;
 public:
-	int svc_init() {
-		// change the size of the queue towards the Sender
-		// forcing the queue to be bounded of capacity equal to inchannels (excluded squareboxleft)
-		//size_t oldsz;
-		//change_outputqueuesize(this->get_num_inchannels()-1, oldsz);
-		//assert(oldsz != 0);		
-		return 0;
-	}
 	void* svc(void* in) {
 		return in;
 	}
@@ -37,6 +29,15 @@ public:
 };
 
 struct SquareBoxRightAdapter : public ff_monode {
+	int svc_init(){
+		if(this->get_out_buffer()->buffersize() < this->get_num_inchannels()-1) return 0;
+		
+		size_t oldsz;
+		change_outputqueuesize(this->get_num_inchannels()-1, oldsz);
+		assert(oldsz != 0);		
+
+		return 0;
+	}
 	void* svc(void* in) {
 		ff_send_out_to(in, this->get_num_outchannels()-1);
 		return this->GO_ON;

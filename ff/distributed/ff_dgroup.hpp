@@ -185,6 +185,7 @@ public:
 			}			
         }
         else { // the group is horizontal!
+		this->setInputQueueLength(1, false);
             ff_a2a* innerA2A = new ff_a2a();
             bool wrapper_around = reinterpret_cast<ff_a2a*>(ir.parentBB)->isset_wraparound();
             
