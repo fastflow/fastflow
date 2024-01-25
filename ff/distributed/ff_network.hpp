@@ -132,6 +132,7 @@ struct ack_t {
 
 struct ff_endpoint {
     ff_endpoint(){}
+    ff_endpoint(std::string addr) : address(std::move(addr)) {}
     ff_endpoint(std::string addr, int port) : address(std::move(addr)), port(port) {}
     ff_endpoint(int rank) : port(rank) {}
     int getRank() const {return port;}

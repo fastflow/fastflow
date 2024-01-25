@@ -137,7 +137,7 @@ public:
 
         ff::cout << std::boolalpha << "Has Receiver: " << hasReceiver << std::endl;
         ff::cout << "Expected input connections: " << expectedEOS << std::endl;
-        ff::cout << "Listen endpoint: " << listenEndpoint.address << ":" << listenEndpoint.port << std::endl << std::endl;
+        ff::cout << "Listen endpoint: " << listenEndpoint.address << std::endl << std::endl;
 
         ff::cout << std::boolalpha << "Has Sender: " << hasSender << std::endl;
         ff::cout << "Destination endpoints: " << std::endl;

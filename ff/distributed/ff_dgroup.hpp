@@ -30,8 +30,8 @@
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_wrappers.hpp>
-#include <ff/distributed/ff_dreceiver.hpp>
-#include <ff/distributed/ff_dsender.hpp>
+#include <ff/distributed/ff_dreceiverMTCL.hpp>
+#include <ff/distributed/ff_dsenderMTCL.hpp>
 #include <ff/distributed/ff_dadapters.hpp>
 
 #include <numeric>
@@ -86,13 +86,13 @@ class dGroup : public ff::ff_farm {
         return new WrapperIN(n);
     }
 
-    static ff_node* buildWrapperOUT(ff_node* n, int id, int outputChannels, int feedbackChannels = 0){
+    static ff_node* buildWrapperOUT(ff_node* n, int id, int outputChannels, int feedbackChannels = 0, std::vector<int> localFeedbackRemapping = {}){
         if (n->isMultiInput()) return new ff_comb(n, new WrapperOUT(new ForwarderNode(n->serializeF, n->freetaskF), id, outputChannels, feedbackChannels, true), false, true);
-        return new WrapperOUT(n, id, outputChannels, feedbackChannels);
+        return new WrapperOUT(n, id, outputChannels, feedbackChannels, false, -1, localFeedbackRemapping);
     }
 
 public:
-    dGroup(ff_IR& ir){
+    dGroup(ff_IR& ir) : ff_farm(){
             
         if (ir.isVertical()){
             int outputChannels = 0;
@@ -158,20 +158,20 @@ public:
             }
 
             if (ir.hasReceiver){
-                if (ir.protocol == Proto::TCP)
-                    this->add_emitter(new ff_dreceiver(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.hasLeftChildren() ? ir.inputL : ir.inputR)));
+                //if (ir.protocol == Proto::TCP)
+                    this->add_emitter(new ff_dreceiverMTCL(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.hasLeftChildren() ? ir.inputL : ir.inputR)));
                 
-#ifdef DFF_MPI
+#if 0
                 else
                    this->add_emitter(new ff_dreceiverMPI(ir.expectedEOS, vector2Map(ir.hasLeftChildren() ? ir.inputL : ir.inputR)));
 #endif 
             }
 
             if (ir.hasSender){
-                if(ir.protocol == Proto::TCP)
-                    this->add_collector(new ff_dsender(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
+                //if(ir.protocol == Proto::TCP)
+                    this->add_collector(new ff_dsenderMTCL(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
                
-#ifdef DFF_MPI
+#if 0
                 else
                    this->add_collector(new ff_dsenderMPI(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
 #endif      
@@ -186,6 +186,7 @@ public:
         }
         else { // the group is horizontal!
             ff_a2a* innerA2A = new ff_a2a();
+            bool wrapper_around = reinterpret_cast<ff_a2a*>(ir.parentBB)->isset_wraparound();
             
             std::vector<int> reverseLeftOutputIndexes(ir.outputL.rbegin(), ir.outputL.rend());
 
@@ -230,7 +231,7 @@ public:
             }
             // add the Square Box Left, just if we have a receiver!
             if (ir.hasReceiver)
-                firstSet.push_back(new SquareBoxLeft(localRightWorkers)); 
+                firstSet.push_back(new ff_comb(new SquareBoxLeftAdapter, new SquareBoxLeft(localRightWorkers), true, true)); 
 
             std::transform(firstSet.begin(), firstSet.end(), firstSet.begin(), [](ff_node* n) -> ff_node* {
                 if (!n->isPipe())
@@ -257,12 +258,12 @@ public:
                         ff_node* inputParent = getBB(child, input);
                         if (inputParent) inputParent->change_node(input, new CollectorAdapter(input, ir.outputL), true); //cleanup?? remove_fromcleanuplist??
                     }
-
+                    
                     if (outputChannels > 0 || feedbacksChannels > 0){
                         ff::svector<ff_node*> outputs; child->get_out_nodes(outputs);
                         for(ff_node* output : outputs){
                             ff_node* outputParent = getBB(child, output);
-                            if (outputParent) outputParent->change_node(output, buildWrapperOUT(output, getBackAndPop(reverseRightOutputIndexes), outputChannels, feedbacksChannels), true); //cleanup?? removefromcleanuplist?
+                            if (outputParent) outputParent->change_node(output, buildWrapperOUT(output, getBackAndPop(reverseRightOutputIndexes), outputChannels, feedbacksChannels, (wrapper_around ? ir.inputL : std::vector<int>())), true); //cleanup?? removefromcleanuplist?
                         }
                     }
 
@@ -272,7 +273,7 @@ public:
             
             // add the SQuareBox Right, iif there is a sender!
             if (ir.hasSender)
-                secondSet.push_back(new SquareBoxRight);
+                secondSet.push_back(new ff_comb(new SquareBoxRight, new SquareBoxRightAdapter, true, true));
 
             std::transform(secondSet.begin(), secondSet.end(), secondSet.begin(), [](ff_node* n) -> ff_node* {
                 if (!n->isPipe())
@@ -281,22 +282,23 @@ public:
             });
 
             innerA2A->add_secondset<ff_node>(secondSet); // cleanup??
+            if (wrapper_around) innerA2A->wrap_around(); // for local feedbacks
             workers.push_back(innerA2A);
 
             
             if (ir.hasReceiver){
-                if (ir.protocol == Proto::TCP)
-                    this->add_emitter(new ff_dreceiverH(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.inputL)));
-#ifdef DFF_MPI
+               // if (ir.protocol == Proto::TCP)
+                    this->add_emitter(new ff_dreceiverHMTCL(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.inputL)));
+#if 0
                 else
                    this->add_emitter(new ff_dreceiverHMPI(ir.expectedEOS, vector2Map(ir.inputL)));
 #endif 
             }
             
             if (ir.hasSender){
-                if(ir.protocol == Proto::TCP)
-                    this->add_collector(new ff_dsenderH(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF) , true);
-#ifdef DFF_MPI
+                //if(ir.protocol == Proto::TCP)
+                    this->add_collector(new ff_dsenderHMTCL(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF) , true);
+#if 0
                 else
                    this->add_collector(new ff_dsenderHMPI(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF), true);
 #endif   

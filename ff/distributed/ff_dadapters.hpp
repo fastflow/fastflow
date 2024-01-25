@@ -16,17 +16,15 @@ namespace ff {
 
 class SquareBoxRight : public ff_minode {
     ssize_t neos = 0;
-public:	
-
+public:
 	int svc_init() {
 		// change the size of the queue towards the Sender
 		// forcing the queue to be bounded of capacity equal to inchannels (excluded squareboxleft)
-		size_t oldsz;
-		change_outputqueuesize(this->get_num_inchannels()-1, oldsz);
-		assert(oldsz != 0);		
+		//size_t oldsz;
+		//change_outputqueuesize(this->get_num_inchannels()-1, oldsz);
+		//assert(oldsz != 0);		
 		return 0;
 	}
-
 	void* svc(void* in) {
 		return in;
 	}
@@ -35,6 +33,13 @@ public:
 		if (id == (ssize_t)(this->get_num_inchannels() - 1)) return;   // EOS coming from the SquareLeft, we must ignore it
 		if (++neos == (ssize_t)(this->get_num_inchannels() - 1))
 			this->ff_send_out(this->EOS);
+	}
+};
+
+struct SquareBoxRightAdapter : public ff_monode {
+	void* svc(void* in) {
+		ff_send_out_to(in, this->get_num_outchannels()-1);
+		return this->GO_ON;
 	}
 };
 
@@ -55,6 +60,13 @@ public:
 		else this->ff_send_out_to(in, destinations[reinterpret_cast<message_t*>(in)->chid]);
 		return this->GO_ON;
     }
+};
+
+struct SquareBoxLeftAdapter : public ff_minode {
+	void* svc(void* in){return in;}
+	void eosnotify(ssize_t){
+		if (this->fromInput()) ff_send_out(this->EOS);
+	}
 };
 
 class EmitterAdapter: public internal_mo_transformer {

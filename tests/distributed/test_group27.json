@@ -1,11 +1,13 @@
 {
     "groups" : [
      {   
-        "endpoint" : "localhost:8000",
+        "endpoint" : "localhost:8080",
+        "batchSize": 1,
          "name" : "G1"
      },
      {   
-        "endpoint" : "localhost:8004",
+        "endpoint" : "localhost:8081",
+        "batchSize": 1,
         "name" : "G2"
      }
     ]

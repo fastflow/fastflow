@@ -26,9 +26,10 @@
 #define FF_DFF_HPP
 
 #define DFF_ENABLED
+#define SINGLE_IO_THREAD
 
 #if !defined(DFF_EXCLUDE_MPI)
-#define DFF_MPI
+#define ENABLE_MPI
 #endif
 
 #if !defined(DFF_EXCLUDE_BLOCKING)

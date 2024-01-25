@@ -42,10 +42,14 @@
 #include <ff/distributed/ff_dintermediate.hpp>
 #include <ff/distributed/ff_dgroup.hpp>
 
+#include "MTCL/include/mtcl.hpp"
+
 #include <cereal/cereal.hpp>
 #include <cereal/archives/json.hpp>
 #include <cereal/types/string.hpp>
 #include <cereal/types/vector.hpp>
+
+#include "MTCL/include/mtcl.hpp"
 
 #ifdef DFF_MPI
 #include <mpi.h>
@@ -69,6 +73,7 @@ public:
 	}*/
 	
     Proto usedProtocol;
+    std::string baseProtocol = "TCP";
 
     void parseConfig(std::string configFile){
       std::ifstream is(configFile);
@@ -83,7 +88,8 @@ public:
             try {
                 std::string tmpProtocol;
                 ari(cereal::make_nvp("protocol", tmpProtocol));
-                if (tmpProtocol == "MPI"){
+                this->baseProtocol = tmpProtocol;
+                /*if (tmpProtocol == "MPI"){
                     #ifdef DFF_MPI
                         this->usedProtocol = Proto::MPI;
                     #else
@@ -92,9 +98,11 @@ public:
                     #endif 
 
                 } else this->usedProtocol = Proto::TCP;
+                */
             } catch (cereal::Exception&) {
                 ari.setNextName(nullptr);
-                this->usedProtocol = Proto::TCP;
+                //this->usedProtocol = Proto::TCP;
+                this->baseProtocol = "TCP";
             }
 
         } catch (const cereal::Exception& e){
@@ -130,7 +138,7 @@ public:
 
 	  const std::string& getRunningGroup() const { return runningGroup; }
 
-    void forceProtocol(Proto p){this->usedProtocol = p;}
+    //void forceProtocol(Proto p){this->usedProtocol = p;}
 	
     int run_and_wait_end(ff_pipeline* parent){
         if (annotatedGroups.find(runningGroup) == annotatedGroups.end()){
@@ -168,10 +176,12 @@ public:
         return -1;
       }
 
-      #ifdef DFF_MPI
+      /*#ifdef DFF_MPI
         if (usedProtocol == Proto::MPI)
           if (MPI_Finalize() != MPI_SUCCESS) abort();
-      #endif 
+      #endif*/ 
+
+      MTCL::Manager::finalize();
         
         return 0;
     }
@@ -241,7 +251,7 @@ private:
 
     void prepareIR(ff_pipeline* parentPipe){
       ff::ff_IR& runningGroup_IR = annotatedGroups[this->runningGroup];
-      runningGroup_IR.protocol = this->usedProtocol; // set the protocol
+      //runningGroup_IR.protocol = this->usedProtocol; // set the protocol
       ff_node* previousStage = getPreviousStage(parentPipe, runningGroup_IR.parentBB);
       ff_node* nextStage = getNextStage(parentPipe, runningGroup_IR.parentBB);
       // TODO: check coverage all 1st level
@@ -251,7 +261,12 @@ private:
 
         // throw an error if a group in the configuration has not been annotated in the current program
         if (!annotatedGroups.count(g.name)) throw FF_Exception("present in the configuration file has not been implemented! :(");
-        auto endpoint = this->usedProtocol == Proto::TCP ? ff_endpoint(g.address, g.port) : ff_endpoint(i);
+        //auto endpoint = this->usedProtocol == Proto::TCP ? ff_endpoint(g.address, g.port) : ff_endpoint(i);
+        ff_endpoint endpoint;
+        if (this->baseProtocol == "MPI") 
+          endpoint.address = "MPI:" + std::to_string(i);
+        else 
+          endpoint.address = this->baseProtocol + ":" + g.address + ":" + std::to_string(g.port);
         endpoint.groupName = g.name;
 
         // annotate the listen endpoint for the specified group
@@ -433,7 +448,17 @@ private:
         auto& currentGroups = parentBB2GroupsName[runningGroup_IR.parentBB];
         runningGroup_IR.expectedEOS = std::count_if(currentGroups.cbegin(), currentGroups.cend(), [&](auto& gName){return (!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasLeftChildren());});
         // if the current group is horizontal count out itsleft from the all horizontals
-        if (!runningGroup_IR.isVertical()) runningGroup_IR.expectedEOS -= 1;
+        if (!runningGroup_IR.isVertical()) {
+          runningGroup_IR.expectedEOS -= 1;
+        }
+      }
+
+      // FEEDBACK OF ALL2ALL expected EOS calculation
+      if (runningGroup_IR.hasLeftChildren() && runningGroup_IR.parentBB->isAll2All() && reinterpret_cast<ff_a2a*>(runningGroup_IR.parentBB)->isset_wraparound()){
+        auto& currentGroups = parentBB2GroupsName[runningGroup_IR.parentBB];
+        runningGroup_IR.expectedEOS += std::count_if(currentGroups.cbegin(), currentGroups.cend(), [&](auto& gName){return (annotatedGroups[gName].hasRightChildren());});
+        runningGroup_IR.hasInputFeedbacks = true;
+        if (runningGroup_IR.hasRightChildren()) runningGroup_IR.expectedEOS -= 1; // minus 1 becuse i cannot count myself since the feedback are implemented locally
       }
 
       // if the previousStage exists, count all the ouput groups pointing to the one i'm going to run
@@ -473,6 +498,13 @@ private:
             if ((!annotatedGroups[gName].isVertical() || annotatedGroups[gName].hasRightChildren()) && gName != runningGroup)
               runningGroup_IR.destinationEndpoints.push_back({ChannelType::INT, annotatedGroups[gName].listenEndpoint});
         }
+        
+        // feedback RELATED of A2A!!!
+        if (runningGroup_IR.parentBB->isAll2All() && reinterpret_cast<ff_a2a*>(runningGroup_IR.parentBB)->isset_wraparound() && runningGroup_IR.hasRightChildren()){
+          for(const auto& gName: parentBB2GroupsName[runningGroup_IR.parentBB])
+              if (gName != this->runningGroup && annotatedGroups[gName].hasLeftChildren())
+                runningGroup_IR.destinationEndpoints.push_back({ChannelType::FBK, annotatedGroups[gName].listenEndpoint});
+        }
 
         if (nextStage)
           for(const auto& gName : inputGroups(parentBB2GroupsName[nextStage]))
@@ -481,9 +513,9 @@ private:
           // FEEDBACK RELATED (wrap around of the main pipe!)
           if (parentPipe->isset_wraparound()){
             for(const auto& gName : inputGroups(parentBB2GroupsName[parentPipe->getStages().front()]))
-              //if (gName != this->runningGroup)
+              if (gName != this->runningGroup)
                 runningGroup_IR.destinationEndpoints.push_back({ChannelType::FBK, annotatedGroups[gName].listenEndpoint});
-            runningGroup_IR.expectedEOS++;
+            //runningGroup_IR.expectedEOS++;
           }
       }
       
@@ -577,24 +609,57 @@ static inline int DFF_Init(int& argc, char**& argv){
     
     dGroups::Instance()->parseConfig(configFile);
 
-    if (!groupName.empty())
+#if defined(DFF_MPI) || defined(ENABLE_MPI)
+    if (groupName.empty()) {
+      if (dGroups::Instance()->baseProtocol != "MPI")
+        ff::error("Falling back to MPI since no group name passed as argument");
+      dGroups::Instance()->baseProtocol = "MPI";
+    }  
+#else
+    if (dGroups::Instance()->baseProtocol == "MPI") {
+        ff::error("MPI support disabled during compiling! Recompile with MPI and retry\n");
+        return -1;
+    }
+    if (groupName.empty()) {
+      ff::error("Group not passed as argument!\nUse option --DFF_GName=\"group-name\"\n");
+      return -1;
+    }
+#endif
+    else {
+      // set the running group
+      dGroups::Instance()->setRunningGroup(groupName);
+    }
+
+    MTCL::Manager::init(groupName);
+
+#if defined(ENABLE_MPI) || defined(DFF_MPI)
+    if (dGroups::Instance()->baseProtocol == "MPI") {
+      int myrank;
+      MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+      dGroups::Instance()->setRunningGroupByRank(myrank);
+    }
+#endif
+    /*if (!groupName.empty())
       dGroups::Instance()->forceProtocol(Proto::TCP);
   #ifdef DFF_MPI
     else
         dGroups::Instance()->forceProtocol(Proto::MPI);
   #endif
+  */
 
 
-    if (dGroups::Instance()->usedProtocol == Proto::TCP){
-       if (groupName.empty()){
+    //if (dGroups::Instance()->usedProtocol == Proto::TCP){
+   /*    if (groupName.empty()){
         ff::error("Group not passed as argument!\nUse option --DFF_GName=\"group-name\"\n");
         return -1;
       } 
-      dGroups::Instance()->setRunningGroup(groupName); 
-    }
+      dGroups::Instance()->setRunningGroup(groupName);
+     */ 
+   // }
 
-  #ifdef DFF_MPI
+  /*#ifdef DFF_MPI
     if (dGroups::Instance()->usedProtocol == Proto::MPI){
+      std::cout << "Using legacy MPI implementation!\n";
       //MPI_Init(&argc, &argv);
       int provided;
       
@@ -608,14 +673,13 @@ static inline int DFF_Init(int& argc, char**& argv){
           return -1;
       }
 
-      int myrank;
-      MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
-      dGroups::Instance()->setRunningGroupByRank(myrank);
+      
 
       std::cout << "Running group: " << dGroups::Instance()->getRunningGroup() << " on rank: " <<  myrank << "\n";
     }
 
   #endif 
+  */
 
     // trig the mapping set if specified
     dGroups::Instance()->setThreadMapping();

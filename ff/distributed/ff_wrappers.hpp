@@ -28,6 +28,7 @@
 #include <iostream>
 #include <type_traits>
 #include <functional>
+#include <vector>
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
 #include <cereal/cereal.hpp>
@@ -112,9 +113,10 @@ private:
 	int defaultDestination;
 	int myID;
 	int feedbackChannels, localFeedbacks, remoteFeedbacks;
+	std::vector<int> localFeebacksRemapping;
 public:
 	
-	WrapperOUT(ff_node* n, int id, int outchannels=-1, int remoteFeedbacks = 0, bool cleanup=false, int defaultDestination = -1): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), myID(id), remoteFeedbacks(remoteFeedbacks){
+	WrapperOUT(ff_node* n, int id, int outchannels=-1, int remoteFeedbacks = 0, bool cleanup=false, int defaultDestination = -1, std::vector<int> localWorkers = {}): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), myID(id), remoteFeedbacks(remoteFeedbacks), localFeebacksRemapping(localWorkers){
 		this->n = n;
 		this->cleanup= cleanup;
 		registerCallback(ff_send_out_to_cbk, this);
@@ -124,25 +126,31 @@ public:
 		if (in > FF_TAG_MIN){
 			if (in == FF_FLUSH){
 				message_t* mout = new message_t(-2, -2);
-				ff_send_out(mout);
+				this->ff_send_out_to(mout, internal_mo_transformer::get_num_outchannels() - 1);
 				return true;
 			}
 			return false;
 		}
-
 		if (localFeedbacks){
-			if (id < localFeedbacks) {
-				if (id == -1) return ff_send_out(in);
-				return ff_send_out_to(in, id);
+			if (!localFeebacksRemapping.empty()){
+				auto it = std::find(localFeebacksRemapping.begin(), localFeebacksRemapping.end(), id);
+				if (it != localFeebacksRemapping.end()){
+					return this->ff_send_out_to(in, std::distance(localFeebacksRemapping.begin(), it));
+				}
 			}
+
+			/*if (id < localFeedbacks) {
+				if (id == -1) return ff_node::ff_send_out(in);
+				return internal_mo_transformer::ff_send_out_to(in, id);
+			}*/
 			// from 0 to feedbackChannels-1 are feedback channels
 			// from feedbackChannels to outchannels-1 are forward channels
-			id -= localFeedbacks; 
+			//id -= localFeedbacks; 
 		}
 
 		message_t* msg = new message_t;
-		msg->feedback = ((id < remoteFeedbacks && remoteFeedbacks) || outchannels == 0);
-		if (!msg->feedback) id -= remoteFeedbacks;
+		msg->feedback = ((id == -1 && (remoteFeedbacks+localFeedbacks)) || (id != -1 && id < remoteFeedbacks+localFeedbacks));
+		if (!msg->feedback) id -= remoteFeedbacks+localFeedbacks;
 		
 		bool datacopied = this->n->serializeF(in, msg->data);
 		msg->sender = myID;
@@ -150,18 +158,25 @@ public:
 		if (!datacopied)  msg->data.freetaskF = this->n->freetaskF;
 		if (localFeedbacks) {
 			// all forward channels are multiplexed in feedbackChannels which coicide with the sender node!
-			ff_send_out_to(msg, localFeedbacks);
+			this->ff_send_out_to(msg, internal_mo_transformer::get_num_outchannels() - 1);
 		} else
-			ff_send_out(msg);
+			this->ff_send_out(msg);
 		if (datacopied) this->n->freetaskF(in);
 		return true;
 	}
 
 	int svc_init() {
 		// save the channel id fo the sender, useful for when there are feedbacks in the application
-
+		for(size_t i = 0; i < localFeebacksRemapping.size(); i++)
+			std::cout << "Index[" << i << "] = " << localFeebacksRemapping[i] << std::endl;
 		// these are local feedback channels
-		localFeedbacks = internal_mo_transformer::get_num_feedbackchannels();
+		if (localFeebacksRemapping.empty()){
+			localFeedbacks = internal_mo_transformer::get_num_feedbackchannels();
+			for(int i = 0; i < localFeedbacks; i++) localFeebacksRemapping.push_back(i); //here we are faking the ramapping table for cases we don't have 
+		}
+		else
+			localFeedbacks = localFeebacksRemapping.size();
+			
 		feedbackChannels = localFeedbacks + remoteFeedbacks;
 
 		if (this->n->isMultiOutput()) {
@@ -225,7 +240,7 @@ public:
 	}
 
     bool serialize(void* in, int id) {
-		if ((void*)in > FF_TAG_MIN) return ff_node::ff_send_out(in);
+		if ((void*)in > FF_TAG_MIN) return ff_minode::ff_send_out(in);
 		
 		message_t* msg = new message_t;
 
@@ -238,7 +253,7 @@ public:
 		msg->chid   = id;
 		if (!msg->feedback) msg->chid -= remoteFeedbacks;
 		if (!datacopied)  msg->data.freetaskF = this->n->freetaskF;
-		ff_node::ff_send_out(msg);
+		ff_minode::ff_send_out(msg);
 		if (datacopied) this->n->freetaskF(in);
 		return true;
 	}
