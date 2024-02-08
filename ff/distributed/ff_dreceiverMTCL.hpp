@@ -104,6 +104,11 @@ protected:
             error("dreceiver receive header error");
             return -1;
         }
+
+        if (h.send(&ACK, sizeof(ack_t)) < 0){
+            error("dreceiver: Error sending back ack");
+        }
+        
         size_t elementsInBatch = size/headerSize;
         bool payload = false;
         for(size_t i = 0; i < elementsInBatch; i++) 
@@ -123,10 +128,6 @@ protected:
                 error("dreceiver receive payload error");
                 return -1;
             }
-        }
-
-        if (h.send(&ACK, sizeof(ack_t)) < 0){
-            error("dreceiver: Error sending back ack");
         }
 
         if (elementsInBatch == 1){

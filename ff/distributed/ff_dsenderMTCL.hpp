@@ -149,6 +149,7 @@ class ff_dsenderMTCL: public ff_minode_t<message_t> {
     friend struct uBuffer_1;
 protected:
     size_t neos=0;
+    size_t totalAcks=0;
     std::vector<std::pair<ChannelType, ff_endpoint>> dest_endpoints;
     precomputedRT_t* precomputedRT;
     std::map<std::pair<int, ChannelType>, size_t> dest2ConnID;
@@ -183,7 +184,7 @@ protected:
             //for(auto& [connID_, counter] : handlerCounters){
                 ssize_t r; ack_t a;
                 size_t sz;
-                if ((r = MTCL_Handlers[i].probe(sz, false)) <= 0){
+                if ((r = MTCL_Handlers[i].probe(sz, handlerCounters.size() == 1)) <= 0){ // get blocking only if i need to receive from one handle
                 //if ((r = recvnnb(sck_, reinterpret_cast<char*>(&a), sizeof(ack_t))) != sizeof(ack_t)){
                     if (errno == EWOULDBLOCK){
                         assert(r == -1);
@@ -200,9 +201,6 @@ protected:
                 
             }
 
-            // now simply sleep for some milliseconds and re do again the previous cycle
-            if (handlerCounters[connID] == 0) 
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             // TODO: FIX with better way to pause from receving acks
         }
         return 1;
@@ -259,6 +257,7 @@ public:
 
             size_t connID = MTCL_Handlers.size() - 1;
             handlerCounters.push_back(ct == ChannelType::INT ? internalmessageOTF : messageOTF);
+            totalAcks += handlerCounters.back();
 
             if (this->batchSize > 1)
                 batchBuffers.push_back(new uBuffer_i(this, connID, this->batchSize, ct));
@@ -276,9 +275,6 @@ public:
 				error("svc_init ff_dsender handshake handler failed!");
 				return -1;
 			}
-
-            //FD_SET(sck, &set);
-            //if (sck > fdmax) fdmax = sck;
         }
 
         // we can erase the list of endpoints
@@ -319,16 +315,41 @@ public:
     }
 
 	void svc_end() {
+		size_t currentack = 0;
+		for(const auto& counter : handlerCounters)	currentack += counter;
+
+		ack_t a;
+        ssize_t r;
+        size_t sz;
+		while(currentack < this->totalAcks) {
+
+            for(size_t i = 0; i < MTCL_Handlers.size(); i++){
+                if (handlerCounters[i] == -1) continue;
+                if ((r = MTCL_Handlers[i].probe(sz, false)) <= 0){ 
+                    if (errno == EWOULDBLOCK){
+                        assert(r == -1);
+                        continue;
+                    }
+                } else {
+                    if (MTCL_Handlers[i].receive(&a, sizeof(ack_t)) == sizeof(ack_t)){
+                        currentack++;
+                        handlerCounters[i]++;
+                        continue;
+                    }
+                }
+                currentack += (batchBuffers[i]->ct == ChannelType::INT ? internalmessageOTF : messageOTF) - handlerCounters[i];
+                handlerCounters[i] = -1;
+            }
+
+		}
+
 		for(auto& h : MTCL_Handlers) h.close();
 	}
 };
 
 
 class ff_dsenderHMTCL : public ff_dsenderMTCL {
-
-    std::vector<MTCL::HandleUser> internal_MTCL_Handlers;
     size_t last_rr_connID_Internal = 0;
-    
     bool squareBoxEOS = false;
 
     size_t getMostFilledInternalBufferConnID(){

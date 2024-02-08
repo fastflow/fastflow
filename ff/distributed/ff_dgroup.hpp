@@ -157,25 +157,13 @@ public:
                }
             }
 
-            if (ir.hasReceiver){
-                //if (ir.protocol == Proto::TCP)
-                    this->add_emitter(new ff_dreceiverMTCL(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.hasLeftChildren() ? ir.inputL : ir.inputR)));
-                
-#if 0
-                else
-                   this->add_emitter(new ff_dreceiverMPI(ir.expectedEOS, vector2Map(ir.hasLeftChildren() ? ir.inputL : ir.inputR)));
-#endif 
-            }
+            if (ir.hasReceiver)
+                this->add_emitter(new ff_dreceiverMTCL(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.hasLeftChildren() ? ir.inputL : ir.inputR)));
 
-            if (ir.hasSender){
-                //if(ir.protocol == Proto::TCP)
-                    this->add_collector(new ff_dsenderMTCL(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
-               
-#if 0
-                else
-                   this->add_collector(new ff_dsenderMPI(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
-#endif      
-            }
+
+            if (ir.hasSender)
+                this->add_collector(new ff_dsenderMTCL(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF), true);
+
 			
 			if (ir.hasRightChildren() && ir.parentBB->isAll2All()) {
 				ff_a2a *a2a = reinterpret_cast<ff_a2a*>(ir.parentBB);
@@ -287,23 +275,11 @@ public:
             workers.push_back(innerA2A);
 
             
-            if (ir.hasReceiver){
-               // if (ir.protocol == Proto::TCP)
-                    this->add_emitter(new ff_dreceiverHMTCL(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.inputL)));
-#if 0
-                else
-                   this->add_emitter(new ff_dreceiverHMPI(ir.expectedEOS, vector2Map(ir.inputL)));
-#endif 
-            }
+            if (ir.hasReceiver)
+                this->add_emitter(new ff_dreceiverHMTCL(ir.listenEndpoint, ir.expectedEOS, vector2Map(ir.inputL)));
             
-            if (ir.hasSender){
-                //if(ir.protocol == Proto::TCP)
-                    this->add_collector(new ff_dsenderHMTCL(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF) , true);
-#if 0
-                else
-                   this->add_collector(new ff_dsenderHMPI(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF), true);
-#endif   
-            }
+            if (ir.hasSender)
+                this->add_collector(new ff_dsenderHMTCL(ir.destinationEndpoints, &ir.routingTable, ir.listenEndpoint.groupName, ir.outBatchSize, ir.messageOTF, ir.internalMessageOTF) , true);
         }  
 
         if (this->getNWorkers() == 0){
