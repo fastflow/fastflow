@@ -92,7 +92,6 @@ template<typename Buffer>
 bool serialize(Buffer&b, ExcType* input){
 	b = {(char*)input, input->clen+sizeof(ExcType)};
 
-	printf("MY SERIALIZE\n");
 	return false;
 }
 
@@ -106,8 +105,6 @@ template<typename Buffer>
 bool deserialize(const Buffer&b, ExcType* p){
 	p->clen = b.second - sizeof(ExcType);
 	p->C = (char*)p + sizeof(ExcType);
-
-	printf("MY DESERIALIZE\n");
 
 	return false;
 }
@@ -161,8 +158,6 @@ struct MiNode : ff::ff_minode_t<ExcType>{
     MiNode(int execTime, bool checkdata=false): execTime(execTime),checkdata(checkdata) {}
 
     ExcType* svc(ExcType* in){
-
-		std::cout << "SERIALIZABLE? " << isSerializable() << "\n";
 		
 	  if (execTime) active_delay(this->execTime);
       ++processedItems;

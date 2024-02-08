@@ -4,21 +4,6 @@
         "endpoint" : "localhost:8000",
         "name" : "S0"
      }
-     ,
-     {   
-        "endpoint" : "localhost:8001",
-        "name" : "S1"
-     }
-     ,
-     {   
-        "endpoint" : "localhost:8002",
-        "name" : "S2"
-     }
-	,
-     {   
-        "endpoint" : "localhost:8003",
-        "name" : "S3"
-     }
 	,
      {   
         "endpoint" : "localhost:8004",
