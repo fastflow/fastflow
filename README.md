@@ -65,14 +65,18 @@ they are added to the high-level layer and provided to the user.
 
 ## Building the library
 
-FastFlow is a header-only library, for the shared-memory run-time, there are basically no dependencies.
+FastFlow is a header-only library, for the shared-memory run-time, there are basically no dependencies
+(but remember to run the script mapping_string.sh in the ff directory!).
 For the distributed-memory run-time, you need to install:
  - Cereal for (automatic) serialization/deserialization purposes (https://uscilab.github.io/cereal/)
  - OpenMPI for experimenting with the MPI communication back-end (https://www.open-mpi.org/software/ompi)
 
 While Cereal is mandatory, OpenMPI installation is optional and can be disabled at compile-time by compiling the
-code with '-DDFF_EXCLUDE_MPI'. To compile tests with the distributed run-time you need a recent compiler
-supporting the -std=c++20 standard.
+code with '-DDFF_EXCLUDE_MPI' (or make EXCLUDE_MPI=1). To compile the tests with the distributed run-time you need a
+recent compiler supporting the -std=c++20 standard (e.g., gcc 10 or above).
+In addition, by default the *shared-memory* version uses the non-blocking concurrency control mode, wherease the
+*distributed version* uses the blocking mode for its run-time system. You can control the concurrency control mode
+either at compile time (see the config.hpp file) or at run-time by calling the proper methods before running the application.
 
 See the [BUILD.ME](BUILD.ME) file for instructions about building unit tests and examples.
 NOTES: currently, the cmake-based compilation of distributed tests has been disabled. 
@@ -88,8 +92,11 @@ Massimo Torquati (University of Pisa)
 ## FastFlow History
 The FastFlow project started in the beginning of 2010 by Massimo Torquati (University of Pisa) and 
 Marco Aldinucci (University of Turin). 
-Over the years several other people (mainly from the Parallel Computing Groups of the University of Pisa and Turin) contributed with ideas and code to the development of the project. FastFlow has been used as 
-run-time system in three EU founded research projects: ParaPhrase, REPARA and RePhrase.
+Over the years several other people (mainly from the Parallel Computing Groups of the University of Pisa and Turin) contributed with ideas and code to the development of the project. FastFlow has been used
+as run-time system in three EU founded research projects: ParaPhrase, REPARA and RePhrase. Currently is one of the tools used in the Euro-HPC project TEXTAROSSA.
+
+More info about FastFlow and its parallel building blocks can be found here:
+Massimo Torquati (Pisa, PhD Thesis) "Harnessing Parallelism in Multi/Many-Cores with Streams and Parallel Patterns"
 
 ## About the License
 From version 3.0.1, FastFlow is released with a dual license: <strong>LGPL-3</strong> and <strong>MIT</strong>. 

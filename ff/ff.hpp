@@ -23,7 +23,6 @@
 
 #ifndef FF_FF_HPP
 #define FF_FF_HPP
-#include <utility>
 #include <ff/config.hpp>
 #include <ff/node.hpp>
 #include <ff/multinode.hpp>
