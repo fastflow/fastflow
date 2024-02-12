@@ -92,7 +92,10 @@ rdcycle(void) {
     unsigned long dst;
     // output into any register, likely a0
     // regular instruction:
-    asm volatile ("csrrs %0, 0xc00, x0" : "=r" (dst) );
+    //  - the following (commented) instruction doesn't work on U74 SiFive
+    // asm volatile ("csrrs %0, 0xc00, x0" : "=r" (dst) );
+    // Marco Danelutto Jan 2024 : this works on the U74 micro arch RiscV
+    asm volatile {"rdtime %0" : "=r" (dst) );
     // regular instruction with symbolic csr and register names
     // asm volatile ("csrrs %0, cycle, zero" : "=r" (dst) );
     // pseudo-instruction:

@@ -20,9 +20,9 @@ public:
 
 	int svc_init() {
 		// change the size of the queue towards the Sender
-		// forcing the queue to be bounded of capacity 1
+		// forcing the queue to be bounded of capacity equal to inchannels (excluded squareboxleft)
 		size_t oldsz;
-		change_outputqueuesize(1, oldsz);
+		change_outputqueuesize(this->get_num_inchannels()-1, oldsz);
 		assert(oldsz != 0);		
 		return 0;
 	}
