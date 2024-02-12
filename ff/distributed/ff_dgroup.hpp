@@ -262,7 +262,7 @@ public:
             
             // add the SQuareBox Right, iif there is a sender!
             if (ir.hasSender)
-                secondSet.push_back(new ff_comb(new SquareBoxRight, new SquareBoxRightAdapter, true, true));
+                secondSet.push_back(new ff_comb(new SquareBoxRight, new SquareBoxRightAdapter(ir.outputL.size()), true, true));
 
             std::transform(secondSet.begin(), secondSet.end(), secondSet.begin(), [](ff_node* n) -> ff_node* {
                 if (!n->isPipe())

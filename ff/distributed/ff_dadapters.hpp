@@ -29,15 +29,22 @@ public:
 };
 
 struct SquareBoxRightAdapter : public ff_monode {
+	size_t leftWorkers;
+	SquareBoxRightAdapter(size_t leftWorkers) : leftWorkers(leftWorkers) {}
+	
 	int svc_init(){
-		if(this->get_out_buffer()->buffersize() < this->get_num_inchannels()-1) return 0;
-		
-		size_t oldsz;
-		change_outputqueuesize(this->get_num_inchannels()-1, oldsz);
-		assert(oldsz != 0);		
+		svector<ff_node*> w;
+        this->get_out_nodes(w);
+		assert(w.size() == 1);
 
+		size_t oldsz = w.back()->get_in_buffer()->buffersize();
+
+		if(oldsz <= leftWorkers) return 0;
+
+		w.back()->change_inputqueuesize(leftWorkers, oldsz);
 		return 0;
 	}
+
 	void* svc(void* in) {
 		ff_send_out_to(in, this->get_num_outchannels()-1);
 		return this->GO_ON;

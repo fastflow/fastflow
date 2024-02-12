@@ -27,6 +27,8 @@
 
 #define DFF_ENABLED
 #define SINGLE_IO_THREAD
+#define MTCL_DISABLE_NAGLE
+#define MTCL_DISABLE_COLLECTIVES
 
 #if !defined(DFF_EXCLUDE_MPI)
 #define ENABLE_MPI
