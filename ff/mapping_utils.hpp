@@ -513,6 +513,8 @@ static inline ssize_t ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
     }
     //std::cerr << "Successfully set affinity of thread " << GetCurrentThreadId() << " to core " << cpu_id << "\n";
 #else 
+FF_IGNORE_UNUSED(cpu_id);
+FF_IGNORE_UNUSED(priority_level);
 #warning "CPU_SET not defined, cannot map thread to specific CPU"
 #endif
     return 0;

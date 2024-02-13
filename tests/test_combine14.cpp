@@ -53,8 +53,6 @@
 
 using namespace ff;
 
-const long WORKTIME_TICKS=25000;
-
 struct Generator: ff_node_t<long> {
     Generator(long ntasks):ntasks(ntasks) {}
     long *svc(long *) {
