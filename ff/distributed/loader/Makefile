@@ -23,7 +23,7 @@
 #
 # ---------------------------------------------------------------------------
 
-CXXFLAGS            += -std=c++20
+CXXFLAGS            += -std=c++17
 ifdef DEBUG
     OPTIMIZE_FLAGS  += -g -fno-inline-functions
 else

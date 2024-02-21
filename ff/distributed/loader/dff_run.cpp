@@ -153,7 +153,7 @@ struct G {
     }
 
     bool isRemote(){
-		if (!host.compare("127.0.0.1") || !host.compare("localhost") || !host.compare(hostname) || !host.compare(std::getenv("DFF_RUN_HOSTNAME")))
+		if (!host.compare("127.0.0.1") || !host.compare("localhost") || !host.compare(hostname) || !(std::getenv("DFF_RUN_HOSTNAME") && host.compare(std::getenv("DFF_RUN_HOSTNAME"))))
 			return false;
 		
 		char ip1[INET_ADDRSTRLEN];
@@ -189,8 +189,6 @@ std::string generateRankFile(std::vector<G>& parsedGroups){
     
     for(size_t i = 0; i < parsedGroups.size(); i++)
         tmpFile << "rank " << i << "=" << parsedGroups[i].host << " slot=0:*\n";  // TODO: to use the "threadMapping" attribute
-    /*for (const G& group : parsedGroups)
-        tmpFile << group.host << std::endl;*/
 
     tmpFile.close();
     // return the name of the temporary file just created; remember to remove it after the usage
