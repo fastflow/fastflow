@@ -441,16 +441,19 @@ int uBuffer_i::flush(bool nocheck){
             error("Errore waiting ack from socket inside the callback\n");
             return false;
         }
-
-        if (parent->MTCL_Handlers[connID].send(this->headers_buffer_ptr, size*headerSize) < 0){
+        MTCL::Request h_req;
+        if (parent->MTCL_Handlers[connID].isend(this->headers_buffer_ptr, size*headerSize, h_req) < 0){
             error("Flushing header buffers");
             return -1;
         }
+        MTCL::Request p_req;
         if (this->current_ptr != this->base_ptr)
-            if (parent->MTCL_Handlers[connID].send(this->base_ptr, this->current_ptr - this->base_ptr) < 0){
+            if (parent->MTCL_Handlers[connID].isend(this->base_ptr, this->current_ptr - this->base_ptr, p_req) < 0){
                 error("flushing payload buffers");
                 return -1;
             }
+        
+        MTCL::waitAll(h_req, p_req);
         
         this->parent->handlerCounters[connID]--;
         this->size = 0;

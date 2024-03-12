@@ -42,8 +42,9 @@ ifdef EXCLUDE_MPI
     CXXFLAGS	    += -DDFF_EXCLUDE_MPI
 else
 ifdef MPI_HOME
-    INCS            += `pkg-config --cflags-only-I $(MPI_HOME)/lib/pkgconfig/ompi-cxx.pc`
-    LIBS            += `pkg-config --libs $(MPI_HOME)/lib/pkgconfig/ompi-cxx.pc`
+    CXX = mpicxx
+#    INCS            += `pkg-config --cflags-only-I $(MPI_HOME)/lib/pkgconfig/ompi-cxx.pc`
+#    LIBS            += `pkg-config --libs $(MPI_HOME)/lib/pkgconfig/ompi-cxx.pc`
 else
     CXXFLAGS	    += -DDFF_EXCLUDE_MPI
 endif

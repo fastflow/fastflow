@@ -167,8 +167,7 @@ public:
 
 	int svc_init() {
 		// save the channel id fo the sender, useful for when there are feedbacks in the application
-		for(size_t i = 0; i < localFeebacksRemapping.size(); i++)
-			std::cout << "Index[" << i << "] = " << localFeebacksRemapping[i] << std::endl;
+
 		// these are local feedback channels
 		if (localFeebacksRemapping.empty()){
 			localFeedbacks = internal_mo_transformer::get_num_feedbackchannels();
