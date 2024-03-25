@@ -326,8 +326,7 @@ public:
             for(size_t i = 0; i < MTCL_Handlers.size(); i++){
                 if (handlerCounters[i] == -1) continue;
                 if ((r = MTCL_Handlers[i].probe(sz, false)) <= 0){ 
-                    if (errno == EWOULDBLOCK){
-                        assert(r == -1);
+                    if (r==-1 && errno == EWOULDBLOCK){
                         continue;
                     }
                 } else {
