@@ -46,6 +46,7 @@
 #include <ff/config.hpp>
 #include <ff/svector.hpp>
 #include <ff/barrier.hpp>
+#include <ff/visit/visitor.hpp>
 #include <atomic>
 
 #ifdef DFF_ENABLED
@@ -424,12 +425,10 @@ public:
     }
     virtual bool isfrozen() const { return freezing>0;} 
     virtual bool done()     const { return isdone || (frozen && !stp);}
-
     pthread_t get_handle() const { return th_handle;}
 
     inline size_t getTid() const { return tid; }
     inline size_t getOSThreadId() const { return threadid; }
-
 protected:
     size_t          tid;                /// unique logical id of the thread
     size_t          threadid;           /// OS specific thread ID
@@ -1110,7 +1109,12 @@ public:
         //return in->push(ptr);
         return (in->*in->pushPMF)(ptr);
     }
-    
+
+    void accept(ff_visitor &visitor) const {
+        visitor.visit_ff_node(this);
+    }
+
+
     /**
      * \brief Noblocking pop from the output channel
      *
