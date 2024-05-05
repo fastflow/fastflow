@@ -38,7 +38,7 @@
 #define FF_SPIN_SYSDEP_H
 
 #if defined(__APPLE__)
-#include <AvailabilityMacros.h>
+#include <Availability.h>
 #endif
 
 

@@ -232,7 +232,7 @@
 #endif 
 
 #if defined(__APPLE__)
-#include <AvailabilityMacros.h>
+#include <Availability.h>
 #if defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && (__MAC_OS_X_VERSION_MIN_REQUIRED >= 1050)
 #define MAC_OS_X_HAS_AFFINITY 1
 #else

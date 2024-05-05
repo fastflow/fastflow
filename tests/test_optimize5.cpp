@@ -106,7 +106,7 @@ struct PipeWorker: ff_pipeline {
     }
 
 
-    long* svc(long*) { abort();}
+    void* svc(void*) { abort(); }
 };
 
 

@@ -358,6 +358,7 @@ namespace ff {
     auto idtt_##name =identity;                                                          \
     auto F_##name =[&](const long ff_start_##idx, const long ff_stop_##idx,              \
                        const int _ff_thread_id, decltype(var) &var) {                    \
+        FF_IGNORE_UNUSED(_ff_thread_id);                                                 \
         const long _ff_jump0=(name->getnw())*(-chunk*step);                              \
         const long _ff_jump1=(-chunk*step);                                              \
         PRAGMA_IVDEP;                                                                    \
