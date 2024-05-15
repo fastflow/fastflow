@@ -15,6 +15,7 @@ Both programs can run a `ff_farm` that wraps the pipeline described above, and c
 cd kernels/vadd_cus
 make all TARGET=hw # sw_emu or hw_emu
 ```
+This may take minutes to hours.
 
 ## Compile host
 ```bash
