@@ -138,7 +138,7 @@ struct ordered_gt: ff_gatherer {
     size_t MemSize;       
 };
 // Worker wrapper to be used when ordering_pair_t is added to the data elements
-class OrderedWorkerWrapper: public ff_node_t<ordering_pair_t> {
+class OrderedWorkerWrapper: public ff_node {
 public:    
     OrderedWorkerWrapper(ff_node* worker, bool cleanup=false):
         worker(worker),cleanup(cleanup) {
@@ -148,7 +148,8 @@ public:
     ~OrderedWorkerWrapper() {
         if (cleanup) delete worker;
     }
-    ordering_pair_t *svc(ordering_pair_t *in) {
+    void *svc(void *t) {
+        ordering_pair_t *in = reinterpret_cast<ordering_pair_t*>(t);
         auto out=worker->svc(in->second.first);
         in->second.first=out;
         return in;
@@ -160,9 +161,8 @@ protected:
     ff_node* worker;
     bool cleanup;
 };
-// A node that removes the ordering_pair_t around the data element
-template<typename IN_t>    
-class OrderedEmitterWrapper: public ff_node_t<IN_t, ordering_pair_t> {
+// A node that removes the ordering_pair_t around the data element 
+class OrderedEmitterWrapper: public ff_node {
 public:
     OrderedEmitterWrapper(ordering_pair_t*const  m, const size_t size):
         idx(0),cnt(0),Memory(m), MemSize(size) {}
@@ -171,7 +171,7 @@ public:
         idx=0;
         return 0;
     } 
-    inline ordering_pair_t* svc(IN_t* in) {
+    inline void* svc(void *in) {
         Memory[idx].first=cnt;
         Memory[idx].second.first = in;
         this->ff_send_out(&Memory[idx]);
@@ -185,7 +185,7 @@ public:
 };
     
 // A node that removes the ordering_pair_t around the data element
-class OrderedCollectorWrapper: public ff_node_t<ordering_pair_t, void> {
+class OrderedCollectorWrapper: public ff_node {
 public:
     struct PairCmp {
         bool operator()(const ordering_pair_t* lhs, const ordering_pair_t* rhs) const { 
@@ -197,7 +197,8 @@ public:
         cnt=0;
         return 0;
     } 
-    inline void* svc(ordering_pair_t* in) {
+    inline void* svc(void *t) {
+        ordering_pair_t *in = reinterpret_cast<ordering_pair_t*>(t);
         if (cnt == in->first) { // it's the next to send out
             ff_send_out(in->second.first);
             cnt++;
