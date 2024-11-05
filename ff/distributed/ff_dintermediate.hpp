@@ -3,6 +3,7 @@
 #include <ff/distributed/ff_network.hpp>
 #include <ff/node.hpp>
 #include <ff/all2all.hpp>
+#include <ff/distributed/ff_ddefines.hpp>
 #include <list>
 #include <vector>
 #include <map>
@@ -10,168 +11,53 @@
 
 namespace ff {
 
-class ff_IR {
+class ff_IR_V2 {
     friend class dGroups;
-protected:
-    // set to true if the group contains the whole parent building block
-    bool wholeParent = false;
-    bool alreadyBuilt = false;
-    void computeCoverage(){
-        if (!parentBB->isAll2All()) return;
-        ff_a2a* a2a = reinterpret_cast<ff_a2a*>(parentBB);
-        coverageL = coverageR = true;
-        for(ff_node* n : a2a->getFirstSet())
-            if (!L.count(n)) {coverageL = false; break;}
-        for(ff_node* n : a2a->getSecondSet())
-            if (!R.count(n)) {coverageR = false; break;}
-    }
-
-    void buildIndexes(){
-        if (alreadyBuilt) return;
-        alreadyBuilt = true;
-
-        if (!L.empty()){
-            if (parentBB->isPipe() && !wholeParent){
-                assert(L.size() == 1);
-                ff::svector<ff_node*> inputs, outputs;
-                for (ff_node* n : L){
-                    n->get_in_nodes(inputs);
-                    n->get_out_nodes(outputs);
-                }
-                for (size_t i = 0; i < inputs.size(); i++) inputL.push_back(i);
-                for (size_t i = 0; i < outputs.size(); i++) outputL.push_back(i);
-                return;
-            }
-            
-            ff::svector<ff_node*> parentInputs;
-            parentBB->get_in_nodes(parentInputs);
-
-            ff::svector<ff_node*> LOutputs;
-            if (!parentBB->isAll2All() || wholeParent) parentBB->get_out_nodes(LOutputs);
-            else for(ff_node* n : reinterpret_cast<ff_a2a*>(parentBB)->getFirstSet()) n->get_out_nodes(LOutputs);
-            
-            for(ff_node* n : L){
-                ff::svector<ff_node*> bbInputs; n->get_in_nodes(bbInputs);     
-                for(ff_node* bbInput : bbInputs)
-                    inputL.push_back(std::find(parentInputs.begin(), parentInputs.end(), bbInput) - parentInputs.begin());
-
-                ff::svector<ff_node*> bbOutputs; n->get_out_nodes(bbOutputs);
-                for(ff_node* bbOutput : bbOutputs)
-                    outputL.push_back(std::find(LOutputs.begin(), LOutputs.end(), bbOutput) - LOutputs.begin());
-            }
-        }
-
-        if (!R.empty() && parentBB->isAll2All() && !wholeParent){
-            ff::svector<ff_node*> RInputs;
-            for(ff_node* n : reinterpret_cast<ff_a2a*>(parentBB)->getSecondSet()) n->get_in_nodes(RInputs);
-
-            ff::svector<ff_node*> parentOutputs;
-            parentBB->get_out_nodes(parentOutputs);
-            
-            for(ff_node* n : R){
-                ff::svector<ff_node*> bbInputs; n->get_in_nodes(bbInputs);
-                for(ff_node* bbInput : bbInputs)
-                    inputR.push_back(std::find(RInputs.begin(), RInputs.end(), bbInput) - RInputs.begin());
-
-                ff::svector<ff_node*> bbOutputs; n->get_out_nodes(bbOutputs);
-                for(ff_node* bbOutput : bbOutputs)
-                    outputR.push_back(std::find(parentOutputs.begin(), parentOutputs.end(), bbOutput) - parentOutputs.begin());
-            }
-        }
-
-    }
-
-    
 public:
-    std::set<ff_node*> L, R;
-    bool coverageL = false, coverageR = false;
-    bool isSource = false, isSink = false;
-    bool hasReceiver = false, hasSender = false;
-    Proto protocol;
 
-    ff_node* parentBB;
+    // representation of the buckets, i.e., the structure of the nested all-to-all
+    std::vector<std::vector<ff_node*>> bucketsDistribution;
 
-    ff_endpoint listenEndpoint;
-    std::vector<std::pair<ChannelType, ff_endpoint>> destinationEndpoints;
+    //std::map<ff_node*, std::pair<ff::svector<ff_node*>,ff::svector<ff_node*>>> feeders, consumers;
 
-    std::set<std::string> otherGroupsFromSameParentBB;
-    size_t expectedEOS = 0;
-    bool hasInputFeedbacks = false;
-    int outBatchSize = 1;
-    int messageOTF, internalMessageOTF;
-    // liste degli index dei nodi input/output nel builiding block in the shared memory context. The first list: inputL will become the rouitng table
-    std::vector<int> inputL, outputL, inputR, outputR;
+    std::unordered_map<ff_node*, IngressEgressChannels_t> channelsDictionary;
 
-    // pre computed routing table for the sender module (shoud coincide with the one exchanged actually at runtime)
-    std::map<std::pair<std::string, ChannelType>, std::vector<int>> routingTable;
-    
-    // TODO: implmentare l'assegnamento di questi campi
-    int leftTotalOuputs;
-    int rightTotalInputs;
+    // list of <groupname - endpoints> to connect to  (in MTCL an edpoint is just a string)
+    std::vector<std::tuple<std::string, std::string, std::vector<ff_node*>>> destinationEndpoints;
 
-    bool isVertical(){return (L.empty() + R.empty()) == 1;}
+    // listening endpoints
+    std::string listeningEndpoint;
 
-    bool hasLeftChildren() {return !L.empty();}
-    bool hasRightChildren() {return !R.empty();}
+    // list of remote groups names that need to connect to this group. The size of this vector represent the number of connection to expect and number of EOS
+    std::vector<std::string> ingressRemoteConnectionsGroupsName;
 
-    void insertInList(std::pair<ff_node*, SetEnum> bb, bool _wholeParent = false){
-        wholeParent = _wholeParent;
-        switch(bb.second){
-            case SetEnum::L: L.insert(bb.first); return;
-            case SetEnum::R: R.insert(bb.first); return;
-        }
-    }
+    // size of batch
+    int batchSize = DEFAULT_BATCH_SIZE;
 
-    std::vector<int> getInputIndexes(bool internal){
-        if ((isVertical() && hasRightChildren()) || (internal && !R.empty())) return inputR;
-        return inputL;
-    }
+    int messageOTF = DEFAULT_MESSAGE_OTF;
 
     void print(){
-        ff::cout << "###### BEGIN GROUP ######\n";
-        ff::cout << "Group Orientation: " << (isVertical() ? "vertical" : "horizontal") << std::endl;
-        ff::cout << std::boolalpha << "Source group: " << isSource << std::endl;
-        ff::cout << std::boolalpha << "Sink group: " << isSink << std::endl;
-        ff::cout << std::boolalpha << "Coverage Left: " << coverageL << std::endl;
-        ff::cout << std::boolalpha << "Coverage Right: " << coverageR << std::endl << std::endl;
+        ff::cout << "******* BEGIN INTERMEDIATE REPRESENTATION ********\n";
+        
+        ff::cout << "\t (*) Listening endpoint: " << listeningEndpoint << std::endl;
+        
+        ff::cout << "\t (*) Connections in output (" << destinationEndpoints.size() << "):\n";
+        for (auto& [name, endp, _] : destinationEndpoints)
+            ff::cout << "\t\t - " <<  name << " (" << endp << ")\n";
+        
+        ff::cout << "\t (*) Connections in input ("<< ingressRemoteConnectionsGroupsName.size() <<"):\n";
+        for (auto& name : ingressRemoteConnectionsGroupsName)
+            ff::cout << "\t\t - " << name << std::endl;
 
-        ff::cout << std::boolalpha << "Has Receiver: " << hasReceiver << std::endl;
-        ff::cout << "Expected input connections: " << expectedEOS << std::endl;
-        ff::cout << "Listen endpoint: " << listenEndpoint.address << std::endl << std::endl;
-
-        ff::cout << std::boolalpha << "Has Sender: " << hasSender << std::endl;
-        ff::cout << "Destination endpoints: " << std::endl;
-        for(auto& [ct, e] : destinationEndpoints)
-            ff::cout << "\t* " << e.groupName << "\t[[" << e.address << ":" << e.port << "]]  - " << (ct==ChannelType::FBK ? "Feedback" : (ct==ChannelType::INT ? "Internal" : "Forward")) << std::endl;
-
-        ff::cout << "Precomputed routing table: \n";
-        for(auto& [p, d] : routingTable){
-            ff::cout << "\t* " << p.first << (p.second==ChannelType::FBK ? "Feedback" : (p.second==ChannelType::INT ? "Internal" : "Forward")) << ":";
-            for(auto i : d) ff::cout << i << " ";
-            ff::cout << std::endl;
+        ff::cout << "\t (*) Group Structure (" << bucketsDistribution.size() << " levels):\n";
+        for(size_t i = 0; i < bucketsDistribution.size(); i++){
+            ff::cout << "\t\tLevel " << i << ": ";
+            for(size_t j = 0; j < bucketsDistribution[i].size(); j++) 
+                ff::cout << bucketsDistribution[i][j]->mioID_str << "[" << bucketsDistribution[i][j]->mioID << "]" << ((j < bucketsDistribution[i].size()-1) ? ", ": "");
+            ff::cout << "\n";
         }
 
-        ff::cout << "\nPrecomputed FWD destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.first.second == ChannelType::FWD ? f.second.size() : 0);}) << std::endl;
-        ff::cout << "Precomputed INT destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.first.second == ChannelType::INT ? f.second.size() : 0);}) << std::endl;
-        ff::cout << "Precomputed FBK destinations: " << std::accumulate(routingTable.begin(), routingTable.end(), 0, [](const auto& s, const auto& f){return s+(f.first.second == ChannelType::FBK ? f.second.size() : 0);}) << std::endl;
-
-        ff::cout << "\n\nIndex Input Left: ";
-        for(int i : inputL) ff::cout << i << " ";
-        ff::cout << "\n";
-
-        ff::cout << "Index Output Left: ";
-        for(int i : outputL) ff::cout << i << " ";
-        ff::cout << "\n";
-
-        ff::cout << "Index Input Right: ";
-        for(int i : inputR) ff::cout << i << " ";
-        ff::cout << "\n";
-
-        ff::cout << "Index Output Right: ";
-        for(int i : outputR) ff::cout << i << " ";
-        ff::cout << "\n";
-        
-        ff::cout << "######  END GROUP  ######\n";
+        ff::cout << "******** END INTERMEDIATE REPRESENTATION *********\n";
     }
 
 };

@@ -61,6 +61,10 @@
 
 namespace ff {
 
+#ifdef DFF_ENABLED
+static std::atomic<int> termination_counter;
+#endif
+
 // distributed rts related type, but always defined
 struct GroupInterface; 
 
@@ -71,6 +75,7 @@ static void* FF_EOSW          = (void*)(ULLONG_MAX-2);   /// propagated only by 
 static void* FF_GO_ON         = (void*)(ULLONG_MAX-3);   /// not automatically propagated
 static void* FF_GO_OUT        = (void*)(ULLONG_MAX-4);   /// not automatically propagated
 #ifdef DFF_ENABLED
+static void* FF_LEOS          = (void*)(ULLONG_MAX-8);  // logical EOS used for distributed FF
 static void* FF_FLUSH         = (void*)(ULLONG_MAX-9);
 #endif
 static void* FF_TAG_MIN       = (void*)(ULLONG_MAX-10);  /// just a lower bound mark
@@ -296,6 +301,10 @@ protected:
             pthread_mutex_unlock(&mutex);
         }
         isdone = true;
+
+#ifdef DFF_ENABLED
+        termination_counter.fetch_sub(1);
+#endif
     }
 
     int disable_cancelability() {
@@ -928,6 +937,7 @@ public:
     void *const EOSW         = FF_EOSW;
 #ifdef DFF_ENABLED    
     void *const FLUSH = FF_FLUSH;
+    void *const LEOS = FF_LEOS;
 #endif
     
     ff_node(const ff_node&):ff_node() {}
@@ -1316,8 +1326,13 @@ protected:
 
 #endif
     // always defined, the body will implement a no-op if the distributed runtime is disabled
-    GroupInterface createGroup(std::string);
-    
+    GroupInterface createGroup(const std::string&);
+
+#ifdef DFF_ENABLED
+    std::string mioID_str;
+    int mioID;
+#endif
+
 protected:
 
     ff_node():in(0),out(0),myid(-1),CPUId(-1),

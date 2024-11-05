@@ -16,8 +16,8 @@
  *  Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  ****************************************************************************
- */
-/* Authors: 
+ *
+ * Authors: 
  *   Nicolo' Tonci
  *   Massimo Torquati
  */
@@ -37,7 +37,6 @@
 #include <sys/uio.h>
 #include <arpa/inet.h>
 
-#define REMOTE
 
 #ifdef __APPLE__
     #include <libkern/OSByteOrder.h>
@@ -64,7 +63,6 @@
 namespace ff {
 
 enum Proto {TCP , MPI};
-enum ChannelType {FWD, INT, FBK};
 
 class dataBuffer: public std::stringbuf {
 public:	

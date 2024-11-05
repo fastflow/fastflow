@@ -31,6 +31,7 @@
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_dgroups.hpp>
+#include <ff/distributed/ff_ddefines.hpp>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/types.h>
@@ -46,14 +47,14 @@
 
 namespace ff {
 
-class ff_dreceiverMTCL: public ff_monode_t<message_t> { 
+class ff_dreceiverMTCL2: public ff_monode_t<message2_t> { 
+    size_t processed  = 0;
 protected:
-    std::map<size_t, ChannelType> connID2ChannelType;
-    static const size_t headerSize = sizeof(int)+sizeof(int)+sizeof(size_t);
+    static const size_t headerSize = sizeof(int)+sizeof(int)+sizeof(ChannelType)+sizeof(size_t);
 
     virtual int handshakeHandler(MTCL::HandleUser& h){
         // ricevo l'handshake e mi salvo che tipo di connessione è
-        size_t size;
+        /*size_t size;
        
         if(h.probe(size, true) < 0){
             error("dreceiver handshakehandler: error probe");
@@ -68,26 +69,26 @@ protected:
         };
 
         connID2ChannelType[h.getID()] = *reinterpret_cast<ChannelType*>(buff);
-        delete [] buff;
-        return 0; //this->sendRoutingTable(sck, reachableDestinations);
+        delete [] buff;*/
+        return 0;
     }
 
     virtual void registerLogicalEOS(int sender){
-        for(size_t i = 0; i < this->get_num_outchannels(); i++)
-                ff_send_out_to(new message_t(sender, i), i);
+        /*for(size_t i = 0; i < this->get_num_outchannels(); i++)
+                ff_send_out_to(new message_t(sender, i), i);*/
     }
 
     virtual void registerEOS(size_t connID){
         this->neos++;
     }
 
-    virtual void forward(message_t* task, size_t){
-        if (task->chid == -1) ff_send_out(task);
-        else ff_send_out_to(task, this->routingTable[task->chid]); // assume the routing table is consistent WARNING!!!
+    virtual void forward(message2_t* task, size_t){
+        //if (task->chid == -1) ff_send_out(task);
+        //else ff_send_out_to(task, this->routingTable[task->chid]); // assume the routing table is consistent WARNING!!!
+        ff_send_out(task);
     }
 
     virtual int handleBatch(MTCL::HandleUser& h){
-        ChannelType t = connID2ChannelType[h.getID()];
         size_t size;
 
         if (h.probe(size) < 0){ // porbe header
@@ -99,6 +100,7 @@ protected:
             h.close();
             return -1;
         }
+
         char* headerBuffer = new char[size];
         if (h.receive(headerBuffer, size) < 0){
             error("dreceiver receive header error");
@@ -112,7 +114,7 @@ protected:
         size_t elementsInBatch = size/headerSize;
         bool payload = false;
         for(size_t i = 0; i < elementsInBatch; i++) 
-            if (*reinterpret_cast<size_t*>(headerBuffer+i*headerSize+2*sizeof(int))) {
+            if (*reinterpret_cast<size_t*>(headerBuffer+i*headerSize+2*sizeof(int)+sizeof(ChannelType))) {
                 payload = true;
                 break;
             }
@@ -131,28 +133,38 @@ protected:
         }
 
         if (elementsInBatch == 1){
-            int sender = ntohl(*reinterpret_cast<int*>(headerBuffer));
-            int chid = ntohl(*reinterpret_cast<int*>(headerBuffer+sizeof(int)));
-            size_t sz = be64toh(*reinterpret_cast<size_t*>(headerBuffer+2*sizeof(int)));
+            int dest = ntohl(*reinterpret_cast<int*>(headerBuffer));
+            int src = ntohl(*reinterpret_cast<int*>(headerBuffer+sizeof(int)));
+            ChannelType t = *reinterpret_cast<ChannelType*>(headerBuffer+2*sizeof(int));
+            size_t sz = be64toh(*reinterpret_cast<size_t*>(headerBuffer+2*sizeof(int)+sizeof(ChannelType)));
             assert(sz == payloadSize);
-
+            
+            processed++;
+            
             if (sz){
-                message_t* out = new message_t(payloadBuffer, sz, true);
-			
-                out->feedback = t == ChannelType::FBK;
-			    out->sender = sender;
-			    out->chid   = chid;
+                message2_t* out = new message2_t(payloadBuffer, sz, true);
+
+			    out->src = src;
+			    out->dest   = dest;
+                out->type = t;
+                out->locality = ChannelLocality::REMOTE;
                 this->forward(out, h.getID());
                 delete [] headerBuffer;
                 return 0;
             }
 
-            if (chid == -2){
-                registerLogicalEOS(sender);
+            if (src != -1){
+                ff_send_out(message2_t::make_logical_EOS(src));
                 delete [] headerBuffer;
                 return 0;
             }
-
+/*
+            if (dest == -2){
+                registerLogicalEOS(src);
+                delete [] headerBuffer;
+                return 0;
+            }
+*/
             registerEOS(h.getID());
             delete [] headerBuffer;
             return -1;
@@ -161,26 +173,28 @@ protected:
             char* payload_sliding_ptr = payloadBuffer;
             char* headerBuffer_sliding_ptr = headerBuffer;
             for(size_t i = 0; i < elementsInBatch; i++){
-                int sender = ntohl(*reinterpret_cast<int*>(headerBuffer_sliding_ptr));
-                int chid = ntohl(*reinterpret_cast<int*>(headerBuffer_sliding_ptr+sizeof(int)));
-                size_t sz = be64toh(*reinterpret_cast<size_t*>(headerBuffer_sliding_ptr+2*sizeof(int)));
+                int dest = ntohl(*reinterpret_cast<int*>(headerBuffer_sliding_ptr));
+                int src = ntohl(*reinterpret_cast<int*>(headerBuffer_sliding_ptr+sizeof(int)));
+                ChannelType t = *reinterpret_cast<ChannelType*>(headerBuffer_sliding_ptr+2*sizeof(int));
+                size_t sz = be64toh(*reinterpret_cast<size_t*>(headerBuffer_sliding_ptr+2*sizeof(int)+sizeof(ChannelType)));
 
                 if (sz){
                     char* _buf = new char[sz];
                     memcpy(_buf, payload_sliding_ptr, sz);
                     payload_sliding_ptr += sz; // advance the sliding ptr
-                    message_t* out = new message_t(_buf, sz, true);
+                    message2_t* out = new message2_t(_buf, sz, true);
                 
-                    out->feedback = t == ChannelType::FBK;
-                    out->sender = sender;
-                    out->chid   = chid;
+                    //out->feedback = t == ChannelType::FBK;
+                    out->dest = dest;
+                    out->src   = src;
+                    out->type = t;
                     this->forward(out, h.getID());
                     headerBuffer_sliding_ptr += headerSize;
                     continue;
                 }
 
-                if (chid == -2){
-                    registerLogicalEOS(sender);
+                if (src != -1){
+                    ff_send_out(message2_t::make_logical_EOS(src));
                     headerBuffer_sliding_ptr += headerSize;
                     continue;
                 }
@@ -202,19 +216,16 @@ protected:
     
 
 public:
-    ff_dreceiverMTCL(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {std::make_pair(0,0)}, int coreid=-1)
-		: input_channels(input_channels), acceptAddr(acceptAddr), routingTable(routingTable), coreid(coreid) {}
+    ff_dreceiverMTCL2(std::string& acceptAddr, size_t input_channels, int coreid=-1)
+		: input_channels(input_channels), acceptAddr(acceptAddr), coreid(coreid) {}
 
     int svc_init() {
   		if (coreid!=-1)
 			ff_mapThreadToCpu(coreid);
-        if (MTCL::Manager::listen(acceptAddr.address) < 0){
+        if (MTCL::Manager::listen(acceptAddr) < 0){
             error("Error in MTCL listen in dreceiver");
             return -1;
         }
-        
-        std::cout << "Receiver initialized!\n";
-
         return 0;
     }
 
@@ -222,79 +233,30 @@ public:
         Here i should not care of input type nor input data since they come from a socket listener.
         Everything will be handled inside a while true in the body of this node where data is pulled from network
     */
-    message_t *svc(message_t* task) {
+    message2_t *svc(message2_t* task) {
 
         while(neos < input_channels){
-            auto handle = MTCL::Manager::getNext();
-            if(handle.isNewConnection())
-                this->handshakeHandler(handle);
-             else 
-                this->handleBatch(handle);
+            auto handle = MTCL::Manager::getNext(std::chrono::milliseconds(RECEIVER_POLL_TIMEOUT));
+            if (handle.isValid()) {
+                if(handle.isNewConnection())
+                    this->handshakeHandler(handle);
+                else 
+                    this->handleBatch(handle);
+            }
+
+            if (ff::termination_counter == 0)
+                break;
+            
         }
-		
         return this->EOS;
     }
 
 protected:
     size_t neos = 0;
     size_t input_channels;
-    ff_endpoint acceptAddr;	
-    std::map<int, int> routingTable;
+    std::string& acceptAddr;	
 	int coreid;
     ack_t ACK;
-};
-
-
-class ff_dreceiverHMTCL : public ff_dreceiverMTCL {
-
-    //std::map<int, bool> isInternalConnection;
-    size_t internalNEos = 0, externalNEos = 0;
-    long next_rr_destination = 0;
-
-    void registerLogicalEOS(int sender){
-        for(size_t i = 0; i < this->get_num_outchannels()-1; i++)
-                ff_send_out_to(new message_t(sender, i), i);
-    }
-
-    void registerEOS(size_t connID){
-        neos++;
-        size_t internalConn = std::count_if(std::begin(connID2ChannelType),
-                                            std::end  (connID2ChannelType),
-                                            [](std::pair<int, ChannelType> const &p) {return p.second == ChannelType::INT;});
-
-        if (connID2ChannelType[connID] != ChannelType::INT){
-            // logical EOS!!
-            /*for(int i = 0; i < this->get_num_outchannels()-1; i++)
-                ff_send_out(new message_t(0,0), i);*/
-
-            if (++externalNEos == (connID2ChannelType.size()-internalConn))
-				for(size_t i = 0; i < this->get_num_outchannels()-1; i++) ff_send_out_to(this->EOS, i);
-        } else{
-            /// logical EOS!
-            //ff_send_out_to(new message_t(0,0), this->get_num_outchannels()-1); 
-			
-            if (++internalNEos == internalConn)
-				ff_send_out_to(this->EOS, this->get_num_outchannels()-1);
-        }
-        
-        
-    }
-
-    void forward(message_t* task, size_t connID){
-        if (connID2ChannelType[connID] == ChannelType::INT) ff_send_out_to(task, this->get_num_outchannels()-1);
-        else if (task->chid != -1) ff_send_out_to(task, this->routingTable[task->chid]);
-        else {
-            ff_send_out_to(task, next_rr_destination);
-            next_rr_destination = (next_rr_destination + 1) % (this->get_num_outchannels()-1);
-        }
-    }
-
-public:
-    ff_dreceiverHMTCL(ff_endpoint acceptAddr, size_t input_channels, std::map<int, int> routingTable = {{0,0}}, int coreid=-1) 
-    : ff_dreceiverMTCL(acceptAddr, input_channels, routingTable, coreid){
-
-    }
-
 };
 
 } // namespace 

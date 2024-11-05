@@ -31,238 +31,100 @@
 #include <vector>
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
+#include <ff/distributed/ff_ddefines.hpp>
+#include <ff/distributed/ff_dutils.hpp>
 #include <cereal/cereal.hpp>
 #include <cereal/types/polymorphic.hpp>
 #include <cereal/archives/portable_binary.hpp>
 
 namespace ff {
 
-template<typename Tin, typename Tout = Tin>
-struct DummyNode : public ff_node_t<Tin, Tout> {
-    Tout* svc(Tin* in){ return nullptr;}
-};
-
-/*
-	Wrapper IN class
-*/
-class WrapperIN: public internal_mi_transformer {
-
-private:
-    int inchannels;	// number of input channels the wrapped node is supposed to have
-	int feedbackChannels = 0;
-public:
-
-
-	WrapperIN(ff_node* n, int inchannels=1, bool cleanup=false): internal_mi_transformer(this, false), inchannels(inchannels){
-		this->n = n;
-		this->cleanup= cleanup;
-	}
-
-	void registerCallback(bool (*cb)(void *,int,unsigned long,unsigned long,void *), void * arg) {
-		internal_mi_transformer::registerCallback(cb,arg);
-	}
-
-	int svc_init() {
-		if (this->n->isMultiInput()) {
-			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
-			mi->set_running(get_num_feedbackchannels()+1);
-		}
-		return n->svc_init();
-	}
-	
-	void * svc(void* in) {
-		// with feedback channels it might be null
-		if (in == nullptr) return n->svc(nullptr);
-		message_t* msg = (message_t*)in;
-
-		
-		if (this->n->isMultiInput()) {
-			int channelid = msg->sender; 
-			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
-			mi->set_input_channelid(channelid, fromInput());
-			if (!this->fromInput()) return n->svc(in);
-		}
-
-		// received a logical EOS
-		if (msg->data.getLen() == 0){
-			this->n->eosnotify(msg->sender);
-			delete msg;
-			return GO_ON;
-		}
-		
-		bool datacopied=true;
-		void* inputData = this->n->deserializeF(msg->data, datacopied);
-		if (!datacopied) msg->data.doNotCleanup();
-		delete msg;	
-		return n->svc(inputData);
-	}
-
-	void svc_end(){this->n->svc_end();}
-	
-	ff_node* getOriginal(){ return this->n;	}
-};
-
-
-/*
-	Wrapper OUT class
-*/
-
-class WrapperOUT: public internal_mo_transformer {
-private:
-    int outchannels; // number of output channels the wrapped node is supposed to have
-	int defaultDestination;
-	int myID;
-	int feedbackChannels, localFeedbacks, remoteFeedbacks;
-	std::vector<int> localFeebacksRemapping;
-public:
-	
-	WrapperOUT(ff_node* n, int id, int outchannels=-1, int remoteFeedbacks = 0, bool cleanup=false, int defaultDestination = -1, std::vector<int> localWorkers = {}): internal_mo_transformer(this, false), outchannels(outchannels), defaultDestination(defaultDestination), myID(id), remoteFeedbacks(remoteFeedbacks), localFeebacksRemapping(localWorkers){
-		this->n = n;
-		this->cleanup= cleanup;
-		registerCallback(ff_send_out_to_cbk, this);
-	}
-	
-	bool serialize(void* in, int id) {
-		if (in > FF_TAG_MIN){
-			if (in == FF_FLUSH){
-				message_t* mout = new message_t(-2, -2);
-				this->ff_send_out_to(mout, internal_mo_transformer::get_num_outchannels() - 1);
-				return true;
-			}
-			return false;
-		}
-		if (localFeedbacks){
-			if (!localFeebacksRemapping.empty()){
-				auto it = std::find(localFeebacksRemapping.begin(), localFeebacksRemapping.end(), id);
-				if (it != localFeebacksRemapping.end()){
-					return this->ff_send_out_to(in, std::distance(localFeebacksRemapping.begin(), it));
-				}
-			}
-
-			/*if (id < localFeedbacks) {
-				if (id == -1) return ff_node::ff_send_out(in);
-				return internal_mo_transformer::ff_send_out_to(in, id);
-			}*/
-			// from 0 to feedbackChannels-1 are feedback channels
-			// from feedbackChannels to outchannels-1 are forward channels
-			//id -= localFeedbacks; 
-		}
-
-		message_t* msg = new message_t;
-		msg->feedback = ((id == -1 && (remoteFeedbacks+localFeedbacks)) || (id != -1 && id < remoteFeedbacks+localFeedbacks));
-		if (!msg->feedback) id -= remoteFeedbacks+localFeedbacks;
-		
-		bool datacopied = this->n->serializeF(in, msg->data);
-		msg->sender = myID;
-		msg->chid   = id;
-		if (!datacopied)  msg->data.freetaskF = this->n->freetaskF;
-		if (localFeedbacks) {
-			// all forward channels are multiplexed in feedbackChannels which coicide with the sender node!
-			this->ff_send_out_to(msg, internal_mo_transformer::get_num_outchannels() - 1);
-		} else
-			this->ff_send_out(msg);
-		if (datacopied) this->n->freetaskF(in);
-		return true;
-	}
-
-	int svc_init() {
-		// save the channel id fo the sender, useful for when there are feedbacks in the application
-
-		// these are local feedback channels
-		if (localFeebacksRemapping.empty()){
-			localFeedbacks = internal_mo_transformer::get_num_feedbackchannels();
-			for(int i = 0; i < localFeedbacks; i++) localFeebacksRemapping.push_back(i); //here we are faking the ramapping table for cases we don't have 
-		}
-		else
-			localFeedbacks = localFeebacksRemapping.size();
-			
-		feedbackChannels = localFeedbacks + remoteFeedbacks;
-
-		if (this->n->isMultiOutput()) {
-			ff_monode* mo = reinterpret_cast<ff_monode*>(this->n);
-			mo->set_virtual_outchannels(outchannels);
-			mo->set_virtual_feedbackchannels(feedbackChannels); 
-		}
-
-		return n->svc_init();
-	}
-
-	void * svc(void* in) {
-		void* out = n->svc(in);
-		//if (out > FF_TAG_MIN) return out;
-		if (!this->serialize(out, defaultDestination)) return out;
-		//serialize(out, defaultDestination);
-		return GO_ON;
-	}
-
-	void svc_end(){n->svc_end();}
-	
-	int run(bool skip_init=false) {
-		return internal_mo_transformer::run(skip_init);
-	}
-
-
-    /** returns the total number of output channels */
-    size_t  get_num_outchannels() const      { return outchannels; }
-    size_t  get_num_feedbackchannels() const { return feedbackChannels; }
-
-	
-	ff::ff_node* getOriginal(){return this->n;}
-	
-	static inline bool ff_send_out_to_cbk(void* task, int id,
-										  unsigned long retry,
-										  unsigned long ticks, void* obj) {		
-		return ((WrapperOUT*)obj)->serialize(task, id);
-	}
-};
-
-/*
-	Wrapper INOUT class
-*/
 class WrapperINOUT: public internal_mi_transformer {
 
 private:
-    int inchannels;	// number of input channels the wrapped node is supposed to have
-	int defaultDestination;
-	int myID;
-	int remoteFeedbacks;
+    const IngressEgressChannels_t& channelsInfo;
+	std::unordered_map<int, inputMapRecord_t> inputMap;
+	std::vector<outputMapRecord_t> outMap;
+	bool sink;
+	size_t eos_received = 0;
 public:
 
-	WrapperINOUT(ff_node* n, int id, int inchannels=1, int remoteFeedbacks = 0, bool cleanup=false, int defaultDestination = -1): internal_mi_transformer(this, false), inchannels(inchannels), defaultDestination(defaultDestination), myID(id), remoteFeedbacks(remoteFeedbacks){
-		this->n       = n;
-		this->cleanup = cleanup;
-        registerCallback(ff_send_out_to_cbk, this);
+	WrapperINOUT(ff_node* n, const IngressEgressChannels_t& channels, bool cleanup=false) : internal_mi_transformer(this, cleanup), channelsInfo(channels) {
+		this->n = n;
+		this->mioID = n->mioID;
+		// registering ff_send_out callback
+		internal_mi_transformer::registerCallback(ff_send_out_to_cbk, this);
 	}
-
-	void registerCallback(bool (*cb)(void *,int,unsigned long,unsigned long,void *), void * arg) {
-		internal_mi_transformer::registerCallback(cb,arg);
-	}
-
-    bool serialize(void* in, int id) {
-		if ((void*)in > FF_TAG_MIN) return ff_minode::ff_send_out(in);
-		
-		message_t* msg = new message_t;
-
-		
-		msg->feedback = (id < remoteFeedbacks && remoteFeedbacks);
 
 	
+
+    bool serialize(void* in, int id, bool ret = false) {
+		
+		if (in == EOS){
+			ff_minode::ff_send_out(message2_t::make_logical_EOS(this->n->mioID, id));
+			if (ret) ff_minode::ff_send_out(in);
+			return true;
+		}
+
+		if (sink) return true;
+		if (ret && in > FF_TAG_MIN) return ff_minode::ff_send_out(in);
+		
+		message2_t* msg = new message2_t;
+		msg->src = this->n->mioID;
+		if (id == -1){
+			msg->dest = -1;
+			msg->type = ChannelType::FWD; //????
+		} else {
+			auto& chInfo = outMap[id];
+			msg->dest = chInfo.identifier;
+			msg->type = chInfo.type;
+		}
+
+		msg->locality = ChannelLocality::REMOTE;
+
+		// check what happens with this datacopied
 		bool datacopied= this->n->serializeF(in, msg->data);
-		msg->sender = myID;          // FIX!
-		msg->chid   = id;
-		if (!msg->feedback) msg->chid -= remoteFeedbacks;
 		if (!datacopied)  msg->data.freetaskF = this->n->freetaskF;
 		ff_minode::ff_send_out(msg);
 		if (datacopied) this->n->freetaskF(in);
+
 		return true;
 	}
 
 	int svc_init() {
-		/*if (this->n->isMultiInput()) { // ??? what??
-			ff_minode* mi = reinterpret_cast<ff_minode*>(this->n); // what?????
-			mi->set_running(inchannels);
-		}*/
+		sink = channelsInfo.second.size() == 0;
+		if (this->n->isMultiInput())
+			reinterpret_cast<ff_minode*>(this->n)->set_running(channelsInfo.first.size());
+		
+		if (this->n->isMultiOutput()){
+			ff_monode* monode = reinterpret_cast<ff_monode*>(this->n);
+			monode->set_virtual_outchannels(std::count_if(channelsInfo.second.begin(), channelsInfo.second.end(), [](auto& o){return std::get<1>(o) == ChannelType::FWD;}));
+			monode->set_virtual_feedbackchannels(std::count_if(channelsInfo.second.begin(), channelsInfo.second.end(), [](auto& o){return std::get<1>(o) == ChannelType::FBK;}));
+		}
+
+		// build the input map
+		for(size_t i = 0; i < channelsInfo.first.size(); i++){
+			auto& t = channelsInfo.first[i];
+			inputMap[std::get<0>(t)->mioID] = inputMapRecord_t(i, std::get<1>(t), std::get<2>(t));
+		}
+
+		if (channelsInfo.first.size() == 0)
+			this->skipfirstpop(true);
+			
+
+		// build the output map
+		for(size_t i = 0; i < channelsInfo.second.size(); i++){
+			auto& t = channelsInfo.second[i];
+			outMap.emplace_back(std::get<0>(t)->mioID, std::get<1>(t), std::get<2>(t));
+		}
+
 		return n->svc_init();
+	}
+
+	void eosnotify(ssize_t id){
+		// just capture it and discard
+		/*if (!sink)
+			ff_minode::ff_send_out(message2_t::make_logical_EOS(this->n->mioID));*/
 	}
 
 	void svc_end(){this->n->svc_end();}
@@ -270,19 +132,27 @@ public:
 	void * svc(void* in) {
 		void* out;
 		if (in != nullptr) {
-			message_t* msg = (message_t*)in;
-			
+			message2_t* msg = (message2_t*)in;
+			inputMapRecord_t& record = inputMap[msg->src];
 			// received a logical EOS
-			if (msg->data.getLen() == 0){
-				this->n->eosnotify(msg->sender); // TODO: msg->sender here is not consistent... always 0
+			
+			if (msg->data.getLen() == 0){ // logical EOS!
+				if (!record.eos_received){
+					this->n->eosnotify(record.index); // TODO: msg->sender here is not consistent... always 0
+					record.eos_received = true;
+					if (++eos_received >= this->channelsInfo.first.size()){
+						delete msg;
+						return EOS;
+					}
+				}
 				delete msg;
 				return GO_ON;
 			}
 			
 			if (this->n->isMultiInput()) {
-				int channelid = msg->sender; 
+				int channelid = record.index; 
 				ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
-				mi->set_input_channelid(channelid, !msg->feedback);
+				mi->set_input_channelid(channelid, msg->type == ChannelType::FWD);
 			}
 			bool datacopied=true;
 			out = n->svc(this->n->deserializeF(msg->data, datacopied));
@@ -290,7 +160,8 @@ public:
 			delete msg;
 		}  else // it can happen if we have a feedback channel
 			out = n->svc(nullptr);
-        serialize(out, defaultDestination);
+		
+        serialize(out, -1, true);
         return GO_ON;
 	}
 

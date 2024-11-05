@@ -154,6 +154,9 @@
 
 #define MAXBACKLOG 32
 
+// milliseconds
+#define RECEIVER_POLL_TIMEOUT 10
+
 /*
  ****** END DISTRIBUTED VERSION PARAMETERS
  */

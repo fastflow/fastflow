@@ -319,6 +319,8 @@ public:
         gt->skipallpop(sk);
         ff_node::skipallpop(sk);
     }
+
+    void set_virtual_inchannels(size_t s){ninchannels = s;}
 #endif
 
     /**
@@ -380,7 +382,12 @@ public:
      */
     ssize_t get_channel_id() const { return gt->get_channel_id();}
 
-    size_t get_num_inchannels()       const { return gt->get_num_inchannels();  } 
+    size_t get_num_inchannels()       const { 
+#ifdef DFF_ENABLED
+        if (ninchannels != -1) return ninchannels;
+#endif
+        return gt->get_num_inchannels();  
+    } 
     size_t get_num_outchannels()      const {
         if (gt->get_filter() == (ff_node*)this)
             return (gt->get_out_buffer()?1:0);
@@ -436,6 +443,9 @@ private:
     svector<ff_node*> inputNodes;
     svector<ff_node*> inputNodesFeedback;
     svector<ff_node*> internalSupportNodes;
+#ifdef DFF_ENABLED    
+    int  ninchannels=-1;
+#endif     
 };
 
 
@@ -669,12 +679,8 @@ public:
         lb->skipallpop(sk);
         ff_node::skipallpop(sk);
     }
-    void set_virtual_outchannels(int n){
-        noutchannels=n;
-    }
-    void set_virtual_feedbackchannels(int n) {
-        nfeedbackchannels=n;
-    }
+    void set_virtual_outchannels(int n){ noutchannels=n; }
+    void set_virtual_feedbackchannels(int n) { nfeedbackchannels=n; }
     
 #endif
 
