@@ -332,26 +332,29 @@ public:
 		
 		ff::svector<int> expandedNextLocalWorkers;
 		for(auto* bb: nextLocalNodes)
-			custom_get_in_nodes(bb, expandedNextLocalWorkers);
+			custom_get_in_nodes(bb, expandedNextLocalWorkers); // expand the next local workers and put the ID in the svector
 		
+		ff::svector<ff_node*> realOutputsNodes; this->get_out_nodes(realOutputsNodes);
+		size_t oldsz;
+
 		for(size_t i = 0; i < expandedNextLocalWorkers.size(); i++){
 			localLookup[expandedNextLocalWorkers[i]] = i;
 			
-			//auto* n = reinterpret_cast<CollectorAdapter2*>(expandedNextLocalWorkers[i])->getOriginal();
-			//auto* n = reinterpret_cast<internal_mi_transformer*>(expandedNextLocalWorkers[i])->n;
 			auto it = std::find_if(channelsDictionary.begin(), channelsDictionary.end(), [&](auto& k){return k.first->mioID == expandedNextLocalWorkers[i];});
-			if (it != channelsDictionary.end())
+			if (it != channelsDictionary.end()){
 				for(auto& t : it->second.first)
 					localLBMap[std::get<0>(t)->mioID].push_back(i);
+				
+				// if the worker is part of an ondemand bb, so the queue length was different from the default one we should set that legth accordingly
+				int newsize = std::get<3>(it->second.first.front());
+				if (newsize > 0)
+					realOutputsNodes[i]->change_inputqueuesize(newsize, oldsz);
+			}
 
 		}
 
-		if (nextLevelSquareBox){
-			ff::svector<ff_node*> w; this->get_out_nodes(w);
-			size_t oldsz;
-			w.back()->change_inputqueuesize(1, oldsz);
-		}
-
+		if (nextLevelSquareBox) // if there is the square box in the next level set the queue size to 1
+			realOutputsNodes.back()->change_inputqueuesize(1, oldsz);
 
 		return 0;
 	}
@@ -385,9 +388,9 @@ public:
 			}
 
 			int dest;
-			std::sample(possibleDest.begin(), possibleDest.end(), &dest, 1, gen);
-			ff_send_out_to(in, dest);
-			// TODO: try to load balance better seeing the queue information....
+			do {
+				std::sample(possibleDest.begin(), possibleDest.end(), &dest, 1, gen);
+			} while (!ff_send_out_to(in, dest, 1));
 		}
 		else if (localLookup.count(msg->dest)) 
 			ff_send_out_to(in, localLookup[msg->dest]);

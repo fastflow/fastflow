@@ -276,8 +276,9 @@ public:
             batchBuffers[dest2ConnID[task->dest]]->push(task);
         else {
             if (task->data.getLen() == 0){
-                for (auto& connID_ : src2PossibleDestConnID[task->src])
+                for (auto& connID_ : std::unordered_set<int>(src2PossibleDestConnID[task->src].begin(), src2PossibleDestConnID[task->src].end())){
                     batchBuffers[connID_]->push(message2_t::make_logical_EOS(task->src));
+                }
                 delete task;
             } else
                 getMostFilledBuffer(task->src)->push(task); // get the most filled buffer socket or a rr socket

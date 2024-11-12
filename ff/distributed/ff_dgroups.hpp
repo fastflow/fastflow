@@ -320,17 +320,19 @@ private:
 
                 // retrive all the nodes connected in input to the current node
                 auto&& feeders = getFeeders(node_, root);
+                
+                int queue_length = std::get<2>(feeders) > 0 ? std::get<2>(feeders) : -1;
                 // scan the forward feeders channel
-                for (ff_node* c : feeders.first) {
+                for (ff_node* c : std::get<0>(feeders)) {
                   auto loc = getLocality(expandedAnnotated, c);
-                  cd.first.emplace_back(c, ChannelType::FWD, loc, -1);
+                  cd.first.emplace_back(c, ChannelType::FWD, loc, queue_length);
 
                   // if the destination is remote add the remote group name to the set of egressRemoteGroups
                   if (loc == ChannelLocality::REMOTE) 
                     ingressRemoteGroups[*expandedAnnotated[c]].push_back(c);
                 } 
                 // scan the feedback consumers channels
-                for (ff_node* c : feeders.second) {
+                for (ff_node* c : std::get<1>(feeders)) {
                   auto loc = getLocality(expandedAnnotated, c);
                   cd.first.emplace_back(c, ChannelType::FBK, loc, -1);
                   // if the destination is remote add the remote group name to the set of egressRemoteGroups

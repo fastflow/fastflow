@@ -159,8 +159,8 @@ std::tuple<ff::svector<ff_node*>,ff::svector<ff_node*>, int> getConsumers(ff_nod
     return out;
 }
 
-std::pair<ff::svector<ff_node*>,ff::svector<ff_node*>> getFeeders(ff_node* n, ff_node* root){
-    std::pair<ff::svector<ff_node*>, ff::svector<ff_node*>> out;
+std::tuple<ff::svector<ff_node*>,ff::svector<ff_node*>, int> getFeeders(ff_node* n, ff_node* root){
+    std::tuple<ff::svector<ff_node*>, ff::svector<ff_node*>, int> out = {{}, {}, 0};
     if (n == root) return out; // base case
 
     ff_node* parent = getBB(root, n);
@@ -169,11 +169,11 @@ std::pair<ff::svector<ff_node*>,ff::svector<ff_node*>> getFeeders(ff_node* n, ff
         ff_pipeline* parentPipe = reinterpret_cast<ff_pipeline*>(parent);
         ff_node* prev_stage = parentPipe->get_prevstage(n);
         if (prev_stage) {
-            prev_stage->get_out_nodes(out.first);
+            prev_stage->get_out_nodes(std::get<0>(out));
             return out;
         } else {
             if (parentPipe->isset_wraparound())
-                parentPipe->get_out_nodes(out.second); // NB: maybe we should use get_out_nodes_feedback
+                parentPipe->get_out_nodes(std::get<1>(out)); // NB: maybe we should use get_out_nodes_feedback
             return out += getFeeders(parent, root); // merge of vector containing feedback feeders + forward feeders
         }
     }
@@ -182,11 +182,12 @@ std::pair<ff::svector<ff_node*>,ff::svector<ff_node*>> getFeeders(ff_node* n, ff
         ff_a2a* a2a = reinterpret_cast<ff_a2a*>(parent);
         if (isFromSecondSet(n, a2a)){
             for(auto* c : a2a->getFirstSet())
-                c->get_out_nodes(out.first);
+                c->get_out_nodes(std::get<0>(out));
+            if (a2a->ondemand_buffer() > 0) std::get<2>(out) = a2a->ondemand_buffer();
             return out;
         } else {
             if (a2a->isset_wraparound())
-                a2a->get_out_nodes(out.second); // NB: maybe we should use get_out_nodes_feedback
+                a2a->get_out_nodes(std::get<1>(out)); // NB: maybe we should use get_out_nodes_feedback
             return out += getFeeders(parent, root); // merge of vector containing feedback feeders + forward feeders
         }
     }
