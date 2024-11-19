@@ -138,9 +138,16 @@ public:
 			
 			if (msg->data.getLen() == 0){ // logical EOS!
 				if (!record.eos_received){
-					this->n->eosnotify(record.index); // TODO: msg->sender here is not consistent... always 0
+					this->n->eosnotify(record.index);
 					record.eos_received = true;
+
 					if (++eos_received >= this->channelsInfo.first.size()){
+						if (!sink) // if i'm not a sink propagate the logical EOS
+							ff_minode::ff_send_out(message2_t::make_logical_EOS(this->n->mioID));
+						
+						// de-registering the call-back to allow the EOS to flow without being captured by the callback
+						internal_mi_transformer::registerCallback(nullptr, nullptr);
+
 						delete msg;
 						return EOS;
 					}
@@ -176,8 +183,6 @@ public:
 							 bool canoverwrite=false) {
 		ff_node::set_output_blocking(m,c,canoverwrite);
 	}
-
-	ff_node* getOriginal(){ return this->n;	}
 	
     static inline bool ff_send_out_to_cbk(void* task, int id,
 										  unsigned long retry,

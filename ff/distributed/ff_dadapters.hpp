@@ -346,9 +346,11 @@ public:
 					localLBMap[std::get<0>(t)->mioID].push_back(i);
 				
 				// if the worker is part of an ondemand bb, so the queue length was different from the default one we should set that legth accordingly
-				int newsize = std::get<3>(it->second.first.front());
-				if (newsize > 0)
-					realOutputsNodes[i]->change_inputqueuesize(newsize, oldsz);
+				if (!it->second.first.empty()){
+					int newsize = std::get<3>(it->second.first.front());
+					if (newsize > 0)
+						realOutputsNodes[i]->change_inputqueuesize(newsize, oldsz);
+				}
 			}
 
 		}

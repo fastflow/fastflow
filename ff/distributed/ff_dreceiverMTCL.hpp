@@ -244,7 +244,7 @@ public:
                     this->handleBatch(handle);
             }
 
-            if (ff::termination_counter == 0)
+            if (ff::termination_counter <= 0)
                 break;
             
         }

@@ -109,7 +109,7 @@ class dGroup : public ff::ff_farm {
     static inline ff_node* buildWrapperEmitter(ff_node* n, EgressChannels_t& channels, const std::vector<ff_node*>& nextLocalWorkers){
         if (channels.empty()) return n;
         if (n->isMultiInput()) 
-            return new ff_comb(n, new EmitterAdapter2(new ForwarderNode(n), channels, nextLocalWorkers, true), false, true);
+            return new ff_comb(n, new EmitterAdapter2(new ForwarderNode(n), channels, nextLocalWorkers, false, true), false, true);
         return new EmitterAdapter2(n, channels, nextLocalWorkers);
     }
 
@@ -135,7 +135,11 @@ public:
             std::vector<ff_node*> wrappedWorkers;
 
             for(ff_node* n : ir.bucketsDistribution.front()){
-                if (isSeq(n)) wrappedWorkers.push_back(new WrapperINOUT(n, ir.channelsDictionary[n])); // cleanup??
+                if (isSeq(n)) wrappedWorkers.push_back(new WrapperINOUT(n, ir.channelsDictionary[n]));
+                else if (n->isPipe() && reinterpret_cast<ff_pipeline*>(n)->cardinality() == 1) { // if i have just one worker in the pipeline i treat it like a sequential
+                    ff_node* s = reinterpret_cast<ff_pipeline*>(n)->get_firststage();
+                    wrappedWorkers.push_back(new WrapperINOUT(s, ir.channelsDictionary[s]));
+                }
                 else {
                     if (!ir.ingressRemoteConnectionsGroupsName.empty()){ // if the receiver is present build the wrappers
                         ff::svector<ff_node*> inputNodes; n->get_in_nodes(inputNodes);
@@ -176,8 +180,11 @@ public:
                 for(ff_node* n : ir.bucketsDistribution[i])
                     if (isSeq(n)) 
                         wrappedWorkers.push_back(buildWrapperSeq(n, ir.channelsDictionary[n], prevLocalWorkers, nextLocalWorkers));
+                    else if (n->isPipe() && reinterpret_cast<ff_pipeline*>(n)->cardinality() == 1) { // if i have just one worker in the pipeline i treat it like a sequential
+                        ff_node* s = reinterpret_cast<ff_pipeline*>(n)->get_firststage();
+                        wrappedWorkers.push_back(buildWrapperSeq(s, ir.channelsDictionary[s], prevLocalWorkers, nextLocalWorkers));
+                    }
                     else {
-                        
                         if (!ir.ingressRemoteConnectionsGroupsName.empty()){ // if the receiver is present build the wrappers
                             ff::svector<ff_node*> inputNodes; n->get_in_nodes(inputNodes);
                             for (ff_node* in : inputNodes){
@@ -243,6 +250,7 @@ public:
         }
 
         ff::termination_counter = this->cardinality() - this->hasCollector() - 1 - (ir.bucketsDistribution.size() > 1 ? ir.bucketsDistribution.size() : 0);
+        ff::cout << "Termination counter set to: " << ff::termination_counter << std::endl;
     }
 
 };
