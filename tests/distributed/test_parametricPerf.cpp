@@ -17,7 +17,7 @@
 
 // running the tests with limited buffer capacity
 #define FF_BOUNDED_BUFFER
-#define DEFAULT_BUFFER_CAPACITY 128
+#define DEFAULT_BUFFER_CAPACITY 512
 
 
 #include <ff/dff.hpp>
@@ -29,6 +29,10 @@ using namespace ff;
 
 // to test serialization without using Cereal
 #define MANUAL_SERIALIZATION 1
+
+static const bool UBALANCE = false;
+static const double unbalance_probbaility = 0.35; // expressed in number between 0 and 1, 0.1 means 10%
+static const size_t unbalance_delay = 100; // expressed in us 100 means 100us
 
 // ------------------------------------------------------
 std::mutex mtx;  // used only for pretty printing
@@ -158,8 +162,12 @@ struct MiNode : ff::ff_minode_t<ExcType>{
     MiNode(int execTime, bool checkdata=false): execTime(execTime),checkdata(checkdata) {}
 
     ExcType* svc(ExcType* in){
-		
-	  if (execTime) active_delay(this->execTime);
+	  // simulate the unbalance of some task with given probability
+	  if (UBALANCE && (static_cast<double>(rand()) / RAND_MAX) < unbalance_probbaility) {
+		active_delay((rand() % 10) * unbalance_delay);
+	  }
+	  else if (execTime) active_delay(this->execTime * this->get_my_id());
+
       ++processedItems;
 	  if (checkdata) {
 		  myassert(in->C[0]     == 'c');
@@ -196,7 +204,7 @@ int main(int argc, char*argv[]){
 	}
 
     if (argc < 9){
-        std::cout << "Usage: " << argv[0] << " #items #byteXitem #execTimeSource #execTimeSink #np_sx #np_dx #nwXpsx #nwXpdx"  << std::endl;
+        std::cout << "Usage: " << argv[0] << " #items #byteXitem #execTimeSource #execTimeSink #np_sx #np_dx #nwXpsx #nwXpdx [ondemand Queue Length]"  << std::endl;
         return -1;
     }
 	bool check = false;
@@ -208,10 +216,14 @@ int main(int argc, char*argv[]){
     int numProcDx = atoi(argv[6]);
 	int numWorkerXProcessSx = atoi(argv[7]);
 	int numWorkerXProcessDx = atoi(argv[8]);
+	int ondemandLength = 0;
+	if (argc == 10) ondemandLength = atoi(argv[9]);
+	ff::cout << "Ondemand set to: " << ondemandLength << std::endl;
+
 	char* p=nullptr;
 	if ((p=getenv("CHECK_DATA"))!=nullptr) check=true;
 	printf("chackdata = %s\n", p);
-	
+	srand(255);
     ff_a2a a2a;
 
     std::vector<MoNode*> sxWorkers;
@@ -223,7 +235,7 @@ int main(int argc, char*argv[]){
     for(int i = 0; i < (numProcDx*numWorkerXProcessDx); i++)
         dxWorkers.push_back(new MiNode(execTimeSink, check));
 
-    a2a.add_firstset(sxWorkers, 0, true);
+    a2a.add_firstset(sxWorkers, ondemandLength, true);
     a2a.add_secondset(dxWorkers, true);
 
 	for(int i = 0; i < numProcSx; i++){
