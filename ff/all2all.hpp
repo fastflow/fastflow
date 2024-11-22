@@ -180,8 +180,12 @@ protected:
                 svector<ff_node*> w1;
                 last->get_out_nodes(w1);
                 if (!w1[0]->isMultiOutput()) { // NOTE: we suppose homogeneous second set
-                    error("A2A, workers (a2a) of the first set are pipelines but their last stage is not multi-output (automatic transformation NOT YET SUPPORTED)\n");
-                    return -1;
+                    svector<ff_node*> w2;
+                    workers2.front()->get_in_nodes(w2);
+                    if (w2.size() > 1){
+                        error("A2A, workers (a2a) of the first set are pipelines but their last stage is not multi-output (automatic transformation NOT YET SUPPORTED)\n");
+                        return -1;
+                    }
                 }
             }
         }

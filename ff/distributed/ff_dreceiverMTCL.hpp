@@ -102,6 +102,7 @@ protected:
         }
 
         char* headerBuffer = new char[size];
+        assert(headerBuffer);
         if (h.receive(headerBuffer, size) < 0){
             error("dreceiver receive header error");
             return -1;
@@ -126,6 +127,7 @@ protected:
                 return -1;
             };
             payloadBuffer = new char[payloadSize];
+            assert(payloadBuffer);
             if (h.receive(payloadBuffer, payloadSize) < 0){
                 error("dreceiver receive payload error");
                 return -1;
