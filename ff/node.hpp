@@ -74,9 +74,9 @@ static void* FF_EOS_NOFREEZE  = (void*)(ULLONG_MAX-1);   /// not automatically p
 static void* FF_EOSW          = (void*)(ULLONG_MAX-2);   /// propagated only by farm's stages
 static void* FF_GO_ON         = (void*)(ULLONG_MAX-3);   /// not automatically propagated
 static void* FF_GO_OUT        = (void*)(ULLONG_MAX-4);   /// not automatically propagated
+static void* FF_FLUSH         = (void*)(ULLONG_MAX-5);   /// not automatically pripagated - currently equal to GO_ON
 #ifdef DFF_ENABLED
 static void* FF_LEOS          = (void*)(ULLONG_MAX-8);  // logical EOS used for distributed FF
-static void* FF_FLUSH         = (void*)(ULLONG_MAX-9);
 #endif
 static void* FF_TAG_MIN       = (void*)(ULLONG_MAX-10);  /// just a lower bound mark
 // The FF_GO_OUT is quite similar to the FF_EOS_NOFREEZE. Both of them are not propagated automatically to
@@ -935,8 +935,8 @@ public:
     void *const EOS_NOFREEZE = FF_EOS_NOFREEZE;
     void *const EOS          = FF_EOS;
     void *const EOSW         = FF_EOSW;
+    void *const FLUSH        = FF_FLUSH;
 #ifdef DFF_ENABLED    
-    void *const FLUSH = FF_FLUSH;
     void *const LEOS = FF_LEOS;
 #endif
     
@@ -1501,7 +1501,7 @@ private:
                     if (!ret) ret = FF_EOS;
                     exit=true;
                 }
-                if ( outpresent && ((ret != FF_GO_ON) && (ret != FF_EOS_NOFREEZE)) ) { 
+                if ( outpresent && ((ret != FF_GO_ON) && (ret != FF_EOS_NOFREEZE) && (ret != FF_FLUSH)) ) { 
                     push(ret);
 #if defined(FF_TASK_CALLBACK)
                     if (filter) callbackOut();
@@ -1625,7 +1625,8 @@ struct ff_node_t: ff_node {
         EOS((OUT_t*)FF_EOS),
         EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
-        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
+        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE),
+        FLUSH((OUT_t*) FF_FLUSH) {
 #ifdef DFF_ENABLED
 
         /* WARNING: 
@@ -1701,7 +1702,7 @@ struct ff_node_t: ff_node {
 #endif
 
 	}
-    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
+    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE, *const FLUSH;
     virtual ~ff_node_t()  {}
     virtual OUT_t* svc(IN_t*)=0;
     inline  void *svc(void *task) { return svc(reinterpret_cast<IN_t*>(task)); };

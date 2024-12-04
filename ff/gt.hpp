@@ -591,7 +591,7 @@ public:
                 nextr = gather_task(&task); 
             else skipfirstpop=false;
 
-            if (task == FF_GO_ON) continue;
+            if (task == FF_GO_ON || task == FF_FLUSH) continue;
             channelid = (nextr-feedbackid);
             frominput=true;
             if (feedbackid>0) { // there are feedback channels
@@ -632,7 +632,7 @@ public:
                 }
 
                 // if the filter returns EOS or GO_OUT we exit immediatly
-                if (task == FF_GO_ON) continue;                
+                if (task == FF_GO_ON || task == FF_FLUSH) continue;                
                 if ((task == FF_GO_OUT) || (task == FF_EOS_NOFREEZE) || (task == FF_EOSW) ) {
                     ret = task;
                     break;   // exiting from the loop without sending the task

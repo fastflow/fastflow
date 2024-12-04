@@ -525,7 +525,7 @@ protected:
             if (task || comp_nodes[0]->skipfirstpop()){
 #endif
                 r1= comp_nodes[0]->svc(task);
-                if (!(r1 == FF_GO_ON || r1 == FF_GO_OUT || r1 == FF_EOS_NOFREEZE)) {
+                if (!(r1 == FF_GO_ON || r1 == FF_GO_OUT || r1 == FF_EOS_NOFREEZE || r1 == FF_FLUSH)) {
                     comp_nodes[0]->ff_send_out(r1);
                 }
                 if (r1 == FF_EOS) 
@@ -549,7 +549,7 @@ protected:
             return true;
         }
         void *r = comp_nodes[1]->svc(task);
-        if (r == FF_GO_ON || r== FF_GO_OUT || r == FF_EOS_NOFREEZE) return true;
+        if (r == FF_GO_ON || r== FF_GO_OUT || r == FF_EOS_NOFREEZE || r == FF_FLUSH) return true;
         if (r == FF_EOS) {
             propagateEOS();
             return true;

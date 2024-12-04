@@ -50,6 +50,14 @@ struct Node1Helper: ff_minode_t<myTask_t> {
     myTask_t* svc(myTask_t*in) {
 		return in;
 	}
+
+	void eosnotify(ssize_t){
+		std::cout << "NODE1 helper eosnotify!\n";
+	}
+
+	void svc_end(){
+		std::cout << "Node1Helper ended!\n";
+	}
 };
 		
 struct Node1: ff_monode_t<myTask_t>{
@@ -71,8 +79,9 @@ struct Node1: ff_monode_t<myTask_t>{
 		if (back == ntasks) {
 			return EOS;
 		}
-		return GO_ON;
+		return FLUSH;
     }
+
 	void svc_end() {
 		if (back != ntasks) {
 			std::cerr << "ERROR\n";
@@ -92,15 +101,22 @@ struct Node2: ff_monode_t<myTask_t>{
 		t->str += std::string(" World");
 		return t;
 	}
+
+	void svc_end(){
+		std::cout << "Node2 ended!\n";
+	}
 };
 struct Node3: ff_minode_t<myTask_t>{ 
     myTask_t* svc(myTask_t* t){
 		t->str   = "Feedback!";
 		t->S.t  += 1;
 		t->S.f  += 1.0;
-		//std::cout << "Node3(" << get_my_id() << ") sending task back\n";
+		std::cout << "Node3(" << get_my_id() << ") sending task back\n";
 		return t;
     }
+	void svc_end(){
+		std::cout << "Node3 ended!\n";
+	}
 };
 
 
@@ -120,7 +136,7 @@ int main(int argc, char*argv[]){
 	}
 
 	ff_pipeline pipe;
-	ff_comb n1(new Node1Helper, new Node1(ntasks), true, true);
+	ff_comb n1(new Node1Helper, new Node1(10), true, true);
 
 	ff_a2a a2a;
 	a2a.add_firstset<ff_node>({new Node2, new Node2}, 0, true);

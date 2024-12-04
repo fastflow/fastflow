@@ -59,12 +59,23 @@ struct message2_t {
         return out;
     }
 
+    inline static message2_t* make_flush(int src){
+        message2_t* out = new message2_t;
+        out->dest = -2; // tag for flushing command
+        out->src = src;
+        return out;
+    }
+
     /* this is used between receiver and sender to signal that no more messages are coming from that group */
     inline static message2_t* make_pyshical_EOS(){
         message2_t* out = new message2_t;
         out->dest = -1;
         out->src = -1;
         return out;
+    }
+
+    inline bool isFlush(){
+        return dest == -2;
     }
 
     bool isLogicalEOS(){

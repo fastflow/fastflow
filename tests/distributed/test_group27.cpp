@@ -16,7 +16,7 @@
  * distributed version:
  *
  *  Node2 - Node3  [upper]=> G1
- *  Node2 - Node3  [lower]=> G3
+ *  Node2 - Node3  [lower]=> G2
  */
 
 #define TORECEIVE 2
@@ -33,6 +33,10 @@ struct myTask_t {
 		S.t = t->S.t;
 		S.f = t->S.f;
 	}
+    myTask_t(long t){
+        S.t = t;
+        str = "test";
+    }
 
 	std::string str;
 	struct S_t {
@@ -46,17 +50,17 @@ struct myTask_t {
 	}
 };	
 
-struct Node2: ff_monode_t<myTask_t>{
+struct Node2: ff_monode_t<myTask_t, std::vector<myTask_t>>{
 	Node2(int index) : index(index) {}
     int svc_init(){
         ff::cout << "[Node2] initilized!\n";
         return 0;
     }
-    myTask_t* svc(myTask_t* t){
+    std::vector<myTask_t>* svc(myTask_t* t){
         if (t == nullptr){
             // generate a task 
             //ff::cout << "[Node2] generating!\n";
-            ff_send_out_to(new myTask_t, index);
+            ff_send_out_to(new std::vector<myTask_t>({myTask_t(10)}), index);
             return GO_ON;
         }
         //ff::cout << "[Node2] received_something!\n";
@@ -81,17 +85,17 @@ struct Node2: ff_monode_t<myTask_t>{
 };
 
 
-struct Node3: ff_monode_t<myTask_t>{ 
+struct Node3: ff_monode_t<std::vector<myTask_t>, myTask_t>{ 
     Node3(int index): index(index){}
     int svc_init(){
         //ff::cout << "[Node3] initilized!\n";
         return 0;
     }
-    myTask_t* svc(myTask_t* t){
+    myTask_t* svc(std::vector<myTask_t>* t){
 		// distributore
         //ff::cout << "[Node3] distributing!\n";
         for(int i = 0; i < TORECEIVE; i++)
-            if (i != index) ff_send_out_to(new myTask_t(t),i);
+            if (i != index) ff_send_out_to(new myTask_t(12),i);
         delete t;
         return GO_ON;
     }
@@ -110,6 +114,7 @@ struct Node3: ff_monode_t<myTask_t>{
 struct AdapterSx : ff_minode_t<myTask_t>{
     myTask_t* svc(myTask_t* t){ 
         ff::cout << "[AdapterSx] Received something (addr: " << t << ")\n";
+        if (t) ff::cout << "[AdapterSx] myTask content: " << t->S.t << " " << t->str <<  std::endl;
         return t;
     }
 
@@ -122,8 +127,8 @@ struct AdapterSx : ff_minode_t<myTask_t>{
     }
 };
 
-struct AdapterDx : ff_minode_t<myTask_t>{
-    myTask_t* svc(myTask_t* t){ 
+struct AdapterDx : ff_minode_t<std::vector<myTask_t>>{
+    std::vector<myTask_t>* svc(std::vector<myTask_t>* t){ 
         ff::cout << "[AdapterDx] Received something (addr: " << t << ")\n";
         return t;
     }
@@ -168,8 +173,6 @@ int main(int argc, char*argv[]){
 
     a2a.createGroup("G1") << &n2_1 << &n3_1;
     a2a.createGroup("G2") << &n2_2 << &n3_2;
-    //pipe.add_stage(&a2a);
-    //pipe.wrap_around();
 
 	if (a2a.run_and_wait_end()<0) {
 		error("running the main pipe\n");

@@ -178,8 +178,8 @@ public:
       }
 
       MTCL::Manager::finalize();
-        
-        return 0;
+      
+      return 0;
     }
 
 protected:
@@ -269,6 +269,8 @@ private:
         // set used to compute the names of groups this group connect to (egress connections), and names of groups will connect to this group (ingress connections)
         std::map<std::string, std::vector<ff_node*>> ingressRemoteGroups, egressRemoteGroups;
 
+        bool groupWrappedAround = false;
+
         // compute the expanded list of nodes in groups
         std::map<ff_node*, std::string*> expandedAnnotated;
         for(auto& [node, g] : this->annotated){
@@ -291,21 +293,24 @@ private:
                 // retrive all the nodes connected in output of the current node
                 auto&& consumers = getConsumers(node_, root);
 
+
+                // scan the feedback consumers channels
+                for (ff_node* c : std::get<1>(consumers)) {
+                  auto loc = getLocality(expandedAnnotated, c);
+                  cd.second.emplace_back(c, ChannelType::FBK, loc, -1);
+                  // if the destination is remote add the remote group name to the set of egressRemoteGroups
+                  if (loc == ChannelLocality::REMOTE) 
+                    egressRemoteGroups[*expandedAnnotated[c]].push_back(c);
+                  else 
+                    groupWrappedAround = true;
+                }
+
                 int queue_length = std::get<2>(consumers) > 0 ? std::get<2>(consumers) : -1;
                 // scan the forward consumers channels
                 for (ff_node* c : std::get<0>(consumers)) {
                   auto loc = getLocality(expandedAnnotated, c);
                   cd.second.emplace_back(c, ChannelType::FWD, loc, queue_length);
 
-                  // if the destination is remote add the remote group name to the set of egressRemoteGroups
-                  if (loc == ChannelLocality::REMOTE) 
-                    egressRemoteGroups[*expandedAnnotated[c]].push_back(c);
-                }
-              
-                // scan the feedback consumers channels
-                for (ff_node* c : std::get<1>(consumers)) {
-                  auto loc = getLocality(expandedAnnotated, c);
-                  cd.second.emplace_back(c, ChannelType::FBK, loc, -1);
                   // if the destination is remote add the remote group name to the set of egressRemoteGroups
                   if (loc == ChannelLocality::REMOTE) 
                     egressRemoteGroups[*expandedAnnotated[c]].push_back(c);
@@ -320,8 +325,18 @@ private:
 
                 // retrive all the nodes connected in input to the current node
                 auto&& feeders = getFeeders(node_, root);
-                
+
+                 // scan the feedback consumers channels
+                for (ff_node* c : std::get<1>(feeders)) {
+                  auto loc = getLocality(expandedAnnotated, c);
+                  cd.first.emplace_back(c, ChannelType::FBK, loc, -1);
+                  // if the destination is remote add the remote group name to the set of egressRemoteGroups
+                  if (loc == ChannelLocality::REMOTE) 
+                    ingressRemoteGroups[*expandedAnnotated[c]].push_back(c);
+                }
+
                 int queue_length = std::get<2>(feeders) > 0 ? std::get<2>(feeders) : -1;
+
                 // scan the forward feeders channel
                 for (ff_node* c : std::get<0>(feeders)) {
                   auto loc = getLocality(expandedAnnotated, c);
@@ -331,14 +346,6 @@ private:
                   if (loc == ChannelLocality::REMOTE) 
                     ingressRemoteGroups[*expandedAnnotated[c]].push_back(c);
                 } 
-                // scan the feedback consumers channels
-                for (ff_node* c : std::get<1>(feeders)) {
-                  auto loc = getLocality(expandedAnnotated, c);
-                  cd.first.emplace_back(c, ChannelType::FBK, loc, -1);
-                  // if the destination is remote add the remote group name to the set of egressRemoteGroups
-                  if (loc == ChannelLocality::REMOTE) 
-                    ingressRemoteGroups[*expandedAnnotated[c]].push_back(c);
-                }
               }
             }
           }
@@ -366,6 +373,8 @@ private:
         runningIR.batchSize = parsedRunningGroup_it->batchSize;
 
         runningIR.messageOTF = parsedRunningGroup_it->messageOTF;
+
+        runningIR.groupWrappedAround = groupWrappedAround;
 
     }
 

@@ -46,27 +46,8 @@
 
 namespace ff{
 class dGroup : public ff::ff_farm {
-    const std::vector<ff_node*> emptyV = {}; 
-
-	template<typename T>
-	T getBackAndPop(std::vector<T>& v){
-		T b = v.back();
-		v.pop_back();
-		return b;
-	}
-	
-	
-    static inline std::unordered_map<int, int> vector2UMap(const std::vector<int> v){
-        std::unordered_map<int,int> output;
-        for(size_t i = 0; i < v.size(); i++) output[v[i]] = i;
-        return output;
-    }
-
-    static inline std::map<int, int> vector2Map(const std::vector<int> v){
-        std::map<int,int> output;
-        for(size_t i = 0; i < v.size(); i++) output[v[i]] = i;
-        return output;
-    }
+    const std::vector<ff_node*> emptyV = {};
+    std::vector<ff_node*> tobeCleaned = {};
 
     struct ForwarderMiNode : ff_minode {
         void* svc(void* in) {return in;}
@@ -99,11 +80,17 @@ class dGroup : public ff::ff_farm {
         void* svc(void* input){ return input;}
     };
 
+    inline void _addWorker_(std::vector<ff_node*>& v, ff_node* n, bool cleanup = false){
+        v.push_back(n);
+        if (cleanup) tobeCleaned.push_back(n);
+    }
+
     static inline ff_node* buildWrapperCollector(ff_node* n, IngressChannels_t& channels, const std::vector<ff_node*>& prevLocalWorkers){
         if (channels.empty()) return n;
         if (n->isMultiOutput())
             return new ff_comb(new CollectorAdapter2(new ForwarderNode(n), channels, prevLocalWorkers, true), n, true, false);
-        return new ff_comb(new CollectorAdapter2(n, channels, prevLocalWorkers), new ForwarderMoNode,  true, true);
+        return new CollectorAdapter2(n, channels, prevLocalWorkers);
+        //return new ff_comb(new CollectorAdapter2(n, channels, prevLocalWorkers), new ForwarderMoNode,  true, true);
     }
 
     static inline ff_node* buildWrapperEmitter(ff_node* n, EgressChannels_t& channels, const std::vector<ff_node*>& nextLocalWorkers){
@@ -135,10 +122,10 @@ public:
             std::vector<ff_node*> wrappedWorkers;
 
             for(ff_node* n : ir.bucketsDistribution.front()){
-                if (isSeq(n)) wrappedWorkers.push_back(new WrapperINOUT(n, ir.channelsDictionary[n]));
+                if (isSeq(n)) _addWorker_(wrappedWorkers, new WrapperINOUT(n, ir.channelsDictionary[n]), true);
                 else if (n->isPipe() && reinterpret_cast<ff_pipeline*>(n)->cardinality() == 1) { // if i have just one worker in the pipeline i treat it like a sequential
                     ff_node* s = reinterpret_cast<ff_pipeline*>(n)->get_firststage();
-                    wrappedWorkers.push_back(new WrapperINOUT(s, ir.channelsDictionary[s]));
+                    _addWorker_(wrappedWorkers, new WrapperINOUT(s, ir.channelsDictionary[s]), true);
                 }
                 else {
                     if (!ir.ingressRemoteConnectionsGroupsName.empty()){ // if the receiver is present build the wrappers
@@ -163,11 +150,12 @@ public:
                         }
                     }
 
-                    wrappedWorkers.push_back(n);
+                    _addWorker_(wrappedWorkers, n);
                 }
             }
 
             this->add_workers(wrappedWorkers);
+            this->cleanup_workers(false);
 
         } else {
             // if i have multiple levels, i need to build the nested a2a
@@ -175,14 +163,14 @@ public:
             ff_a2a* current_A2A = rootA2A;
             for(size_t i = 0; i < ir.bucketsDistribution.size(); i++){
                 std::vector<ff_node*> wrappedWorkers;
-                const std::vector<ff_node*>& prevLocalWorkers = i > 0 ? ir.bucketsDistribution[i-1] : emptyV;
-                const std::vector<ff_node*>& nextLocalWorkers = i < (ir.bucketsDistribution.size() - 1) ? ir.bucketsDistribution[i+1] : emptyV;
+                const std::vector<ff_node*>& prevLocalWorkers = i > 0 ? ir.bucketsDistribution[i-1] : (ir.groupWrappedAround ? ir.bucketsDistribution.back() : emptyV);
+                const std::vector<ff_node*>& nextLocalWorkers = i < (ir.bucketsDistribution.size() - 1) ? ir.bucketsDistribution[i+1] : (ir.groupWrappedAround ? ir.bucketsDistribution.front() : emptyV);
                 for(ff_node* n : ir.bucketsDistribution[i])
                     if (isSeq(n)) 
-                        wrappedWorkers.push_back(buildWrapperSeq(n, ir.channelsDictionary[n], prevLocalWorkers, nextLocalWorkers));
+                        _addWorker_(wrappedWorkers, buildWrapperSeq(n, ir.channelsDictionary[n], prevLocalWorkers, nextLocalWorkers), true);
                     else if (n->isPipe() && reinterpret_cast<ff_pipeline*>(n)->cardinality() == 1) { // if i have just one worker in the pipeline i treat it like a sequential
                         ff_node* s = reinterpret_cast<ff_pipeline*>(n)->get_firststage();
-                        wrappedWorkers.push_back(buildWrapperSeq(s, ir.channelsDictionary[s], prevLocalWorkers, nextLocalWorkers));
+                        _addWorker_(wrappedWorkers, buildWrapperSeq(s, ir.channelsDictionary[s], prevLocalWorkers, nextLocalWorkers), true);
                     }
                     else {
                         if (!ir.ingressRemoteConnectionsGroupsName.empty()){ // if the receiver is present build the wrappers
@@ -212,14 +200,14 @@ public:
                     }
                 
                 // add also the squarebox to wrapped workers
-                wrappedWorkers.push_back(new ff_comb(new ForwarderMiNode, new SquareBox(nextLocalWorkers, ir.channelsDictionary), true, true)); // add combine to have either multi input and multioutput
-
+                _addWorker_(wrappedWorkers, new ff_comb(new SquareBoxInputAdapter, new SquareBox(nextLocalWorkers, ir.channelsDictionary), true, true), true); // add combine to have either multi input and multioutput
+        
                 /*if (i == 0)
                     current_A2A->add_firstset(wrappedWorkers, 0, true);
                 else*/ if (i == (ir.bucketsDistribution.size()-1)){
-                    current_A2A->add_secondset(wrappedWorkers, true);
+                    current_A2A->add_secondset(wrappedWorkers, false);
                 } else {
-                    current_A2A->add_firstset(wrappedWorkers, 0, true);
+                    current_A2A->add_firstset(wrappedWorkers, 0, false);
                     
                     if (i+2 == ir.bucketsDistribution.size()) continue;
                     
@@ -233,8 +221,9 @@ public:
                     current_A2A = nextLevelA2A;
                 }
             }
-            
-            // check if there is a feedback internally 
+            // check if there is a feedback internally
+
+            if (ir.groupWrappedAround) rootA2A->wrap_around();
 
             this->add_workers({rootA2A});
             this->cleanup_workers(true);
@@ -249,8 +238,11 @@ public:
             this->cleanup_emitter(true);
         }
 
-        ff::termination_counter = this->cardinality() - this->hasCollector() - 1 - (ir.bucketsDistribution.size() > 1 ? ir.bucketsDistribution.size() : 0);
-        ff::cout << "Termination counter set to: " << ff::termination_counter << std::endl;
+        ff::termination_counter = this->cardinality() - 1 /*receiver*/ - (ir.bucketsDistribution.size() > 1 ? ir.bucketsDistribution.size() + 1 /*Sender just for multi level groups*/ : 0);
+    }
+
+    ~dGroup(){
+        for(ff_node* n : tobeCleaned) delete n;
     }
 
 };

@@ -36,6 +36,8 @@ public:
 
     int messageOTF = DEFAULT_MESSAGE_OTF;
 
+    bool groupWrappedAround;
+
     void print(){
         ff::cout << "******* BEGIN INTERMEDIATE REPRESENTATION ********\n";
         
@@ -49,7 +51,7 @@ public:
         for (auto& name : ingressRemoteConnectionsGroupsName)
             ff::cout << "\t\t - " << name << std::endl;
 
-        ff::cout << "\t (*) Group Structure (" << bucketsDistribution.size() << " levels):\n";
+        ff::cout << "\t (*) Group Structure (" << bucketsDistribution.size() << " levels " << (groupWrappedAround ? "WRAPPED" : "") << "):\n";
         for(size_t i = 0; i < bucketsDistribution.size(); i++){
             ff::cout << "\t\tLevel " << i << ": ";
             for(size_t j = 0; j < bucketsDistribution[i].size(); j++) 

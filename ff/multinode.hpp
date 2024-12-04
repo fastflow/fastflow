@@ -864,7 +864,8 @@ struct ff_minode_t: ff_minode {
         GO_ON((OUT_t*)FF_GO_ON),
         EOS((OUT_t*)FF_EOS),EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
-        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
+        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE),
+        FLUSH((OUT_t*) FF_FLUSH) {
 #ifdef DFF_ENABLED
 
         /* WARNING: 
@@ -935,7 +936,7 @@ struct ff_minode_t: ff_minode {
     }
 #endif
 	}
-    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
+    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE, *const FLUSH;
     virtual ~ff_minode_t()  {}
     virtual OUT_t* svc(IN_t*)=0;
     inline  void *svc(void *task) { return svc(reinterpret_cast<IN_t*>(task)); };
@@ -971,7 +972,8 @@ struct ff_monode_t: ff_monode {
         GO_ON((OUT_t*)FF_GO_ON),
         EOS((OUT_t*)FF_EOS),EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
-        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
+        EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE),
+        FLUSH((OUT_t*) FF_FLUSH) {
 #ifdef DFF_ENABLED
 
      if constexpr (traits::has_alloctask_v<IN_t>) {        
@@ -1036,7 +1038,7 @@ struct ff_monode_t: ff_monode {
     }
 #endif
 	}
-    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE;
+    OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE, *const FLUSH;
     virtual ~ff_monode_t()  {}
     virtual OUT_t* svc(IN_t*)=0;
     inline  void *svc(void *task) { return svc(reinterpret_cast<IN_t*>(task)); };

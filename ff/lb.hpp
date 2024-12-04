@@ -957,7 +957,7 @@ public:
                     ticksmax=(std::max)(ticksmax,diff);
 #endif  
 
-                    if (task == FF_GO_ON) continue;
+                    if (task == FF_GO_ON || task == FF_FLUSH) continue;
                     if ((task == FF_GO_OUT) || (task == FF_EOS_NOFREEZE)) {
                         ret = task;
                         break; // exiting from the loop without sending out the task
@@ -1074,7 +1074,7 @@ public:
                         ticksmax=(std::max)(ticksmax,diff);
 #endif  
 
-                        if (task == FF_GO_ON) continue;
+                        if (task == FF_GO_ON || task == FF_FLUSH) continue;
                         if ((task == FF_GO_OUT) || (task == FF_EOS_NOFREEZE)){
                             ret = task;
                             break; // exiting from the loop without sending out the task

@@ -240,9 +240,7 @@ public:
         while(neos < input_channels){
             auto handle = MTCL::Manager::getNext(std::chrono::milliseconds(RECEIVER_POLL_TIMEOUT));
             if (handle.isValid()) {
-                if(handle.isNewConnection())
-                    this->handshakeHandler(handle);
-                else 
+                if (!handle.isNewConnection())
                     this->handleBatch(handle);
             }
 

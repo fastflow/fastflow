@@ -49,17 +49,16 @@
 namespace ff {
 
 class ff_dsenderMTCL2;
-//class ff_dsenderHMTCL;
 
 class uBuffer_i {
-    friend class ff_dsenderHMTCL;
+    friend class ff_dsenderMTCL2;
 protected:
     ff_dsenderMTCL2* parent;
     static const size_t headerSize = sizeof(int)+sizeof(int)+sizeof(ChannelType)+sizeof(size_t);
     size_t maxSize, capacity;
     char *base_ptr = nullptr, *current_ptr = nullptr;
     char *headers_buffer_ptr = nullptr;
-    int flush(bool nocheck = false);
+    int flush();
     
 
     void pushHeader(int dest, int src, ChannelType t, size_t size_){
@@ -96,6 +95,9 @@ public:
             }
 
             memcpy(this->current_ptr, m->data.getPtr(), m->data.getLen()); this->current_ptr += m->data.getLen();
+
+            if (m->type == ChannelType::FBK) 
+                this->flush();
         } else 
             this->flush();
         
@@ -134,7 +136,7 @@ struct uBuffer_1 : public uBuffer_i {
             this->current_ptr = this->base_ptr + m->data.getLen();
         }
         this->size = 1;
-        if (this->flush(true) < 0){
+        if (this->flush() < 0){
             error("uBuffer_1 sending task (flush Function)");
             return -1;
         }
@@ -163,22 +165,6 @@ protected:
     int messageOTF;
     int coreid;
     std::mt19937 gen{std::random_device{}()};
- 
-
-    virtual int handshakeHandler(MTCL::HandleUser& h){
-        /*size_t sz = htobe64(gName.size());
-        char * buff = new char[sizeof(ChannelType)+sizeof(size_t)+gName.size()];
-        memcpy(buff, &t, sizeof(ChannelType));
-        memcpy(buff + sizeof(ChannelType), &sz, sizeof(size_t));
-        memcpy(buff + sizeof(ChannelType) + sizeof(size_t), gName.c_str(), gName.size());
-
-       if (h.send(buff, sizeof(ChannelType)+sizeof(size_t)+gName.size()) < 0){
-            error("Error writing on socket in handshake handler\n");
-            return -1;
-       }*/
-
-        return 0;
-    }
 
      int waitAckFrom(int connID){
         while (handlerCounters[connID] == 0){
@@ -226,8 +212,6 @@ public:
 
     ff_dsenderMTCL2(const std::vector<std::tuple<std::string, std::string, std::vector<ff_node*>>>& destEndpoints, const std::unordered_map<ff_node*, IngressEgressChannels_t>& channelsDictionary, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1) : destEndpoints(destEndpoints), channelsDictionary(channelsDictionary), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {}
 
-    
-
     int svc_init() {
 		if (coreid!=-1)
 			ff_mapThreadToCpu(coreid);
@@ -254,11 +238,6 @@ public:
 
             for(ff_node* n : dest_v)
                 dest2ConnID[n->mioID] = connID;
-            
-            if (handshakeHandler(MTCL_Handlers[connID]) < 0) {
-				error("svc_init ff_dsender handshake handler failed!");
-				return -1;
-			}
         }
 
         // build the map for messages without destination, in order to perform the load balacing
@@ -272,13 +251,18 @@ public:
     }
 
     message2_t *svc(message2_t* task) {
-        if (task->dest != -1)
+        if (task->dest >= 0)
             batchBuffers[dest2ConnID[task->dest]]->push(task);
         else {
-            if (task->data.getLen() == 0){
-                for (auto& connID_ : std::unordered_set<int>(src2PossibleDestConnID[task->src].begin(), src2PossibleDestConnID[task->src].end())){
+
+            if (task->isFlush())
+                for (auto& connID_ : std::unordered_set<int>(src2PossibleDestConnID[task->src].begin(), src2PossibleDestConnID[task->src].end()))
+                    batchBuffers[connID_]->flush();
+
+            else if (task->data.getLen() == 0){
+                for (auto& connID_ : std::unordered_set<int>(src2PossibleDestConnID[task->src].begin(), src2PossibleDestConnID[task->src].end()))
                     batchBuffers[connID_]->push(message2_t::make_logical_EOS(task->src));
-                }
+                
                 delete task;
             } else
                 getMostFilledBuffer(task->src)->push(task); // get the most filled buffer socket or a rr socket
@@ -287,24 +271,10 @@ public:
         return this->GO_ON;
     }
 
-    void eosnotify(ssize_t id) {
-        // this send the logic EOS signal, not the real one 
-        //for (size_t i = 0; i < MTCL_Handlers.size(); i++)
-        //    batchBuffers[i]->push(new message2_t); //TODO: fix 
-
-		/*if (++neos >= this->get_num_inchannels()) {
-			// all input EOS received, now sending the EOS to all connections
-            for(size_t i = 0; i < MTCL_Handlers.size(); i++) {
-				if (batchBuffers[i]->sendEOS()<0) {
-					error("sending EOS to external connections (ff_dsender)\n");
-				}										 
-			}
-		}*/
-
-
-    }
 
 	void svc_end() {
+        for(auto& h : MTCL_Handlers) h.close();
+
 		size_t currentack = 0;
 		for(const auto& counter : handlerCounters)	currentack += counter;
 
@@ -332,15 +302,14 @@ public:
 
 		}
 
-		for(auto& h : MTCL_Handlers) h.close();
 	}
 };
 
 
 
-int uBuffer_i::flush(bool nocheck){
+int uBuffer_i::flush(){
         // there is nothing to send!
-        if (!nocheck && size == 0) return 0;
+        if (size == 0) return 0;
 
         if (parent->handlerCounters[connID] == 0 && parent->waitAckFrom(connID) == -1){
             error("Errore waiting ack from socket inside the callback\n");

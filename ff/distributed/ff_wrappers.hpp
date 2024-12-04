@@ -66,6 +66,11 @@ public:
 			return true;
 		}
 
+		if (in == FLUSH){
+			ff_minode::ff_send_out(message2_t::make_flush(this->n->mioID));
+			return true;
+		}
+
 		if (sink) return true;
 		if (ret && in > FF_TAG_MIN) return ff_minode::ff_send_out(in);
 		
@@ -146,7 +151,9 @@ public:
 							ff_minode::ff_send_out(message2_t::make_logical_EOS(this->n->mioID));
 						
 						// de-registering the call-back to allow the EOS to flow without being captured by the callback
-						internal_mi_transformer::registerCallback(nullptr, nullptr);
+						internal_mi_transformer::registerCallback([](void* task, int id, unsigned long retry, unsigned long ticks, void * obj) {
+							return reinterpret_cast<WrapperINOUT*>(obj)->ff_minode::ff_send_out(task, id, retry, ticks);
+						}, this);
 
 						delete msg;
 						return EOS;
@@ -183,7 +190,7 @@ public:
 							 bool canoverwrite=false) {
 		ff_node::set_output_blocking(m,c,canoverwrite);
 	}
-	
+
     static inline bool ff_send_out_to_cbk(void* task, int id,
 										  unsigned long retry,
 										  unsigned long ticks, void* obj) {		
