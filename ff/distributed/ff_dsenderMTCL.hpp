@@ -82,11 +82,11 @@ public:
     }
 
     virtual int push(message2_t* m){
-        this->pushHeader(htonl(m->dest), htonl(m->src), m->type, htobe64(m->data.getLen()));
+        this->pushHeader(htonl(m->dest), htonl(m->src), m->type, htobe64(m->size));
         ++size;
-        if (m->data.getLen()){
+        if (m->size){
             size_t distance = current_ptr - base_ptr;
-            size_t requiredSpace = m->data.getLen();
+            size_t requiredSpace = m->size;
             if (capacity < distance + requiredSpace){
                 this->base_ptr = (char*)realloc(this->base_ptr, distance+2*requiredSpace);
                 assert(this->base_ptr);
@@ -94,7 +94,7 @@ public:
                 this->current_ptr = this->base_ptr + distance;
             }
 
-            memcpy(this->current_ptr, m->data.getPtr(), m->data.getLen()); this->current_ptr += m->data.getLen();
+            memcpy(this->current_ptr, m->data, m->size); this->current_ptr += m->size;
 
             if (m->type == ChannelType::FBK) 
                 this->flush();
@@ -130,10 +130,10 @@ struct uBuffer_1 : public uBuffer_i {
     
     int push(message2_t* m) override {
         
-        this->pushHeader(htonl(m->dest), htonl(m->src), m->type, htobe64(m->data.getLen()));
-        if (m->data.getLen()){
-            this->base_ptr = m->data.getPtr();
-            this->current_ptr = this->base_ptr + m->data.getLen();
+        this->pushHeader(htonl(m->dest), htonl(m->src), m->type, htobe64(m->size));
+        if (m->size){
+            this->base_ptr = m->data;
+            this->current_ptr = this->base_ptr + m->size;
         }
         this->size = 1;
         if (this->flush() < 0){
@@ -259,7 +259,7 @@ public:
                 for (auto& connID_ : std::unordered_set<int>(src2PossibleDestConnID[task->src].begin(), src2PossibleDestConnID[task->src].end()))
                     batchBuffers[connID_]->flush();
 
-            else if (task->data.getLen() == 0){
+            else if (task->size == 0){
                 for (auto& connID_ : std::unordered_set<int>(src2PossibleDestConnID[task->src].begin(), src2PossibleDestConnID[task->src].end()))
                     batchBuffers[connID_]->push(message2_t::make_logical_EOS(task->src));
                 

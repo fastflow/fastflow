@@ -147,7 +147,7 @@ public:
 					if (ff_send_out_to(task, localDest[idx], 1)){ // non blcking ff_send_out_to, we try just once                                                         
                         nextDestination = idx;
                         if (msg) {
-							if (!datacopied) msg->data.doNotCleanup();
+							if (!datacopied) msg->cleanup = false;
 							delete msg;
 						}
                         return true;
@@ -160,9 +160,9 @@ public:
 					msg->locality = ChannelLocality::REMOTE; // correct
 					msg->type = defaultChannelType;
 
-					datacopied = this->n->serializeF(task, msg->data);
+					datacopied = this->n->serializeF(task, msg);
 					if (!datacopied) {
-						msg->data.freetaskF = this->n->freetaskF;
+						msg->freeCallback = &this->n->freetaskF;
 					}
 				}
 				this->get_num_feedbackchannels();
@@ -186,9 +186,9 @@ public:
 			msg->type = chInfo.type;
 			msg->locality = chInfo.locality;
 
-			bool datacopied = this->n->serializeF(task, msg->data);
+			bool datacopied = this->n->serializeF(task, msg);
 			if (!datacopied) 
-				msg->data.freetaskF = this->n->freetaskF;
+				msg->freeCallback = &this->n->freetaskF;
 			ff_send_out_to(msg, this->get_num_outchannels() - 1); // send to the routing worker
 			if (datacopied) this->n->freetaskF(task);
 			return true;
@@ -267,7 +267,7 @@ public:
 				}
 				auto& channelInfo = inputMap[msg->src];
 				
-				if (msg->data.getLen() == 0){ // EOS logico
+				if (msg->size == 0){ // EOS logico
 					if (!channelInfo.eos_received){
 						this->n->eosnotify(channelInfo.index); 
 						channelInfo.eos_received = true;
@@ -283,8 +283,8 @@ public:
 				channel = channelInfo.index;
 				type = channelInfo.type; 
 				bool datacopied = true;
-				in = this->n->deserializeF(msg->data, datacopied);
-				if (!datacopied) msg->data.doNotCleanup();
+				in = this->n->deserializeF(msg, datacopied);
+				if (!datacopied) msg->cleanup = false;
 				delete msg;
 			} else {  // the result come from a local worker, just pass it to collector and compute the right worker id
 				auto& channelInfo = localInputMap[get_channel_id()];
@@ -371,7 +371,7 @@ public:
 			}
 			
 			std::vector<int>& possibleDest = localLBMap[msg->src];
-			if (msg->data.getLen() == 0){ // this is a logical EOS, without destination we should broadcast it 
+			if (msg->size == 0){ // this is a logical EOS, without destination we should broadcast it 
 				
 				/*if (possibleDest.empty() && nextLevelSquareBox){
 					ff_send_out_to(msg, this->get_num_outchannels()-1);
@@ -405,7 +405,7 @@ struct SquareBoxInputAdapter : public ff_minode {
 	void* svc(void* in) {return in;}
 
 	void eosnotify(ssize_t id){
-		if (this->fromInput() && (id == this->get_num_inchannels() - this->get_num_feedbackchannels() - 1))
+		if (this->fromInput() && (id == (ssize_t)(this->get_num_inchannels() - this->get_num_feedbackchannels() - 1)))
 			ff_send_out(this->EOS);
 	}
 };

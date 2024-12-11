@@ -56,10 +56,8 @@ public:
 		internal_mi_transformer::registerCallback(ff_send_out_to_cbk, this);
 	}
 
-	
-
     bool serialize(void* in, int id, bool ret = false) {
-		
+		if (sink) return true;
 		if (in == EOS){
 			ff_minode::ff_send_out(message2_t::make_logical_EOS(this->n->mioID, id));
 			if (ret) ff_minode::ff_send_out(in);
@@ -71,14 +69,13 @@ public:
 			return true;
 		}
 
-		if (sink) return true;
 		if (ret && in > FF_TAG_MIN) return ff_minode::ff_send_out(in);
 		
 		message2_t* msg = new message2_t;
 		msg->src = this->n->mioID;
 		if (id == -1){
 			msg->dest = -1;
-			msg->type = ChannelType::FWD; //????
+			msg->type = ChannelType::FWD;
 		} else {
 			auto& chInfo = outMap[id];
 			msg->dest = chInfo.identifier;
@@ -88,10 +85,13 @@ public:
 		msg->locality = ChannelLocality::REMOTE;
 
 		// check what happens with this datacopied
-		bool datacopied= this->n->serializeF(in, msg->data);
-		if (!datacopied)  msg->data.freetaskF = this->n->freetaskF;
+		bool datacopied = this->n->serializeF(in, msg);
+		if (!datacopied)  
+			msg->freeCallback = &this->n->freetaskF;
+		else 
+			this->n->freetaskF(in);
+
 		ff_minode::ff_send_out(msg);
-		if (datacopied) this->n->freetaskF(in);
 
 		return true;
 	}
@@ -141,7 +141,7 @@ public:
 			inputMapRecord_t& record = inputMap[msg->src];
 			// received a logical EOS
 			
-			if (msg->data.getLen() == 0){ // logical EOS!
+			if (msg->size == 0){ // logical EOS!
 				if (!record.eos_received){
 					this->n->eosnotify(record.index);
 					record.eos_received = true;
@@ -163,14 +163,12 @@ public:
 				return GO_ON;
 			}
 			
-			if (this->n->isMultiInput()) {
-				int channelid = record.index; 
-				ff_minode* mi = reinterpret_cast<ff_minode*>(this->n);
-				mi->set_input_channelid(channelid, msg->type == ChannelType::FWD);
-			}
+			if (this->n->isMultiInput()) 
+				reinterpret_cast<ff_minode*>(this->n)->set_input_channelid(record.index, msg->type == ChannelType::FWD);
+
 			bool datacopied=true;
-			out = n->svc(this->n->deserializeF(msg->data, datacopied));
-			if (!datacopied) msg->data.doNotCleanup();
+			out = n->svc(this->n->deserializeF(msg, datacopied));
+			if (!datacopied) msg->cleanup = false;
 			delete msg;
 		}  else // it can happen if we have a feedback channel
 			out = n->svc(nullptr);

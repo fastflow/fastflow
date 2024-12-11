@@ -52,43 +52,7 @@ class ff_dreceiverMTCL2: public ff_monode_t<message2_t> {
 protected:
     static const size_t headerSize = sizeof(int)+sizeof(int)+sizeof(ChannelType)+sizeof(size_t);
 
-    virtual int handshakeHandler(MTCL::HandleUser& h){
-        // ricevo l'handshake e mi salvo che tipo di connessione è
-        /*size_t size;
-       
-        if(h.probe(size, true) < 0){
-            error("dreceiver handshakehandler: error probe");
-            return -1;
-        }
-        char* buff = new char[size];
-        assert(buff);
-
-        if (h.receive(buff, size) < 0){
-            error("dreceiver handshakehandler: error receving");
-            return -1;
-        };
-
-        connID2ChannelType[h.getID()] = *reinterpret_cast<ChannelType*>(buff);
-        delete [] buff;*/
-        return 0;
-    }
-
-    virtual void registerLogicalEOS(int sender){
-        /*for(size_t i = 0; i < this->get_num_outchannels(); i++)
-                ff_send_out_to(new message_t(sender, i), i);*/
-    }
-
-    virtual void registerEOS(size_t connID){
-        this->neos++;
-    }
-
-    virtual void forward(message2_t* task, size_t){
-        //if (task->chid == -1) ff_send_out(task);
-        //else ff_send_out_to(task, this->routingTable[task->chid]); // assume the routing table is consistent WARNING!!!
-        ff_send_out(task);
-    }
-
-    virtual int handleBatch(MTCL::HandleUser& h){
+    inline int handleBatch(MTCL::HandleUser& h){
         size_t size;
 
         if (h.probe(size) < 0){ // porbe header
@@ -107,11 +71,11 @@ protected:
             error("dreceiver receive header error");
             return -1;
         }
-
+    
         if (h.send(&ACK, sizeof(ack_t)) < 0){
             error("dreceiver: Error sending back ack");
         }
-        
+    
         size_t elementsInBatch = size/headerSize;
         bool payload = false;
         for(size_t i = 0; i < elementsInBatch; i++) 
@@ -150,7 +114,7 @@ protected:
 			    out->dest   = dest;
                 out->type = t;
                 out->locality = ChannelLocality::REMOTE;
-                this->forward(out, h.getID());
+                ff_send_out(out);
                 delete [] headerBuffer;
                 return 0;
             }
@@ -160,14 +124,7 @@ protected:
                 delete [] headerBuffer;
                 return 0;
             }
-/*
-            if (dest == -2){
-                registerLogicalEOS(src);
-                delete [] headerBuffer;
-                return 0;
-            }
-*/
-            registerEOS(h.getID());
+            
             delete [] headerBuffer;
             return -1;
 
@@ -186,11 +143,10 @@ protected:
                     payload_sliding_ptr += sz; // advance the sliding ptr
                     message2_t* out = new message2_t(_buf, sz, true);
                 
-                    //out->feedback = t == ChannelType::FBK;
                     out->dest = dest;
                     out->src   = src;
                     out->type = t;
-                    this->forward(out, h.getID());
+                    ff_send_out(out);
                     headerBuffer_sliding_ptr += headerSize;
                     continue;
                 }
@@ -200,8 +156,6 @@ protected:
                     headerBuffer_sliding_ptr += headerSize;
                     continue;
                 }
-
-                registerEOS(h.getID());
 
                 headerBuffer_sliding_ptr += headerSize;
             }
@@ -239,10 +193,8 @@ public:
 
         while(neos < input_channels){
             auto handle = MTCL::Manager::getNext(std::chrono::milliseconds(RECEIVER_POLL_TIMEOUT));
-            if (handle.isValid()) {
-                if (!handle.isNewConnection())
-                    this->handleBatch(handle);
-            }
+            if (handle.isValid()) 
+                this->handleBatch(handle);
 
             if (ff::termination_counter <= 0)
                 break;

@@ -31,9 +31,11 @@
 
 namespace ff {
 
-enum ChannelType {FWD, FBK};
+class ff_node;
 
-enum ChannelLocality {LOCAL, REMOTE};
+enum ChannelType : char {FWD, FBK};
+
+enum ChannelLocality : char {LOCAL, REMOTE};
 
 using queueLength = int;
 
@@ -47,10 +49,29 @@ struct message2_t {
     int src, dest;
     ChannelType type;
     ChannelLocality locality;
-    dataBuffer data;
 
-    message2_t(char *rd, size_t size, bool cleanup=true) : data(rd,size,cleanup){}
+    size_t size = 0;
+    char* data = nullptr;
+    bool cleanup = false;
+    std::function<void(void*)>* freeCallback = nullptr;
+
+    message2_t(char *rd, size_t size, bool cleanup=true) :  size(size), data(rd), cleanup(cleanup) {}
     message2_t() = default;
+
+
+    ~message2_t(){ cleanContent(); }
+
+    inline void setBuff(std::pair<char*, size_t>&& buffPair){
+        data = buffPair.first; 
+        size = buffPair.second;
+    }
+
+    inline void cleanContent(){
+        if (data && cleanup){
+            if (freeCallback) freeCallback->operator()(data);
+            else delete [] data;
+        }
+    }
 
     inline static message2_t* make_logical_EOS(int src, int dest = -1){
         message2_t* out = new message2_t;
@@ -79,7 +100,7 @@ struct message2_t {
     }
 
     bool isLogicalEOS(){
-        return (dest == -1 && data.getLen() == 0);
+        return (dest == -1 && size == 0);
     }
 };
 
