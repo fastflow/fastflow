@@ -48,7 +48,6 @@
 namespace ff {
 
 class ff_dreceiverMTCL2: public ff_monode_t<message2_t> { 
-    size_t processed  = 0;
 protected:
     static const size_t headerSize = sizeof(int)+sizeof(int)+sizeof(ChannelType)+sizeof(size_t);
 
@@ -64,9 +63,14 @@ protected:
             h.close();
             return -1;
         }
+        size_t elementsInBatch = size/headerSize;
 
-        char* headerBuffer = new char[size];
-        assert(headerBuffer);
+        if (elementsInBatch > headerBufferEntries){
+            headerBuffer = (char*)realloc(headerBuffer, elementsInBatch*headerSize);
+            assert(headerBuffer);
+            headerBufferEntries = elementsInBatch;
+        }
+
         if (h.receive(headerBuffer, size) < 0){
             error("dreceiver receive header error");
             return -1;
@@ -75,8 +79,7 @@ protected:
         if (h.send(&ACK, sizeof(ack_t)) < 0){
             error("dreceiver: Error sending back ack");
         }
-    
-        size_t elementsInBatch = size/headerSize;
+     
         bool payload = false;
         for(size_t i = 0; i < elementsInBatch; i++) 
             if (*reinterpret_cast<size_t*>(headerBuffer+i*headerSize+2*sizeof(int)+sizeof(ChannelType))) {
@@ -104,9 +107,7 @@ protected:
             ChannelType t = *reinterpret_cast<ChannelType*>(headerBuffer+2*sizeof(int));
             size_t sz = be64toh(*reinterpret_cast<size_t*>(headerBuffer+2*sizeof(int)+sizeof(ChannelType)));
             assert(sz == payloadSize);
-            
-            processed++;
-            
+                        
             if (sz){
                 message2_t* out = new message2_t(payloadBuffer, sz, true);
 
@@ -115,17 +116,14 @@ protected:
                 out->type = t;
                 out->locality = ChannelLocality::REMOTE;
                 ff_send_out(out);
-                delete [] headerBuffer;
                 return 0;
             }
 
             if (src != -1){
                 ff_send_out(message2_t::make_logical_EOS(src));
-                delete [] headerBuffer;
                 return 0;
             }
             
-            delete [] headerBuffer;
             return -1;
 
         } else {
@@ -163,8 +161,6 @@ protected:
             if (payloadBuffer)
                 delete [] payloadBuffer; 
         }
-
-        delete [] headerBuffer;
         
         return 0;
     }
@@ -173,7 +169,10 @@ protected:
 
 public:
     ff_dreceiverMTCL2(std::string& acceptAddr, size_t input_channels, int coreid=-1)
-		: input_channels(input_channels), acceptAddr(acceptAddr), coreid(coreid) {}
+		: input_channels(input_channels), acceptAddr(acceptAddr), coreid(coreid), headerBufferEntries(1) {
+            headerBuffer = (char*)malloc(headerSize*headerBufferEntries);
+            assert(headerBuffer);
+        }
 
     int svc_init() {
   		if (coreid!=-1)
@@ -192,7 +191,7 @@ public:
     message2_t *svc(message2_t* task) {
 
         while(neos < input_channels){
-            auto handle = MTCL::Manager::getNext(std::chrono::milliseconds(RECEIVER_POLL_TIMEOUT));
+            auto handle = MTCL::Manager::getNext(std::chrono::microseconds(RECEIVER_POLL_TIMEOUT));
             if (handle.isValid()) 
                 this->handleBatch(handle);
 
@@ -209,6 +208,8 @@ protected:
     std::string& acceptAddr;	
 	int coreid;
     ack_t ACK;
+    char* headerBuffer = nullptr;
+    size_t headerBufferEntries = 1;
 };
 
 } // namespace 

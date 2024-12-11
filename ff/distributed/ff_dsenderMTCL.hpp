@@ -61,7 +61,7 @@ protected:
     int flush();
     
 
-    void pushHeader(int dest, int src, ChannelType t, size_t size_){
+    inline void pushHeader(int dest, int src, ChannelType t, size_t size_){
         char* offset_ptr = headers_buffer_ptr + this->size*headerSize;
         *reinterpret_cast<int*>(offset_ptr) = dest;
         *reinterpret_cast<int*>(offset_ptr+sizeof(int)) = src;
@@ -307,7 +307,7 @@ public:
 
 
 
-int uBuffer_i::flush(){
+inline int uBuffer_i::flush(){
         // there is nothing to send!
         if (size == 0) return 0;
 
