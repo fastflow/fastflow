@@ -33,6 +33,7 @@
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_ddefines.hpp>
 #include <ff/distributed/ff_dutils.hpp>
+#include <ff/distributed/ff_messageAllocator.hpp>
 #include <cereal/cereal.hpp>
 #include <cereal/types/polymorphic.hpp>
 #include <cereal/archives/portable_binary.hpp>
@@ -59,19 +60,19 @@ public:
     bool serialize(void* in, int id, bool ret = false) {
 		if (sink) return true;
 		if (in == EOS){
-			ff_minode::ff_send_out(message2_t::make_logical_EOS(this->n->mioID, id));
+			ff_minode::ff_send_out(MessageAllocator::make_logical_EOS(this->n->mioID, id));
 			if (ret) ff_minode::ff_send_out(in);
 			return true;
 		}
 
 		if (in == FLUSH){
-			ff_minode::ff_send_out(message2_t::make_flush(this->n->mioID));
+			ff_minode::ff_send_out(MessageAllocator::make_flush(this->n->mioID));
 			return true;
 		}
 
 		if (ret && in > FF_TAG_MIN) return ff_minode::ff_send_out(in);
 		
-		message2_t* msg = new message2_t;
+		message2_t* msg = MessageAllocator::allocateMessage();
 		msg->src = this->n->mioID;
 		if (id == -1){
 			msg->dest = -1;
@@ -87,7 +88,7 @@ public:
 		// check what happens with this datacopied
 		bool datacopied = this->n->serializeF(in, msg);
 		if (!datacopied)  
-			msg->freeCallback = &this->n->freetaskF;
+			msg->freeCallback = this->n->freetaskF;
 		else 
 			this->n->freetaskF(in);
 
@@ -126,11 +127,7 @@ public:
 		return n->svc_init();
 	}
 
-	void eosnotify(ssize_t id){
-		// just capture it and discard
-		/*if (!sink)
-			ff_minode::ff_send_out(message2_t::make_logical_EOS(this->n->mioID));*/
-	}
+	void eosnotify(ssize_t id){	}
 
 	void svc_end(){this->n->svc_end();}
 	
@@ -138,17 +135,16 @@ public:
 		void* out;
 		if (in != nullptr) {
 			message2_t* msg = (message2_t*)in;
-			inputMapRecord_t& record = inputMap[msg->src];
-			// received a logical EOS
 			
 			if (msg->size == 0){ // logical EOS!
+				inputMapRecord_t& record = inputMap[msg->src];
 				if (!record.eos_received){
 					this->n->eosnotify(record.index);
 					record.eos_received = true;
 
 					if (++eos_received >= this->channelsInfo.first.size()){
 						if (!sink) // if i'm not a sink propagate the logical EOS
-							ff_minode::ff_send_out(message2_t::make_logical_EOS(this->n->mioID));
+							ff_minode::ff_send_out(MessageAllocator::make_logical_EOS(this->n->mioID));
 						
 						// de-registering the call-back to allow the EOS to flow without being captured by the callback
 						internal_mi_transformer::registerCallback([](void* task, int id, unsigned long retry, unsigned long ticks, void * obj) {
@@ -163,11 +159,11 @@ public:
 				return GO_ON;
 			}
 			
-			if (this->n->isMultiInput()) 
-				reinterpret_cast<ff_minode*>(this->n)->set_input_channelid(record.index, msg->type == ChannelType::FWD);
+			if (this->n->isMultiInput())
+				reinterpret_cast<ff_minode*>(this->n)->set_input_channelid(inputMap[msg->src].index, msg->type == ChannelType::FWD);
 
 			bool datacopied=true;
-			out = n->svc(this->n->deserializeF(msg, datacopied));
+			out = n->svc(this->n->deserializeF(msg, datacopied, n));
 			if (!datacopied) msg->cleanup = false;
 			delete msg;
 		}  else // it can happen if we have a feedback channel

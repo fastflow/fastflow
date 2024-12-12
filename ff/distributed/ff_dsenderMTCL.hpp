@@ -30,6 +30,7 @@
 #include <random>
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
+#include <ff/distributed/ff_messageAllocator.hpp>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
@@ -102,18 +103,11 @@ public:
             this->flush();
         
 
-        delete m;
+        MessageAllocator::releaseMessage(m);
 
         if (size == maxSize )
             return this->flush();
 		return 0;
-    }
-
-    int sendEOS(){
-        if (this->push(message2_t::make_pyshical_EOS())<0) {
-			error("pushing EOS");
-		}
-        return flush();
     }
 
     ~uBuffer_i(){
@@ -141,7 +135,7 @@ struct uBuffer_1 : public uBuffer_i {
             return -1;
         }
 
-        delete m;
+        MessageAllocator::releaseMessage(m);
 
         return 0;
     }
@@ -255,15 +249,16 @@ public:
             batchBuffers[dest2ConnID[task->dest]]->push(task);
         else {
 
-            if (task->isFlush())
+            if (task->isFlush()){
                 for (auto& connID_ : std::unordered_set<int>(src2PossibleDestConnID[task->src].begin(), src2PossibleDestConnID[task->src].end()))
                     batchBuffers[connID_]->flush();
-
+                MessageAllocator::releaseMessage(task);
+            }
             else if (task->size == 0){
                 for (auto& connID_ : std::unordered_set<int>(src2PossibleDestConnID[task->src].begin(), src2PossibleDestConnID[task->src].end()))
-                    batchBuffers[connID_]->push(message2_t::make_logical_EOS(task->src));
+                    batchBuffers[connID_]->push(MessageAllocator::make_logical_EOS(task->src));
                 
-                delete task;
+                MessageAllocator::releaseMessage(task);
             } else
                 getMostFilledBuffer(task->src)->push(task); // get the most filled buffer socket or a rr socket
         }

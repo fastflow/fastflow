@@ -53,7 +53,7 @@ struct message2_t {
     size_t size = 0;
     char* data = nullptr;
     bool cleanup = false;
-    std::function<void(void*)>* freeCallback = nullptr;
+    void(*freeCallback)(void*) = nullptr;
 
     message2_t(char *rd, size_t size, bool cleanup=true) :  size(size), data(rd), cleanup(cleanup) {}
     message2_t() = default;
@@ -68,31 +68,13 @@ struct message2_t {
 
     inline void cleanContent(){
         if (data && cleanup){
-            if (freeCallback) freeCallback->operator()(data);
+            if (freeCallback) freeCallback(data);
             else delete [] data;
         }
-    }
-
-    inline static message2_t* make_logical_EOS(int src, int dest = -1){
-        message2_t* out = new message2_t;
-        out->dest = dest;
-        out->src = src;
-        return out;
-    }
-
-    inline static message2_t* make_flush(int src){
-        message2_t* out = new message2_t;
-        out->dest = -2; // tag for flushing command
-        out->src = src;
-        return out;
-    }
-
-    /* this is used between receiver and sender to signal that no more messages are coming from that group */
-    inline static message2_t* make_pyshical_EOS(){
-        message2_t* out = new message2_t;
-        out->dest = -1;
-        out->src = -1;
-        return out;
+        data = nullptr;
+        cleanup = false;
+        size = 0;
+        freeCallback = nullptr;
     }
 
     inline bool isFlush(){

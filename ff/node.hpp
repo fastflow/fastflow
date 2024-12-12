@@ -1314,10 +1314,10 @@ protected:
     virtual void propagateEOS(void* task=FF_EOS) { (void)task; }
     
 #ifdef DFF_ENABLED
-    std::function<bool(void*, message2_t*)> serializeF;
-    std::function<void(void*)> freetaskF;
-    std::function<void*(message2_t*, bool&)> deserializeF;
-    std::function<void*(char*, size_t)> alloctaskF;
+    bool (*serializeF)(void*, message2_t* b); //std::function<bool(void*, message2_t*)> serializeF;
+    void (*freetaskF)(void*); //std::function<void(void*)> freetaskF;
+    void* (*deserializeF)(message2_t*, bool&, ff_node*); //std::function<void*(message2_t*, bool&)> deserializeF;
+    void* (*alloctaskF)(char*, size_t); //std::function<void*(char*, size_t)> alloctaskF;
 
     
     virtual bool isSerializable(){ return (bool)serializeF; }
@@ -1667,8 +1667,10 @@ struct ff_node_t: ff_node {
     // check on Serialization capabilities on the OUTPUT type!
     if constexpr (traits::is_serializable_v<OUT_t>){
         this->serializeF = [](void* o, message2_t* b) -> bool {
-                               bool datacopied = true;
-                               b->setBuff(serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o),datacopied));
+                               static thread_local std::pair<char*, size_t> p;
+                               static thread_local bool datacopied = true;
+                               serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o),datacopied, p);
+                               b->data = p.first; b->size = p.second;
                                return datacopied;
                            };
     } else if constexpr (cereal::traits::is_output_serializable<OUT_t, cereal::PortableBinaryOutputArchive>::value){
@@ -1685,19 +1687,19 @@ struct ff_node_t: ff_node {
     
     // check on Serialization capabilities on the INPUT type!
     if constexpr (traits::is_deserializable_v<IN_t>) {
-        this->deserializeF = [this](message2_t* b, bool& datacopied) -> void* {
-                                 IN_t* ptr=(IN_t*)this->alloctaskF(b->data, b->size);
+        this->deserializeF = [](message2_t* b, bool& datacopied, ff_node* obj) -> void* {
+                                 IN_t* ptr=(IN_t*)obj->alloctaskF(b->data, b->size);
                                  datacopied = deserializeWrapper<IN_t>(b->data, b->size, ptr);
                                  assert(ptr);
                                  return ptr;
                              };
     } else if constexpr(cereal::traits::is_input_serializable<IN_t, cereal::PortableBinaryInputArchive>::value){
-            this->deserializeF = [this](message2_t* b, bool& datacopied) -> void* {
+            this->deserializeF = [](message2_t* b, bool& datacopied, ff_node* obj) -> void* {
                                     static thread_local deserBuff local_deser_buffer;
                                     local_deser_buffer.setBuffer(b->data, b->size);                                   
                                      std::istream iss(&local_deser_buffer);
                                      cereal::PortableBinaryInputArchive ar(iss);
-                                     IN_t* o = (IN_t*)this->alloctaskF(nullptr,0);
+                                     IN_t* o = (IN_t*)obj->alloctaskF(nullptr,0);
                                      assert(o);
                                      ar >> *o;
                                      datacopied = true;

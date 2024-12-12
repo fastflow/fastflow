@@ -147,23 +147,12 @@ public:
             return -1;
         }
 
-
-      // if all the groups are created from the ff_node coming from the argument (i.e., the root) add a pipeline containing the bb
-      /*bool allDeriveFromParent = true; 
-      for(auto& [name, ir]: annotatedGroups) 
-        if (ir.parentBB != parent) { allDeriveFromParent = false; break; }
-
-      if (allDeriveFromParent) {
-        ff_pipeline *mypipe = new ff_pipeline;
-        mypipe->add_stage(parent);
-        parent = mypipe;
-      }*/
-
       this->prepareIR2(parent);
 
 #ifdef DFF_PRINT_IR
       runningIR.print();
 #endif
+      MessageAllocator::init(MESSAGE_PREALLOCATE);
 
       // buildare il farm dalla rappresentazione intermedia del gruppo che devo rannare
       dGroup _grp(runningIR);
@@ -178,6 +167,7 @@ public:
       }
 
       MTCL::Manager::finalize();
+      MessageAllocator::finalize();
       
       return 0;
     }
@@ -438,7 +428,7 @@ static inline int DFF_Init(int& argc, char**& argv){
 #if defined(DFF_MPI) || defined(ENABLE_MPI)
     if (groupName.empty()) {
       if (dGroups::Instance()->baseProtocol != "MPI")
-        ff::error("Falling back to MPI since no group name passed as argument");
+        ff::error("Falling back to MPI since no group name passed as argument\n");
       dGroups::Instance()->baseProtocol = "MPI";
     }  
 #else

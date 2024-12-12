@@ -118,24 +118,22 @@ inline constexpr bool has_alloctask_v = has_alloctask<T>::value;
 }
 
 template<typename T, typename = std::enable_if_t<traits::is_serializable<T>::value>>
-std::pair<char*,size_t> serializeWrapper(T*in, bool& datacopied){
-    std::pair<char*,size_t> p;
+inline void serializeWrapper(T*in, bool& datacopied, std::pair<char*, size_t>& p){
     datacopied = serialize(p, in);
-    return p;
 }
 
 template<typename T, typename = std::enable_if_t<traits::is_deserializable<T>::value>>
-bool deserializeWrapper(char* c, size_t s, T* obj){
+inline bool deserializeWrapper(char* c, size_t s, T* obj){
     return deserialize(std::make_pair(c, s),obj);
 }
 
 template<typename T, typename = std::enable_if_t<traits::has_freetask<T>::value>>
-void freetaskWrapper(T*in){
+inline void freetaskWrapper(T*in){
     serializefreetask((char*)in, in);
 }
 
 template<typename T, typename = std::enable_if_t<traits::has_alloctask<T>::value>>
-void alloctaskWrapper(char* c, size_t s, T*& p){
+inline void alloctaskWrapper(char* c, size_t s, T*& p){
     deserializealloctask(std::make_pair(c,s), p);
 }
 

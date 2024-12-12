@@ -109,7 +109,8 @@ protected:
             assert(sz == payloadSize);
                         
             if (sz){
-                message2_t* out = new message2_t(payloadBuffer, sz, true);
+                message2_t* out = MessageAllocator::allocateMessage();
+                out->data = payloadBuffer; out->size = sz; out->cleanup = true;
 
 			    out->src = src;
 			    out->dest   = dest;
@@ -120,7 +121,7 @@ protected:
             }
 
             if (src != -1){
-                ff_send_out(message2_t::make_logical_EOS(src));
+                ff_send_out(MessageAllocator::make_logical_EOS(src));
                 return 0;
             }
             
@@ -139,7 +140,8 @@ protected:
                     char* _buf = new char[sz];
                     memcpy(_buf, payload_sliding_ptr, sz);
                     payload_sliding_ptr += sz; // advance the sliding ptr
-                    message2_t* out = new message2_t(_buf, sz, true);
+                    message2_t* out = MessageAllocator::allocateMessage();
+                    out->data = _buf; out->size = sz; out->cleanup = true;
                 
                     out->dest = dest;
                     out->src   = src;
@@ -150,7 +152,7 @@ protected:
                 }
 
                 if (src != -1){
-                    ff_send_out(message2_t::make_logical_EOS(src));
+                    ff_send_out(MessageAllocator::make_logical_EOS(src));
                     headerBuffer_sliding_ptr += headerSize;
                     continue;
                 }

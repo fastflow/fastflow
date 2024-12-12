@@ -33,6 +33,7 @@
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_ddefines.hpp>
 #include <ff/distributed/ff_dutils.hpp>
+#include <ff/distributed/ff_messageAllocator.hpp>
 #include <cereal/cereal.hpp>
 #include <cereal/types/polymorphic.hpp>
 #include <cereal/archives/portable_binary.hpp>
@@ -111,7 +112,7 @@ public:
 	void eosnotify(ssize_t){
 		if (!this->exited){
 			this->n->eosnotify();
-			ff_monode::ff_send_out_to(message2_t::make_logical_EOS(this->n->mioID), this->get_num_outchannels()-1);
+			ff_monode::ff_send_out_to(MessageAllocator::make_logical_EOS(this->n->mioID), this->get_num_outchannels()-1);
 
 			for(auto& d : localDest)
 				ff_monode::ff_send_out_to(this->LEOS, d);
@@ -121,7 +122,7 @@ public:
 
     bool forward(void* task, int destination, bool ret = false){
 		if (task == EOS){
-			ff_monode::ff_send_out_to(message2_t::make_logical_EOS(this->n->mioID), this->get_num_outchannels()-1);
+			ff_monode::ff_send_out_to(MessageAllocator::make_logical_EOS(this->n->mioID), this->get_num_outchannels()-1);
 			for(auto& d : localDest)
 				ff_monode::ff_send_out_to(this->LEOS, d);
 			this->exited =true;
@@ -130,7 +131,7 @@ public:
 		}
 
 		if (task == FLUSH){
-			ff_monode::ff_send_out_to(message2_t::make_flush(this->n->mioID), this->get_num_outchannels()-1);
+			ff_monode::ff_send_out_to(MessageAllocator::make_flush(this->n->mioID), this->get_num_outchannels()-1);
 			return true;
 		}
 		
@@ -148,13 +149,13 @@ public:
                         nextDestination = idx;
                         if (msg) {
 							if (!datacopied) msg->cleanup = false;
-							delete msg;
+							MessageAllocator::releaseMessage(msg);
 						}
                         return true;
 					}
 				}
 				if (!msg) {
-					msg = new message2_t;
+					msg = MessageAllocator::allocateMessage();
 					msg->src = this->n->mioID;
 					msg->dest = -1;
 					msg->locality = ChannelLocality::REMOTE; // correct
@@ -162,7 +163,7 @@ public:
 
 					datacopied = this->n->serializeF(task, msg);
 					if (!datacopied) {
-						msg->freeCallback = &this->n->freetaskF;
+						msg->freeCallback = this->n->freetaskF;
 					}
 				}
 				this->get_num_feedbackchannels();
@@ -180,7 +181,7 @@ public:
 				ff_send_out_to(task, chInfo.localIndex);
 				return true;
 			}
-			message2_t* msg = new message2_t;
+			message2_t* msg = MessageAllocator::allocateMessage();
 			msg->src = this->n->mioID;
 			msg->dest = chInfo.identifier;
 			msg->type = chInfo.type;
@@ -188,7 +189,7 @@ public:
 
 			bool datacopied = this->n->serializeF(task, msg);
 			if (!datacopied) 
-				msg->freeCallback = &this->n->freetaskF;
+				msg->freeCallback = this->n->freetaskF;
 			ff_send_out_to(msg, this->get_num_outchannels() - 1); // send to the routing worker
 			if (datacopied) this->n->freetaskF(task);
 			return true;
@@ -272,20 +273,20 @@ public:
 						this->n->eosnotify(channelInfo.index); 
 						channelInfo.eos_received = true;
 						if (++eos_received >= this->channelsInfo.size()){
-							delete msg;
+							MessageAllocator::releaseMessage(msg);
 							return EOS;
 						}
 					}
-					delete msg;
+					MessageAllocator::releaseMessage(msg);
 					return GO_ON;
 				}
 
 				channel = channelInfo.index;
 				type = channelInfo.type; 
 				bool datacopied = true;
-				in = this->n->deserializeF(msg, datacopied);
+				in = this->n->deserializeF(msg, datacopied, this->n);
 				if (!datacopied) msg->cleanup = false;
-				delete msg;
+				MessageAllocator::releaseMessage(msg);
 			} else {  // the result come from a local worker, just pass it to collector and compute the right worker id
 				auto& channelInfo = localInputMap[get_channel_id()];
 				channel = channelInfo.first;
@@ -365,7 +366,7 @@ public:
 				if (nextLevelSquareBox) ff_send_out_to(msg, this->get_num_outchannels()-1);
 				else {
 					std::cerr << "LOST MESSAGE!!!!!\n";
-					delete msg;
+					MessageAllocator::releaseMessage(msg);
 				}
 				return this->GO_ON;
 			}
@@ -379,9 +380,9 @@ public:
 				}*/
 				
 				for(auto& dest : possibleDest)
-					ff_send_out_to(message2_t::make_logical_EOS(msg->src, -1), dest);
+					ff_send_out_to(MessageAllocator::make_logical_EOS(msg->src, -1), dest);
 				
-				delete msg;
+				MessageAllocator::releaseMessage(msg);
 				return this->GO_ON;
 			}
 
