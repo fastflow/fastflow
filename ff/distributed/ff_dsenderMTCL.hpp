@@ -60,7 +60,14 @@ protected:
     char *base_ptr = nullptr, *current_ptr = nullptr;
     char *headers_buffer_ptr = nullptr;
     int flush();
+    int flush(void*, size_t);
     
+    inline static void pushHeader_(char* buffAddr, int dest, int src, ChannelType t, size_t size_){
+        *reinterpret_cast<int*>(buffAddr) = dest;
+        *reinterpret_cast<int*>(buffAddr+sizeof(int)) = src;
+        *reinterpret_cast<ChannelType*>(buffAddr+2*sizeof(int)) = t;
+        *reinterpret_cast<size_t*>(buffAddr+2*sizeof(int)+sizeof(ChannelType)) = size_;
+    }
 
     inline void pushHeader(int dest, int src, ChannelType t, size_t size_){
         char* offset_ptr = headers_buffer_ptr + this->size*headerSize;
@@ -74,10 +81,10 @@ public:
     uBuffer_i(ff_dsenderMTCL2* parent, size_t connID, size_t batchSize, size_t taskSizeHint = 512) : parent(parent), maxSize(batchSize), connID(connID) {
         this->capacity = maxSize*taskSizeHint;
         if (this->capacity){
-            this->base_ptr = (char*)malloc(this->capacity);
+            this->base_ptr = (char*)malloc(this->capacity+(maxSize*headerSize)+sizeof(int));
             assert(this->base_ptr);
         }
-        this->headers_buffer_ptr = (char*)malloc(maxSize*headerSize);
+        this->headers_buffer_ptr = (char*)malloc(maxSize*headerSize+sizeof(int));
         assert(this->headers_buffer_ptr);
         this->current_ptr = this->base_ptr;
     }
@@ -89,7 +96,7 @@ public:
             size_t distance = current_ptr - base_ptr;
             size_t requiredSpace = m->size;
             if (capacity < distance + requiredSpace){
-                this->base_ptr = (char*)realloc(this->base_ptr, distance+2*requiredSpace);
+                this->base_ptr = (char*)realloc(this->base_ptr, distance+2*requiredSpace+maxSize*headerSize+sizeof(int));
                 assert(this->base_ptr);
                 this->capacity = distance+2*requiredSpace;
                 this->current_ptr = this->base_ptr + distance;
@@ -123,14 +130,13 @@ struct uBuffer_1 : public uBuffer_i {
     uBuffer_1(ff_dsenderMTCL2* parent, size_t connID, size_t batchSize = 1, size_t taskSizeHint = 0) : uBuffer_i(parent, connID, 1, 0) { }
     
     int push(message2_t* m) override {
-        
-        this->pushHeader(htonl(m->dest), htonl(m->src), m->type, htobe64(m->size));
-        if (m->size){
-            this->base_ptr = m->data;
-            this->current_ptr = this->base_ptr + m->size;
-        }
-        this->size = 1;
-        if (this->flush() < 0){
+        size_t totalSize = m->size + headerSize + sizeof(int);
+
+        m->data = (char*)realloc(m->data, totalSize);
+        pushHeader_(m->data + m->size, htonl(m->dest), htonl(m->src), m->type, htobe64(m->size));
+        *reinterpret_cast<int*>(m->data+totalSize-sizeof(int)) = htonl(1);
+
+        if (this->flush(m->data, totalSize) < 0){
             error("uBuffer_1 sending task (flush Function)");
             return -1;
         }
@@ -306,27 +312,37 @@ inline int uBuffer_i::flush(){
         // there is nothing to send!
         if (size == 0) return 0;
 
+        memcpy(this->current_ptr, this->headers_buffer_ptr, size*headerSize);
+        this->current_ptr += size*headerSize;
+        *(reinterpret_cast<int*>(this->current_ptr)) = htonl(this->size);
+        this->current_ptr += sizeof(int);
+
         if (parent->handlerCounters[connID] == 0 && parent->waitAckFrom(connID) == -1){
             error("Errore waiting ack from socket inside the callback\n");
             return -1;
         }
-        MTCL::Request h_req;
-        if (parent->MTCL_Handlers[connID].isend(this->headers_buffer_ptr, size*headerSize, h_req) < 0){
-            error("Flushing header buffers");
+
+        if (parent->MTCL_Handlers[connID].send(this->base_ptr, this->current_ptr - this->base_ptr ) < 0){
+            error("flushing payload buffers");
             return -1;
         }
-        MTCL::Request p_req;
-        if (this->current_ptr != this->base_ptr)
-            if (parent->MTCL_Handlers[connID].isend(this->base_ptr, this->current_ptr - this->base_ptr, p_req) < 0){
-                error("flushing payload buffers");
-                return -1;
-            }
-        
-        MTCL::waitAll(h_req, p_req);
         
         this->parent->handlerCounters[connID]--;
         this->size = 0;
         this->current_ptr = this->base_ptr;
+        return 0;
+    }
+
+    inline int uBuffer_i::flush(void* buff, size_t s){
+
+        if (parent->handlerCounters[connID] == 0 && parent->waitAckFrom(connID) == -1){
+            error("Errore waiting ack from socket inside the callback\n");
+            return -1;
+        }
+
+        parent->MTCL_Handlers[connID].send(buff, s);
+        
+        this->parent->handlerCounters[connID]--;
         return 0;
     }
 

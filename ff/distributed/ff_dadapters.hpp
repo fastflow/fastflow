@@ -88,7 +88,7 @@ public:
 			if (indexOfLocalPlacement != -1) {
 				localDest.push_back(indexOfLocalPlacement);
 				if (std::get<3>(t) > 0) {
-					assert(indexOfLocalPlacement < this->get_num_outchannels()-1); // check that we are not going to change the queue size of the squarebox
+					assert(indexOfLocalPlacement < (ssize_t)this->get_num_outchannels()-1); // check that we are not going to change the queue size of the squarebox
 					pyhsicalNextLocalWorkers[indexOfLocalPlacement]->change_inputqueuesize(std::get<3>(t), oldsz);
 				}
 			}

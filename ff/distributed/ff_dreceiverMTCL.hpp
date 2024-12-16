@@ -63,15 +63,14 @@ protected:
             h.close();
             return -1;
         }
-        size_t elementsInBatch = size/headerSize;
 
-        if (elementsInBatch > headerBufferEntries){
-            headerBuffer = (char*)realloc(headerBuffer, elementsInBatch*headerSize);
-            assert(headerBuffer);
-            headerBufferEntries = elementsInBatch;
+        if (!inputBuffer || inputBufferSize < size){
+            if (inputBuffer) free(inputBuffer);
+            inputBuffer = (char*)malloc(size);
+            inputBufferSize = size;
         }
 
-        if (h.receive(headerBuffer, size) < 0){
+        if (h.receive(inputBuffer, size) < 0){
             error("dreceiver receive header error");
             return -1;
         }
@@ -79,44 +78,28 @@ protected:
         if (h.send(&ACK, sizeof(ack_t)) < 0){
             error("dreceiver: Error sending back ack");
         }
-     
-        bool payload = false;
-        for(size_t i = 0; i < elementsInBatch; i++) 
-            if (*reinterpret_cast<size_t*>(headerBuffer+i*headerSize+2*sizeof(int)+sizeof(ChannelType))) {
-                payload = true;
-                break;
-            }
-        size_t payloadSize = 0;
-        char* payloadBuffer = nullptr;
-        if (payload){
-            if (h.probe(payloadSize) < 0){
-                error("dreiceiver probe payload error");
-                return -1;
-            };
-            payloadBuffer = new char[payloadSize];
-            assert(payloadBuffer);
-            if (h.receive(payloadBuffer, payloadSize) < 0){
-                error("dreceiver receive payload error");
-                return -1;
-            }
-        }
+
+        int elementsInBatch = ntohl(*reinterpret_cast<int*>(inputBuffer + size - sizeof(int)));
 
         if (elementsInBatch == 1){
+            char* headerBuffer = inputBuffer + size - headerSize - sizeof(int);
             int dest = ntohl(*reinterpret_cast<int*>(headerBuffer));
             int src = ntohl(*reinterpret_cast<int*>(headerBuffer+sizeof(int)));
             ChannelType t = *reinterpret_cast<ChannelType*>(headerBuffer+2*sizeof(int));
             size_t sz = be64toh(*reinterpret_cast<size_t*>(headerBuffer+2*sizeof(int)+sizeof(ChannelType)));
-            assert(sz == payloadSize);
                         
             if (sz){
                 message2_t* out = MessageAllocator::allocateMessage();
-                out->data = payloadBuffer; out->size = sz; out->cleanup = true;
+                out->data = inputBuffer; out->size = sz; out->cleanup = true;
 
 			    out->src = src;
-			    out->dest   = dest;
+			    out->dest = dest;
                 out->type = t;
                 out->locality = ChannelLocality::REMOTE;
                 ff_send_out(out);
+
+                // invalidate the buffer sice it was sent to a node
+                inputBuffer = nullptr; inputBufferSize = 0;
                 return 0;
             }
 
@@ -128,9 +111,9 @@ protected:
             return -1;
 
         } else {
-            char* payload_sliding_ptr = payloadBuffer;
-            char* headerBuffer_sliding_ptr = headerBuffer;
-            for(size_t i = 0; i < elementsInBatch; i++){
+            char* payload_sliding_ptr = inputBuffer;
+            char* headerBuffer_sliding_ptr = inputBuffer + size - elementsInBatch*headerSize - sizeof(int);
+            for(int i = 0; i < elementsInBatch; i++){
                 int dest = ntohl(*reinterpret_cast<int*>(headerBuffer_sliding_ptr));
                 int src = ntohl(*reinterpret_cast<int*>(headerBuffer_sliding_ptr+sizeof(int)));
                 ChannelType t = *reinterpret_cast<ChannelType*>(headerBuffer_sliding_ptr+2*sizeof(int));
@@ -160,8 +143,6 @@ protected:
                 headerBuffer_sliding_ptr += headerSize;
             }
 
-            if (payloadBuffer)
-                delete [] payloadBuffer; 
         }
         
         return 0;
@@ -212,6 +193,9 @@ protected:
     ack_t ACK;
     char* headerBuffer = nullptr;
     size_t headerBufferEntries = 1;
+
+    char* inputBuffer = nullptr;
+    size_t inputBufferSize = 0;
 };
 
 } // namespace 

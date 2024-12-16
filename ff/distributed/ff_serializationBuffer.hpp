@@ -3,7 +3,10 @@
 #include <sstream>
 #include <streambuf>
 
+namespace ff {
+
 class serBuffer : public std::streambuf {
+    static const size_t headerSize = sizeof(int)+sizeof(int)+sizeof(ChannelType)+sizeof(size_t);
 public:
     serBuffer(size_t initialSize = 2)
         : m_buffer(nullptr), m_capacity(0) {
@@ -30,7 +33,7 @@ public:
             return; // No need to resize if the new capacity is smaller
         }
 
-        char* newBuffer = static_cast<char*>(realloc(m_buffer, newCapacity));
+        char* newBuffer = static_cast<char*>(realloc(m_buffer, newCapacity+headerSize));
         if (!newBuffer) {
             throw std::bad_alloc();
         }
@@ -45,7 +48,7 @@ public:
 
     std::pair<char*, size_t> getBufferAndReset(){
         auto out = std::make_pair(m_buffer, size());
-        m_buffer = static_cast<char*>(malloc(m_capacity));
+        m_buffer = static_cast<char*>(malloc(m_capacity+headerSize));
         setp(m_buffer, m_buffer + m_capacity);
         return out;
     }
@@ -74,4 +77,5 @@ struct deserBuff: public std::stringbuf {
     }
 };
 
+} // namwespace
 #endif
