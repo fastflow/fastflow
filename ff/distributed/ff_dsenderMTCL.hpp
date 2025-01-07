@@ -144,22 +144,20 @@ class uBuffer_1 : public uBuffer_i {
     char* _buffer = nullptr;
     size_t _buffer_size = 0;
 public:
-    uBuffer_1(ff_dsenderMTCL2* parent, MTCL::HandleUser& h, int& counter, size_t taskSizeHint = 512) : uBuffer_i(parent, h, counter, 1, 0) {
+    uBuffer_1(ff_dsenderMTCL2* parent, MTCL::HandleUser& h, int& counter, size_t taskSizeHint = SIZE_THRESHOLD) : uBuffer_i(parent, h, counter, 1, 0) {
         _buffer = (char*) malloc(taskSizeHint+headerSize+sizeof(int));
         _buffer_size = taskSizeHint+headerSize+sizeof(int);
      }
     
     int push(message2_t* m) override {
-        size_t totalSize = m->size + headerSize + sizeof(int);
+        sizeDFF_t actualSize = m->size;
+        if (actualSize > SIZE_THRESHOLD) m->size = 0;
 
-        if (totalSize > _buffer_size){
-            _buffer = (char*)realloc(_buffer, totalSize);
-            _buffer_size = totalSize;
-        }
+        size_t totalSize = m->size + headerSize + sizeof(int);
 
         memcpy(_buffer, m->data, m->size);
 
-        pushHeader_(_buffer + m->size, m->dest, m->src, m->type, m->size);
+        pushHeader_(_buffer + m->size, m->dest, m->src, m->type, actualSize);
         *reinterpret_cast<int*>(_buffer+totalSize-sizeof(int)) = htonl(1);
 
 #ifdef DFF_ACK
@@ -173,6 +171,12 @@ public:
             error("Error sending\n");
             return -1;
         }
+
+        if (actualSize > SIZE_THRESHOLD)
+            if (handle.send(m->data, actualSize) < 0){
+                error("Error sending big payload\n");
+                return -1;
+            }
 
 #ifdef DFF_ACK
         counter -= 1;
