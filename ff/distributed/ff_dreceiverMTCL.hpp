@@ -49,7 +49,21 @@ namespace ff {
 
 class ff_dreceiverMTCL2: public ff_monode_t<message2_t> { 
 protected:
-    static const size_t headerSize = sizeof(int)+sizeof(int)+sizeof(ChannelType)+sizeof(size_t);
+    //static const size_t headerSize = sizeof(int)+sizeof(int)+sizeof(ChannelType)+sizeof(size_t);
+
+    template <typename T>
+    static inline T NetworkToHostByteOrder(T value) {
+        static_assert(std::is_integral<T>::value, "T must be an integral type.");
+
+        if constexpr (sizeof(T) == 2)  // 16-bit values
+            return ntohs(static_cast<uint16_t>(value));
+        else if constexpr (sizeof(T) == 4)  // 32-bit values
+            return ntohl(static_cast<uint32_t>(value));
+         else if constexpr (sizeof(T) == 8)  // 64-bit values (no standard functions, so implemented manually)
+            return be64toh(static_cast<uint64_t>(value)); 
+         else 
+            return value;
+    }
 
     inline int handleBatch(MTCL::HandleUser& h){
         size_t size;
@@ -74,27 +88,28 @@ protected:
             error("dreceiver receive header error");
             return -1;
         }
-    
+
+#ifdef DFF_ACK    
         if (h.send(&ACK, sizeof(ack_t)) < 0){
             error("dreceiver: Error sending back ack");
         }
+#endif
 
         int elementsInBatch = ntohl(*reinterpret_cast<int*>(inputBuffer + size - sizeof(int)));
 
         if (elementsInBatch == 1){
             char* headerBuffer = inputBuffer + size - headerSize - sizeof(int);
-            int dest = ntohl(*reinterpret_cast<int*>(headerBuffer));
-            int src = ntohl(*reinterpret_cast<int*>(headerBuffer+sizeof(int)));
-            ChannelType t = *reinterpret_cast<ChannelType*>(headerBuffer+2*sizeof(int));
-            size_t sz = be64toh(*reinterpret_cast<size_t*>(headerBuffer+2*sizeof(int)+sizeof(ChannelType)));
+            addr_t src = NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer+sizeof(addr_t)));        
                         
-            if (sz){
+            if (*reinterpret_cast<size_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType))){
                 message2_t* out = MessageAllocator::allocateMessage();
-                out->data = inputBuffer; out->size = sz; out->cleanup = true;
+                out->data = inputBuffer; 
+                out->size = NetworkToHostByteOrder(*reinterpret_cast<size_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType)));
+                out->cleanup = true;
 
 			    out->src = src;
-			    out->dest = dest;
-                out->type = t;
+			    out->dest = NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer));
+                out->type = *reinterpret_cast<ChannelType*>(headerBuffer+2*sizeof(addr_t));
                 out->locality = ChannelLocality::REMOTE;
                 ff_send_out(out);
 
@@ -114,21 +129,21 @@ protected:
             char* payload_sliding_ptr = inputBuffer;
             char* headerBuffer_sliding_ptr = inputBuffer + size - elementsInBatch*headerSize - sizeof(int);
             for(int i = 0; i < elementsInBatch; i++){
-                int dest = ntohl(*reinterpret_cast<int*>(headerBuffer_sliding_ptr));
-                int src = ntohl(*reinterpret_cast<int*>(headerBuffer_sliding_ptr+sizeof(int)));
-                ChannelType t = *reinterpret_cast<ChannelType*>(headerBuffer_sliding_ptr+2*sizeof(int));
-                size_t sz = be64toh(*reinterpret_cast<size_t*>(headerBuffer_sliding_ptr+2*sizeof(int)+sizeof(ChannelType)));
+                addr_t src = NetworkToHostByteOrder(*reinterpret_cast<int*>(headerBuffer_sliding_ptr+sizeof(addr_t)));
 
-                if (sz){
-                    char* _buf = new char[sz];
-                    memcpy(_buf, payload_sliding_ptr, sz);
-                    payload_sliding_ptr += sz; // advance the sliding ptr
+                if (*reinterpret_cast<sizeDFF_t*>(headerBuffer_sliding_ptr+2*sizeof(addr_t)+sizeof(ChannelType))){
                     message2_t* out = MessageAllocator::allocateMessage();
-                    out->data = _buf; out->size = sz; out->cleanup = true;
+                    out->size = NetworkToHostByteOrder(*reinterpret_cast<sizeDFF_t*>(headerBuffer_sliding_ptr+2*sizeof(addr_t)+sizeof(ChannelType))); 
+
+                    char* _buf = new char[out->size];
+                    memcpy(_buf, payload_sliding_ptr, out->size);
+                    payload_sliding_ptr += out->size; // advance the sliding ptr
+                    out->data = _buf; 
+                    out->cleanup = true;
                 
-                    out->dest = dest;
+                    out->dest = NetworkToHostByteOrder(*reinterpret_cast<int*>(headerBuffer_sliding_ptr));
                     out->src   = src;
-                    out->type = t;
+                    out->type = *reinterpret_cast<ChannelType*>(headerBuffer_sliding_ptr+2*sizeof(addr_t));
                     ff_send_out(out);
                     headerBuffer_sliding_ptr += headerSize;
                     continue;
@@ -151,15 +166,10 @@ protected:
     
 
 public:
-    ff_dreceiverMTCL2(std::string& acceptAddr, size_t input_channels, int coreid=-1)
-		: input_channels(input_channels), acceptAddr(acceptAddr), coreid(coreid), headerBufferEntries(1) {
-            headerBuffer = (char*)malloc(headerSize*headerBufferEntries);
-            assert(headerBuffer);
-        }
+    ff_dreceiverMTCL2(std::string& acceptAddr, size_t input_channels)
+		: input_channels(input_channels), acceptAddr(acceptAddr){ }
 
     int svc_init() {
-  		if (coreid!=-1)
-			ff_mapThreadToCpu(coreid);
         if (MTCL::Manager::listen(acceptAddr) < 0){
             error("Error in MTCL listen in dreceiver");
             return -1;
@@ -173,15 +183,18 @@ public:
     */
     message2_t *svc(message2_t* task) {
 
-        while(neos < input_channels){
-            auto handle = MTCL::Manager::getNext(std::chrono::microseconds(RECEIVER_POLL_TIMEOUT));
-            if (handle.isValid()) 
-                this->handleBatch(handle);
+        if (input_channels == 1){
+            auto handle = MTCL::Manager::getNext();
+            while(this->handleBatch(handle) != -1);
+        } else
+            while(neos < input_channels){
+                auto handle = MTCL::Manager::getNext(std::chrono::microseconds(RECEIVER_POLL_TIMEOUT));
+                if (handle.isValid()) 
+                    this->handleBatch(handle);
 
-            if (ff::termination_counter <= 0)
-                break;
-            
-        }
+                if (ff::termination_counter <= 0)
+                    break;
+            }
         return this->EOS;
     }
 
@@ -189,10 +202,7 @@ protected:
     size_t neos = 0;
     size_t input_channels;
     std::string& acceptAddr;	
-	int coreid;
     ack_t ACK;
-    char* headerBuffer = nullptr;
-    size_t headerBufferEntries = 1;
 
     char* inputBuffer = nullptr;
     size_t inputBufferSize = 0;

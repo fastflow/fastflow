@@ -37,6 +37,10 @@ enum ChannelType : char {FWD, FBK};
 
 enum ChannelLocality : char {LOCAL, REMOTE};
 
+using addr_t = short;
+
+using sizeDFF_t = size_t;
+
 using queueLength = int;
 
 using nodeXChannelType_t = std::tuple<ff_node*, ChannelType, ChannelLocality, queueLength>;
@@ -50,18 +54,18 @@ struct message2_t {
     ChannelType type;
     ChannelLocality locality;
 
-    size_t size = 0;
+    sizeDFF_t size = 0;
     char* data = nullptr;
     bool cleanup = false;
     void(*freeCallback)(void*) = nullptr;
 
-    message2_t(char *rd, size_t size, bool cleanup=true) :  size(size), data(rd), cleanup(cleanup) {}
+    message2_t(char *rd, sizeDFF_t size, bool cleanup=true) :  size(size), data(rd), cleanup(cleanup) {}
     message2_t() = default;
 
 
     ~message2_t(){ cleanContent(); }
 
-    inline void setBuff(std::pair<char*, size_t>&& buffPair){
+    inline void setBuff(std::pair<char*, sizeDFF_t>&& buffPair){
         data = buffPair.first; 
         size = buffPair.second;
     }
@@ -85,6 +89,8 @@ struct message2_t {
         return (dest == -1 && size == 0);
     }
 };
+
+static const size_t headerSize = sizeof(addr_t) + sizeof(addr_t) + sizeof(ChannelType) + sizeof(sizeDFF_t); 
 
 struct inputMapRecord_t {
     int index;

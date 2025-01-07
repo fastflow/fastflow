@@ -55,30 +55,45 @@ class uBuffer_i {
     friend class ff_dsenderMTCL2;
 protected:
     ff_dsenderMTCL2* parent;
-    static const size_t headerSize = sizeof(int)+sizeof(int)+sizeof(ChannelType)+sizeof(size_t);
+    MTCL::HandleUser& handle;
+    int& counter;
     size_t maxSize, capacity;
     char *base_ptr = nullptr, *current_ptr = nullptr;
     char *headers_buffer_ptr = nullptr;
     int flush();
     int flush(void*, size_t);
+
+    template <typename T>
+    static inline T HostToNetworkByteOrder(T value) {
+        static_assert(std::is_integral<T>::value, "T must be an integral type.");
+
+        if constexpr (sizeof(T) == 2)  // 16-bit values
+            return htons(static_cast<uint16_t>(value));
+        else if constexpr (sizeof(T) == 4) // 32-bit values
+            return htonl(static_cast<uint32_t>(value));
+        else if constexpr (sizeof(T) == 8)  // 64-bit values
+            return htobe64(static_cast<uint64_t>(value));
+         else 
+            return value;
+    }
     
-    inline static void pushHeader_(char* buffAddr, int dest, int src, ChannelType t, size_t size_){
-        *reinterpret_cast<int*>(buffAddr) = dest;
-        *reinterpret_cast<int*>(buffAddr+sizeof(int)) = src;
-        *reinterpret_cast<ChannelType*>(buffAddr+2*sizeof(int)) = t;
-        *reinterpret_cast<size_t*>(buffAddr+2*sizeof(int)+sizeof(ChannelType)) = size_;
+    inline static void pushHeader_(char* buffAddr, addr_t dest, addr_t src, ChannelType t, sizeDFF_t size_){
+        *reinterpret_cast<addr_t*>(buffAddr) = HostToNetworkByteOrder(dest);
+        *reinterpret_cast<addr_t*>(buffAddr+sizeof(addr_t)) = HostToNetworkByteOrder(src);
+        *reinterpret_cast<ChannelType*>(buffAddr+2*sizeof(addr_t)) = t;
+        *reinterpret_cast<sizeDFF_t*>(buffAddr+2*sizeof(addr_t)+sizeof(ChannelType)) = HostToNetworkByteOrder(size_);
     }
 
-    inline void pushHeader(int dest, int src, ChannelType t, size_t size_){
+    inline void pushHeader(addr_t dest, addr_t src, ChannelType t, sizeDFF_t size_){
         char* offset_ptr = headers_buffer_ptr + this->size*headerSize;
-        *reinterpret_cast<int*>(offset_ptr) = dest;
-        *reinterpret_cast<int*>(offset_ptr+sizeof(int)) = src;
-        *reinterpret_cast<ChannelType*>(offset_ptr+2*sizeof(int)) = t;
-        *reinterpret_cast<size_t*>(offset_ptr+2*sizeof(int)+sizeof(ChannelType)) = size_;
+        *reinterpret_cast<addr_t*>(offset_ptr) = HostToNetworkByteOrder(dest);
+        *reinterpret_cast<addr_t*>(offset_ptr+sizeof(addr_t)) = HostToNetworkByteOrder(src);
+        *reinterpret_cast<ChannelType*>(offset_ptr+2*sizeof(addr_t)) = t;
+        *reinterpret_cast<sizeDFF_t*>(offset_ptr+2*sizeof(addr_t)+sizeof(ChannelType)) = HostToNetworkByteOrder(size_);
     }
 
 public:
-    uBuffer_i(ff_dsenderMTCL2* parent, size_t connID, size_t batchSize, size_t taskSizeHint = 512) : parent(parent), maxSize(batchSize), connID(connID) {
+    uBuffer_i(ff_dsenderMTCL2* parent, MTCL::HandleUser& handle, int& counter, size_t batchSize, size_t taskSizeHint = 512) : parent(parent), handle(handle), counter(counter), maxSize(batchSize) {
         this->capacity = maxSize*taskSizeHint;
         if (this->capacity){
             this->base_ptr = (char*)malloc(this->capacity+(maxSize*headerSize)+sizeof(int));
@@ -90,7 +105,7 @@ public:
     }
 
     virtual int push(message2_t* m){
-        this->pushHeader(htonl(m->dest), htonl(m->src), m->type, htobe64(m->size));
+        this->pushHeader(m->dest, m->src, m->type, m->size);
         ++size;
         if (m->size){
             size_t distance = current_ptr - base_ptr;
@@ -122,27 +137,48 @@ public:
     }
 
     size_t size = 0;
-    size_t connID;
 };
 
 
-struct uBuffer_1 : public uBuffer_i {
-    uBuffer_1(ff_dsenderMTCL2* parent, size_t connID, size_t batchSize = 1, size_t taskSizeHint = 0) : uBuffer_i(parent, connID, 1, 0) { }
+class uBuffer_1 : public uBuffer_i {
+    char* _buffer = nullptr;
+    size_t _buffer_size = 0;
+public:
+    uBuffer_1(ff_dsenderMTCL2* parent, MTCL::HandleUser& h, int& counter, size_t taskSizeHint = 512) : uBuffer_i(parent, h, counter, 1, 0) {
+        _buffer = (char*) malloc(taskSizeHint+headerSize+sizeof(int));
+        _buffer_size = taskSizeHint+headerSize+sizeof(int);
+     }
     
     int push(message2_t* m) override {
         size_t totalSize = m->size + headerSize + sizeof(int);
 
-        m->data = (char*)realloc(m->data, totalSize);
-        pushHeader_(m->data + m->size, htonl(m->dest), htonl(m->src), m->type, htobe64(m->size));
-        *reinterpret_cast<int*>(m->data+totalSize-sizeof(int)) = htonl(1);
+        if (totalSize > _buffer_size){
+            _buffer = (char*)realloc(_buffer, totalSize);
+            _buffer_size = totalSize;
+        }
 
-        if (this->flush(m->data, totalSize) < 0){
-            error("uBuffer_1 sending task (flush Function)");
+        memcpy(_buffer, m->data, m->size);
+
+        pushHeader_(_buffer + m->size, m->dest, m->src, m->type, m->size);
+        *reinterpret_cast<int*>(_buffer+totalSize-sizeof(int)) = htonl(1);
+
+#ifdef DFF_ACK
+        if (counter == 0 && parent->waitAckFrom(counter) == -1){
+            error("Error waiting ack from socket inside the callback\n");
+            return -1;
+        }
+#endif
+
+        if (handle.send(_buffer, totalSize) < 0){
+            error("Error sending\n");
             return -1;
         }
 
-        MessageAllocator::releaseMessage(m);
+#ifdef DFF_ACK
+        counter -= 1;
+#endif
 
+        MessageAllocator::releaseMessage(m);
         return 0;
     }
 };
@@ -166,8 +202,8 @@ protected:
     int coreid;
     std::mt19937 gen{std::random_device{}()};
 
-     int waitAckFrom(int connID){
-        while (handlerCounters[connID] == 0){
+     int waitAckFrom(int& counter){
+        while (!counter){
             for(size_t i = 0; i < handlerCounters.size(); ++i){
                 ssize_t r; ack_t a;
                 size_t sz;
@@ -232,9 +268,9 @@ public:
             totalAcks += handlerCounters.back();
 
             if (this->batchSize > 1)
-                batchBuffers.push_back(new uBuffer_i(this, connID, this->batchSize));
+                batchBuffers.push_back(new uBuffer_i(this, MTCL_Handlers.back(), handlerCounters.back(), this->batchSize));
             else
-                batchBuffers.push_back(new uBuffer_1(this, connID));
+                batchBuffers.push_back(new uBuffer_1(this, MTCL_Handlers.back(), handlerCounters.back()));
 
             for(ff_node* n : dest_v)
                 dest2ConnID[n->mioID] = connID;
@@ -317,32 +353,22 @@ inline int uBuffer_i::flush(){
         *(reinterpret_cast<int*>(this->current_ptr)) = htonl(this->size);
         this->current_ptr += sizeof(int);
 
-        if (parent->handlerCounters[connID] == 0 && parent->waitAckFrom(connID) == -1){
+#ifdef DFF_ACK
+        if (counter == 0 && parent->waitAckFrom(counter) == -1){
             error("Errore waiting ack from socket inside the callback\n");
             return -1;
         }
+#endif
 
-        if (parent->MTCL_Handlers[connID].send(this->base_ptr, this->current_ptr - this->base_ptr ) < 0){
+        if (handle.send(this->base_ptr, this->current_ptr - this->base_ptr ) < 0){
             error("flushing payload buffers");
             return -1;
         }
-        
-        this->parent->handlerCounters[connID]--;
+#ifdef DFF_ACK
+        counter -= 1;
+#endif
         this->size = 0;
         this->current_ptr = this->base_ptr;
-        return 0;
-    }
-
-    inline int uBuffer_i::flush(void* buff, size_t s){
-
-        if (parent->handlerCounters[connID] == 0 && parent->waitAckFrom(connID) == -1){
-            error("Errore waiting ack from socket inside the callback\n");
-            return -1;
-        }
-
-        parent->MTCL_Handlers[connID].send(buff, s);
-        
-        this->parent->handlerCounters[connID]--;
         return 0;
     }
 

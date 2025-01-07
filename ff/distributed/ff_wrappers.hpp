@@ -114,7 +114,7 @@ public:
 			inputMap[std::get<0>(t)->mioID] = inputMapRecord_t(i, std::get<1>(t), std::get<2>(t));
 		}
 
-		if (channelsInfo.first.size() == 0)
+		if (!std::count_if(channelsInfo.first.begin(), channelsInfo.first.end(), [](auto& o){return std::get<1>(o) == ChannelType::FWD;}))
 			this->skipfirstpop(true);
 			
 
@@ -165,7 +165,7 @@ public:
 			bool datacopied=true;
 			out = n->svc(this->n->deserializeF(msg, datacopied, n));
 			if (!datacopied) msg->cleanup = false;
-			delete msg;
+			MessageAllocator::releaseMessage(msg);
 		}  else // it can happen if we have a feedback channel
 			out = n->svc(nullptr);
 		
