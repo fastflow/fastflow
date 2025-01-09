@@ -51,17 +51,18 @@ namespace ff {
 
 class ff_dsenderMTCL2;
 
-class uBuffer_i {
+class uBuffer2 {
     friend class ff_dsenderMTCL2;
-protected:
+    size_t batchingLimit, sizeLimit;
+    unsigned int actualSize = 0;
     ff_dsenderMTCL2* parent;
     MTCL::HandleUser& handle;
     int& counter;
-    size_t maxSize, capacity;
-    char *base_ptr = nullptr, *current_ptr = nullptr;
-    char *headers_buffer_ptr = nullptr;
-    int flush();
-    int flush(void*, size_t);
+
+    char* mainBuffer = nullptr; 
+    char* headerBuffer = nullptr;
+
+    char* mainBuffer_curr_ptr = nullptr;
 
     template <typename T>
     static inline T HostToNetworkByteOrder(T value) {
@@ -76,7 +77,7 @@ protected:
          else 
             return value;
     }
-    
+
     inline static void pushHeader_(char* buffAddr, addr_t dest, addr_t src, ChannelType t, sizeDFF_t size_){
         *reinterpret_cast<addr_t*>(buffAddr) = HostToNetworkByteOrder(dest);
         *reinterpret_cast<addr_t*>(buffAddr+sizeof(addr_t)) = HostToNetworkByteOrder(src);
@@ -84,110 +85,25 @@ protected:
         *reinterpret_cast<sizeDFF_t*>(buffAddr+2*sizeof(addr_t)+sizeof(ChannelType)) = HostToNetworkByteOrder(size_);
     }
 
-    inline void pushHeader(addr_t dest, addr_t src, ChannelType t, sizeDFF_t size_){
-        char* offset_ptr = headers_buffer_ptr + this->size*headerSize;
-        *reinterpret_cast<addr_t*>(offset_ptr) = HostToNetworkByteOrder(dest);
-        *reinterpret_cast<addr_t*>(offset_ptr+sizeof(addr_t)) = HostToNetworkByteOrder(src);
-        *reinterpret_cast<ChannelType*>(offset_ptr+2*sizeof(addr_t)) = t;
-        *reinterpret_cast<sizeDFF_t*>(offset_ptr+2*sizeof(addr_t)+sizeof(ChannelType)) = HostToNetworkByteOrder(size_);
-    }
-
 public:
-    uBuffer_i(ff_dsenderMTCL2* parent, MTCL::HandleUser& handle, int& counter, size_t batchSize, size_t taskSizeHint = 512) : parent(parent), handle(handle), counter(counter), maxSize(batchSize) {
-        this->capacity = maxSize*taskSizeHint;
-        if (this->capacity){
-            this->base_ptr = (char*)malloc(this->capacity+(maxSize*headerSize)+sizeof(int));
-            assert(this->base_ptr);
-        }
-        this->headers_buffer_ptr = (char*)malloc(maxSize*headerSize+sizeof(int));
-        assert(this->headers_buffer_ptr);
-        this->current_ptr = this->base_ptr;
+    uBuffer2(size_t batchingLimit, size_t sizeLimit, ff_dsenderMTCL2* parent, MTCL::HandleUser& handle, int& counter) : batchingLimit(batchingLimit), sizeLimit(sizeLimit), parent(parent), handle(handle), counter(counter) {
+        mainBuffer = (char*)malloc(2*sizeLimit+batchingLimit*headerSize+sizeof(int));
+        headerBuffer = (char*)malloc(batchingLimit*headerSize);
+        mainBuffer_curr_ptr = mainBuffer;
     }
 
-    virtual int push(message2_t* m){
-        this->pushHeader(m->dest, m->src, m->type, m->size);
-        ++size;
-        if (m->size){
-            size_t distance = current_ptr - base_ptr;
-            size_t requiredSpace = m->size;
-            if (capacity < distance + requiredSpace){
-                this->base_ptr = (char*)realloc(this->base_ptr, distance+2*requiredSpace+maxSize*headerSize+sizeof(int));
-                assert(this->base_ptr);
-                this->capacity = distance+2*requiredSpace;
-                this->current_ptr = this->base_ptr + distance;
-            }
-
-            memcpy(this->current_ptr, m->data, m->size); this->current_ptr += m->size;
-
-            if (m->type == ChannelType::FBK) 
-                this->flush();
-        } else 
-            this->flush();
-        
-
-        MessageAllocator::releaseMessage(m);
-
-        if (size == maxSize )
-            return this->flush();
-		return 0;
+    ~uBuffer2(){
+        free(mainBuffer);
+        free(headerBuffer);
     }
-
-    ~uBuffer_i(){
-        delete headers_buffer_ptr;
-    }
-
-    size_t size = 0;
-};
-
-
-class uBuffer_1 : public uBuffer_i {
-    char* _buffer = nullptr;
-    size_t _buffer_size = 0;
-public:
-    uBuffer_1(ff_dsenderMTCL2* parent, MTCL::HandleUser& h, int& counter, size_t taskSizeHint = SIZE_THRESHOLD) : uBuffer_i(parent, h, counter, 1, 0) {
-        _buffer = (char*) malloc(taskSizeHint+headerSize+sizeof(int));
-        _buffer_size = taskSizeHint+headerSize+sizeof(int);
-     }
     
-    int push(message2_t* m) override {
-        sizeDFF_t actualSize = m->size;
-        if (actualSize > SIZE_THRESHOLD) m->size = 0;
-
-        size_t totalSize = m->size + headerSize + sizeof(int);
-
-        memcpy(_buffer, m->data, m->size);
-
-        pushHeader_(_buffer + m->size, m->dest, m->src, m->type, actualSize);
-        *reinterpret_cast<int*>(_buffer+totalSize-sizeof(int)) = htonl(1);
-
-#ifdef DFF_ACK
-        if (counter == 0 && parent->waitAckFrom(counter) == -1){
-            error("Error waiting ack from socket inside the callback\n");
-            return -1;
-        }
-#endif
-
-        if (handle.send(_buffer, totalSize) < 0){
-            error("Error sending\n");
-            return -1;
-        }
-
-        if (actualSize > SIZE_THRESHOLD)
-            if (handle.send(m->data, actualSize) < 0){
-                error("Error sending big payload\n");
-                return -1;
-            }
-
-#ifdef DFF_ACK
-        counter -= 1;
-#endif
-
-        MessageAllocator::releaseMessage(m);
-        return 0;
-    }
+    int push(message2_t*);
+    int flush();
 };
 
-class ff_dsenderMTCL2: public ff_minode_t<message2_t> { 
+
+class ff_dsenderMTCL2: public ff_minode_t<message2_t> {
+    friend class uBuffer2;
     friend class uBuffer_i;
     friend struct uBuffer_1;
 
@@ -199,14 +115,15 @@ protected:
     std::unordered_map<int, size_t> dest2ConnID;
     std::vector<MTCL::HandleUser> MTCL_Handlers;
     std::unordered_map<int, std::vector<size_t>> src2PossibleDestConnID;
-    std::vector<uBuffer_i*> batchBuffers;
+    std::vector<uBuffer2*> batchBuffers;
     std::vector<int> handlerCounters;
     int batchSize;
+    size_t batchByteSize;
     int messageOTF;
     int coreid;
     std::mt19937 gen{std::random_device{}()};
 
-     int waitAckFrom(int& counter){
+    int waitAckFrom(int& counter){
         while (!counter){
             for(size_t i = 0; i < handlerCounters.size(); ++i){
                 ssize_t r; ack_t a;
@@ -232,16 +149,16 @@ protected:
         return 1;
     }
 
-    uBuffer_i* getMostFilledBuffer(const int& src){
-        uBuffer_i* maxBuffer = nullptr;
+    uBuffer2* getMostFilledBuffer(const int& src){
+        uBuffer2* maxBuffer = nullptr;
         auto& possibleDestConnID = src2PossibleDestConnID[src];
         for(auto& connID : possibleDestConnID){
             auto* buffer = batchBuffers[connID];
             if (!maxBuffer) maxBuffer = buffer;
-            else if (maxBuffer->size < buffer->size) maxBuffer = buffer;
+            else if (maxBuffer->actualSize < buffer->actualSize) maxBuffer = buffer;
         }
 
-        if (maxBuffer->size > 0) return maxBuffer;
+        if (maxBuffer->actualSize > 0) return maxBuffer;
         size_t connID;
         std::sample(possibleDestConnID.begin(), possibleDestConnID.end(), &connID, 1, gen);
         return batchBuffers[connID];
@@ -250,7 +167,7 @@ protected:
     
 public:
 
-    ff_dsenderMTCL2(const std::vector<std::tuple<std::string, std::string, std::vector<ff_node*>>>& destEndpoints, const std::unordered_map<ff_node*, IngressEgressChannels_t>& channelsDictionary, int batchSize = DEFAULT_BATCH_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1) : destEndpoints(destEndpoints), channelsDictionary(channelsDictionary), batchSize(batchSize), messageOTF(messageOTF), coreid(coreid) {}
+    ff_dsenderMTCL2(const std::vector<std::tuple<std::string, std::string, std::vector<ff_node*>>>& destEndpoints, const std::unordered_map<ff_node*, IngressEgressChannels_t>& channelsDictionary, int batchSize = DEFAULT_BATCH_SIZE, size_t batchByteSize = DEFAULT_BATCH_BYTE_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1) : destEndpoints(destEndpoints), channelsDictionary(channelsDictionary), batchSize(batchSize), batchByteSize(batchByteSize), messageOTF(messageOTF), coreid(coreid) {}
 
     int svc_init() {
 		if (coreid!=-1)
@@ -271,10 +188,7 @@ public:
             size_t connID = MTCL_Handlers.size() - 1;
             totalAcks += handlerCounters.back();
 
-            if (this->batchSize > 1)
-                batchBuffers.push_back(new uBuffer_i(this, MTCL_Handlers.back(), handlerCounters.back(), this->batchSize));
-            else
-                batchBuffers.push_back(new uBuffer_1(this, MTCL_Handlers.back(), handlerCounters.back()));
+            batchBuffers.push_back(new uBuffer2(batchSize, batchByteSize, this, MTCL_Handlers.back(), handlerCounters.back()));
 
             for(ff_node* n : dest_v)
                 dest2ConnID[n->mioID] = connID;
@@ -346,16 +260,66 @@ public:
 	}
 };
 
+int uBuffer2::push(message2_t* m){
+        if (batchingLimit == 1 || m->size > sizeLimit){
+            // if there is already something in the buffer FLUSH it to preserve the ordering
+            if (actualSize) this->flush();
+            
+            // direct send
+            sizeDFF_t effectiveSize = m->size;
+            if (effectiveSize > SIZE_THRESHOLD) m->size = 0;
 
+            size_t totalSize = m->size + headerSize + sizeof(int);
 
-inline int uBuffer_i::flush(){
-        // there is nothing to send!
-        if (size == 0) return 0;
+            memcpy(mainBuffer, m->data, m->size);
 
-        memcpy(this->current_ptr, this->headers_buffer_ptr, size*headerSize);
-        this->current_ptr += size*headerSize;
-        *(reinterpret_cast<int*>(this->current_ptr)) = htonl(this->size);
-        this->current_ptr += sizeof(int);
+            pushHeader_(mainBuffer + m->size, m->dest, m->src, m->type, effectiveSize);
+            *reinterpret_cast<int*>(mainBuffer+totalSize-sizeof(int)) = htonl(1);
+
+#ifdef DFF_ENABLED
+        if (counter == 0 && parent->waitAckFrom(counter) == -1){
+            error("Error waiting ack from socket inside the callback\n");
+            return -1;
+        }
+#endif
+
+        if (handle.send(mainBuffer, totalSize) < 0){
+            error("Error sending\n");
+            return -1;
+        }
+
+        if (effectiveSize > SIZE_THRESHOLD)
+            if (handle.send(m->data, effectiveSize) < 0){
+                error("Error sending big payload\n");
+                return -1;
+            }
+
+#ifdef DFF_ACK
+        counter -= 1;
+#endif
+
+        } else {
+            pushHeader_(headerBuffer+actualSize*headerSize, m->dest, m->src, m->type, m->size);
+            ++actualSize;
+            if (m->size){
+                memcpy(mainBuffer_curr_ptr, m->data, m->size); 
+                mainBuffer_curr_ptr += m->size;
+            }
+            // if the entries reached the batching limit OR the size of the buffer reached the sizeLimit OR the message has not size (i.e. is a logical EOS)  OR the current message is a Feedback FLUSH the buffer
+            if (actualSize == batchingLimit || (size_t)(this->mainBuffer_curr_ptr - this->mainBuffer) >= sizeLimit || m->size == 0 || m->type == ChannelType::FBK) 
+                this->flush();
+        }
+        MessageAllocator::releaseMessage(m);
+        return 0;
+    }
+
+    int uBuffer2::flush(){
+        // copy headers at the end of the main buffer
+        memcpy(this->mainBuffer_curr_ptr, this->headerBuffer, actualSize*headerSize);
+        // write the number of messages in the batch
+        this->mainBuffer_curr_ptr += actualSize*headerSize;
+        *(reinterpret_cast<int*>(this->mainBuffer_curr_ptr)) = htonl(this->actualSize);
+        this->mainBuffer_curr_ptr += sizeof(int);
 
 #ifdef DFF_ACK
         if (counter == 0 && parent->waitAckFrom(counter) == -1){
@@ -364,15 +328,16 @@ inline int uBuffer_i::flush(){
         }
 #endif
 
-        if (handle.send(this->base_ptr, this->current_ptr - this->base_ptr ) < 0){
+        if (handle.send(this->mainBuffer, this->mainBuffer_curr_ptr - this->mainBuffer ) < 0){
             error("flushing payload buffers");
             return -1;
         }
 #ifdef DFF_ACK
         counter -= 1;
 #endif
-        this->size = 0;
-        this->current_ptr = this->base_ptr;
+        // reset the parameters 
+        this->actualSize = 0;
+        this->mainBuffer_curr_ptr = this->mainBuffer;
         return 0;
     }
 

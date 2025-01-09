@@ -192,6 +192,7 @@ private:
         std::string threadMapping;
         int port;
         int batchSize          = DEFAULT_BATCH_SIZE;
+        size_t batchByteSize   = DEFAULT_BATCH_BYTE_SIZE;
         int messageOTF         = DEFAULT_MESSAGE_OTF;
         int rank;
 
@@ -209,6 +210,13 @@ private:
             try {
                 ar(cereal::make_nvp("batchSize", batchSize));
             } catch (cereal::Exception&) {ar.setNextName(nullptr);}
+
+             try {
+              std::string batchByteSize_str;
+                ar(cereal::make_nvp("batchByteSize", batchByteSize_str));
+                batchByteSize = convertToBytes(batchByteSize_str);
+            } catch (cereal::Exception&) {ar.setNextName(nullptr);}
+              catch (std::invalid_argument& e){std::cerr << "Error parsing batchByteSize option: " << e.what() << std::endl;}
 
              try {
                 ar(cereal::make_nvp("messageOTF", messageOTF));
@@ -361,6 +369,7 @@ private:
         runningIR.listeningEndpoint = buildEndpointString(*parsedRunningGroup_it);
 
         runningIR.batchSize = parsedRunningGroup_it->batchSize;
+        runningIR.batchByteSize = parsedRunningGroup_it->batchByteSize;
 
         runningIR.messageOTF = parsedRunningGroup_it->messageOTF;
 

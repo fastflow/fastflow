@@ -230,7 +230,7 @@ public:
         }
 
         if (!ir.destinationEndpoints.empty()){
-            this->add_collector(new ff_dsenderMTCL2(ir.destinationEndpoints, ir.channelsDictionary, ir.batchSize, ir.messageOTF), true); // TO DO: check the signature of the dsender constructor
+            this->add_collector(new ff_dsenderMTCL2(ir.destinationEndpoints, ir.channelsDictionary, ir.batchSize, ir.batchByteSize, ir.messageOTF), true); // TO DO: check the signature of the dsender constructor
         }
 
         if (!ir.ingressRemoteConnectionsGroupsName.empty()){

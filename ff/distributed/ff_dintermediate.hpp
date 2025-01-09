@@ -33,6 +33,7 @@ public:
 
     // size of batch
     int batchSize = DEFAULT_BATCH_SIZE;
+    size_t batchByteSize = DEFAULT_BATCH_BYTE_SIZE;
 
     int messageOTF = DEFAULT_MESSAGE_OTF;
 

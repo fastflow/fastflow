@@ -334,6 +334,42 @@ void custom_get_out_nodes(ff_node* n, ff::svector<int>& w){
     w.push_back(n->mioID);
 }
 
+size_t convertToBytes(const std::string& input) {
+    if (input.empty()) 
+        return 0;
+
+    // Find the position of the first non-digit character
+    size_t pos = 0;
+    while (pos < input.size() && std::isdigit(input[pos])) 
+        ++pos;
+
+    if (pos == 0) {
+        throw std::invalid_argument("Input must start with a numeric value");
+    }
+
+    // Extract the numeric value
+    size_t value = 0;
+    std::istringstream(input.substr(0, pos)) >> value;
+
+    // Extract the suffix (if any)
+    std::string suffix = input.substr(pos);
+    for (auto& c : suffix) 
+        c = std::tolower(c); // Convert suffix to lowercase
+
+    // Convert based on suffix
+    if (suffix.empty()) {
+        return value; // No suffix means bytes
+    } else if (suffix == "k") {
+        return value * 1024; // Kilobytes
+    } else if (suffix == "m") {
+        return value * 1024 * 1024; // Megabytes
+    } else if (suffix == "g") {
+        return value * 1024 * 1024 * 1024; // Gigabytes
+    } else {
+        throw std::invalid_argument("Unknown suffix: " + suffix);
+    }
+}
+
 
 } // namespace
 #endif

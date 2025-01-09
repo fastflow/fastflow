@@ -46,6 +46,10 @@
 #define DEFAULT_BATCH_SIZE        1
 #endif
 
+#if !defined(DEFAULT_BATCH_BYTE_SIZE)
+#define DEFAULT_BATCH_BYTE_SIZE 65536
+#endif
+
 // default number of On-The-Fly messages
 #if !defined(DEFAULT_INTERNALMSG_OTF)
 #define DEFAULT_INTERNALMSG_OTF  10
