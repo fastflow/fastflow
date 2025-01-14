@@ -169,8 +169,8 @@ protected:
     
 
 public:
-    ff_dreceiverMTCL2(std::string& acceptAddr, size_t input_channels)
-		: input_channels(input_channels), acceptAddr(acceptAddr){ }
+    ff_dreceiverMTCL2(std::string& acceptAddr, size_t input_channels, bool straightGroup = false)
+		: input_channels(input_channels), acceptAddr(acceptAddr), straightGroup(straightGroup){ }
 
     int svc_init() {
         if (MTCL::Manager::listen(acceptAddr) < 0){
@@ -186,7 +186,7 @@ public:
     */
     message2_t *svc(message2_t* task) {
 
-        if (input_channels == 1){
+        if (input_channels == 1 && straightGroup){
             auto handle = MTCL::Manager::getNext();
             while(this->handleBatch(handle) != -1);
         } else
@@ -198,6 +198,7 @@ public:
                 if (ff::termination_counter <= 0)
                     break;
             }
+
         return this->EOS;
     }
 
@@ -206,7 +207,7 @@ protected:
     size_t input_channels;
     std::string& acceptAddr;	
     ack_t ACK;
-
+    bool straightGroup;
     char* inputBuffer = nullptr;
     size_t inputBufferSize = 0;
 };

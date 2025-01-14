@@ -166,7 +166,6 @@ public:
         return -1;
       }
 
-      MTCL::Manager::finalize();
       MessageAllocator::finalize();
       
       return 0;
@@ -456,6 +455,7 @@ static inline int DFF_Init(int& argc, char**& argv){
     }
 
     MTCL::Manager::init(groupName);
+    std::atexit([]()-> void {MTCL::Manager::finalize();});
 
 #if defined(ENABLE_MPI) || defined(DFF_MPI)
     if (dGroups::Instance()->baseProtocol == "MPI") {
@@ -464,47 +464,6 @@ static inline int DFF_Init(int& argc, char**& argv){
       dGroups::Instance()->setRunningGroupByRank(myrank);
     }
 #endif
-    /*if (!groupName.empty())
-      dGroups::Instance()->forceProtocol(Proto::TCP);
-  #ifdef DFF_MPI
-    else
-        dGroups::Instance()->forceProtocol(Proto::MPI);
-  #endif
-  */
-
-
-    //if (dGroups::Instance()->usedProtocol == Proto::TCP){
-   /*    if (groupName.empty()){
-        ff::error("Group not passed as argument!\nUse option --DFF_GName=\"group-name\"\n");
-        return -1;
-      } 
-      dGroups::Instance()->setRunningGroup(groupName);
-     */ 
-   // }
-
-  /*#ifdef DFF_MPI
-    if (dGroups::Instance()->usedProtocol == Proto::MPI){
-      std::cout << "Using legacy MPI implementation!\n";
-      //MPI_Init(&argc, &argv);
-      int provided;
-      
-      if (MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided) != MPI_SUCCESS)
-        return -1;
-      
-      
-      // no thread support 
-      if (provided < MPI_THREAD_MULTIPLE){
-          error("No thread support by MPI\n");
-          return -1;
-      }
-
-      
-
-      std::cout << "Running group: " << dGroups::Instance()->getRunningGroup() << " on rank: " <<  myrank << "\n";
-    }
-
-  #endif 
-  */
 
     // trig the mapping set if specified
     dGroups::Instance()->setThreadMapping();

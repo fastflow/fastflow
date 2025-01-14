@@ -234,7 +234,7 @@ public:
         }
 
         if (!ir.ingressRemoteConnectionsGroupsName.empty()){
-            this->add_emitter(new ff_comb(new ff_dreceiverMTCL2(ir.listeningEndpoint, ir.ingressRemoteConnectionsGroupsName.size()), new SquareBox(ir.bucketsDistribution.front(), ir.channelsDictionary, ir.bucketsDistribution.size() > 1), true, true));
+            this->add_emitter(new ff_comb(new ff_dreceiverMTCL2(ir.listeningEndpoint, ir.ingressRemoteConnectionsGroupsName.size(), ir.bucketsDistribution.size() == 1), new SquareBox(ir.bucketsDistribution.front(), ir.channelsDictionary, ir.bucketsDistribution.size() > 1), true, true));
             this->cleanup_emitter(true);
         }
 

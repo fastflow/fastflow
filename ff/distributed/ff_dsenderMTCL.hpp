@@ -173,7 +173,10 @@ public:
 		if (coreid!=-1)
 			ff_mapThreadToCpu(coreid);
 
-        
+        // important for the next lines since they are using the reference to the back of the vector
+        MTCL_Handlers.reserve(destEndpoints.size());
+        handlerCounters.reserve(destEndpoints.size());
+
         for(auto& [_, endpoint, dest_v] : destEndpoints){
             
             auto h = MTCL::Manager::connect(endpoint, MAX_RETRIES, 10);
@@ -186,7 +189,7 @@ public:
             MTCL_Handlers.push_back(std::move(h));
             handlerCounters.push_back(messageOTF);
             size_t connID = MTCL_Handlers.size() - 1;
-            totalAcks += handlerCounters.back();
+            totalAcks += messageOTF;
 
             batchBuffers.push_back(new uBuffer2(batchSize, batchByteSize, this, MTCL_Handlers.back(), handlerCounters.back()));
 
@@ -261,7 +264,7 @@ public:
 };
 
 int uBuffer2::push(message2_t* m){
-        if (batchingLimit == 1 || m->size > sizeLimit){
+        if (batchingLimit == 1 || m->size >= sizeLimit){
             // if there is already something in the buffer FLUSH it to preserve the ordering
             if (actualSize) this->flush();
             
