@@ -50,10 +50,15 @@
 #define DEFAULT_BATCH_BYTE_SIZE 65536
 #endif
 
-// default number of On-The-Fly messages
-#if !defined(DEFAULT_INTERNALMSG_OTF)
-#define DEFAULT_INTERNALMSG_OTF  10
+#if !defined(SINGLE_SEND_SIZE_THRESHOLD)
+#define SINGLE_SEND_SIZE_THRESHOLD 524288 // 512kb
 #endif
+
+#if !defined(MESSAGE_PREALLOCATE)
+#define MESSAGE_PREALLOCATE 100
+#endif
+
+// default number of On-The-Fly messages
 #if !defined(DEFAULT_MESSAGE_OTF)
 #define DEFAULT_MESSAGE_OTF     100
 #endif

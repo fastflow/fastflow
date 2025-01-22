@@ -106,13 +106,13 @@ protected:
                 out->size = NetworkToHostByteOrder(*reinterpret_cast<sizeDFF_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType)));
                 out->dest = NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer));
                 out->type = *reinterpret_cast<ChannelType*>(headerBuffer+2*sizeof(addr_t));
-                if (out->size > SIZE_THRESHOLD){
+                if (out->size > SINGLE_SEND_SIZE_THRESHOLD){
                     out->data = (char*)malloc(out->size);
                     h.receive(out->data, out->size);
                 } else{
                     out->data = inputBuffer;
                     // invalidate the buffer sice it was sent to a node
-                    inputBuffer = nullptr; inputBufferSize = 0;
+                    inputBuffer = (char*)malloc(inputBufferSize); 
                 }
                 out->cleanup = true;
 			    out->src = src;
@@ -138,10 +138,9 @@ protected:
                     message2_t* out = MessageAllocator::allocateMessage();
                     out->size = NetworkToHostByteOrder(*reinterpret_cast<sizeDFF_t*>(headerBuffer_sliding_ptr+2*sizeof(addr_t)+sizeof(ChannelType))); 
 
-                    char* _buf = new char[out->size];
-                    memcpy(_buf, payload_sliding_ptr, out->size);
+                    out->data = (char*) malloc(out->size);
+                    memcpy(out->data, payload_sliding_ptr, out->size);
                     payload_sliding_ptr += out->size; // advance the sliding ptr
-                    out->data = _buf; 
                     out->cleanup = true;
                 
                     out->dest = NetworkToHostByteOrder(*reinterpret_cast<int*>(headerBuffer_sliding_ptr));

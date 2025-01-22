@@ -50,8 +50,6 @@
 #include <cereal/types/string.hpp>
 #include <cereal/types/vector.hpp>
 
-#include "MTCL/include/mtcl.hpp"
-
 #ifdef DFF_MPI
 #include <mpi.h>
 #endif

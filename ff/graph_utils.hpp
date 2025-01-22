@@ -160,6 +160,8 @@ static inline ff_node* getBB(ff_node* startnode, ff_node* n) {
     return nullptr;
 }
 
+#ifdef DFF_ENABLED
+
 static bool isFromFirstSet(ff_node* node, ff_a2a* a2a){
     for(auto* n : a2a->getFirstSet())
         if (n == node) return true;
@@ -171,6 +173,8 @@ static bool isFromSecondSet(ff_node* node, ff_a2a* a2a){
         if (n == node) return true;
     return false;
 }
+
+#endif
 
     
 } // namespace

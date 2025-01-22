@@ -87,7 +87,7 @@ class uBuffer2 {
 
 public:
     uBuffer2(size_t batchingLimit, size_t sizeLimit, ff_dsenderMTCL2* parent, MTCL::HandleUser& handle, int& counter) : batchingLimit(batchingLimit), sizeLimit(sizeLimit), parent(parent), handle(handle), counter(counter) {
-        mainBuffer = (char*)malloc(2*sizeLimit+batchingLimit*headerSize+sizeof(int));
+        mainBuffer = (char*)malloc(2*std::max<size_t>(sizeLimit, SINGLE_SEND_SIZE_THRESHOLD)+batchingLimit*headerSize+sizeof(int));
         headerBuffer = (char*)malloc(batchingLimit*headerSize);
         mainBuffer_curr_ptr = mainBuffer;
     }
@@ -263,14 +263,14 @@ public:
 	}
 };
 
-int uBuffer2::push(message2_t* m){
+inline int uBuffer2::push(message2_t* m){
         if (batchingLimit == 1 || m->size >= sizeLimit){
             // if there is already something in the buffer FLUSH it to preserve the ordering
             if (actualSize) this->flush();
             
             // direct send
             sizeDFF_t effectiveSize = m->size;
-            if (effectiveSize > SIZE_THRESHOLD) m->size = 0;
+            if (effectiveSize > SINGLE_SEND_SIZE_THRESHOLD) m->size = 0;
 
             size_t totalSize = m->size + headerSize + sizeof(int);
 
@@ -279,7 +279,7 @@ int uBuffer2::push(message2_t* m){
             pushHeader_(mainBuffer + m->size, m->dest, m->src, m->type, effectiveSize);
             *reinterpret_cast<int*>(mainBuffer+totalSize-sizeof(int)) = htonl(1);
 
-#ifdef DFF_ENABLED
+#ifdef DFF_ACK
         if (counter == 0 && parent->waitAckFrom(counter) == -1){
             error("Error waiting ack from socket inside the callback\n");
             return -1;
@@ -291,7 +291,7 @@ int uBuffer2::push(message2_t* m){
             return -1;
         }
 
-        if (effectiveSize > SIZE_THRESHOLD)
+        if (effectiveSize > SINGLE_SEND_SIZE_THRESHOLD)
             if (handle.send(m->data, effectiveSize) < 0){
                 error("Error sending big payload\n");
                 return -1;
@@ -316,7 +316,7 @@ int uBuffer2::push(message2_t* m){
         return 0;
     }
 
-    int uBuffer2::flush(){
+    inline int uBuffer2::flush(){
         // copy headers at the end of the main buffer
         memcpy(this->mainBuffer_curr_ptr, this->headerBuffer, actualSize*headerSize);
         // write the number of messages in the batch

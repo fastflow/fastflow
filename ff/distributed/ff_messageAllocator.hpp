@@ -4,7 +4,7 @@
 #include "ff/mpmc/MPMCqueues.hpp"
 
 namespace ff {
-
+#ifndef NO_MESSAGE_ALLOCATOR
 class MessageAllocator {
     inline static MPMC_Ptr_Queue messageAllocatorQueue;
 
@@ -48,6 +48,28 @@ public:
     }
 
 };
+#else
+struct MessageAllocator {
+    static void init(size_t){}
+    static void finalize(){}
+    static inline message2_t* allocateMessage(){ return new message2_t; }
+    static inline void releaseMessage(message2_t* m){ delete m; }
+    inline static message2_t* make_logical_EOS(int src, int dest = -1){
+        message2_t* out = new message2_t;
+        out->dest = dest;
+        out->src = src;
+        return out;
+    }
+
+    inline static message2_t* make_flush(int src){
+        message2_t* out = new message2_t;
+        out->dest = -2; // tag for flushing command
+        out->src = src;
+        return out;
+    }
+
+};
+#endif
 
 }
 #endif
