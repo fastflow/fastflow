@@ -100,32 +100,33 @@ protected:
         }
 #endif
 
-        int elementsInBatch = ntohl(*reinterpret_cast<int*>(inputBuffer + size - sizeof(int)));
+        //int elementsInBatch = ntohl(*reinterpret_cast<int*>(inputBuffer + size - sizeof(int)));
 
-        if (elementsInBatch == 1){
-            char* headerBuffer = inputBuffer + size - headerSize - sizeof(int);
-            addr_t src = NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer+sizeof(addr_t)));        
+        //if (elementsInBatch == 1){
+            //char* headerBuffer = inputBuffer + size - headerSize - sizeof(int);
+            //addr_t src = NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer+sizeof(addr_t)));        
                         
-            if (*reinterpret_cast<size_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType))){
+            //if (*reinterpret_cast<size_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType))){
                 message2_t* out = MessageAllocator::allocateMessage();
-                out->size = NetworkToHostByteOrder(*reinterpret_cast<sizeDFF_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType)));
-                out->dest = NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer));
-                out->type = *reinterpret_cast<ChannelType*>(headerBuffer+2*sizeof(addr_t));
-                if (out->size > SINGLE_SEND_SIZE_THRESHOLD){
+                out->size = sz_tmp; //NetworkToHostByteOrder(*reinterpret_cast<sizeDFF_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType)));
+                out->dest = rank; //NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer));
+                out->type = rank ? ChannelType::FWD : ChannelType::FBK;//*reinterpret_cast<ChannelType*>(headerBuffer+2*sizeof(addr_t));
+                /*if (out->size > SINGLE_SEND_SIZE_THRESHOLD){
                     out->data = (char*)malloc(out->size);
                     MPI_Recv(out->data, out->size, MPI_BYTE, s.MPI_SOURCE, s.MPI_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     //h.receive(out->data, out->size);
-                } else{
+                } else{*/
                     out->data = inputBuffer;
                     // invalidate the buffer sice it was sent to a node
-                    inputBuffer = (char*)malloc(inputBufferSize); 
-                }
+                //}
                 out->cleanup = true;
-			    out->src = src;
+			    out->src = !rank;
                 out->locality = ChannelLocality::REMOTE;
                 ff_send_out(out);
+                inputBuffer = (char*)malloc(inputBufferSize); 
+
                 return 0;
-            }
+            /*}
 
             if (src != -1){
                 ff_send_out(MessageAllocator::make_logical_EOS(src));
@@ -166,7 +167,7 @@ protected:
                 headerBuffer_sliding_ptr += headerSize;
             }
 
-        }
+        }*/
         
         return 0;
     }

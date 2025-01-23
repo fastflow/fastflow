@@ -274,14 +274,14 @@ inline int uBuffer2::push(message2_t* m){
             
             // direct send
             sizeDFF_t effectiveSize = m->size;
-            if (effectiveSize > SINGLE_SEND_SIZE_THRESHOLD) m->size = 0;
+            //if (effectiveSize > SINGLE_SEND_SIZE_THRESHOLD) m->size = 0;
 
-            size_t totalSize = m->size + headerSize + sizeof(int);
+            size_t totalSize = m->size ;//+ headerSize + sizeof(int);
 
             memcpy(mainBuffer, m->data, m->size);
 
-            pushHeader_(mainBuffer + m->size, m->dest, m->src, m->type, effectiveSize);
-            *reinterpret_cast<int*>(mainBuffer+totalSize-sizeof(int)) = htonl(1);
+            //pushHeader_(mainBuffer + m->size, m->dest, m->src, m->type, effectiveSize);
+            //*reinterpret_cast<int*>(mainBuffer+totalSize-sizeof(int)) = htonl(1);
 
 #ifdef DFF_ACK
         if (counter == 0 && parent->waitAckFrom(counter) == -1){
@@ -299,11 +299,11 @@ inline int uBuffer2::push(message2_t* m){
         else
             MPI_Send(mainBuffer, totalSize, MPI_BYTE, 0, 1, MPI_COMM_WORLD);
 
-        if (effectiveSize > SINGLE_SEND_SIZE_THRESHOLD)
+        /*if (effectiveSize > SINGLE_SEND_SIZE_THRESHOLD)
             if (rank == 0)
                 MPI_Send(m->data, effectiveSize, MPI_BYTE, 1, 0, MPI_COMM_WORLD);
              else
-                MPI_Send(m->data, effectiveSize, MPI_BYTE, 0, 1, MPI_COMM_WORLD);
+                MPI_Send(m->data, effectiveSize, MPI_BYTE, 0, 1, MPI_COMM_WORLD);*/
             /*if (handle.send(m->data, effectiveSize) < 0){
                 error("Error sending big payload\n");
                 return -1;
