@@ -32,6 +32,7 @@
 
 #if !defined(DFF_EXCLUDE_MPI)
 #define ENABLE_MPI
+#include <mpi.h>
 #endif
 
 #if !defined(DFF_EXCLUDE_BLOCKING)

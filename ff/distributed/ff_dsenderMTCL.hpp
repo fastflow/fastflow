@@ -45,7 +45,7 @@
 #include <cereal/types/vector.hpp>
 #include <cereal/types/polymorphic.hpp>
 
-#include "MTCL/include/mtcl.hpp"
+//#include "MTCL/include/mtcl.hpp"
 
 namespace ff {
 
@@ -56,7 +56,7 @@ class uBuffer2 {
     size_t batchingLimit, sizeLimit;
     unsigned int actualSize = 0;
     ff_dsenderMTCL2* parent;
-    MTCL::HandleUser& handle;
+    //MTCL::HandleUser& handle;
     int& counter;
 
     char* mainBuffer = nullptr; 
@@ -86,7 +86,7 @@ class uBuffer2 {
     }
 
 public:
-    uBuffer2(size_t batchingLimit, size_t sizeLimit, ff_dsenderMTCL2* parent, MTCL::HandleUser& handle, int& counter) : batchingLimit(batchingLimit), sizeLimit(sizeLimit), parent(parent), handle(handle), counter(counter) {
+    uBuffer2(size_t batchingLimit, size_t sizeLimit, ff_dsenderMTCL2* parent, /*MTCL::HandleUser& handle,*/ int& counter) : batchingLimit(batchingLimit), sizeLimit(sizeLimit), parent(parent), /*handle(handle),*/ counter(counter) {
         mainBuffer = (char*)malloc(2*std::max<size_t>(sizeLimit, SINGLE_SEND_SIZE_THRESHOLD)+batchingLimit*headerSize+sizeof(int));
         headerBuffer = (char*)malloc(batchingLimit*headerSize);
         mainBuffer_curr_ptr = mainBuffer;
@@ -113,7 +113,7 @@ protected:
     size_t neos=0;
     size_t totalAcks=0;
     std::unordered_map<int, size_t> dest2ConnID;
-    std::vector<MTCL::HandleUser> MTCL_Handlers;
+    //std::vector<MTCL::HandleUser> MTCL_Handlers;
     std::unordered_map<int, std::vector<size_t>> src2PossibleDestConnID;
     std::vector<uBuffer2*> batchBuffers;
     std::vector<int> handlerCounters;
@@ -123,7 +123,7 @@ protected:
     int coreid;
     std::mt19937 gen{std::random_device{}()};
 
-    int waitAckFrom(int& counter){
+    /*int waitAckFrom(int& counter){
         while (!counter){
             for(size_t i = 0; i < handlerCounters.size(); ++i){
                 ssize_t r; ack_t a;
@@ -147,7 +147,7 @@ protected:
             // TODO: FIX with better way to pause from receving acks
         }
         return 1;
-    }
+    }*/
 
     uBuffer2* getMostFilledBuffer(const int& src){
         uBuffer2* maxBuffer = nullptr;
@@ -174,24 +174,24 @@ public:
 			ff_mapThreadToCpu(coreid);
 
         // important for the next lines since they are using the reference to the back of the vector
-        MTCL_Handlers.reserve(destEndpoints.size());
+        //MTCL_Handlers.reserve(destEndpoints.size());
         handlerCounters.reserve(destEndpoints.size());
 
         for(auto& [_, endpoint, dest_v] : destEndpoints){
             
-            auto h = MTCL::Manager::connect(endpoint, MAX_RETRIES, 10);
-            if (!h.isValid()) {
+            //auto h = MTCL::Manager::connect(endpoint, MAX_RETRIES, 10);
+            /*if (!h.isValid()) {
                 std::cerr << "Connection failed with this endpoint: " << endpoint << std::endl;
                 error("Unable to connect failing!!");
                 return -1;
-            }
+            }*/
 
-            MTCL_Handlers.push_back(std::move(h));
+            //MTCL_Handlers.push_back(std::move(h));
             handlerCounters.push_back(messageOTF);
-            size_t connID = MTCL_Handlers.size() - 1;
+            size_t connID = 0;// MTCL_Handlers.size() - 1;
             totalAcks += messageOTF;
 
-            batchBuffers.push_back(new uBuffer2(batchSize, batchByteSize, this, MTCL_Handlers.back(), handlerCounters.back()));
+            batchBuffers.push_back(new uBuffer2(batchSize, batchByteSize, this,/*MTCL_Handlers.back()*/ handlerCounters.back()));
 
             for(ff_node* n : dest_v)
                 dest2ConnID[n->mioID] = connID;
@@ -231,8 +231,12 @@ public:
 
 
 	void svc_end() {
-        for(auto& h : MTCL_Handlers) h.close();
-
+        if (rank == 0)
+            MPI_Send(nullptr, 0, MPI_BYTE, 1, 0, MPI_COMM_WORLD);
+        else
+            MPI_Send(nullptr, 0, MPI_BYTE, 0, 1, MPI_COMM_WORLD);
+        //for(auto& h : MTCL_Handlers) h.close();
+        /*
 		size_t currentack = 0;
 		for(const auto& counter : handlerCounters)	currentack += counter;
 
@@ -259,7 +263,7 @@ public:
             }
 
 		}
-
+*/
 	}
 };
 
@@ -285,17 +289,25 @@ inline int uBuffer2::push(message2_t* m){
             return -1;
         }
 #endif
-
+        /*
         if (handle.send(mainBuffer, totalSize) < 0){
             error("Error sending\n");
             return -1;
-        }
+        }*/
+        if (rank == 0)
+            MPI_Send(mainBuffer, totalSize, MPI_BYTE, 1, 0, MPI_COMM_WORLD);
+        else
+            MPI_Send(mainBuffer, totalSize, MPI_BYTE, 0, 1, MPI_COMM_WORLD);
 
         if (effectiveSize > SINGLE_SEND_SIZE_THRESHOLD)
-            if (handle.send(m->data, effectiveSize) < 0){
+            if (rank == 0)
+                MPI_Send(m->data, effectiveSize, MPI_BYTE, 1, 0, MPI_COMM_WORLD);
+             else
+                MPI_Send(m->data, effectiveSize, MPI_BYTE, 0, 1, MPI_COMM_WORLD);
+            /*if (handle.send(m->data, effectiveSize) < 0){
                 error("Error sending big payload\n");
                 return -1;
-            }
+            }*/
 
 #ifdef DFF_ACK
         counter -= 1;
@@ -331,10 +343,14 @@ inline int uBuffer2::push(message2_t* m){
         }
 #endif
 
-        if (handle.send(this->mainBuffer, this->mainBuffer_curr_ptr - this->mainBuffer ) < 0){
+        /*if (handle.send(this->mainBuffer, this->mainBuffer_curr_ptr - this->mainBuffer ) < 0){
             error("flushing payload buffers");
             return -1;
-        }
+        }*/
+       if (rank == 0)
+            MPI_Send(mainBuffer, this->mainBuffer_curr_ptr - this->mainBuffer, MPI_BYTE, 1, 0, MPI_COMM_WORLD);
+        else
+            MPI_Send(mainBuffer, this->mainBuffer_curr_ptr - this->mainBuffer, MPI_BYTE, 0, 1, MPI_COMM_WORLD);
 #ifdef DFF_ACK
         counter -= 1;
 #endif

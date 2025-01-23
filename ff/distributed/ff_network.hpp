@@ -61,7 +61,7 @@
 #endif
 
 namespace ff {
-
+int rank;
 enum Proto {TCP , MPI};
 
 class dataBuffer: public std::stringbuf {

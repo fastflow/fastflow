@@ -42,9 +42,6 @@
 #include <cereal/types/vector.hpp>
 #include <cereal/types/polymorphic.hpp>
 
-#include "MTCL/include/mtcl.hpp"
-
-
 namespace ff {
 
 class ff_dreceiverMTCL2: public ff_monode_t<message2_t> { 
@@ -65,16 +62,23 @@ protected:
             return value;
     }
 
-    inline int handleBatch(MTCL::HandleUser& h){
+    inline int handleBatch(/*MTCL::HandleUser& h*/){
         size_t size;
+        int sz_tmp;
+        MPI_Status s;
+        if (rank == 0){
+            MPI_Probe(1, 1, MPI_COMM_WORLD, &s);
+        } else
+            MPI_Probe(0, 0, MPI_COMM_WORLD, &s);
 
-        if (h.probe(size) < 0){ // porbe header
+        MPI_Get_count(&s, MPI_BYTE, &sz_tmp);
+        size = sz_tmp;
+        /*if (h.probe(size) < 0){ // porbe header
             error("dreceiver probe header error");
             return -1;
-        } 
+        } */
 
         if (size == 0){
-            h.close();
             return -1;
         }
 
@@ -84,10 +88,11 @@ protected:
             inputBufferSize = size;
         }
 
-        if (h.receive(inputBuffer, size) < 0){
+        /*if (h.receive(inputBuffer, size) < 0){
             error("dreceiver receive header error");
             return -1;
-        }
+        }*/
+       MPI_Recv(inputBuffer, sz_tmp, MPI_BYTE, s.MPI_SOURCE, s.MPI_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
 #ifdef DFF_ACK    
         if (h.send(&ACK, sizeof(ack_t)) < 0){
@@ -108,7 +113,8 @@ protected:
                 out->type = *reinterpret_cast<ChannelType*>(headerBuffer+2*sizeof(addr_t));
                 if (out->size > SINGLE_SEND_SIZE_THRESHOLD){
                     out->data = (char*)malloc(out->size);
-                    h.receive(out->data, out->size);
+                    MPI_Recv(out->data, out->size, MPI_BYTE, s.MPI_SOURCE, s.MPI_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    //h.receive(out->data, out->size);
                 } else{
                     out->data = inputBuffer;
                     // invalidate the buffer sice it was sent to a node
@@ -172,10 +178,10 @@ public:
 		: input_channels(input_channels), acceptAddr(acceptAddr), straightGroup(straightGroup){ }
 
     int svc_init() {
-        if (MTCL::Manager::listen(acceptAddr) < 0){
+        /*if (MTCL::Manager::listen(acceptAddr) < 0){
             error("Error in MTCL listen in dreceiver");
             return -1;
-        }
+        }*/
         return 0;
     }
 
@@ -186,9 +192,9 @@ public:
     message2_t *svc(message2_t* task) {
 
         if (input_channels == 1 && straightGroup){
-            auto handle = MTCL::Manager::getNext();
-            while(this->handleBatch(handle) != -1);
-        } else
+            //auto handle = MTCL::Manager::getNext();
+            while(this->handleBatch() != -1);
+        } /*else
             while(neos < input_channels){
                 auto handle = MTCL::Manager::getNext(std::chrono::microseconds(RECEIVER_POLL_TIMEOUT));
                 if (handle.isValid()) 
@@ -197,7 +203,7 @@ public:
                 if (ff::termination_counter <= 0)
                     break;
             }
-
+*/
         return this->EOS;
     }
 
