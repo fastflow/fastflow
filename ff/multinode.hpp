@@ -873,24 +873,20 @@ struct ff_minode_t: ff_minode {
          *    IS DUPLICATED for the ff_node_t (see file node.hpp).
          *
          */        
-     if constexpr (traits::has_alloctask_v<IN_t>) {        
-         this->alloctaskF = [](char* ptr, size_t sz) -> void* {
-                                IN_t* p = nullptr;
-                                alloctaskWrapper<IN_t>(ptr, sz, p);
-                                assert(p);
-                                return p;
-                           };
+     if constexpr (traits::has_allocTask_member<IN_t>::value){//(traits::has_alloctask_v<IN_t>) {        
+        this->alloctaskF = reinterpret_cast<void*(*)(char*,size_t)>(IN_t::alloc);
      } else {
-         this->alloctaskF = [](char*, size_t ) -> void* {
+         this->alloctaskF = [](char*, size_t) -> void* {
                                IN_t* o = new IN_t;
                                assert(o);
                                return o;
                            };
      }
         
-     if constexpr (traits::has_freetask_v<OUT_t>) {
+     if constexpr (traits::has_freeTask_member<OUT_t>::value){//(traits::has_freetask_v<OUT_t>) {
         this->freetaskF = [](void* o) {
-                              freetaskWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o));
+                            OUT_t::freeTask(reinterpret_cast<OUT_t*>(o));
+                              //freetaskWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o));
                           };
 
      } else {
@@ -898,35 +894,36 @@ struct ff_minode_t: ff_minode {
      }
 
         
-     // check on Serialization capabilities on the OUTPUT type!
-     if constexpr (traits::is_serializable_v<OUT_t>){
+    // check on Serialization capabilities on the OUTPUT type!
+    if constexpr (traits::has_serialize_member<OUT_t>::value){  //(traits::is_serializable_v<OUT_t>){
         this->serializeF = [](void* o, message2_t* b) -> bool {
-                               static thread_local std::pair<char*, size_t> p;
-                               static thread_local bool datacopied = true;
-                               serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o),datacopied, p);
-                               b->data = p.first; b->size = p.second;
+                               //static thread_local std::pair<char*, size_t> p;
+                               //static thread_local bool datacopied = true;
+                               auto [buff, size, datacopied] = reinterpret_cast<OUT_t*>(o)->serialize();
+                               //serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o),datacopied, p);
+                               b->data = buff; b->size = size;
                                return datacopied;
                            };
     } else if constexpr (cereal::traits::is_output_serializable<OUT_t, cereal::PortableBinaryOutputArchive>::value) {
-        this->serializeF = [](void* o, message2_t* b) -> bool {
-                               static thread_local serBuffer local_ser_buffer;
-                               std::ostream oss(&local_ser_buffer);
-                               cereal::PortableBinaryOutputArchive ar(oss);
-                               ar << *reinterpret_cast<OUT_t*>(o);
-                               b->setBuff(local_ser_buffer.getBufferAndReset());
-                               return true;
-                           };
-    }
+            this->serializeF = [](void* o, message2_t* b) -> bool {
+                                static thread_local serBuffer local_ser_buffer;
+                                std::ostream oss(&local_ser_buffer);
+                                cereal::PortableBinaryOutputArchive ar(oss);
+                                ar << *reinterpret_cast<OUT_t*>(o);
+                                b->setBuff(local_ser_buffer.getBufferAndReset());
+                                return true;
+                            };
+        }
     
     // check on Serialization capabilities on the INPUT type!
-    if constexpr (traits::is_deserializable_v<IN_t>){
+    if constexpr (traits::has_deserialize_member<IN_t>::value){//(traits::is_deserializable_v<IN_t>){
         this->deserializeF = [](message2_t* b, bool& datacopied, ff_node* obj) -> void* {
                                  IN_t* ptr=(IN_t*)obj->alloctaskF(b->data, b->size);
-                                 datacopied = deserializeWrapper<IN_t>(b->data, b->size, ptr);
+                                 datacopied = ptr->deserialize(b->data, b->size);
                                  assert(ptr);
                                  return ptr;
                              };
-    } else if constexpr(cereal::traits::is_input_serializable<IN_t, cereal::PortableBinaryInputArchive>::value) {
+    } else if constexpr(cereal::traits::is_input_serializable<IN_t, cereal::PortableBinaryInputArchive>::value){
             this->deserializeF = [](message2_t* b, bool& datacopied, ff_node* obj) -> void* {
                                     static thread_local deserBuff local_deser_buffer;
                                     local_deser_buffer.setBuffer(b->data, b->size);                                   
@@ -937,8 +934,11 @@ struct ff_minode_t: ff_minode {
                                     ar >> *o;
                                     datacopied = true;
                                     return o;
-                                 };
+                                };
     }
+
+    if constexpr (traits::has_freeBlob_member<OUT_t>::value)
+        this->freeBlob = OUT_t::freeBlob;
 #endif
 	}
     OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE, *const FLUSH;
@@ -981,13 +981,8 @@ struct ff_monode_t: ff_monode {
         FLUSH((OUT_t*) FF_FLUSH) {
 #ifdef DFF_ENABLED
 
-     if constexpr (traits::has_alloctask_v<IN_t>) {        
-        this->alloctaskF = [](char* ptr, size_t sz) -> void* {
-                               IN_t* p = nullptr;
-                               alloctaskWrapper<IN_t>(ptr, sz, p);
-                               assert(p);
-                               return p;
-                           };
+     if constexpr (traits::has_allocTask_member<IN_t>::value){//(traits::has_alloctask_v<IN_t>) {        
+        this->alloctaskF = reinterpret_cast<void*(*)(char*,size_t)>(IN_t::alloc);
      } else {
          this->alloctaskF = [](char*, size_t) -> void* {
                                IN_t* o = new IN_t;
@@ -996,9 +991,10 @@ struct ff_monode_t: ff_monode {
                            };
      }
         
-     if constexpr (traits::has_freetask_v<OUT_t>) {
+     if constexpr (traits::has_freeTask_member<OUT_t>::value){//(traits::has_freetask_v<OUT_t>) {
         this->freetaskF = [](void* o) {
-                              freetaskWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o));
+                            OUT_t::freeTask(reinterpret_cast<OUT_t*>(o));
+                              //freetaskWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o));
                           };
 
      } else {
@@ -1007,12 +1003,13 @@ struct ff_monode_t: ff_monode {
 
         
     // check on Serialization capabilities on the OUTPUT type!
-    if constexpr (traits::is_serializable_v<OUT_t>){
+    if constexpr (traits::has_serialize_member<OUT_t>::value){  //(traits::is_serializable_v<OUT_t>){
         this->serializeF = [](void* o, message2_t* b) -> bool {
-                               static thread_local std::pair<char*, size_t> p;
-                               static thread_local bool datacopied = true;
-                               serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o),datacopied, p);
-                               b->data = p.first; b->size = p.second;
+                               //static thread_local std::pair<char*, size_t> p;
+                               //static thread_local bool datacopied = true;
+                               auto [buff, size, datacopied] = reinterpret_cast<OUT_t*>(o)->serialize();
+                               //serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o),datacopied, p);
+                               b->data = buff; b->size = size;
                                return datacopied;
                            };
     } else if constexpr (cereal::traits::is_output_serializable<OUT_t, cereal::PortableBinaryOutputArchive>::value) {
@@ -1027,10 +1024,10 @@ struct ff_monode_t: ff_monode {
         }
     
     // check on Serialization capabilities on the INPUT type!
-    if constexpr (traits::is_deserializable_v<IN_t>){
+    if constexpr (traits::has_deserialize_member<IN_t>::value){//(traits::is_deserializable_v<IN_t>){
         this->deserializeF = [](message2_t* b, bool& datacopied, ff_node* obj) -> void* {
                                  IN_t* ptr=(IN_t*)obj->alloctaskF(b->data, b->size);
-                                 datacopied = deserializeWrapper<IN_t>(b->data, b->size, ptr);
+                                 datacopied = ptr->deserialize(b->data, b->size);
                                  assert(ptr);
                                  return ptr;
                              };
@@ -1047,6 +1044,9 @@ struct ff_monode_t: ff_monode {
                                     return o;
                                 };
     }
+
+    if constexpr (traits::has_freeBlob_member<OUT_t>::value)
+        this->freeBlob = OUT_t::freeBlob;
 #endif
 	}
     OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE, *const FLUSH;

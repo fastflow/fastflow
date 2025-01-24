@@ -316,7 +316,7 @@ public:
 #ifdef DFF_ENABLED
     virtual bool isSerializable(){ return comp_nodes[1]->isSerializable(); }
     virtual bool isDeserializable(){ return comp_nodes[0]->isDeserializable(); }
-    virtual std::pair<decltype(serializeF), decltype(freetaskF)> getSerializationFunction(){ return comp_nodes[1]->getSerializationFunction(); }
+    virtual std::tuple<decltype(serializeF), decltype(freetaskF), decltype(freeBlob)> getSerializationFunction(){ return comp_nodes[1]->getSerializationFunction(); }
     virtual std::pair<decltype(deserializeF), decltype(alloctaskF)> getDeserializationFunction(){ return comp_nodes[0]->getDeserializationFunction(); }
 
 #endif

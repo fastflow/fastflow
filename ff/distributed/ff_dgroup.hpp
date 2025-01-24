@@ -58,10 +58,13 @@ class dGroup : public ff::ff_farm {
     };
 
     struct ForwarderNode : ff_node { 
-        ForwarderNode(bool (*f)(void*, message2_t* b),
-					  void (*d)(void*)) {			
+        ForwarderNode(bool (*f)(void*, message2_t*),
+					  void (*d)(void*), 
+                      void(*freeBlob)(char*,size_t)
+                      ) {			
             this->serializeF = f;
 			this->freetaskF  = d;
+            this->freeBlob = freeBlob;
         }
         ForwarderNode(void* (*f)(message2_t*, bool&, ff_node*),
 					  void* (*a)(char*, size_t)) {
@@ -75,6 +78,7 @@ class dGroup : public ff::ff_farm {
             this->deserializeF = n->deserializeF;
             this->serializeF = n->serializeF;
             this->freetaskF = n->freetaskF;
+            this->freeBlob = n->freeBlob;
         }
 
         void* svc(void* input){ return input;}

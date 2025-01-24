@@ -43,14 +43,16 @@
 #include <ff/distributed/ff_dintermediate.hpp>
 #include <ff/distributed/ff_dgroup.hpp>
 
-//#include "MTCL/include/mtcl.hpp"
+#include "MTCL/include/mtcl.hpp"
 
 #include <cereal/cereal.hpp>
 #include <cereal/archives/json.hpp>
 #include <cereal/types/string.hpp>
 #include <cereal/types/vector.hpp>
 
+#ifdef ENABLE_MPI
 #include <mpi.h>
+#endif
 
 namespace ff {
 
@@ -450,17 +452,16 @@ static inline int DFF_Init(int& argc, char**& argv){
       dGroups::Instance()->setRunningGroup(groupName);
     }
 
-    //MTCL::Manager::init(groupName);
-    //std::atexit([]()-> void {MTCL::Manager::finalize();});
-    int provided;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
-    std::atexit([]()-> void {MPI_Finalize();});
+    MTCL::Manager::init(groupName);
+    std::atexit([]()-> void {
+        MTCL::Manager::finalize(true);
+      });
+   
 #if defined(ENABLE_MPI) || defined(DFF_MPI)
     if (dGroups::Instance()->baseProtocol == "MPI") {
       int myrank;
       MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
       dGroups::Instance()->setRunningGroupByRank(myrank);
-      ff::rank = myrank;
     }
 #endif
 

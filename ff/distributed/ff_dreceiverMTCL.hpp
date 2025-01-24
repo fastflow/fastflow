@@ -42,11 +42,12 @@
 #include <cereal/types/vector.hpp>
 #include <cereal/types/polymorphic.hpp>
 
+#include "MTCL/include/mtcl.hpp"
+
 namespace ff {
 
 class ff_dreceiverMTCL2: public ff_monode_t<message2_t> { 
 protected:
-    //static const size_t headerSize = sizeof(int)+sizeof(int)+sizeof(ChannelType)+sizeof(size_t);
 
     template <typename T>
     static inline T NetworkToHostByteOrder(T value) {
@@ -62,23 +63,15 @@ protected:
             return value;
     }
 
-    inline int handleBatch(/*MTCL::HandleUser& h*/){
+    inline int handleBatch(MTCL::HandleUser& h){
         size_t size;
-        int sz_tmp;
-        MPI_Status s;
-        if (rank == 0){
-            MPI_Probe(1, 1, MPI_COMM_WORLD, &s);
-        } else
-            MPI_Probe(0, 0, MPI_COMM_WORLD, &s);
-
-        MPI_Get_count(&s, MPI_BYTE, &sz_tmp);
-        size = sz_tmp;
-        /*if (h.probe(size) < 0){ // porbe header
+        if (h.probe(size) < 0){ // porbe header
             error("dreceiver probe header error");
             return -1;
-        } */
+        } 
 
         if (size == 0){
+            h.close();
             return -1;
         }
 
@@ -88,11 +81,10 @@ protected:
             inputBufferSize = size;
         }
 
-        /*if (h.receive(inputBuffer, size) < 0){
+        if (h.receive(inputBuffer, size) < 0){
             error("dreceiver receive header error");
             return -1;
-        }*/
-       MPI_Recv(inputBuffer, sz_tmp, MPI_BYTE, s.MPI_SOURCE, s.MPI_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
 
 #ifdef DFF_ACK    
         if (h.send(&ACK, sizeof(ack_t)) < 0){
@@ -100,33 +92,36 @@ protected:
         }
 #endif
 
-        //int elementsInBatch = ntohl(*reinterpret_cast<int*>(inputBuffer + size - sizeof(int)));
+        int elementsInBatch = ntohl(*reinterpret_cast<int*>(inputBuffer + size - sizeof(int)));
 
-        //if (elementsInBatch == 1){
-            //char* headerBuffer = inputBuffer + size - headerSize - sizeof(int);
-            //addr_t src = NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer+sizeof(addr_t)));        
+        if (elementsInBatch == 1){
+            char* headerBuffer = inputBuffer + size - headerSize - sizeof(int);
+            addr_t src = NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer+sizeof(addr_t)));        
                         
-            //if (*reinterpret_cast<size_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType))){
+            if (*reinterpret_cast<size_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType))){
                 message2_t* out = MessageAllocator::allocateMessage();
-                out->size = sz_tmp; //NetworkToHostByteOrder(*reinterpret_cast<sizeDFF_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType)));
-                out->dest = rank; //NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer));
-                out->type = rank ? ChannelType::FWD : ChannelType::FBK;//*reinterpret_cast<ChannelType*>(headerBuffer+2*sizeof(addr_t));
-                /*if (out->size > SINGLE_SEND_SIZE_THRESHOLD){
+                out->size = NetworkToHostByteOrder(*reinterpret_cast<sizeDFF_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType)));
+                out->dest = NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer));
+                out->type = *reinterpret_cast<ChannelType*>(headerBuffer+2*sizeof(addr_t));
+                
+                if (out->size > SINGLE_SEND_SIZE_THRESHOLD){
                     out->data = (char*)malloc(out->size);
-                    MPI_Recv(out->data, out->size, MPI_BYTE, s.MPI_SOURCE, s.MPI_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    //h.receive(out->data, out->size);
-                } else{*/
+                    h.receive(out->data, out->size);
+                } else{
                     out->data = inputBuffer;
-                    // invalidate the buffer sice it was sent to a node
-                //}
+                    inputBuffer = nullptr;
+                }
+
                 out->cleanup = true;
-			    out->src = !rank;
+			    out->src = src;
+                std::cout << "Received a message from src: " << src << std::endl;
                 out->locality = ChannelLocality::REMOTE;
                 ff_send_out(out);
-                inputBuffer = (char*)malloc(inputBufferSize); 
+                if (!inputBuffer)
+                    inputBuffer = (char*)malloc(inputBufferSize); 
 
                 return 0;
-            /*}
+            }
 
             if (src != -1){
                 ff_send_out(MessageAllocator::make_logical_EOS(src));
@@ -139,7 +134,7 @@ protected:
             char* payload_sliding_ptr = inputBuffer;
             char* headerBuffer_sliding_ptr = inputBuffer + size - elementsInBatch*headerSize - sizeof(int);
             for(int i = 0; i < elementsInBatch; i++){
-                addr_t src = NetworkToHostByteOrder(*reinterpret_cast<int*>(headerBuffer_sliding_ptr+sizeof(addr_t)));
+                addr_t src = NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer_sliding_ptr+sizeof(addr_t)));
 
                 if (*reinterpret_cast<sizeDFF_t*>(headerBuffer_sliding_ptr+2*sizeof(addr_t)+sizeof(ChannelType))){
                     message2_t* out = MessageAllocator::allocateMessage();
@@ -150,7 +145,7 @@ protected:
                     payload_sliding_ptr += out->size; // advance the sliding ptr
                     out->cleanup = true;
                 
-                    out->dest = NetworkToHostByteOrder(*reinterpret_cast<int*>(headerBuffer_sliding_ptr));
+                    out->dest = NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer_sliding_ptr));
                     out->src   = src;
                     out->type = *reinterpret_cast<ChannelType*>(headerBuffer_sliding_ptr+2*sizeof(addr_t));
                     ff_send_out(out);
@@ -167,7 +162,7 @@ protected:
                 headerBuffer_sliding_ptr += headerSize;
             }
 
-        }*/
+        }
         
         return 0;
     }
@@ -179,10 +174,10 @@ public:
 		: input_channels(input_channels), acceptAddr(acceptAddr), straightGroup(straightGroup){ }
 
     int svc_init() {
-        /*if (MTCL::Manager::listen(acceptAddr) < 0){
+        if (MTCL::Manager::listen(acceptAddr) < 0){
             error("Error in MTCL listen in dreceiver");
             return -1;
-        }*/
+        }
         return 0;
     }
 
@@ -193,9 +188,9 @@ public:
     message2_t *svc(message2_t* task) {
 
         if (input_channels == 1 && straightGroup){
-            //auto handle = MTCL::Manager::getNext();
-            while(this->handleBatch() != -1);
-        } /*else
+            auto handle = MTCL::Manager::getNext();
+            while(this->handleBatch(handle) != -1);
+        } else
             while(neos < input_channels){
                 auto handle = MTCL::Manager::getNext(std::chrono::microseconds(RECEIVER_POLL_TIMEOUT));
                 if (handle.isValid()) 
@@ -204,7 +199,6 @@ public:
                 if (ff::termination_counter <= 0)
                     break;
             }
-*/
         return this->EOS;
     }
 

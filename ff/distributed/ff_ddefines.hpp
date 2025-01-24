@@ -57,7 +57,7 @@ struct message2_t {
     sizeDFF_t size = 0;
     char* data = nullptr;
     bool cleanup = false;
-    void(*freeCallback)(void*) = nullptr;
+    void(*freeCallback)(char*, size_t) = nullptr;
 
     message2_t(char *rd, sizeDFF_t size, bool cleanup=true) :  size(size), data(rd), cleanup(cleanup) {}
     message2_t() = default;
@@ -72,8 +72,8 @@ struct message2_t {
 
     inline void cleanContent(){
         if (data && cleanup){
-            if (freeCallback) freeCallback(data);
-            else delete [] data;
+            if (freeCallback) freeCallback(data, size);
+            else free(data);
         }
         data = nullptr;
         cleanup = false;

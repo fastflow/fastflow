@@ -87,13 +87,14 @@ public:
 
 		// check what happens with this datacopied
 		bool datacopied = this->n->serializeF(in, msg);
-		if (!datacopied)  
-			msg->freeCallback = this->n->freetaskF;
-		else 
-			this->n->freetaskF(in);
-
+		msg->cleanup = true;
+		msg->freeCallback = this->n->freeBlob;
+	
 		ff_minode::ff_send_out(msg);
-
+		
+		if (datacopied)
+			this->n->freetaskF(in);
+			
 		return true;
 	}
 

@@ -163,7 +163,7 @@ public:
 
 					datacopied = this->n->serializeF(task, msg);
 					if (!datacopied) {
-						msg->freeCallback = this->n->freetaskF;
+						msg->freeCallback = this->n->freeBlob;
 					}
 				}
 				this->get_num_feedbackchannels();
@@ -188,8 +188,8 @@ public:
 			msg->locality = chInfo.locality;
 
 			bool datacopied = this->n->serializeF(task, msg);
-			if (!datacopied) 
-				msg->freeCallback = this->n->freetaskF;
+			msg->cleanup = true;
+			msg->freeCallback = this->n->freeBlob;
 			ff_send_out_to(msg, this->get_num_outchannels() - 1); // send to the routing worker
 			if (datacopied) this->n->freetaskF(task);
 			return true;

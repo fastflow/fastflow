@@ -80,39 +80,34 @@ struct ExcType {
 	  }
 	  archive(cereal::binary_data(C, clen));
 	}
-#endif	
+#else
+	static void freeBlob(char* b, size_t sz){
+        reinterpret_cast<ExcType*>(b)->~ExcType();
+		free(b);
+    }
+    
+    static void freeTask(ExcType* ptr){
+        return;
+    }
+    
+    std::tuple<char*, size_t, bool> serialize(){
+        return {(char*)this, this->clen+sizeof(ExcType), false};
+    }
+    
+    bool deserialize(char* buffer, size_t sz){
+        this->clen = sz - sizeof(ExcType);
+		this->C = buffer + sizeof(ExcType);
+        return false;
+    }
+    
+    static ExcType* alloc(char* buf, size_t sz){
+        return new (buf) ExcType(true);
+    }
+
+#endif
+
 		
 };
-
-template<typename T>
-void serializefreetask(T *o, ExcType* input) {
-	input->~ExcType();
-	free(o);
-}
-
-
-#ifdef MANUAL_SERIALIZATION
-template<typename Buffer>
-bool serialize(Buffer&b, ExcType* input){
-	b = {(char*)input, input->clen+sizeof(ExcType)};
-
-	return false;
-}
-
-template<typename Buffer>
-void deserializealloctask(const Buffer& b, ExcType*& p) {
-	p = new (b.first) ExcType(true);
-
-};
-
-template<typename Buffer>
-bool deserialize(const Buffer&b, ExcType* p){
-	p->clen = b.second - sizeof(ExcType);
-	p->C = (char*)p + sizeof(ExcType);
-
-	return false;
-}
-#endif
 
 static ExcType* allocateExcType(size_t size, bool setdata=false) {
 	char* _p = (char*)calloc(size+sizeof(ExcType), 1);	// to make valgrind happy !

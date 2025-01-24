@@ -45,18 +45,18 @@
 #include <cereal/types/vector.hpp>
 #include <cereal/types/polymorphic.hpp>
 
-//#include "MTCL/include/mtcl.hpp"
+#include "MTCL/include/mtcl.hpp"
 
 namespace ff {
 
 class ff_dsenderMTCL2;
 
-class uBuffer2 {
+class uBuffer {
     friend class ff_dsenderMTCL2;
     size_t batchingLimit, sizeLimit;
     unsigned int actualSize = 0;
     ff_dsenderMTCL2* parent;
-    //MTCL::HandleUser& handle;
+    MTCL::HandleUser& handle;
     int& counter;
 
     char* mainBuffer = nullptr; 
@@ -86,13 +86,13 @@ class uBuffer2 {
     }
 
 public:
-    uBuffer2(size_t batchingLimit, size_t sizeLimit, ff_dsenderMTCL2* parent, /*MTCL::HandleUser& handle,*/ int& counter) : batchingLimit(batchingLimit), sizeLimit(sizeLimit), parent(parent), /*handle(handle),*/ counter(counter) {
+    uBuffer(size_t batchingLimit, size_t sizeLimit, ff_dsenderMTCL2* parent, MTCL::HandleUser& handle, int& counter) : batchingLimit(batchingLimit), sizeLimit(sizeLimit), parent(parent), handle(handle), counter(counter) {
         mainBuffer = (char*)malloc(2*std::max<size_t>(sizeLimit, SINGLE_SEND_SIZE_THRESHOLD)+batchingLimit*headerSize+sizeof(int));
         headerBuffer = (char*)malloc(batchingLimit*headerSize);
         mainBuffer_curr_ptr = mainBuffer;
     }
 
-    ~uBuffer2(){
+    ~uBuffer(){
         free(mainBuffer);
         free(headerBuffer);
     }
@@ -103,9 +103,7 @@ public:
 
 
 class ff_dsenderMTCL2: public ff_minode_t<message2_t> {
-    friend class uBuffer2;
-    friend class uBuffer_i;
-    friend struct uBuffer_1;
+    friend class uBuffer;
 
     const std::vector<std::tuple<std::string, std::string, std::vector<ff_node*>>>& destEndpoints;
     const std::unordered_map<ff_node*, IngressEgressChannels_t>& channelsDictionary;
@@ -113,9 +111,9 @@ protected:
     size_t neos=0;
     size_t totalAcks=0;
     std::unordered_map<int, size_t> dest2ConnID;
-    //std::vector<MTCL::HandleUser> MTCL_Handlers;
+    std::vector<MTCL::HandleUser> MTCL_Handlers;
     std::unordered_map<int, std::vector<size_t>> src2PossibleDestConnID;
-    std::vector<uBuffer2*> batchBuffers;
+    std::vector<uBuffer> batchBuffers;
     std::vector<int> handlerCounters;
     int batchSize;
     size_t batchByteSize;
@@ -123,7 +121,7 @@ protected:
     int coreid;
     std::mt19937 gen{std::random_device{}()};
 
-    /*int waitAckFrom(int& counter){
+    int waitAckFrom(int& counter){
         while (!counter){
             for(size_t i = 0; i < handlerCounters.size(); ++i){
                 ssize_t r; ack_t a;
@@ -147,18 +145,18 @@ protected:
             // TODO: FIX with better way to pause from receving acks
         }
         return 1;
-    }*/
+    }
 
-    uBuffer2* getMostFilledBuffer(const int& src){
-        uBuffer2* maxBuffer = nullptr;
+    uBuffer& getMostFilledBuffer(const int& src){
+        uBuffer* maxBuffer = nullptr;
         auto& possibleDestConnID = src2PossibleDestConnID[src];
         for(auto& connID : possibleDestConnID){
-            auto* buffer = batchBuffers[connID];
+            auto* buffer = &batchBuffers[connID];
             if (!maxBuffer) maxBuffer = buffer;
             else if (maxBuffer->actualSize < buffer->actualSize) maxBuffer = buffer;
         }
 
-        if (maxBuffer->actualSize > 0) return maxBuffer;
+        if (maxBuffer->actualSize > 0) return *maxBuffer;
         size_t connID;
         std::sample(possibleDestConnID.begin(), possibleDestConnID.end(), &connID, 1, gen);
         return batchBuffers[connID];
@@ -170,28 +168,25 @@ public:
     ff_dsenderMTCL2(const std::vector<std::tuple<std::string, std::string, std::vector<ff_node*>>>& destEndpoints, const std::unordered_map<ff_node*, IngressEgressChannels_t>& channelsDictionary, int batchSize = DEFAULT_BATCH_SIZE, size_t batchByteSize = DEFAULT_BATCH_BYTE_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1) : destEndpoints(destEndpoints), channelsDictionary(channelsDictionary), batchSize(batchSize), batchByteSize(batchByteSize), messageOTF(messageOTF), coreid(coreid) {}
 
     int svc_init() {
-		if (coreid!=-1)
-			ff_mapThreadToCpu(coreid);
 
         // important for the next lines since they are using the reference to the back of the vector
-        //MTCL_Handlers.reserve(destEndpoints.size());
+        MTCL_Handlers.reserve(destEndpoints.size());
         handlerCounters.reserve(destEndpoints.size());
 
         for(auto& [_, endpoint, dest_v] : destEndpoints){
             
-            //auto h = MTCL::Manager::connect(endpoint, MAX_RETRIES, 10);
-            /*if (!h.isValid()) {
+            auto h = MTCL::Manager::connect(endpoint, MAX_RETRIES, 10);
+            if (!h.isValid()) {
                 std::cerr << "Connection failed with this endpoint: " << endpoint << std::endl;
-                error("Unable to connect failing!!");
                 return -1;
-            }*/
+            }
 
-            //MTCL_Handlers.push_back(std::move(h));
+            MTCL_Handlers.push_back(std::move(h));
             handlerCounters.push_back(messageOTF);
-            size_t connID = 0;// MTCL_Handlers.size() - 1;
+            size_t connID = MTCL_Handlers.size() - 1;
             totalAcks += messageOTF;
 
-            batchBuffers.push_back(new uBuffer2(batchSize, batchByteSize, this,/*MTCL_Handlers.back()*/ handlerCounters.back()));
+            batchBuffers.emplace_back(batchSize, batchByteSize, this, MTCL_Handlers.back(), handlerCounters.back());
 
             for(ff_node* n : dest_v)
                 dest2ConnID[n->mioID] = connID;
@@ -203,27 +198,27 @@ public:
                 if (l == ChannelLocality::REMOTE)
                     src2PossibleDestConnID[n->mioID].push_back(dest2ConnID[dest_n->mioID]);
     
-
         return 0;
     }
 
     message2_t *svc(message2_t* task) {
         if (task->dest >= 0)
-            batchBuffers[dest2ConnID[task->dest]]->push(task);
+            batchBuffers[dest2ConnID[task->dest]].push(task);
         else {
-
             if (task->isFlush()){
                 for (auto& connID_ : std::unordered_set<int>(src2PossibleDestConnID[task->src].begin(), src2PossibleDestConnID[task->src].end()))
-                    batchBuffers[connID_]->flush();
+                    batchBuffers[connID_].flush();
                 MessageAllocator::releaseMessage(task);
             }
-            else if (task->size == 0){
-                for (auto& connID_ : std::unordered_set<int>(src2PossibleDestConnID[task->src].begin(), src2PossibleDestConnID[task->src].end()))
-                    batchBuffers[connID_]->push(MessageAllocator::make_logical_EOS(task->src));
+            else if (task->isLogicalEOS()){
+    
+                for (auto& connID_ : std::unordered_set<int>(src2PossibleDestConnID[task->src].begin(), src2PossibleDestConnID[task->src].end())){
+                    batchBuffers[connID_].push(MessageAllocator::make_logical_EOS(task->src));
+                }
                 
                 MessageAllocator::releaseMessage(task);
             } else
-                getMostFilledBuffer(task->src)->push(task); // get the most filled buffer socket or a rr socket
+                getMostFilledBuffer(task->src).push(task); // get the most filled buffer socket or a rr socket
         }
 
         return this->GO_ON;
@@ -231,12 +226,8 @@ public:
 
 
 	void svc_end() {
-        if (rank == 0)
-            MPI_Send(nullptr, 0, MPI_BYTE, 1, 0, MPI_COMM_WORLD);
-        else
-            MPI_Send(nullptr, 0, MPI_BYTE, 0, 1, MPI_COMM_WORLD);
-        //for(auto& h : MTCL_Handlers) h.close();
-        /*
+        for(auto& h : MTCL_Handlers) h.close();
+        
 		size_t currentack = 0;
 		for(const auto& counter : handlerCounters)	currentack += counter;
 
@@ -263,25 +254,24 @@ public:
             }
 
 		}
-*/
 	}
 };
 
-inline int uBuffer2::push(message2_t* m){
+inline int uBuffer::push(message2_t* m){
         if (batchingLimit == 1 || m->size >= sizeLimit){
             // if there is already something in the buffer FLUSH it to preserve the ordering
             if (actualSize) this->flush();
             
             // direct send
             sizeDFF_t effectiveSize = m->size;
-            //if (effectiveSize > SINGLE_SEND_SIZE_THRESHOLD) m->size = 0;
+            if (effectiveSize > SINGLE_SEND_SIZE_THRESHOLD) m->size = 0;
 
-            size_t totalSize = m->size ;//+ headerSize + sizeof(int);
+            size_t totalSize = m->size + headerSize + sizeof(int);
 
             memcpy(mainBuffer, m->data, m->size);
 
-            //pushHeader_(mainBuffer + m->size, m->dest, m->src, m->type, effectiveSize);
-            //*reinterpret_cast<int*>(mainBuffer+totalSize-sizeof(int)) = htonl(1);
+            pushHeader_(mainBuffer + m->size, m->dest, m->src, m->type, effectiveSize);
+            *reinterpret_cast<int*>(mainBuffer+totalSize-sizeof(int)) = htonl(1);
 
 #ifdef DFF_ACK
         if (counter == 0 && parent->waitAckFrom(counter) == -1){
@@ -289,25 +279,17 @@ inline int uBuffer2::push(message2_t* m){
             return -1;
         }
 #endif
-        /*
+        
         if (handle.send(mainBuffer, totalSize) < 0){
             error("Error sending\n");
             return -1;
-        }*/
-        if (rank == 0)
-            MPI_Send(mainBuffer, totalSize, MPI_BYTE, 1, 0, MPI_COMM_WORLD);
-        else
-            MPI_Send(mainBuffer, totalSize, MPI_BYTE, 0, 1, MPI_COMM_WORLD);
-
-        /*if (effectiveSize > SINGLE_SEND_SIZE_THRESHOLD)
-            if (rank == 0)
-                MPI_Send(m->data, effectiveSize, MPI_BYTE, 1, 0, MPI_COMM_WORLD);
-             else
-                MPI_Send(m->data, effectiveSize, MPI_BYTE, 0, 1, MPI_COMM_WORLD);*/
-            /*if (handle.send(m->data, effectiveSize) < 0){
+        }
+        
+        if (effectiveSize > SINGLE_SEND_SIZE_THRESHOLD)
+            if (handle.send(m->data, effectiveSize) < 0){
                 error("Error sending big payload\n");
                 return -1;
-            }*/
+            }
 
 #ifdef DFF_ACK
         counter -= 1;
@@ -328,7 +310,7 @@ inline int uBuffer2::push(message2_t* m){
         return 0;
     }
 
-    inline int uBuffer2::flush(){
+    inline int uBuffer::flush(){
         // copy headers at the end of the main buffer
         memcpy(this->mainBuffer_curr_ptr, this->headerBuffer, actualSize*headerSize);
         // write the number of messages in the batch
@@ -343,14 +325,11 @@ inline int uBuffer2::push(message2_t* m){
         }
 #endif
 
-        /*if (handle.send(this->mainBuffer, this->mainBuffer_curr_ptr - this->mainBuffer ) < 0){
+        if (handle.send(this->mainBuffer, this->mainBuffer_curr_ptr - this->mainBuffer ) < 0){
             error("flushing payload buffers");
             return -1;
-        }*/
-       if (rank == 0)
-            MPI_Send(mainBuffer, this->mainBuffer_curr_ptr - this->mainBuffer, MPI_BYTE, 1, 0, MPI_COMM_WORLD);
-        else
-            MPI_Send(mainBuffer, this->mainBuffer_curr_ptr - this->mainBuffer, MPI_BYTE, 0, 1, MPI_COMM_WORLD);
+        }
+
 #ifdef DFF_ACK
         counter -= 1;
 #endif
