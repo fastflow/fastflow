@@ -114,7 +114,6 @@ protected:
 
                 out->cleanup = true;
 			    out->src = src;
-                std::cout << "Received a message from src: " << src << std::endl;
                 out->locality = ChannelLocality::REMOTE;
                 ff_send_out(out);
                 if (!inputBuffer)

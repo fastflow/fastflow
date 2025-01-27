@@ -31,7 +31,9 @@
 #define MTCL_DISABLE_COLLECTIVES
 
 #if !defined(DFF_EXCLUDE_MPI)
+#ifndef ENABLE_MPI
 #define ENABLE_MPI
+#endif
 #endif
 
 #if !defined(DFF_EXCLUDE_BLOCKING)
