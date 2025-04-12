@@ -146,7 +146,7 @@ public:
 				for(size_t i = 0; i < localDest.size(); i++){
 					int idx = (nextDestination + 1 + i) % localDest.size();
 					if (ff_send_out_to(task, localDest[idx], 1)){ // non blcking ff_send_out_to, we try just once                                                         
-                        nextDestination = idx;
+						nextDestination = idx;
                         if (msg) {
 							if (!datacopied) msg->cleanup = false;
 							MessageAllocator::releaseMessage(msg);
@@ -217,8 +217,9 @@ private:
 	std::unordered_map<int, inputMapRecord_t> inputMap;
 	std::vector<std::pair<int, ChannelType>> localInputMap;
 	size_t eos_received = 0;
+	bool prevLevelSquareBox;
 public:
-	CollectorAdapter2(ff_node* n, const IngressChannels_t& channels, const std::vector<ff_node*>& prevLocalNodes, bool cleanup=false): internal_mi_transformer(this, cleanup), channelsInfo(channels), prevLocalNodes(prevLocalNodes) {
+	CollectorAdapter2(ff_node* n, const IngressChannels_t& channels, const std::vector<ff_node*>& prevLocalNodes, bool prevLevelSquareBox = true, bool cleanup=false): internal_mi_transformer(this, cleanup), channelsInfo(channels), prevLocalNodes(prevLocalNodes), prevLevelSquareBox(prevLevelSquareBox) {
 		this->n       = n;
 		this->mioID = n->mioID;
 	}
@@ -260,7 +261,7 @@ public:
 			ssize_t channel;
 			ChannelType type = ChannelType::FWD;
 			// if the results come from the "square box" or "receiver", it is a result from a remote workers so i have to read from which worker it come from 
-			if (this->fromInput() && (size_t)get_channel_id() == (this->get_num_inchannels() - this->get_num_feedbackchannels() - 1)){
+			if (prevLevelSquareBox && this->fromInput() && (size_t)get_channel_id() == (this->get_num_inchannels() - this->get_num_feedbackchannels() - 1)){
 				message2_t * msg = reinterpret_cast<message2_t*>(in);
 				if (inputMap.count(msg->src) == 0) {
 					std::cerr << "Errore ho ricevuto quLCOSA CHE NON DOVEVO\n";
