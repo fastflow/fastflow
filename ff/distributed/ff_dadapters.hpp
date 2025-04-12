@@ -313,7 +313,10 @@ class SquareBox : public ff_monode {
 	const std::vector<ff_node*>& nextLocalNodes;
 	const std::unordered_map<ff_node*, IngressEgressChannels_t>& channelsDictionary;
 	std::unordered_map<int, std::vector<int>> localLBMap; // local map for load balacing of messages without destinations
-    std::mt19937 gen{std::random_device{}()};
+    int rr_dest;
+#ifdef RANDOM_LOADBALANCING
+	std::mt19937 gen{std::random_device{}()};
+#endif
 	bool nextLevelSquareBox;
 public:
 	/*
@@ -388,7 +391,12 @@ public:
 
 			int dest;
 			do {
+#ifdef RANDOM_LOADBALANCING
 				std::sample(possibleDest.begin(), possibleDest.end(), &dest, 1, gen);
+#else
+				rr_dest = (rr_dest + 1) % possibleDest.size();
+				dest = possibleDest[rr_dest];
+#endif
 			} while (!ff_send_out_to(in, dest, 1));
 		}
 		else if (localLookup.count(msg->dest)) 

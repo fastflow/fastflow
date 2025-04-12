@@ -27,7 +27,7 @@
 
 #include <iostream>
 #include <map>
-#include <random>
+
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_messageAllocator.hpp>
@@ -46,6 +46,10 @@
 #include <cereal/types/polymorphic.hpp>
 
 #include "MTCL/include/mtcl.hpp"
+
+#ifdef RANDOM_LOADBALANCING
+#include <random>
+#endif
 
 namespace ff {
 
@@ -86,6 +90,13 @@ class uBuffer {
     }
 
 public:
+    uBuffer() = default;
+
+    uBuffer(uBuffer&& other) : batchingLimit(other.batchingLimit), sizeLimit(other.sizeLimit), actualSize(other.actualSize), parent(other.parent), handle(other.handle), counter(other.counter), mainBuffer(other.mainBuffer), headerBuffer(other.headerBuffer), mainBuffer_curr_ptr(other.mainBuffer_curr_ptr){
+        other.mainBuffer = nullptr;
+        other.headerBuffer = nullptr;
+    }
+
     uBuffer(size_t batchingLimit, size_t sizeLimit, ff_dsenderMTCL2* parent, MTCL::HandleUser& handle, int& counter) : batchingLimit(batchingLimit), sizeLimit(sizeLimit), parent(parent), handle(handle), counter(counter) {
         mainBuffer = (char*)malloc(2*std::max<size_t>(sizeLimit, SINGLE_SEND_SIZE_THRESHOLD)+batchingLimit*headerSize+sizeof(int));
         headerBuffer = (char*)malloc(batchingLimit*headerSize);
@@ -93,8 +104,8 @@ public:
     }
 
     ~uBuffer(){
-        free(mainBuffer);
-        free(headerBuffer);
+        if (mainBuffer) free(mainBuffer);
+        if (headerBuffer) free(headerBuffer);
     }
     
     int push(message2_t*);
@@ -118,8 +129,10 @@ protected:
     int batchSize;
     size_t batchByteSize;
     int messageOTF;
-    int coreid;
+    size_t rr_connID;
+#ifdef RANDOM_LOADBALANCING
     std::mt19937 gen{std::random_device{}()};
+#endif
 
     int waitAckFrom(int& counter){
         while (!counter){
@@ -148,24 +161,33 @@ protected:
     }
 
     uBuffer& getMostFilledBuffer(const int& src){
-        uBuffer* maxBuffer = nullptr;
         auto& possibleDestConnID = src2PossibleDestConnID[src];
-        for(auto& connID : possibleDestConnID){
-            auto* buffer = &batchBuffers[connID];
-            if (!maxBuffer) maxBuffer = buffer;
-            else if (maxBuffer->actualSize < buffer->actualSize) maxBuffer = buffer;
-        }
 
-        if (maxBuffer->actualSize > 0) return *maxBuffer;
+        if (batchSize > 1){
+            uBuffer* maxBuffer = nullptr;
+            for(auto& connID : possibleDestConnID){
+                auto* buffer = &batchBuffers[connID];
+                if (!maxBuffer) maxBuffer = buffer;
+                else if (maxBuffer->actualSize < buffer->actualSize) maxBuffer = buffer;
+            }
+
+            if (maxBuffer->actualSize > 0) return *maxBuffer;
+        }
+        
+#ifdef RANDOM_LOADBALANCING
         size_t connID;
-        std::sample(possibleDestConnID.begin(), possibleDestConnID.end(), &connID, 1, gen);
+        std::sample(possibleDestConnID.begin(), possibleDestConnID.end(), &connID, 1, gen); 
         return batchBuffers[connID];
+#else
+        rr_connID = (rr_connID + 1) % possibleDestConnID.size();
+        return batchBuffers[possibleDestConnID[rr_connID]];
+#endif
     }
 
     
 public:
 
-    ff_dsenderMTCL2(const std::vector<std::tuple<std::string, std::string, std::vector<ff_node*>>>& destEndpoints, const std::unordered_map<ff_node*, IngressEgressChannels_t>& channelsDictionary, int batchSize = DEFAULT_BATCH_SIZE, size_t batchByteSize = DEFAULT_BATCH_BYTE_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF, int coreid=-1) : destEndpoints(destEndpoints), channelsDictionary(channelsDictionary), batchSize(batchSize), batchByteSize(batchByteSize), messageOTF(messageOTF), coreid(coreid) {}
+    ff_dsenderMTCL2(const std::vector<std::tuple<std::string, std::string, std::vector<ff_node*>>>& destEndpoints, const std::unordered_map<ff_node*, IngressEgressChannels_t>& channelsDictionary, int batchSize = DEFAULT_BATCH_SIZE, size_t batchByteSize = DEFAULT_BATCH_BYTE_SIZE, int messageOTF = DEFAULT_MESSAGE_OTF) : destEndpoints(destEndpoints), channelsDictionary(channelsDictionary), batchSize(batchSize), batchByteSize(batchByteSize), messageOTF(messageOTF){}
 
     int svc_init() {
 
@@ -186,7 +208,8 @@ public:
             size_t connID = MTCL_Handlers.size() - 1;
             totalAcks += messageOTF;
 
-            batchBuffers.emplace_back(batchSize, batchByteSize, this, MTCL_Handlers.back(), handlerCounters.back());
+            batchBuffers.emplace_back(batchSize, batchByteSize, this, MTCL_Handlers[connID], handlerCounters[connID]);
+            //batchBuffers.push_back(std::move(uBuffer(batchSize, batchByteSize, this, MTCL_Handlers[connID], handlerCounters[connID])));
 
             for(ff_node* n : dest_v)
                 dest2ConnID[n->mioID] = connID;
@@ -197,6 +220,9 @@ public:
             for(auto& [dest_n, t, l, q] : channelsTuple.second)
                 if (l == ChannelLocality::REMOTE)
                     src2PossibleDestConnID[n->mioID].push_back(dest2ConnID[dest_n->mioID]);
+        
+        // initialize the round robin variabile with the number of all available endpoints, so that probably we will start from zero at the first iteration
+        rr_connID = destEndpoints.size();
     
         return 0;
     }
