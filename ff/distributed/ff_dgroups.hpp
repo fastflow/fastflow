@@ -135,6 +135,10 @@ public:
         threadMapper::instance()->setMappingList(g->threadMapping.c_str());
     }
 
+    void setBatchSize(int _size){
+      for(auto& pg : parsedGroups) pg.batchSize = _size;
+    }
+
 	  const std::string& getRunningGroup() const { return runningGroup; }
 
     //void forceProtocol(Proto p){this->usedProtocol = p;}
@@ -485,6 +489,10 @@ static inline int DFF_Init(int& argc, char**& argv){
 
 static inline const std::string DFF_getMyGroup() {
 	return dGroups::Instance()->getRunningGroup();
+}
+
+static inline void setBatchSize(int size){
+  return dGroups::Instance()->setBatchSize(size);
 }
 
 int ff_pipeline::run_and_wait_end() {
