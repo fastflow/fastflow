@@ -76,7 +76,8 @@ public:
 		
 		// try to reuse an already present message
 		message2_t* msg = reusableMsg ? reusableMsg : MessageAllocator::allocateMessage();
-
+		if (msg == reusableMsg) reusableMsg = nullptr;
+		
 		msg->src = this->n->mioID;
 		if (id == -1){
 			msg->dest = -1;
@@ -94,8 +95,8 @@ public:
 		msg->freeCallback = this->n->freeBlob;
 	
 		ff_minode::ff_send_out(msg);
-		if (datacopied)
-			this->n->freetaskF(in);
+		//if (datacopied)
+		this->n->freetaskF(in);
 			
 		return true;
 	}
@@ -122,15 +123,17 @@ public:
 			
 
 		// build the output map
+		ff::queueLength maxLength = -1;
 		for(size_t i = 0; i < channelsInfo.second.size(); i++){
 			auto& t = channelsInfo.second[i];
 			outMap.emplace_back(std::get<0>(t)->mioID, std::get<1>(t), std::get<2>(t));
+			if (std::get<3>(t) > maxLength) maxLength = std::get<3>(t);
 		}
 
-		// set the size of output queue to sender to 1
-		size_t oldsz;
-        ff::svector<ff_node*> realOutputsNodes; this->get_out_nodes(realOutputsNodes);
-        realOutputsNodes.back()->change_outputqueuesize(1, oldsz);
+		if (maxLength > 0){
+			size_t oldsz;
+        	this->change_outputqueuesize(maxLength, oldsz);
+		}
 
 		return n->svc_init();
 	}
