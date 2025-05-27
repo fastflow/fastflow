@@ -75,6 +75,12 @@ protected:
             return -1;
         }
 
+#ifdef DFF_ACK    
+        if (h.send(&ACK, sizeof(ack_t)) < 0){
+            error("dreceiver: Error sending back ack");
+        }
+#endif
+
         if (!inputBuffer || inputBufferSize < size){
             if (inputBuffer) free(inputBuffer);
             inputBuffer = (char*)malloc(size);
@@ -85,12 +91,6 @@ protected:
             error("dreceiver receive header error");
             return -1;
         }
-
-#ifdef DFF_ACK    
-        if (h.send(&ACK, sizeof(ack_t)) < 0){
-            error("dreceiver: Error sending back ack");
-        }
-#endif
 
         int elementsInBatch = ntohl(*reinterpret_cast<int*>(inputBuffer + size - sizeof(int)));
 
@@ -140,7 +140,7 @@ protected:
                     out->size = NetworkToHostByteOrder(*reinterpret_cast<sizeDFF_t*>(headerBuffer_sliding_ptr+2*sizeof(addr_t)+sizeof(ChannelType))); 
 
                     out->data = (char*) malloc(out->size);
-                    memcpy(out->data, payload_sliding_ptr, out->size);
+                    std::memcpy(out->data, payload_sliding_ptr, out->size);
                     payload_sliding_ptr += out->size; // advance the sliding ptr
                     out->cleanup = true;
                 
@@ -199,6 +199,10 @@ public:
                     break;
             }
         return this->EOS;
+    }
+
+    ~ff_dreceiverMTCL2(){
+        if (inputBuffer) free(inputBuffer);
     }
 
 protected:

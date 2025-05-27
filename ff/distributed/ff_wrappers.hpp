@@ -48,6 +48,8 @@ private:
 	std::vector<outputMapRecord_t> outMap;
 	bool sink;
 	size_t eos_received = 0;
+
+	message2_t* reusableMsg = nullptr;
 public:
 
 	WrapperINOUT(ff_node* n, const IngressEgressChannels_t& channels, bool cleanup=false) : internal_mi_transformer(this, cleanup), channelsInfo(channels) {
@@ -72,7 +74,9 @@ public:
 
 		if (ret && in > FF_TAG_MIN) return ff_minode::ff_send_out(in);
 		
-		message2_t* msg = MessageAllocator::allocateMessage();
+		// try to reuse an already present message
+		message2_t* msg = reusableMsg ? reusableMsg : MessageAllocator::allocateMessage();
+
 		msg->src = this->n->mioID;
 		if (id == -1){
 			msg->dest = -1;
@@ -85,13 +89,11 @@ public:
 
 		msg->locality = ChannelLocality::REMOTE;
 
-		// check what happens with this datacopied
 		bool datacopied = this->n->serializeF(in, msg);
 		msg->cleanup = true;
 		msg->freeCallback = this->n->freeBlob;
 	
 		ff_minode::ff_send_out(msg);
-		
 		if (datacopied)
 			this->n->freetaskF(in);
 			
@@ -124,6 +126,11 @@ public:
 			auto& t = channelsInfo.second[i];
 			outMap.emplace_back(std::get<0>(t)->mioID, std::get<1>(t), std::get<2>(t));
 		}
+
+		// set the size of output queue to sender to 1
+		size_t oldsz;
+        ff::svector<ff_node*> realOutputsNodes; this->get_out_nodes(realOutputsNodes);
+        realOutputsNodes.back()->change_outputqueuesize(1, oldsz);
 
 		return n->svc_init();
 	}
@@ -166,12 +173,24 @@ public:
 			bool datacopied=true;
 			out = n->svc(this->n->deserializeF(msg, datacopied, n));
 			if (!datacopied) msg->cleanup = false;
-			MessageAllocator::releaseMessage(msg);
+			
+			// try to reuse the message for an eventual output
+			if (reusableMsg) 
+				MessageAllocator::releaseMessage(msg);
+			else {
+				reusableMsg = msg;
+				reusableMsg->cleanContent();
+			}
+
 		}  else // it can happen if we have a feedback channel
 			out = n->svc(nullptr);
 		
         serialize(out, -1, true);
         return GO_ON;
+	}
+
+	~WrapperINOUT(){
+		if (reusableMsg) delete reusableMsg;
 	}
 
 	bool init_output_blocking(pthread_mutex_t   *&m,

@@ -123,7 +123,7 @@ protected:
     size_t totalAcks=0;
     std::unordered_map<int, size_t> dest2ConnID;
     std::vector<MTCL::HandleUser> MTCL_Handlers;
-    std::unordered_map<int, std::vector<size_t>> src2PossibleDestConnID;
+    std::unordered_map<int, std::set<size_t>> src2PossibleDestConnID;
     std::vector<uBuffer> batchBuffers;
     std::vector<int> handlerCounters;
     int batchSize;
@@ -160,7 +160,7 @@ protected:
         return 1;
     }
 
-    uBuffer& getMostFilledBuffer(const int& src){
+    inline uBuffer& getMostFilledBuffer(const int& src){
         auto& possibleDestConnID = src2PossibleDestConnID[src];
 
         if (batchSize > 1){
@@ -180,7 +180,7 @@ protected:
         return batchBuffers[connID];
 #else
         rr_connID = (rr_connID + 1) % possibleDestConnID.size();
-        return batchBuffers[possibleDestConnID[rr_connID]];
+        return batchBuffers[*std::next(possibleDestConnID.begin(), rr_connID)];
 #endif
     }
 
@@ -219,7 +219,7 @@ public:
         for(auto& [n, channelsTuple] : channelsDictionary)
             for(auto& [dest_n, t, l, q] : channelsTuple.second)
                 if (l == ChannelLocality::REMOTE)
-                    src2PossibleDestConnID[n->mioID].push_back(dest2ConnID[dest_n->mioID]);
+                    src2PossibleDestConnID[n->mioID].insert(dest2ConnID[dest_n->mioID]);
         
         // initialize the round robin variabile with the number of all available endpoints, so that probably we will start from zero at the first iteration
         rr_connID = destEndpoints.size();
@@ -293,8 +293,9 @@ inline int uBuffer::push(message2_t* m){
             if (effectiveSize > SINGLE_SEND_SIZE_THRESHOLD) m->size = 0;
 
             size_t totalSize = m->size + headerSize + sizeof(int);
-
-            memcpy(mainBuffer, m->data, m->size);
+            
+            if (m->data && m->size)
+                std::memcpy(mainBuffer, m->data, m->size);
 
             pushHeader_(mainBuffer + m->size, m->dest, m->src, m->type, effectiveSize);
             *reinterpret_cast<int*>(mainBuffer+totalSize-sizeof(int)) = htonl(1);
@@ -316,6 +317,8 @@ inline int uBuffer::push(message2_t* m){
                 error("Error sending big payload\n");
                 return -1;
             }
+        
+        MessageAllocator::releaseMessage(m);
 
 #ifdef DFF_ACK
         counter -= 1;
@@ -328,11 +331,11 @@ inline int uBuffer::push(message2_t* m){
                 memcpy(mainBuffer_curr_ptr, m->data, m->size); 
                 mainBuffer_curr_ptr += m->size;
             }
+            MessageAllocator::releaseMessage(m);
             // if the entries reached the batching limit OR the size of the buffer reached the sizeLimit OR the message has not size (i.e. is a logical EOS)  OR the current message is a Feedback FLUSH the buffer
             if (actualSize == batchingLimit || (size_t)(this->mainBuffer_curr_ptr - this->mainBuffer) >= sizeLimit || m->size == 0 || m->type == ChannelType::FBK) 
                 this->flush();
         }
-        MessageAllocator::releaseMessage(m);
         return 0;
     }
 

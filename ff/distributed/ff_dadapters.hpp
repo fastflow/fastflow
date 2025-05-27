@@ -144,7 +144,7 @@ public:
 			bool datacopied = true;
 			do {
 				for(size_t i = 0; i < localDest.size(); i++){
-					int idx = (nextDestination + 1 + i) % localDest.size();
+					const int idx = (nextDestination + 1 + i) % localDest.size();
 					if (ff_send_out_to(task, localDest[idx], 1)){ // non blcking ff_send_out_to, we try just once                                                         
 						nextDestination = idx;
                         if (msg) {
@@ -160,19 +160,17 @@ public:
 					msg->dest = -1;
 					msg->locality = ChannelLocality::REMOTE; // correct
 					msg->type = defaultChannelType;
-
+					msg->cleanup = true;
 					datacopied = this->n->serializeF(task, msg);
 					if (!datacopied) {
 						msg->freeCallback = this->n->freeBlob;
 					}
 				}
-				this->get_num_feedbackchannels();
 				if (ff_send_out_to(msg, this->get_num_outchannels() - 1, 1)) {
 					if (datacopied) this->n->freetaskF(task);
 					return true;
 				}
 			} while(1);
-
 
 		} else {
 			
@@ -375,14 +373,9 @@ public:
 				return this->GO_ON;
 			}
 			
-			std::vector<int>& possibleDest = localLBMap[msg->src];
 			if (msg->size == 0){ // this is a logical EOS, without destination we should broadcast it 
-				
-				/*if (possibleDest.empty() && nextLevelSquareBox){
-					ff_send_out_to(msg, this->get_num_outchannels()-1);
-					return this->GO_ON;
-				}*/
-				
+				std::vector<int>& possibleDest = localLBMap[msg->src];
+
 				for(auto& dest : possibleDest)
 					ff_send_out_to(MessageAllocator::make_logical_EOS(msg->src, -1), dest);
 				
@@ -390,15 +383,20 @@ public:
 				return this->GO_ON;
 			}
 
-			int dest;
-			do {
+			if (!nextLevelSquareBox) // if there is no square box, it means all the next works can receive the task (this is not always true so this line can introduce some bugs)
+				ff_send_out(in);
+			else {
+				int dest;
+				std::vector<int>& possibleDest = localLBMap[msg->src];
+				do {
 #ifdef RANDOM_LOADBALANCING
-				std::sample(possibleDest.begin(), possibleDest.end(), &dest, 1, gen);
+					std::sample(possibleDest.begin(), possibleDest.end(), &dest, 1, gen);
 #else
-				rr_dest = (rr_dest + 1) % possibleDest.size();
-				dest = possibleDest[rr_dest];
+					rr_dest = (rr_dest + 1) % possibleDest.size();
+					dest = possibleDest[rr_dest];
 #endif
-			} while (!ff_send_out_to(in, dest, 1));
+				} while (!ff_send_out_to(in, dest, 1));
+			}
 		}
 		else if (localLookup.count(msg->dest)) 
 			ff_send_out_to(in, localLookup[msg->dest]);

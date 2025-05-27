@@ -63,66 +63,6 @@
 namespace ff {
 enum Proto {TCP , MPI};
 
-class dataBuffer: public std::stringbuf {
-public:	
-    dataBuffer()
-        : std::stringbuf(std::ios::in | std::ios::out | std::ios::binary) {
-	}
-    
-    dataBuffer(char p[], size_t len, bool cleanup=false)
-        : std::stringbuf(std::ios::in | std::ios::out | std::ios::binary),
-		  len(len),cleanup(cleanup) {
-        setg(p, p, p + len);
-    }
-
-	~dataBuffer() {
-		if (cleanup) {
-			cleanup = false;
-			if (freetaskF) {
-				freetaskF(getPtr());
-			} else
-				delete [] getPtr();
-		}		
-	}
-
-    void setBuffer(char p[], size_t len, bool cleanup=true){
-        setg(p, p, p+len);
-        this->len = len;
-        this->cleanup = cleanup;
-    }
-
-	size_t getLen() const {
-		if (len>=0) return len;
-		return str().length();
-	}
-	char* getPtr() const {
-		return eback();
-	}
-
-	void doNotCleanup(){
-		cleanup = false;
-	}
-
-	std::function<void(void*)> freetaskF;
-	
-protected:	
-	ssize_t len=-1;
-	bool cleanup = false;
-};
-
-using ffDbuffer = std::pair<char*, size_t>;
-
-struct message_t {
-	message_t(){}
-    message_t(int sender, int chid) : sender(sender), chid(chid) {}
-	message_t(char *rd, size_t size, bool cleanup=true) : data(rd,size,cleanup){}
-	
-	int           sender;
-	int           chid;
-    bool          feedback = false;
-	dataBuffer    data;
-};
-
 struct ack_t {
     char ack = 'A';
 };
