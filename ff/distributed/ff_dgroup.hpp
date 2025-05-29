@@ -205,7 +205,7 @@ public:
                     }
                 
                 // add also the squarebox to wrapped workers
-                if ((i == 0 && !ir.ingressRemoteConnectionsGroupsName.empty()) || (i == (ir.bucketsDistribution.size()-1) && !ir.destinationEndpoints.empty()))
+                if ((i == 0 && !ir.ingressRemoteConnectionsGroupsName.empty()) || (i == (ir.bucketsDistribution.size()-1) && !ir.destinationEndpoints.empty()) || (i != 0 && i != (ir.bucketsDistribution.size()-1)))
                     _addWorker_(wrappedWorkers, new ff_comb(new SquareBoxInputAdapter, new SquareBox(nextLocalWorkers, ir.channelsDictionary), true, true), true); // add combine to have either multi input and multioutput
         
                 /*if (i == 0)

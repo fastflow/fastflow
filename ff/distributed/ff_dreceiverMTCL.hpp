@@ -98,12 +98,11 @@ protected:
             char* headerBuffer = inputBuffer + size - headerSize - sizeof(int);
             addr_t src = NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer+sizeof(addr_t)));        
                         
-            if (*reinterpret_cast<size_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType))){
+            if (*reinterpret_cast<sizeDFF_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType))){
                 message2_t* out = MessageAllocator::allocateMessage();
                 out->size = NetworkToHostByteOrder(*reinterpret_cast<sizeDFF_t*>(headerBuffer+2*sizeof(addr_t)+sizeof(ChannelType)));
                 out->dest = NetworkToHostByteOrder(*reinterpret_cast<addr_t*>(headerBuffer));
                 out->type = *reinterpret_cast<ChannelType*>(headerBuffer+2*sizeof(addr_t));
-                
                 if (out->size > SINGLE_SEND_SIZE_THRESHOLD){
                     out->data = (char*)malloc(out->size);
                     h.receive(out->data, out->size);
