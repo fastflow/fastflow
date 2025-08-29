@@ -37,7 +37,7 @@ set ( TESTS
     test_all-or-none test_farm+farm test_farm+A2A test_farm+A2A2)
 
 set ( TESTS
-    test_faas_function test_faas)
+    test_faas_function test_faas test_faas_raw)
 
 foreach( t ${TESTS} )
    

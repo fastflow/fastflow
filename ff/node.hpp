@@ -50,10 +50,10 @@
 
 #if defined(DFF_ENABLED) || defined(FF_FAAS_ENABLED)
 #include <ff/distributed/ff_network.hpp>
-#include <ff/distributed/ff_typetraits.hpp>
 #endif
 
 #if defined(DFF_ENABLED) 
+#include <ff/distributed/ff_typetraits.hpp>
 #include <cereal/cereal.hpp>
 #include <cereal/types/polymorphic.hpp>
 #include <cereal/archives/portable_binary.hpp>
@@ -1602,7 +1602,7 @@ struct ff_node_t: ff_node {
         EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
         EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
-
+            
 #ifdef DFF_ENABLED
         /* WARNING:
               *    the definition of functions alloctaskF, freetaskF, serializeF, deserializeF

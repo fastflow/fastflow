@@ -91,7 +91,7 @@ struct result_t {
 
 };
 
-#if defined(MANUAL_SERIALIZATION)
+//#if defined(MANUAL_SERIALIZATION)
 template<typename Buffer>
 void serialize(Buffer&b, result_t* input){
     b = {reinterpret_cast<char*>(input), sizeof(result_t)};
@@ -101,7 +101,7 @@ template<typename Buffer>
 void deserialize(const Buffer&b, result_t*& strPtr){
     strPtr = reinterpret_cast<result_t*>(b.first);
 }
-#endif
+//#endif
 
 std::vector<tuple_t> dataset;     // contains all the input tuples in memory
 std::atomic<long> total_lines=0;  // total number of lines processed by the system

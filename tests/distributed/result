@@ -1,0 +1,80 @@
+./test_group16.cpp:	void serialize(Archive & archive) {
+./test_group9.cpp:	void serialize(Archive & archive) {
+./test_group22.cpp:	void serialize(Archive & archive) {
+./test_group10.cpp:	void serialize(Archive & archive) {
+./test_group18.cpp:	void serialize(Archive & archive) {
+./test_group12.cpp:	void serialize(Archive & archive) {
+./test_group24.cpp:	void serialize(Archive & archive) {
+./test_group21.cpp:	void serialize(Archive & archive) {
+./test_parametricPerfH.cpp:	void serialize(Archive & archive) {
+./test_parametricPerfH.cpp:void serializefreetask(T *o, ExcType* input) {
+./test_parametricPerfH.cpp:bool serialize(Buffer&b, ExcType* input){
+./test_parametricPerfH.cpp:void deserializealloctask(const Buffer& b, ExcType*& p) {
+./test_parametricPerfH.cpp:bool deserialize(const Buffer&b, ExcType* p){
+./test_a2aOnDemand2.cpp:	void serialize(Archive & archive) {
+./test_group14.cpp:	void serialize(Archive & archive) {
+./test_group19.cpp:	void serialize(Archive & archive) {
+./test_parametricPerf.cpp:	void serialize(Archive & archive) {
+./test_parametricPerf.cpp:void serializefreetask(T *o, ExcType* input) {
+./test_parametricPerf.cpp:bool serialize(Buffer&b, ExcType* input){
+./test_parametricPerf.cpp:void deserializealloctask(const Buffer& b, ExcType*& p) {
+./test_parametricPerf.cpp:bool deserialize(const Buffer&b, ExcType* p){
+./dwordcount/dwordcount.cpp:	void serialize(Archive & archive) {
+./dwordcount/dwordcount.cpp:void serialize(Buffer&b, result_t* input){
+./dwordcount/dwordcount.cpp:void deserialize(const Buffer&b, result_t*& strPtr){
+./dwordcount/dwordcountb.cpp:	void serialize(Archive & archive) {
+./dwordcount/dwordcountb.cpp:	void serialize(Archive & archive) {
+./dwordcount/dwordcountbench.cpp:	void serialize(Archive & archive) {
+./dwordcount/dwordcountbench.cpp:	void serialize(Archive & archive) {
+./dwordcount/dwordcountH.cpp:	void serialize(Archive & archive) {
+./dwordcount/dwordcountH.cpp:bool serialize(Buffer&b, result_t* input){
+./dwordcount/dwordcountH.cpp:bool deserialize(const Buffer&b, result_t*& strPtr){
+./test_group23.cpp:	void serialize(Archive & archive) {
+./dtrafficmonitoring/trafficmonitoring.cpp:	void serialize(Archive & archive) {
+./dtrafficmonitoring/trafficmonitoring.cpp:	void serialize(Archive & archive) {
+./test_group25.cpp:	void serialize(Archive & archive) {
+./test_a2aOnDemand.cpp:	void serialize(Archive & archive) {
+./test_group26.cpp:	void serialize(Archive & archive) {
+./test_group13.cpp:	void serialize(Archive & archive) {
+./test_group20.cpp:	void serialize(Archive & archive) {
+./test_group11.cpp:	void serialize(Archive & archive) {
+./test_group16.cpp:	void serialize(Archive & archive) {
+./test_group9.cpp:	void serialize(Archive & archive) {
+./test_group22.cpp:	void serialize(Archive & archive) {
+./test_group10.cpp:	void serialize(Archive & archive) {
+./test_group18.cpp:	void serialize(Archive & archive) {
+./test_group12.cpp:	void serialize(Archive & archive) {
+./test_group24.cpp:	void serialize(Archive & archive) {
+./test_group21.cpp:	void serialize(Archive & archive) {
+./test_parametricPerfH.cpp:	void serialize(Archive & archive) {
+./test_parametricPerfH.cpp:void serializefreetask(T *o, ExcType* input) {
+./test_parametricPerfH.cpp:bool serialize(Buffer&b, ExcType* input){
+./test_parametricPerfH.cpp:void deserializealloctask(const Buffer& b, ExcType*& p) {
+./test_parametricPerfH.cpp:bool deserialize(const Buffer&b, ExcType* p){
+./test_a2aOnDemand2.cpp:	void serialize(Archive & archive) {
+./test_group14.cpp:	void serialize(Archive & archive) {
+./test_group19.cpp:	void serialize(Archive & archive) {
+./test_parametricPerf.cpp:	void serialize(Archive & archive) {
+./test_parametricPerf.cpp:void serializefreetask(T *o, ExcType* input) {
+./test_parametricPerf.cpp:bool serialize(Buffer&b, ExcType* input){
+./test_parametricPerf.cpp:void deserializealloctask(const Buffer& b, ExcType*& p) {
+./test_parametricPerf.cpp:bool deserialize(const Buffer&b, ExcType* p){
+./dwordcount/dwordcount.cpp:	void serialize(Archive & archive) {
+./dwordcount/dwordcount.cpp:void serialize(Buffer&b, result_t* input){
+./dwordcount/dwordcount.cpp:void deserialize(const Buffer&b, result_t*& strPtr){
+./dwordcount/dwordcountb.cpp:	void serialize(Archive & archive) {
+./dwordcount/dwordcountb.cpp:	void serialize(Archive & archive) {
+./dwordcount/dwordcountbench.cpp:	void serialize(Archive & archive) {
+./dwordcount/dwordcountbench.cpp:	void serialize(Archive & archive) {
+./dwordcount/dwordcountH.cpp:	void serialize(Archive & archive) {
+./dwordcount/dwordcountH.cpp:bool serialize(Buffer&b, result_t* input){
+./dwordcount/dwordcountH.cpp:bool deserialize(const Buffer&b, result_t*& strPtr){
+./test_group23.cpp:	void serialize(Archive & archive) {
+./dtrafficmonitoring/trafficmonitoring.cpp:	void serialize(Archive & archive) {
+./dtrafficmonitoring/trafficmonitoring.cpp:	void serialize(Archive & archive) {
+./test_group25.cpp:	void serialize(Archive & archive) {
+./test_a2aOnDemand.cpp:	void serialize(Archive & archive) {
+./test_group26.cpp:	void serialize(Archive & archive) {
+./test_group13.cpp:	void serialize(Archive & archive) {
+./test_group20.cpp:	void serialize(Archive & archive) {
+./test_group11.cpp:	void serialize(Archive & archive) {

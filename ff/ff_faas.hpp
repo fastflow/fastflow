@@ -56,23 +56,9 @@
     #define PRINT_DBG(...) ((void)0)
 #endif
 
-// default size of the default parallelism degree
-#if !defined(DEFAULT_PARALLELISM_DEGREE)
-#define DEFAULT_PARALLELISM_DEGREE 1
-#endif
-
-// default filename for the FAAS backends file
-#if !defined(DEFAULT_BACKEND_FILE)
-#define DEFAULT_BACKEND_FILE "faas_backends.json"
-#endif
-
-// default filename for the FAAS functions file
-#if !defined(DEFAULT_FUNCTIONS_FILE)
-#define DEFAULT_FUNCTIONS_FILE "faas_functions.json"
-#endif
-
-#include <ff/ff.hpp>
 #include <ff/FaaS/ff_faas_typetraits.hpp>
+#include <ff/ff.hpp>
+#include <ff/ff_faas_configuration.hpp>
 #include <ff/platforms/platform.h>
 #include <ff/FaaS/ff_faas_node_t.hpp>
 

@@ -66,16 +66,21 @@ namespace ff {
                 if (faasConnector->registerFaasFunction() == ff_faas_connector::REGISTRATION_ERROR) 
                     throw std::runtime_error("Failed to register FaaS function: " + *functionName + "\n");
 
+                stats_collection = faasConfig->isStatsCollectionEnabled(functionName);
+
                 PRINT_DBG("Constructor called for function invoker thread for function: " + *functionName);
         }
 
         ~ff_faas_function_invoker_thread(){
-            PRINT_DBG("Destructor called for function invoker thread for function: " + *functionName);
-            if (faasConnector) {
-                if (faasConnector->deregisterFaasFunction() == ff_faas_connector::DEREGISTRATION_ERROR) {
-                    std::cerr << "Failed to deregister FaaS function: " << *functionName << std::endl;
+            try{ 
+                PRINT_DBG("Destructor called for function invoker thread for function: " + *functionName);
+                if (faasConnector) {
+                    if (faasConnector->deregisterFaasFunction() == ff_faas_connector::DEREGISTRATION_ERROR) 
+                        std::cerr << "Failed to deregister FaaS function: " << *functionName << std::endl;                    
                 }
-            }
+            } catch(...) {
+                std::cerr << "Exception in deregister FaaS function: " << *functionName << std::endl;
+            }    
         };
 
         #ifdef DEBUG
@@ -117,13 +122,21 @@ namespace ff {
             PRINT_DBG("Worker thread stopped successfully.");
         }
 
+        void detach_worker() {
+            if (worker_thread.joinable()) {
+                worker_thread.detach();
+            }
+        }
+
         bool inline can_accept_task() const {
             return task.load(std::memory_order_acquire) == nullptr;
         }
 
-        bool push_input(IN_t* data) {
+        bool push_input(ff_faas_node_t<IN_t,OUT_t>::internal_task_t* data) {
             PRINT_DBG("Trying to send a new task to the worker thread...");
-            IN_t* expected = nullptr;
+
+            typename ff_faas_node_t<IN_t,OUT_t>::internal_task_t* expected = nullptr;
+
             // The producer returns immediately if data is NOT nullptr, 
             // the consumer is either running or it is about to reset the task
             if (!task.compare_exchange_strong(expected, data, std::memory_order_release, std::memory_order_relaxed)) {
@@ -146,12 +159,19 @@ namespace ff {
         ff_faas_function_invoker_thread& operator=(const ff_faas_function_invoker_thread& other) = delete;
 
         void serialize(IN_t* input, std::unique_ptr<dataBuffer>& serializedData) {
-            PRINT_DBG("Serializing input data for function: " + *functionName);
-            if (faas_node.serializeF(input, *serializedData))
+            try{
+                PRINT_DBG("Serializing input data for function: " + *functionName);
+                if (faas_node.serializeF(input, *serializedData))
+                    faas_node.freetaskF(input);
+                else 
+                    serializedData->freetaskF = faas_node.freetaskF;
+                PRINT_DBG("Input data serialized for function: " + *functionName);
+            }
+            catch (...) {
+                std::cerr << "Exception received during serializing task for function: " << *functionName << std::endl;
+                PRINT_DBG("Input data not serialized for function: " + *functionName);
                 faas_node.freetaskF(input);
-            else 
-                serializedData->freetaskF = faas_node.freetaskF;
-            PRINT_DBG("Input data serialized for function: " + *functionName);
+            }
         }
 
         OUT_t* deserialize(std::unique_ptr<dataBuffer> resultBuffer) {
@@ -161,40 +181,67 @@ namespace ff {
             if (!datacopied) 
                 resultBuffer->doNotCleanup();  // Do not cleanup the buffer, as it is already handled by the deserializer         
             PRINT_DBG("Output data deserialized for function: " + *functionName);
-            return task;
+            return task;      
         }
 
         void run() {
             while (true) {
-                IN_t* data = nullptr;
+                unsigned long task_id = 0;
+                std::unique_ptr<std::chrono::high_resolution_clock::time_point> T_total_start = nullptr;
+                typename ff_faas_node_t<IN_t,OUT_t>::internal_task_t* internal_task = nullptr;
                 PRINT_DBG("Worker thread is running: started a new cycle.");
 
                 // Load the task from the atomic pointer with memory_order_acquire to ensure visibility
-                data = task.load(std::memory_order_acquire);
+                internal_task = task.load(std::memory_order_acquire);
 
-                if (data != nullptr) {
+                if (internal_task != nullptr) {
                     PRINT_DBG("Worker thread is processing a task for function: " + *functionName);
                     // Process the data if it's not nullptr
-                    std::unique_ptr<dataBuffer> serializedData = std::make_unique<dataBuffer>();
-                    serialize(data, serializedData );
+                    std::unique_ptr<dataBuffer> serializedData = nullptr;
+                    try {
+                        IN_t* data = internal_task->task;
+                        if(stats_collection) {
+                            T_total_start = std::move(internal_task->T_total_start);
+                            task_id = internal_task->task_id;
+                        }             
+                        delete internal_task;  // Free the internal task structure           
+                        serializedData = std::make_unique<dataBuffer>();                                           
+                        serialize(data, serializedData);
+                    }
+                    catch (const std::bad_alloc& e) {
+                        std::cerr << "Memory allocation failed during serialization: " << e.what() << " for function: " << *functionName << std::endl;
+                    }
 
                     if (serializedData) {
                         std::unique_ptr<dataBuffer> resultBuffer = faasConnector->invokeFaasFunction(std::move(serializedData));
                         if (resultBuffer) {
                             OUT_t* new_task = deserialize(std::move(resultBuffer));
 
-                            if ((new_task != nullptr)&&(faas_node.get_out_buffer()!=nullptr)) {                                            
-                                if(!faas_node.ff_send_out(new_task))
-                                    std::cerr << "Error sending output task for function: " << *functionName << std::endl;                                                    
+                            if ((new_task != nullptr)&&(faas_node.get_out_buffer()!=nullptr)) {   
+                                // we suppose it cannot failed forever                                         
+                                while(!faas_node.ff_send_out(new_task)) {}                                
                                 PRINT_DBG("Worker thread sent output task for function: " + *functionName);
+                                if(stats_collection) {
+                                    try{
+                                        std::shared_ptr<stats_entry> stats = faasConnector->getStats();
+                                        if(stats) {                                                                                          
+                                            std::chrono::duration<double> T_total_dur = std::chrono::high_resolution_clock::now() - *T_total_start;
+                                            stats->T_total = std::chrono::duration<double, std::micro>(T_total_dur).count();   
+                                            stats->T_ff_overhead = stats->T_total - stats->T_faas_overhead - stats->T_fun_exec - stats->T_comm;                            
+                                            faas_node.insert_stats_entry(task_id, stats);
+                                        }
+                                    } catch (const std::bad_alloc& e) {
+                                        std::cerr << "Memory allocation failed during statistics collection: " << e.what() << " for function: " << *functionName << std::endl;                                        
+                                    }                                    
+                                }
                             }
                         }
                         else 
-                            std::cerr << "Error invoking FaaS function: " << *functionName << std::endl;
+                            std::cerr << "Error invoking FaaS function: " << *functionName << std::endl;                    
                     } else 
                         std::cerr << "Error serializing task for function: " << *functionName << std::endl;
 
-                    // After processing, reset the task to nullptr
+                    // After processing, reset the task to nullptr, also in case of an error
                     task.store(nullptr, std::memory_order_release);    
                     PRINT_DBG("Worker thread reset task to nullptr for function: " + *functionName);
                     faas_node.worker_thaw();
@@ -205,29 +252,32 @@ namespace ff {
                     }
 
                 } else {
-                        // If task is nullptr, the consumer needs to sleep 
-                        // Check the stop flag
-                        if (stop_flag.load(std::memory_order_acquire)) {
-                        PRINT_DBG("Worker thread stopping as stop flag is set.");
-                            return;  // Stop the loop if the flag is set
-                        }                            
-                        std::unique_lock<std::mutex> lock(sleep_mtx);
-                        sleeping.store(true,std::memory_order_release);  // Mark the consumer as sleeping
-                        PRINT_DBG("Worker thread goes to sleep, waiting for new tasks for function: " + *functionName);                        
-                        cv.wait(lock, [&]() { return task.load(std::memory_order_acquire) != nullptr || stop_flag.load(std::memory_order_acquire) == true; });
-                        PRINT_DBG("Worker thread woke up, checking for new tasks for function: " + *functionName);
-                        sleeping.store(false,std::memory_order_release);  // Mark the consumer as awake
-                    }
+                    // If task is nullptr, the consumer needs to sleep 
+                    // Check the stop flag
+                    if (stop_flag.load(std::memory_order_acquire)) {
+                    PRINT_DBG("Worker thread stopping as stop flag is set.");
+                        return;  // Stop the loop if the flag is set
+                    } 
+                    std::unique_lock<std::mutex> lock(sleep_mtx);
+                    sleeping.store(true,std::memory_order_release);  // Mark the consumer as sleeping
+                    PRINT_DBG("Worker thread goes to sleep, waiting for new tasks for function: " + *functionName);                        
+                    cv.wait(lock, [&]() { return task.load(std::memory_order_acquire) != nullptr || stop_flag.load(std::memory_order_acquire) == true; });
+                    PRINT_DBG("Worker thread woke up, checking for new tasks for function: " + *functionName);
+                    sleeping.store(false,std::memory_order_release);  // Mark the consumer as awake                                      
                 }
             }
+        }
+
+        bool stats_collection;
 
         std::shared_ptr<std::string> functionName;
         ff_faas_node_t<IN_t, OUT_t>& faas_node;
         std::thread worker_thread;
+        // every thread has its own connector
         std::unique_ptr<ff_faas_connector> faasConnector;
 
         // Task pointer is an atomic to ensure proper synchronization between threads
-        alignas(CACHE_LINE_SIZE) std::atomic<IN_t*> task;
+        alignas(CACHE_LINE_SIZE) std::atomic<typename ff_faas_node_t<IN_t,OUT_t>::internal_task_t*> task;
 
         // Atomic flag for stopping the consumer
         alignas(CACHE_LINE_SIZE) std::atomic<bool> stop_flag;

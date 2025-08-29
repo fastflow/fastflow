@@ -2,6 +2,8 @@
     "faas_functions": [
       {
         "function_name": "testfaasfunction",
+        "initial_parallelism": 1,
+        "stats_collection": true,
         "faas_name": "faas1",
         "function_config": {
           "Name":"testfaasfunction",

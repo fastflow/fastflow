@@ -37,6 +37,7 @@
 #include <ff/FaaS/ff_faas_connector.hpp>
 #include <ff/FaaS/ff_faas_config.hpp>
 #include <ff/ff_faas.hpp>
+#include <chrono>
 #include <simdutf/simdutf.h>
 #include <simdutf/simdutf.cpp>
 #include <rapidjson/document.h>
@@ -56,11 +57,28 @@ class Serverledge_connector : public ff_faas_connector {
 public:
     Serverledge_connector(const std::shared_ptr<const ff::ff_faas_config> faasConfig,
                           const std::shared_ptr<std::string> functionName)
-        : ff_faas_connector(faasConfig, functionName) {
+        : ff_faas_connector(faasConfig, functionName), stats_collection(false) {
             
         PRINT_DBG("Constructor called for function: " + *functionName);
-
+        stats_collection = faasConfig->isStatsCollectionEnabled(functionName);
+        if(stats_collection) {
+            stats = std::make_shared<stats_entry>();
+            stats->is_warm = false;
+            stats->T_comm = 0.0;
+            stats->T_total = 0.0;
+            stats->T_reg = 0.0;
+            stats->T_dereg = 0.0;
+            stats->T_prewarm = 0.0;
+            stats->T_faas_overhead = 0.0;
+            stats->T_ff_overhead = 0.0;
+            stats->T_fun_exec = 0.0;
+            stats->T_init_container = 0.0;
+            stats->T_offload = 0.0;
+            stats->Msg_dim_sent = 0;
+            stats->Msg_dim_recv = 0;
+        }
         std::call_once(initSchemasFlag, &Serverledge_connector::preprocessSchemas);
+        PRINT_DBG("Constructor finished for function: " + *functionName);
     }
 
     ~Serverledge_connector() override {
@@ -79,19 +97,35 @@ public:
         size_t payloadSize = payload->getLen();
 
         size_t sendBufferSize = simdutf::base64_length_from_binary(payloadSize, simdutf::base64_options::base64_default);
-        
-        std::unique_ptr<char[]> sendBuffer = std::make_unique<char[]>(sendBufferSize);
+        std::unique_ptr<char[]> sendBuffer = nullptr;
+        try {
+             sendBuffer = std::make_unique<char[]>(sendBufferSize);
+        } catch (const std::bad_alloc& e) {
+            std::cerr << "[Serverledge_connector] Function invocation error: Memory allocation failed for base64 encoding buffer for function: " << *functionName << ". Exception: " << e.what() << std::endl;            
+            return nullptr;
+        }
 
         auto result = simdutf::binary_to_base64(payloadBuff, payloadSize, sendBuffer.get());
         if (result != sendBufferSize) {
             std::cerr << "[Serverledge_connector] Function invocation error: Base64 encoding failed. Expected size: " << sendBufferSize << ", got: " << result << " for function: " << *functionName << std::endl;
             return nullptr;
         }
+        size_t total_size = 0;
+        size_t json_payload_starting_size = 0;
+        const char* json_payload_starting = nullptr;
+        if(stats_collection) {
+            stats->Msg_dim_sent = sendBufferSize + json_payload_starting_stats_size + json_payload_ending_size;  
+            json_payload_starting_size = json_payload_starting_stats_size;              
+            json_payload_starting = json_payload_starting_stats;
+        }
+        else 
+        {
+            json_payload_starting_size = json_payload_starting_s;              
+            json_payload_starting = json_payload_st;            
+        }
 
-        size_t total_size = sendBufferSize + json_payload_starting_size + json_payload_ending_size;
-
+        total_size = sendBufferSize + json_payload_starting_size + json_payload_ending_size;
         auto& req_it = Serverledge_connector::function_registration_map.at(*functionName);
-
         std::shared_ptr<rapidjson::Document> req_json_doc = req_it.first;
         std::string EntryPoint = "/invoke/" + std::string(req_json_doc->GetObject()["Name"].GetString());
         auto& req_config_json_doc = function_config_map.at(faasConfig->getFunctionFaasName(functionName));
@@ -100,7 +134,12 @@ public:
         int port = req_config_json_doc->GetObject()["port"].GetInt();
 
         if(!cli)
-            cli = std::make_unique<httplib::Client>(host, port);
+            try {
+                cli = std::make_unique<httplib::Client>(host, port);
+            } catch (const std::bad_alloc& e) {
+                std::cerr << "[Serverledge_connector] Function invocation error: Memory allocation failed to create HTTP client for function " << *functionName << ". Exception: " << e.what() << std::endl;
+                return nullptr;
+            }
 
         cli->set_connection_timeout(CONN_TIMEOUT_SEC, CONN_TIMEOUT_USEC); 
         cli->set_write_timeout(WRITE_TIMEOUT_SEC, WRITE_TIMEOUT_USEC); 
@@ -112,38 +151,60 @@ public:
         int maxRetries = MAXRETRIES; 
         int attempt = 0;
         while (attempt < maxRetries) {
-            httplib::Result HTTPres = cli->Post(EntryPoint, headers,
-                    total_size,
-                    [&](size_t offset, size_t length, httplib::DataSink &sink) {
-                        if (offset < json_payload_starting_size) {
-                            size_t len = std::min(length, json_payload_starting_size - offset);
-                            sink.write(json_payload_starting + offset, len);
-                        } else if (offset < json_payload_starting_size + sendBufferSize) {
-                            size_t relative = offset - json_payload_starting_size;
-                            size_t len = std::min(length, sendBufferSize - relative);
-                            sink.write(sendBuffer.get() + relative, len);
-                        } else if (offset < total_size) {
-                            size_t relative = offset - json_payload_starting_size - sendBufferSize;
-                            size_t len = std::min(length, json_payload_ending_size - relative);
-                            sink.write(json_payload_ending + relative, len);
-                        } else {
-                            return false; // offset out of range
-                        }
-                        return true;
-                    },
-                    "application/json");
-            if (!HTTPres) {
-                std::cerr << "[Serverledge_connector] Invocation request for function " << *functionName << " failed: " << httplib::to_string(HTTPres.error()) << std::endl;
+            httplib::Result HTTPres;
+            try{
+                std::chrono::high_resolution_clock::time_point T_call_start;
+                if(stats_collection) 
+                    T_call_start = std::chrono::high_resolution_clock::now();
+                
+                PRINT_DBG("[Serverledge_connector] Function " + *functionName + " invoked with message: " + std::string(json_payload_starting) + std::string(sendBuffer.get()) + std::string(json_payload_ending) + "\n");
+
+                HTTPres = cli->Post(EntryPoint, headers,
+                        total_size,
+                        [&](size_t offset, size_t length, httplib::DataSink &sink) {
+                            if (offset < json_payload_starting_size) {
+                                size_t len = std::min(length, json_payload_starting_size - offset);
+                                sink.write(json_payload_starting + offset, len);
+                            } else if (offset < json_payload_starting_size + sendBufferSize) {
+                                size_t relative = offset - json_payload_starting_size;
+                                size_t len = std::min(length, sendBufferSize - relative);
+                                sink.write(sendBuffer.get() + relative, len);
+                            } else if (offset < total_size) {
+                                size_t relative = offset - json_payload_starting_size - sendBufferSize;
+                                size_t len = std::min(length, json_payload_ending_size - relative);
+                                sink.write(json_payload_ending + relative, len);
+                            } else {
+                                return false; // offset out of range
+                            }
+                            return true;
+                        },
+                        "application/json");
+                if(stats_collection) {                  
+                    std::chrono::duration<double> T_call_dur = std::chrono::high_resolution_clock::now() - T_call_start;
+                    T_faas_call = std::chrono::duration<double, std::micro>(T_call_dur).count();                
+                }
+                    
+                if (!HTTPres) {
+                    std::cerr << "[Serverledge_connector] Invocation request for function " << *functionName << " failed: " << httplib::to_string(HTTPres.error()) << std::endl;
+                    return nullptr;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[Serverledge_connector] Invocation request for function " << *functionName << " failed: Exception during HTTP POST. Exception: " << e.what() << std::endl;
                 return nullptr;
             }
 
             switch (HTTPres->status) {
                 case 200: {
-                    
-                    std::vector<char> respBuffer(HTTPres->body.begin(), HTTPres->body.end());
-                    PRINT_DBG("[Serverledge_connector] Risposta HTTP ricevuta: " << respBuffer.data());
+                    PRINT_DBG("[Serverledge_connector] Function " + *functionName + " returned with message: " + HTTPres->body);
+                    std::shared_ptr<rapidjson::Document> res_json_doc = nullptr;
+                    try {                                      
+                        res_json_doc = std::make_shared<rapidjson::Document>();
+                    }
+                    catch (const std::bad_alloc& e) {
+                        std::cerr << "[Serverledge_connector] Function invocation error: Memory allocation failed for response JSON document for function " << *functionName << ". Exception: " << e.what() << std::endl;                        
+                        return nullptr;
+                    }
 
-                    std::shared_ptr<rapidjson::Document> res_json_doc = std::make_shared<rapidjson::Document>();
                     if (res_json_doc->Parse(HTTPres->body.c_str()).HasParseError()) {
                         std::cerr << "[Serverledge_connector] Function invocation error: JSON parse error at offset "
                                   << res_json_doc->GetErrorOffset() << ": "
@@ -162,6 +223,17 @@ public:
                         return nullptr;  
                     }
 
+                    if(stats_collection) { 
+                        if(res_json_doc->HasMember("IsWarmStart")) 
+                            stats->is_warm = res_json_doc->GetObject()["IsWarmStart"].GetBool();                                         
+                        stats->T_init_container = res_json_doc->GetObject()["InitTime"].GetDouble() * 1000000.0;                                                                                                 
+                        if(res_json_doc->HasMember("OffloadLatency")) 
+                             stats->T_offload = res_json_doc->GetObject()["OffloadLatency"].GetDouble() * 1000000.0;
+                        // TODO: check if OffloadLatency is really included in ResponseTime
+                        stats->T_faas_overhead = res_json_doc->GetObject()["ResponseTime"].GetDouble() * 1000000.0 - stats->T_fun_exec + stats->T_offload * 1000000.0;
+                        stats->T_comm = T_faas_call - stats->T_fun_exec - stats->T_faas_overhead; 
+                    }
+
                     const rapidjson::Value& result = res_json_doc->GetObject()["Result"];
                     res_json_doc->Parse(result.GetString(), result.GetStringLength()); 
                     if (res_json_doc->HasParseError()) {
@@ -170,22 +242,34 @@ public:
                     }
 
                     if(!res_json_doc->HasMember("r") || !res_json_doc->GetObject()["r"].IsString()) {
-                        std::cerr << "Errore: la risposta non contiene il campo 'r' o non è del tipo stringa\n";
+                        std::cerr << "[Serverledge_connector] Function invocation error: answer does not contain an 'r' field or it is not a string\n";
                         return nullptr;
+                    }
+
+                    if(stats_collection) {
+                        stats->Msg_dim_recv = HTTPres->body.size();
+
+                        if(!res_json_doc->HasMember("s") || !res_json_doc->GetObject()["s"].IsDouble()) {
+                            std::cerr << "[Serverledge_connector] Function invocation error for statistics collection: answer does not contain an 's' field or it is not a double\n";
+                            return nullptr;
+                        }
+                        else
+                            stats->T_fun_exec = res_json_doc->GetObject()["s"].GetDouble();
+                        
                     }
 
                     rapidjson::Value& r =  res_json_doc->GetObject()["r"];
 
                     size_t rSize = r.GetStringLength();
                     size_t maxLength = simdutf::maximal_binary_length_from_base64(r.GetString(), rSize);
-                    char* resultData = new char[maxLength];
-                    simdutf::result res = simdutf::base64_to_binary(r.GetString(), rSize, resultData, simdutf::base64_default, simdutf::last_chunk_handling_options::strict);
+                    std::unique_ptr<char[]> resultData = std::make_unique<char[]>(maxLength);
+                    simdutf::result res = simdutf::base64_to_binary(r.GetString(), rSize, resultData.get(), simdutf::base64_default, simdutf::last_chunk_handling_options::strict);
                     if(res.error) {
                         std::cerr << "[Serverledge_connector] Function invocation error: conversion from Base64 to binary for the return parameters failed for function " << *functionName << std::endl;
                         return nullptr;    
                     }      
                     std::unique_ptr<dataBuffer> resultBuffer = std::make_unique<dataBuffer>();
-                    resultBuffer->setBuffer(resultData, res.count, true);
+                    resultBuffer->setBuffer(resultData.release(), res.count, true);
                     
                     std::cout << "[Serverledge_connector] Function invoked successfully." << std::endl;
                     return resultBuffer; 
@@ -211,16 +295,25 @@ public:
     }
 
     RegistrationResult registerFaasFunction() override {
-
+        std::chrono::high_resolution_clock::time_point T_reg_start;
         PRINT_DBG("registerFaasFunction called for: " + *functionName);
-        
+        if(stats_collection)
+            T_reg_start = std::chrono::high_resolution_clock::now();        
+
         std::unique_lock<std::mutex> lock(registrationMutex);
         const std::string& faasName = faasConfig->getFunctionFaasName(functionName);
         auto itFaasConfig = function_config_map.find(faasName);
-        std::shared_ptr<rapidjson::Document> req_config_json_doc = std::make_shared<rapidjson::Document>();
+        std::shared_ptr<rapidjson::Document> req_config_json_doc = nullptr;
+        try {
+            req_config_json_doc = std::make_shared<rapidjson::Document>();
+        } catch (const std::bad_alloc& e) {
+            std::cerr << "[Serverledge_connector] Registration error: Memory allocation failed for FaasConfig JSON document for function: " << *functionName << ". Exception: " << e.what() << std::endl;
+            return REGISTRATION_ERROR;
+        }
 
         if (itFaasConfig == function_config_map.end()) {
-            std::string faasConfigStr = faasConfig->getFaasConfig(faasName);  // Otteniamo la configurazione Faas dal faasConfig
+
+            std::string faasConfigStr = faasConfig->getFaasConfig(faasName); 
 
             if (req_config_json_doc->Parse(faasConfigStr.c_str()).HasParseError()) {
                 std::cerr << "[Serverledge_connector] Invalid JSON for FaasConfig: Parse error at offset "
@@ -239,9 +332,17 @@ public:
                 req_config_json_doc->AddMember("port", rapidjson::Value(DEFAULT_PORT), req_config_json_doc->GetAllocator());               
         }
 
-        std::shared_ptr<rapidjson::Document> req_json_doc = std::make_shared<rapidjson::Document>();
+        std::shared_ptr<rapidjson::Document> req_json_doc = nullptr;
+        try {
+            req_json_doc = std::make_shared<rapidjson::Document>();
+        } catch (const std::bad_alloc& e) {
+            std::cerr << "[Serverledge_connector] Registration error: Memory allocation failed for request JSON document for function: " << *functionName << ". Exception: " << e.what() << std::endl;
+            return REGISTRATION_ERROR;
+        }
         auto it = function_registration_map.find(*functionName);
+
         if (it == function_registration_map.end()) {
+
             std::string functionConfig = faasConfig->getFunctionConfig(functionName);  
             if (req_json_doc->Parse(functionConfig.c_str()).HasParseError()) {
                 std::cerr << "[Serverledge_connector] Invalid JSON: Parse error at offset "
@@ -279,26 +380,44 @@ public:
 
             if(sendHttpRegistrationRequest(req_json_doc,req_config_json_doc) == REGISTRATION_ERROR)
                 return REGISTRATION_ERROR;            
+            try {
+                function_config_map[faasName] = req_config_json_doc;
+                function_registration_map[*functionName] = std::make_pair(req_json_doc, 1);
+            } catch (const std::bad_alloc& e) {
+                std::cerr << "[Serverledge_connector] Registration error: Memory allocation failed while saving registration for function: " << *functionName << ". Exception: " << e.what() << std::endl;
+                return REGISTRATION_ERROR;
+            }
 
-            function_config_map[faasName] = req_config_json_doc;
-            function_registration_map[*functionName] = std::make_pair(req_json_doc, 1);
             PRINT_DBG("Saved registration for function: " << *functionName);           
+            if(stats_collection) {
+                std::chrono::duration<double> T_reg_dur = std::chrono::high_resolution_clock::now() - T_reg_start;
+                stats->T_reg = std::chrono::duration<double, std::micro>(T_reg_dur).count();                
+            }
             lock.unlock(); 
-            sendHTTPPrewarmingRequest();
-            PRINT_DBG("Registration for function: " << *functionName << " finished succesfully.");
+
+            if(sendHTTPPrewarmingRequest() == PREWARMING_ERROR) {
+                std::cerr << "[Serverledge_connector] Warning: Prewarming request failed for function: " << *functionName << std::endl;
+            }
+
+            PRINT_DBG("Registration for function: " << *functionName << " finished succesfully.");            
             return REGISTRATION_OK;
         }
 
         it->second.second++;
 
         lock.unlock(); 
-        sendHTTPPrewarmingRequest();
-
+        if(sendHTTPPrewarmingRequest() == PREWARMING_ERROR) {
+            std::cerr << "[Serverledge_connector] Warning: Prewarming request failed for function: " << *functionName << std::endl;
+            }
         PRINT_DBG("Registration for function: " << *functionName << " finished: yet registered.");
         return YET_REGISTERED;
     }
 
     DeRegistrationResult deregisterFaasFunction() override {
+        std:: chrono::high_resolution_clock::time_point T_dereg_start;
+        if(stats_collection) 
+            T_dereg_start = std::chrono::high_resolution_clock::now();
+
         PRINT_DBG("deregisterFaasFunction called for: " + *functionName);
 
         std::lock_guard<std::mutex> lock(registrationMutex);
@@ -318,6 +437,10 @@ public:
                 return DEREGISTRATION_ERROR;    
 
             function_registration_map.erase(it);
+            if(stats_collection) {
+                std::chrono::duration<double> T_dereg_dur = std::chrono::high_resolution_clock::now() - T_dereg_start;
+                stats->T_dereg =  std::chrono::duration<double, std::micro>(T_dereg_dur).count();
+            }
             return DEREGISTRATION_OK;
         }
 
@@ -330,7 +453,13 @@ private:
         auto& req_it = Serverledge_connector::function_registration_map.at(*functionName);
 
         std::shared_ptr<rapidjson::Document> req_json_doc = req_it.first;
-        std::string jsonPayload = "{\"Name\": \"" + std::string(req_json_doc->GetObject()["Name"].GetString()) + "\"}";
+        std::string jsonPayload;
+        try {
+            jsonPayload = "{\"Name\": \"" + std::string(req_json_doc->GetObject()["Name"].GetString()) + "\"}";
+        } catch (const std::bad_alloc& e) {
+            std::cerr << "[Serverledge_connector] Deregistration error: Memory allocation failed for JSON payload for function: " << *functionName << ". Exception: " << e.what() << std::endl;
+            return DEREGISTRATION_ERROR;
+        }
 
         auto& req_config_json_doc = function_config_map.at(faasConfig->getFunctionFaasName(functionName));
 
@@ -338,7 +467,12 @@ private:
         int port = req_config_json_doc->GetObject()["port"].GetInt();
 
         if(!cli) 
-            cli = std::make_unique<httplib::Client>(host, port);
+            try{
+                cli = std::make_unique<httplib::Client>(host, port);
+            } catch (const std::bad_alloc& e) {
+                std::cerr << "[Serverledge_connector] Deregistration error: Memory allocation failed to create HTTP client for function " << *functionName << ". Exception: " << e.what() << std::endl;
+                return DEREGISTRATION_ERROR;
+            }
 
         cli->set_connection_timeout(CONN_TIMEOUT_SEC, CONN_TIMEOUT_USEC); 
         cli->set_write_timeout(WRITE_TIMEOUT_SEC, WRITE_TIMEOUT_USEC); 
@@ -402,12 +536,18 @@ private:
         int maxRetries = MAXRETRIES;
         int attempt = 0;
         while (attempt < maxRetries) {
-            auto res = cli->Post("/create", headers, jsonPayload, "application/json");
+            httplib::Result res;
+            try {
+                res = cli->Post("/create", headers, jsonPayload, "application/json");
 
-            if (!res) {
-                std::cerr << "[Serverledge_connector] Registration request for function " << *functionName << " failed: " << httplib::to_string(res.error()) << std::endl;
+                if (!res) {
+                    std::cerr << "[Serverledge_connector] Registration request for function " << *functionName << " failed: " << httplib::to_string(res.error()) << std::endl;
+                    return REGISTRATION_ERROR;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[Serverledge_connector] Registration request for function " << *functionName << " failed: Exception during HTTP POST. Exception: " << e.what() << std::endl;
                 return REGISTRATION_ERROR;
-            }
+            }   
 
             switch (res->status) {
                 case 200:
@@ -435,18 +575,32 @@ private:
 
     PrewarmingResult sendHTTPPrewarmingRequest() {
 
+        std:: chrono::high_resolution_clock::time_point T_prewarm_start;
+        if(stats_collection) 
+            T_prewarm_start = std::chrono::high_resolution_clock::now();
+
         PRINT_DBG("sendHTTPPrewarmingRequest called for: " + *functionName);
         std::shared_ptr<rapidjson::Document> req_json_doc = Serverledge_connector::function_registration_map.at(*functionName).first;
 
         auto& req_config_json_doc = function_config_map.at(faasConfig->getFunctionFaasName(functionName));
-
-        std::string jsonPayload = "{\"Function\": \"" + std::string(req_json_doc->GetObject()["Name"].GetString()) + "\",\"Instances\": 1}";
+        std::string jsonPayload;
+        try {
+            jsonPayload = "{\"Function\": \"" + std::string(req_json_doc->GetObject()["Name"].GetString()) + "\",\"Instances\": 1}";
+        } catch (const std::bad_alloc& e) {
+            std::cerr << "[Serverledge_connector] Prewarming error: Memory allocation failed for JSON payload for function: " << *functionName << ". Exception: " << e.what() << std::endl;
+            return PREWARMING_ERROR;
+        }
 
         const std::string& host = req_config_json_doc->GetObject()["host"].GetString();
         int port = req_config_json_doc->GetObject()["port"].GetInt();
 
         if(!cli)
-            cli = std::make_unique<httplib::Client>(host, port);
+            try{
+                cli = std::make_unique<httplib::Client>(host, port);
+            } catch (const std::bad_alloc& e) {
+                std::cerr << "[Serverledge_connector] Prewarming error: Memory allocation failed to create HTTP client for function " << *functionName << ". Exception: " << e.what() << std::endl;
+                return PREWARMING_ERROR;
+            }
 
         cli->set_connection_timeout(CONN_TIMEOUT_SEC, CONN_TIMEOUT_USEC); 
         cli->set_write_timeout(WRITE_TIMEOUT_SEC, WRITE_TIMEOUT_USEC); 
@@ -458,16 +612,25 @@ private:
         int maxRetries = MAXRETRIES;
         int attempt = 0;
         while (attempt < maxRetries) {
-            auto res = cli->Post("/prewarm", headers, jsonPayload, "application/json");
-
-            if (!res) {
-                std::cerr << "[Serverledge_connector] Prewarming request for function " << *functionName << " failed: " << httplib::to_string(res.error()) << std::endl;
+            httplib::Result res;
+            try {                 
+                res = cli->Post("/prewarm", headers, jsonPayload, "application/json");
+                if (!res) {
+                   std::cerr << "[Serverledge_connector] Prewarming request for function " << *functionName << " failed: " << httplib::to_string(res.error()) << std::endl;
+                    return PREWARMING_ERROR;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[Serverledge_connector] Prewarming request for function " << *functionName << " failed: Exception during HTTP POST. Exception: " << e.what() << std::endl;
                 return PREWARMING_ERROR;
             }
 
             switch (res->status) {
                 case 200:
                     std::cout << "[Serverledge_connector] Function prewarmed successfully: " << res->body << std::endl;
+                    if(stats_collection) {
+                        std::chrono::duration<double> T_prewarm_dur = std::chrono::high_resolution_clock::now() - T_prewarm_start;
+                        stats->T_prewarm =   std::chrono::duration<double, std::micro>(T_prewarm_dur).count();                
+                    }
                     return PREWARMING_OK;
                 case 404:
                     std::cerr << "[Serverledge_connector] Prewarming function error: Unknown function. " << res->body << std::endl;
@@ -493,7 +656,7 @@ private:
         schemaDoc.Parse(FaasConfigEntry_schemaStr);
         if (schemaDoc.HasParseError())
             throw std::runtime_error("[Serverledge_connector] FaasConfig schema parse error!\n");
-            
+                    
         faasConfigEntrySchema = std::make_shared<rapidjson::SchemaDocument>(schemaDoc); 
 
         // Preprocessing schema FunctionConfig
@@ -513,7 +676,7 @@ private:
         PRINT_DBG("Schemas preprocessed and stored.");
     }
 
-    bool validateJsonAgainstSchema(std::shared_ptr<rapidjson::Document> doc, rapidjson::SchemaDocument& schemaDoc) {
+    bool inline validateJsonAgainstSchema(std::shared_ptr<rapidjson::Document> doc, rapidjson::SchemaDocument& schemaDoc) {
         rapidjson::SchemaValidator validator(schemaDoc);
         if (!doc->Accept(validator)) {
             rapidjson::StringBuffer sb;
@@ -573,10 +736,13 @@ private:
     })";
 
     std::unique_ptr<httplib::Client> cli = nullptr;
-
-    static inline constexpr char json_payload_starting[] = "{\"Params\":{\"p\":\"";
+    bool stats_collection;
+    double T_faas_call = 0.0;
+    static inline constexpr char json_payload_st[] = "{\"Params\":{\"p\":\"";
+    static inline constexpr char json_payload_starting_stats[] = "{\"Params\":{\"s\":\"\",\"p\":\"";
     static inline constexpr char json_payload_ending[] = "\"}}";
-    static inline constexpr size_t json_payload_starting_size = 16; // Length of the starting JSON payload string
+    static inline constexpr size_t json_payload_starting_s = 16; // Length of the starting JSON payload string
+    static inline constexpr size_t json_payload_starting_stats_size = 23; // Length of the starting JSON payload string with stats
     static inline constexpr size_t json_payload_ending_size = 3; // Length of the ending
 
     alignas(CACHE_LINE_SIZE) static inline std::unordered_map<std::string, std::pair<std::shared_ptr<rapidjson::Document>, int>> function_registration_map;

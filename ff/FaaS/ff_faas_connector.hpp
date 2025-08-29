@@ -36,6 +36,7 @@
 
 #include <ff/FaaS/ff_faas_config.hpp>
 #include <ff/distributed/ff_network.hpp>
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
@@ -43,6 +44,26 @@
 #include <stdexcept>
 #include <mutex>
 #include <iostream>
+
+//Stats for a call to the FaaS , in microseconds
+// 0: not available or not applicable or really zero
+struct stats_entry {
+    double T_comm; // Communication time NO
+    double T_total; // Total time FATTO
+    double T_reg; // Registration time, if applicable  FATTO
+    double T_dereg; // Deregistration time, if applicable FATTO 
+    double T_prewarm; // Prewarming time, if applicable FATTO 
+    double T_faas_overhead; // FaaS overhead time, T_init_container and T_offload included FATTO 
+                            // TODO: I don't know if T_offload is included really for Serverledge
+    double T_ff_overhead; // FastFlow overhead time FATTO
+    double T_fun_exec; // Fun execution time on the FaaS FATTO
+    double T_init_container; // Time for container initialization ( only if is_warm == false ) FATTO
+    double T_offload; // Time for offloading the function to another node of the FaaS (0: no offloading) FATTO
+    uint64_t Msg_dim_sent; // Message dimension sent, in bytes FATTO
+    uint64_t Msg_dim_recv; // Message dimension received, in bytes FATTO
+    bool is_warm; // True if the function is executed on a warm container, false otherwise FATTO
+};
+
 
 #define REGISTER_CONNECTOR(NAME, CLASS)                                                                 \
     namespace                                                                                           \
@@ -111,7 +132,12 @@ class ff_faas_connector
 
         virtual DeRegistrationResult deregisterFaasFunction() = 0;
 
+        std::shared_ptr<stats_entry> getStats() {            
+            return stats;
+        }
+
     protected: 
+        std::shared_ptr<stats_entry> stats = nullptr; //stats for a single invocation
         inline static std::shared_ptr<const ff::ff_faas_config> faasConfig;
         const std::shared_ptr<std::string> functionName;
         inline static std::once_flag init_flag;
@@ -130,46 +156,31 @@ class ff_faas_connector_factory
 
         void registerConnector(const std::string& name, Creator creator)
         {
-            try {
-                std::lock_guard<std::mutex> lock(mtx);
-                registry[name] = std::move(creator);
-            }
-            catch (const std::system_error& e) {
-                std::cerr << "Mutex error in registerConnector: " << e.what() << std::endl;
-                throw;
-            }
+            std::lock_guard<std::mutex> lock(mtx);
+            registry[name] = std::move(creator);
+
         }
 
         void deregisterConnector(const std::string& name)
         {
-            try {
-                std::lock_guard<std::mutex> lock(mtx);
-                registry.erase(name);
-            }
-            catch (const std::system_error& e) {
-                std::cerr << "Mutex error in deregisterConnector: " << e.what() << std::endl;
-                throw;
-            }
+
+            std::lock_guard<std::mutex> lock(mtx);
+            registry.erase(name);
         }
 
         std::unique_ptr<ff_faas_connector> create(const std::string& name, std::shared_ptr<const ff::ff_faas_config> conf, const std::shared_ptr<std::string> functionName) const
         {
-            try {
-                std::lock_guard<std::mutex> lock(mtx);
-                auto it = registry.find(name);
-                if (it != registry.end()) {
-                    return (it->second)(conf, functionName); 
-                }
-            }
-            catch (const std::system_error& e) {
-                std::cerr << "Mutex error in create: " << e.what() << std::endl;
-                throw;
-            }
+            std::lock_guard<std::mutex> lock(mtx);
+            auto it = registry.find(name);
+            if (it != registry.end()) 
+                return (it->second)(conf, functionName); 
+                
             throw std::runtime_error("Unknown ff_faas_connector: " + name);
         }
 
 
     private:
+
         ff_faas_connector_factory() = default;
         ~ff_faas_connector_factory() = default;
 

@@ -34,21 +34,20 @@
 #ifndef FF_FAAS_FUNCTION_ADAPTER_HPP
 #define FF_FAAS_FUNCTION_ADAPTER_HPP
 
-namespace ff {
-    class ff_faas_function_base;
-}
+#include <ff/distributed/ff_network.hpp>
 
 class ff_faas_function_adapter
 {
     public:
-        ff_faas_function_adapter(ff::ff_faas_function_base& faas_function): faas_fun(faas_function) {}
+        ff_faas_function_adapter() = default;
 
         virtual ~ff_faas_function_adapter() = default;
 
         virtual bool ff_faas_function_adapter_init() = 0;
-        virtual bool ff_faas_function_adapter_run() = 0;
-    protected: 
-        ff::ff_faas_function_base& faas_fun;
+        virtual std::unique_ptr<dataBuffer> ff_faas_function_adapter_getRequest(std::unique_ptr<std::string>&, bool&) = 0; // The first parameter is an error messag, the second parameter indicates if the function execution time must be measured
+        virtual bool ff_faas_function_adapter_sendResponse(std::unique_ptr<dataBuffer>,std::unique_ptr<std::string>&, double) = 0; // The first parameter is an error message, the second parameter is the function execution time, in microseconds, or -1 if not available
+        virtual bool ff_faas_function_adapter_sendErrorResponse(std::unique_ptr<std::string>) = 0;
+
 };
 
 #endif // FF_FAAS_FUNCTION_ADAPTER_HPP
