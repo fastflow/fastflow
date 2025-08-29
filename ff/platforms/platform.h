@@ -48,13 +48,17 @@ inline static int posix_memalign(void **memptr, size_t alignment, size_t size)
 #if defined(_WIN32)
 #pragma unmanaged
 
-#define NOMINMAX
+//#define NOMINMAX
 
-#include <ff/platforms/pthread_minport_windows.h>
+//#include <ff/platforms/pthread_minport_windows.h>
+
+#include <pthread.h>
+
 #define INLINE __forceinline
 #define NOINLINE __declspec(noinline)
-//#define CACHE_LINE_SIZE 64
-#define __WIN_ALIGNED_16__ __declspec(align(16))
+
+#define CACHE_LINE_SIZE 64
+//#define __WIN_ALIGNED_32__ __declspec(align(32))
 
 // Thread specific storage
 #define __thread __declspec(thread)
@@ -66,6 +70,91 @@ INLINE void PAUSE() {}
 
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
+
+#define CLOCK_REALTIME              0
+#define CLOCK_MONOTONIC             1
+#define CLOCK_PROCESS_CPUTIME_ID    2
+#define CLOCK_THREAD_CPUTIME_ID     3
+#define POW10_7                 10000000
+#define DELTA_EPOCH_IN_100NS    INT64_C(116444736000000000)
+#define POW10_9                 1000000000
+typedef int clockid_t;
+
+INLINE static int lc_set_errno(int result)
+{
+    if (result != 0) {
+        errno = result;
+        return -1;
+    }
+    return 0;
+}
+
+int clock_gettime(clockid_t clock_id, struct timespec* tp)
+{
+    unsigned __int64 t;
+    LARGE_INTEGER pf, pc;
+    union {
+        unsigned __int64 u64;
+        FILETIME ft;
+    }  ct, et, kt, ut;
+
+    switch (clock_id) {
+    case CLOCK_REALTIME:
+    {
+        GetSystemTimeAsFileTime(&ct.ft);
+        t = ct.u64 - DELTA_EPOCH_IN_100NS;
+        tp->tv_sec = t / POW10_7;
+        tp->tv_nsec = ((int)(t % POW10_7)) * 100;
+
+        return 0;
+    }
+
+    case CLOCK_MONOTONIC:
+    {
+        if (QueryPerformanceFrequency(&pf) == 0)
+            return lc_set_errno(EINVAL);
+
+        if (QueryPerformanceCounter(&pc) == 0)
+            return lc_set_errno(EINVAL);
+
+        tp->tv_sec = pc.QuadPart / pf.QuadPart;
+        tp->tv_nsec = (int)(((pc.QuadPart % pf.QuadPart) * POW10_9 + (pf.QuadPart >> 1)) / pf.QuadPart);
+        if (tp->tv_nsec >= POW10_9) {
+            tp->tv_sec++;
+            tp->tv_nsec -= POW10_9;
+        }
+
+        return 0;
+    }
+
+    case CLOCK_PROCESS_CPUTIME_ID:
+    {
+        if (0 == GetProcessTimes(GetCurrentProcess(), &ct.ft, &et.ft, &kt.ft, &ut.ft))
+            return lc_set_errno(EINVAL);
+        t = kt.u64 + ut.u64;
+        tp->tv_sec = t / POW10_7;
+        tp->tv_nsec = ((int)(t % POW10_7)) * 100;
+
+        return 0;
+    }
+
+    case CLOCK_THREAD_CPUTIME_ID:
+    {
+        if (0 == GetThreadTimes(GetCurrentThread(), &ct.ft, &et.ft, &kt.ft, &ut.ft))
+            return lc_set_errno(EINVAL);
+        t = kt.u64 + ut.u64;
+        tp->tv_sec = t / POW10_7;
+        tp->tv_nsec = ((int)(t % POW10_7)) * 100;
+
+        return 0;
+    }
+
+    default:
+        break;
+    }
+
+    return lc_set_errno(EINVAL);
+}
 
 INLINE static int posix_memalign(void **memptr,size_t alignment, size_t sz)
 {
@@ -229,7 +318,6 @@ struct iovec
 #include <unistd.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include <stdlib.h>
 inline static void posix_memalign_free(void* mem)
 {
     free(mem);

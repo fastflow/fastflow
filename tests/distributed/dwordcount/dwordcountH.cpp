@@ -49,9 +49,12 @@
  *
  */
 
+#define DFF_EXCLUDE_MPI
+
+
 #define FF_BOUNDED_BUFFER
 //#define MAKE_VALGRIND_HAPPY
-//#define MANUAL_SERIALIZATION
+#define MANUAL_SERIALIZATION
 #define DEFAULT_BUFFER_CAPACITY 2048
 #define BYKEY true
 
@@ -82,10 +85,10 @@ struct result_t {
     uint64_t id;              // indicates the current number of occurrences of the word
     uint64_t ts;              // timestamp
 
-	template<class Archive>
-	void serialize(Archive & archive) {
-		archive(key,id,ts);
-	}
+	//template<class Archive>
+	//void serialize(Archive & archive) {
+	//	archive(key,id,ts);
+	//}
 
 };
 

@@ -213,12 +213,12 @@ static inline unsigned long nextPowerOf2(unsigned long x) {
     return p;
 }
 
-static inline void timedwait_timeout(struct timespec&tv) {
+static inline void timedwait_timeout(struct timespec& tv) {
     clock_gettime(CLOCK_REALTIME, &tv);
     tv.tv_nsec+=FF_TIMEDWAIT_NS;
-    if (tv.tv_nsec>=1e+9) {
+    if (tv.tv_nsec>= 1000000000) {
         tv.tv_sec+=1;
-        tv.tv_nsec-=1e+9;
+        tv.tv_nsec-= 1000000000;
     }
 }
 

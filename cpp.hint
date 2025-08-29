@@ -1,0 +1,4 @@
+// I file dei suggerimenti consentono all'IDE di Visual Studio di interpretare gli identificatori di Visual C++,
+// come i nomi di funzioni e le macro.
+// Per altre informazioni, vedere https://go.microsoft.com/fwlink/?linkid=865984
+#define _CONSTEXPR20

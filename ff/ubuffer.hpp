@@ -497,8 +497,8 @@ public:
      * to be precise in a lock-free buffer.
      *
      */
-    inline unsigned long length() const {
-        unsigned long len = buf_r->length();
+    inline unsigned long long length() const {
+        unsigned long long len = buf_r->length();
         if (buf_r == buf_w) return len;
         ssize_t in_use = in_use_buffers-2;
         return len+(in_use>0?in_use:0)*size+buf_w->length();
@@ -554,7 +554,7 @@ private:
 #endif
 
     unsigned long       in_use_buffers; // used to estimate queue length
-    unsigned long	    size;
+    unsigned long long  size;
     bool			    fixedsize;
     BufferPool			pool;
 };

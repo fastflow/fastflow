@@ -49,6 +49,22 @@
 #include <errno.h>
 #include <ff/config.hpp>
 #include <ff/utils.hpp>
+#if defined(__CYGWIN__)||defined(_WIN32)
+#include <processthreadsapi.h>
+#include <sysinfoapi.h>
+#include <windows.h>
+#include <powerbase.h>
+
+typedef struct _PROCESSOR_POWER_INFORMATION {
+    ULONG   Number;                  // Numero del processore
+    ULONG   MaxMhz;                 // Frequenza massima in MHz
+    ULONG   CurrentMhz;             // Frequenza attuale in MHz
+    ULONG   MhzLimit;               // Limite della frequenza in MHz
+    ULONG   MaxIdleState;           // Stato di inattività massimo
+    ULONG   CurrentIdleState;       // Stato di inattività corrente
+} PROCESSOR_POWER_INFORMATION;
+
+#endif
 #if defined(__linux__)
  #include <sched.h>
  #include <sys/types.h>
@@ -73,7 +89,8 @@ static inline int ff_gettid() { return syscall(__NR_gettid);}
  #include <mach/thread_policy.h> 
  // If you don't include mach/mach.h, it doesn't work.
  // In theory mach/thread_policy.h should be enough
-#elif defined(_WIN32)
+#endif
+#if defined(_WIN32)
  #include <ff/platforms/platform.h>
 #endif
 #if defined(__APPLE__) && MAC_OS_X_HAS_AFFINITY
@@ -97,17 +114,86 @@ static inline size_t ff_getThreadID() {
     //uint64_t tid;
     // pthread_getthreadid_np(NULL, &tid); // MA: for some reasons does nto works (it was working)
     //return (long) tid; // > 10.6 only
-#elif defined(_WIN32)
+#elif defined(_WIN32)||defined(__CYGWIN__)
     return GetCurrentThreadId();
 #endif
     return -1;
 }
 
+/**
+ *  \brief Returns the number of cores in the system
+ *
+ *  It returns the number of cores present in the system. (Note that it does
+ *  take into account hyperthreading). It works on Linux OS, Apple OS and
+ *  Windows.
+ *
+ *  \return An integer value showing the number of cores.
+ */
+static inline ssize_t ff_numCores() {
+    if (FF_NUM_CORES != -1) return FF_NUM_CORES;
+    ssize_t  n = -1;
+#if defined(__linux__)    
+#if defined(MAMMUT)
+    mammut::Mammut m;
+    std::vector<mammut::topology::Cpu*> cpus = m.getInstanceTopology()->getCpus();
+    if (cpus.size() > 0 && cpus[0]->getPhysicalCores().size() > 0) {
+        n = 0;
+        for (size_t i = 0; i < cpus.size(); i++) {
+            std::vector<mammut::topology::PhysicalCore*> phyCores = cpus.at(i)->getPhysicalCores();
+            std::vector<mammut::topology::VirtualCore*>  virtCores = phyCores.at(0)->getVirtualCores();
+            n += phyCores.size() * virtCores.size();
+        }
+    }
+#else
+#if defined(HAVE_PTHREAD_SETAFFINITY_NP)
+    // trying to understand which are the cores on which the thread can be executed
+    // so that we obtain only the cores that are currently online
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    do {
+        if (pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) != 0)
+            break;
+#if defined(CPU_COUNT_S)
+        n = CPU_COUNT_S(sizeof(cpu_set_t), &cpuset);
+#elif defined(CPU_COUNT)
+        n = CPU_COUNT(&cpuset);
+#else
+        n = 0;
+        for (size_t i = 0;i < sizeof(cpu_set_t);++i) {
+            if (CPU_ISSET(i, &cpuset)) ++n;
+        }
+#endif
+        return n;
+    } while (0);
+#endif /* HAVE_PTHREAD_SETAFFINITY_NP */   
+    FILE* f;
+    f = popen("cat /proc/cpuinfo |grep processor | wc -l", "r");
+    if (fscanf(f, "%ld", &n) == EOF) { pclose(f); return n; }
+    pclose(f);
+#endif // MAMMUT
+
+#elif defined(__APPLE__) // BSD
+    int nn;
+    size_t len = sizeof(nn);
+    if (sysctlbyname("hw.logicalcpu", &nn, &len, NULL, 0) == -1)
+        perror("sysctl");
+    n = nn;
+#elif defined(_WIN32)||defined(__CYGWIN__)
+    SYSTEM_INFO sysinfo;
+    GetSystemInfo(&sysinfo);
+    n = sysinfo.dwNumberOfProcessors;
+#else
+    //#warning "Cannot detect num. of cores."
+#endif
+    return n;
+}
+
+
 /** 
- *  \brief Returnes the frequency of the CPU
+ *  \brief Returns the frequency of the CPU
  *
  *  It returns the frequency of the CPUs (On a shared memory system, all cores
- *  have the same frequency). It works on Linux OS and Apple OS.
+ *  have the same frequency). It works on Linux OS and Apple OS and Windows
  *  
  *  \return An integer value showing the frequency of the core.
  */
@@ -126,83 +212,18 @@ static inline unsigned long ff_getCpuFreq() {
     if (sysctlbyname("hw.cpufrequency", &t, &len, NULL, 0) != 0) {
         perror("sysctl");
     }
-#elif defined(_WIN32)
-//SYSTEM_POWER_CAPABILITIES pow;
-//GetPwrCapabilities(&pow);
+#elif defined(_WIN32)||defined(__CYGWIN__)
+    const ssize_t num_cores = ff_numCores();
+    PROCESSOR_POWER_INFORMATION *p_pwr_info = new PROCESSOR_POWER_INFORMATION[num_cores];
+    CallNtPowerInformation(ProcessorInformation, NULL, 0, p_pwr_info, num_cores*sizeof(PROCESSOR_POWER_INFORMATION));
+    unsigned long MaxMhz = p_pwr_info[0].MaxMhz;
+    delete p_pwr_info;
+    return MaxMhz;
 #else
-//#warning "Cannot detect CPU frequency"
+#warning "Cannot detect CPU frequency"
 #endif
     return (t);
 }
-
-/**
- *  \brief Returns the number of cores in the system
- *
- *  It returns the number of cores present in the system. (Note that it does
- *  take into account hyperthreading). It works on Linux OS, Apple OS and
- *  Windows.
- *
- *  \return An integer value showing the number of cores.
- */
-static inline ssize_t ff_numCores() {
-    if (FF_NUM_CORES != -1) return FF_NUM_CORES;
-    ssize_t  n=-1;
-#if defined(__linux__)    
-#if defined(MAMMUT)
-    mammut::Mammut m;
-    std::vector<mammut::topology::Cpu*> cpus = m.getInstanceTopology()->getCpus();
-    if (cpus.size()>0 && cpus[0]->getPhysicalCores().size()>0) {
-        n = 0;
-        for(size_t i = 0; i < cpus.size(); i++){
-            std::vector<mammut::topology::PhysicalCore*> phyCores  = cpus.at(i)->getPhysicalCores();
-            std::vector<mammut::topology::VirtualCore*>  virtCores = phyCores.at(0)->getVirtualCores();
-            n+= phyCores.size()*virtCores.size();
-        }
-    }
-#else
-#if defined(HAVE_PTHREAD_SETAFFINITY_NP)
-    // trying to understand which are the cores on which the thread can be executed
-    // so that we obtain only the cores that are currently online
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    do {
-        if (pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) != 0) 
-            break;        
-#if defined(CPU_COUNT_S)
-        n = CPU_COUNT_S(sizeof(cpu_set_t), &cpuset);
-#elif defined(CPU_COUNT)
-        n = CPU_COUNT(&cpuset);
-#else
-        n=0;
-        for(size_t i=0;i<sizeof(cpu_set_t);++i) {
-            if (CPU_ISSET(i, &cpuset)) ++n;
-        }
-#endif
-        return n;
-    } while(0);
-#endif /* HAVE_PTHREAD_SETAFFINITY_NP */   
-    FILE       *f;    
-    f = popen("cat /proc/cpuinfo |grep processor | wc -l", "r");
-    if (fscanf(f, "%ld", &n) == EOF) { pclose(f); return n;}
-    pclose(f);
-#endif // MAMMUT
-
-#elif defined(__APPLE__) // BSD
-    int nn;
-    size_t len = sizeof(nn);
-    if (sysctlbyname("hw.logicalcpu", &nn, &len, NULL, 0) == -1)
-        perror("sysctl");
-    n = nn;
-#elif defined(_WIN32)
-    SYSTEM_INFO sysinfo;
-    GetSystemInfo( &sysinfo );
-    n = sysinfo.dwNumberOfProcessors;
-#else
-//#warning "Cannot detect num. of cores."
-#endif
-    return n;
-}
-
 
 /**
  *  \brief Returns the real number of cores in the system without considering 
@@ -215,8 +236,22 @@ static inline ssize_t ff_numCores() {
 static inline ssize_t ff_realNumCores() {
     if (FF_NUM_REAL_CORES != -1) return FF_NUM_REAL_CORES;
     ssize_t  n=-1;
-#if defined(_WIN32)
-	n = 2; // Not yet implemented
+#if defined(_WIN32)||defined(__CYGWIN__)
+    DWORD bufferSize = 0;
+
+    GetLogicalProcessorInformationEx(RelationProcessorCore, NULL, &bufferSize);
+    SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *buffer = new SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX[bufferSize];
+
+    if (GetLogicalProcessorInformationEx(RelationProcessorCore, buffer, &bufferSize)) {
+        n++;
+        DWORD numProcessors = bufferSize / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX);
+        for (DWORD i = 0; i < numProcessors; i++)
+            if (buffer[i].Relationship == RelationProcessorCore)
+                n++;
+    }
+    else
+        n = -1;
+    delete buffer;
 #else
 #if defined(__linux__)
 #if defined(MAMMUT)
@@ -316,8 +351,22 @@ static inline ssize_t ff_realNumCores() {
  */
 static inline ssize_t ff_numSockets() {
    ssize_t  n=-1;
-#if defined(_WIN32)
-   n = 1;
+#if defined(_WIN32)||defined(__CYGWIN__)
+   DWORD bufferSize = 0;
+
+   GetLogicalProcessorInformationEx(RelationProcessorCore, NULL, &bufferSize);
+   SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX* buffer = new SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX[bufferSize];
+
+   if (GetLogicalProcessorInformationEx(RelationProcessorCore, buffer, &bufferSize)) {
+       n++;
+       DWORD numProcessors = bufferSize / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX);
+       for (DWORD i = 0; i < numProcessors; i++)
+           if (buffer[i].Relationship == RelationProcessorPackage)
+               n++;
+   }
+   else
+       n = -1;
+   delete buffer;
 #else
 #if defined(__linux__)
     char inspect[]="cat /proc/cpuinfo|grep 'physical id'|sort|uniq|wc -l";
@@ -441,6 +490,8 @@ static inline ssize_t ff_getMyCore() {
                       &thread_info_count, &get_default);
     ssize_t res = mypolicy.affinity_tag;
     return(res);
+#elif defined(__CYGWIN__)||defined(_WIN32)
+    return GetCurrentProcessorNumber();
 #else
 #if __GNUC__
 #warning "ff_getMyCpu not supported"
@@ -506,7 +557,7 @@ static inline ssize_t ff_mapThreadToCpu(int cpu_id, int priority_level=0) {
       }
    }
     return(ff_setPriority(priority_level));
-#elif defined(_WIN32)
+#elif defined(_WIN32)||defined(__CYGWIN__)
     if (-1==SetThreadIdealProcessor(GetCurrentThread(),cpu_id)) {
         perror("ff_mapThreadToCpu:SetThreadIdealProcessor");
         return EINVAL;
@@ -544,7 +595,7 @@ static inline size_t cache_line_size() {
     return line_size;
 }
 
-#elif defined(_WIN32)
+#elif defined(_WIN32)||defined(__CYGWIN__)
 //#include <stdlib.h>
 //#include <windows.h>
 

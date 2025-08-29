@@ -1,0 +1,20 @@
+{
+    "faas_backends": [
+      {
+        "faas_name": "faas1",
+        "faas_type": "Serverledge",
+        "faas_config": {
+          "host":"localhost",
+          "port": 1323
+        }
+      },
+      {
+        "faas_name": "faas2",
+        "faas_type": "Serverledge",
+        "faas_config": {
+          "host":"localhost",
+          "port": 1323        }
+      }
+    ]
+  }
+  

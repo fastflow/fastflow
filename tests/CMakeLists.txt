@@ -7,6 +7,7 @@ set ( TESTS
     test_ofarm test_ofarm2
     test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing
     test_accelerator_pipe+farm test_farm+pipe test_farm+pipe2
+    test_FFConvFaaS test_faas_function test_faas
     test_freeze
     test_masterworker bench_masterworker
     test_multi_masterworker test_pipe+masterworker
@@ -34,23 +35,49 @@ set ( TESTS
     test_all-to-all test_all-to-all2 test_all-to-all3 test_all-to-all4 test_all-to-all5 test_all-to-all6 test_all-to-all7 test_all-to-all8 test_all-to-all9 test_all-to-all10 test_all-to-all11 test_all-to-all12 test_all-to-all13 test_all-to-all14 test_all-to-all15 test_all-to-all16
     test_optimize test_optimize2 test_optimize3 test_optimize4 test_optimize5
     test_all-or-none test_farm+farm test_farm+A2A test_farm+A2A2)
-	
+
+set ( TESTS
+    test_faas_function test_faas)
+
 foreach( t ${TESTS} )
-    add_executable( ${t}_NONBLOCKING ${t}.cpp)
-    target_include_directories(${t}_NONBLOCKING PRIVATE
-                               $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>)
-    target_link_libraries( ${t}_NONBLOCKING ${CMAKE_THREAD_LIBS_INIT} )
+   
+    set(TEST_SRC "${CMAKE_CURRENT_SOURCE_DIR}/${t}.cpp")
+   
+    if(NOT EXISTS ${TEST_SRC})
+        set(TEST_SRC "${CMAKE_CURRENT_SOURCE_DIR}/FaaS/${t}.cpp")
+    endif()
+
+    if(NOT EXISTS ${TEST_SRC})
+        message(FATAL_ERROR "File sorgente per ${t} non trovato in nessuna directory")
+    endif()
+
+    if (t MATCHES "test_FFConvFaaS")
+        find_package(CURL REQUIRED)
+        if(CURL_FOUND)            
+            set (CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} ${CURL_LIBRARIES}) 
+        else(CURL_FOUND)
+            message(FATAL_ERROR "CURL library not found")
+        endif(CURL_FOUND)
+    endif(t MATCHES "test_FFConvFaaS")
+
+    if (t MATCHES "test_faas")
+        set(PROJECT_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/ff/FaaS/include)
+        set(FAAS_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/ff/FaaS)
+        add_definitions(-DDFF_EXCLUDE_MPI)
+    endif(t MATCHES "test_faas")
+
+    add_executable( ${t}_NONBLOCKING  ${TEST_SRC})
+    target_include_directories(${t}_NONBLOCKING PRIVATE  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}> $<BUILD_INTERFACE:${FAAS_INCLUDE_DIR}>  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}> $<BUILD_INTERFACE: ${CURL_INCLUDE_DIRS}> $<BUILD_INTERFACE:${PTHREAD_INCLUDE_DIR}> )
+    target_link_libraries(${t}_NONBLOCKING PRIVATE ${CMAKE_REQUIRED_LIBRARIES})
     add_test( ${t}_NONBLOCKING ${CMAKE_CURRENT_BINARY_DIR}/${t}_NONBLOCKING )
     set_tests_properties ( ${t}_NONBLOCKING PROPERTIES TIMEOUT 180)
 
-    add_executable(${t}_BLOCKING ${t}.cpp)
-    set_target_properties (${t}_BLOCKING PROPERTIES
-                           COMPILE_DEFINITIONS "BLOCKING_MODE")
-    target_include_directories(${t}_BLOCKING PRIVATE
-                               $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>)
-    target_link_libraries( ${t}_BLOCKING ${CMAKE_THREAD_LIBS_INIT} )
+    add_executable( ${t}_BLOCKING ${TEST_SRC})
+    target_include_directories(${t}_BLOCKING PRIVATE  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}> $<BUILD_INTERFACE:${FAAS_INCLUDE_DIR}>  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}> $<BUILD_INTERFACE:${CURL_INCLUDE_DIRS}> $<BUILD_INTERFACE:${PTHREAD_INCLUDE_DIR}> )
+    target_link_libraries(${t}_BLOCKING PRIVATE ${CMAKE_REQUIRED_LIBRARIES})
     add_test( ${t}_BLOCKING ${CMAKE_CURRENT_BINARY_DIR}/${t}_BLOCKING )
     set_tests_properties ( ${t}_BLOCKING PROPERTIES TIMEOUT 180)
+
 endforeach( t )
 
 # tests with special compilation parameters
@@ -58,39 +85,3 @@ endforeach( t )
 #     COMPILE_DEFINITIONS LB_CALLBACK)
 # set_target_properties(test_scheduling2_BLOCKING PROPERTIES
 # 	  COMPILE_DEFINITIONS LB_CALLBACK)
-
-#layer2 tests
-# add_subdirectory( layer2-tests-HAL )
-
-# tests MPMC for x86 only
-# if ( (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64") OR (
-#   CMAKE_SYSTEM_PROCESSOR MATCHES "i386") )
-#     add_subdirectory( mpmc )
-# endif ( )
-
-# TODO
-# OpenCL
-# find_package(OpenCL)
-# if ( NOT OPENCL_FOUND )
-#     MESSAGE( WARNING "OpenCL not found - skipping OpenCL tests" )	
-# else ( )
-#   add_subdirectory( ocl )	
-# endif ( )
-
-# TODO
-# CUDA
-# find_package(CUDA)
-# if (NOT CUDA_FOUND)
-#     MESSAGE( WARING "CUDA not found - skipping CUDA tests")
-# else ( )
-#   add_subdirectory( cuda )
-# endif ( )
-
-# TODO
-# Distributed
-# find_package(ZeroMQ)
-# if(NOT (ZMQ_FOUND))
-#     MESSAGE( WARNING "0mq not found - skipping 0mq tests")
-# else(NOT (ZMQ_FOUND))
-#   add_subdirectory( d )
-# endif(NOT (ZMQ_FOUND))

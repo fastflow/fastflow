@@ -1,0 +1,91 @@
+﻿{
+  "configurations": [
+    {
+      "name": "x64-Debug",
+      "generator": "Ninja",
+      "configurationType": "Debug",
+      "inheritEnvironments": [ "msvc_x64" ],
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "variables": [
+        {
+          "name": "CURL_INCLUDE_DIR",
+          "value": "C:/Users/Luca Ferrucci/git/curl/include/",
+          "type": "PATH"
+        },
+        {
+          "name": "CURL_LIBRARY",
+          "value": "C:/Users/Luca Ferrucci/git/curl/build/Win64/VC14.30/DLL Release - DLL Windows SSPI/libcurl.lib",
+          "type": "PATH"
+        },
+        {
+          "name": "RAPIDJSON_INCLUDE_DIR",
+          "value": "${projectDir}/tests",
+          "type": "PATH"
+        }
+      ],
+      "intelliSenseMode": "windows-msvc-x64"
+    },
+    {
+      "name": "x64-RelWithDebInfo",
+      "generator": "Ninja",
+      "configurationType": "RelWithDebInfo",
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "inheritEnvironments": [ "msvc_x64" ],
+      "variables": [
+        {
+          "name": "CURL_INCLUDE_DIR",
+          "value": "C:/Users/Luca Ferrucci/git/curl/include/",
+          "type": "PATH"
+        },
+        {
+          "name": "CURL_LIBRARY",
+          "value": "C:/Users/Luca Ferrucci/git/curl/build/Win64/VC14.30/DLL Release - DLL Windows SSPI/libcurl.lib",
+          "type": "PATH"
+        },
+        {
+          "name": "RAPIDJSON_INCLUDE_DIR",
+          "value": "${projectDir}/tests",
+          "type": "PATH"
+        }
+      ],
+      "intelliSenseMode": "windows-msvc-x64"
+    },
+    {
+      "name": "x64-Release",
+      "generator": "Ninja",
+      "configurationType": "Release",
+      "buildRoot": "${projectDir}\\out\\build\\${name}",
+      "installRoot": "${projectDir}\\out\\install\\${name}",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "inheritEnvironments": [ "msvc_x64" ],
+      "variables": [
+        {
+          "name": "CURL_INCLUDE_DIR",
+          "value": "C:/Users/Luca Ferrucci/git/curl/include/",
+          "type": "PATH"
+        },
+        {
+          "name": "CURL_LIBRARY",
+          "value": "C:/Users/Luca Ferrucci/git/curl/build/Win64/VC14.30/DLL Release - DLL Windows SSPI/libcurl.lib",
+          "type": "PATH"
+        },
+        {
+          "name": "RAPIDJSON_INCLUDE_DIR",
+          "value": "${projectDir}/tests",
+          "type": "PATH"
+        }
+      ],
+      "intelliSenseMode": "windows-msvc-x64"
+    }
+  ]
+}

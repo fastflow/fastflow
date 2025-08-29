@@ -48,22 +48,21 @@
 #include <ff/barrier.hpp>
 #include <atomic>
 
-#ifdef DFF_ENABLED
-
+#if defined(DFF_ENABLED) || defined(FF_FAAS_ENABLED)
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_typetraits.hpp>
+#endif
+
+#if defined(DFF_ENABLED) 
 #include <cereal/cereal.hpp>
 #include <cereal/types/polymorphic.hpp>
 #include <cereal/archives/portable_binary.hpp>
-
 #endif
-
 
 namespace ff {
 
 // distributed rts related type, but always defined
 struct GroupInterface; 
-
 
 static void* FF_EOS           = (void*)(ULLONG_MAX);     /// automatically propagated
 static void* FF_EOS_NOFREEZE  = (void*)(ULLONG_MAX-1);   /// not automatically propagated
@@ -1297,18 +1296,15 @@ protected:
     
     virtual void propagateEOS(void* task=FF_EOS) { (void)task; }
     
-#ifdef DFF_ENABLED
-    std::function<bool(void*, dataBuffer&)> serializeF;
+#if defined(DFF_ENABLED) || defined(FF_FAAS_ENABLED)
     std::function<void(void*)> freetaskF;
+    std::function<void* (char*, size_t)> alloctaskF;
+    std::function<bool(void*, dataBuffer&)> serializeF;
     std::function<void*(dataBuffer&, bool&)> deserializeF;
-    std::function<void*(char*, size_t)> alloctaskF;
-
-    
     virtual bool isSerializable(){ return (bool)serializeF; }
     virtual bool isDeserializable(){ return (bool)deserializeF; }
     virtual std::pair<decltype(serializeF), decltype(freetaskF)> getSerializationFunction(){return std::make_pair(serializeF,freetaskF);}
     virtual std::pair<decltype(deserializeF), decltype(alloctaskF)> getDeserializationFunction(){ return std::make_pair(deserializeF,alloctaskF);}
-
 #endif
     // always defined, the body will implement a no-op if the distributed runtime is disabled
     GroupInterface createGroup(std::string);
@@ -1418,10 +1414,10 @@ private:
         inline bool get(void **ptr) { return filter->get(ptr);}
 
         inline void* svc(void * ) {
-            void * task = NULL;
+            void * task = nullptr;
             void * ret  = FF_EOS;
-            bool inpresent  = (filter->get_in_buffer() != NULL);
-            bool outpresent = (filter->get_out_buffer() != NULL);
+            bool inpresent  = (filter->get_in_buffer() != nullptr);
+            bool outpresent = (filter->get_out_buffer() != nullptr);
             bool skipfirstpop = filter->skipfirstpop(); 
             bool exit=false;            
             bool filter_outpresent = false;
@@ -1606,47 +1602,49 @@ struct ff_node_t: ff_node {
         EOSW((OUT_t*)FF_EOSW),
         GO_OUT((OUT_t*)FF_GO_OUT),
         EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
+
 #ifdef DFF_ENABLED
+        /* WARNING:
+              *    the definition of functions alloctaskF, freetaskF, serializeF, deserializeF
+              *    IS DUPLICATED for the ff_minode_t and ff_monode_t (see file multinode.hpp).
+              *
+              */
+        if constexpr (traits::has_alloctask_v<IN_t>) {
+            this->alloctaskF = [](char* ptr, size_t sz) -> void* {
+                IN_t* p = nullptr;
+                alloctaskWrapper<IN_t>(ptr, sz, p);
+                assert(p);
+                return p;
+                };
+        }
+        else {
+            this->alloctaskF = [](char*, size_t) -> void* {
+                IN_t* o = new IN_t;
+                assert(o);
+                return o;
+                };
+        }
 
-        /* WARNING: 
-         *    the definition of functions alloctaskF, freetaskF, serializeF, deserializeF
-         *    IS DUPLICATED for the ff_minode_t and ff_monode_t (see file multinode.hpp).
-         *
-         */
-     if constexpr (traits::has_alloctask_v<IN_t>) {        
-         this->alloctaskF = [](char* ptr, size_t sz) -> void* {
-                                IN_t* p = nullptr;
-                                alloctaskWrapper<IN_t>(ptr, sz, p);
-                                assert(p);
-                                return p;
-                           };
-     } else {
-         this->alloctaskF = [](char*, size_t ) -> void* {
-                               IN_t* o = new IN_t;
-                               assert(o);
-                               return o;
-                           };
-     }
-        
-     if constexpr (traits::has_freetask_v<OUT_t>) {
-        this->freetaskF = [](void* o) {
-                              freetaskWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o));
-                          };
+        if constexpr (traits::has_freetask_v<OUT_t>) {
+            this->freetaskF = [](void* o) {
+                freetaskWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o));
+                };
 
-     } else {
-         this->freetaskF = [](void* o) {
-                               if constexpr (!std::is_void_v<OUT_t>) {
-                                       OUT_t* obj = reinterpret_cast<OUT_t*>(o);
-                                       delete obj;
-                               }
-                           };
-     }
-        
+        }
+        else {
+            this->freetaskF = [](void* o) {
+                if constexpr (!std::is_void_v<OUT_t>) {
+                    OUT_t* obj = reinterpret_cast<OUT_t*>(o);
+                    delete obj;
+                }
+                };
+        }
+
     // check on Serialization capabilities on the OUTPUT type!
     if constexpr (traits::is_serializable_v<OUT_t>){
         this->serializeF = [](void* o, dataBuffer& b) -> bool {
                                bool datacopied = true;
-                               std::pair<char*, size_t> p = serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o,datacopied));
+                               std::pair<char*, size_t> p = serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o),datacopied);
                                b.setBuffer(p.first, p.second);
                                return datacopied;
                            };
@@ -1725,7 +1723,8 @@ struct ff_node_F: public ff_node_t<TIN,TOUT> {
  * This is used in the internal implementation but can be used also
  * at the user level. In this second case
  */
-struct ff_buffernode: ff_node {
+
+ struct ff_buffernode: ff_node {
     ff_buffernode() {}
     ff_buffernode(int nentries, bool fixedsize=FF_FIXED_SIZE, int id=-1, int multi_producer_eos=-1) {
         set(nentries,fixedsize,id, multi_producer_eos);

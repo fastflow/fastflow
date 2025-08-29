@@ -1,0 +1,28 @@
+{
+    "faas_functions": [
+      {
+        "function_name": "testfaasfunction",
+        "faas_name": "faas1",
+        "function_config": {
+          "Name":"testfaasfunction",
+          "Runtime": "custom",
+          "MemoryMB": 32,
+          "CustomImage":"testfaasfunction"
+        }
+      },
+      {
+        "function_name": "testfaasfunction2",
+        "faas_name": "faas1",
+        "function_config": {
+          "Name":"testfaasfunction2",
+          "Runtime": "custom",
+          "MemoryMB": 32,
+          "CPUDemand": 1,
+          "Handler": "",
+          "TarFunctionCode":"",
+          "CustomImage":"testfaasfunction2"
+        }
+      }
+    ]
+  }
+  

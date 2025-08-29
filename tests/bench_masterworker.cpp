@@ -57,7 +57,7 @@ struct Worker: ff_node_t<long> {
 
       volatile size_t i=0;
       while(i<1000) {
-          __asm__("nop");
+          //__asm__("nop");
           i = i +1;
       }
       

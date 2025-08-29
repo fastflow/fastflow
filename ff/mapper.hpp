@@ -135,7 +135,7 @@ public:
             assert(isPowerOf2(CList.size()));
             size = CList.size();
         } else {
-            int nc = ff_numCores();
+            unsigned long long nc = ff_numCores();
             if (nc <= 0) {
                 error("threadMapper: invalid num_cores\n");
                 return;

@@ -108,11 +108,11 @@ private:
     long padding2[longxCacheLine-1];
 #else
     ALIGN_TO_PRE(CACHE_LINE_SIZE)
-    volatile unsigned long pread;
+    volatile unsigned long long pread;
     ALIGN_TO_POST(CACHE_LINE_SIZE)
 
     ALIGN_TO_PRE(CACHE_LINE_SIZE)
-    volatile unsigned long pwrite;
+    volatile unsigned long long pwrite;
     ALIGN_TO_POST(CACHE_LINE_SIZE)
 #endif
     size_t     size;
@@ -266,9 +266,9 @@ public:
      */
     inline bool multipush(void * const data[], int len) {
         if ((unsigned)len>=size) return false;
-        unsigned long last = pwrite + ((pwrite+ --len >= size) ? (len-size): len);
-        unsigned long r    = len-(last+1), l=last;
-        unsigned long i;
+        unsigned long long last = pwrite + ((pwrite+ --len >= size) ? (len-size): len);
+        unsigned long long r    = len-(last+1), l=last;
+        unsigned long long i;
 
         if (buf[last]==NULL) {
             
@@ -386,9 +386,9 @@ public:
      * It returns the length of the buffer 
      * (i.e. the actual number of elements it contains) 
      */
-    inline unsigned long length() const {
-        long tpread=pread, tpwrite=pwrite;
-        long len = tpwrite-tpread;
+    inline unsigned long long length() const {
+        long long tpread=pread, tpwrite=pwrite;
+        long long len = tpwrite-tpread;
         if (len>0) return (unsigned long)len;
         if (len<0) return (unsigned long)(size+len);
         if (buf[tpwrite]==NULL) return 0;
@@ -422,9 +422,9 @@ class Lamport_Buffer {
 private:
     // Padding is required to avoid false-sharing between 
     // core's private cache
-    volatile unsigned long    pread;
+    volatile unsigned long long  pread;
     long padding1[longxCacheLine-1];
-    volatile unsigned long    pwrite;
+    volatile unsigned long long  pwrite;
     long padding2[longxCacheLine-1];
 
     const    size_t size;
@@ -471,7 +471,7 @@ public:
      * It return true if there is at least one room in the buffer 
      */
     inline bool available()   { 
-        const unsigned long next = pwrite + ((pwrite+1>=size)?(1-size):1);
+        const unsigned long long next = pwrite + ((pwrite+1>=size)?(1-size):1);
         return (next != pread);
     }
 
@@ -486,7 +486,7 @@ public:
     inline bool push(void * const data) {
         assert(data);
 
-        const unsigned long next = pwrite + ((pwrite+1>=size)?(1-size):1);
+        const unsigned long long next = pwrite + ((pwrite+1>=size)?(1-size):1);
         if (next != pread) {
             buf[pwrite] = data;
             /* We have to ensure that all writes have been committed 
@@ -525,12 +525,12 @@ public:
     /**
      * TODO
      */
-    inline unsigned long length() const {
+    inline unsigned long long length() const {
         // long len = pwrite-pread;
         // if (len>=0) return len;
         //return size+len;
-        long tpread=pread, tpwrite=pwrite;
-        long len = tpwrite-tpread;
+        long long tpread=pread, tpwrite=pwrite;
+        long long len = tpwrite-tpread;
         if (len>0) return (unsigned long)len;
         if (len<0) return (unsigned long)(size+len);
         if (buf[tpwrite]==NULL) return 0;
