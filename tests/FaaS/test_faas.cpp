@@ -55,7 +55,7 @@ void serialize(S& s, MyOutput& o) {
 class Stage1 : public ff_node_t<char, MyInput> {
     public:
         MyInput* svc(char*) {
-            if(NUM_TASK-->0) {
+            if(NUM_TASK-- > 0) {
                 std::string msg = "Sto generando il task " + std::to_string(NUM_TASK);
                 PRINT_DBG(msg);              
                 return new  MyInput {NUM_TASK+1, NUM_TASK};
@@ -104,5 +104,22 @@ int main(int argc, char *argv[]) {
         return -1;
     }
     
+    auto stats_map = faasNode.getRealTimeStats();
+    if (stats_map) {
+        for (const auto& pair : *stats_map) {
+            std::cout << "Key: " << pair.first << ", Value: \n" 
+            << "  Function total execution time:" << pair.second->T_total << std::endl
+            << "    FastFlow overhead time: " << pair.second->T_ff_overhead << std::endl
+            << "    Communication time: " << pair.second->T_comm << std::endl
+            << "    FAAS overhead time: " << pair.second->T_faas_overhead << std::endl   
+            << "      - FAAS container initialization time:" << pair.second->T_init_container << std::endl
+            << "      - FAAS function offload time:" << pair.second->T_offload << std::endl
+            << "    FAAS function execution time :" << pair.second->T_fun_exec << std::endl
+            << "  Warm start: " << pair.second->is_warm << std::endl 
+            << "  Req msg size: " << pair.second->Msg_dim_sent << std::endl
+            << "  Response msg size: " << pair.second->Msg_dim_recv << std::endl;                                            
+        }
+    } 
+
     return 0;
 } 

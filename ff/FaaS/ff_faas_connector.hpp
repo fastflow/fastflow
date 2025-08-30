@@ -50,11 +50,11 @@
 struct stats_entry {
     double T_comm; // Communication time NO
     double T_total; // Total time FATTO
-    double T_reg; // Registration time, if applicable  FATTO
-    double T_dereg; // Deregistration time, if applicable FATTO 
-    double T_prewarm; // Prewarming time, if applicable FATTO 
     double T_faas_overhead; // FaaS overhead time, T_init_container and T_offload included FATTO 
                             // TODO: I don't know if T_offload is included really for Serverledge
+    double T_reg; // Time to register a function on FAAS
+    double T_dereg;  // Time to deregister a function on FAAS
+    double T_prewarm;  // Time to prewarm a certain set of containers for the function on FAAS
     double T_ff_overhead; // FastFlow overhead time FATTO
     double T_fun_exec; // Fun execution time on the FaaS FATTO
     double T_init_container; // Time for container initialization ( only if is_warm == false ) FATTO
@@ -92,19 +92,22 @@ class ff_faas_connector
         enum RegistrationResult {
             REGISTRATION_OK,
             YET_REGISTERED,
-            REGISTRATION_ERROR
+            REGISTRATION_ERROR,
+            REGISTRATION_NOT_SUPPORTED
         };
 
         enum DeRegistrationResult {
             DEREGISTRATION_OK,
             NOT_REGISTERED,
             NOT_YET_DEREGISTERED,
-            DEREGISTRATION_ERROR
+            DEREGISTRATION_ERROR,
+            DEREGISTRATION_NOT_SUPPORTED
         };
 
         enum PrewarmingResult {
             PREWARMING_OK,
-            PREWARMING_ERROR
+            PREWARMING_ERROR,
+            PREWARMING_NOT_SUPPORTED
         };
 
         virtual ~ff_faas_connector() = default;
@@ -126,18 +129,16 @@ class ff_faas_connector
             });
         }
 
-        virtual std::unique_ptr<dataBuffer> invokeFaasFunction(const std::unique_ptr<dataBuffer> payload) = 0;
+        virtual std::unique_ptr<dataBuffer> invokeFaasFunction(const std::unique_ptr<dataBuffer> payload, std::shared_ptr<stats_entry>& stats) = 0;
 
-        virtual RegistrationResult registerFaasFunction() = 0;
+        virtual RegistrationResult registerFaasFunction(double& T_reg) = 0; // The optional time to register a function, for stats purposes
 
-        virtual DeRegistrationResult deregisterFaasFunction() = 0;
+        virtual DeRegistrationResult deregisterFaasFunction(double& T_dereg) = 0; // The optional time to deregister a function, for stats purposes
 
-        std::shared_ptr<stats_entry> getStats() {            
-            return stats;
-        }
+        virtual PrewarmingResult prewarmingFaasFunction(unsigned long num, double& T_prewarm) = 0; //  The optional time to load a prewarmed container for a function, for stats purposes
+
 
     protected: 
-        std::shared_ptr<stats_entry> stats = nullptr; //stats for a single invocation
         inline static std::shared_ptr<const ff::ff_faas_config> faasConfig;
         const std::shared_ptr<std::string> functionName;
         inline static std::once_flag init_flag;

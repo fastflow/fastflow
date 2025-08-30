@@ -207,7 +207,7 @@ namespace ff {
             return true;
         }
 
-        // It returns the statistics until the actual moment ( )
+        // It returns the statistics until the actual moment
         std::shared_ptr<std::unordered_map<unsigned long, std::shared_ptr<stats_entry>>> getRealTimeStats() {
             if(stats_collection) {                
                 std::lock_guard<std::mutex> lock(stats_map_mtx);

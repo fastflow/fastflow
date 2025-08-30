@@ -56,18 +56,18 @@ namespace ff {
     public:
         ff_faas_function_invoker_thread(const std::shared_ptr<std::string> functionName,std::shared_ptr<const ff::ff_faas_config> faasConfig, 
                                         ff_faas_node_t<IN_t, OUT_t>& faas_node)
-            : functionName(functionName),faas_node(faas_node),task(nullptr),stop_flag(false),sleeping(false) {
+            : T_reg(0),T_dereg(0),T_prewarm(0),functionName(functionName),faas_node(faas_node),task(nullptr),stop_flag(false),sleeping(false) {
                 const std::string& faasType = faasConfig->getFunctionFaasType(functionName);
 
                 faasConnector = ff_faas_connector_factory::instance().create(faasType, faasConfig, functionName);
                 if (!faasConnector) 
                     throw std::runtime_error("Failed to create connector for type \'" + faasType + "\'\n");
 
-                if (faasConnector->registerFaasFunction() == ff_faas_connector::REGISTRATION_ERROR) 
-                    throw std::runtime_error("Failed to register FaaS function: " + *functionName + "\n");
-
                 stats_collection = faasConfig->isStatsCollectionEnabled(functionName);
 
+                if (faasConnector->registerFaasFunction(T_reg) == ff_faas_connector::REGISTRATION_ERROR)                 
+                    throw std::runtime_error("Failed to register FaaS function: " + *functionName + "\n");
+                faasConnector->prewarmingFaasFunction(NUM_PREWARM,T_prewarm); 
                 PRINT_DBG("Constructor called for function invoker thread for function: " + *functionName);
         }
 
@@ -75,7 +75,7 @@ namespace ff {
             try{ 
                 PRINT_DBG("Destructor called for function invoker thread for function: " + *functionName);
                 if (faasConnector) {
-                    if (faasConnector->deregisterFaasFunction() == ff_faas_connector::DEREGISTRATION_ERROR) 
+                    if (faasConnector->deregisterFaasFunction(T_dereg) == ff_faas_connector::DEREGISTRATION_ERROR) 
                         std::cerr << "Failed to deregister FaaS function: " << *functionName << std::endl;                    
                 }
             } catch(...) {
@@ -194,7 +194,7 @@ namespace ff {
                 // Load the task from the atomic pointer with memory_order_acquire to ensure visibility
                 internal_task = task.load(std::memory_order_acquire);
 
-                if (internal_task != nullptr) {
+                if (internal_task != nullptr) {                    
                     PRINT_DBG("Worker thread is processing a task for function: " + *functionName);
                     // Process the data if it's not nullptr
                     std::unique_ptr<dataBuffer> serializedData = nullptr;
@@ -213,7 +213,8 @@ namespace ff {
                     }
 
                     if (serializedData) {
-                        std::unique_ptr<dataBuffer> resultBuffer = faasConnector->invokeFaasFunction(std::move(serializedData));
+                        std::shared_ptr<stats_entry> stats;
+                        std::unique_ptr<dataBuffer> resultBuffer = faasConnector->invokeFaasFunction(std::move(serializedData), stats);
                         if (resultBuffer) {
                             OUT_t* new_task = deserialize(std::move(resultBuffer));
 
@@ -223,14 +224,15 @@ namespace ff {
                                 PRINT_DBG("Worker thread sent output task for function: " + *functionName);
                                 if(stats_collection) {
                                     try{
-                                        std::shared_ptr<stats_entry> stats = faasConnector->getStats();
-                                        if(stats) {                                                                                          
-                                            std::chrono::duration<double> T_total_dur = std::chrono::high_resolution_clock::now() - *T_total_start;
-                                            stats->T_total = std::chrono::duration<double, std::micro>(T_total_dur).count();   
-                                            stats->T_ff_overhead = stats->T_total - stats->T_faas_overhead - stats->T_fun_exec - stats->T_comm;                            
-                                            faas_node.insert_stats_entry(task_id, stats);
-                                        }
-                                    } catch (const std::bad_alloc& e) {
+                                        std::chrono::duration<double> T_total_dur = std::chrono::high_resolution_clock::now() - *T_total_start;
+                                        stats->T_total = std::chrono::duration<double, std::micro>(T_total_dur).count();   
+                                        stats->T_ff_overhead = stats->T_total - stats->T_faas_overhead - stats->T_fun_exec - stats->T_comm;
+                                        stats->T_reg = T_reg;
+                                        stats->T_dereg = T_dereg;    
+                                        stats->T_prewarm = T_prewarm;                        
+                                        faas_node.insert_stats_entry(task_id, stats);
+                                    }
+                                    catch (const std::bad_alloc& e) {
                                         std::cerr << "Memory allocation failed during statistics collection: " << e.what() << " for function: " << *functionName << std::endl;                                        
                                     }                                    
                                 }
@@ -269,6 +271,7 @@ namespace ff {
         }
 
         bool stats_collection;
+        double T_reg,T_dereg,T_prewarm;
 
         std::shared_ptr<std::string> functionName;
         ff_faas_node_t<IN_t, OUT_t>& faas_node;

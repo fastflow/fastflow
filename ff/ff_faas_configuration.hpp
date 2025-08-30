@@ -46,4 +46,8 @@
 #define DEFAULT_FUNCTIONS_FILE "faas_functions.json"
 #endif
 
+#if !defined(DEFAULT_NUM_PREWARM)
+#define NUM_PREWARM 1
+#endif
+
 #endif /* FF_CONFIG_HPP */

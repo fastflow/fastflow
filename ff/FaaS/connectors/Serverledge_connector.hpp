@@ -61,22 +61,6 @@ public:
             
         PRINT_DBG("Constructor called for function: " + *functionName);
         stats_collection = faasConfig->isStatsCollectionEnabled(functionName);
-        if(stats_collection) {
-            stats = std::make_shared<stats_entry>();
-            stats->is_warm = false;
-            stats->T_comm = 0.0;
-            stats->T_total = 0.0;
-            stats->T_reg = 0.0;
-            stats->T_dereg = 0.0;
-            stats->T_prewarm = 0.0;
-            stats->T_faas_overhead = 0.0;
-            stats->T_ff_overhead = 0.0;
-            stats->T_fun_exec = 0.0;
-            stats->T_init_container = 0.0;
-            stats->T_offload = 0.0;
-            stats->Msg_dim_sent = 0;
-            stats->Msg_dim_recv = 0;
-        }
         std::call_once(initSchemasFlag, &Serverledge_connector::preprocessSchemas);
         PRINT_DBG("Constructor finished for function: " + *functionName);
     }
@@ -85,7 +69,7 @@ public:
         PRINT_DBG("Destructor called.");
     }
 
-    std::unique_ptr<dataBuffer> invokeFaasFunction(std::unique_ptr<dataBuffer> payload) override {
+    std::unique_ptr<dataBuffer> invokeFaasFunction(std::unique_ptr<dataBuffer> payload, std::shared_ptr<stats_entry>& stats) override {
         if (!payload) {
             std::cerr << "[Serverledge_connector] Function invocation error: payload is nullptr for function: " << *functionName << std::endl;
             return nullptr;
@@ -114,6 +98,7 @@ public:
         size_t json_payload_starting_size = 0;
         const char* json_payload_starting = nullptr;
         if(stats_collection) {
+            init_stats(stats); 
             stats->Msg_dim_sent = sendBufferSize + json_payload_starting_stats_size + json_payload_ending_size;  
             json_payload_starting_size = json_payload_starting_stats_size;              
             json_payload_starting = json_payload_starting_stats;
@@ -294,13 +279,17 @@ public:
         return nullptr;
     }
 
-    RegistrationResult registerFaasFunction() override {
-        std::chrono::high_resolution_clock::time_point T_reg_start;
-        PRINT_DBG("registerFaasFunction called for: " + *functionName);
-        if(stats_collection)
-            T_reg_start = std::chrono::high_resolution_clock::now();        
+    RegistrationResult registerFaasFunction(double& T_reg) override {
+
+        T_reg = 0;
+        PRINT_DBG("registerFaasFunction called for: " + *functionName);  
 
         std::unique_lock<std::mutex> lock(registrationMutex);
+
+        std::chrono::high_resolution_clock::time_point T_reg_start;
+        if(stats_collection) 
+            T_reg_start = std::chrono::high_resolution_clock::now();
+
         const std::string& faasName = faasConfig->getFunctionFaasName(functionName);
         auto itFaasConfig = function_config_map.find(faasName);
         std::shared_ptr<rapidjson::Document> req_config_json_doc = nullptr;
@@ -389,36 +378,38 @@ public:
             }
 
             PRINT_DBG("Saved registration for function: " << *functionName);           
-            if(stats_collection) {
-                std::chrono::duration<double> T_reg_dur = std::chrono::high_resolution_clock::now() - T_reg_start;
-                stats->T_reg = std::chrono::duration<double, std::micro>(T_reg_dur).count();                
-            }
             lock.unlock(); 
 
-            if(sendHTTPPrewarmingRequest() == PREWARMING_ERROR) {
-                std::cerr << "[Serverledge_connector] Warning: Prewarming request failed for function: " << *functionName << std::endl;
-            }
-
-            PRINT_DBG("Registration for function: " << *functionName << " finished succesfully.");            
+            PRINT_DBG("Registration for function: " << *functionName << " finished succesfully.");   
+            if(stats_collection) {                  
+                std::chrono::duration<double> T_reg_dur = std::chrono::high_resolution_clock::now() - T_reg_start;
+                T_reg = std::chrono::duration<double, std::micro>(T_reg_dur).count();                
+            }         
             return REGISTRATION_OK;
         }
 
         it->second.second++;
 
         lock.unlock(); 
-        if(sendHTTPPrewarmingRequest() == PREWARMING_ERROR) {
-            std::cerr << "[Serverledge_connector] Warning: Prewarming request failed for function: " << *functionName << std::endl;
-            }
+
         PRINT_DBG("Registration for function: " << *functionName << " finished: yet registered.");
+        
+        if(stats_collection) {                  
+            std::chrono::duration<double> T_reg_dur = std::chrono::high_resolution_clock::now() - T_reg_start;
+            T_reg = std::chrono::duration<double, std::micro>(T_reg_dur).count();                
+        }  
+
         return YET_REGISTERED;
     }
 
-    DeRegistrationResult deregisterFaasFunction() override {
-        std:: chrono::high_resolution_clock::time_point T_dereg_start;
+    DeRegistrationResult deregisterFaasFunction(double& T_dereg) override {
+
+        T_dereg = 0;
+        PRINT_DBG("deregisterFaasFunction called for: " + *functionName);
+
+        std::chrono::high_resolution_clock::time_point T_dereg_start;
         if(stats_collection) 
             T_dereg_start = std::chrono::high_resolution_clock::now();
-
-        PRINT_DBG("deregisterFaasFunction called for: " + *functionName);
 
         std::lock_guard<std::mutex> lock(registrationMutex);
 
@@ -437,17 +428,56 @@ public:
                 return DEREGISTRATION_ERROR;    
 
             function_registration_map.erase(it);
-            if(stats_collection) {
+            if(stats_collection) {                  
                 std::chrono::duration<double> T_dereg_dur = std::chrono::high_resolution_clock::now() - T_dereg_start;
-                stats->T_dereg =  std::chrono::duration<double, std::micro>(T_dereg_dur).count();
-            }
+                T_dereg = std::chrono::duration<double, std::micro>(T_dereg_dur).count();                
+            }  
             return DEREGISTRATION_OK;
+        }
+
+        if(stats_collection) {                  
+            std::chrono::duration<double> T_dereg_dur = std::chrono::high_resolution_clock::now() - T_dereg_start;
+            T_dereg = std::chrono::duration<double, std::micro>(T_dereg_dur).count();                
         }
 
         return NOT_YET_DEREGISTERED;
     }
 
+    PrewarmingResult prewarmingFaasFunction(unsigned long num, double& T_prewarm) {
+        T_prewarm = 0;
+        PRINT_DBG(" prewarmingFaasFunction called for: " + *functionName);
+
+        std::chrono::high_resolution_clock::time_point T_prewarm_start;
+        if(stats_collection) 
+            T_prewarm_start = std::chrono::high_resolution_clock::now();
+
+        if(sendHTTPPrewarmingRequest(num) == PREWARMING_ERROR)
+            return PREWARMING_ERROR;
+        
+        if(stats_collection) {                  
+            std::chrono::duration<double> T_prewarm_dur = std::chrono::high_resolution_clock::now() - T_prewarm_start;
+            T_prewarm = std::chrono::duration<double, std::micro>(T_prewarm_dur).count();                
+        }
+        return PREWARMING_OK;
+    }
+
 private:
+
+    void init_stats(std::shared_ptr<stats_entry>& stats) {
+        if(stats_collection) {
+            stats = std::make_shared<stats_entry>();
+            stats->is_warm = false;
+            stats->T_comm = 0.0;
+            stats->T_total = 0.0;
+            stats->T_faas_overhead = 0.0;
+            stats->T_ff_overhead = 0.0;
+            stats->T_fun_exec = 0.0;
+            stats->T_init_container = 0.0;
+            stats->T_offload = 0.0;
+            stats->Msg_dim_sent = 0;
+            stats->Msg_dim_recv = 0;
+        }        
+    }
 
     DeRegistrationResult sendHttpDeRegistrationRequest() {
         auto& req_it = Serverledge_connector::function_registration_map.at(*functionName);
@@ -573,11 +603,7 @@ private:
         return REGISTRATION_ERROR;     
     }
 
-    PrewarmingResult sendHTTPPrewarmingRequest() {
-
-        std:: chrono::high_resolution_clock::time_point T_prewarm_start;
-        if(stats_collection) 
-            T_prewarm_start = std::chrono::high_resolution_clock::now();
+    PrewarmingResult sendHTTPPrewarmingRequest(unsigned long num) {
 
         PRINT_DBG("sendHTTPPrewarmingRequest called for: " + *functionName);
         std::shared_ptr<rapidjson::Document> req_json_doc = Serverledge_connector::function_registration_map.at(*functionName).first;
@@ -585,7 +611,7 @@ private:
         auto& req_config_json_doc = function_config_map.at(faasConfig->getFunctionFaasName(functionName));
         std::string jsonPayload;
         try {
-            jsonPayload = "{\"Function\": \"" + std::string(req_json_doc->GetObject()["Name"].GetString()) + "\",\"Instances\": 1}";
+            jsonPayload = "{\"Function\": \"" + std::string(req_json_doc->GetObject()["Name"].GetString()) + "\",\"Instances\":" + std::to_string(num) + "}";
         } catch (const std::bad_alloc& e) {
             std::cerr << "[Serverledge_connector] Prewarming error: Memory allocation failed for JSON payload for function: " << *functionName << ". Exception: " << e.what() << std::endl;
             return PREWARMING_ERROR;
@@ -627,10 +653,6 @@ private:
             switch (res->status) {
                 case 200:
                     std::cout << "[Serverledge_connector] Function prewarmed successfully: " << res->body << std::endl;
-                    if(stats_collection) {
-                        std::chrono::duration<double> T_prewarm_dur = std::chrono::high_resolution_clock::now() - T_prewarm_start;
-                        stats->T_prewarm =   std::chrono::duration<double, std::micro>(T_prewarm_dur).count();                
-                    }
                     return PREWARMING_OK;
                 case 404:
                     std::cerr << "[Serverledge_connector] Prewarming function error: Unknown function. " << res->body << std::endl;
