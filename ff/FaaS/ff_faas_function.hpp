@@ -127,7 +127,7 @@ namespace ff {
                          obj = reinterpret_cast<IN_t*>(this->alloctaskF(nullptr, 0));
                     } 
                     catch (const std::bad_alloc& e) {
-                        std::cerr << "Memory allocation failed during deserialization: " << e.what() << std::endl;
+                        std::cein rr << "Memory allocation failed during deserialization: " << e.what() << std::endl;
                         return nullptr;
                     }
                     // we supposed no error in deserialization

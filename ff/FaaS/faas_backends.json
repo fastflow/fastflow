@@ -13,8 +13,8 @@
         "faas_type": "Serverledge",
         "faas_config": {
           "host":"localhost",
-          "port": 1323        }
+          "port": 1323
+        }
       }
     ]
   }
-  

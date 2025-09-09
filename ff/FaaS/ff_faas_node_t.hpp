@@ -187,7 +187,7 @@ namespace ff {
 
         virtual ~ff_faas_node_t() = default;
 
-        unsigned long getParallelismDegree() {            
+        size_t getParallelismDegree() {            
             return parallelism_degree.load(std::memory_order_relaxed);
         }
 
@@ -196,7 +196,7 @@ namespace ff {
             return faas_function_invoker_threads.size();
         }
 
-        bool setParallelismDegree(unsigned long new_degree) { 
+        bool setParallelismDegree(size_t new_degree) { 
             PRINT_DBG("Setting new parallelism degree for function " + *functionName + " read.");    
             if (new_degree <= 0) {
                 std::cerr << "Parallelism degree must be positive." << std::endl;
@@ -383,7 +383,7 @@ namespace ff {
         alignas(CACHE_LINE_SIZE) std::mutex stats_map_mtx;
         std::shared_ptr<std::unordered_map<unsigned long, std::shared_ptr<stats_entry>>> stats_map;
         std::shared_ptr<std::string> functionName;  
-        alignas(CACHE_LINE_SIZE) std::atomic<unsigned long> parallelism_degree;
+        alignas(CACHE_LINE_SIZE) std::atomic<size_t> parallelism_degree;
         alignas(CACHE_LINE_SIZE) std::atomic<bool> sleeping;
         alignas(CACHE_LINE_SIZE) inline static  std::shared_ptr<const ff_faas_config> faasConfig = nullptr;
         alignas(CACHE_LINE_SIZE) inline static  std::once_flag init_flag;

@@ -1,7 +1,6 @@
 #include <ff/ff_faas.hpp>
 #include "ff/FaaS/connectors/Serverledge_connector.hpp"
 #include <iostream>
-#include "ff/FaaS/ff_faas_typetraits.hpp"
 
 int NUM_TASK = 3; // Numero di task da generare
 #define F_NAME "testfaasfunction"
@@ -37,7 +36,6 @@ bool faas_deserialize(const T& b, MyOutput*& strPtr){
 template<typename T>
 void faas_deserializealloctask(const T&, MyOutput*&) { 
 }
-
 
 // Bitsery serialization (obbligatoria se vuoi usare Bitsery)
 template <typename S>
