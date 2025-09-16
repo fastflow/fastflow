@@ -1,0 +1,18 @@
+{
+    "faas_functions": [
+      {
+        "function_name": "meansin",
+        "initial_parallelism": 2,
+        "stats_collection": true,
+        "faas_name": "faas1",
+        "function_config": {
+          "Name":"meansin",
+          "Runtime": "custom",
+          "CPUDemand": 1,
+          "MemoryMB": 64,
+          "CustomImage":"meansin"
+        }
+      }
+    ]
+  }
+  

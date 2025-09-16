@@ -12,9 +12,6 @@
 #include <iostream>
 #include <vector>
 
-std::mutex debug_output_mutex;
-
-// Strutture d'esempio
 struct MyInput {
     int a, b;
 };
@@ -39,7 +36,8 @@ template<typename T>
 void faas_deserializealloctask(const T&, MyOutput*&) { 
 }
 
-// Funzioni Bitsery
+/*
+// Bitsery
 template <typename S>
 void serialize(S& s, MyInput& obj) {
     s.value4b(obj.a);
@@ -50,6 +48,7 @@ template <typename S>
 void serialize(S& s, MyOutput& obj) {
     s.value4b(obj.result);
 }
+*/
 
 int main(int argc, char* argv[]) {
     // 1. Prepara l'input
@@ -63,7 +62,7 @@ int main(int argc, char* argv[]) {
 
 
     PRINT_DBG("Inizio preparazione dell'input...");
-    PRINT_DBG("Input preparato: a = " << input.a << ", b = " << input.b);
+    PRINT_DBG("Input preparato: a = " + std::to_string(input.a) + ", b = " + std::to_string(input.b));
 
     if constexpr (ff::traits::is_faas_serializable_v<MyInput>) {
         bool datacopied = true;
@@ -71,18 +70,18 @@ int main(int argc, char* argv[]) {
         std::pair<char*, size_t> p = ff::traits::faas_serializeWrapper<MyInput>(&input, datacopied);
         buffer_size = p.second;
         buffer = p.first;
-        PRINT_DBG("Serializzazione manuale completata, buffer_size: " << buffer_size);
+        PRINT_DBG("Serializzazione manuale completata, buffer_size: " + std::to_string(buffer_size));
     }
     else {
         // 2. Serializza in un buffer binario (std::vector<char>)
         PRINT_DBG("Inizio serializzazione con Bitsery...");
         bitsery::MeasureSize measureSize;
         size_t neededSize = bitsery::quickSerialization<bitsery::MeasureSize>(measureSize, input);
-        PRINT_DBG("Dimensione necessaria per la serializzazione: " << neededSize);
+        PRINT_DBG("Dimensione necessaria per la serializzazione: " + std::to_string(neededSize));
 
         std::vector<char> Bitsery_buffer;
         Bitsery_buffer.resize(neededSize);
-        PRINT_DBG("Buffer ridimensionato a " << neededSize << " byte");
+        PRINT_DBG("Buffer ridimensionato a " + std::to_string(neededSize) + " byte");
 
         bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<char>>>(Bitsery_buffer, input);
         PRINT_DBG("Serializzazione con Bitsery completata");
@@ -98,7 +97,7 @@ int main(int argc, char* argv[]) {
     bufferBase64.resize(simdutf::base64_length_from_binary(buffer_size, simdutf::base64_options::base64_default));
 
     simdutf::binary_to_base64(buffer, buffer_size, bufferBase64.data(), simdutf::base64_options::base64_default);
-    PRINT_DBG("Codifica Base64 completata, lunghezza: " << bufferBase64.size());
+    PRINT_DBG("Codifica Base64 completata, lunghezza: " + std::to_string(bufferBase64.size()));
 
     // 4. Costruisci JSON con RapidJSON
     PRINT_DBG("Creazione JSON...");
@@ -126,7 +125,7 @@ int main(int argc, char* argv[]) {
     rapidjson::Writer<rapidjson::StringBuffer> writer(jsonBuf);
     doc.Accept(writer);
     std::string jsonBody = jsonBuf.GetString();
-    PRINT_DBG("JSON creato: " << jsonBody);
+    PRINT_DBG("JSON creato: " + jsonBody);
 
     // 5. Crea il client HTTP
     PRINT_DBG("Inizio richiesta HTTP...");
@@ -139,10 +138,10 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    PRINT_DBG("Risposta HTTP ricevuta, status: " << res->status);
+    PRINT_DBG("Risposta HTTP ricevuta, status: " + std::to_string(res->status));
     std::vector<char> respBuffer(res->body.begin(), res->body.end());
 
-    PRINT_DBG("Risposta HTTP ricevuta: " << respBuffer.data());
+    PRINT_DBG("Risposta HTTP ricevuta: " + std::string(respBuffer.data()));
 
     // Parsing del corpo JSON della risposta
     rapidjson::Document responseDoc;
@@ -176,7 +175,7 @@ int main(int argc, char* argv[]) {
 
     size_t rSize = p->GetStringLength();
     size_t maxLength = simdutf::maximal_binary_length_from_base64(p->GetString(), rSize);
-    PRINT_DBG("Decoding Base64, input size: " << rSize << ", maxLength: " << maxLength);
+    PRINT_DBG("Decoding Base64, input size: " + std::to_string(rSize) + ", maxLength: " + std::to_string(maxLength));
 
     char* resultData = new char[maxLength];
     simdutf::result Res = simdutf::base64_to_binary(p->GetString(), rSize, resultData, simdutf::base64_default, simdutf::last_chunk_handling_options::strict);

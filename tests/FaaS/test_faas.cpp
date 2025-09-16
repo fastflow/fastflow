@@ -9,8 +9,6 @@ int NUM_TASK = 3; // Numero di task da generare
 using namespace ff;
 using namespace ff::traits;
 
-std::mutex debug_output_mutex;
-
 struct MyInput {
     int a;
     int b;    

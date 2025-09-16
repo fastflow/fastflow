@@ -35,7 +35,6 @@
 #define SERVERLEDGE_CONNECTOR_HPP
 
 #include <ff/FaaS/ff_faas_connector.hpp>
-#include <ff/FaaS/ff_faas_config.hpp>
 #include <ff/ff_faas.hpp>
 #include <chrono>
 #include <simdutf/simdutf.h>
@@ -59,14 +58,14 @@ public:
                           const std::shared_ptr<std::string> functionName)
         : ff_faas_connector(faasConfig, functionName), stats_collection(false) {
             
-        PRINT_DBG("Constructor called for function: " + *functionName);
+        PRINT_DBG(std::string("Constructor called for function: ") + *functionName);
         stats_collection = faasConfig->isStatsCollectionEnabled(functionName);
         std::call_once(initSchemasFlag, &Serverledge_connector::preprocessSchemas);
-        PRINT_DBG("Constructor finished for function: " + *functionName);
+        PRINT_DBG(std::string("Constructor finished for function: ") + *functionName);
     }
 
     ~Serverledge_connector() override {
-        PRINT_DBG("Destructor called.");
+        PRINT_DBG(std::string("Destructor called."));
     }
 
     std::unique_ptr<dataBuffer> invokeFaasFunction(std::unique_ptr<dataBuffer> payload, std::shared_ptr<stats_entry>& stats) override {
@@ -75,7 +74,7 @@ public:
             return nullptr;
         }
 
-        PRINT_DBG("InvokeFaasFunction called for: " + *functionName);
+        PRINT_DBG(std::string("InvokeFaasFunction called for: ") + *functionName);
 
         char* payloadBuff = payload->getPtr();
         size_t payloadSize = payload->getLen();
@@ -142,7 +141,7 @@ public:
                 if(stats_collection) 
                     T_call_start = std::chrono::high_resolution_clock::now();
                 
-                PRINT_DBG("[Serverledge_connector] Function " + *functionName + " invoked with message: " + std::string(json_payload_starting) + std::string(sendBuffer.get()) + std::string(json_payload_ending) + "\n");
+                PRINT_DBG(std::string("[Serverledge_connector] Function ") + *functionName + std::string(" invoked with message: ") + std::string(json_payload_starting) + std::string(sendBuffer.get()) + std::string(json_payload_ending) + std::string("\n"));
 
                 HTTPres = cli->Post(EntryPoint, headers,
                         total_size,
@@ -180,7 +179,7 @@ public:
 
             switch (HTTPres->status) {
                 case 200: {
-                    PRINT_DBG("[Serverledge_connector] Function " + *functionName + " returned with message: " + HTTPres->body);
+                    PRINT_DBG(std::string("[Serverledge_connector] Function ") + *functionName + std::string(" returned with message: ") + HTTPres->body);
                     std::shared_ptr<rapidjson::Document> res_json_doc = nullptr;
                     try {                                      
                         res_json_doc = std::make_shared<rapidjson::Document>();
@@ -215,8 +214,7 @@ public:
                         if(res_json_doc->HasMember("OffloadLatency")) 
                              stats->T_offload = res_json_doc->GetObject()["OffloadLatency"].GetDouble() * 1000000.0;
                         // TODO: check if OffloadLatency is really included in ResponseTime
-                        stats->T_faas_overhead = res_json_doc->GetObject()["ResponseTime"].GetDouble() * 1000000.0 - stats->T_fun_exec + stats->T_offload * 1000000.0;
-                        stats->T_comm = T_faas_call - stats->T_fun_exec - stats->T_faas_overhead; 
+                        stats->T_faas_overhead = res_json_doc->GetObject()["ResponseTime"].GetDouble() * 1000000.0 + stats->T_offload * 1000000.0;
                     }
 
                     const rapidjson::Value& result = res_json_doc->GetObject()["Result"];
@@ -238,9 +236,11 @@ public:
                             std::cerr << "[Serverledge_connector] Function invocation error for statistics collection: answer does not contain an 's' field or it is not a double\n";
                             return nullptr;
                         }
-                        else
+                        else {
                             stats->T_fun_exec = res_json_doc->GetObject()["s"].GetDouble();
-                        
+                            stats->T_faas_overhead -= stats->T_fun_exec;
+                            stats->T_comm = T_faas_call - stats->T_fun_exec - stats->T_faas_overhead; 
+                        }
                     }
 
                     rapidjson::Value& r =  res_json_doc->GetObject()["r"];
@@ -282,7 +282,7 @@ public:
     RegistrationResult registerFaasFunction(double& T_reg) override {
 
         T_reg = 0;
-        PRINT_DBG("registerFaasFunction called for: " + *functionName);  
+        PRINT_DBG(std::string("registerFaasFunction called for: ") + *functionName);  
 
         std::unique_lock<std::mutex> lock(registrationMutex);
 
@@ -377,10 +377,10 @@ public:
                 return REGISTRATION_ERROR;
             }
 
-            PRINT_DBG("Saved registration for function: " << *functionName);           
+            PRINT_DBG(std::string("Saved registration for function: ") + *functionName);           
             lock.unlock(); 
 
-            PRINT_DBG("Registration for function: " << *functionName << " finished succesfully.");   
+            PRINT_DBG(std::string("Registration for function: ") + *functionName + std::string(" finished succesfully."));   
             if(stats_collection) {                  
                 std::chrono::duration<double> T_reg_dur = std::chrono::high_resolution_clock::now() - T_reg_start;
                 T_reg = std::chrono::duration<double, std::micro>(T_reg_dur).count();                
@@ -392,7 +392,7 @@ public:
 
         lock.unlock(); 
 
-        PRINT_DBG("Registration for function: " << *functionName << " finished: yet registered.");
+        PRINT_DBG(std::string("Registration for function: ") + *functionName + std::string(" finished: yet registered."));
         
         if(stats_collection) {                  
             std::chrono::duration<double> T_reg_dur = std::chrono::high_resolution_clock::now() - T_reg_start;
@@ -405,7 +405,7 @@ public:
     DeRegistrationResult deregisterFaasFunction(double& T_dereg) override {
 
         T_dereg = 0;
-        PRINT_DBG("deregisterFaasFunction called for: " + *functionName);
+        PRINT_DBG(std::string("deregisterFaasFunction called for: ") + *functionName);
 
         std::chrono::high_resolution_clock::time_point T_dereg_start;
         if(stats_collection) 
@@ -420,10 +420,10 @@ public:
         }
 
         it->second.second--;
-        PRINT_DBG("Remained registrations for function: " << *functionName << ": " << it->second.second);
+        PRINT_DBG(std::string("Remained registrations for function: ") + *functionName + std::string(": ") + std::to_string(it->second.second));
 
         if (it->second.second <= 0) {
-            PRINT_DBG("Last deregistration for function: " << *functionName << ". Cleaning.");
+            PRINT_DBG(std::string("Last deregistration for function: ") + *functionName + std::string(". Cleaning."));
             if(sendHttpDeRegistrationRequest() == DEREGISTRATION_ERROR) 
                 return DEREGISTRATION_ERROR;    
 
@@ -445,7 +445,7 @@ public:
 
     PrewarmingResult prewarmingFaasFunction(unsigned long num, double& T_prewarm) {
         T_prewarm = 0;
-        PRINT_DBG(" prewarmingFaasFunction called for: " + *functionName);
+        PRINT_DBG(std::string(" prewarmingFaasFunction called for: ") + *functionName);
 
         std::chrono::high_resolution_clock::time_point T_prewarm_start;
         if(stats_collection) 
@@ -568,6 +568,7 @@ private:
         while (attempt < maxRetries) {
             httplib::Result res;
             try {
+                PRINT_DBG(std::string("Msg sent for registration:") + jsonPayload);
                 res = cli->Post("/create", headers, jsonPayload, "application/json");
 
                 if (!res) {
@@ -605,7 +606,7 @@ private:
 
     PrewarmingResult sendHTTPPrewarmingRequest(unsigned long num) {
 
-        PRINT_DBG("sendHTTPPrewarmingRequest called for: " + *functionName);
+        PRINT_DBG(std::string("sendHTTPPrewarmingRequest called for: ") + *functionName);
         std::shared_ptr<rapidjson::Document> req_json_doc = Serverledge_connector::function_registration_map.at(*functionName).first;
 
         auto& req_config_json_doc = function_config_map.at(faasConfig->getFunctionFaasName(functionName));
@@ -695,7 +696,7 @@ private:
             
         HTTPInvocationResponseSchema = std::make_shared<rapidjson::SchemaDocument>(schemaDoc); 
 
-        PRINT_DBG("Schemas preprocessed and stored.");
+        PRINT_DBG(std::string("Schemas preprocessed and stored."));
     }
 
     bool inline validateJsonAgainstSchema(std::shared_ptr<rapidjson::Document> doc, rapidjson::SchemaDocument& schemaDoc) {

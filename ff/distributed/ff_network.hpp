@@ -25,6 +25,7 @@
 #ifndef FF_NETWORK
 #define FF_NETWORK
 
+#include <functional>
 #include <sstream>
 #include <iostream>
 #include <exception>

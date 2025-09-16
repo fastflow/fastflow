@@ -2,9 +2,6 @@
 #define FF_FAAS_TYPETRAITS_HPP
 
 #include <type_traits>
-#include <bitsery/bitsery.h>
-#include <bitsery/adapter/measure_size.h>
-#include <bitsery/details/adapter_common.h>
 
 namespace ff {
     namespace traits {

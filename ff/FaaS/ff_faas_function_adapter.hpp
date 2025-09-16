@@ -35,6 +35,7 @@
 #define FF_FAAS_FUNCTION_ADAPTER_HPP
 
 #include <ff/distributed/ff_network.hpp>
+#include <memory>
 
 class ff_faas_function_adapter
 {

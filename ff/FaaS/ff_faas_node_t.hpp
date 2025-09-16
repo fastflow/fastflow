@@ -35,9 +35,7 @@
 #ifndef FF_FAAS_NODE_HPP
 #define FF_FAAS_NODE_HPP
 
-#include <ff/FaaS/ff_faas_typetraits.hpp>
-#include <ff/ff_faas_configuration.hpp>
-#include <ff_faas_function_invoker_thread.hpp>
+#include <ff/FaaS/ff_faas_function_invoker_thread.hpp>
 #include <bitsery/bitsery.h>
 #include <bitsery/brief_syntax.h>
 #include <bitsery/adapter/measure_size.h>
@@ -57,7 +55,8 @@ namespace ff {
 
         ff_faas_node_t(std::shared_ptr<std::string> fName,                       
                        const std::string& backendFile = std::string(DEFAULT_BACKEND_FILE),
-                       const std::string& functionsFile = std::string(DEFAULT_FUNCTIONS_FILE))
+                       const std::string& functionsFile = std::string(DEFAULT_FUNCTIONS_FILE), 
+                       size_t initial_parallelism_degree = 0)
             : num_task(0),stats_collection(false), functionName(fName), sleeping(false) 
         {
             PRINT_DBG("Constructor called for master node thread.");
@@ -65,14 +64,18 @@ namespace ff {
                 throw std::runtime_error("Function name cannot be empty.\n");
 
             std::call_once(init_flag, [&]() {
-                PRINT_DBG("Reading configuration for " + *functionName);
+                PRINT_DBG(std::string("Reading configuration for ") + *functionName);
                 faasConfig = std::make_shared<ff_faas_config>(backendFile, functionsFile);
-                PRINT_DBG("Configuration for " + *functionName + " read.");
+                PRINT_DBG(std::string("Configuration for ") + *functionName + std::string(" read."));
             });
 
-            parallelism_degree = faasConfig->getFunctionInitialParallelism(functionName);
+            if (initial_parallelism_degree==0)
+                parallelism_degree = faasConfig->getFunctionInitialParallelism(functionName);
+            else
+                parallelism_degree = initial_parallelism_degree;
+
             stats_collection = faasConfig->isStatsCollectionEnabled(functionName);
-            PRINT_DBG("Initial parallelism for " + *functionName + " is " + std::to_string(parallelism_degree));        
+            PRINT_DBG(std::string("Initial parallelism for ") + *functionName + std::string(" is ") + std::to_string(parallelism_degree));        
 
             if (!faasConfig || !faasConfig->hasFunction(functionName)) 
                 throw std::runtime_error("Function \'" + *functionName + "\' not found in configuration file.\n");
@@ -91,7 +94,7 @@ namespace ff {
                     return o;
                 };
             }
-            PRINT_DBG("Allocation function for function " + *functionName + " read.");
+            PRINT_DBG(std::string("Allocation function for function ") + *functionName + std::string(" read."));
 
             if constexpr (traits::has_faas_freetask_v<IN_t>) {
                 this->freetaskF = [](void* o) {
@@ -108,7 +111,7 @@ namespace ff {
                 };
             }
 
-            PRINT_DBG("Deallocation function for function " + *functionName + " read.");
+            PRINT_DBG(std::string("Deallocation function for function ") + *functionName + std::string(" read."));
 
             if constexpr (traits::is_faas_serializable_v<IN_t>) {
                 this->serializeF = [](void* o, dataBuffer& b) -> bool {
@@ -135,7 +138,7 @@ namespace ff {
                 };
                 PRINT_DBG("Serialization function is Bitsery serializable!"); 
             }
-            PRINT_DBG("Serialization function for function " + *functionName + " read.");
+            PRINT_DBG(std::string("Serialization function for function ") + *functionName + std::string(" read."));
 
             if constexpr (traits::is_faas_deserializable_v<OUT_t>) {
                 this->deserializeF = [this](dataBuffer& b, bool& datacopied) -> void* {
@@ -172,7 +175,7 @@ namespace ff {
                 PRINT_DBG("Serialization function is Bitsery deserializable!");
             }
                 
-            PRINT_DBG("Deserialization function for function " + *functionName + " read.");
+            PRINT_DBG(std::string("Deserialization function for function ") + *functionName + std::string(" read."));
             
             for (unsigned long i = 0; i < parallelism_degree; ++i) {     
                 // Create a new invoker thread
@@ -197,13 +200,13 @@ namespace ff {
         }
 
         bool setParallelismDegree(size_t new_degree) { 
-            PRINT_DBG("Setting new parallelism degree for function " + *functionName + " read.");    
+            PRINT_DBG(std::string("Setting new parallelism degree for function ") + *functionName + std::string(" read."));    
             if (new_degree <= 0) {
                 std::cerr << "Parallelism degree must be positive." << std::endl;
                 return false;
             }
             parallelism_degree.store(new_degree,std::memory_order_release);
-            PRINT_DBG("New parallelism degree for function " + *functionName + " set.");    
+            PRINT_DBG(std::string("New parallelism degree for function ") + *functionName + std::string(" set."));    
             return true;
         }
 
@@ -231,7 +234,7 @@ namespace ff {
         }
 
         inline void worker_thaw() {
-            PRINT_DBG("Trying to resume main thread for function " + *functionName);    
+            PRINT_DBG(std::string("Trying to resume main thread for function ") + *functionName);    
             if (sleeping.load(std::memory_order_acquire)) {                                
                 std::lock_guard<std::mutex> lock(sleep_mtx);
                 PRINT_DBG("Main thread is sleeping, notifying it to wake up.");
@@ -273,10 +276,10 @@ namespace ff {
         ff_faas_node_t& operator=(const ff_faas_node_t& other) = delete;
 
         void eosnotify(ssize_t) override final {
-            PRINT_DBG("EOS arrived to main thread for " + *functionName);    
+            PRINT_DBG(std::string("EOS arrived to main thread for ") + *functionName);    
             std::unique_lock<std::mutex> lock(change_degree_mtx);
             for (auto& thread : faas_function_invoker_threads) {
-                PRINT_DBG("Stopping worker thread: ",thread->get_id());  
+                PRINT_DBG(std::string("Stopping worker thread: "),thread->get_id());  
                 try{
                     thread->stop();                                
                 } catch(...) {
@@ -307,7 +310,7 @@ namespace ff {
                 size_t active_thread_count = faas_function_invoker_threads.size();
                 unsigned long current_parallelism_degree = parallelism_degree.load(std::memory_order_acquire);
                 if (active_thread_count < current_parallelism_degree) {
-                    PRINT_DBG("Parallelism too low. We need a number of threads equal to " + (current_parallelism_degree - active_thread_count));    
+                    PRINT_DBG(std::string("Parallelism too low. We need a number of threads equal to ") + std::to_string((current_parallelism_degree - active_thread_count)));    
                     for (size_t i = 0; i < current_parallelism_degree - active_thread_count; ++i) {
                         bool task_assigned = false;
                         try {
@@ -329,7 +332,7 @@ namespace ff {
                 else 
                     if (active_thread_count > current_parallelism_degree) {
                         size_t threads_to_stop = active_thread_count - current_parallelism_degree;
-                        PRINT_DBG("Parallelism too high. We need to stop a number of threads equal to " + threads_to_stop);    
+                        PRINT_DBG(std::string("Parallelism too high. We need to stop a number of threads equal to ") + std::to_string(threads_to_stop));    
                         for (auto it = faas_function_invoker_threads.begin(); it != faas_function_invoker_threads.end();) { 
                             auto thread = it->get();
                             if(threads_to_stop > 0) {

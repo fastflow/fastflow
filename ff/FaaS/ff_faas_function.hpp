@@ -34,7 +34,8 @@
 #ifndef FF_FAAS_FUNCTION_HPP
 #define FF_FAAS_FUNCTION_HPP
 
-#include <ff/ff_faas.hpp>
+#include <ff/ff_faas_configuration.hpp>
+#include <ff/FaaS/ff_faas_typetraits.hpp>
 #include <ff/FaaS/ff_faas_function_adapter.hpp>
 #include <bitsery/bitsery.h>
 #include <bitsery/brief_syntax.h>
@@ -50,7 +51,7 @@ namespace ff {
     public:
         ff_faas_function(int argc = 0, char** argv = nullptr) {
             static_assert(std::is_base_of<ff_faas_function_adapter, T>::value, "T must be derived from ff_faas_function_adapter");
-            PRINT_DBG("Inizializzazione della funzione FAAS con argc: " << argc);
+            PRINT_DBG(std::string("Inizializzazione della funzione FAAS con argc: ") + std::to_string(argc));
             
             if constexpr (traits::has_faas_alloctask_v<IN_t>) {
                 this->alloctaskF = [](char* ptr, size_t sz) -> void* {
@@ -127,7 +128,7 @@ namespace ff {
                          obj = reinterpret_cast<IN_t*>(this->alloctaskF(nullptr, 0));
                     } 
                     catch (const std::bad_alloc& e) {
-                        std::cein rr << "Memory allocation failed during deserialization: " << e.what() << std::endl;
+                        std::cerr << "Memory allocation failed during deserialization: " << e.what() << std::endl;
                         return nullptr;
                     }
                     // we supposed no error in deserialization
@@ -140,7 +141,7 @@ namespace ff {
             }
             PRINT_DBG("Funzione di deserializzazione registrata.");
             
-            faas_fun_adapter = make_unique<T>(argc, argv);   
+            faas_fun_adapter = std::make_unique<T>(argc, argv);   
             PRINT_DBG("Adapter FAAS creato.");
             
             if(!faas_fun_adapter->ff_faas_function_adapter_init()) {
@@ -197,7 +198,7 @@ namespace ff {
                 if(stats_collection) {
                     std::chrono::duration<double> T_fun_exec_dur = std::chrono::high_resolution_clock::now() - T_fun_exec_start;
                     T_fun_exec = std::chrono::duration<double, std::micro>(T_fun_exec_dur).count();
-                    PRINT_DBG("Funzione eseguita in: " << T_fun_exec << " microsecondi");
+                    PRINT_DBG(std::string("Funzione eseguita in: ") + std::to_string(T_fun_exec) + std::string(" microsecondi"));
                 }
 
                 std::unique_ptr<dataBuffer> OutputParamsBuffer = nullptr;

@@ -34,7 +34,7 @@
 #ifndef SERVERLEDGE_ADAPTER_HPP
 #define SERVERLEDGE_ADAPTER_HPP
 
-#include <ff/ff_faas.hpp>
+#include<ff/ff_faas.hpp>
 #include <ff/FaaS/ff_faas_function_adapter.hpp>
 #include <simdutf/simdutf.h>
 #include <simdutf/simdutf.cpp>
@@ -49,7 +49,7 @@ using namespace std;
 using namespace rapidjson;
 using namespace simdutf;
 
-#if defined(DEBUG)
+#ifdef DEBUG
 std::mutex debug_output_mutex;
 #endif
 
@@ -76,7 +76,7 @@ public:
             return inputBuffer;
         } catch (const std::exception& e) {
             error_msg = make_unique<std::string>("[Serverledge_adapter] Internal error: " + string(e.what()));
-            PRINT_DBG("Server error: " << e.what());
+            PRINT_DBG(std::string("Server error: ") + string(e.what()));
             return nullptr;
         }
     }
@@ -95,18 +95,18 @@ public:
             }
 
             if(stats_collection) {
-                PRINT_DBG("JSON da inviare con statistiche: " 
-                    << string(json_response_starting, json_response_starting_size) 
-                    << string(json_response_middle.get(), json_response_middle_size) 
-                    << string(json_response_stats, json_response_stats_size) 
-                    << std::to_string(T_fun_exec)
-                    << string(json_response_stats_ending, json_response_stats_ending_size));
+                PRINT_DBG(string("JSON da inviare con statistiche: ") 
+                    + string(json_response_starting, json_response_starting_size) 
+                    + string(json_response_middle.get(), json_response_middle_size) 
+                    + string(json_response_stats, json_response_stats_size) 
+                    + std::to_string(T_fun_exec)
+                    + string(json_response_stats_ending, json_response_stats_ending_size));
                 }
                 else {
-                    PRINT_DBG("JSON da inviare: " 
-                    << string(json_response_starting, json_response_starting_size) 
-                    << string(json_response_middle.get(), json_response_middle_size) 
-                    << string(json_response_ending, json_response_ending_size));
+                    PRINT_DBG(string("JSON da inviare: ")
+                    + string(json_response_starting, json_response_starting_size) 
+                    + string(json_response_middle.get(), json_response_middle_size) 
+                    + string(json_response_ending, json_response_ending_size));
                 }
 
             // Create HTTP response
@@ -129,17 +129,17 @@ public:
             socket.close();            
         } catch (const std::bad_alloc& e) {
             error_msg = std::make_unique<std::string>("[Serverledge_adapter] Internal error: memory allocation failed");
-            PRINT_DBG("Memory allocation failed for output parameters: " << e.what());
+            PRINT_DBG(string("Memory allocation failed for output parameters: ") + string(e.what()));
             return false;
         }
         catch (const boost::system::system_error& e) {
             error_msg = std::make_unique<std::string>("[Serverledge_adapter] Internal Network/system error: " + string(e.what()));
-            PRINT_DBG("Network/system error: " << e.what());
+            PRINT_DBG(string("Network/system error: ") + string(e.what()));
             return false;
         } 
         catch (const std::exception& e) {
             error_msg = std::make_unique<std::string>("[Serverledge_adapter] Internal error: " + string(e.what()));
-            PRINT_DBG("Exception: " << e.what());
+            PRINT_DBG(string("Exception: ") + string(e.what()));
             return false;
         } 
         return true;
@@ -177,13 +177,11 @@ private:
 
             if (req.method() != beast::http::verb::post || req.target() != entrypoint) {
                 error_msg = std::make_unique<std::string>("[Serverledge_adapter] Invalid entrypoint or method. Use POST on /invoke");                
-                PRINT_DBG("Invalid entrypoint or method. Received: " << req.method_string() << " " << req.target());
+                PRINT_DBG(string("Invalid entrypoint or method. Received: ") + string(req.method_string()) + " " + string(req.target()));
                 return nullptr;
             }
-
             version = req.version();
-
-            PRINT_DBG("Handling HTTP request: " << req.body());
+            PRINT_DBG(string("Handling HTTP request: ") + req.body());
 
             // Parse the JSON request
             Document requestJson;
@@ -191,7 +189,7 @@ private:
             if (!parseResult) {
                 error_msg = std::make_unique<std::string>("[Serverledge_adapter] Internal error: JSON parse error " + string(GetParseError_En(parseResult.Code())) + 
                     " at offset " + to_string(parseResult.Offset()));
-                PRINT_DBG("Error parsing JSON: " << GetParseError_En(parseResult.Code()) << " at offset " << parseResult.Offset());
+                PRINT_DBG(string("Error parsing JSON: ") + string(GetParseError_En(parseResult.Code())) + string(" at offset ") + to_string(parseResult.Offset()));
                 return nullptr;
             }
 
@@ -226,14 +224,14 @@ private:
             const Value& p = requestJson["Params"]["p"];
             size_t rSize = p.GetStringLength();
             size_t maxLength = maximal_binary_length_from_base64(p.GetString(), rSize);
-            PRINT_DBG("Decoding Base64, input size: " << rSize << ", maxLength: " << maxLength);
+            PRINT_DBG(string("Decoding Base64, input size: ") + to_string(rSize) + string(", maxLength: ") + to_string( maxLength));
 
             std::unique_ptr<char[]> resultData;
             try {
                 resultData = std::make_unique<char[]>(maxLength);
             } catch (const std::bad_alloc& e) {
                 error_msg = std::make_unique<std::string>("[Serverledge_adapter] Internal error: memory allocation failed creating Base64 encoding buffer");
-                PRINT_DBG("Memory allocation failed for input parameters: " << e.what());
+                PRINT_DBG(string("Memory allocation failed for input parameters: ") + string(e.what()));
                 return nullptr;
             }
 
@@ -250,17 +248,17 @@ private:
                 inputBuffer = std::make_unique<dataBuffer>();
             } catch (const std::bad_alloc& e) {
                 error_msg = std::make_unique<std::string>("[Serverledge_adapter] Internal error: memory allocation failed creating input dataBuffer");
-                PRINT_DBG("Memory allocation failed creating input dataBuffer: " << e.what());
+                PRINT_DBG(string("Memory allocation failed creating input dataBuffer: ") + string(e.what()));
                 return nullptr;
             }
 
             inputBuffer->setBuffer(resultData.release(), Res.count, true);
-            PRINT_DBG("Handling HTTP request: " << req.body() <<" finished.");
+            PRINT_DBG(string("Handling HTTP request: ") + req.body() + string(" finished."));
             return inputBuffer;
 
         } catch (const std::exception& e) {
             error_msg = std::make_unique<std::string>("[Serverledge_adapter] Internal error: " + string(e.what()));
-            PRINT_DBG("Exception: " << e.what());
+            PRINT_DBG(string("Exception: ") + string(e.what()));
             return nullptr;
         }
     }

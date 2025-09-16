@@ -7,7 +7,7 @@ set ( TESTS
     test_ofarm test_ofarm2
     test_accelerator_ofarm test_accelerator_ofarm_multiple_freezing
     test_accelerator_pipe+farm test_farm+pipe test_farm+pipe2
-    test_FFConvFaaS test_faas_function test_faas
+    test_faas_function test_faas test_faas_raw test_FFConvFaaS2 test_FFConvFaaS2_function
     test_freeze
     test_masterworker bench_masterworker
     test_multi_masterworker test_pipe+masterworker
@@ -37,7 +37,7 @@ set ( TESTS
     test_all-or-none test_farm+farm test_farm+A2A test_farm+A2A2)
 
 set ( TESTS
-    test_faas_function test_faas test_faas_raw)
+    test_faas_function test_faas test_faas_raw test_FFConvFaaS2 test_FFConvFaaS2_function )
 
 foreach( t ${TESTS} )
    
@@ -51,29 +51,27 @@ foreach( t ${TESTS} )
         message(FATAL_ERROR "File sorgente per ${t} non trovato in nessuna directory")
     endif()
 
-    if (t MATCHES "test_FFConvFaaS")
+    if (t STREQUAL "test_FFConvFaaS")
         find_package(CURL REQUIRED)
         if(CURL_FOUND)            
             set (CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} ${CURL_LIBRARIES}) 
         else(CURL_FOUND)
             message(FATAL_ERROR "CURL library not found")
         endif(CURL_FOUND)
-    endif(t MATCHES "test_FFConvFaaS")
+    endif(t STREQUAL "test_FFConvFaaS")
 
-    if (t MATCHES "test_faas")
+    if (t STREQUAL "test_faas"  OR t STREQUAL "test_faas_raw" OR t STREQUAL "test_faas_function" OR t STREQUAL "test_FFConvFaaS2" OR t STREQUAL "test_FFConvFaaS2_function")
         set(PROJECT_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/ff/FaaS/include)
-        set(FAAS_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/ff/FaaS)
-        add_definitions(-DDFF_EXCLUDE_MPI)
-    endif(t MATCHES "test_faas")
+    endif()
 
     add_executable( ${t}_NONBLOCKING  ${TEST_SRC})
-    target_include_directories(${t}_NONBLOCKING PRIVATE  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}> $<BUILD_INTERFACE:${FAAS_INCLUDE_DIR}>  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}> $<BUILD_INTERFACE: ${CURL_INCLUDE_DIRS}> $<BUILD_INTERFACE:${PTHREAD_INCLUDE_DIR}> )
+    target_include_directories(${t}_NONBLOCKING PRIVATE  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}> $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}> $<BUILD_INTERFACE: ${CURL_INCLUDE_DIRS}> $<BUILD_INTERFACE:${PTHREAD_INCLUDE_DIR}> )
     target_link_libraries(${t}_NONBLOCKING PRIVATE ${CMAKE_REQUIRED_LIBRARIES})
     add_test( ${t}_NONBLOCKING ${CMAKE_CURRENT_BINARY_DIR}/${t}_NONBLOCKING )
     set_tests_properties ( ${t}_NONBLOCKING PROPERTIES TIMEOUT 180)
 
     add_executable( ${t}_BLOCKING ${TEST_SRC})
-    target_include_directories(${t}_BLOCKING PRIVATE  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}> $<BUILD_INTERFACE:${FAAS_INCLUDE_DIR}>  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}> $<BUILD_INTERFACE:${CURL_INCLUDE_DIRS}> $<BUILD_INTERFACE:${PTHREAD_INCLUDE_DIR}> )
+    target_include_directories(${t}_BLOCKING PRIVATE  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}> $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}> $<BUILD_INTERFACE:${CURL_INCLUDE_DIRS}> $<BUILD_INTERFACE:${PTHREAD_INCLUDE_DIR}> )
     target_link_libraries(${t}_BLOCKING PRIVATE ${CMAKE_REQUIRED_LIBRARIES})
     add_test( ${t}_BLOCKING ${CMAKE_CURRENT_BINARY_DIR}/${t}_BLOCKING )
     set_tests_properties ( ${t}_BLOCKING PROPERTIES TIMEOUT 180)
