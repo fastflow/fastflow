@@ -12,6 +12,10 @@
 #include <iostream>
 #include <vector>
 
+#ifdef DEBUG
+std::mutex debug_output_mutex;
+#endif
+
 struct MyInput {
     int a, b;
 };

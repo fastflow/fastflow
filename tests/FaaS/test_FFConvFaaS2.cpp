@@ -458,13 +458,13 @@ int main(int argc, char *argv[]) {
         for(auto& worker: workers) {
             ff_faas_node_t<InputTask,float>* faas_worker = dynamic_cast<ff_faas_node_t<InputTask,float>*> (worker);
             if(faas_worker) {
-                if (first_line)
-                    first_line = false;
-                else
-                    (t->getOutputFile()) << endl;
                 auto stats_map = faas_worker->getRealTimeStats();
                 tot_FAAS_offloaded_lines+=stats_map->size();
                 for(auto& stat: *stats_map) {
+                    if (first_line)
+                        first_line = false;
+                    else
+                        (t->getOutputFile()) << endl;
                     // 1 if the call is to the FAAS 
                     // + sent msg size ( in bytes )
                     // + warm or not 
@@ -480,7 +480,7 @@ int main(int argc, char *argv[]) {
                     << stat.second->T_faas_overhead/1000.0 << ","
                     << stat.second->T_ff_overhead/1000.0 << ","
                     << stat.second->T_fun_exec/1000.0 << ","
-                    << stat.second->T_total/1000.0 << endl; 
+                    << stat.second->T_total/1000.0; 
                     
                     mean_internal_FAAS_fun_exec_time += stat.second->T_fun_exec/1000.0;   
                     mean_FAAS_overhead_time += stat.second->T_faas_overhead/1000.0;
@@ -491,15 +491,15 @@ int main(int argc, char *argv[]) {
                 }
             }
             else {
-                if (first_line)
-                    first_line = false;
-                else
-                    (t->getOutputFile()) << endl;
                 Worker* local_worker = dynamic_cast<Worker*>(worker);
                 auto stats_vector = local_worker->getRealTimeStats();
                 tot_local_lines+=stats_vector->size();
                 for(double& stat: *stats_vector) {
-                    (t->getOutputFile()) << "0,0,0,0,0,0," << stat / 1000.0 << ",0\n";
+                    if (first_line)
+                        first_line = false;
+                    else
+                        (t->getOutputFile()) << endl;
+                    (t->getOutputFile()) << "0,0,0,0,0,0," << stat / 1000.0 << ",0";
                     mean_internal_local_fun_exec_time += stat/1000.0;   
                 }
             }

@@ -34,8 +34,8 @@
 #ifndef SERVERLEDGE_CONNECTOR_HPP
 #define SERVERLEDGE_CONNECTOR_HPP
 
-#include <ff/FaaS/ff_faas_connector.hpp>
 #include <ff/ff_faas.hpp>
+#include <ff/FaaS/ff_faas_connector.hpp>
 #include <chrono>
 #include <simdutf/simdutf.h>
 #include <simdutf/simdutf.cpp>
@@ -51,6 +51,11 @@
 #include <string>
 #include <unordered_map>
 #include <mutex>
+#include <shared_mutex>
+
+#ifdef DEBUG
+std::mutex debug_output_mutex;
+#endif
 
 class Serverledge_connector : public ff_faas_connector {
 public:
@@ -109,7 +114,10 @@ public:
         }
 
         total_size = sendBufferSize + json_payload_starting_size + json_payload_ending_size;
-        auto& req_it = Serverledge_connector::function_registration_map.at(*functionName);
+        
+        std::shared_lock<std::shared_mutex> lock(registrationMutex, std::defer_lock); // non blocca subito
+        lock.lock(); 
+         auto& req_it = Serverledge_connector::function_registration_map.at(*functionName);
         std::shared_ptr<rapidjson::Document> req_json_doc = req_it.first;
         std::string EntryPoint = "/invoke/" + std::string(req_json_doc->GetObject()["Name"].GetString());
         auto& req_config_json_doc = function_config_map.at(faasConfig->getFunctionFaasName(functionName));
@@ -124,6 +132,7 @@ public:
                 std::cerr << "[Serverledge_connector] Function invocation error: Memory allocation failed to create HTTP client for function " << *functionName << ". Exception: " << e.what() << std::endl;
                 return nullptr;
             }
+        lock.unlock();
 
         cli->set_connection_timeout(CONN_TIMEOUT_SEC, CONN_TIMEOUT_USEC); 
         cli->set_write_timeout(WRITE_TIMEOUT_SEC, WRITE_TIMEOUT_USEC); 
@@ -256,7 +265,7 @@ public:
                     std::unique_ptr<dataBuffer> resultBuffer = std::make_unique<dataBuffer>();
                     resultBuffer->setBuffer(resultData.release(), res.count, true);
                     
-                    std::cout << "[Serverledge_connector] Function invoked successfully." << std::endl;
+                    PRINT_DBG("Function invoked successfully.");
                     return resultBuffer; 
                 }
                 case 404:
@@ -284,25 +293,29 @@ public:
         T_reg = 0;
         PRINT_DBG(std::string("registerFaasFunction called for: ") + *functionName);  
 
-        std::unique_lock<std::mutex> lock(registrationMutex);
+        std::unique_lock<std::shared_mutex> lock(registrationMutex);
 
         std::chrono::high_resolution_clock::time_point T_reg_start;
         if(stats_collection) 
             T_reg_start = std::chrono::high_resolution_clock::now();
 
+        // I recover the backend installation from the configuration backend file 
         const std::string& faasName = faasConfig->getFunctionFaasName(functionName);
+        // I search if I have yet registered the installation before in the configuration backend map
         auto itFaasConfig = function_config_map.find(faasName);
         std::shared_ptr<rapidjson::Document> req_config_json_doc = nullptr;
-        try {
-            req_config_json_doc = std::make_shared<rapidjson::Document>();
-        } catch (const std::bad_alloc& e) {
-            std::cerr << "[Serverledge_connector] Registration error: Memory allocation failed for FaasConfig JSON document for function: " << *functionName << ". Exception: " << e.what() << std::endl;
-            return REGISTRATION_ERROR;
-        }
 
+        // I register the new backend installation, if not present in the configuration backend map
         if (itFaasConfig == function_config_map.end()) {
 
             std::string faasConfigStr = faasConfig->getFaasConfig(faasName); 
+            // I create and fill a new backend installation json document for future requests
+            try {
+                req_config_json_doc = std::make_shared<rapidjson::Document>();
+            } catch (const std::bad_alloc& e) {
+                std::cerr << "[Serverledge_connector] Registration error: Memory allocation failed for FaasConfig JSON document for function: " << *functionName << ". Exception: " << e.what() << std::endl;
+                return REGISTRATION_ERROR;
+            }
 
             if (req_config_json_doc->Parse(faasConfigStr.c_str()).HasParseError()) {
                 std::cerr << "[Serverledge_connector] Invalid JSON for FaasConfig: Parse error at offset "
@@ -320,19 +333,25 @@ public:
             if(!req_config_json_doc->HasMember("port")) 
                 req_config_json_doc->AddMember("port", rapidjson::Value(DEFAULT_PORT), req_config_json_doc->GetAllocator());               
         }
+        else 
+            req_config_json_doc = itFaasConfig->second;
 
         std::shared_ptr<rapidjson::Document> req_json_doc = nullptr;
-        try {
-            req_json_doc = std::make_shared<rapidjson::Document>();
-        } catch (const std::bad_alloc& e) {
-            std::cerr << "[Serverledge_connector] Registration error: Memory allocation failed for request JSON document for function: " << *functionName << ". Exception: " << e.what() << std::endl;
-            return REGISTRATION_ERROR;
-        }
+
         auto it = function_registration_map.find(*functionName);
 
+        // I register the new function on the backend installation, if not present in the function_registration map
         if (it == function_registration_map.end()) {
 
             std::string functionConfig = faasConfig->getFunctionConfig(functionName);  
+
+            try {
+                req_json_doc = std::make_shared<rapidjson::Document>();
+            } catch (const std::bad_alloc& e) {
+                std::cerr << "[Serverledge_connector] Registration error: Memory allocation failed for request JSON document for function: " << *functionName << ". Exception: " << e.what() << std::endl;
+                return REGISTRATION_ERROR;
+            }
+
             if (req_json_doc->Parse(functionConfig.c_str()).HasParseError()) {
                 std::cerr << "[Serverledge_connector] Invalid JSON: Parse error at offset "
                         << req_json_doc->GetErrorOffset() << ": "
@@ -370,7 +389,8 @@ public:
             if(sendHttpRegistrationRequest(req_json_doc,req_config_json_doc) == REGISTRATION_ERROR)
                 return REGISTRATION_ERROR;            
             try {
-                function_config_map[faasName] = req_config_json_doc;
+                if (itFaasConfig == function_config_map.end())
+                    function_config_map[faasName] = req_config_json_doc;
                 function_registration_map[*functionName] = std::make_pair(req_json_doc, 1);
             } catch (const std::bad_alloc& e) {
                 std::cerr << "[Serverledge_connector] Registration error: Memory allocation failed while saving registration for function: " << *functionName << ". Exception: " << e.what() << std::endl;
@@ -411,7 +431,7 @@ public:
         if(stats_collection) 
             T_dereg_start = std::chrono::high_resolution_clock::now();
 
-        std::lock_guard<std::mutex> lock(registrationMutex);
+        std::lock_guard<std::shared_mutex> lock(registrationMutex);
 
         auto it = function_registration_map.find(*functionName);
         if (it == function_registration_map.end()) {
@@ -523,7 +543,7 @@ private:
 
             switch (res->status) {
                 case 200:
-                    std::cout << "[Serverledge_connector] Function deregistered successfully: " << res->body << std::endl;
+                    PRINT_DBG("Function deregistered successfully: " + res->body);
                     return DEREGISTRATION_OK;
                 case 404:
                     std::cerr << "[Serverledge_connector] Function deregistration error: Unknown function. " << res->body << std::endl;
@@ -582,7 +602,7 @@ private:
 
             switch (res->status) {
                 case 200:
-                    std::cout << "[Serverledge_connector] Function registered successfully: " << res->body << std::endl;
+                    PRINT_DBG("Function registered successfully: " + res->body);
                     return REGISTRATION_OK;
                 case 404:
                     std::cerr << "[Serverledge_connector] Function registration error: Invalid runtime. " << res->body << std::endl;
@@ -607,6 +627,8 @@ private:
     PrewarmingResult sendHTTPPrewarmingRequest(unsigned long num) {
 
         PRINT_DBG(std::string("sendHTTPPrewarmingRequest called for: ") + *functionName);
+
+        std::shared_lock<std::shared_mutex> lock(registrationMutex);
         std::shared_ptr<rapidjson::Document> req_json_doc = Serverledge_connector::function_registration_map.at(*functionName).first;
 
         auto& req_config_json_doc = function_config_map.at(faasConfig->getFunctionFaasName(functionName));
@@ -653,7 +675,7 @@ private:
 
             switch (res->status) {
                 case 200:
-                    std::cout << "[Serverledge_connector] Function prewarmed successfully: " << res->body << std::endl;
+                    PRINT_DBG("Function prewarmed successfully: " + res->body);
                     return PREWARMING_OK;
                 case 404:
                     std::cerr << "[Serverledge_connector] Prewarming function error: Unknown function. " << res->body << std::endl;
@@ -770,7 +792,7 @@ private:
 
     alignas(CACHE_LINE_SIZE) static inline std::unordered_map<std::string, std::pair<std::shared_ptr<rapidjson::Document>, int>> function_registration_map;
     alignas(CACHE_LINE_SIZE) static inline std::unordered_map<std::string, std::shared_ptr<rapidjson::Document>> function_config_map;
-    alignas(CACHE_LINE_SIZE) static inline std::mutex registrationMutex;
+    alignas(CACHE_LINE_SIZE) static inline std::shared_mutex registrationMutex;
 
     alignas(CACHE_LINE_SIZE) static inline std::shared_ptr<rapidjson::SchemaDocument> HTTPInvocationResponseSchema;
     alignas(CACHE_LINE_SIZE) static inline std::shared_ptr<rapidjson::SchemaDocument> faasConfigEntrySchema;

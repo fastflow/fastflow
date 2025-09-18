@@ -46,10 +46,6 @@
 #include <condition_variable>
 #include <thread>
 
-#ifdef DEBUG
-std::mutex debug_output_mutex;
-#endif
-
 namespace ff {
 
     template<typename IN_t, typename OUT_t>
