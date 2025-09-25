@@ -9,31 +9,34 @@ int NUM_TASK = 3; // Numero di task da generare
 using namespace ff;
 using namespace ff::traits;
 
+
 struct MyInput {
-    int a;
-    int b;    
+    int a, b;
+/*
+    std::tuple<char*, size_t, bool> faas_serialize() {
+        return {reinterpret_cast<char*>(this), sizeof(MyInput), false};
+    }
+
+    static void faas_freeTask(MyInput* ptr){
+        return;
+    }
+*/
 };
 
 struct MyOutput {
     int result;
+/*
+    static MyOutput* faas_alloc(char* buffer, size_t sz) {
+        return reinterpret_cast<MyOutput*>(buffer);    
+    } 
+
+    bool faas_deserialize(char*, size_t ) {
+        return false;    
+    }
+*/
 };
 
 
-template <class T>
-bool faas_serialize(T& b, MyInput* input) {
-    b = {reinterpret_cast<char*>(input), sizeof(MyInput)};
-    return false;
-}
-
-template <class T>
-bool faas_deserialize(const T& b, MyOutput*& strPtr){
-    strPtr = reinterpret_cast<MyOutput*>(b.first);
-    return false;
-}
-
-template<typename T>
-void faas_deserializealloctask(const T&, MyOutput*&) { 
-}
 
 // Bitsery serialization (obbligatoria se vuoi usare Bitsery)
 template <typename S>

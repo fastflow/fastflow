@@ -1,8 +1,8 @@
 /* -*- Mode: C++; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 /*!
- *  \file connector.hpp
- *  \ingroup <TODO>
+ *  \file ff_faas_function_adapter.hpp
+ *  \ingroup adapter
  *
  *  \brief  Defines the ff_faas_function_adapter class for a specific FAAS framework
  *
@@ -34,21 +34,22 @@
 #ifndef FF_FAAS_FUNCTION_ADAPTER_HPP
 #define FF_FAAS_FUNCTION_ADAPTER_HPP
 
-#include <ff/distributed/ff_network.hpp>
+#include <ff/FaaS/ff_faas_buffer.hpp>
 #include <memory>
+namespace adapter {
+    class ff_faas_function_adapter
+    {
+        public:
+            ff_faas_function_adapter() = default;
 
-class ff_faas_function_adapter
-{
-    public:
-        ff_faas_function_adapter() = default;
+            virtual ~ff_faas_function_adapter() = default;
 
-        virtual ~ff_faas_function_adapter() = default;
+            virtual bool ff_faas_function_adapter_init() = 0;
+            virtual std::unique_ptr<ff::faasBuffer> ff_faas_function_adapter_getRequest(std::unique_ptr<std::string>&, bool&) = 0; // The first parameter is an error messag, the second parameter indicates if the function execution time must be measured
+            virtual bool ff_faas_function_adapter_sendResponse(std::unique_ptr<ff::faasBuffer>,std::unique_ptr<std::string>&, double) = 0; // The first parameter is an error message, the second parameter is the function execution time, in microseconds, or -1 if not available
+            virtual bool ff_faas_function_adapter_sendErrorResponse(std::unique_ptr<std::string>) = 0;
 
-        virtual bool ff_faas_function_adapter_init() = 0;
-        virtual std::unique_ptr<dataBuffer> ff_faas_function_adapter_getRequest(std::unique_ptr<std::string>&, bool&) = 0; // The first parameter is an error messag, the second parameter indicates if the function execution time must be measured
-        virtual bool ff_faas_function_adapter_sendResponse(std::unique_ptr<dataBuffer>,std::unique_ptr<std::string>&, double) = 0; // The first parameter is an error message, the second parameter is the function execution time, in microseconds, or -1 if not available
-        virtual bool ff_faas_function_adapter_sendErrorResponse(std::unique_ptr<std::string>) = 0;
-
-};
+    };
+}
 
 #endif // FF_FAAS_FUNCTION_ADAPTER_HPP

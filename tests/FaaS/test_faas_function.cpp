@@ -5,29 +5,27 @@
 struct MyInput {
     int a;
     int b;
+    /*
+    static MyInput* faas_alloc(char* buffer, size_t) {
+        return reinterpret_cast<MyInput*>(buffer);    
+    }
+
+    bool faas_deserialize(char*, size_t ) {
+        return false;    
+    }
+    */
 };
 
 struct MyOutput {
     int result;
+    /*
+    std::tuple<char*, size_t, bool> faas_serialize() {
+        return { reinterpret_cast<char*>(this), sizeof(int), false};
+    }
+    */
 };
 
-template <class T>
-bool faas_serialize(T& b, MyOutput* output) {
-    b = {reinterpret_cast<char*>(output), sizeof(MyOutput)};
-    return false;
-}
 
-template <class T>
-bool faas_deserialize(const T& b, MyInput*& strPtr){
-    strPtr = new (b.first) MyInput;
-    return false;
-}
-
-template<typename T>
-void faas_deserializealloctask(const T&, MyInput*&) {
-}
-
-/*
 // Bitsery serialization (obbligatoria se vuoi usare Bitsery)
 template <typename S>
 void serialize(S& s, MyInput& o) {
@@ -39,7 +37,7 @@ template <typename S>
 void serialize(S& s, MyOutput& o) {
     s.value4b(o.result);
 }
-*/
+
 
 class MyFaaSFunction : public ff::ff_faas_function<MyInput, MyOutput, Serverledge_adapter> {
 public:

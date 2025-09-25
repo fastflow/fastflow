@@ -47,6 +47,7 @@
 #include <thread>
 
 namespace ff {
+    using namespace connector;
 
     template<typename IN_t, typename OUT_t>
     class ff_faas_node_t;  // Forward declaration
@@ -69,6 +70,7 @@ namespace ff {
                     throw std::runtime_error("Failed to register FaaS function: " + *functionName + "\n");
                 faasConnector->prewarmingFaasFunction(NUM_PREWARM,T_prewarm); 
                 PRINT_DBG("Constructor called for function invoker thread for function: " + *functionName);
+                serializedData = std::make_shared<faasBuffer>();
         }
 
         ~ff_faas_function_invoker_thread(){
@@ -158,28 +160,27 @@ namespace ff {
         ff_faas_function_invoker_thread(const ff_faas_function_invoker_thread& other) = delete;
         ff_faas_function_invoker_thread& operator=(const ff_faas_function_invoker_thread& other) = delete;
 
-        void serialize(IN_t* input, std::unique_ptr<dataBuffer>& serializedData) {
+        void serialize(IN_t* input, std::shared_ptr<faasBuffer>& serializedData) {
             try{
                 PRINT_DBG("Serializing input data for function: " + *functionName);
-                if (faas_node.serializeF(input, *serializedData))
-                    faas_node.freetaskF(input);
+                if (faas_node.faas_serializeF(input, *serializedData))
+                    faas_node.faas_freetaskF(input);
                 else 
-                    serializedData->freetaskF = faas_node.freetaskF;
+                    serializedData->freetaskF = faas_node.faas_freetaskF;
                 PRINT_DBG("Input data serialized for function: " + *functionName);
             }
             catch (...) {
                 std::cerr << "Exception received during serializing task for function: " << *functionName << std::endl;
                 PRINT_DBG("Input data not serialized for function: " + *functionName);
-                faas_node.freetaskF(input);
+                faas_node.faas_freetaskF(input);
             }
         }
 
-        OUT_t* deserialize(std::unique_ptr<dataBuffer> resultBuffer) {
+        OUT_t* deserialize(std::unique_ptr<faasBuffer> resultBuffer) {
             PRINT_DBG("Deserializing output data for function: " + *functionName);
             bool datacopied = false;
-            OUT_t* task = static_cast<OUT_t*>(faas_node.deserializeF(*resultBuffer, datacopied));            
-            if (!datacopied) 
-                resultBuffer->doNotCleanup();  // Do not cleanup the buffer, as it is already handled by the deserializer         
+            OUT_t* task = static_cast<OUT_t*>(faas_node.faas_deserializeF(*resultBuffer, datacopied));            
+            resultBuffer->setCleanup(datacopied);  // Do not cleanup the buffer, as it is already handled by the deserializer         
             PRINT_DBG("Output data deserialized for function: " + *functionName);
             return task;      
         }
@@ -197,7 +198,6 @@ namespace ff {
                 if (internal_task != nullptr) {                    
                     PRINT_DBG("Worker thread is processing a task for function: " + *functionName);
                     // Process the data if it's not nullptr
-                    std::unique_ptr<dataBuffer> serializedData = nullptr;
                     try {
                         IN_t* data = internal_task->task;
                         if(stats_collection) {
@@ -205,7 +205,6 @@ namespace ff {
                             task_id = internal_task->task_id;
                         }             
                         delete internal_task;  // Free the internal task structure           
-                        serializedData = std::make_unique<dataBuffer>();                                           
                         serialize(data, serializedData);
                     }
                     catch (const std::bad_alloc& e) {
@@ -214,7 +213,7 @@ namespace ff {
 
                     if (serializedData) {
                         std::shared_ptr<stats_entry> stats;
-                        std::unique_ptr<dataBuffer> resultBuffer = faasConnector->invokeFaasFunction(std::move(serializedData), stats);
+                        std::unique_ptr<faasBuffer> resultBuffer = faasConnector->invokeFaasFunction(serializedData, stats);
                         if (resultBuffer) {
                             OUT_t* new_task = deserialize(std::move(resultBuffer));
 
@@ -272,6 +271,7 @@ namespace ff {
 
         bool stats_collection;
         double T_reg,T_dereg,T_prewarm;
+        std::shared_ptr<faasBuffer> serializedData = nullptr;
 
         std::shared_ptr<std::string> functionName;
         ff_faas_node_t<IN_t, OUT_t>& faas_node;

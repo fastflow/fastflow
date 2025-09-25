@@ -11,6 +11,7 @@
 #include <simdutf/simdutf.cpp>
 #include <iostream>
 #include <vector>
+#include <tuple>
 
 #ifdef DEBUG
 std::mutex debug_output_mutex;
@@ -18,29 +19,26 @@ std::mutex debug_output_mutex;
 
 struct MyInput {
     int a, b;
+
+    //std::tuple<char*, size_t, bool> faas_serialize() {
+    //    return {reinterpret_cast<char*>(this), sizeof(MyInput), false};
+    //}
+        
 };
 
 struct MyOutput {
     int result;
+
+    //static MyOutput* faas_alloc(char* buffer, size_t sz) {
+    //    return reinterpret_cast<MyOutput*>(buffer);    
+    //} 
+
+    //bool faas_deserialize(char*, size_t ) {
+    //    return false;    
+    //}
 };
 
-template <class T>
-bool faas_serialize(T& b, MyInput* input) {
-    b = {reinterpret_cast<char*>(input), sizeof(MyInput)};
-    return false;
-}
 
-template <class T>
-bool faas_deserialize(const T& b, MyOutput*& strPtr){
-    strPtr = new (b.first) MyOutput;
-    return false;
-}
-
-template<typename T>
-void faas_deserializealloctask(const T&, MyOutput*&) { 
-}
-
-/*
 // Bitsery
 template <typename S>
 void serialize(S& s, MyInput& obj) {
@@ -52,32 +50,45 @@ template <typename S>
 void serialize(S& s, MyOutput& obj) {
     s.value4b(obj.result);
 }
-*/
 
-int main(int argc, char* argv[]) {
-    // 1. Prepara l'input
-    MyInput input{5, 7};
-    bool stats_collection = false;
-    if(argc==2)
-        if(strcmp(argv[1],"t")==0)
-            stats_collection = true;
-    size_t buffer_size = 0;
-    char* buffer = nullptr;
-
-
-    PRINT_DBG("Inizio preparazione dell'input...");
-    PRINT_DBG("Input preparato: a = " + std::to_string(input.a) + ", b = " + std::to_string(input.b));
-
-    if constexpr (ff::traits::is_faas_serializable_v<MyInput>) {
-        bool datacopied = true;
+template <typename T>
+std::enable_if_t<ff::traits::has_faas_serialize_member<T>::value>
+manual_serialize(T& input, char*& buffer, size_t& buffer_size) {
         PRINT_DBG("Inizio serializzazione manuale...");
-        std::pair<char*, size_t> p = ff::traits::faas_serializeWrapper<MyInput>(&input, datacopied);
-        buffer_size = p.second;
-        buffer = p.first;
+        std::tuple<char*, size_t, bool> p = input.faas_serialize();
+        buffer_size = std::get<1>(p);
+        buffer = std::get<0>(p);
         PRINT_DBG("Serializzazione manuale completata, buffer_size: " + std::to_string(buffer_size));
-    }
+}
+
+template <typename T>
+std::enable_if_t<!ff::traits::has_faas_serialize_member<T>::value>
+manual_serialize(T& , char*& , size_t& ) {
+}
+
+template <typename T>
+std::enable_if_t<ff::traits::has_faas_deserialize_member<T>::value>
+manual_deserialize(T*& output, char*& resultData, size_t& maxLength) {
+        PRINT_DBG("Inizio deserializzazione manuale...");
+        output = T::faas_alloc(resultData, maxLength);
+        output->faas_deserialize(resultData, maxLength);
+        PRINT_DBG("Deserializzazione manuale completata");
+}
+
+template <typename T>
+std::enable_if_t<!ff::traits::has_faas_deserialize_member<T>::value>
+manual_deserialize(T*& output, char*& resultData, size_t& maxLength) {
+}
+
+int main() {
+    MyInput input{5, 10};
+    char* buffer = nullptr;
+    size_t buffer_size = 0;
+    bool stats_collection = false;
+
+    if constexpr (!ff::traits::has_faas_serialize_member<MyInput>::value)  
+        manual_serialize<MyInput>(input, buffer, buffer_size);
     else {
-        // 2. Serializza in un buffer binario (std::vector<char>)
         PRINT_DBG("Inizio serializzazione con Bitsery...");
         bitsery::MeasureSize measureSize;
         size_t neededSize = bitsery::quickSerialization<bitsery::MeasureSize>(measureSize, input);
@@ -90,20 +101,17 @@ int main(int argc, char* argv[]) {
         bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<char>>>(Bitsery_buffer, input);
         PRINT_DBG("Serializzazione con Bitsery completata");
         buffer_size = Bitsery_buffer.size();
-        buffer = Bitsery_buffer.data(); // Converti in un array di char
+        buffer = Bitsery_buffer.data();
     }
 
-    // 3. Codifica in Base64 con fastbase64
     PRINT_DBG("Inizio codifica in Base64...");
 
-    
     std::vector<char> bufferBase64;
     bufferBase64.resize(simdutf::base64_length_from_binary(buffer_size, simdutf::base64_options::base64_default));
 
     simdutf::binary_to_base64(buffer, buffer_size, bufferBase64.data(), simdutf::base64_options::base64_default);
     PRINT_DBG("Codifica Base64 completata, lunghezza: " + std::to_string(bufferBase64.size()));
 
-    // 4. Costruisci JSON con RapidJSON
     PRINT_DBG("Creazione JSON...");
     rapidjson::Document doc;
     doc.SetObject();
@@ -147,7 +155,6 @@ int main(int argc, char* argv[]) {
 
     PRINT_DBG("Risposta HTTP ricevuta: " + std::string(respBuffer.data()));
 
-    // Parsing del corpo JSON della risposta
     rapidjson::Document responseDoc;
     responseDoc.Parse(respBuffer.data(), respBuffer.size());
 
@@ -191,28 +198,22 @@ int main(int argc, char* argv[]) {
 
     MyOutput* output;
 
-    if constexpr (ff::traits::is_faas_deserializable_v<MyOutput>) {
-        PRINT_DBG("Inizio deserializzazione manuale...");
-        ff::traits::faas_alloctaskWrapper<MyOutput>(resultData, maxLength, output);
-        ff::traits::faas_deserializeWrapper<MyOutput>(resultData, maxLength, output);
-        PRINT_DBG("Deserializzazione manuale completata");
-    }
+    if constexpr (!ff::traits::has_faas_deserialize_member<MyOutput>::value) 
+        manual_deserialize<MyOutput>(output, resultData, maxLength);
     else {
-        // 6. Deserializza la risposta (binaria)
         std::vector<char> v = std::vector<char>(resultData, resultData + Res.count);
         output = new MyOutput;
         PRINT_DBG("Inizio deserializzazione della risposta con Bitsery...");
-        auto state = bitsery::quickDeserialization<bitsery::InputBufferAdapter<std::vector<char>>>(
-            {v.begin(), v.end()}, output
-        );
+        auto state = bitsery::quickDeserialization<bitsery::InputBufferAdapter<std::vector<char>>>({v.begin(), v.end()}, output);
 
         if (state.first != bitsery::ReaderError::NoError) {
-            std::cerr << "Errore nella deserializzazione\n";
-            return 1;
+            std::cerr << "Deserialization with Bitsery failed\n";
+            PRINT_DBG("Deserializzazione con Bitsery fallita");
+            return 1;   
         }
+
         PRINT_DBG("Deserializzazione con Bitsery completata");
     }
     std::cout << "Risultato della somma: " << output->result << "\n";
-
     return 0;
 }

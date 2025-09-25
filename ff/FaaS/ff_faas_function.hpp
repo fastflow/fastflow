@@ -44,6 +44,8 @@
 #include <memory>
 #include <chrono>
 
+using namespace adapter;
+
 namespace ff {
 
     template <typename IN_t, typename OUT_t = IN_t, typename T = void>
@@ -52,80 +54,74 @@ namespace ff {
         ff_faas_function(int argc = 0, char** argv = nullptr) {
             static_assert(std::is_base_of<ff_faas_function_adapter, T>::value, "T must be derived from ff_faas_function_adapter");
             PRINT_DBG(std::string("Inizializzazione della funzione FAAS con argc: ") + std::to_string(argc));
-            
-            if constexpr (traits::has_faas_alloctask_v<IN_t>) {
-                this->alloctaskF = [](char* ptr, size_t sz) -> void* {
-                    IN_t* p = nullptr;
-                    traits::faas_alloctaskWrapper<IN_t>(ptr, sz, p);
-                    return p;
-                };
+
+            if constexpr (traits::has_faas_allocTask_member<IN_t>::value) {
+                this->faas_alloctaskF = reinterpret_cast<void*(*)(char*,size_t)>(IN_t::faas_alloc);
             }
             else {
-                this->alloctaskF = [](char*, size_t) -> void* {
+                this->faas_alloctaskF = [](char*, size_t) -> void* {
                     IN_t* o = new IN_t;
                     assert(o);
                     return o;
                 };
             }
+            PRINT_DBG("Allocation function read.");
 
-            if constexpr (traits::has_faas_freetask_v<OUT_t>) {
-                this->freetaskF = [](void* o) {
-                    traits::faas_freetaskWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o));
+            if constexpr (traits::has_faas_freeTask_member<OUT_t>::value) {
+                this->faas_freetaskF = [](void* o) {
+                    OUT_t::freeTask(reinterpret_cast<OUT_t*>(o));
                 };
             }
-            else {
-                this->freetaskF = [](void* o) {
-                    if constexpr (!std::is_void_v<OUT_t>) {
-                        OUT_t* obj = reinterpret_cast<OUT_t*>(o);
-                        delete obj;
-                    }
-                };
-            }
+            else
+                this->faas_freetaskF = [](void* o) { delete reinterpret_cast<OUT_t*>(o); };                            
 
-            if constexpr (traits::is_faas_serializable_v<OUT_t>) {
-                this->serializeF = [](void* o, dataBuffer& b) -> bool {
-                    bool datacopied = true;
-                    std::pair<char*, size_t> p = traits::faas_serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o), datacopied);
-                    b.setBuffer(p.first, p.second);
+            PRINT_DBG("Deallocation function read.");
+
+            if constexpr (traits::has_faas_serialize_member<OUT_t>::value) {
+                this->faas_serializeF = [](void* o, faasBuffer& b) -> bool {
+                    auto [buff, size, datacopied] = reinterpret_cast<OUT_t*>(o)->faas_serialize();
+                    b.setBuffer(buff,size,datacopied);
                     return datacopied;
                 };
+                PRINT_DBG("Serialization function manually serializable!");
             }
             else {
-                this->serializeF = [](void* data, dataBuffer& b) -> bool {
+                this->faas_serializeF = [](void* data, faasBuffer& b) -> bool {
                     OUT_t* obj = static_cast<OUT_t*>(data);
                     bitsery::MeasureSize measureSize;
-                    size_t neededSize = bitsery::quickSerialization<bitsery::MeasureSize>(measureSize, *obj);
-                    auto buffer = new char[neededSize];
-                    std::stringbuf sb(std::ios::in | std::ios::out | std::ios::binary);  
-                    sb.pubsetbuf(buffer, neededSize);
-                    std::ostream os(&sb);           
+                    size_t neededSize = bitsery::quickSerialization<bitsery::MeasureSize,OUT_t>(measureSize, *obj);
+                    b.reuseBuffer(neededSize);
+                    std::ostream os(&b);           
                     bitsery::Serializer<bitsery::OutputStreamAdapter> ser(os);
                     ser.object(*obj);  
-                    b.setBuffer(buffer, neededSize, true);             
                     return true;
                 };
+                PRINT_DBG("Serialization function is Bitsery serializable!"); 
             }
-            PRINT_DBG("Funzione di serializzazione registrata.");
+            PRINT_DBG(std::string("Serialization function read."));
 
-            if constexpr (traits::is_faas_deserializable_v<IN_t>) {
-                this->deserializeF = [this](dataBuffer& b, bool& datacopied) -> void* {
+            if constexpr (traits::has_faas_deserialize_member<IN_t>::value) {
+                //TODO: da rivedere! Non capisco perché nel codice di Tonci c'è un terzo parametro
+                this->faas_deserializeF = [this](faasBuffer& b, bool& datacopied) -> void* {
                     IN_t* ptr = nullptr;
                     try{
-                        ptr = static_cast<IN_t*>(this->alloctaskF(b.getPtr(), b.getLen()));
+                        ptr = static_cast<IN_t*>(this->faas_alloctaskF(b.getBuffer(), b.size()));
                     }
                     catch (const std::bad_alloc& e) {
                         std::cerr << "Memory allocation failed during deserialization: " << e.what() << std::endl;
                         return nullptr;
                     }
-                    datacopied = traits::faas_deserializeWrapper<IN_t>(b.getPtr(), b.getLen(), ptr);             
+                    datacopied = ptr->faas_deserialize(b.getBuffer(), b.size());            
                     return ptr;
                 };
+                PRINT_DBG("Serialization function manually deserializable!");
             }
             else {
-                this->deserializeF = [this](dataBuffer& b, bool& datacopied) -> void* {
+                //TODO: da rivedere! Non capisco perché nel codice di Tonci c'è un terzo parametro
+                this->faas_deserializeF = [this](faasBuffer& b, bool& datacopied) -> void* {
                     IN_t* obj = nullptr;
                     try {
-                         obj = reinterpret_cast<IN_t*>(this->alloctaskF(nullptr, 0));
+                         obj = reinterpret_cast<IN_t*>(this->faas_alloctaskF(nullptr, 0));
                     } 
                     catch (const std::bad_alloc& e) {
                         std::cerr << "Memory allocation failed during deserialization: " << e.what() << std::endl;
@@ -138,9 +134,9 @@ namespace ff {
                     datacopied = true;
                     return obj;
                 };
+                PRINT_DBG("Serialization function is Bitsery deserializable!");
             }
-            PRINT_DBG("Funzione di deserializzazione registrata.");
-            
+
             faas_fun_adapter = std::make_unique<T>(argc, argv);   
             PRINT_DBG("Adapter FAAS creato.");
             
@@ -159,7 +155,7 @@ namespace ff {
             while(true) {
                 unique_ptr<std::string> error_msg = nullptr;
                 PRINT_DBG("Attesa richiesta dal client nella funzione FAAS...");
-                unique_ptr<dataBuffer> InputParamsBuffer = faas_fun_adapter->ff_faas_function_adapter_getRequest(error_msg, stats_collection);
+                unique_ptr<ff::faasBuffer> InputParamsBuffer = faas_fun_adapter->ff_faas_function_adapter_getRequest(error_msg, stats_collection);
                 
                 if(!InputParamsBuffer) {
                     if(!faas_fun_adapter->ff_faas_function_adapter_sendErrorResponse(std::move(error_msg))) {
@@ -173,9 +169,8 @@ namespace ff {
                 PRINT_DBG("Richiesta ottenuta correttamente. Gestione richiesta...");
 
                 bool datacopied = false;
-                IN_t* input_obj = static_cast<IN_t*>(deserializeF(*InputParamsBuffer, datacopied));
-                if (!datacopied) 
-                    InputParamsBuffer->doNotCleanup();   
+                IN_t* input_obj = static_cast<IN_t*>(faas_deserializeF(*InputParamsBuffer, datacopied));                
+                InputParamsBuffer->setCleanup(datacopied);   
 
                 if(!input_obj) {
                     if(!faas_fun_adapter->ff_faas_function_adapter_sendErrorResponse(std::make_unique<std::string>("Error during input deserialization."))) {
@@ -201,20 +196,20 @@ namespace ff {
                     PRINT_DBG(std::string("Funzione eseguita in: ") + std::to_string(T_fun_exec) + std::string(" microsecondi"));
                 }
 
-                std::unique_ptr<dataBuffer> OutputParamsBuffer = nullptr;
+                std::unique_ptr<faasBuffer> OutputParamsBuffer = nullptr;
                 try {
-                    OutputParamsBuffer = std::make_unique<dataBuffer>();
-                    if (serializeF(output_obj, *OutputParamsBuffer))
-                        freetaskF(output_obj);
+                    OutputParamsBuffer = std::make_unique<faasBuffer>();
+                    if (faas_serializeF(output_obj, *OutputParamsBuffer))
+                        faas_freetaskF(output_obj);
                     else 
-                        OutputParamsBuffer->freetaskF = freetaskF;
+                        OutputParamsBuffer->freetaskF = faas_freetaskF;
                 } catch (const std::bad_alloc& e) {
                     if(!faas_fun_adapter->ff_faas_function_adapter_sendErrorResponse(std::make_unique<std::string>("Memory allocation failed during output serialization: " + std::string(e.what())))) {
                         std::cerr << "Failed to send error response to client." << std::endl;
                         return -1;
                     }
                     PRINT_DBG("Errore nella serializzazione dell'output.");
-                    freetaskF(output_obj);
+                    faas_freetaskF(output_obj);
                     continue;
                 }
 
@@ -233,10 +228,10 @@ namespace ff {
 
     private:
         bool stats_collection = false;
-        std::function<void(void*)> freetaskF;
-        std::function<void* (char*, size_t)> alloctaskF;
-        std::function<bool(void*, dataBuffer&)> serializeF;
-        std::function<void*(dataBuffer&, bool&)> deserializeF;
+        std::function<void(void*)> faas_freetaskF;
+        std::function<void* (char*, size_t)> faas_alloctaskF;
+        std::function<bool(void*, faasBuffer&)> faas_serializeF;
+        std::function<void*(faasBuffer&, bool&)> faas_deserializeF;
         std::unique_ptr<T> faas_fun_adapter;
     };
 

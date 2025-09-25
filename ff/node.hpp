@@ -1296,7 +1296,7 @@ protected:
     
     virtual void propagateEOS(void* task=FF_EOS) { (void)task; }
     
-#if defined(DFF_ENABLED) || defined(FF_FAAS_ENABLED)
+#if defined(DFF_ENABLED) 
     std::function<void(void*)> freetaskF;
     std::function<void* (char*, size_t)> alloctaskF;
     std::function<bool(void*, dataBuffer&)> serializeF;
@@ -1306,6 +1306,7 @@ protected:
     virtual std::pair<decltype(serializeF), decltype(freetaskF)> getSerializationFunction(){return std::make_pair(serializeF,freetaskF);}
     virtual std::pair<decltype(deserializeF), decltype(alloctaskF)> getDeserializationFunction(){ return std::make_pair(deserializeF,alloctaskF);}
 #endif
+
     // always defined, the body will implement a no-op if the distributed runtime is disabled
     GroupInterface createGroup(std::string);
     

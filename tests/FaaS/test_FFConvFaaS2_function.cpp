@@ -1,7 +1,7 @@
 #include <ff/FaaS/adapters/Serverledge_adapter.hpp>
 #include <ff/FaaS/ff_faas_function.hpp>
 #include <iostream>
-#include "ff/FaaS/include/bitsery/bitsery.h"
+#include <ff/FaaS/include/bitsery/bitsery.h>
 #include <ff/FaaS/include/bitsery/traits/vector.h>
 #include <cstdint>
 
