@@ -77,7 +77,7 @@ manual_deserialize(T*& output, char*& resultData, size_t& maxLength) {
 
 template <typename T>
 std::enable_if_t<!ff::traits::has_faas_deserialize_member<T>::value>
-manual_deserialize(T*& output, char*& resultData, size_t& maxLength) {
+manual_deserialize(T*&, char*&, size_t&) {
 }
 
 int main() {

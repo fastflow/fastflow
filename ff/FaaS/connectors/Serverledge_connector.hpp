@@ -85,7 +85,7 @@ namespace connector {
             size_t payloadSize = payload->size();
 
             try {
-                    base64_translation_buffer.resize(simdutf::base64_length_from_binary(payloadSize, simdutf::base64_options::base64_default));           
+                base64_translation_buffer.resize(simdutf::base64_length_from_binary(payloadSize, simdutf::base64_options::base64_default));           
             } catch (const std::bad_alloc& e) {
                 std::cerr << "[Serverledge_connector] Function invocation error: Memory allocation failed for base64 encoding buffer for function: " << *functionName << ". Exception: " << e.what() << std::endl;            
                 return nullptr;
@@ -196,7 +196,7 @@ namespace connector {
                             return nullptr;
                         }
 
-                        if (res_json_doc->Parse(HTTPres->body.c_str()).HasParseError()) {
+                        if (res_json_doc->ParseInsitu(HTTPres->body.data()).HasParseError()) {
                             std::cerr << "[Serverledge_connector] Function invocation error: JSON parse error at offset "
                                     << res_json_doc->GetErrorOffset() << ": "
                                     << rapidjson::GetParseError_En(res_json_doc->GetParseError())
@@ -225,7 +225,8 @@ namespace connector {
                         }
 
                         const rapidjson::Value& result = res_json_doc->GetObject()["Result"];
-                        res_json_doc->Parse(result.GetString(), result.GetStringLength()); 
+
+                        res_json_doc->ParseInsitu(const_cast<char*>(result.GetString())); 
                         if (res_json_doc->HasParseError()) {
                             std::cerr << "[Serverledge_connector] Function invocation error: JSON validation failed for function " << *functionName << std::endl;
                             return nullptr;
@@ -255,15 +256,13 @@ namespace connector {
                         size_t rSize = r.GetStringLength();
                         size_t maxLength = simdutf::maximal_binary_length_from_base64(r.GetString(), rSize);
                         
-                        std::unique_ptr<char[]> resultData = std::make_unique<char[]>(maxLength);
+                        std::unique_ptr<ff::faasBuffer> resultBuffer = std::make_unique<ff::faasBuffer>(maxLength);
 
-                        simdutf::result res = simdutf::base64_to_binary(r.GetString(), rSize, resultData.get(), simdutf::base64_default, simdutf::last_chunk_handling_options::strict);
+                        simdutf::result res = simdutf::base64_to_binary(r.GetString(), rSize, resultBuffer->getBuffer(), simdutf::base64_default, simdutf::last_chunk_handling_options::strict);
                         if(res.error) {
                             std::cerr << "[Serverledge_connector] Function invocation error: conversion from Base64 to binary for the return parameters failed for function " << *functionName << std::endl;
                             return nullptr;    
                         }      
-                        std::unique_ptr<ff::faasBuffer> resultBuffer = std::make_unique<ff::faasBuffer>();
-                        resultBuffer->setBuffer(resultData.release(), res.count, true);
                         
                         PRINT_DBG("Function invoked successfully.");
                         return resultBuffer; 

@@ -118,6 +118,7 @@ namespace ff {
         void resizeBuffer(size_t newCapacity) {
             if(newCapacity<=m_capacity) {
                 setp(m_buffer, m_buffer + m_capacity);
+                setg(m_buffer,m_buffer, m_buffer + m_capacity);
                 return;
             }
             if (m_buffer) 
