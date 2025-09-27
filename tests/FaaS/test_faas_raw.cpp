@@ -1,8 +1,9 @@
 #include "ff/ff_faas.hpp"
+#include <ff/FaaS/ff_faas_buffer.hpp>
 #include <bitsery/bitsery.h>
 #include <bitsery/adapter/measure_size.h>
 #include <bitsery/adapter/buffer.h>
-#include <bitsery/traits/vector.h>
+#include <bitsery/adapter/stream.h>
 #include <httplib.h>
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
@@ -63,7 +64,23 @@ manual_serialize(T& input, char*& buffer, size_t& buffer_size) {
 
 template <typename T>
 std::enable_if_t<!ff::traits::has_faas_serialize_member<T>::value>
-manual_serialize(T& , char*& , size_t& ) {
+manual_serialize(T& input, char*& buffer, size_t& buffer_size) {
+    PRINT_DBG("Inizio serializzazione con Bitsery...");
+    bitsery::MeasureSize measureSize;
+    buffer_size = bitsery::quickSerialization<bitsery::MeasureSize>(measureSize, input);
+    PRINT_DBG("Dimensione necessaria per la serializzazione: " + std::to_string(buffer_size));
+
+    buffer = new char[buffer_size];
+
+    ff::faasBuffer faas_buffer;
+    faas_buffer.setBuffer(buffer, buffer_size, false);
+
+    PRINT_DBG("Buffer dimensionato a " + std::to_string(buffer_size) + " byte");
+
+    std::ostream os(&faas_buffer);           
+    bitsery::Serializer<bitsery::OutputStreamAdapter> ser(os);
+    ser.object(input);  
+    PRINT_DBG("Serializzazione con Bitsery completata");
 }
 
 template <typename T>
@@ -77,7 +94,15 @@ manual_deserialize(T*& output, char*& resultData, size_t& maxLength) {
 
 template <typename T>
 std::enable_if_t<!ff::traits::has_faas_deserialize_member<T>::value>
-manual_deserialize(T*&, char*&, size_t&) {
+manual_deserialize(T*& output, char*& resultData, size_t& maxLength) {
+    PRINT_DBG("Inizio deserializzazione della risposta con Bitsery...");
+    ff::faasBuffer faas_buffer;
+    faas_buffer.setBuffer(resultData, maxLength);
+    output = new T;
+    std::istream is(&faas_buffer);
+    bitsery::Deserializer<bitsery::InputStreamAdapter> des(is);
+    des.object(*output);
+    PRINT_DBG("Deserializzazione con Bitsery completata");
 }
 
 int main() {
@@ -86,23 +111,7 @@ int main() {
     size_t buffer_size = 0;
     bool stats_collection = false;
 
-    if constexpr (!ff::traits::has_faas_serialize_member<MyInput>::value)  
-        manual_serialize<MyInput>(input, buffer, buffer_size);
-    else {
-        PRINT_DBG("Inizio serializzazione con Bitsery...");
-        bitsery::MeasureSize measureSize;
-        size_t neededSize = bitsery::quickSerialization<bitsery::MeasureSize>(measureSize, input);
-        PRINT_DBG("Dimensione necessaria per la serializzazione: " + std::to_string(neededSize));
-
-        std::vector<char> Bitsery_buffer;
-        Bitsery_buffer.resize(neededSize);
-        PRINT_DBG("Buffer ridimensionato a " + std::to_string(neededSize) + " byte");
-
-        bitsery::quickSerialization<bitsery::OutputBufferAdapter<std::vector<char>>>(Bitsery_buffer, input);
-        PRINT_DBG("Serializzazione con Bitsery completata");
-        buffer_size = Bitsery_buffer.size();
-        buffer = Bitsery_buffer.data();
-    }
+    manual_serialize<MyInput>(input, buffer, buffer_size);
 
     PRINT_DBG("Inizio codifica in Base64...");
 
@@ -197,23 +206,8 @@ int main() {
     }
 
     MyOutput* output;
+    manual_deserialize<MyOutput>(output, resultData, maxLength);
 
-    if constexpr (!ff::traits::has_faas_deserialize_member<MyOutput>::value) 
-        manual_deserialize<MyOutput>(output, resultData, maxLength);
-    else {
-        std::vector<char> v = std::vector<char>(resultData, resultData + Res.count);
-        output = new MyOutput;
-        PRINT_DBG("Inizio deserializzazione della risposta con Bitsery...");
-        auto state = bitsery::quickDeserialization<bitsery::InputBufferAdapter<std::vector<char>>>({v.begin(), v.end()}, output);
-
-        if (state.first != bitsery::ReaderError::NoError) {
-            std::cerr << "Deserialization with Bitsery failed\n";
-            PRINT_DBG("Deserializzazione con Bitsery fallita");
-            return 1;   
-        }
-
-        PRINT_DBG("Deserializzazione con Bitsery completata");
-    }
     std::cout << "Risultato della somma: " << output->result << "\n";
     return 0;
 }

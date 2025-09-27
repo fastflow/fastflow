@@ -46,7 +46,7 @@ namespace adapter {
 
             virtual bool ff_faas_function_adapter_init() = 0;
             virtual std::unique_ptr<ff::faasBuffer> ff_faas_function_adapter_getRequest(std::unique_ptr<std::string>&, bool&) = 0; // The first parameter is an error messag, the second parameter indicates if the function execution time must be measured
-            virtual bool ff_faas_function_adapter_sendResponse(std::unique_ptr<ff::faasBuffer>,std::unique_ptr<std::string>&, double) = 0; // The first parameter is an error message, the second parameter is the function execution time, in microseconds, or -1 if not available
+            virtual bool ff_faas_function_adapter_sendResponse(std::shared_ptr<ff::faasBuffer>,std::unique_ptr<std::string>&, double) = 0; // The first parameter is an error message, the second parameter is the function execution time, in microseconds, or -1 if not available
             virtual bool ff_faas_function_adapter_sendErrorResponse(std::unique_ptr<std::string>) = 0;
 
     };

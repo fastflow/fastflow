@@ -51,7 +51,7 @@ namespace ff {
     template <typename IN_t, typename OUT_t = IN_t, typename T = void>
     class ff_faas_function {
     public:
-        ff_faas_function(int argc = 0, char** argv = nullptr): OutputParamsBuffer(nullptr),stats_collection(false) {
+        ff_faas_function(int argc = 0, char** argv = nullptr): stats_collection(false) {
             static_assert(std::is_base_of<ff_faas_function_adapter, T>::value, "T must be derived from ff_faas_function_adapter");
             PRINT_DBG(std::string("Inizializzazione della funzione FAAS con argc: ") + std::to_string(argc));
 
@@ -137,7 +137,8 @@ namespace ff {
                 PRINT_DBG("Serialization function is Bitsery deserializable!");
             }
 
-            faas_fun_adapter = std::make_unique<T>(argc, argv);   
+            faas_fun_adapter = std::make_unique<T>(argc, argv);
+            OutputParamsBuffer = std::make_shared<faasBuffer>();   
             PRINT_DBG("Adapter FAAS creato.");
             
             if(!faas_fun_adapter->ff_faas_function_adapter_init()) {
@@ -196,7 +197,6 @@ namespace ff {
                     PRINT_DBG(std::string("Funzione eseguita in: ") + std::to_string(T_fun_exec) + std::string(" microsecondi"));
                 }
 
-                std::unique_ptr<faasBuffer> OutputParamsBuffer = nullptr;
                 try {
                     if (faas_serializeF(output_obj, *OutputParamsBuffer))
                         faas_freetaskF(output_obj);
@@ -212,7 +212,7 @@ namespace ff {
                     continue;
                 }
 
-                if(!faas_fun_adapter->ff_faas_function_adapter_sendResponse(std::move(OutputParamsBuffer), error_msg, T_fun_exec)) {
+                if(!faas_fun_adapter->ff_faas_function_adapter_sendResponse(OutputParamsBuffer, error_msg, T_fun_exec)) {
                     if(!faas_fun_adapter->ff_faas_function_adapter_sendErrorResponse(std::move(error_msg))) {
                         std::cerr << "Failed to send error response to client." << std::endl;
                         return -1;
@@ -226,7 +226,7 @@ namespace ff {
         }
 
     private:
-        std::unique_ptr<faasBuffer> OutputParamsBuffer;
+        std::shared_ptr<faasBuffer> OutputParamsBuffer;
         bool stats_collection;
         std::function<void(void*)> faas_freetaskF;
         std::function<void* (char*, size_t)> faas_alloctaskF;

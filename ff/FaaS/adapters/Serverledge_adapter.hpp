@@ -82,7 +82,7 @@ namespace adapter {
         }
 
         // it returns false in case of an error, true otherwise
-        bool ff_faas_function_adapter_sendResponse(unique_ptr<ff::faasBuffer> outputBuf, unique_ptr<string>& error_msg, double T_fun_exec) {
+        bool ff_faas_function_adapter_sendResponse(std::shared_ptr<ff::faasBuffer> outputBuf, unique_ptr<string>& error_msg, double T_fun_exec) {
             try{            
                 size_t json_response_middle_size = simdutf::base64_length_from_binary(outputBuf->size(), simdutf::base64_options::base64_default);
                 json_response_middle.resize(json_response_middle_size);
@@ -105,7 +105,7 @@ namespace adapter {
                     else {
                         PRINT_DBG(string("JSON da inviare: ")
                         + string(json_response_starting, json_response_starting_size) 
-                        + string(json_response_middle.get(), json_response_middle_size) 
+                        + string(json_response_middle.data(), json_response_middle_size) 
                         + string(json_response_ending, json_response_ending_size));
                     }
 
