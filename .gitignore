@@ -324,3 +324,5 @@ $RECYCLE.BIN/
 
 
 # End of https://www.gitignore.io/api/c,c++,eclipse,emacs,vim,cmake,autotools,macos,linux,windows
+.vc/
+.vscode/
