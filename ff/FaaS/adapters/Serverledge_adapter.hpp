@@ -85,9 +85,9 @@ namespace adapter {
         bool ff_faas_function_adapter_sendResponse(unique_ptr<ff::faasBuffer> outputBuf, unique_ptr<string>& error_msg, double T_fun_exec) {
             try{            
                 size_t json_response_middle_size = simdutf::base64_length_from_binary(outputBuf->size(), simdutf::base64_options::base64_default);
-                std::unique_ptr<char[]> json_response_middle = std::make_unique<char[]>(json_response_middle_size);
+                json_response_middle.resize(json_response_middle_size);
 
-                auto result = simdutf::binary_to_base64(outputBuf->getBuffer(), outputBuf->size(), json_response_middle.get());
+                auto result = simdutf::binary_to_base64(outputBuf->getBuffer(), outputBuf->size(), json_response_middle.data());
                 if (result != json_response_middle_size) { 
                     PRINT_DBG("Base64 conversion for output failed.");
                     error_msg = std::make_unique<std::string>("[Serverledge_adapter] Internal error: conversion from binary to Base64 for the output parameters failed");
@@ -97,7 +97,7 @@ namespace adapter {
                 if(stats_collection) {
                     PRINT_DBG(string("JSON da inviare con statistiche: ") 
                         + string(json_response_starting, json_response_starting_size) 
-                        + string(json_response_middle.get(), json_response_middle_size) 
+                        + string(json_response_middle.data(), json_response_middle_size) 
                         + string(json_response_stats, json_response_stats_size) 
                         + std::to_string(T_fun_exec)
                         + string(json_response_stats_ending, json_response_stats_ending_size));
@@ -116,7 +116,7 @@ namespace adapter {
 
                 // Efficiently write to the response body without copying multiple times
                 asio::write(socket, asio::buffer(json_response_starting, json_response_starting_size));
-                asio::write(socket, asio::buffer(json_response_middle.get(), json_response_middle_size));
+                asio::write(socket, asio::buffer(json_response_middle));
 
                 if(stats_collection) {
                     asio::write(socket, asio::buffer(json_response_stats, json_response_stats_size));                
@@ -185,8 +185,8 @@ namespace adapter {
 
                 // Parse the JSON request
                 Document requestJson;
-                ParseResult parseResult = requestJson.Parse(req.body().c_str());
-                if (!parseResult) {
+                ParseResult parseResult = requestJson.ParseInsitu(req.body().data());
+                if (parseResult.IsError()) {
                     error_msg = std::make_unique<std::string>("[Serverledge_adapter] Internal error: JSON parse error " + string(GetParseError_En(parseResult.Code())) + 
                         " at offset " + to_string(parseResult.Offset()));
                     PRINT_DBG(string("Error parsing JSON: ") + string(GetParseError_En(parseResult.Code())) + string(" at offset ") + to_string(parseResult.Offset()));
@@ -226,16 +226,16 @@ namespace adapter {
                 size_t maxLength = maximal_binary_length_from_base64(p.GetString(), rSize);
                 PRINT_DBG(string("Decoding Base64, input size: ") + to_string(rSize) + string(", maxLength: ") + to_string( maxLength));
 
-                std::unique_ptr<char[]> resultData;
+                std::unique_ptr<ff::faasBuffer> inputBuffer;
                 try {
-                    resultData = std::make_unique<char[]>(maxLength);
+                    inputBuffer = std::make_unique<ff::faasBuffer>(maxLength);
                 } catch (const std::bad_alloc& e) {
                     error_msg = std::make_unique<std::string>("[Serverledge_adapter] Internal error: memory allocation failed creating Base64 encoding buffer");
-                    PRINT_DBG(string("Memory allocation failed for input parameters: ") + string(e.what()));
+                    PRINT_DBG(string("Memory allocation failed for input dataBuffer: ") + string(e.what()));
                     return nullptr;
                 }
 
-                result Res = base64_to_binary(p.GetString(), rSize, resultData.get(), simdutf::base64_default, simdutf::last_chunk_handling_options::strict);
+                result Res = base64_to_binary(p.GetString(), rSize, inputBuffer->getBuffer(), simdutf::base64_default, simdutf::last_chunk_handling_options::strict);
                 if(Res.error) {
                     error_msg = std::make_unique<std::string>("[Serverledge_adapter] Internal error: conversion from Base64 to binary for the input parameters failed");
                     PRINT_DBG("Base64 to binary conversion failed.");
@@ -243,16 +243,6 @@ namespace adapter {
                 }
                 PRINT_DBG("Base64 to binary conversion of the request succeed.");
 
-                std::unique_ptr<ff::faasBuffer> inputBuffer;
-                try {
-                    inputBuffer = std::make_unique<ff::faasBuffer>();
-                } catch (const std::bad_alloc& e) {
-                    error_msg = std::make_unique<std::string>("[Serverledge_adapter] Internal error: memory allocation failed creating input dataBuffer");
-                    PRINT_DBG(string("Memory allocation failed creating input dataBuffer: ") + string(e.what()));
-                    return nullptr;
-                }
-
-                inputBuffer->setBuffer(resultData.release(), Res.count, true);
                 PRINT_DBG(string("Handling HTTP request: ") + req.body() + string(" finished."));
                 return inputBuffer;
 
@@ -268,6 +258,8 @@ namespace adapter {
         asio::ip::tcp::acceptor tcp_acceptor;
         asio::ip::tcp::socket socket;
         bool stats_collection = false;
+
+        std::vector<char> json_response_middle;
         static inline constexpr char json_response_starting[] = R"({"success":true,"result":"{\"r\":\")";
         static inline constexpr char json_response_ending[] = R"(\"}","output":""})";
         static inline constexpr char json_response_stats_ending[] = R"(}","output":""})";

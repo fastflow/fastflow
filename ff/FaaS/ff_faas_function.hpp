@@ -51,7 +51,7 @@ namespace ff {
     template <typename IN_t, typename OUT_t = IN_t, typename T = void>
     class ff_faas_function {
     public:
-        ff_faas_function(int argc = 0, char** argv = nullptr) {
+        ff_faas_function(int argc = 0, char** argv = nullptr): OutputParamsBuffer(nullptr),stats_collection(false) {
             static_assert(std::is_base_of<ff_faas_function_adapter, T>::value, "T must be derived from ff_faas_function_adapter");
             PRINT_DBG(std::string("Inizializzazione della funzione FAAS con argc: ") + std::to_string(argc));
 
@@ -198,7 +198,6 @@ namespace ff {
 
                 std::unique_ptr<faasBuffer> OutputParamsBuffer = nullptr;
                 try {
-                    OutputParamsBuffer = std::make_unique<faasBuffer>();
                     if (faas_serializeF(output_obj, *OutputParamsBuffer))
                         faas_freetaskF(output_obj);
                     else 
@@ -227,7 +226,8 @@ namespace ff {
         }
 
     private:
-        bool stats_collection = false;
+        std::unique_ptr<faasBuffer> OutputParamsBuffer;
+        bool stats_collection;
         std::function<void(void*)> faas_freetaskF;
         std::function<void* (char*, size_t)> faas_alloctaskF;
         std::function<bool(void*, faasBuffer&)> faas_serializeF;
