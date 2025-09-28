@@ -136,9 +136,6 @@ public:
             }
         }
 
-        // Token di autenticazione ( solo per OpenWhisk )
-        getline(ss, auth_token, ',');
-
         // File di output del test
         getline(ss, cell, ',');
         output_file.open(cell);
@@ -178,11 +175,6 @@ public:
         return FaasType;
     }
 
-    inline const string& getAuthToken() const {
-        return auth_token;
-    }
-
-
     inline const string& getFunName() const {
         return fun_name;
     }
@@ -211,8 +203,6 @@ private:
     // true: OpenWhisk
     // false: Serverledge
     bool FaasType;
-    // Token di autenticazione ( solo per OpenWhisk )
-    string auth_token;
     // Nome della funzione da invocare
     string fun_name;
     // File di output del test

@@ -34,7 +34,7 @@
 #ifndef SERVERLEDGE_ADAPTER_HPP
 #define SERVERLEDGE_ADAPTER_HPP
 
-#include<ff/ff_faas.hpp>
+#include<ff/ff_faas_configuration.hpp>
 #include <ff/FaaS/ff_faas_function_adapter.hpp>
 #include <simdutf/simdutf.h>
 #include <simdutf/simdutf.cpp>
