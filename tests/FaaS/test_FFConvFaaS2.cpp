@@ -509,6 +509,8 @@ int main(int argc, char *argv[]) {
 
         result_file << t->getNumWorkers() << "," << t->getOffNumWorkers() << "," << t->getStreamLen() << "," << mean_msg_dim << "," << mean_internal_local_fun_exec_time << "," << mean_internal_FAAS_fun_exec_time << "," << mean_T_comm << "," << mean_FAAS_overhead_time << "," << mean_FF_overhead_time << "," << mean_total_req_exec_time << "," << farm.ffTime();
 
+        cout << "Test with " << t->getNumWorkers() << " workers, of which " << t->getOffNumWorkers() << " offloaded to the FaaS, and " << t->getStreamLen() << " tasks: DONE" << endl;
+
         t->getOutputFile().close();
 
         this_thread::sleep_for(chrono::seconds(2));
