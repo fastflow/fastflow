@@ -488,8 +488,10 @@ namespace connector {
                 stats->is_warm = false;
                 stats->T_comm = 0.0;
                 stats->T_total = 0.0;
+                stats->T_req_total = 0.0;
                 stats->T_faas_overhead = 0.0;
-                stats->T_ff_overhead = 0.0;
+                stats->T_req_ff_overhead = 0.0;
+                stats->T_total_ff_overhead = 0.0;
                 stats->T_fun_exec = 0.0;
                 stats->T_init_container = 0.0;
                 stats->T_offload = 0.0;

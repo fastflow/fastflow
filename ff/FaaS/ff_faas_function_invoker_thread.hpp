@@ -146,6 +146,8 @@ namespace ff {
                 return false;  // If task is not nullptr, it means consumer is still processing
             }
 
+            PRINT_DBG("New task assigned to the worker thread, with id: " +  std::to_string(data->task_id) + " and initial time: " + std::to_string(reinterpret_cast<uintptr_t>(data->T_total_start.get())));
+
             // Notify the worker thread (consumer) that there is new data to process
             if (sleeping.load(std::memory_order_acquire)) {
                 PRINT_DBG("Worker thread is sleeping, notifying it to wake up.");
@@ -197,13 +199,16 @@ namespace ff {
 
                 if (internal_task != nullptr) {                    
                     PRINT_DBG("Worker thread is processing a task for function: " + *functionName);
-                    // Process the data if it's not nullptr
+                    // Process the data if it's not nullptr                 
+                    std::chrono::high_resolution_clock::time_point T_req_total_start;   
                     try {
                         IN_t* data = internal_task->task;
                         if(stats_collection) {
+                            T_req_total_start = std::chrono::high_resolution_clock::now();
                             T_total_start = std::move(internal_task->T_total_start);
                             task_id = internal_task->task_id;
                         }             
+                        PRINT_DBG("New task assigned to me, with id:" + std::to_string(internal_task->task_id) + " and initial time:" + std::to_string(reinterpret_cast<uintptr_t>(T_total_start.get())));
                         delete internal_task;  // Free the internal task structure           
                         serialize(data, serializedData);
                     }
@@ -224,8 +229,15 @@ namespace ff {
                                 if(stats_collection) {
                                     try{
                                         std::chrono::duration<double> T_total_dur = std::chrono::high_resolution_clock::now() - *T_total_start;
+                                        std::chrono::duration<double> T_req_total_dur = std::chrono::high_resolution_clock::now() - T_req_total_start;
                                         stats->T_total = std::chrono::duration<double, std::micro>(T_total_dur).count();   
-                                        stats->T_ff_overhead = stats->T_total - stats->T_faas_overhead - stats->T_fun_exec - stats->T_comm;
+                                        stats->T_req_total = std::chrono::duration<double, std::micro>(T_req_total_dur).count();   
+                                        PRINT_DBG("Total service time for task id " + std::to_string(task_id) + " is " + std::to_string(stats->T_total) + " microseconds.");
+                                        PRINT_DBG("Total req service time for task id " + std::to_string(task_id) + " is " + std::to_string(stats->T_req_total) + " microseconds.");
+                                        stats->T_req_ff_overhead = stats->T_req_total - stats->T_faas_overhead - stats->T_fun_exec - stats->T_comm;
+                                        stats->T_total_ff_overhead = stats->T_total - stats->T_faas_overhead - stats->T_fun_exec - stats->T_comm;
+                                        PRINT_DBG("Total FF overhead time for task id " + std::to_string(task_id) + " is " + std::to_string(stats->T_total_ff_overhead) + " microseconds.");
+                                        PRINT_DBG("Total req FF overhead time for task id " + std::to_string(task_id) + " is " + std::to_string(stats->T_req_ff_overhead) + " microseconds.");
                                         stats->T_reg = T_reg;
                                         stats->T_dereg = T_dereg;    
                                         stats->T_prewarm = T_prewarm;                        

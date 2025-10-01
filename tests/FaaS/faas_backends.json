@@ -4,7 +4,7 @@
       "faas_name": "faas1",
       "faas_type": "Serverledge",
       "faas_config": {
-        "host":"localhost",
+        "host":"192.168.200.12",
         "port": 1323
       }
     }

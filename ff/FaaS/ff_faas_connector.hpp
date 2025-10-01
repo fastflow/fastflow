@@ -48,20 +48,22 @@ namespace connector {
     //Stats for a call to the FaaS , in microseconds
     // 0: not available or not applicable or really zero
     struct stats_entry {
-        double T_comm; // Communication time NO
-        double T_total; // Total time FATTO
-        double T_faas_overhead; // FaaS overhead time, T_init_container and T_offload included FATTO 
+        double T_comm; // Communication time 
+        double T_total; // Total time to serve the request, since it has been submitted to the FF node
+        double T_req_total; // Total time to serve the request from the worker thread
+        double T_faas_overhead; // FaaS overhead time, T_init_container and T_offload included  
                                 // TODO: I don't know if T_offload is included really for Serverledge
         double T_reg; // Time to register a function on FAAS
         double T_dereg;  // Time to deregister a function on FAAS
         double T_prewarm;  // Time to prewarm a certain set of containers for the function on FAAS
-        double T_ff_overhead; // FastFlow overhead time FATTO
-        double T_fun_exec; // Fun execution time on the FaaS FATTO
-        double T_init_container; // Time for container initialization ( only if is_warm == false ) FATTO
-        double T_offload; // Time for offloading the function to another node of the FaaS (0: no offloading) FATTO
-        uint64_t Msg_dim_sent; // Message dimension sent, in bytes FATTO
-        uint64_t Msg_dim_recv; // Message dimension received, in bytes FATTO
-        bool is_warm; // True if the function is executed on a warm container, false otherwise FATTO
+        double T_req_ff_overhead; // FastFlow overhead time, to serve the request from the worker thread
+        double T_total_ff_overhead; // FastFlow overhead time, to serve the request since it has been submitted to the FF node
+        double T_fun_exec; // Fun execution time on the FaaS 
+        double T_init_container; // Time for container initialization ( only if is_warm == false ) 
+        double T_offload; // Time for offloading the function to another node of the FaaS (0: no offloading) 
+        uint64_t Msg_dim_sent; // Message dimension sent, in bytes 
+        uint64_t Msg_dim_recv; // Message dimension received, in bytes 
+        bool is_warm; // True if the function is executed on a warm container, false otherwise 
     };
 
 

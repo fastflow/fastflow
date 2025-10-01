@@ -427,11 +427,15 @@ int main(int argc, char *argv[]) {
         Collector C;
         farm.add_collector(C);
 
+        std::chrono::high_resolution_clock::time_point T_farm_total_start = std::chrono::high_resolution_clock::now();
+
         if (farm.run_and_wait_end() < 0) {
             error("Errore durante l'esecuzione del Farm\n");
             return -1;
         }
+        std::chrono::duration<double> T_farm_total_dur = std::chrono::high_resolution_clock::now() - T_farm_total_start;
 
+        double T_farm_total = std::chrono::duration<double, std::micro>(T_farm_total_dur).count()/1000.0;   
 
         auto workers = farm.getWorkers();
 
@@ -468,14 +472,14 @@ int main(int argc, char *argv[]) {
                     << (stat.second->is_warm ? "1,":"0,")
                     << stat.second->T_comm/1000.0 << ","
                     << stat.second->T_faas_overhead/1000.0 << ","
-                    << stat.second->T_ff_overhead/1000.0 << ","
+                    << stat.second->T_req_ff_overhead/1000.0 << ","
                     << stat.second->T_fun_exec/1000.0 << ","
-                    << stat.second->T_total/1000.0; 
+                    << stat.second->T_req_total/1000.0; 
                     
                     mean_internal_FAAS_fun_exec_time += stat.second->T_fun_exec/1000.0;   
                     mean_FAAS_overhead_time += stat.second->T_faas_overhead/1000.0;
-                    mean_FF_overhead_time += stat.second->T_ff_overhead/1000.0;
-                    mean_total_req_exec_time += stat.second->T_total/1000.0;
+                    mean_FF_overhead_time += stat.second->T_req_ff_overhead/1000.0;
+                    mean_total_req_exec_time += stat.second->T_req_total/1000.0;
                     mean_msg_dim += stat.second->Msg_dim_sent;
                     mean_T_comm += stat.second->T_comm/1000.0;
                 }

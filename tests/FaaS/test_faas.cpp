@@ -107,8 +107,8 @@ int main(int argc, char *argv[]) {
     if (stats_map) {
         for (const auto& pair : *stats_map) {
             std::cout << "Key: " << pair.first << ", Value: \n" 
-            << "  Function total execution time:" << pair.second->T_total << std::endl
-            << "    FastFlow overhead time: " << pair.second->T_ff_overhead << std::endl
+            << "  Function total execution time:" << pair.second->T_req_total << std::endl
+            << "    FastFlow overhead time: " << pair.second->T_req_ff_overhead << std::endl
             << "    Communication time: " << pair.second->T_comm << std::endl
             << "    FAAS overhead time: " << pair.second->T_faas_overhead << std::endl   
             << "      - FAAS container initialization time:" << pair.second->T_init_container << std::endl
