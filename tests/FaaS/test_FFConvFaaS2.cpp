@@ -504,6 +504,7 @@ int main(int argc, char *argv[]) {
             mean_internal_local_fun_exec_time /= tot_local_lines;
 
         if (tot_FAAS_offloaded_lines != 0) {
+            mean_T_comm /= tot_FAAS_offloaded_lines; 
             mean_msg_dim /= tot_FAAS_offloaded_lines;
             mean_internal_FAAS_fun_exec_time /= tot_FAAS_offloaded_lines;
             mean_FAAS_overhead_time /= tot_FAAS_offloaded_lines;
