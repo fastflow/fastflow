@@ -92,7 +92,10 @@ rdcycle(void) {
     unsigned long dst;
     // output into any register, likely a0
     // regular instruction:
-    asm volatile ("csrrs %0, 0xc00, x0" : "=r" (dst) );
+    //  - the following (commented) instruction doesn't work on U74 SiFive
+    // asm volatile ("csrrs %0, 0xc00, x0" : "=r" (dst) );
+    // Marco Danelutto Jan 2024 : this works on the U74 micro arch RiscV
+    asm volatile ("rdtime %0" : "=r" (dst) );
     // regular instruction with symbolic csr and register names
     // asm volatile ("csrrs %0, cycle, zero" : "=r" (dst) );
     // pseudo-instruction:
@@ -194,17 +197,13 @@ INLINE_ELAPSED(__inline__)
 /* MacOS/Mach (Darwin) time-base register interface (unlike UpTime,
    from Carbon, requires no additional libraries to be linked). 
    13 July 2022 (MarcoA): Reviewed for M1 Macs
-   256 is an empirich costant to match the sensistivity of x86 tick counter
    */  
 #if defined(__APPLE__)
 #include <mach/mach_time.h>
 //#if defined(_MACH_ABSOLUTE_TIME_H_) && defined(_MACH_MACH_TIME_H_)
 #if !defined(HAVE_TICK_COUNTER)
 typedef uint64_t ticks;
-static __inline__ ticks getticks(void) {
-  return (256*mach_continuous_time()); 
-}
-//#define getticks mach_absolute_time
+#define getticks mach_absolute_time
 INLINE_ELAPSED(__inline__)
 #define HAVE_TICK_COUNTER
 #endif
@@ -238,7 +237,7 @@ INLINE_ELAPSED(__inline__)
  */
 #if (defined(__GNUC__) || defined(__ICC)) && defined(__linux__) && (defined(__arm__) || defined(__aarch64__)) && !defined(HAVE_TICK_COUNTER)
 
-typedef size_t ticks;
+typedef unsigned long ticks;
 
 
 /****
@@ -285,9 +284,9 @@ static __inline__ ticks getticks(void)
   ticks ret = 0;
   timespec time_tick;
   if( clock_gettime(CLOCK_MONOTONIC_RAW, &time_tick) == 0 ) {
-    ret = (ticks) (time_tick.tv_sec*1000000000L) + (ticks) time_tick.tv_nsec;        // time in nanoseconds
+    ret = time_tick.tv_nsec;        // time in nanoseconds
   }
-  return (512*ret);
+  return ret;
 }
 
 INLINE_ELAPSED(__inline__)

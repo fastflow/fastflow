@@ -72,8 +72,7 @@ endif
 #VERSION             = 
 #CFLAGS              =
 #LDFLAGS             =
-TRACE_FASTFLOW =1 
-CXXFLAGS            += -std=c++17
+CXXFLAGS            += -std=c++20
 ifdef DEBUG
     OPTIMIZE_FLAGS  += -g -fno-inline-functions
 else
@@ -119,7 +118,14 @@ ifeq ($(ARCH),-march=x86_64)
 endif
 
 ifeq ($(strip $(OS)),Darwin)
-        CXX += -DNO_DEFAULT_MAPPING
+  CXXFLAGS        += -DNO_DEFAULT_MAPPING -DBLOCKING_MODE
+  ifeq  ($(strip $(ARCH)),x86_64 )
+  ARCH = -march=core2
+  else ifeq ($(strip $(ARCH)),arm64 )
+  ARCH = -arch arm64
+  else
+  ARCH = -arch ppc
+  endif
 endif
 
 

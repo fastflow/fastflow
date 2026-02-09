@@ -565,6 +565,7 @@ public:
             return -1;
         }
         filter = f;
+        if (skip1pop) filter->skipfirstpop(true);
         return 0;
     }
 

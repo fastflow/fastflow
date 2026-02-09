@@ -23,11 +23,12 @@
 #define FF_MAKEUNIQUE_HPP
 
 #include <memory>
+
+#if __cplusplus < 201400L   // to check
+
 #include <type_traits>
 #include <utility>
 
-
-#if __cplusplus < 201400L   // to check
 // C++11 implementation of make_unique
 
 #if (__cplusplus >= 201103L) || (defined __GXX_EXPERIMENTAL_CXX0X__) || (defined(HAS_CXX11_VARIADIC_TEMPLATES))
