@@ -25,7 +25,7 @@
 
 CXXFLAGS            += -std=c++17
 ifdef DEBUG
-    OPTIMIZE_FLAGS  += -g -fno-inline-functions
+    OPTIMIZE_FLAGS  += -g -fno-inline-functions -DDEBUG
 else
     OPTIMIZE_FLAGS  += -O3 -finline-functions -DNDEBUG
 endif

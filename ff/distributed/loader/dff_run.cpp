@@ -188,10 +188,21 @@ std::string generateRankFile(std::vector<G>& parsedGroups){
     std::ofstream tmpFile(name, std::ofstream::out);
     
     for(size_t i = 0; i < parsedGroups.size(); i++)
-        tmpFile << "rank " << i << "=" << parsedGroups[i].host << " slot=0:*\n";  // TODO: to use the "threadMapping" attribute
+        tmpFile << "rank " << i << "=+n" << i << " slot=0:*\n";  // TODO: to use the "threadMapping" attribute
 
     tmpFile.close();
-    // return the name of the temporary file just created; remember to remove it after the usage
+    return name;
+}
+
+std::string generateHostFile(std::vector<G>& parsedGroups){
+    std::string name = "/tmp/dffHostFile" + std::to_string(getpid());
+
+    std::ofstream tmpFile(name, std::ofstream::out);
+    
+    for(size_t i = 0; i < parsedGroups.size(); i++)
+        tmpFile << parsedGroups[i].host << " slots=1\n"; 
+
+    tmpFile.close();
     return name;
 }
 
@@ -203,7 +214,6 @@ int main(int argc, char** argv) {
         exit(EXIT_SUCCESS);
     }
 
-    // get the hostname
     if (gethostname(hostname, HOST_NAME_MAX) != 0) {
 		perror("gethostname");
 		exit(EXIT_FAILURE);
@@ -282,7 +292,7 @@ int main(int argc, char** argv) {
     try {
         cereal::JSONInputArchive ar(is);
 
-        // get the protocol to be used from the configuration file if it was not forced by the command line
+        /*get the protocol to be used from the configuration file if it was not forced by the command line*/
         if (!usedProtocol)
             try {
                 std::string tmpProtocol;
@@ -293,11 +303,11 @@ int main(int argc, char** argv) {
                     usedProtocol = Proto::TCP;
             } catch (cereal::Exception&) {
                 ar.setNextName(nullptr);
-                // if the protocol is not specified we assume TCP
+                /*if the protocol is not specified we assume TCP*/
                 usedProtocol = Proto::TCP;
             }
 
-        // parse all the groups in the configuration file
+        //parse all the groups in the configuration file
         ar(cereal::make_nvp("groups", parsedGroups));
     } catch (const cereal::Exception& e){
         std::cerr << "Error parsing the JSON config file. Check syntax and structure of  the file and retry!" << std::endl;
@@ -346,12 +356,13 @@ int main(int argc, char** argv) {
 
     if (usedProtocol == Proto::MPI){
         std::string rankFile = generateRankFile(parsedGroups);
+        std::string hostFile = generateHostFile(parsedGroups);
         std::cout << "RankFile: " << rankFile << std::endl;
         // invoke mpirun using the just created rankfile
 
         char command[350];
      
-        sprintf(command, "mpirun -np %lu --rankfile %s %s --DFF_Config=%s", parsedGroups.size(), rankFile.c_str(), executable.c_str(), configFile.c_str());
+        sprintf(command, "mpirun --hostfile %s -np %lu --rankfile %s %s --DFF_Config=%s", hostFile.c_str(), parsedGroups.size(), rankFile.c_str(), executable.c_str(), configFile.c_str());
 
 		std::cout << "mpicommand: " << command << "\n";
 		
@@ -371,6 +382,7 @@ int main(int argc, char** argv) {
         pclose(fp);
 
         std::remove(rankFile.c_str());
+        std::remove(hostFile.c_str());
     }
     
     

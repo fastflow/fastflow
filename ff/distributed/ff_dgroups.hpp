@@ -59,6 +59,8 @@ namespace ff {
 class dGroups {
 public:
     friend struct GroupInterface;
+    friend struct dMapper; 
+
     static dGroups* Instance(){
       static dGroups dg;
       return &dg;
@@ -73,6 +75,7 @@ public:
 	
     Proto usedProtocol;
     std::string baseProtocol = "TCP";
+    std::string dryrun_outFile;
 
     void parseConfig(std::string configFile){
       std::ifstream is(configFile);
@@ -110,11 +113,13 @@ public:
         }
     }
 
-    void annotateGroup(const std::string& name, ff_node* parentBB){
+    void annotateGroup(const std::string& name, ff_node* parentBB, const std::string& host = ""){
       if (annotatedGroups.count(name)){
         std::cerr << "Group " << name << " created twice. Error!\n"; abort();
       }
       annotatedGroups.insert(name);
+      if (!host.empty())
+        group2host[name] = host;
     }
 
     int size(){ return annotatedGroups.size();}
@@ -139,15 +144,64 @@ public:
       for(auto& pg : parsedGroups) pg.batchSize = _size;
     }
 
+    void setBatchByteSize(int _size){
+      for(auto& pg : parsedGroups) pg.batchByteSize = _size;
+    }
+
 	  const std::string& getRunningGroup() const { return runningGroup; }
 
     //void forceProtocol(Proto p){this->usedProtocol = p;}
+
+    void perform_dryRun(){
+      std::fstream fs(dryrun_outFile, std::ios::out);
+      
+      if (!fs.is_open()){
+        ff::error("Failing opening dryRun output file: %s", dryrun_outFile.data());
+        return;
+      }
+      std::map<std::string, std::vector<std::string>> tmpMap;
+      for(auto& [node, gName] : annotated)
+        tmpMap[gName].push_back(node->mioID_str);
+      fs << "{\n  \"groups\": [\n";
+      bool firstGroup = true;
+      int port = 8000;
+      for (const auto& [groupName, nodes] : tmpMap) {
+          if (!firstGroup) {
+            fs << ",\n";
+          }
+          fs << "    {\n";
+          fs << "      \"name\": \"" << groupName << "\",\n";
+          if (group2host.count(groupName))
+            fs << "      \"endpoint\": \"" << group2host[groupName] << ":" << port++ << "\",\n";
+          fs << "      \"includedNodes\": [";
+  
+          for (size_t i = 0; i < nodes.size(); ++i) {
+              fs << "\"" << nodes[i] << "\"";
+              if (i < nodes.size() - 1)
+                  fs << ", ";
+          }
+  
+          fs << "]\n    }";
+          firstGroup = false;
+      }
+      fs << "\n  ]\n}\n";
+      fs.close();
+    }
 	
     int run_and_wait_end(ff_pipeline* parent){
-        if (annotatedGroups.find(runningGroup) == annotatedGroups.end()){
-            ff::error("The group %s is not found nor implemented!\n", runningGroup.c_str());
-            return -1;
-        }
+
+       // set the ids of the nodes for the whole original application
+       setIDs(parent, "");
+
+      if (!dryrun_outFile.empty()){
+        perform_dryRun();
+        return 0;
+      }
+
+      if (annotatedGroups.find(runningGroup) == annotatedGroups.end()){
+        ff::error("The group %s is not found nor implemented!\n", runningGroup.c_str());
+        return -1;
+      }
 
       this->prepareIR2(parent);
 
@@ -180,6 +234,7 @@ protected:
     std::map<ff_node*, std::string> annotated;
 private:
     std::set<std::string> annotatedGroups;
+    std::map<std::string, std::string> group2host;
     
     std::string runningGroup;
     ff_IR_V2 runningIR;
@@ -260,9 +315,6 @@ private:
         if (parsedRunningGroup_it == parsedGroups.end()){
           std::cerr << "The running group <" << this->runningGroup << "> is not present in configuration file! Aborting\n"; abort();
         }
-
-        // set the ids of the nodes for the whole original application
-        setIDs(root, "");
 
         std::vector<ff_node*> nodesInGroup;
         // set used to compute the names of groups this group connect to (egress connections), and names of groups will connect to this group (ingress connections)
@@ -393,7 +445,7 @@ static inline int DFF_Init(int& argc, char**& argv){
     } 
 
 
-	std::string configFile, groupName;  
+	std::string configFile, groupName, dryrun_outFile;  
 
     for(int i = 0; i < argc; i++){
       if (strstr(argv[i], "--DFF_Config") != NULL){
@@ -426,54 +478,73 @@ static inline int DFF_Init(int& argc, char**& argv){
         }
         continue;
       } 
+
+      if (strstr(argv[i], "--DFF_dryrun") != NULL){
+        char * equalPosition = strchr(argv[i], '=');
+        if (equalPosition == NULL){
+          // the option is in the next argument array position
+          dGroups::Instance()->dryrun_outFile = std::string(argv[i+1]);
+          argv[i] = argv[i+1] = NULL;
+          i++;
+        } else {
+          // the option is in the next position of this string
+          dGroups::Instance()->dryrun_outFile = std::string(++equalPosition);
+          argv[i] = NULL;
+        }
+        continue;
+      } 
     }
 
-    if (configFile.empty()){
-      ff::error("Config file not passed as argument!\nUse option --DFF_Config=\"config-file-name\"\n");
-      return -1;
-    }
+    if (dGroups::Instance()->dryrun_outFile.empty()){
+      // the execution is not a dry run
+      if (configFile.empty()){
+        ff::error("Config file not passed as argument!\nUse option --DFF_Config=\"config-file-name\"\n");
+        return -1;
+      }
     
-    dGroups::Instance()->parseConfig(configFile);
+      dGroups::Instance()->parseConfig(configFile);
 
 #if defined(DFF_MPI) || defined(ENABLE_MPI)
-    if (groupName.empty()) {
-      if (dGroups::Instance()->baseProtocol != "MPI")
-        ff::error("Falling back to MPI since no group name passed as argument\n");
-      dGroups::Instance()->baseProtocol = "MPI";
-    }  
+      if (groupName.empty()) {
+        if (dGroups::Instance()->baseProtocol != "MPI")
+          ff::error("Falling back to MPI since no group name passed as argument\n");
+        dGroups::Instance()->baseProtocol = "MPI";
+      }  
 #else
-    if (dGroups::Instance()->baseProtocol == "MPI") {
-        ff::error("MPI support disabled during compilation! Recompile with MPI and retry\n");
+      if (dGroups::Instance()->baseProtocol == "MPI") {
+          ff::error("MPI support disabled during compilation! Recompile with MPI and retry\n");
+          return -1;
+      }
+      if (groupName.empty()) {
+        ff::error("Group not passed as argument!\nUse option --DFF_GName=\"group-name\"\n");
         return -1;
-    }
-    if (groupName.empty()) {
-      ff::error("Group not passed as argument!\nUse option --DFF_GName=\"group-name\"\n");
-      return -1;
-    }
+      }
 #endif
-    else {
-      // set the running group
-      dGroups::Instance()->setRunningGroup(groupName);
-    }
+      else {
+        // set the running group
+        dGroups::Instance()->setRunningGroup(groupName);
+      }
 
-    MTCL::Manager::init(groupName);
-    std::atexit([]()-> void {
-        MTCL::Manager::finalize(true);
-      });
+      MTCL::Manager::init(groupName);
+      std::atexit([]()-> void {
+          MTCL::Manager::finalize(true);
+        });
    
 #if defined(ENABLE_MPI) || defined(DFF_MPI)
-    if (dGroups::Instance()->baseProtocol == "MPI") {
-      int myrank;
-      MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
-      dGroups::Instance()->setRunningGroupByRank(myrank);
-    }
+      if (dGroups::Instance()->baseProtocol == "MPI") {
+        int myrank;
+        MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+        dGroups::Instance()->setRunningGroupByRank(myrank);
+      }
 #endif
 
-    // trig the mapping set if specified
-    dGroups::Instance()->setThreadMapping();
+      // trig the mapping set if specified
+      dGroups::Instance()->setThreadMapping();
+    }
 
     // set the name for the printer
     ff::cout.setPrefix(dGroups::Instance()->getRunningGroup());
+
 
     // recompact the argv array
     int j = 0;
@@ -493,6 +564,10 @@ static inline const std::string DFF_getMyGroup() {
 
 static inline void setBatchSize(int size){
   return dGroups::Instance()->setBatchSize(size);
+}
+
+static inline void setBatchByteSize(size_t size){
+  return dGroups::Instance()->setBatchByteSize(size);
 }
 
 int ff_pipeline::run_and_wait_end() {

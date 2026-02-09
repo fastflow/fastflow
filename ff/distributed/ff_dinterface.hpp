@@ -55,16 +55,16 @@ struct GroupInterface {
 };
 
 
-GroupInterface ff_node::createGroup(const std::string& name){
+GroupInterface ff_node::createGroup(const std::string& name, const std::string& host){
 #ifdef DFF_ENABLED
-    dGroups::Instance()->annotateGroup(name, this);
+    dGroups::Instance()->annotateGroup(name, this, host);
 #endif
     return GroupInterface(name, this);
 }
 
-GroupInterface createGroup(const std::string& name){
+GroupInterface createGroup(const std::string& name, const std::string& host = ""){
 #ifdef DFF_ENABLED
-    dGroups::Instance()->annotateGroup(name, nullptr);
+    dGroups::Instance()->annotateGroup(name, nullptr, host);
 #endif
     return GroupInterface(name);
 }

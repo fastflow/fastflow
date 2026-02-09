@@ -53,12 +53,13 @@ private:
     int nextDestination = -1;
 	const EgressChannels_t& channelsInfo;
 	const std::vector<ff_node*>& nextLocalNodes;
+	bool nextLevelSquareBox; // meaning that i have a router node or a sender
 	std::vector<outputMapRecord_t> outMap;
 	std::vector<int> localDest;
 	bool exited = false;
 	ChannelType defaultChannelType = ChannelType::FWD;
 public:
-	EmitterAdapter2(ff_node* n, const EgressChannels_t& channels, const std::vector<ff_node*>& nextLocalNodes, bool skipallpop = false, bool cleanup=false): internal_mo_transformer(this, cleanup), channelsInfo(channels), nextLocalNodes(nextLocalNodes) {
+	EmitterAdapter2(ff_node* n, const EgressChannels_t& channels, const std::vector<ff_node*>& nextLocalNodes, bool nextLevelSquareBox = true,  bool skipallpop = false, bool cleanup=false): internal_mo_transformer(this, cleanup), channelsInfo(channels), nextLocalNodes(nextLocalNodes), nextLevelSquareBox(nextLevelSquareBox) {
 		if (skipallpop) this->skipallpop(true);
 		this->n       = n;
 		this->mioID = n->mioID;
@@ -88,7 +89,7 @@ public:
 			if (indexOfLocalPlacement != -1) {
 				localDest.push_back(indexOfLocalPlacement);
 				if (std::get<3>(t) > 0) {
-					assert(indexOfLocalPlacement < (ssize_t)this->get_num_outchannels()-1); // check that we are not going to change the queue size of the squarebox
+					//assert(indexOfLocalPlacement < (ssize_t)this->get_num_outchannels()-1); // check that we are not going to change the queue size of the squarebox
 					pyhsicalNextLocalWorkers[indexOfLocalPlacement]->change_inputqueuesize(std::get<3>(t), oldsz);
 				}
 			}
@@ -112,7 +113,8 @@ public:
 	void eosnotify(ssize_t){
 		if (!this->exited){
 			this->n->eosnotify();
-			ff_monode::ff_send_out_to(MessageAllocator::make_logical_EOS(this->n->mioID), this->get_num_outchannels()-1);
+			if (nextLevelSquareBox)
+				ff_monode::ff_send_out_to(MessageAllocator::make_logical_EOS(this->n->mioID), this->get_num_outchannels()-1);
 
 			for(auto& d : localDest)
 				ff_monode::ff_send_out_to(this->LEOS, d);
@@ -122,7 +124,8 @@ public:
 
     bool forward(void* task, int destination, bool ret = false){
 		if (task == EOS){
-			ff_monode::ff_send_out_to(MessageAllocator::make_logical_EOS(this->n->mioID), this->get_num_outchannels()-1);
+			if (nextLevelSquareBox)
+				ff_monode::ff_send_out_to(MessageAllocator::make_logical_EOS(this->n->mioID), this->get_num_outchannels()-1);
 			for(auto& d : localDest)
 				ff_monode::ff_send_out_to(this->LEOS, d);
 			this->exited =true;
@@ -131,7 +134,8 @@ public:
 		}
 
 		if (task == FLUSH){
-			ff_monode::ff_send_out_to(MessageAllocator::make_flush(this->n->mioID), this->get_num_outchannels()-1);
+			if (nextLevelSquareBox)
+				ff_monode::ff_send_out_to(MessageAllocator::make_flush(this->n->mioID), this->get_num_outchannels()-1);
 			return true;
 		}
 		
@@ -154,21 +158,23 @@ public:
                         return true;
 					}
 				}
-				if (!msg) {
-					msg = MessageAllocator::allocateMessage();
-					msg->src = this->n->mioID;
-					msg->dest = -1;
-					msg->locality = ChannelLocality::REMOTE; // correct
-					msg->type = defaultChannelType;
-					msg->cleanup = true;
-					datacopied = this->n->serializeF(task, msg);
-					if (!datacopied) {
-						msg->freeCallback = this->n->freeBlob;
+				if (nextLevelSquareBox){
+					if (!msg) {
+						msg = MessageAllocator::allocateMessage();
+						msg->src = this->n->mioID;
+						msg->dest = -1;
+						msg->locality = ChannelLocality::REMOTE; // correct
+						msg->type = defaultChannelType;
+						msg->cleanup = true;
+						datacopied = this->n->serializeF(task, msg);
+						if (!datacopied) {
+							msg->freeCallback = this->n->freeBlob;
+						}
 					}
-				}
-				if (ff_send_out_to(msg, this->get_num_outchannels() - 1, 1)) {
-					if (datacopied) this->n->freetaskF(task);
-					return true;
+					if (ff_send_out_to(msg, this->get_num_outchannels() - 1, 1)) {
+						if (datacopied) this->n->freetaskF(task);
+						return true;
+					}
 				}
 			} while(1);
 
@@ -345,15 +351,15 @@ public:
 				if (!it->second.first.empty()){
 					auto& ci = it->second.first.front();
 					int newsize = std::get<3>(ci);
-					if (newsize > 0)
-						realOutputsNodes[i]->change_inputqueuesize(newsize, oldsz);
+					/*if (newsize > 0)
+						realOutputsNodes[i]->change_inputqueuesize(newsize, oldsz);*/
 				}
 			}
 
 		}
 
-		if (nextLevelSquareBox) // if there is the square box in the next level set the queue size to 1
-			realOutputsNodes.back()->change_inputqueuesize(1, oldsz);
+		//if (nextLevelSquareBox) // if there is the square box in the next level set the queue size to 1
+		//	realOutputsNodes.back()->change_inputqueuesize(1, oldsz);
 
 		return 0;
 	}
@@ -413,8 +419,9 @@ struct SquareBoxInputAdapter : public ff_minode {
 	void* svc(void* in) {return in;}
 
 	void eosnotify(ssize_t id){
-		if (this->fromInput() && (id == (ssize_t)(this->get_num_inchannels() - this->get_num_feedbackchannels() - 1)))
-			ff_send_out(this->EOS);
+		if (this->fromInput() && (id == (ssize_t)(this->get_num_inchannels() - this->get_num_feedbackchannels() - 1))){
+			ff_send_out(this->EOS);	
+		}
 	}
 };
 

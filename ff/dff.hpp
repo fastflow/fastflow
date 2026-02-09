@@ -60,6 +60,10 @@
 #define MESSAGE_PREALLOCATE 100
 #endif
 
+#if !defined(SEND_BUFFERS_PREALLOCATE)
+#define SEND_BUFFERS_PREALLOCATE 2
+#endif
+
 // default number of On-The-Fly messages
 #if !defined(DEFAULT_MESSAGE_OTF)
 #define DEFAULT_MESSAGE_OTF     100
@@ -69,7 +73,7 @@
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_dgroups.hpp>
-
+#include <ff/distributed/mapper/mapper.hpp>
 #include<ff/distributed/ff_dinterface.hpp>
 
 #endif /* FF_DFF_HPP */

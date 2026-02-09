@@ -31,7 +31,7 @@ else
 endif
 
 ifdef CEREAL_HOME
-    INCS            += -I$(CEREAL_HOME)
+    INCS            += -I$(CEREAL_HOME)/include
 else
     INCS            += -I ~/cereal/include
 endif

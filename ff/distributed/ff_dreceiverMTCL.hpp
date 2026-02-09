@@ -63,34 +63,13 @@ protected:
             return value;
     }
 
-    inline int handleBatch(MTCL::HandleUser& h){
-        size_t size;
-        if (h.probe(size) < 0){ // porbe header
-            error("dreceiver probe header error");
-            return -1;
-        } 
+    inline int handleBatch(char*& inputBuffer, size_t size, MTCL::HandleUser& h){
 
-        if (size == 0){
-            h.close();
-            return -1;
-        }
-
-#ifdef DFF_ACK    
+        #ifdef DFF_ACK
         if (h.send(&ACK, sizeof(ack_t)) < 0){
             error("dreceiver: Error sending back ack");
         }
 #endif
-
-        if (!inputBuffer || inputBufferSize < size){
-            if (inputBuffer) free(inputBuffer);
-            inputBuffer = (char*)malloc(size);
-            inputBufferSize = size;
-        }
-
-        if (h.receive(inputBuffer, size) < 0){
-            error("dreceiver receive header error");
-            return -1;
-        }
 
         int elementsInBatch = ntohl(*reinterpret_cast<int*>(inputBuffer + size - sizeof(int)));
 
@@ -116,7 +95,7 @@ protected:
                 out->locality = ChannelLocality::REMOTE;
                 ff_send_out(out);
                 if (!inputBuffer)
-                    inputBuffer = (char*)malloc(inputBufferSize); 
+                    inputBuffer = (char*)malloc(size); 
 
                 return 0;
             }
@@ -169,7 +148,7 @@ protected:
 
 public:
     ff_dreceiverMTCL2(std::string& acceptAddr, size_t input_channels, bool straightGroup = false)
-		: input_channels(input_channels), acceptAddr(acceptAddr), straightGroup(straightGroup){ }
+		: input_channels(input_channels), acceptAddr(acceptAddr){ }
 
     int svc_init() {
         if (MTCL::Manager::listen(acceptAddr) < 0){
@@ -184,34 +163,252 @@ public:
         Everything will be handled inside a while true in the body of this node where data is pulled from network
     */
     message2_t *svc(message2_t* task) {
+        
+#if 0        
+        std::vector<MTCL::HandleUser> handles;
+        char*  buffers[2]   = {nullptr, nullptr};
+        size_t buffSizes[2] = {0, 0};
+        bool   busy[2]      = {false, false};
+        MTCL::Request reqs[2];
 
-        if (input_channels == 1 && straightGroup){
-            auto handle = MTCL::Manager::getNext();
-            while(this->handleBatch(handle) != -1);
-        } else
-            while(neos < input_channels){
-                auto handle = MTCL::Manager::getNext(std::chrono::microseconds(RECEIVER_POLL_TIMEOUT));
-                if (handle.isValid()) 
-                    this->handleBatch(handle);
+        size_t inSizes[2] = {0, 0};     // size per pending slot
+        int    hIndex[2]  = {-1, -1};   // handle index per pending slot
 
-                if (ff::termination_counter <= 0)
-                    break;
+        int currBuff = 0;               // which slot to use for the next post
+        int waiting  = 0;               // # of outstanding ireceives (0..2)
+
+        auto isHandleBusy = [&](int idx) -> bool {
+            return (busy[0] && hIndex[0] == idx) || (busy[1] && hIndex[1] == idx);
+        };
+
+        while (true) {
+            // Accept new connections (non-blocking)
+            if (handles.size() < input_channels) {
+                auto handle = MTCL::Manager::getNext(std::chrono::microseconds(0));
+                if (handle.isValid() && handle.isNewConnection())
+                    handles.push_back(std::move(handle));
             }
+
+            bool submittedThisRound = false;
+
+            // Try to post up to (2 - waiting) new ireceives
+            for (int idx = 0; idx < static_cast<int>(handles.size()) && waiting < 2; ++idx) {
+                if (isHandleBusy(idx)) continue;                 // already have a pending irecv on this handle
+
+                auto& h = handles[idx];
+
+                size_t sz = 0;
+                if (h.probe(sz, false) < 0 && errno == EWOULDBLOCK)
+                    continue;
+                                                    // nothing ready on this handle
+                if (sz == 0) {
+                    h.close();
+                    continue;
+                }
+
+                // Ensure buffer capacity for this slot
+                if (sz > buffSizes[currBuff]) {
+                    buffers[currBuff] = static_cast<char*>(realloc(buffers[currBuff], sz));
+                    buffSizes[currBuff] = sz;
+                }
+
+                // Post non-blocking receive
+                h.ireceive(buffers[currBuff], sz, reqs[currBuff]);
+
+                if (MTCL::test(reqs[currBuff])) {
+                    // Completed immediately
+                    handleBatch(buffers[currBuff], sz, h);
+                } else {
+                    // Remember metadata for later completion
+                    busy[currBuff]    = true;
+                    inSizes[currBuff] = sz;
+                    hIndex[currBuff]  = idx;
+                    ++waiting;
+                    currBuff ^= 1;
+                }
+
+                submittedThisRound = true;                       // we posted something this pass
+            }
+
+            // If there are pending ops, only wait when:
+            //  - both slots are busy (waiting == 2), OR
+            //  - nothing new was submitted this round (so we’ve scanned all handles)
+            if (waiting > 0 && (waiting == 2 || !submittedThisRound)) {
+                for (;;) {
+                    bool anyCompleted = false;
+
+                    for (int i = 0; i < 2; ++i) {
+                        if (busy[i] && MTCL::test(reqs[i])) {
+                            // Dispatch the completed receive
+                            auto& hh = handles[hIndex[i]];
+                            handleBatch(buffers[i], inSizes[i], hh);
+
+                            busy[i] = false;
+                            inSizes[i] = 0;
+                            hIndex[i] = -1;
+                            --waiting;
+                            anyCompleted = true;
+                        }
+                    }
+
+                    if (anyCompleted) break;                     // unblock after 0/1/2 completions (at least one)
+                    std::this_thread::sleep_for(std::chrono::microseconds(50)); // gentle backoff
+                }
+            }
+
+            // Optional: small pause when absolutely nothing is pending or submitted to avoid hot spinning
+            if (waiting == 0 && !submittedThisRound) {
+                std::this_thread::sleep_for(std::chrono::microseconds(50));
+            }
+
+            if (ff::termination_counter <= 0)
+                    break;
+        }
+#else
+// new versione by claude
+        std::vector<MTCL::HandleUser> handles;
+        char* buffers[2] = {nullptr, nullptr};
+        size_t buffSizes[2] = {0, 0};
+
+        struct PendingOp {
+            bool active = false;
+            MTCL::Request request;
+            size_t size = 0;
+            size_t handleIdx = 0;
+            long timestamp = 0;
+        };
+        PendingOp pending[2];
+
+        while (ff::termination_counter > 0) {
+            // Accept new connections (non-blocking)
+            if (handles.size() < input_channels) {
+                auto handle = MTCL::Manager::getNext(std::chrono::microseconds(0));
+                if (handle.isValid() && handle.isNewConnection()) {
+                    handles.push_back(std::move(handle));
+                }
+            }
+
+            // Count active operations
+            int activeCount = (pending[0].active ? 1 : 0) + (pending[1].active ? 1 : 0);
+            
+            // Try to start new receives if we have free slots
+            if (activeCount < 2) {
+                for (size_t idx = 0; idx < handles.size() && activeCount < 2; ++idx) {
+                    // Skip if this handle already has a pending operation
+                    /*if ((pending[0].active && pending[0].handleIdx == idx) ||
+                        (pending[1].active && pending[1].handleIdx == idx)) {
+                        continue;
+                    }*/
+
+                    auto& h = handles[idx];
+
+                    // Check if data is available (non-blocking)
+                    size_t sz = 0;
+                    int probeResult = h.probe(sz, false);
+                    
+                    if (probeResult < 0) {
+                        if (errno == EWOULDBLOCK) {
+                            continue; // No data available yet
+                        } else {
+                            // Handle error - mark handle as invalid
+                            h.close();
+                            continue;
+                        }
+                    }
+                    
+                    if (sz == 0) {
+                        // Connection closed
+                        h.close();
+                        
+                        // Cancel any pending operations for this handle
+                        for (int i = 0; i < 2; ++i) {
+                            if (pending[i].active && pending[i].handleIdx == idx) {
+                                pending[i].active = false;
+                                activeCount--;
+                            }
+                        }
+                        continue;
+                    }
+
+                    // Find a free slot
+                    int slot = -1;
+                    for (int i = 0; i < 2; ++i) {
+                        if (!pending[i].active) {
+                            slot = i;
+                            break;
+                        }
+                    }
+                    
+                    if (slot == -1) continue; // No free slots (shouldn't happen)
+
+                    // Ensure buffer capacity
+                    if (sz > buffSizes[slot]) {
+                        buffers[slot] = static_cast<char*>(realloc(buffers[slot], sz));
+                        buffSizes[slot] = sz;
+                    }
+
+                    // Start non-blocking receive
+                    h.ireceive(buffers[slot], sz, pending[slot].request);
+                    
+                    // Check if it completed immediately
+                    /*if (MTCL::test(pending[slot].request)) {
+                        handleBatch(buffers[slot], sz, h);
+                    } else {*/
+                        // Mark as pending
+                        pending[slot].active = true;
+                        pending[slot].size = sz;
+                        pending[slot].handleIdx = idx;
+                        pending[slot].timestamp = ff::getusec();
+                        activeCount++;
+                    //}
+                }
+            }
+
+            // Check for completed operations
+            if (pending[0].active && pending[1].active && pending[0].handleIdx == pending[1].handleIdx){
+                if (pending[0].timestamp < pending[1].timestamp){
+                    if (MTCL::wait(pending[0].request)) {
+                        handleBatch(buffers[0], pending[0].size, 
+                                handles[pending[0].handleIdx]);
+                        pending[0].active = false;
+                    }
+                } else {
+                    // processa 1;
+                    if (MTCL::wait(pending[1].request)) {
+                    handleBatch(buffers[1], pending[1].size, 
+                                handles[pending[1].handleIdx]);
+                        pending[1].active = false;
+                    }
+                }
+            } else
+            for (int i = 0; i < 2; ++i) {
+                if (pending[i].active && MTCL::test(pending[i].request)) {
+                    // Validate handle is still valid
+                    if (pending[i].handleIdx < handles.size() && 
+                        handles[pending[i].handleIdx].isValid()) {
+                        handleBatch(buffers[i], pending[i].size, 
+                                handles[pending[i].handleIdx]);
+                    }
+                    
+                    pending[i].active = false;
+                }
+            }
+        }
+
+        for(int i  = 0; i < 2; i++)
+            free(buffers[i]);
+        
+        for(auto& h : handles) h.close();
+
+#endif
+
         return this->EOS;
     }
 
-    ~ff_dreceiverMTCL2(){
-        if (inputBuffer) free(inputBuffer);
-    }
-
 protected:
-    size_t neos = 0;
     size_t input_channels;
     std::string& acceptAddr;	
     ack_t ACK;
-    bool straightGroup;
-    char* inputBuffer = nullptr;
-    size_t inputBufferSize = 0;
 };
 
 } // namespace 

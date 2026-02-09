@@ -528,6 +528,7 @@ private:
 #ifdef DFF_ENABLED
     friend class dGroups;
     friend class dGroup;
+    friend class dMapper;
 #endif
 
 private:
@@ -1323,7 +1324,7 @@ protected:
 
 #endif
     // always defined, the body will implement a no-op if the distributed runtime is disabled
-    GroupInterface createGroup(const std::string&);
+    GroupInterface createGroup(const std::string&, const std::string& = "");
 
 #ifdef DFF_ENABLED
     std::string mioID_str;
