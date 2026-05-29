@@ -206,9 +206,13 @@ public:
                     }
                 
                 // add also the squarebox to wrapped workers
-                if ((i == 0 && !ir.ingressRemoteConnectionsGroupsName.empty()) || (i == (ir.bucketsDistribution.size()-1) && !ir.destinationEndpoints.empty()) || (i != 0 && i != (ir.bucketsDistribution.size()-1)))
-                    _addWorker_(wrappedWorkers, new ff_comb(new SquareBoxInputAdapter, new SquareBox(nextLocalWorkers, ir.channelsDictionary, nextLevelSquareBox), true, true), true); // add combine to have either multi input and multioutput
-        
+                if ((i == 0 && !ir.ingressRemoteConnectionsGroupsName.empty()) || (i == (ir.bucketsDistribution.size()-1) && !ir.destinationEndpoints.empty()) || (i != 0 && i != (ir.bucketsDistribution.size()-1))){
+                    if (wrappedWorkers.front()->isMultiOutput())
+                        _addWorker_(wrappedWorkers, new ff_comb(new SquareBoxInputAdapter, new SquareBox(nextLocalWorkers, ir.channelsDictionary, nextLevelSquareBox), true, true), true); // add combine to have either multi input and multioutput
+                    else
+                        _addWorker_(wrappedWorkers, new SquareBoxInputAdapter, true); // if the workers are not multioutput i can just add the square box as input adapter
+                }
+                
                 /*if (i == 0)
                     current_A2A->add_firstset(wrappedWorkers, 0, true);
                 else*/ if (i == (ir.bucketsDistribution.size()-1)){
