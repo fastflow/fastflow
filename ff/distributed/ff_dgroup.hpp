@@ -91,6 +91,31 @@ class dGroup : public ff::ff_farm {
         if (cleanup) tobeCleaned.push_back(n);
     }
 
+    inline ff_node* buildSquareBoxWorker(const std::vector<ff_node*>& wrappedWorkers,
+                                         const std::vector<ff_node*>& nextLocalWorkers,
+                                         const std::unordered_map<ff_node*, IngressEgressChannels_t>& channelsDictionary,
+                                         bool nextLevelSquareBox) {
+        ff_node* boxWorker = nullptr;
+        if (wrappedWorkers.front()->isMultiOutput())
+            boxWorker = new ff_comb(new SquareBoxInputAdapter,
+                                    new SquareBox(nextLocalWorkers, channelsDictionary, nextLevelSquareBox),
+                                    true, true);
+        else
+            boxWorker = new SquareBoxInputAdapter;
+
+        // The routing box is a synthetic worker inserted only by the distributed
+        // runtime. If the original level is made of pipelines, exposing this box
+        // as a plain comp/adapter would make the generated ff_a2a set
+        // heterogeneous, even though the user graph is homogeneous. Keep the
+        // same routing semantics but present the box as a one-stage pipeline.
+        if (wrappedWorkers.front()->isPipe()) {
+            ff_pipeline* p = new ff_pipeline;
+            p->add_stage(boxWorker, true);
+            return p;
+        }
+        return boxWorker;
+    }
+
     const std::vector<ff_node*>& keepLocalNodes(const ff::svector<ff_node*>& nodes) {
         localNodesStorage.emplace_back(nodes.begin(), nodes.end());
         return localNodesStorage.back();
@@ -305,10 +330,9 @@ public:
                 
                 // add also the squarebox to wrapped workers
                 if ((i == 0 && !ir.ingressRemoteConnectionsGroupsName.empty()) || (i == (ir.bucketsDistribution.size()-1) && !ir.destinationEndpoints.empty()) || (i != 0 && i != (ir.bucketsDistribution.size()-1))){
-                    if (wrappedWorkers.front()->isMultiOutput())
-                        _addWorker_(wrappedWorkers, new ff_comb(new SquareBoxInputAdapter, new SquareBox(nextLocalWorkers, ir.channelsDictionary, nextLevelSquareBox), true, true), true); // add combine to have either multi input and multioutput
-                    else
-                        _addWorker_(wrappedWorkers, new SquareBoxInputAdapter, true); // if the workers are not multioutput i can just add the square box as input adapter
+                    _addWorker_(wrappedWorkers,
+                                buildSquareBoxWorker(wrappedWorkers, nextLocalWorkers, ir.channelsDictionary, nextLevelSquareBox),
+                                true);
                 }
                 
                 /*if (i == 0)
