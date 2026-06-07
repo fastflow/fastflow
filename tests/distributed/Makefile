@@ -38,6 +38,9 @@ endif
 ifdef PRINT_IR
     CXXFLAGS += -DDFF_PRINT_IR
 endif
+ifdef PRINT_GROUP
+    CXXFLAGS += -DDFF_PRINT_GROUP=\"$(PRINT_GROUP)\"
+endif
 ifdef EXCLUDE_MPI
     CXXFLAGS	    += -DDFF_EXCLUDE_MPI
 else

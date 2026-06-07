@@ -73,7 +73,7 @@
 #include <ff/ff.hpp>
 #include <ff/distributed/ff_network.hpp>
 #include <ff/distributed/ff_dgroups.hpp>
-#include <ff/distributed/mapper/mapper.hpp>
+// #include <ff/distributed/mapper/mapper.hpp>   
 #include<ff/distributed/ff_dinterface.hpp>
 
 #endif /* FF_DFF_HPP */
