@@ -162,6 +162,46 @@ INLINE void * pthread_getspecific(pthread_key_t key) {
 //#if (_WIN32_WINNT >= _WIN32_WINNT_VISTA)
 #ifndef _FF_WIN_XP
 typedef CONDITION_VARIABLE pthread_cond_t;
+/* ---- FF_WIN_MSVC_COMPAT: MSVC compatibility shim ------------------------ */
+/* MSVC's Windows port lacks pthread_cond_timedwait(), clock_gettime() and
+   CLOCK_REALTIME, all of which the FastFlow core relies on for its blocking-mode
+   timed waits. On Linux these come from <pthread.h>/<time.h>; here we provide a
+   minimal implementation on top of the native CONDITION_VARIABLE/CRITICAL_SECTION
+   already used by this port. INLINE/RESTRICT, <time.h> (struct timespec),
+   <errno.h> (ETIMEDOUT) and <Windows.h> are already in scope above. */
+#ifndef FF_WIN_MSVC_COMPAT
+#define FF_WIN_MSVC_COMPAT
+#ifndef CLOCK_REALTIME
+#define CLOCK_REALTIME 0
+#endif
+/* clock_gettime(): map CLOCK_REALTIME onto the Windows system clock. FILETIME
+   counts 100 ns ticks since 1601-01-01; 116444736000000000 is the offset (in
+   ticks) from that epoch to the Unix epoch 1970-01-01. */
+INLINE int clock_gettime(int, struct timespec *tp) {
+    FILETIME ft; ULARGE_INTEGER u;
+    GetSystemTimePreciseAsFileTime(&ft);
+    u.LowPart = ft.dwLowDateTime; u.HighPart = ft.dwHighDateTime;
+    unsigned long long t = u.QuadPart - 116444736000000000ULL;
+    tp->tv_sec  = (long)(t / 10000000ULL);
+    tp->tv_nsec = (long)((t % 10000000ULL) * 100ULL);
+    return 0;
+}
+/* pthread_cond_timedwait(): turn the absolute POSIX deadline into a relative
+   millisecond timeout for SleepConditionVariableCS(); return ETIMEDOUT on
+   expiry, as POSIX requires. */
+INLINE int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
+                                  const struct timespec *abstime) {
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+    long long ms = (long long)(abstime->tv_sec - now.tv_sec) * 1000LL
+                 + (long long)(abstime->tv_nsec - now.tv_nsec) / 1000000LL;
+    if (ms < 0) ms = 0;
+    if (!SleepConditionVariableCS(cond, mutex, (DWORD)ms))
+        if (GetLastError() == ERROR_TIMEOUT) return ETIMEDOUT;
+    return 0;
+}
+#endif
+/* ---- end FF_WIN_MSVC_COMPAT --------------------------------------------- */
 //#include <Windows.h>
 #include <WinBase.h>
 INLINE int pthread_cond_init(pthread_cond_t  RESTRICT * cond,
