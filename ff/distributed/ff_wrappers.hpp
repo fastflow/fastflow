@@ -90,7 +90,7 @@ public:
 
 		msg->locality = ChannelLocality::REMOTE;
 
-		bool datacopied = this->n->serializeF(in, msg);
+		this->n->serializeF(in, msg);
 		msg->cleanup = true;
 		msg->freeCallback = this->n->freeBlob;
 	

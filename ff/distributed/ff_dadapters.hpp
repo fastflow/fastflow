@@ -185,6 +185,13 @@ public:
 				ff_send_out_to(task, chInfo.localIndex);
 				return true;
 			}
+			// A local channel without a local output index means that the
+			// group wiring missed a local boundary node. Do not let it fall
+			// through to the remote sender.
+			if (chInfo.locality == ChannelLocality::LOCAL) {
+				error("EmitterAdapter2, missing local output mapping for node %d\n", chInfo.identifier);
+				return false;
+			}
 			message2_t* msg = MessageAllocator::allocateMessage();
 			msg->src = this->n->mioID;
 			msg->dest = chInfo.identifier;
@@ -333,12 +340,10 @@ public:
 	int svc_init(){
 		
 		ff::svector<int> expandedNextLocalWorkers;
-		for(auto* bb: nextLocalNodes)
+		for(auto* bb: nextLocalNodes) {
 			custom_get_in_nodes(bb, expandedNextLocalWorkers); // expand the next local workers and put the ID in the svector
+		}
 		
-		ff::svector<ff_node*> realOutputsNodes; this->get_out_nodes(realOutputsNodes);
-		size_t oldsz;
-
 		for(size_t i = 0; i < expandedNextLocalWorkers.size(); i++){
 			localLookup[expandedNextLocalWorkers[i]] = i;
 			
@@ -346,14 +351,6 @@ public:
 			if (it != channelsDictionary.end()){
 				for(auto& t : it->second.first)
 					localLBMap[std::get<0>(t)->mioID].push_back(i);
-				
-				// if the worker is part of an ondemand bb, so the queue length was different from the default one we should set that legth accordingly
-				if (!it->second.first.empty()){
-					auto& ci = it->second.first.front();
-					int newsize = std::get<3>(ci);
-					/*if (newsize > 0)
-						realOutputsNodes[i]->change_inputqueuesize(newsize, oldsz);*/
-				}
 			}
 
 		}

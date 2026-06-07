@@ -157,6 +157,7 @@ int main(int argc, char*argv[]){
 		}
 		ntasks = std::stol(argv[1]);
 	}
+	(void)ntasks;
 
 	ff_pipeline pipe;
 	ff_a2a a2a;

@@ -76,6 +76,8 @@ public:
     Proto usedProtocol;
     std::string baseProtocol = "TCP";
     std::string dryrun_outFile;
+    // Optional runtime/debug selection used to dump the fully built dGroup.
+    std::string printGroupSelection;
 
     void parseConfig(std::string configFile){
       std::ifstream is(configFile);
@@ -150,6 +152,11 @@ public:
 
 	  const std::string& getRunningGroup() const { return runningGroup; }
 
+    bool shouldPrintBuiltGroup() const {
+      return !printGroupSelection.empty() &&
+             (printGroupSelection == "all" || printGroupSelection == runningGroup);
+    }
+
     //void forceProtocol(Proto p){this->usedProtocol = p;}
 
     void perform_dryRun(){
@@ -210,8 +217,12 @@ public:
 #endif
       MessageAllocator::init(MESSAGE_PREALLOCATE);
 
-      // buildare il farm dalla rappresentazione intermedia del gruppo che devo rannare
       dGroup _grp(runningIR);
+
+      // The IR dump shows the logical buckets only. This optional dump prints
+      // the concrete runtime structure after wrappers and routing boxes exist.
+      if (shouldPrintBuiltGroup())
+        _grp.print(runningGroup);
       if (_grp.run() < 0){
         std::cerr << "Error running the group!" << std::endl;
         return -1;
@@ -299,7 +310,15 @@ private:
     }
 
     inline ChannelLocality getLocality(std::map<ff_node*, std::string*>& map, ff_node* n){
-      return (*map[n] == this->runningGroup ? ChannelLocality::LOCAL : ChannelLocality::REMOTE);
+      auto it = map.find(n);
+      // Connected nodes must belong to some distributed group. Using map[n]
+      // here would silently create a null entry and later segfault.
+      if (it == map.end() || it->second == nullptr) {
+        std::cerr << "Node " << n->mioID_str << " is connected to group "
+                  << this->runningGroup << " but was not annotated in any distributed group. Aborting\n";
+        abort();
+      }
+      return (*it->second == this->runningGroup ? ChannelLocality::LOCAL : ChannelLocality::REMOTE);
     }
 
     inline std::string buildEndpointString(const G& g){
@@ -493,7 +512,25 @@ static inline int DFF_Init(int& argc, char**& argv){
         }
         continue;
       } 
+
+      if (strstr(argv[i], "--DFF_PrintGroup") != NULL){
+        char * equalPosition = strchr(argv[i], '=');
+        if (equalPosition == NULL){
+          dGroups::Instance()->printGroupSelection = std::string(argv[i+1]);
+          argv[i] = argv[i+1] = NULL;
+          i++;
+        } else {
+          dGroups::Instance()->printGroupSelection = std::string(++equalPosition);
+          argv[i] = NULL;
+        }
+        continue;
+      }
     }
+
+#ifdef DFF_PRINT_GROUP
+    if (dGroups::Instance()->printGroupSelection.empty())
+      dGroups::Instance()->printGroupSelection = DFF_PRINT_GROUP;
+#endif
 
     if (dGroups::Instance()->dryrun_outFile.empty()){
       // the execution is not a dry run

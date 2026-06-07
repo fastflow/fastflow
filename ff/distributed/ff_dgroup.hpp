@@ -35,6 +35,7 @@
 #include <ff/distributed/ff_dsenderMTCL.hpp>
 #include <ff/distributed/ff_dadapters.hpp>
 
+#include <list>
 #include <numeric>
 
 #ifdef DFF_MPI
@@ -47,6 +48,7 @@
 namespace ff{
 class dGroup : public ff::ff_farm {
     const std::vector<ff_node*> emptyV = {};
+    std::list<std::vector<ff_node*>> localNodesStorage = {};
     std::vector<ff_node*> tobeCleaned = {};
 
     struct ForwarderMiNode : ff_minode {
@@ -87,6 +89,87 @@ class dGroup : public ff::ff_farm {
     inline void _addWorker_(std::vector<ff_node*>& v, ff_node* n, bool cleanup = false){
         v.push_back(n);
         if (cleanup) tobeCleaned.push_back(n);
+    }
+
+    const std::vector<ff_node*>& keepLocalNodes(const ff::svector<ff_node*>& nodes) {
+        localNodesStorage.emplace_back(nodes.begin(), nodes.end());
+        return localNodesStorage.back();
+    }
+
+    static inline void printIndent(size_t indent) {
+        for(size_t i = 0; i < indent; ++i) ff::cout << "  ";
+    }
+
+    static inline const char* nodeKind(ff_node* n) {
+        if (n->isAll2All()) return "a2a";
+        if (n->isPipe()) return "pipe";
+        if (n->isFarm()) return "farm";
+        if (n->isComp()) return "comp";
+        if (n->isMultiInput() && n->isMultiOutput()) return "mi+mo";
+        if (n->isMultiInput()) return "mi";
+        if (n->isMultiOutput()) return "mo";
+        return "seq";
+    }
+
+    // Recursively dump the concrete nodes inserted in the runtime group so we
+    // can compare them with the higher-level IR buckets when debugging cuts.
+    static inline void printNode(ff_node* n, size_t indent) {
+        printIndent(indent);
+        ff::cout << "- " << nodeKind(n)
+                 << " node@" << n
+                 << " id=" << n->mioID_str << "[" << n->mioID << "]"
+                 << " mi=" << n->isMultiInput()
+                 << " mo=" << n->isMultiOutput()
+                 << " comp=" << n->isComp()
+                 << "\n";
+
+        if (n->isPipe()) {
+            const auto& stages = reinterpret_cast<ff_pipeline*>(n)->getStages();
+            for(size_t i = 0; i < stages.size(); ++i) {
+                printIndent(indent + 1);
+                ff::cout << "stage " << i << ":\n";
+                printNode(stages[i], indent + 2);
+            }
+            return;
+        }
+
+        if (n->isAll2All()) {
+            auto* a2a = reinterpret_cast<ff_a2a*>(n);
+            const auto& firstSet = a2a->getFirstSet();
+            const auto& secondSet = a2a->getSecondSet();
+
+            printIndent(indent + 1);
+            ff::cout << "first-set (" << firstSet.size() << ")\n";
+            for(ff_node* worker : firstSet)
+                printNode(worker, indent + 2);
+
+            printIndent(indent + 1);
+            ff::cout << "second-set (" << secondSet.size() << ")\n";
+            for(ff_node* worker : secondSet)
+                printNode(worker, indent + 2);
+            return;
+        }
+
+        if (n->isFarm()) {
+            auto* farm = reinterpret_cast<ff_farm*>(n);
+            if (ff_node* emitter = farm->getEmitter()) {
+                printIndent(indent + 1);
+                ff::cout << "emitter:\n";
+                printNode(emitter, indent + 2);
+            }
+
+            const auto& workers = farm->getWorkers();
+            printIndent(indent + 1);
+            ff::cout << "workers (" << workers.size() << ")\n";
+            for(ff_node* worker : workers)
+                printNode(worker, indent + 2);
+
+            if (ff_node* collector = farm->getCollector()) {
+                printIndent(indent + 1);
+                ff::cout << "collector:\n";
+                printNode(collector, indent + 2);
+            }
+        }
     }
 
     static inline ff_node* buildWrapperCollector(ff_node* n, IngressChannels_t& channels, const std::vector<ff_node*>& prevLocalWorkers, bool prevLevelSquareBox){
@@ -132,23 +215,35 @@ public:
                     _addWorker_(wrappedWorkers, new WrapperINOUT(s, ir.channelsDictionary[s]), true);
                 }
                 else {
+                    ff::svector<ff_node*> inputNodes;
+                    ff::svector<ff_node*> outputNodes;
+                    n->get_in_nodes(inputNodes);
+                    n->get_out_nodes(outputNodes);
+
+                    // In a single-level wrapped group, composite skeleton
+                    // boundary nodes may still communicate locally through
+                    // feedback channels. Keep these vectors alive because the
+                    // adapters store references to them.
+                    const std::vector<ff_node*>& prevLocalWorkers =
+                        ir.groupWrappedAround ? keepLocalNodes(outputNodes) : emptyV;
+                    const std::vector<ff_node*>& nextLocalWorkers =
+                        ir.groupWrappedAround ? keepLocalNodes(inputNodes) : emptyV;
+
                     if (!ir.ingressRemoteConnectionsGroupsName.empty()){ // if the receiver is present build the wrappers
-                        ff::svector<ff_node*> inputNodes; n->get_in_nodes(inputNodes);
                         for (ff_node* in : inputNodes){
                             ff_node* inputParent = getBB(n, in);
                             if (inputParent) {
-                                ff_node* wrapper = buildWrapperCollector(in, ir.channelsDictionary[in].first, emptyV, true);							
+                                ff_node* wrapper = buildWrapperCollector(in, ir.channelsDictionary[in].first, prevLocalWorkers, true);
                                 inputParent->change_node(in, wrapper, true, false); //cleanup?? removefromcleanuplist??
                             }  
                         }
                     }
 
                     if (!ir.destinationEndpoints.empty()){
-                        ff::svector<ff_node*> outNodes; n->get_out_nodes(outNodes);
-                        for (ff_node* out : outNodes){
+                        for (ff_node* out : outputNodes){
                             ff_node* outParent = getBB(n, out);
                             if (outParent){
-                                ff_node* wrapper = buildWrapperEmitter(out, ir.channelsDictionary[out].second, emptyV, true);
+                                ff_node* wrapper = buildWrapperEmitter(out, ir.channelsDictionary[out].second, nextLocalWorkers, true);
                                 outParent->change_node(out, wrapper, true, false);
                             }
                         }
@@ -190,11 +285,14 @@ public:
                             }
                         }
 
-                        if (!ir.destinationEndpoints.empty()){
+                        if (!ir.destinationEndpoints.empty() || !nextLocalWorkers.empty()){
                             ff::svector<ff_node*> outNodes; n->get_out_nodes(outNodes);
                             for (ff_node* out : outNodes){
                                 ff_node* outParent = getBB(n, out);
                                 if (outParent){
+                                    // Local edges between levels need the emitter
+                                    // adapter too, otherwise downstream collectors
+                                    // receive only real EOS and miss logical EOS.
                                     ff_node* wrapper = buildWrapperEmitter(out, ir.channelsDictionary[out].second, nextLocalWorkers, nextLevelSquareBox);
                                     outParent->change_node(out, wrapper, true, false);
                                 }
@@ -257,7 +355,26 @@ public:
         for(ff_node* n : tobeCleaned) delete n;
     }
 
+    void print(const std::string& groupName) const {
+        ff::cout << "******** BEGIN BUILT GROUP " << groupName << " ********\n";
+
+        if (ff_node* emitter = this->getEmitter()) {
+            ff::cout << "Emitter:\n";
+            printNode(emitter, 1);
+        }
+
+        ff::cout << "Workers (" << this->getWorkers().size() << "):\n";
+        for(ff_node* worker : this->getWorkers())
+            printNode(worker, 1);
+
+        if (ff_node* collector = this->getCollector()) {
+            ff::cout << "Collector:\n";
+            printNode(collector, 1);
+        }
+
+        ff::cout << "********* END BUILT GROUP " << groupName << " *********\n";
+    }
+
 };
 } // namespace
 #endif
-

@@ -46,6 +46,30 @@ class ff_a2a: public ff_node {
     friend class ff_farm;
     friend class ff_pipeline;    
 protected:
+    static inline void set_output_blocking_to(ff_node* n,
+                                              pthread_mutex_t *&m,
+                                              pthread_cond_t *&c,
+                                              bool canoverwrite=false) {
+        n->set_output_blocking(m, c, canoverwrite);
+    }
+
+    // Synthetic output buffer exposed by nested A2A nodes. When the outer
+    // skeleton enables blocking output, propagate it to the real producer too.
+    struct a2a_output_buffernode: ff_buffernode {
+        a2a_output_buffernode(int nentries, bool fixedsize, ff_node* producer=nullptr):
+            ff_buffernode(nentries, fixedsize), producer(producer) {}
+
+        void set_output_blocking(pthread_mutex_t *&m,
+                                 pthread_cond_t *&c,
+                                 bool canoverwrite=false) {
+            ff_buffernode::set_output_blocking(m, c, canoverwrite);
+            if (producer)
+                ff_a2a::set_output_blocking_to(producer, m, c, true);
+        }
+
+        ff_node* producer;
+    };
+
     inline int cardinality(BARRIER_T * const barrier)  { 
         int card=0;
         for(size_t i=0;i<workers1.size();++i) 
@@ -232,7 +256,7 @@ protected:
                 workers1[i] = mo; // replacing old node
                 internalSupportNodes.push_back(mo);
             }
-        } 
+        }
         for(size_t i=0;i<workers1.size();++i) {
             if (ondemand_chunk && (workers1[i]->ondemand_buffer()==0)) {
                 svector<ff_node*> w;
@@ -645,6 +669,12 @@ public:
 
     
     void get_out_nodes(svector<ff_node*>&w) {
+        // Once output buffers have been materialized, outer skeletons must
+        // connect to them instead of walking back to the internal second set.
+        if (outputNodes.size()) {
+            w += outputNodes;
+            return;
+        }
         for(size_t i=0;i<workers2.size();++i)
             workers2[i]->get_out_nodes(w);
         if (w.size() == 0)
@@ -786,7 +816,10 @@ protected:
                 workers2[i]->get_out_nodes(w);
                 assert(w.size());
                 for(size_t j=0;j<w.size();++j) {
-                    ff_node* t = new ff_buffernode(nentries,fixedsize); 
+                    // Keep the real producer reachable from the synthetic
+                    // output buffer so blocking mode is not lost.
+                    ff_node* producer = w[j]->isMultiOutput() ? nullptr : w[j];
+                    ff_node* t = new a2a_output_buffernode(nentries, fixedsize, producer);
                     t->set_id(id++);
                     internalSupportNodes.push_back(t);
                     if (w[j]->isMultiOutput()) {

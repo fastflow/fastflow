@@ -180,6 +180,26 @@ class ff_dsenderMTCL2 : public ff_minode_t<message2_t> {
 	std::mt19937 gen{std::random_device{}()};
 #endif
 
+	inline size_t getDestConnID(int dest) const {
+		auto it = dest2ConnID.find(dest);
+		if (it == dest2ConnID.end()) {
+			error("ff_dsenderMTCL2, missing remote connection for destination node %d\n", dest);
+			abort();
+		}
+		return it->second;
+	}
+
+	// Anonymous messages, EOS and FLUSH must have at least one known remote
+	// destination for their source node.
+	const std::set<size_t>& getPossibleDestConnID(int src) {
+		auto it = src2PossibleDestConnID.find(src);
+		if (it == src2PossibleDestConnID.end() || it->second.empty()) {
+			error("ff_dsenderMTCL2, missing remote destination set for source node %d\n", src);
+			abort();
+		}
+		return it->second;
+	}
+
 	int waitAckFromAny() {
 		static size_t lastConnId = 0;
 		while (true)
@@ -234,7 +254,7 @@ class ff_dsenderMTCL2 : public ff_minode_t<message2_t> {
 	}
 
 	inline uBuffer &getMostFilledBuffer(const int &src) {
-		auto &possibleDestConnID = src2PossibleDestConnID[src];
+		const auto &possibleDestConnID = getPossibleDestConnID(src);
 
 		if (batchSize > 1) {
 			uBuffer *maxBuffer = nullptr;
@@ -302,7 +322,7 @@ class ff_dsenderMTCL2 : public ff_minode_t<message2_t> {
 		for (auto &[n, channelsTuple] : channelsDictionary)
 			for (auto &[dest_n, t, l, q] : channelsTuple.second)
 				if (l == ChannelLocality::REMOTE)
-					src2PossibleDestConnID[n->mioID].insert(dest2ConnID[dest_n->mioID]);
+					src2PossibleDestConnID[n->mioID].insert(getDestConnID(dest_n->mioID));
 
 		// initialize the round robin variabile with the number of all available endpoints, so that probably we will start from zero at the first iteration
 		rr_connID = destEndpoints.size();
@@ -312,15 +332,16 @@ class ff_dsenderMTCL2 : public ff_minode_t<message2_t> {
 
 	message2_t *svc(message2_t *task) {
 		if (task->dest >= 0)
-			batchBuffers[dest2ConnID[task->dest]].push(task);
+			batchBuffers[getDestConnID(task->dest)].push(task);
 		else {
 			if (task->isFlush()) {
-				for (auto &connID_ : std::unordered_set<int>(src2PossibleDestConnID[task->src].begin(), src2PossibleDestConnID[task->src].end()))
+				const auto &possibleDestConnID = getPossibleDestConnID(task->src);
+				for (auto &connID_ : std::unordered_set<size_t>(possibleDestConnID.begin(), possibleDestConnID.end()))
 					batchBuffers[connID_].flush();
 				MessageAllocator::releaseMessage(task);
 			} else if (task->isLogicalEOS()) {
 
-				for (auto &connID_ : src2PossibleDestConnID[task->src]) {
+				for (auto &connID_ : getPossibleDestConnID(task->src)) {
 					batchBuffers[connID_].push(MessageAllocator::make_logical_EOS(task->src));
 				}
 
@@ -438,6 +459,10 @@ inline int uBuffer::push(message2_t *m) {
 }
 
 inline int uBuffer::flush(bool doNotReleaseBuffer) {
+	// A FLUSH may arrive before this connection has accumulated any batch.
+	if (!this->buffers || actualSize == 0)
+		return 0;
+
 	// copy headers at the end of the main buffer
 	memcpy(this->mainBuffer_curr_ptr, this->buffers->headers, actualSize * headerSize);
 	// write the number of messages in the batch

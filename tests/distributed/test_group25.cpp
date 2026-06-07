@@ -134,6 +134,7 @@ int main(int argc, char*argv[]){
 		}
 		ntasks = std::stol(argv[1]);
 	}
+	(void)ntasks;
 
 	ff_pipeline pipe;
 	ff_comb n1(new Node1Helper, new Node1(10), true, true);

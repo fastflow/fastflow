@@ -138,7 +138,8 @@ int main(int argc, char*argv[]){
 
 	g1 << &s1 << &s2 << &w1 << &w2;
 	g2 << &s3 << &w3;
-	g3 << &t1 << &t2 << &t3;
+	// G3 owns the second A2A stage, including the final collector K.
+	g3 << &t1 << &t2 << &t3 << &k;
 	
     // -------------------------------------------
 
