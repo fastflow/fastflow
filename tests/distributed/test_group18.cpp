@@ -99,6 +99,7 @@ struct Node5: ff_minode_t<myTask_t>{
     }
 	void svc_end() {
 		if (processed != ntasks) {
+			std::cout << "RESULT ERROR, processed " << processed << " tasks, expected " << ntasks << "\n";
 			abort();
 		}
 		//ff::

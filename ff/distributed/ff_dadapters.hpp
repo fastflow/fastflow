@@ -56,6 +56,7 @@ private:
 	bool nextLevelSquareBox; // meaning that i have a router node or a sender
 	std::vector<outputMapRecord_t> outMap;
 	std::vector<int> localDest;
+	bool hasRemoteDestinations = false;
 	bool exited = false;
 	ChannelType defaultChannelType = ChannelType::FWD;
 public:
@@ -93,6 +94,8 @@ public:
 					pyhsicalNextLocalWorkers[indexOfLocalPlacement]->change_inputqueuesize(std::get<3>(t), oldsz);
 				}
 			}
+			if (std::get<2>(t) == ChannelLocality::REMOTE)
+				hasRemoteDestinations = true;
 			outMap.emplace_back(std::get<0>(t)->mioID, std::get<1>(t), std::get<2>(t), indexOfLocalPlacement);
 		}
 		
@@ -113,7 +116,10 @@ public:
 	void eosnotify(ssize_t){
 		if (!this->exited){
 			this->n->eosnotify();
-			if (nextLevelSquareBox)
+			// A routing box can exist at the next level because other workers
+			// have remote egresses. Send synthetic control messages to it only
+			// for workers that actually own at least one remote destination.
+			if (nextLevelSquareBox && hasRemoteDestinations)
 				ff_monode::ff_send_out_to(MessageAllocator::make_logical_EOS(this->n->mioID), this->get_num_outchannels()-1);
 
 			for(auto& d : localDest)
@@ -124,7 +130,10 @@ public:
 
     bool forward(void* task, int destination, bool ret = false){
 		if (task == EOS){
-			if (nextLevelSquareBox)
+			// Keep local-only workers from generating remote logical EOS: the
+			// sender has no destination set for them and the extra control
+			// message can abort termination in mixed local/remote A2A levels.
+			if (nextLevelSquareBox && hasRemoteDestinations)
 				ff_monode::ff_send_out_to(MessageAllocator::make_logical_EOS(this->n->mioID), this->get_num_outchannels()-1);
 			for(auto& d : localDest)
 				ff_monode::ff_send_out_to(this->LEOS, d);
@@ -134,7 +143,7 @@ public:
 		}
 
 		if (task == FLUSH){
-			if (nextLevelSquareBox)
+			if (nextLevelSquareBox && hasRemoteDestinations)
 				ff_monode::ff_send_out_to(MessageAllocator::make_flush(this->n->mioID), this->get_num_outchannels()-1);
 			return true;
 		}
@@ -158,7 +167,7 @@ public:
                         return true;
 					}
 				}
-				if (nextLevelSquareBox){
+				if (nextLevelSquareBox && hasRemoteDestinations){
 					if (!msg) {
 						msg = MessageAllocator::allocateMessage();
 						msg->src = this->n->mioID;
@@ -275,7 +284,9 @@ public:
 			if (prevLevelSquareBox && this->fromInput() && (size_t)get_channel_id() == (this->get_num_inchannels() - this->get_num_feedbackchannels() - 1)){
 				message2_t * msg = reinterpret_cast<message2_t*>(in);
 				if (inputMap.count(msg->src) == 0) {
-					std::cerr << "Errore ho ricevuto quLCOSA CHE NON DOVEVO\n";
+					std::cerr << "CollectorAdapter2 received an unexpected remote source " << msg->src << "; expected:";
+					for (auto& entry : inputMap) std::cerr << " " << entry.first;
+					std::cerr << "\n";
 					abort();
 				}
 				auto& channelInfo = inputMap[msg->src];
@@ -325,7 +336,7 @@ class SquareBox : public ff_monode {
 	const std::vector<ff_node*>& nextLocalNodes;
 	const std::unordered_map<ff_node*, IngressEgressChannels_t>& channelsDictionary;
 	std::unordered_map<int, std::vector<int>> localLBMap; // local map for load balacing of messages without destinations
-    int rr_dest;
+    int rr_dest = 0;
 #ifdef RANDOM_LOADBALANCING
 	std::mt19937 gen{std::random_device{}()};
 #endif
@@ -347,10 +358,16 @@ public:
 		for(size_t i = 0; i < expandedNextLocalWorkers.size(); i++){
 			localLookup[expandedNextLocalWorkers[i]] = i;
 			
-			auto it = std::find_if(channelsDictionary.begin(), channelsDictionary.end(), [&](auto& k){return k.first->mioID == expandedNextLocalWorkers[i];});
-			if (it != channelsDictionary.end()){
-				for(auto& t : it->second.first)
-					localLBMap[std::get<0>(t)->mioID].push_back(i);
+			// Composite nodes and their boundary nodes can share mioID. Merge
+			// all matching channel records instead of relying on unordered_map
+			// iteration order to pick the right one.
+			for (const auto& k : channelsDictionary) {
+				if (k.first->mioID != expandedNextLocalWorkers[i]) continue;
+				for (auto& t : k.second.first) {
+					auto& destinations = localLBMap[std::get<0>(t)->mioID];
+					if (std::find(destinations.begin(), destinations.end(), i) == destinations.end())
+						destinations.push_back(i);
+				}
 			}
 
 		}
@@ -386,20 +403,20 @@ public:
 				return this->GO_ON;
 			}
 
-			if (!nextLevelSquareBox) // if there is no square box, it means all the next works can receive the task (this is not always true so this line can introduce some bugs)
-				ff_send_out(in);
-			else {
-				int dest;
-				std::vector<int>& possibleDest = localLBMap[msg->src];
-				do {
+			// Route anonymous messages through the computed local map even when
+			// there is no following square box. Some pipeline connections, such
+			// as farm(no collector) -> A2A, are point-to-point rather than
+			// broadcast/load-balanced across every local input.
+			int dest;
+			std::vector<int>& possibleDest = localLBMap[msg->src];
+			do {
 #ifdef RANDOM_LOADBALANCING
-					std::sample(possibleDest.begin(), possibleDest.end(), &dest, 1, gen);
+				std::sample(possibleDest.begin(), possibleDest.end(), &dest, 1, gen);
 #else
-					rr_dest = (rr_dest + 1) % possibleDest.size();
-					dest = possibleDest[rr_dest];
+				rr_dest = (rr_dest + 1) % possibleDest.size();
+				dest = possibleDest[rr_dest];
 #endif
-				} while (!ff_send_out_to(in, dest, 1));
-			}
+			} while (!ff_send_out_to(in, dest, 1));
 		}
 		else if (localLookup.count(msg->dest)) 
 			ff_send_out_to(in, localLookup[msg->dest]);
@@ -412,12 +429,33 @@ public:
 };
 
 struct SquareBoxInputAdapter : public ff_minode {
+	size_t eos_received = 0;
+	bool eos_forwarded = false;
+	bool waitAllInputEOS = false;
+
+	SquareBoxInputAdapter(bool waitAllInputEOS = false) : waitAllInputEOS(waitAllInputEOS) {}
 
 	void* svc(void* in) {return in;}
 
 	void eosnotify(ssize_t id){
-		if (this->fromInput() && (id == (ssize_t)(this->get_num_inchannels() - this->get_num_feedbackchannels() - 1))){
+		if (!this->fromInput() || eos_forwarded) return;
+
+		// If a previous routing level exists, its EOS arrives on the last input
+		// channel and must be propagated as before. Without such a routing level
+		// all inputs are real upstream workers, so wait for all of them before
+		// closing the sender path. This fixes oblique cuts without adding data
+		// messages or checks in the normal svc path.
+		if (!waitAllInputEOS) {
+			if (id == (ssize_t)(this->get_num_inchannels() - this->get_num_feedbackchannels() - 1)) {
+				ff_send_out(this->EOS);	
+				eos_forwarded = true;
+			}
+			return;
+		}
+
+		if (++eos_received >= (this->get_num_inchannels() - this->get_num_feedbackchannels())){
 			ff_send_out(this->EOS);	
+			eos_forwarded = true;
 		}
 	}
 };

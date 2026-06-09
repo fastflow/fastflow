@@ -152,6 +152,50 @@ std::tuple<ff::svector<ff_node*>,ff::svector<ff_node*>, int> getConsumers(ff_nod
         }
     }
 
+    if (parent->isFarm()){
+        ff_farm* farm = reinterpret_cast<ff_farm*>(parent);
+        const auto& workers = farm->getWorkers();
+
+        if (farm->getEmitter() == n) {
+            for (ff_node* worker : workers)
+                worker->get_in_nodes(std::get<0>(out));
+            return out;
+        }
+
+        for (size_t i = 0; i < workers.size(); ++i) {
+            if (workers[i] != n) continue;
+
+            if (farm->hasCollector()) {
+                if (ff_node* collector = farm->getCollector()) {
+                    collector->get_in_nodes(std::get<0>(out));
+                    return out;
+                }
+            }
+
+            // This is the supported vertical cut where the whole farm is in
+            // one group. A farm without collector exposes its workers as output
+            // boundary nodes; if the next pipeline stage is an A2A with matching
+            // cardinality, FastFlow wires worker_i directly to firstset_i.
+            ff_node* farmParent = getBB(root, parent);
+            if (farmParent && farmParent->isPipe()) {
+                ff_node* nextStage = reinterpret_cast<ff_pipeline*>(farmParent)->get_nextstage(parent);
+                if (nextStage && nextStage->isAll2All()) {
+                    const auto& firstSet = reinterpret_cast<ff_a2a*>(nextStage)->getFirstSet();
+                    if (workers.size() == firstSet.size()) {
+                        firstSet[i]->get_in_nodes(std::get<0>(out));
+                        return out;
+                    }
+                }
+            }
+
+            return out += getConsumers(parent, root);
+        }
+
+        if (ff_node* collector = farm->getCollector())
+            if (collector == n)
+                return out += getConsumers(parent, root);
+    }
+
     if (parent->isComp())
         return getConsumers(parent, root);
 
@@ -186,9 +230,58 @@ std::tuple<ff::svector<ff_node*>,ff::svector<ff_node*>, int> getFeeders(ff_node*
             if (a2a->ondemand_buffer() > 0) std::get<2>(out) = a2a->ondemand_buffer();
             return out;
         } else {
+            const auto& firstSet = a2a->getFirstSet();
+            for (size_t i = 0; i < firstSet.size(); ++i) {
+                if (firstSet[i] != n) continue;
+
+                // Only the vertical farm boundary is supported here: the whole
+                // farm belongs to the previous group and feeds this A2A. Keep
+                // this narrow because other multi-output predecessors, such as
+                // another A2A, may legitimately feed every first-set node.
+                ff_node* a2aParent = getBB(root, parent);
+                if (a2aParent && a2aParent->isPipe()) {
+                    ff_node* prevStage = reinterpret_cast<ff_pipeline*>(a2aParent)->get_prevstage(parent);
+                    if (prevStage && prevStage->isFarm()) {
+                        ff_farm* prevFarm = reinterpret_cast<ff_farm*>(prevStage);
+                        if (!prevFarm->hasCollector()) {
+                            ff::svector<ff_node*> prevOutputs;
+                            prevStage->get_out_nodes(prevOutputs);
+                            if (prevOutputs.size() == firstSet.size()) {
+                                std::get<0>(out).push_back(prevOutputs[i]);
+                                return out;
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+
             if (a2a->isset_wraparound())
                 a2a->get_out_nodes(std::get<1>(out)); // NB: maybe we should use get_out_nodes_feedback
             return out += getFeeders(parent, root); // merge of vector containing feedback feeders + forward feeders
+        }
+    }
+
+    if (parent->isFarm()){
+        ff_farm* farm = reinterpret_cast<ff_farm*>(parent);
+        const auto& workers = farm->getWorkers();
+
+        if (farm->getEmitter() == n)
+            return out += getFeeders(parent, root);
+
+        for (ff_node* worker : workers) {
+            if (worker != n) continue;
+            if (ff_node* emitter = farm->getEmitter())
+                emitter->get_out_nodes(std::get<0>(out));
+            return out;
+        }
+
+        if (ff_node* collector = farm->getCollector()) {
+            if (collector == n) {
+                for (ff_node* worker : workers)
+                    worker->get_out_nodes(std::get<0>(out));
+                return out;
+            }
         }
     }
 
@@ -230,6 +323,22 @@ void setIDs(ff_node* root, std::string prefix = ""){
         int i = 0, j = 0;
         for (auto& w : leftV) setIDs(w, prefix+"S"+std::to_string(i++));
         for (auto& w : rightV) setIDs(w, prefix+"D"+std::to_string(j++));
+    } else
+    if (root->isFarm()){
+        ff_farm* farm = reinterpret_cast<ff_farm*>(root);
+
+        // Distributed routing uses mioID as the logical source/destination.
+        // In a supported vertical farm cut the whole farm is one group, but a
+        // farm without collector exposes workers as output boundary nodes. Give
+        // those internals distinct mioIDs to avoid routing/EOS aliasing.
+        if (ff_node* emitter = farm->getEmitter())
+            setIDs(emitter, prefix+"P0");
+
+        for (ff_node* worker : farm->getWorkers())
+            setIDs(worker, prefix+"P1");
+
+        if (ff_node* collector = farm->getCollector())
+            setIDs(collector, prefix+"P2");
     }
 }
 

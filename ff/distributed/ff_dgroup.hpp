@@ -94,14 +94,15 @@ class dGroup : public ff::ff_farm {
     inline ff_node* buildSquareBoxWorker(const std::vector<ff_node*>& wrappedWorkers,
                                          const std::vector<ff_node*>& nextLocalWorkers,
                                          const std::unordered_map<ff_node*, IngressEgressChannels_t>& channelsDictionary,
-                                         bool nextLevelSquareBox) {
+                                         bool nextLevelSquareBox,
+                                         bool prevLevelSquareBox) {
         ff_node* boxWorker = nullptr;
         if (wrappedWorkers.front()->isMultiOutput())
-            boxWorker = new ff_comb(new SquareBoxInputAdapter,
+            boxWorker = new ff_comb(new SquareBoxInputAdapter(!prevLevelSquareBox),
                                     new SquareBox(nextLocalWorkers, channelsDictionary, nextLevelSquareBox),
                                     true, true);
         else
-            boxWorker = new SquareBoxInputAdapter;
+            boxWorker = new SquareBoxInputAdapter(!prevLevelSquareBox);
 
         // The routing box is a synthetic worker inserted only by the distributed
         // runtime. If the original level is made of pipelines, exposing this box
@@ -331,7 +332,7 @@ public:
                 // add also the squarebox to wrapped workers
                 if ((i == 0 && !ir.ingressRemoteConnectionsGroupsName.empty()) || (i == (ir.bucketsDistribution.size()-1) && !ir.destinationEndpoints.empty()) || (i != 0 && i != (ir.bucketsDistribution.size()-1))){
                     _addWorker_(wrappedWorkers,
-                                buildSquareBoxWorker(wrappedWorkers, nextLocalWorkers, ir.channelsDictionary, nextLevelSquareBox),
+                                buildSquareBoxWorker(wrappedWorkers, nextLocalWorkers, ir.channelsDictionary, nextLevelSquareBox, prevLevelSquareBox),
                                 true);
                 }
                 
