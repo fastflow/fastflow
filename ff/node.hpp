@@ -48,6 +48,10 @@
 #include <ff/barrier.hpp>
 #include <atomic>
 
+#ifdef USE_CPP_THREADS
+#include <thread>
+#endif
+
 #ifdef DFF_ENABLED
 
 #include <ff/distributed/ff_network.hpp>
@@ -62,7 +66,7 @@
 namespace ff {
 
 // distributed rts related type, but always defined
-struct GroupInterface; 
+struct GroupInterface;
 
 
 static void* FF_EOS           = (void*)(ULLONG_MAX);     /// automatically propagated
@@ -78,8 +82,8 @@ static void* FF_TAG_MIN       = (void*)(ULLONG_MAX-10);  /// just a lower bound 
 // EOSW is like EOS but it is not propagated outside a farm pattern. If an emitter receives EOSW in input,
 // then it will be discarded.
 //
-    
-/* optimization levels used in the optimize_static call (see optimize.hpp) */    
+
+/* optimization levels used in the optimize_static call (see optimize.hpp) */
 struct OptLevel {
     ssize_t  max_nb_threads{MAX_NUM_THREADS};
     ssize_t  max_mapped_threads{MAX_NUM_THREADS};
@@ -117,9 +121,24 @@ struct OptLevel2: OptLevel {
 // such for example stand-alone nodes or manager node or ...etc...    
 static std::atomic_ulong   internal_threadCounter{0};
 static std::atomic_ulong   internal_threadCounter_noBarrier{MAX_NUM_THREADS};
-    
+
 // TODO: Should be rewritten in terms of mapping_utils.hpp 
 #if defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
+
+static inline int get_cpuset(int cpuId, cpu_set_t* cpuset) {
+    // This is linux-specific code
+    CPU_ZERO(cpuset);
+
+    int id;
+    if (cpuId<0) {
+        id = threadMapper::instance()->getCoreId();
+        CPU_SET (id, cpuset);
+    } else  {
+        id = cpuId;
+        CPU_SET (cpuId, cpuset);
+    }
+    return id;
+}
 
     /*
      *
@@ -135,23 +154,13 @@ static std::atomic_ulong   internal_threadCounter_noBarrier{MAX_NUM_THREADS};
      */
 static inline int init_thread_affinity(pthread_attr_t*attr, int cpuId) {
     // This is linux-specific code
-    cpu_set_t cpuset;    
-    CPU_ZERO(&cpuset);
-
-    int id;
-    if (cpuId<0) {
-        id = threadMapper::instance()->getCoreId();
-        CPU_SET (id, &cpuset);
-    } else  {
-        id = cpuId;
-        CPU_SET (cpuId, &cpuset);
-    }
-
+    cpu_set_t cpuset;
+    int id = get_cpuset(cpuId, &cpuset);
     if (pthread_attr_setaffinity_np (attr, sizeof(cpuset), &cpuset)<0) {
         perror("pthread_attr_setaffinity_np");
         return -2;
     }
-    return id;    
+    return id;
 }
 #elif !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
 
@@ -213,10 +222,10 @@ protected:
         spawned(false), freezing(0), frozen(false),isdone(false),
         init_error(false), attr(NULL) {
         (void)FF_TAG_MIN; // to avoid warnings
-        
+
         /* Attr is NULL, default mutex attributes are used. Upon successful
          * initialization, the state of the mutex becomes initialized and
-         * unlocked. 
+         * unlocked.
          * */
         if (pthread_mutex_init(&mutex,NULL)!=0) {
             error("FATAL ERROR: ff_thread: pthread_mutex_init fails!\n");
@@ -232,8 +241,18 @@ protected:
         }
     }
 
-    virtual ~ff_thread() {}
-    
+    virtual ~ff_thread() {
+#ifdef USE_CPP_THREADS
+        if(th_handle.joinable()) {
+            try {
+                th_handle.detach();
+            } catch (const std::system_error& e) {
+                error("std::thread.detach: thread detach failed.");
+            }
+        }
+#endif
+    }
+
     void thread_routine() {
         threadid = ff_getThreadID();
 #if defined(FF_INITIAL_BARRIER)
@@ -256,28 +275,28 @@ protected:
                 ret = svc(NULL);
             }
             svc_end();
-            
+
             if (disable_cancelability()) {
                 error("ff_thread, thread_routine, could not change thread cancelability");
                 return;
             }
 
             // acquire lock. While freezing is true,
-            // freeze and wait. 
+            // freeze and wait.
             pthread_mutex_lock(&mutex);
             if (ret != FF_EOS_NOFREEZE && !stp) {
                 if ((freezing == 0) && (ret == FF_EOS)) stp = true;
                 while(freezing==1) { // NOTE: freezing can change to 2
-                    frozen=true; 
+                    frozen=true;
                     pthread_cond_signal(&cond_frozen);
                     pthread_cond_wait(&cond,&mutex);
                 }
             }
-            
+
             //thawed=true;
             //pthread_cond_signal(&cond);
-            //frozen=false; 
-            if (freezing != 0) freezing = 1; // freeze again next time 
+            //frozen=false;
+            if (freezing != 0) freezing = 1; // freeze again next time
             pthread_mutex_unlock(&mutex);
 
             if (enable_cancelability()) {
@@ -285,7 +304,7 @@ protected:
                 return;
             }
         } while(!stp);
-        
+
         if (freezing) {
             pthread_mutex_lock(&mutex);
             frozen=true;
@@ -316,9 +335,9 @@ protected:
     virtual void callbackIn(void  * =NULL) { }
     virtual void callbackOut(void * =NULL) { }
 #endif
-    
+
 public:
- 
+
     virtual void* svc(void * task) = 0;
     virtual int   svc_init() { return 0; };
     virtual void  svc_end()  {}
@@ -328,12 +347,15 @@ public:
 
     virtual void no_mapping() { default_mapping=false; }
     bool get_mapping() const { return default_mapping; }
-    
+
     virtual int run(bool=false) { return spawn(); }
-    
+
     virtual int spawn(int cpuId=-1) {
         if (spawned) return -1;
 
+        int CPUId = -1;
+
+#ifndef USE_CPP_THREADS
         if ((attr = (pthread_attr_t*)malloc(sizeof(pthread_attr_t))) == NULL) {
             error("spawn: pthread can not be created, malloc failed\n");
             return -1;
@@ -343,27 +365,46 @@ public:
                 return -1;
         }
 
-        int CPUId = -1;
         if (default_mapping)
             init_thread_affinity(attr, cpuId);
+#endif
+
         if (CPUId==-2) return -2;
 
         if (barrier)
             tid= internal_threadCounter.fetch_add(1);
         else
             tid= internal_threadCounter_noBarrier.fetch_add(1);
+
+#ifndef USE_CPP_THREADS
         int r=0;
         if ((r=pthread_create(&th_handle, attr,
                               proxy_thread_routine, this)) != 0) {
-            errno=r;
+            errno = r;
             perror("pthread_create: pthread creation failed.");
-            barrier?--internal_threadCounter:--internal_threadCounter_noBarrier;
+            barrier ? --internal_threadCounter : --internal_threadCounter_noBarrier;
             return -2;
         }
+#else
+        try {
+            th_handle = std::thread(proxy_thread_routine, this);
+        } catch (const std::system_error& e) {
+            error("std::thread: thread creation failed.");
+            barrier ? --internal_threadCounter : --internal_threadCounter_noBarrier;
+            return -2;
+        }
+#if defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
+        if(default_mapping) {
+            cpu_set_t cpuset;
+            get_cpuset(cpuId, &cpuset);
+            pthread_setaffinity_np (th_handle.native_handle(), sizeof(cpuset), &cpuset);
+        }
+#endif
+#endif
         spawned = true;
         return CPUId;
     }
-     
+
     virtual int wait() {
         int r=0;
         stp=true;
@@ -372,14 +413,22 @@ public:
             thaw();
         }
         if (spawned) {
+#ifndef USE_CPP_THREADS
             pthread_join(th_handle, NULL);
+#else
+            try {
+                th_handle.join();
+            } catch (const std::system_error& e) {
+                error("std::thread.join: thread join failed.");
+            }
+#endif
             barrier ? --internal_threadCounter: --internal_threadCounter_noBarrier;
         }
         if (attr) {
             if (pthread_attr_destroy(attr)) {
                 error("ERROR: ff_thread.wait: pthread_attr_destroy fails!");
                 r=-1;
-            }        
+            }
             free(attr);
             attr = NULL;
         }
@@ -396,24 +445,24 @@ public:
 
     virtual void stop() { stp = true; };
 
-    virtual void freeze() {  
+    virtual void freeze() {
         stp=false;
         freezing = 1;
     }
-    
+
     virtual void thaw(bool _freeze=false, ssize_t=-1) {
         pthread_mutex_lock(&mutex);
-        // if this function is called even if the thread is not 
+        // if this function is called even if the thread is not
         // in frozen state, then freezing has to be set to 1 and not 2
         //if (_freeze) freezing= (frozen?2:1); // next time freeze again the thread
         // October 2014, changed the above policy.
-        // If thaw is called and the thread is not in the frozen stage, 
+        // If thaw is called and the thread is not in the frozen stage,
         // then the thread won't fall to sleep at the next freezing point
 
         if (_freeze) freezing = 2; // next time freeze again the thread
         else freezing=0;
         //assert(thawed==false);
-        frozen=false; 
+        frozen=false;
         pthread_cond_signal(&cond);
         pthread_mutex_unlock(&mutex);
 
@@ -422,10 +471,8 @@ public:
         //thawed=false;
         //pthread_mutex_unlock(&mutex);
     }
-    virtual bool isfrozen() const { return freezing>0;} 
+    virtual bool isfrozen() const { return freezing>0;}
     virtual bool done()     const { return isdone || (frozen && !stp);}
-
-    pthread_t get_handle() const { return th_handle;}
 
     inline size_t getTid() const { return tid; }
     inline size_t getOSThreadId() const { return threadid; }
@@ -438,22 +485,29 @@ private:
     BARRIER_T    *  barrier;            /// A \p Barrier object
     bool            stp;
     bool            spawned;
-    int             freezing;  
+    int             freezing;
     bool            frozen,isdone;
     bool            init_error;
+#ifndef USE_CPP_THREADS
     pthread_t       th_handle;
+#else
+    std::thread     th_handle;
+#endif
     pthread_attr_t *attr;
-    pthread_mutex_t mutex; 
+    pthread_mutex_t mutex;
     pthread_cond_t  cond;
     pthread_cond_t  cond_frozen;
     int             old_cancelstate;
 };
-    
+
 static void * proxy_thread_routine(void * arg) {
     ff_thread & obj = *(ff_thread *)arg;
     obj.thread_routine();
+#ifndef USE_CPP_THREADS
     pthread_exit(NULL);
+#else
     return NULL;
+#endif
 }
 
 // forward declaration    
@@ -518,13 +572,13 @@ private:
 #endif
 
 private:
-    FFBUFFER        * in;           ///< Input buffer, built upon SWSR lock-free (wait-free) 
-                                    ///< (un)bounded FIFO queue                                 
-    FFBUFFER        * out;          ///< Output buffer, built upon SWSR lock-free (wait-free) 
-                                    ///< (un)bounded FIFO queue 
+    FFBUFFER        * in;           ///< Input buffer, built upon SWSR lock-free (wait-free)
+                                    ///< (un)bounded FIFO queue
+    FFBUFFER        * out;          ///< Output buffer, built upon SWSR lock-free (wait-free)
+                                    ///< (un)bounded FIFO queue
     ssize_t           myid;         ///< This is the node id, it is valid only for farm's workers
     ssize_t           CPUId;
-    ssize_t           neos=1;       ///< n. of EOS the node expects to receive before terminating 
+    ssize_t           neos=1;       ///< n. of EOS the node expects to receive before terminating
     bool              myoutbuffer;
     bool              myinbuffer;
     bool              skip1pop;
@@ -532,10 +586,10 @@ private:
     bool _skipallpop;
 #endif
 
-    bool              in_active;    // allows to disable/enable input tasks receiving   
+    bool              in_active;    // allows to disable/enable input tasks receiving
     bool              my_own_thread;
 
-    ff_thread       * thread;       /// A \p thWorker object, which extends the \p ff_thread class 
+    ff_thread       * thread;       /// A \p thWorker object, which extends the \p ff_thread class
     bool (*callback)(void *, int, unsigned long,unsigned long, void *);
     void            * callback_arg;
     BARRIER_T       * barrier;      /// A \p Barrier object
@@ -546,16 +600,16 @@ private:
     double wttime;
 
 protected:
-    
+
     virtual void set_id(ssize_t id) {
         myid = id;
     }
     // sets how many EOSs the node has to receive before terminating,
-    // it also sets when eosnotify has to be called, by default at each input EOS    
+    // it also sets when eosnotify has to be called, by default at each input EOS
     virtual void set_neos(ssize_t n) { neos = n; }
-    
+
     virtual inline bool push(void * ptr) { return out->push(ptr); }
-    virtual inline bool pop(void ** ptr) { 
+    virtual inline bool pop(void ** ptr) {
         if (!in_active) return false; // it does not want to receive data
         return in->pop(ptr);
     }
@@ -579,16 +633,16 @@ protected:
         for(unsigned long i=0;i<retry;++i) {
             if (push(ptr)) return true;
             losetime_out(ticks);
-        }     
+        }
         return false;
     }
-    
+
     virtual inline bool Pop(void **ptr, unsigned long retry=((unsigned long)-1), unsigned long ticks=(TICKS2WAIT)) {
         if (blocking_in) {
             if (!in_active) { *ptr=NULL; return false; }
         retry:
             bool r = in->pop(ptr);
-            if (!r) { // EMPTY                
+            if (!r) { // EMPTY
                 struct timespec tv;
                 timedwait_timeout(tv);
                 pthread_mutex_lock(cons_m);
@@ -602,7 +656,7 @@ protected:
             if (!in_active) { *ptr=NULL; return false; }
             if (pop(ptr)) return true;
             losetime_in(ticks);
-        } 
+        }
         return true;
     }
 
@@ -618,7 +672,7 @@ protected:
             assert(cons_m); assert(cons_c);
             if (pthread_mutex_init(cons_m, NULL) != 0) return false;
             if (pthread_cond_init(cons_c, NULL) != 0)  return false;
-        } 
+        }
         m = cons_m,  c = cons_c;
         return true;
     }
@@ -633,7 +687,7 @@ protected:
             assert(prod_m); assert(prod_c);
             if (pthread_mutex_init(prod_m, NULL) != 0) return false;
             if (pthread_cond_init(prod_c, NULL) != 0)  return false;
-        } 
+        }
         m = prod_m, c = prod_c;
         return true;
     }
@@ -649,18 +703,18 @@ protected:
     }
 
     // this function is used mainly for combined node where the cond variable must
-    // be shared with the first internal node 
+    // be shared with the first internal node
     virtual inline void  set_cons_c(pthread_cond_t *c) {
         assert(cons_c == nullptr);
         assert(cons_m == nullptr);
         cons_c = c;
-    }        
+    }
     virtual inline pthread_cond_t    &get_cons_c()       { return *cons_c;}
 
     /**
      * \brief Set the ff_node to start with no input task
      *
-     * Setting it to true let the \p ff_node execute the \p svc method spontaneusly 
+     * Setting it to true let the \p ff_node execute the \p svc method spontaneusly
      * before receiving a task on the input channel. \p skipfirstpop makes it possible
      * to define a "producer" node that starts the network.
      *
@@ -673,15 +727,15 @@ protected:
     virtual inline void skipallpop(bool sk) {_skipallpop = sk;}
 #endif
 
-    /** 
+    /**
      * \brief Gets the status of spontaneous start
-     * 
+     *
      * If \p true the \p ff_node execute the \p svc method spontaneusly
      * before receiving a task on the input channel. \p skipfirstpop makes it possible
      * to define a "producer" node that produce the stream.
-     * 
+     *
      * \return \p true if skip-the-first-element mode is set, \p false otherwise
-     * 
+     *
      * Example: \ref l1_ff_nodes_graph.cpp
      */
     bool skipfirstpop() const { return skip1pop; }
@@ -690,9 +744,9 @@ protected:
     bool skipallpop() {return _skipallpop;}
 #endif
 
-    
-    /** 
-     * \brief Creates the input channel 
+
+    /**
+     * \brief Creates the input channel
      *
      *  \param nentries: the number of elements of the buffer
      *  \param fixedsize flag to decide whether the buffer is bound or unbound.
@@ -717,8 +771,8 @@ protected:
         set_neos(neos);
         return 0;
     }
-    
-    /** 
+
+    /**
      *  \brief Creates the output channel
      *
      *  \param nentries: the number of elements of the buffer
@@ -730,17 +784,17 @@ protected:
     virtual int create_output_buffer(int nentries, bool fixedsize=FF_FIXED_SIZE) {
         if (out) return -1;
         if (nentries<=0) return -1;
-        out = new FFBUFFER(nentries,fixedsize); 
+        out = new FFBUFFER(nentries,fixedsize);
         if (!out) return -1;
         myoutbuffer=true;
         if (!out->init()) return -1;
         return 0;
     }
 
-    /** 
+    /**
      *  \brief Assign the output channelname to a channel
      *
-     * Attach the output of a \p ff_node to an existing channel, typically the input 
+     * Attach the output of a \p ff_node to an existing channel, typically the input
      * channel of another \p ff_node
      *
      *  \param o reference to a channel of type \p FFBUFFER
@@ -748,16 +802,16 @@ protected:
      *  \return 0 if successful, -1 otherwise
      */
     virtual int set_output_buffer(FFBUFFER * const o) {
-        if (myoutbuffer) return -1;        
+        if (myoutbuffer) return -1;
         out = o;
         return 0;
     }
 
 
-    /** 
+    /**
      *  \brief Assign the input channelname to a channel
      *
-     * Attach the input of a \p ff_node to an existing channel, typically the output 
+     * Attach the input of a \p ff_node to an existing channel, typically the output
      * channel of another \p ff_node
      *
      *  \param i a buffer object of type \p FFBUFFER
@@ -781,20 +835,20 @@ protected:
     }
     virtual inline int set_output_feedback(ff_node *) { return -1;}
     virtual inline void set_input_channelid(ssize_t, bool=true) {}
-        
+
     virtual int prepare() { prepared=true; return 0; }
     virtual int dryrun() { if (!prepared) return prepare(); return 0; }
 
-    virtual void set_scheduling_ondemand(const int /*inbufferentries*/=1) {} 
-    virtual int ondemand_buffer() const { return 0;} 
+    virtual void set_scheduling_ondemand(const int /*inbufferentries*/=1) {}
+    virtual int ondemand_buffer() const { return 0;}
 
-    
+
     /**
      * \brief Run the ff_node
      *
      * \return 0 success, -1 otherwise
      */
-    virtual int run(bool=false) { 
+    virtual int run(bool=false) {
         if (thread) delete reinterpret_cast<thWorker*>(thread);
         thread = new thWorker(this,neos);
         if (!thread) return -1;
@@ -803,8 +857,8 @@ protected:
 
     #ifdef DFF_ENABLED
     virtual int run(ff_node*, bool=false) {return 0;}
-    #endif     
-    
+    #endif
+
     /**
      * \brief Suspend (freeze) the ff_node and run it
      *
@@ -825,11 +879,11 @@ protected:
      *
      * \return 0 success, -1 otherwise
      */
-    virtual int  wait() { 
+    virtual int  wait() {
         if (!thread) return 0;
-        return thread->wait(); 
+        return thread->wait();
     }
-    
+
     /**
      * \brief Wait the freezing state
      *
@@ -837,43 +891,43 @@ protected:
      *
      * \return 0 success, -1 otherwise
      */
-    virtual int  wait_freezing() { 
+    virtual int  wait_freezing() {
         if (!thread) return 0;
-        return thread->wait_freezing(); 
+        return thread->wait_freezing();
     }
-    
+
     virtual void stop() {
-        if (!thread) return; 
-        thread->stop(); 
+        if (!thread) return;
+        thread->stop();
     }
-    
+
     /**
      * \brief Freeze (suspend) a ff_node
      */
-    virtual void freeze() { 
-        if (!thread) return; 
-        thread->freeze(); 
+    virtual void freeze() {
+        if (!thread) return;
+        thread->freeze();
     }
-    
+
     /**
      * \brief Thaw (resume) a ff_node
      */
-    virtual void thaw(bool _freeze=false, ssize_t=-1) { 
-        if (!thread) return; 
+    virtual void thaw(bool _freeze=false, ssize_t=-1) {
+        if (!thread) return;
         thread->thaw(_freeze);
     }
-    
+
     /**
      * \brief Checks if a ff_node is frozen
      * \return \p true is it frozen
      */
-    virtual bool isfrozen() const { 
+    virtual bool isfrozen() const {
         if (!thread) return false;
         return thread->isfrozen();
     }
 
     /**
-     * \brief checks if the node is running 
+     * \brief checks if the node is running
      *
      */
     virtual bool done() const  {
@@ -884,7 +938,7 @@ protected:
 
     virtual bool isoutbuffermine() const { return myoutbuffer;}
 
-    virtual int  cardinality(BARRIER_T * const b) { 
+    virtual int  cardinality(BARRIER_T * const b) {
         barrier = b;
         return 1;
     }
@@ -893,7 +947,7 @@ protected:
     virtual inline void setlb(ff_loadbalancer*,bool=false) {}
     virtual inline void setgt(ff_gatherer*,bool=false) {}
 
-    
+
     /**
      * \brief Misure \ref ff::ff_node execution time
      *
@@ -924,13 +978,13 @@ public:
     void *const EOS          = FF_EOS;
     void *const EOSW         = FF_EOSW;
 
-    
+
     ff_node(const ff_node&):ff_node() {}
- 
-    /** 
+
+    /**
      *  \brief Destructor, polymorphic deletion through base pointer is allowed.
      *
-     *  
+     *
      */
     virtual  ~ff_node() {
         if (in && myinbuffer) delete in;
@@ -965,11 +1019,11 @@ public:
      * \return output data stream item pointer
      */
     virtual void* svc(void * task) = 0;
-        
+
     /**
      * \brief Service initialisation
      *
-     * Called after run-time initialisation (e.g. thread spawning) but before 
+     * Called after run-time initialisation (e.g. thread spawning) but before
      * to start to get items from input stream (can be useful for initialisation
      * of parallel activities, e.g. manual thread pinning that cannot be done in
      * the costructor because threads stil do not exist).
@@ -977,7 +1031,7 @@ public:
      * \return 0
      */
     virtual int svc_init() { return 0; }
-    
+
     /**
      *
      * \brief Service finalisation
@@ -986,7 +1040,7 @@ public:
      * runtime support (can be useful for housekeeping)
      */
     virtual void  svc_end() {}
-    
+
 
     /**
      * \brief Node initialisation
@@ -1009,21 +1063,21 @@ public:
     /**
      * \brief EOS callback
      *
-     * This method is called when an EOS has just been received from one input channel. 
-     * Inside this method it is possible to call ff_send_out to produce data elements in output 
+     * This method is called when an EOS has just been received from one input channel.
+     * Inside this method it is possible to call ff_send_out to produce data elements in output
      * (this is not possible in the svc_end method).
-     * The parameter \param id is the ID of the channel that received the EOS. 
+     * The parameter \param id is the ID of the channel that received the EOS.
      */
     virtual void eosnotify(ssize_t /*id*/=-1) {}
 
     /**
      * \brief Returns the number of EOS the node has to receive before terminating.
-     */    
+     */
     virtual ssize_t get_neos() const { return neos;}
 
     /**
      *  \brief Returns the identifier of the node (not unique)
-     */    
+     */
     virtual ssize_t get_my_id() const { return myid; };
 
     /**
@@ -1037,7 +1091,7 @@ public:
     virtual bool change_node(ff_node* old, ff_node* n, bool cleanup=false, bool remove_from_cleanuplist=false) { return false;}
 
     /**
-     * Change the size of the outputchannel. 
+     * Change the size of the outputchannel.
      * WARNING: this method should not be used if the queue is being used!!!!
      *
      */
@@ -1047,7 +1101,7 @@ public:
         return true;
     }
     /**
-     * Change the size of the inputchannel. 
+     * Change the size of the inputchannel.
      * WARNING: this method should not be used if the queue is being used!!!!
      *
      */
@@ -1057,7 +1111,7 @@ public:
         return true;
     }
 
-    
+
 #if defined(FF_TASK_CALLBACK)
     virtual void callbackIn(void * =NULL)  { }
     virtual void callbackOut(void * =NULL) { }
@@ -1068,13 +1122,13 @@ public:
     virtual inline void get_in_nodes(svector<ff_node*>&w) { w.push_back(this); }
     virtual inline void get_in_nodes_feedback(svector<ff_node*>&) {}
 
-    
+
     /**
      * \brief Force ff_node-to-core pinning
      *
      * \param cpuID is the ID of the CPU to which the thread will be pinned.
      */
-    virtual void  setAffinity(int cpuID) { 
+    virtual void  setAffinity(int cpuID) {
         if (cpuID<0 || !threadMapper::instance()->checkCPUId(cpuID) ) {
             error("setAffinity, invalid cpuID\n");
         }
@@ -1085,8 +1139,8 @@ public:
         barrier = b;
     }
     virtual BARRIER_T* get_barrier() const { return barrier; }
-    
-    /** 
+
+    /**
      * \internal
      * \brief Gets the CPU id (if set) of this node is pinned
      *
@@ -1106,11 +1160,11 @@ public:
      * \param ptr is a pointer to the task
      *
      */
-    virtual inline bool  put(void * ptr) { 
+    virtual inline bool  put(void * ptr) {
         //return in->push(ptr);
         return (in->*in->pushPMF)(ptr);
     }
-    
+
     /**
      * \brief Noblocking pop from the output channel
      *
@@ -1120,7 +1174,7 @@ public:
      *
      */
     virtual inline bool  get(void **ptr) { return out->pop(ptr);}
-   
+
     virtual inline void losetime_out(unsigned long ticks=ff_node::TICKS2WAIT) {
         FFTRACE(lostpushticks+=ticks; ++pushwait);
 #if defined(SPIN_USE_PAUSE)
@@ -1165,7 +1219,7 @@ public:
 
     virtual const struct timeval getwstartime() const { return wtstart;}
 
-    virtual const struct timeval getwstoptime() const { return wtstop;}    
+    virtual const struct timeval getwstoptime() const { return wtstop;}
 
 #if defined(TRACE_FASTFLOW)
     virtual void ffStats(std::ostream & out) {
@@ -1193,11 +1247,11 @@ public:
      * \param task a pointer to the task
      * \param retry number of tries to put (nonbloking partial) the task to output channel
      * \param ticks delay between successive retries
-     * 
+     *
      */
     virtual bool ff_send_out(void * task, int id=-1,
                              unsigned long retry=((unsigned long)-1),
-                             unsigned long ticks=(TICKS2WAIT)) { 
+                             unsigned long ticks=(TICKS2WAIT)) {
         if (callback) return  callback(task,id,retry,ticks,callback_arg);
         bool r =Push(task,retry,ticks);
 #if defined(FF_TASK_CALLBACK)
@@ -1212,7 +1266,7 @@ public:
         if (out) out->reset();
     }
 
-    /** 
+    /**
      *  checking for multi-input/output, all-to-all, farm, pipe
      *
      */
@@ -1225,7 +1279,7 @@ public:
     virtual inline bool isPipe() const        { return false; }
 
     virtual inline void set_multiinput()  {}
-    
+
 #if defined(FF_REPARA)
     struct rpr_measure_t {
         size_t schedule_id;
@@ -1235,21 +1289,21 @@ public:
         size_t vmSize, vmPeak;
         double energy;
     };
-    
+
     using RPR_devices_measure = std::vector<std::pair<int, std::vector<rpr_measure_t> > >;
     using RPR_measures_vector = std::vector<std::vector<RPR_devices_measure> >;
 
-    /** 
+    /**
      *  Returns input data size
      */
     virtual size_t rpr_get_sizeIn()  const { return rpr_sizeIn; }
 
-    /** 
+    /**
      *  Returns output data size
      */
     virtual size_t rpr_get_sizeOut() const { return rpr_sizeOut; }
 
-    /** 
+    /**
      *  gets/sets energy flag
      */
     virtual bool rpr_get_measure_energy() const { return measureEnergy; }
@@ -1262,19 +1316,19 @@ public:
      *    - each stage of a pipeline or a worker of a farm can be a pipeline or a farm as well
      *      therefore the second level vector is grater than 1 only if the stage is a pipeline or a farm
      *    - each entry of a stage is a vector containing info for each device associated to the stage.
-     *      The device is identified by the first entry of the std::pair, the second element of the pair 
+     *      The device is identified by the first entry of the std::pair, the second element of the pair
      *      is a vector containing the measurments for the period considered.
      */
     virtual RPR_measures_vector rpr_get_measures() { return RPR_measures_vector(); }
 
-    
-protected: 
+
+protected:
     bool   measureEnergy = false;
     size_t rpr_sizeIn      = {0};
     size_t rpr_sizeOut     = {0};
 #endif  /* FF_REPARA */
 
-    /** 
+    /**
      *  used for composition (see ff_comb)
      */
     static inline bool ff_send_out_comp(void * task, int, unsigned long /*retry*/,unsigned long /*ticks*/, void *obj) {
@@ -1294,16 +1348,16 @@ protected:
     /** returns the total number of input channels */
     virtual inline size_t  get_num_inchannels() const       { return 0; } //(in?1:0); }
     virtual inline size_t  get_num_feedbackchannels() const { return 0; } //(out?1:0);}
-    
+
     virtual void propagateEOS(void* task=FF_EOS) { (void)task; }
-    
+
 #ifdef DFF_ENABLED
     std::function<bool(void*, dataBuffer&)> serializeF;
     std::function<void(void*)> freetaskF;
     std::function<void*(dataBuffer&, bool&)> deserializeF;
     std::function<void*(char*, size_t)> alloctaskF;
 
-    
+
     virtual bool isSerializable(){ return (bool)serializeF; }
     virtual bool isDeserializable(){ return (bool)deserializeF; }
     virtual std::pair<decltype(serializeF), decltype(freetaskF)> getSerializationFunction(){return std::make_pair(serializeF,freetaskF);}
@@ -1312,25 +1366,25 @@ protected:
 #endif
     // always defined, the body will implement a no-op if the distributed runtime is disabled
     GroupInterface createGroup(std::string);
-    
+
 protected:
 
     ff_node():in(0),out(0),myid(-1),CPUId(-1),
               myoutbuffer(false),myinbuffer(false),
-              skip1pop(false), in_active(true), 
+              skip1pop(false), in_active(true),
               my_own_thread(true),
               thread(NULL),callback(NULL),barrier(NULL) {
         time_setzero(tstart);time_setzero(tstop);
         time_setzero(wtstart);time_setzero(wtstop);
         wttime=0;
         FFTRACE(taskcnt=0;lostpushticks=0;pushwait=0;lostpopticks=0;popwait=0;ticksmin=(ticks)-1;ticksmax=0;tickstot=0);
-        
+
         p_cons_c = NULL;
 
         blocking_in = blocking_out = FF_RUNTIME_MODE;
     };
 
-    
+
     // move constructor
     ff_node(ff_node &&n) {
         tstart = n.tstart;
@@ -1348,7 +1402,7 @@ protected:
         barrier = n.barrier;
 
         // TODO trace <------
-        
+
         in = n.in;
         myinbuffer = n.myinbuffer;
         out = n.out;
@@ -1388,26 +1442,26 @@ protected:
     virtual void no_mapping() {
         default_mapping=false;
     }
-    
-private:  
+
+private:
     /* ------------------------------------------------------------------------------------- */
     class thWorker: public ff_thread {
     public:
         thWorker(ff_node * const filter, const ssize_t input_neos=1):
             ff_thread(filter->barrier, filter->default_mapping),filter(filter),input_neos(input_neos) {}
-        
+
         inline bool push(void * task) {
             /* NOTE: filter->push and not buffer->push because of the filter can be a dnode
-             *  
+             *
              * It is not correct to call filter->Push because the filter could be a composition
              * so the ff_send_out allows to call the callback
              */
             //return filter->Push(task);
             return filter->ff_send_out(task);
         }
-        
+
         inline bool pop(void ** task) {
-            /* 
+            /*
              * NOTE: filter->pop and not buffer->pop because of the filter can be a dnode
              */
             return filter->Pop(task);
@@ -1422,12 +1476,12 @@ private:
             void * ret  = FF_EOS;
             bool inpresent  = (filter->get_in_buffer() != NULL);
             bool outpresent = (filter->get_out_buffer() != NULL);
-            bool skipfirstpop = filter->skipfirstpop(); 
-            bool exit=false;            
+            bool skipfirstpop = filter->skipfirstpop();
+            bool exit=false;
             bool filter_outpresent = false;
             size_t neos=input_neos;
 
-            
+
             // if the node is a combine where the last stage is a multi-output
             if ( filter && ( !outpresent && filter->isMultiOutput() ) ) {
                 filter_outpresent=true;
@@ -1439,13 +1493,13 @@ private:
 #else
                 if (inpresent) {
 #endif
-                    if (!skipfirstpop) pop(&task); 
+                    if (!skipfirstpop) pop(&task);
                     else skipfirstpop=false;
                     if ((task == FF_EOS) || (task == FF_EOSW) ||
                         (task == FF_EOS_NOFREEZE)) {
                         ret = task;
-                        
-                        if (--neos > 0) continue;  
+
+                        if (--neos > 0) continue;
                         filter->eosnotify();
 
                         // only EOS and EOSW are propagated
@@ -1462,7 +1516,7 @@ private:
 
 #if defined(FF_TASK_CALLBACK)
                 if (filter) callbackIn();
-#endif                    
+#endif
 
                 ret = filter->svc(task);
 
@@ -1471,9 +1525,9 @@ private:
                 filter->tickstot +=diff;
                 filter->ticksmin=(std::min)(filter->ticksmin,diff); // (std::min) for win portability)
                 filter->ticksmax=(std::max)(filter->ticksmax,diff);
-#endif           
+#endif
 
-                if (ret == FF_GO_OUT) break;     
+                if (ret == FF_GO_OUT) break;
                 if (!ret || (ret >= FF_EOSW)) { // EOS or EOS_NOFREEZE or EOSW
                     // NOTE: The EOS is gonna be produced in the output queue
                     // and the thread exits even if there might be some tasks
@@ -1481,40 +1535,40 @@ private:
                     if (!ret) ret = FF_EOS;
                     exit=true;
                 }
-                if ( outpresent && ((ret != FF_GO_ON) && (ret != FF_EOS_NOFREEZE)) ) { 
+                if ( outpresent && ((ret != FF_GO_ON) && (ret != FF_EOS_NOFREEZE)) ) {
                     push(ret);
 #if defined(FF_TASK_CALLBACK)
                     if (filter) callbackOut();
 #endif
                 }
             } while(!exit);
-            
+
             gettimeofday(&filter->wtstop,NULL);
             filter->wttime+=diffmsec(filter->wtstop,filter->wtstart);
-            
+
             return ret;
         }
-        
+
         int svc_init() {
 #if !defined(HAVE_PTHREAD_SETAFFINITY_NP) && !defined(NO_DEFAULT_MAPPING)
             if (filter->default_mapping) {
                 int cpuId = filter->getCPUId();
                 if (ff_mapThreadToCpu((cpuId<0) ? (cpuId=threadMapper::instance()->getCoreId(tid)) : cpuId)!=0)
-                    error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());            
+                    error("Cannot map thread %d to CPU %d, mask is %u,  size is %u,  going on...\n",tid, (cpuId<0) ? threadMapper::instance()->getCoreId(tid) : cpuId, threadMapper::instance()->getMask(), threadMapper::instance()->getCListSize());
                 filter->setCPUId(cpuId);
             }
 #endif
             gettimeofday(&filter->tstart,NULL);
             return filter->svc_init();
         }
-        
+
         void svc_end() {
             filter->svc_end();
-            gettimeofday(&filter->tstop,NULL);            
+            gettimeofday(&filter->tstop,NULL);
         }
-        
-        int run(bool=false) { 
-            int CPUId = ff_thread::spawn(filter->getCPUId());             
+
+        int run(bool=false) {
+            int CPUId = ff_thread::spawn(filter->getCPUId());
             filter->setCPUId(CPUId);
             return (CPUId==-2)?-1:0;
         }
@@ -1525,24 +1579,24 @@ private:
         inline bool isfrozen() const { return ff_thread::isfrozen();}
         inline bool done()     const { return ff_thread::done();}
         inline int  get_my_id() const { return filter->get_my_id(); };
-        
+
     protected:
 #if defined(FF_TASK_CALLBACK)
         void callbackIn(void  *t=NULL) { filter->callbackIn(t);  }
         void callbackOut(void *t=NULL) { filter->callbackOut(t); }
-#endif        
-    protected:            
+#endif
+    protected:
         ff_node * const filter;
         const ssize_t input_neos;
     };
     /* ------------------------------------------------------------------------------------- */
 
     inline void   setCPUId(int id) { CPUId = id;}
-    inline void   setThread(ff_thread *const th) { my_own_thread = false; thread = th; }        
+    inline void   setThread(ff_thread *const th) { my_own_thread = false; thread = th; }
     inline size_t getTid() const {
         if (!thread) return (size_t)-1;
         return thread->getTid();
-    } 
+    }
 
 protected:
 
@@ -1556,7 +1610,7 @@ protected:
     ticks         ticksmax;
     ticks         tickstot;
 #endif
-    
+
     // for the input queue
     pthread_mutex_t    *cons_m = nullptr;
     pthread_cond_t     *cons_c = nullptr;
@@ -1569,7 +1623,7 @@ protected:
     // for synchronizing with the next multi-input stage
     pthread_cond_t     *p_cons_c = nullptr;
 
-    bool               FF_MEM_ALIGN(blocking_in,32); 
+    bool               FF_MEM_ALIGN(blocking_in,32);
     bool               FF_MEM_ALIGN(blocking_out,32);
 
     bool                  prepared = false;
@@ -1599,7 +1653,7 @@ struct ff_node_t: ff_node {
 
     using ff_node::registerCallback;
     using ff_node::ff_send_out;
-    
+
     ff_node_t():
         GO_ON((OUT_t*)FF_GO_ON),
         EOS((OUT_t*)FF_EOS),
@@ -1608,12 +1662,12 @@ struct ff_node_t: ff_node {
         EOS_NOFREEZE((OUT_t*) FF_EOS_NOFREEZE) {
 #ifdef DFF_ENABLED
 
-        /* WARNING: 
+        /* WARNING:
          *    the definition of functions alloctaskF, freetaskF, serializeF, deserializeF
          *    IS DUPLICATED for the ff_minode_t and ff_monode_t (see file multinode.hpp).
          *
          */
-     if constexpr (traits::has_alloctask_v<IN_t>) {        
+     if constexpr (traits::has_alloctask_v<IN_t>) {
          this->alloctaskF = [](char* ptr, size_t sz) -> void* {
                                 IN_t* p = nullptr;
                                 alloctaskWrapper<IN_t>(ptr, sz, p);
@@ -1627,7 +1681,7 @@ struct ff_node_t: ff_node {
                                return o;
                            };
      }
-        
+
      if constexpr (traits::has_freetask_v<OUT_t>) {
         this->freetaskF = [](void* o) {
                               freetaskWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o));
@@ -1641,7 +1695,7 @@ struct ff_node_t: ff_node {
                                }
                            };
      }
-        
+
     // check on Serialization capabilities on the OUTPUT type!
     if constexpr (traits::is_serializable_v<OUT_t>){
         this->serializeF = [](void* o, dataBuffer& b) -> bool {
@@ -1658,7 +1712,7 @@ struct ff_node_t: ff_node {
                                return true;
                            };
     }
-    
+
     // check on Serialization capabilities on the INPUT type!
     if constexpr (traits::is_deserializable_v<IN_t>) {
         this->deserializeF = [this](dataBuffer& b, bool& datacopied) -> void* {
@@ -1706,7 +1760,7 @@ private:
  *
  *  This class is defined in \ref node.hpp
  */
-template<typename TIN, typename TOUT=TIN, 
+template<typename TIN, typename TOUT=TIN,
          typename FUNC=std::function<TOUT*(TIN*,ff_node*const)> >
 struct ff_node_F: public ff_node_t<TIN,TOUT> {
    ff_node_F(FUNC f):F(f) {}
@@ -1730,7 +1784,7 @@ struct ff_buffernode: ff_node {
     ff_buffernode(int nentries, bool fixedsize=FF_FIXED_SIZE, int id=-1, int multi_producer_eos=-1) {
         set(nentries,fixedsize,id, multi_producer_eos);
     }
-    // NOTE: this constructor is supposed to be used only for implementing 
+    // NOTE: this constructor is supposed to be used only for implementing
     // internal FastFlow features!
     ff_buffernode(int id, FFBUFFER *in, FFBUFFER *out) {
         set_id(id);
@@ -1770,18 +1824,18 @@ struct ff_buffernode: ff_node {
     }
 
     void reset_blocking_out() { blocking_out = false; }
-    
+
     bool ff_send_out(void *ptr, int id=-1,
                      unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {
         return ff_node::ff_send_out(ptr,id,retry,ticks);
     }
-    bool gather_task(void **task, unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {    
+    bool gather_task(void **task, unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {
         bool r =ff_node::Pop(task,retry,ticks);
         return r;
     }
 
-    template<typename T> 
-    bool gather_task(T *&task, unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {    
+    template<typename T>
+    bool gather_task(T *&task, unsigned long retry=((unsigned long)-1), unsigned long ticks=(ff_node::TICKS2WAIT)) {
         return gather_task((void **)&task, retry, ticks);
     }
 
@@ -1809,9 +1863,9 @@ protected:
 };
 
 
-    
 
-    
+
+
 
 } // namespace ff
 

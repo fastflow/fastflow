@@ -56,7 +56,9 @@
 
 #include <cstdlib>
 #include <cstring>
-//#include <atomic>
+#ifdef USE_CPP_FENCE
+#include <atomic>
+#endif
 //#include <ff/atomic/abstraction_dcas.h>
 
 #include <ff/sysdep.h>
@@ -250,8 +252,11 @@ public:
              * memory model where stores can be executed out-or-order 
              * (e.g. Powerpc). This is a no-op on Intel x86/x86-64 CPUs.
              */
-            WMB(); 
-            //std::atomic_thread_fence(std::memory_order_release);
+#ifndef USE_CPP_FENCE
+            WMB();
+#else
+            std::atomic_thread_fence(std::memory_order_release);
+#endif
             buf[pwrite] = data;
             pwrite = pwrite + ((pwrite+1 >=  size) ? (1-size): 1); // circular buffer
             return true;

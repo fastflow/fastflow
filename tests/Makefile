@@ -62,7 +62,10 @@ endif
 #                       string, please use the 'mapping_string.sh' script
 #                       contained in the ff directory.
 #
-###############################à#############################################
+# -DFF_NONPORTABLE_IMPL Pthreads and assembly memory barriers are used
+#                       instead of C++11 threads and memory fences.
+#
+#############################################################################
 #CC                 ?= gcc
 #CXX                ?= g++ -std=c++17 #-DBLOCKING_MODE -DDEFAULT_BUFFER_CAPACITY=32768 -DFF_BOUNDED_BUFFER
 #CC                 ?= icc  -mmic
@@ -93,6 +96,15 @@ ifdef TRACE_FASTFLOW
 endif
 ifdef DEFAULT_BUFFER_CAPACITY
     CXXFLAGS        += -DDEFAULT_BUFFER_CAPACITY=${DEFAULT_BUFFER_CAPACITY}
+endif
+ifdef FF_NONPORTABLE_IMPL
+    CXXFLAGS        += -DFF_NONPORTABLE_IMPL
+endif
+ifdef USE_CPP_THREADS
+    CXXFLAGS        += -DUSE_CPP_THREADS
+endif
+ifdef USE_CPP_FENCE
+    CXXFLAGS        += -DUSE_CPP_FENCE
 endif
 CXXFLAGS            += -DNO_CMAKE_CONFIG -Wall
 INCS                 = -I.. 

@@ -220,6 +220,14 @@
 #endif
 
 
+// If the following is defined, then pthreads and assembly memory barriers are used
+// instead of C++11 threads and memory fences.
+#if !defined(FF_NONPORTABLE_IMPL)
+#define USE_CPP_THREADS
+#define USE_CPP_FENCE
+#endif
+
+
 // TODO:
 //#if defined(NO_CMAKE_CONFIG)
 
