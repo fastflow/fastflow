@@ -23,8 +23,15 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <chrono>
 #include <thread>
+#include <vector>
+#include <algorithm>
+#include <cstring>
+#include <cerrno>
+#include <cstdlib>
+#include <csignal>
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/wait.h>
@@ -55,10 +62,14 @@ enum Proto {TCP = 1 , MPI};
 
 Proto usedProtocol;
 bool seeAll = false;
+bool dryRun = false;
+unsigned timeoutSec = 0;
+constexpr auto TCP_LAUNCHER_POLL_INTERVAL = std::chrono::milliseconds(10);
 std::vector<std::string> viewGroups;
 char hostname[HOST_NAME_MAX];
 std::string configFile("");
-std::string executable;
+std::string executablePath;
+std::vector<std::string> executableArgs;
 
 
 static inline unsigned long getusec() {
@@ -69,6 +80,16 @@ static inline unsigned long getusec() {
 
 static inline bool toBePrinted(std::string gName){
     return (seeAll || (find(viewGroups.begin(), viewGroups.end(), gName) != viewGroups.end()));
+}
+
+static inline std::string shellQuote(const std::string& s) {
+    std::string out("'");
+    for (char c : s) {
+        if (c == '\'') out += "'\\''";
+        else out += c;
+    }
+    out += "'";
+    return out;
 }
 
 static inline std::vector<std::string> split (const std::string &s, char delim) {
@@ -111,8 +132,10 @@ static inline void convertToIP(const char *host, char *ip) {
 
 struct G {
     std::string name, host, preCmd;
-    int fd = 0;
-    FILE* file = nullptr;
+    int fd = -1;
+    pid_t pid = -1;
+    int exitCode = -1;
+    bool signaled = false;
 
     template <class Archive>
     void load( Archive & ar ){
@@ -134,25 +157,83 @@ struct G {
         }
     }
 
-    void run(){
-        char b[1024]; // ssh -t // trovare MAX ARGV
-        
-        sprintf(b, " %s %s %s %s %s --DFF_Config=%s --DFF_GName=%s %s 2>&1 %s", (isRemote() ? "ssh -T " : ""), (isRemote() ? host.c_str() : ""), (isRemote() ? "'" : ""), this->preCmd.c_str(),  executable.c_str(), configFile.c_str(), this->name.c_str(), toBePrinted(this->name) ? "" : "> /dev/null", (isRemote() ? "'" : ""));
-       std::cout << "Executing the following command: " << b << std::endl;
-        file = popen(b, "r");
-        fd = fileno(file);
-        
-        if (fd == -1) {
-            printf("Failed to run command\n" );
-            exit(1);
-        }
+    // Build the exact command executed for this group. The executable and runtime
+    // arguments are quoted individually; preCmd is kept as shell syntax so it
+    // can provide environment setup before launching the group.
+    std::string buildCommand() const {
+        std::ostringstream cmd;
+        if (!preCmd.empty())
+            cmd << preCmd << " ";
 
-        int flags = fcntl(fd, F_GETFL, 0); 
-        flags |= O_NONBLOCK; 
-        fcntl(fd, F_SETFL, flags);
+        cmd << shellQuote(executablePath);
+        for (const auto& arg : executableArgs)
+            cmd << " " << shellQuote(arg);
+        cmd << " " << shellQuote("--DFF_Config=" + configFile);
+        cmd << " " << shellQuote("--DFF_GName=" + name);
+
+        return cmd.str();
     }
 
-    bool isRemote(){
+    std::string printableCommand() const {
+        std::string cmd = buildCommand();
+        if (isRemote())
+            return "ssh -T " + shellQuote(host) + " " + shellQuote(cmd);
+        return cmd;
+    }
+
+    // Start the group process and capture both stdout and stderr through a pipe.
+    // This keeps TCP mode independent from mpirun while still allowing the
+    // launcher to report per-group failures.
+    void run(){
+        std::string command = buildCommand();
+        std::cout << "Executing [" << name << "]: " << printableCommand() << std::endl;
+        if (dryRun) return;
+
+        int pipefd[2];
+        if (pipe(pipefd) < 0) {
+            perror("pipe");
+            exit(EXIT_FAILURE);
+        }
+
+        pid = fork();
+        if (pid < 0) {
+            perror("fork");
+            close(pipefd[0]);
+            close(pipefd[1]);
+            exit(EXIT_FAILURE);
+        }
+
+        if (pid == 0) {
+            // Put the child in its own process group so timeout handling can
+            // terminate the shell, ssh and the group process together.
+            setpgid(0, 0);
+            close(pipefd[0]);
+            dup2(pipefd[1], STDOUT_FILENO);
+            dup2(pipefd[1], STDERR_FILENO);
+            close(pipefd[1]);
+
+            // Remote execution still runs the same quoted group command, but
+            // delegates process creation to ssh on the target host.
+            if (isRemote()) {
+                execlp("ssh", "ssh", "-T", host.c_str(), command.c_str(), (char*)nullptr);
+            } else {
+                execlp("/bin/sh", "sh", "-lc", command.c_str(), (char*)nullptr);
+            }
+            perror("exec");
+            _exit(127);
+        }
+
+        close(pipefd[1]);
+        fd = pipefd[0];
+
+        int flags = fcntl(fd, F_GETFL, 0);
+        if (flags >= 0)
+            fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    }
+
+    // Treat loopback, the local hostname and DFF_RUN_HOSTNAME as local.
+    // Other hostnames are resolved and compared against this host IP.
+    bool isRemote() const {
 		if (!host.compare("127.0.0.1") || !host.compare("localhost") || !host.compare(hostname) || !(std::getenv("DFF_RUN_HOSTNAME") && host.compare(std::getenv("DFF_RUN_HOSTNAME"))))
 			return false;
 		
@@ -163,11 +244,31 @@ struct G {
 		if (strncmp(ip1,ip2,INET_ADDRSTRLEN)==0) return false;
 		return true;  // remote
 	}
+
+    bool isRunning() const {
+        return pid > 0;
+    }
+
+    void closeOutput() {
+        if (fd >= 0) {
+            close(fd);
+            fd = -1;
+        }
+    }
+
+    void terminate() {
+        // Give the group a short graceful-stop window before forcing cleanup.
+        if (pid <= 0) return;
+        kill(-pid, SIGTERM);
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        if (pid > 0)
+            kill(-pid, SIGKILL);
+    }
 };
 
-bool allTerminated(std::vector<G>& groups){
-    for (G& g: groups)
-        if (g.file != nullptr)
+bool allTerminated(const std::vector<G>& groups){
+    for (const G& g: groups)
+        if (g.isRunning())
             return false;
     return true;
 }
@@ -248,14 +349,24 @@ int main(int argc, char** argv) {
 			case 'V': {
 				seeAll=true;
 			} break;
+            case 'n': {
+                dryRun = true;
+            } break;
+            case 't': {
+                if (argv[i+1] == NULL) {
+                    std::cerr << "-t requires a timeout in seconds\n";
+                    usage(argv[0]);
+                    exit(EXIT_FAILURE);
+                }
+                timeoutSec = std::stoul(argv[++i]);
+            } break;
 			case 'v': {
 				if (argv[i+1] == NULL) {
 					std::cerr << "-v requires at list one argument\n";
 					usage(argv[0]);
 					exit(EXIT_FAILURE);
 				}
-				viewGroups = split(argv[i+1], ',');
-				i+=viewGroups.size();
+				viewGroups = split(argv[++i], ',');
 			} break;
 			}
 		} else { optind=i; break;}
@@ -267,17 +378,21 @@ int main(int argc, char** argv) {
 		exit(EXIT_FAILURE);
 	}
 
-    executable = n_fs::absolute(n_fs::path(argv[optind])).string();
+    if (optind <= 0 || optind >= argc) {
+        std::cerr << "ERROR: Missing executable command\n";
+        usage(argv[0]);
+        exit(EXIT_FAILURE);
+    }
 
-	if (!n_fs::exists(executable)) {
+    executablePath = n_fs::absolute(n_fs::path(argv[optind])).string();
+
+	if (!n_fs::exists(executablePath)) {
 		std::cerr << "ERROR: Unable to find the executable file (we found as executable \'" << argv[optind] << "\')\n";
 		exit(EXIT_FAILURE);
 	}
-
-    executable += " ";
 		
     for (int index = optind+1 ; index < argc; index++) {
-        executable += std::string(argv[index]) + " ";
+        executableArgs.push_back(argv[index]);
 	}
 	
     std::ifstream is(configFile);
@@ -323,35 +438,80 @@ int main(int argc, char** argv) {
         auto Tstart = getusec();
         for (G& g : parsedGroups)
             g.run();
+
+        if (dryRun)
+            return 0;
+
+        bool timedOut = false;
         
         while(!allTerminated(parsedGroups)){
+            if (timeoutSec > 0 && ((getusec() - Tstart) / 1000000) >= timeoutSec) {
+                // Timeout is enforced by the launcher so a hung TCP group
+                // cannot keep the whole application alive indefinitely.
+                timedOut = true;
+                for (G& g : parsedGroups)
+                    if (g.isRunning())
+                        g.terminate();
+            }
+
             for(G& g : parsedGroups){
-                if (g.file != nullptr){
+                if (g.isRunning()){
                     char buff[1024] = { 0 };
                     
-                    ssize_t result = read(g.fd, buff, sizeof(buff));
+                    // Pipes are non-blocking: no available output should not
+                    // delay polling the other still-running groups.
+                    ssize_t result = g.fd >= 0 ? read(g.fd, buff, sizeof(buff)) : 0;
                     if (result == -1){
-                        if (errno == EAGAIN)
+                        if (errno == EAGAIN || errno == EWOULDBLOCK)
                             continue;
-
-                        int code = pclose(g.file);
-                        if (WEXITSTATUS(code) != 0)
-                            std::cout << "[" << g.name << "][ERR] Report an return code: " << WEXITSTATUS(code) << std::endl;
-                        g.file = nullptr;
+                        g.closeOutput();
                     } else if (result > 0){
-                        std::cout << buff;
+                        if (toBePrinted(g.name))
+                            std::cout << buff;
                     } else {
-                        int code = pclose(g.file);
-                        if (WEXITSTATUS(code) != 0)
-                            std::cout << "[" << g.name << "][ERR] Report an return code: " << WEXITSTATUS(code) << std::endl;
-                        g.file = nullptr;
+                        g.closeOutput();
+                    }
+
+                    // Reap completed children without blocking. Drain any
+                    // remaining pipe data before recording the final status.
+                    int status = 0;
+                    pid_t r = waitpid(g.pid, &status, WNOHANG);
+                    if (r == g.pid) {
+                        while (g.fd >= 0) {
+                            result = read(g.fd, buff, sizeof(buff));
+                            if (result > 0) {
+                                if (toBePrinted(g.name))
+                                    std::cout << buff;
+                            } else break;
+                        }
+                        g.closeOutput();
+
+                        if (WIFEXITED(status)) {
+                            g.exitCode = WEXITSTATUS(status);
+                            if (g.exitCode != 0)
+                                std::cout << "[" << g.name << "][ERR] returned code " << g.exitCode << std::endl;
+                        } else if (WIFSIGNALED(status)) {
+                            g.signaled = true;
+                            g.exitCode = 128 + WTERMSIG(status);
+                            std::cout << "[" << g.name << "][ERR] killed by signal " << WTERMSIG(status) << std::endl;
+                        }
+                        g.pid = -1;
                     }
                 }
             }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(15));
+            std::this_thread::sleep_for(TCP_LAUNCHER_POLL_INTERVAL);
         }
         std::cout << "Elapsed time: " << (getusec()-(Tstart))/1000 << " ms" << std::endl;
+
+        if (timedOut) {
+            std::cerr << "ERROR: timeout after " << timeoutSec << " seconds\n";
+            return EXIT_FAILURE;
+        }
+
+        for (const G& g : parsedGroups)
+            if (g.exitCode != 0)
+                return EXIT_FAILURE;
     }
 
     if (usedProtocol == Proto::MPI){
@@ -362,7 +522,12 @@ int main(int argc, char** argv) {
 
         char command[350];
      
-        sprintf(command, "mpirun --hostfile %s -np %lu --rankfile %s %s --DFF_Config=%s", hostFile.c_str(), parsedGroups.size(), rankFile.c_str(), executable.c_str(), configFile.c_str());
+        std::ostringstream exe;
+        exe << shellQuote(executablePath);
+        for (const auto& arg : executableArgs)
+            exe << " " << shellQuote(arg);
+
+        sprintf(command, "mpirun --hostfile %s -np %lu --rankfile %s %s --DFF_Config=%s", hostFile.c_str(), parsedGroups.size(), rankFile.c_str(), exe.str().c_str(), configFile.c_str());
 
 		std::cout << "mpicommand: " << command << "\n";
 		

@@ -16,7 +16,9 @@
 #include <iostream>
 #include <ff/dff.hpp>
 
+#if defined(ENABLE_MPI) || defined(DFF_MPI)
 #include <mpi.h>
+#endif
 
 using namespace ff;
 std::mutex mtx;   // used for pretty printing
