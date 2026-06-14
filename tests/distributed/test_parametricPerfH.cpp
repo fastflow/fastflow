@@ -62,6 +62,7 @@ struct ExcType {
 	bool contiguous;
 	
 
+#if !defined(MANUAL_SERIALIZATION)
 	template<class Archive>
 	void serialize(Archive & archive) {
 	  archive(clen);
@@ -71,34 +72,35 @@ struct ExcType {
 	  }
 	  archive(cereal::binary_data(C, clen));
 	}
+#else
+	// ExcType is allocated as one contiguous object+payload blob. The release
+	// hook destroys the object and frees that same allocation after send.
+	static void releaseBlob(void* owner, char* b, size_t) {
+		auto* ptr = reinterpret_cast<ExcType*>(owner ? owner : b);
+		ptr->~ExcType();
+		free(ptr);
+	}
+
+	static void freeTask(ExcType*) {
+		return;
+	}
+
+	ff::serializedBuffer_t serialize() {
+		return {(char*)this, clen+sizeof(ExcType), false, this, releaseBlob};
+	}
+
+	bool deserialize(char* buffer, size_t sz) {
+		clen = sz - sizeof(ExcType);
+		C = buffer + sizeof(ExcType);
+		return false;
+	}
+
+	static ExcType* alloc(char* buffer, size_t) {
+		return new (buffer) ExcType(true);
+	}
+#endif
 	
 };
-template<typename T>
-void serializefreetask(T *o, ExcType* input) {
-	input->~ExcType();
-	free(o);
-}
-
-
-#ifdef MANUAL_SERIALIZATION
-template<typename Buffer>
-bool serialize(Buffer&b, ExcType* input){
-	b = {(char*)input, input->clen+sizeof(ExcType)};
-	return false;  // 'false' means no data copy
-}
-
-template<typename Buffer>
-void deserializealloctask(const Buffer& b, ExcType*& p) {
-	p = new (b.first) ExcType(true);
-};
-
-template<typename Buffer>
-bool deserialize(const Buffer&b, ExcType* p){
-	p->clen = b.second - sizeof(ExcType);
-	p->C = (char*)p + sizeof(ExcType);
-	return false; // 'false' means no data copy
-}
-#endif
 
 static ExcType* allocateExcType(size_t size, bool setdata=false) {
 	char* _p = (char*)calloc(size+sizeof(ExcType), 1 ); // to make valgrind happy !

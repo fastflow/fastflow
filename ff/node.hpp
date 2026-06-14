@@ -1315,7 +1315,7 @@ protected:
     void (*freetaskF)(void*) = nullptr; //std::function<void(void*)> freetaskF;
     void* (*deserializeF)(message2_t*, bool&, ff_node*) = nullptr; //std::function<void*(message2_t*, bool&)> deserializeF;
     void* (*alloctaskF)(char*, size_t) = nullptr; //std::function<void*(char*, size_t)> alloctaskF;
-    void (*freeBlob)(char*, size_t) = nullptr; 
+    blobReleaseF_t freeBlob = nullptr; 
     
     virtual bool isSerializable(){ return (bool)serializeF; }
     virtual bool isDeserializable(){ return (bool)deserializeF; }
@@ -1658,10 +1658,15 @@ struct ff_node_t: ff_node {
         this->serializeF = [](void* o, message2_t* b) -> bool {
                                //static thread_local std::pair<char*, size_t> p;
                                //static thread_local bool datacopied = true;
-                               auto [buff, size, datacopied] = reinterpret_cast<OUT_t*>(o)->serialize();
+                               serializedBuffer_t serialized = reinterpret_cast<OUT_t*>(o)->serialize();
+                               // The manual serializer returns both the payload
+                               // and its release policy; keep both in the message.
                                //serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o),datacopied, p);
-                               b->data = buff; b->size = size;
-                               return datacopied;
+                               b->data = serialized.data;
+                               b->size = serialized.size;
+                               b->blobOwner = serialized.owner;
+                               b->freeCallback = serialized.release;
+                               return serialized.copied;
                            };
     } else if constexpr (cereal::traits::is_output_serializable<OUT_t, cereal::PortableBinaryOutputArchive>::value) {
             this->serializeF = [](void* o, message2_t* b) -> bool {
@@ -1696,8 +1701,6 @@ struct ff_node_t: ff_node {
                                 };
     }
 
-    if constexpr (traits::has_freeBlob_member<OUT_t>::value)
-        this->freeBlob = OUT_t::freeBlob;
 
 #endif
 

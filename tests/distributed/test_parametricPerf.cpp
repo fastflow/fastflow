@@ -81,17 +81,20 @@ struct ExcType {
 	  archive(cereal::binary_data(C, clen));
 	}
 #else
-	static void freeBlob(char* b, size_t sz){
-        reinterpret_cast<ExcType*>(b)->~ExcType();
-		free(b);
+	// ExcType is allocated as one contiguous object+payload blob. The release
+	// hook destroys the object and frees that same allocation after send.
+	static void releaseBlob(void* owner, char* b, size_t sz){
+        auto* ptr = reinterpret_cast<ExcType*>(owner ? owner : b);
+        ptr->~ExcType();
+		free(ptr);
     }
     
     static void freeTask(ExcType* ptr){
         return;
     }
     
-    std::tuple<char*, size_t, bool> serialize(){
-        return {(char*)this, this->clen+sizeof(ExcType), false};
+    ff::serializedBuffer_t serialize(){
+        return {(char*)this, this->clen+sizeof(ExcType), false, this, releaseBlob};
     }
     
     bool deserialize(char* buffer, size_t sz){

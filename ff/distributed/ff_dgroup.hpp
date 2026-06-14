@@ -62,7 +62,7 @@ class dGroup : public ff::ff_farm {
     struct ForwarderNode : ff_node { 
         ForwarderNode(bool (*f)(void*, message2_t*),
 					  void (*d)(void*), 
-                      void(*freeBlob)(char*,size_t)
+                      blobReleaseF_t freeBlob
                       ) {			
             this->serializeF = f;
 			this->freetaskF  = d;

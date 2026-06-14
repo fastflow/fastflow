@@ -899,10 +899,15 @@ struct ff_minode_t: ff_minode {
         this->serializeF = [](void* o, message2_t* b) -> bool {
                                //static thread_local std::pair<char*, size_t> p;
                                //static thread_local bool datacopied = true;
-                               auto [buff, size, datacopied] = reinterpret_cast<OUT_t*>(o)->serialize();
+                               serializedBuffer_t serialized = reinterpret_cast<OUT_t*>(o)->serialize();
+                               // The manual serializer returns both the payload
+                               // and its release policy; keep both in the message.
                                //serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o),datacopied, p);
-                               b->data = buff; b->size = size;
-                               return datacopied;
+                               b->data = serialized.data;
+                               b->size = serialized.size;
+                               b->blobOwner = serialized.owner;
+                               b->freeCallback = serialized.release;
+                               return serialized.copied;
                            };
     } else if constexpr (cereal::traits::is_output_serializable<OUT_t, cereal::PortableBinaryOutputArchive>::value) {
             this->serializeF = [](void* o, message2_t* b) -> bool {
@@ -937,8 +942,6 @@ struct ff_minode_t: ff_minode {
                                 };
     }
 
-    if constexpr (traits::has_freeBlob_member<OUT_t>::value)
-        this->freeBlob = OUT_t::freeBlob;
 #endif
 	}
     OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE, *const FLUSH;
@@ -1007,10 +1010,15 @@ struct ff_monode_t: ff_monode {
         this->serializeF = [](void* o, message2_t* b) -> bool {
                                //static thread_local std::pair<char*, size_t> p;
                                //static thread_local bool datacopied = true;
-                               auto [buff, size, datacopied] = reinterpret_cast<OUT_t*>(o)->serialize();
+                               serializedBuffer_t serialized = reinterpret_cast<OUT_t*>(o)->serialize();
+                               // The manual serializer returns both the payload
+                               // and its release policy; keep both in the message.
                                //serializeWrapper<OUT_t>(reinterpret_cast<OUT_t*>(o),datacopied, p);
-                               b->data = buff; b->size = size;
-                               return datacopied;
+                               b->data = serialized.data;
+                               b->size = serialized.size;
+                               b->blobOwner = serialized.owner;
+                               b->freeCallback = serialized.release;
+                               return serialized.copied;
                            };
     } else if constexpr (cereal::traits::is_output_serializable<OUT_t, cereal::PortableBinaryOutputArchive>::value) {
             this->serializeF = [](void* o, message2_t* b) -> bool {
@@ -1045,8 +1053,6 @@ struct ff_monode_t: ff_monode {
                                 };
     }
 
-    if constexpr (traits::has_freeBlob_member<OUT_t>::value)
-        this->freeBlob = OUT_t::freeBlob;
 #endif
 	}
     OUT_t * const GO_ON,  *const EOS, *const EOSW, *const GO_OUT, *const EOS_NOFREEZE, *const FLUSH;

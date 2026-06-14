@@ -49,6 +49,30 @@ using EgressChannels_t = std::vector<nodeXChannelType_t>;
 using IngressChannels_t = EgressChannels_t;
 using IngressEgressChannels_t = std::pair<IngressChannels_t, EgressChannels_t>;
 
+using blobReleaseF_t = void(*)(void*, char*, size_t);
+
+// Manual serialization descriptor.
+//
+// copied == true:
+//   data points to a runtime-owned buffer and the original task can be freed
+//   immediately after enqueueing the message.
+//
+// copied == false:
+//   data is borrowed until the transport is done with the message. The optional
+//   owner/release pair describes how to release the object that keeps data alive.
+struct serializedBuffer_t {
+    char* data = nullptr;
+    sizeDFF_t size = 0;
+    bool copied = true;
+    void* owner = nullptr;
+    blobReleaseF_t release = nullptr;
+
+    serializedBuffer_t() = default;
+    serializedBuffer_t(char* data, sizeDFF_t size, bool copied=true,
+                       void* owner=nullptr, blobReleaseF_t release=nullptr):
+        data(data), size(size), copied(copied), owner(owner), release(release) {}
+};
+
 struct message2_t {
     int src, dest;
     ChannelType type;
@@ -57,7 +81,10 @@ struct message2_t {
     sizeDFF_t size = 0;
     char* data = nullptr;
     bool cleanup = false;
-    void(*freeCallback)(char*, size_t) = nullptr;
+    // Sender-side release hook for non-copied serialized buffers. It is stored
+    // per message because different messages may carry different owners.
+    void* blobOwner = nullptr;
+    blobReleaseF_t freeCallback = nullptr;
 
     message2_t(char *rd, sizeDFF_t size, bool cleanup=true) :  size(size), data(rd), cleanup(cleanup) {}
     message2_t() = default;
@@ -68,16 +95,21 @@ struct message2_t {
     inline void setBuff(std::pair<char*, sizeDFF_t>&& buffPair){
         data = buffPair.first; 
         size = buffPair.second;
+        blobOwner = nullptr;
+        freeCallback = nullptr;
     }
 
     inline void cleanContent(){
         if (data && cleanup){
-            if (freeCallback) freeCallback(data, size);
+            // Use the owner-aware release hook when manual serialization
+            // supplied one; otherwise keep the default copied-buffer policy.
+            if (freeCallback) freeCallback(blobOwner, data, size);
             else free(data);
         }
         data = nullptr;
         cleanup = false;
         size = 0;
+        blobOwner = nullptr;
         freeCallback = nullptr;
     }
 

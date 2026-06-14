@@ -90,13 +90,14 @@ public:
 
 		msg->locality = ChannelLocality::REMOTE;
 
-		this->n->serializeF(in, msg);
+		bool datacopied = this->n->serializeF(in, msg);
 		msg->cleanup = true;
-		msg->freeCallback = this->n->freeBlob;
 	
 		ff_minode::ff_send_out(msg);
-		//if (datacopied)
-		this->n->freetaskF(in);
+		// With zero-copy serialization the message cleanup owns the serialized
+		// lifetime; freeing the task here would invalidate the in-flight payload.
+		if (datacopied)
+			this->n->freetaskF(in);
 			
 		return true;
 	}

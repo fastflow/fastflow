@@ -176,9 +176,6 @@ public:
 						msg->type = defaultChannelType;
 						msg->cleanup = true;
 						datacopied = this->n->serializeF(task, msg);
-						if (!datacopied) {
-							msg->freeCallback = this->n->freeBlob;
-						}
 					}
 					if (ff_send_out_to(msg, this->get_num_outchannels() - 1, 1)) {
 						if (datacopied) this->n->freetaskF(task);
@@ -209,7 +206,6 @@ public:
 
 			bool datacopied = this->n->serializeF(task, msg);
 			msg->cleanup = true;
-			msg->freeCallback = this->n->freeBlob;
 			ff_send_out_to(msg, this->get_num_outchannels() - 1); // send to the routing worker
 			if (datacopied) this->n->freetaskF(task);
 			return true;

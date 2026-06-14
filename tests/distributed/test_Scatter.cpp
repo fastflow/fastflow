@@ -46,36 +46,49 @@
 
 using namespace ff;
 
-using DataType = char;
+// Scatter sends slices of an mmap-backed region. The sender-side Partition
+// owns only the wrapper, not the payload; the receiver-side Partition owns the
+// transport buffer received from the backend.
+struct Partition {
+	char* data = nullptr;
+	size_t size = 0;
+	bool ownsPayload = false;
 
-size_t PARTITION_SIZE = 0;
+	Partition() = default;
+	Partition(char* data, size_t size, bool ownsPayload=false):
+		data(data), size(size), ownsPayload(ownsPayload) {}
 
-template<typename T>
-void serializefreetask(T *o, DataType* input) {
-}
-template<typename Buffer>
-bool serialize(Buffer&b, DataType* input){
-	b = {input, PARTITION_SIZE};
-	return false;  // the data is not copied
-}
-template<typename Buffer>
-bool deserialize(const Buffer&b, DataType* p){
-	assert(b.second == PARTITION_SIZE);
-	return false;
-}
-template<typename Buffer>
-void deserializealloctask(const Buffer& b, DataType*& p) {
-	assert(b.second == PARTITION_SIZE);	
-	p = new (b.first) DataType[PARTITION_SIZE];
+	~Partition() {
+		if (ownsPayload) free(data);
+	}
+
+	// The transport may still reference data after ff_send_out_to returns. Defer
+	// deleting the wrapper until message cleanup; the mmap payload is borrowed.
+	static void releaseSerialized(void* owner, char*, size_t) {
+		delete reinterpret_cast<Partition*>(owner);
+	}
+
+	ff::serializedBuffer_t serialize() {
+		return {data, size, false, this, releaseSerialized};
+	}
+
+	bool deserialize(char*, size_t sz) {
+		assert(sz == size);
+		return false;
+	}
+
+	static Partition* alloc(char* buffer, size_t sz) {
+		return new Partition(buffer, sz, true);
+	}
 };
 
 
-struct LNode : ff::ff_monode_t<DataType>{
+struct LNode : ff::ff_monode_t<Partition>{
 
     LNode(char* data, size_t size, long nLeft,long id):
 		data(data), size(size), nLeft(nLeft), myid(id) {}
 
-    DataType* svc(DataType*) {
+    Partition* svc(Partition*) {
 		int  nout = get_num_outchannels();  // the number of R-Workers
 		//long myid = get_my_id();         TODO: get_my_id() should give the global id! <--------------
 		assert((size % nout)==0);           // this is a constraint that could be removed
@@ -103,7 +116,7 @@ struct LNode : ff::ff_monode_t<DataType>{
 			//ff::cout << "[LNode" << myid << "] sending to " << startdest+i << "\n";
 			long* p = reinterpret_cast<long*>(pstart);
 			*p = (startdest+i + 1);
-			ff_send_out_to(pstart, startdest+i);
+			ff_send_out_to(new Partition(pstart, partitionsize), startdest+i);
 			pstart += partitionsize;
 		}
 		return this->EOS;
@@ -114,20 +127,20 @@ struct LNode : ff::ff_monode_t<DataType>{
 	long    myid;
 };
 
-struct RNode : ff::ff_minode_t<DataType>{
+struct RNode : ff::ff_minode_t<Partition>{
     int processedItems = 0;
 	long myid =-1;
 
 	RNode(long id):myid(id) {}
 	
-    DataType* svc(DataType* in){
+    Partition* svc(Partition* in){
 
-		long* p = reinterpret_cast<long*>(in);
+		long* p = reinterpret_cast<long*>(in->data);
 		if (*p != (myid+1)) {
 			ff::cout << "ERROR: expected " << myid+1 << " reiceived " << *p << "\n";
 		}
 		++processedItems;
-		delete [] in;
+		delete in;
 		return GO_ON;
     }
 	
@@ -159,9 +172,6 @@ int main(int argc, char*argv[]){
 		return -1;
 	}
 
-	// sets the global variable 
-	PARTITION_SIZE= size / nRight;
-	
 	char* m = (char*)mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE,0,0);
 	if (m == MAP_FAILED) {
 		perror("mmap");

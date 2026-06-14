@@ -26,6 +26,7 @@
 #define FF_TYPETRAITS_H
 
 #include <type_traits>
+#include <ff/distributed/ff_ddefines.hpp>
 
 namespace ff {
 
@@ -56,7 +57,7 @@ namespace traits {
   template <typename T>                                                   
   struct has_serialize_member {                                                           
       template <typename U>    
-      static auto test(U*) -> std::is_same<std::tuple<char*,size_t,bool>, decltype(std::declval<U>().serialize())>;                                          
+      static auto test(U*) -> std::is_same<serializedBuffer_t, decltype(std::declval<U>().serialize())>;                                          
                                                                           
       template <typename>                                              
       static std::false_type test(...);                                   
@@ -68,17 +69,6 @@ namespace traits {
   struct has_freeTask_member {                                                           
       template <typename U>    
       static auto test(U*) -> std::is_same<void, decltype(std::declval<U>().freeTask(std::declval<U*>()))>;                                          
-                                                                          
-      template <typename>                                              
-      static std::false_type test(...);                                   
-                                                                          
-      static constexpr bool value = decltype(test<T>(nullptr))::value; 
-  };
-
-  template <typename T>                                                   
-  struct has_freeBlob_member {                                                           
-      template <typename U>    
-      static auto test(U*) -> std::is_same<void, decltype(std::declval<U>().freeBlob(std::declval<char*>(), std::declval<size_t>()))>;                                          
                                                                           
       template <typename>                                              
       static std::false_type test(...);                                   
