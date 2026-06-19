@@ -98,7 +98,7 @@ public:
         return 0;
     }
 
-    inline void doBarrier(size_t id) {
+    inline void doBarrier(size_t) {
         pthread_mutex_lock(&bLock);
         if (++counter == _barrier) {
             pthread_cond_broadcast(&bCond);
