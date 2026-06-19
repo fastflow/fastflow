@@ -186,7 +186,8 @@ set(FFHEADERS
     ${FF}/tpcnode.hpp
     ${FF}/ubuffer.hpp
     ${FF}/utils.hpp
-    ${FF}/version.h)
+    ${FF}/version.h
+    ${FF}/visit/visitor.hpp)
 
 set(FFHEADERS_PLAT
     ${FF}/platforms/getopt.h
