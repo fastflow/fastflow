@@ -883,5 +883,14 @@ void parallel_reduce_idx(Value_t& var, const Value_t& identity,
     
 } // namespace ff
 
+/* FF_WIN_MSVC_COMPAT: pull in ff/graph_utils.hpp so that any translation unit
+   that includes only <ff/parallel_for.hpp> is self-contained. pipeline.hpp
+   (pulled in above) forward-declares isa2a_getfirstset()/isa2a_getsecondset()
+   as static and odr-uses them, but their definitions live in graph_utils.hpp
+   (normally only reached via ff/ff.hpp). GCC/Clang defer the missing definition;
+   MSVC requires it in the same TU and otherwise errors with C2129. graph_utils
+   does not include parallel_for.hpp, so there is no include cycle. */
+#include <ff/graph_utils.hpp>
+
 #endif /* FF_PARFOR_HPP */
     
