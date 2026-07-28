@@ -35,6 +35,7 @@ set ( TESTS
     test_optimize test_optimize2 test_optimize3 test_optimize4 test_optimize5
     test_all-or-none test_farm+farm test_farm+A2A test_farm+A2A2)
 	
+list(APPEND TESTS test_pipeline_output_blocking)
 foreach( t ${TESTS} )
     add_executable( ${t}_NONBLOCKING ${t}.cpp)
     target_include_directories(${t}_NONBLOCKING PRIVATE
