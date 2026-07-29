@@ -482,12 +482,10 @@ protected:
             pthread_mutex_t   *m        = NULL;
             pthread_cond_t    *c        = NULL;
             if (curr_single_standard) {
-                bool skip_set_output_blocking = false;
                 if (nodes_list[i]->create_input_buffer(in_buffer_entries, fixedsizeIN)<0)  return -1;
                 if (prev_single_standard) {
                     if (nodes_list[i-1]->set_output_buffer(nodes_list[i]->get_in_buffer())<0) return -1;
                 } else {
-                    skip_set_output_blocking = true;
                     // WARNING: here we add as output node of the previous stage the
                     //          current node and not a buffer-node.                      
                     if (prev_multi_standard || prev_multi_multioutput) {                        
@@ -508,8 +506,7 @@ protected:
                     error("PIPE, init input blocking mode for node %d\n", i);
                     return -1;
                 }                
-                if (!skip_set_output_blocking) // we do not want to overwrite previous setting
-                    nodes_list[i-1]->set_output_blocking(m,c); 
+                nodes_list[i-1]->set_output_blocking(m,c);
                 if (!nodes_list[i-1]->init_output_blocking(m,c,false)) {
                     error("PIPE, init output blocking mode for node %d\n", i-1);
                     return -1;
