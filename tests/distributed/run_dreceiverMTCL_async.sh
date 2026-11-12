@@ -96,5 +96,5 @@ for ((iteration=1; iteration<=repeat; ++iteration)); do
         done
     done
 done
-echo "Results: $passed passed, $failed failed. Regression failures are expected until the receiver is fixed."
+echo "Results: $passed passed, $failed failed."
 exit "$result"

@@ -25,9 +25,11 @@
 #ifndef DDEFINES_HPP
 #define DDEFINES_HPP
 
+#include <cstddef>
+#include <cstdlib>
 #include <tuple>
 #include <utility>
-#include <ff/ff.hpp>
+#include <vector>
 
 namespace ff {
 

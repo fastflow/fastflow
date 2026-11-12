@@ -176,10 +176,10 @@ struct ReceivedMessage {
 };
 
 // Connect the real receiver's output to a local consumer without a farm.
-class ReceiverWithOutputCallback : public ff::ff_dreceiverMTCL2 {
+class ReceiverWithOutputCallback : public ff::distributed::receiver::Receiver {
 public:
-    using ff::ff_dreceiverMTCL2::ff_dreceiverMTCL2;
-    using ff::ff_dreceiverMTCL2::registerCallback;
+    using ff::distributed::receiver::Receiver::Receiver;
+    using ff::distributed::receiver::Receiver::registerCallback;
 };
 
 class ReceiverFixture {
@@ -196,9 +196,9 @@ private:
 public:
     std::vector<ReceivedMessage> received;
 
-    explicit ReceiverFixture(size_t messageCount)
+    explicit ReceiverFixture(size_t messageCount, ff::distributed::ProtocolOptions options = {})
         : handle(new ObservedReceiveHandle(LocalTcpConnection::instance, peer.receiver)),
-          keepAlive(handle, false, false), receiver(endpoint, 1), expectedCount(messageCount) {
+          keepAlive(handle, false, false), receiver(endpoint, 1, options), expectedCount(messageCount) {
         // Manager expects one framed native int identifying a P2P connection.
         const int collective = 0;
         peer.writeLength(sizeof(collective));

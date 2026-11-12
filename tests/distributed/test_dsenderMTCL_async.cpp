@@ -21,7 +21,7 @@ void testCloseWaitsForPendingSends(SendMode mode) {
 
     Bytes received;
     if (mode == SendMode::ImmediatelyWritable) {
-        completePendingSendsAndCollectWire(transport, received);
+        completePendingSendsAndCollectWire(transport, sender, received);
     } else {
         requireHarness(transport.handle().firstSendWasPending() &&
                            transport.handle().has_active_send_req(),
@@ -66,7 +66,7 @@ void testPendingBatchBufferIsNotOverwritten(SendMode mode) {
     sender.svc(makeDataMessage(directPayload).release());
 
     Bytes received;
-    completePendingSendsAndCollectWire(transport, received);
+    completePendingSendsAndCollectWire(transport, sender, received);
     sender.svc_end();
     requireHarness(transport.collectReceivedBytes(received) == ReceiveState::PeerClosed,
                    "svc_end did not shut down the write side");

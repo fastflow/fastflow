@@ -206,6 +206,16 @@ public:
         }
     }
 
+    void sendConfirmation() {
+        // Independent MTCL wire fixture: native protocol ACK in a sized frame.
+        const std::uint64_t size = htobe64(sizeof(ff::ack_t));
+        const ff::ack_t confirmation{};
+        requireHarness(::send(receiver_.get(), &size, sizeof(size), MSG_NOSIGNAL) == sizeof(size),
+                       "failed to send confirmation length");
+        requireHarness(::send(receiver_.get(), &confirmation, sizeof(confirmation), MSG_NOSIGNAL) == sizeof(confirmation),
+                       "failed to send confirmation payload");
+    }
+
 private:
     struct CloseHandle {
         void operator()(RecordingTcpHandle* handle) const noexcept {
@@ -240,17 +250,11 @@ class SenderWithOneConnection : public ff::ff_dsenderMTCL2 {
 public:
     SenderWithOneConnection(RecordingTcpHandle& handle, int batchCount, std::size_t batchBytes)
         : ff_dsenderMTCL2(kEndpoints, kChannels, batchCount, batchBytes) {
-        ff::uBufferAllocator::init(SEND_BUFFERS_PREALLOCATE,
-                                  2 * SINGLE_SEND_SIZE_THRESHOLD + batchCount * ff::headerSize + sizeof(int),
-                                  batchCount);
-        MTCL_Handlers.emplace_back(&handle, false, false);
-        handlerCounters.push_back(DEFAULT_MESSAGE_OTF);
-        batchBuffers.emplace_back(batchCount, batchBytes, this, MTCL_Handlers[0], handlerCounters[0]);
-        dest2ConnID[kDestinationId] = 0;
-        src2PossibleDestConnID[kSourceId].insert(0);
-        // ACK mode is off: svc_end() needs no receive-side ACKs.
-        totalAcks = DEFAULT_MESSAGE_OTF;
+        const auto session = attachSession(MTCL::HandleUser(&handle, false, false));
+        addDestination(kDestinationId, session);
+        allowSource(kSourceId, session);
     }
+    bool progress() { return progressSends(); }
 };
 
 struct ReleaseMessage {
@@ -262,32 +266,12 @@ using Message = std::unique_ptr<ff::message2_t, ReleaseMessage>;
 
 class MessagePool {
 public:
-    MessagePool() {
-        ff::MessageAllocator::init(kMessagePoolSize);
-        try {
-            initializeChannels();
-        } catch (...) {
-            ff::MessageAllocator::finalize();
-            throw;
-        }
-    }
+    MessagePool() { ff::MessageAllocator::init(kMessagePoolSize); }
     ~MessagePool() { ff::MessageAllocator::finalize(); }
     MessagePool(const MessagePool&) = delete;
     MessagePool& operator=(const MessagePool&) = delete;
     MessagePool(MessagePool&&) = delete;
     MessagePool& operator=(MessagePool&&) = delete;
-
-private:
-    static void initializeChannels() {
-        // svc() allocates broadcast EOS messages without setting their channel.
-        // Hold every pooled message at once, then return them initialized.
-        std::array<Message, kMessagePoolSize> messages;
-        for (auto& message : messages) {
-            message.reset(ff::MessageAllocator::allocateMessage());
-            message->type = ff::ChannelType::FWD;
-            message->locality = ff::ChannelLocality::REMOTE;
-        }
-    }
 };
 
 inline Message makeDataMessage(const std::string& text) {
@@ -332,16 +316,12 @@ inline void appendExpectedMessageFrame(Bytes& wire, const std::string& text,
     append(wire, htonl(std::uint32_t{1}));
 }
 
-inline void completePendingSendsAndCollectWire(TestTransport& transport, Bytes& wire) {
+inline void completePendingSendsAndCollectWire(TestTransport& transport, SenderWithOneConnection& sender, Bytes& wire) {
     // Bound cooperative progress; the runner's timeout also bounds blocking calls.
     constexpr std::size_t maxProgressIterations = 10000;
     for (std::size_t iteration = 0; iteration < maxProgressIterations; ++iteration) {
         transport.collectReceivedBytes(wire);
-        bool complete = true;
-        for (auto* buffer : ff::uBufferAllocator::q) {
-            const bool bufferComplete = MTCL::test(buffer->r);
-            complete = complete && bufferComplete;
-        }
+        const bool complete = sender.progress();
         if (complete && !transport.handle().has_active_send_req()) {
             transport.collectReceivedBytes(wire);
             return;

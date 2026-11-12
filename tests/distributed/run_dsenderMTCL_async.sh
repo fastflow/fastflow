@@ -10,7 +10,7 @@ control_only=false
 repeat=1
 usage() {
     echo "Usage: $0 [--case close|overwrite] [--control] [--repeat N]"
-    echo "Default: both healthy controls, then both regression cases (currently fail)."
+    echo "Default: both healthy controls, then both regression cases."
 }
 while (($#)); do
     case "$1" in
@@ -91,5 +91,5 @@ for ((iteration=1; iteration<=repeat; ++iteration)); do
         done
     done
 done
-echo "Results: $passed passed, $failed failed. Regression failures are expected until the sender is fixed."
+echo "Results: $passed passed, $failed failed."
 exit "$result"
