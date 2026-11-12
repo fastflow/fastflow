@@ -36,6 +36,7 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <arpa/inet.h>
+#include <unistd.h>
 
 
 #ifdef __APPLE__
