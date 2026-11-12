@@ -10,9 +10,10 @@
 namespace ff::distributed::sender {
 
 /** Accumulates copied records without owning transport state.
- * encode() writes the existing payload/header/count layout into caller-owned
- * storage. clear() preserves capacity for subsequent batches. Large payloads
- * bypass accumulation and use encodeSingle() for their descriptor frame.
+ * encode() completes the payload/header/count layout in place and exchanges the
+ * finished frame with caller-owned storage, so payloads are copied only once.
+ * The storage it receives in exchange keeps its capacity for subsequent batches.
+ * Large payloads bypass accumulation and use encodeSingle() for their frame.
  */
 class Batch {
     std::vector<char> payloads_;
@@ -28,26 +29,29 @@ public:
             const auto offset = payloads_.size();
             if (message.size > payloads_.max_size() - offset)
                 throw std::length_error("distributed batch payload overflow");
-            payloads_.resize(offset + message.size);
-            std::memcpy(payloads_.data() + offset, message.data, message.size);
+            payloads_.insert(payloads_.end(), message.data, message.data + message.size);
         }
         records_.push_back(header);
     }
 
-    void encode(std::vector<char>& output) const {
+    // Leaves the batch empty: output receives the frame and the batch keeps
+    // output's previous storage, emptied, as its next accumulation buffer.
+    void encode(std::vector<char>& output) {
         if (records_.size() > (output.max_size() - wire::batchCountBytes) / wire::recordHeaderBytes)
             throw std::length_error("distributed batch header overflow");
         const auto overhead = records_.size() * wire::recordHeaderBytes + wire::batchCountBytes;
-        if (payloads_.size() > output.max_size() - overhead)
+        const auto payloadBytes = payloads_.size();
+        if (payloadBytes > payloads_.max_size() - overhead)
             throw std::length_error("distributed batch size overflow");
-        output.resize(payloads_.size() + overhead);
-        if (!payloads_.empty()) std::memcpy(output.data(), payloads_.data(), payloads_.size());
-        auto* header = output.data() + payloads_.size();
+        payloads_.resize(payloadBytes + overhead);
+        auto* header = payloads_.data() + payloadBytes;
         for (const auto& record : records_) {
             wire::encodeHeader(header, record);
             header += wire::recordHeaderBytes;
         }
         wire::encodeCount(header, records_.size());
+        output.swap(payloads_);
+        clear();
     }
 
     static void encodeSingle(const message2_t& message, bool separatePayload,

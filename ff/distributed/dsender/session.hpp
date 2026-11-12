@@ -61,13 +61,13 @@ public:
     }
 
     // The caller first obtains a token, progressing all sessions while waiting.
+    // encode() moves the batch into the operation's storage and empties the batch.
     void sendBatch() {
         if (batch_.empty()) return;
         auto& operation = sends_.acquire();
         batch_.encode(operation.storage());
         tokens_.acquire();
         operation.start(handle_);
-        batch_.clear();
     }
 
     void sendSingle(const message2_t& message, std::size_t separatePayloadAbove) {
