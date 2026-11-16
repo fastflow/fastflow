@@ -46,26 +46,41 @@ inline static int posix_memalign(void **memptr, size_t alignment, size_t size)
 
 
 #if defined(_WIN32)
+#if defined(_MSC_VER)
 #pragma unmanaged
+#endif
 
 #define NOMINMAX
 
+// MinGW-w64 has the POSIX threads (winpthreads) and the POSIX headers that
+// define what follows for MSVC only: their declarations would clash
+#if defined(__MINGW32__)
+#include <windows.h>
+#include <pthread.h>
+#include <sys/time.h>
+#include <unistd.h>
+#else
 #include <ff/platforms/pthread_minport_windows.h>
+#endif
 #define INLINE __forceinline
 #define NOINLINE __declspec(noinline)
 //#define CACHE_LINE_SIZE 64
 #define __WIN_ALIGNED_16__ __declspec(align(16))
 
 // Thread specific storage
+#if !defined(__MINGW32__)
 #define __thread __declspec(thread)
+#endif
 
 
 // Only x86 and x86_64 are currently supported for Windows OS
 INLINE void WMB() {} 
 INLINE void PAUSE() {}
 
+#if !defined(__MINGW32__)
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
+#endif
 
 INLINE static int posix_memalign(void **memptr,size_t alignment, size_t sz)
 {
@@ -82,6 +97,7 @@ INLINE static void posix_memalign_free(void* mem)
  // Other
 
 #include <string>
+#if !defined(__MINGW32__)
 typedef unsigned long useconds_t;
 //#define strtoll std::stoll
 #define strtoll _strtoi64
@@ -125,6 +141,7 @@ expected_counter_difference;
     }
 	return(0);
 }
+#endif // !__MINGW32__
 
 
 //#define __TICKS2WAIT 1000
@@ -147,6 +164,7 @@ struct timeval {
 #endif 
 */
 
+#if !defined(__MINGW32__)
 struct timezone 
 {
   int  tz_minuteswest; /* minutes W of Greenwich */
@@ -187,6 +205,7 @@ INLINE static int gettimeofday(struct timeval *tv, struct timezone *tz)
  
   return 0;
 }
+#endif // !__MINGW32__
 
 //#include <sys/time.h> 
 //#include <sys/resource.h> 

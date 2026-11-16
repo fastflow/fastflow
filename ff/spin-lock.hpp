@@ -151,7 +151,9 @@ ALIGN_TO_PRE(CACHE_LINE_SIZE) struct CLHSpinLock {
 #if defined(_MSC_VER) // To be tested
     MyPred[pid] = (CLHLockNode *) __sync_lock_test_and_set((void *volatile *)&Tail, (void *)MyNode[pid]);
 #else //defined(__GNUC__)
-    MyPred[pid] = (CLHLockNode *) __sync_lock_test_and_set((long *)&Tail, (long)MyNode[pid]);
+    // intptr_t, which is a pointer wide also where long is not (LLP64, i.e.
+    // 64-bit Windows with MinGW-w64)
+    MyPred[pid] = (CLHLockNode *) __sync_lock_test_and_set((intptr_t *)&Tail, (intptr_t)MyNode[pid]);
 #endif
     while (MyPred[pid]->locked == true) ;
     }

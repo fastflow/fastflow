@@ -108,6 +108,20 @@ typedef unsigned long int     atom_t;
 #define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(__alignment)))
 #endif
 
+// MinGW-w64: GCC or Clang on Windows, which is not __unix__ and has no
+// __declspec( align ) of MSVC; INLINE is the one of platform.h, if there
+#if (defined __MINGW32__)
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#ifndef INLINE
+#define INLINE                  inline
+#endif
+#define ALIGN_TO_PRE(alignment)
+#define ALIGN_TO_POST(alignment)        __attribute__( (aligned(alignment)) )
+#define FF_MEM_ALIGN(__A,__alignment)  __A __attribute__( (aligned(__alignment)) )
+#endif
+
 #if ((defined __GNUC__ || defined __llvm__) && defined __unix__ && defined __x86_64__)
 #define ALIGN_SINGLE_POINTER    8
 #define ALIGN_DOUBLE_POINTER    16
@@ -121,6 +135,10 @@ typedef unsigned long int     atom_t;
 #define ALIGN_SINGLE_POINTER  4
 #define ALIGN_DOUBLE_POINTER  8
 #elif ((defined __GNUC__ || defined __llvm__) && defined __unix__ && defined __powerpc64__)
+#define ALIGN_SINGLE_POINTER    8
+#define ALIGN_DOUBLE_POINTER    16
+typedef unsigned long long int  atom_t;
+#elif ((defined __GNUC__ || defined __llvm__) && defined __MINGW64__)
 #define ALIGN_SINGLE_POINTER    8
 #define ALIGN_DOUBLE_POINTER    16
 typedef unsigned long long int  atom_t;
