@@ -883,5 +883,13 @@ void parallel_reduce_idx(Value_t& var, const Value_t& identity,
     
 } // namespace ff
 
+/* pipeline.hpp, included above, declares isa2a_getfirstset() and
+   isa2a_getsecondset() as static and uses them, while they are defined in
+   graph_utils.hpp, which only ff.hpp includes: a translation unit that
+   includes parallel_for.hpp alone builds with GCC and Clang, which do not
+   need the definition there, but not with MSVC (error C2129).
+   graph_utils.hpp does not include parallel_for.hpp. */
+#include <ff/graph_utils.hpp>
+
 #endif /* FF_PARFOR_HPP */
     
