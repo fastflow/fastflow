@@ -162,6 +162,42 @@ INLINE void * pthread_getspecific(pthread_key_t key) {
 //#if (_WIN32_WINNT >= _WIN32_WINNT_VISTA)
 #ifndef _FF_WIN_XP
 typedef CONDITION_VARIABLE pthread_cond_t;
+/* The timed waits of the blocking mode (node.hpp, lb.hpp, gt.hpp, farm.hpp,
+   pipeline.hpp, utils.hpp) need pthread_cond_timedwait(), clock_gettime() and
+   CLOCK_REALTIME, which come from <pthread.h> and <time.h> on POSIX systems
+   and which this port did not have: they are written on the
+   CONDITION_VARIABLE and the CRITICAL_SECTION it already uses. */
+#ifndef CLOCK_REALTIME
+#define CLOCK_REALTIME 0
+#endif
+
+/* CLOCK_REALTIME on the system clock of Windows: FILETIME counts the 100 ns
+   ticks since 1601-01-01, and 116444736000000000 of them are before the
+   Unix epoch 1970-01-01. */
+INLINE int clock_gettime(int, struct timespec *tp) {
+    FILETIME ft; ULARGE_INTEGER u;
+    GetSystemTimePreciseAsFileTime(&ft);
+    u.LowPart = ft.dwLowDateTime; u.HighPart = ft.dwHighDateTime;
+    unsigned long long t = u.QuadPart - 116444736000000000ULL;
+    tp->tv_sec  = (long)(t / 10000000ULL);
+    tp->tv_nsec = (long)((t % 10000000ULL) * 100ULL);
+    return 0;
+}
+
+/* The absolute deadline of POSIX turned into the relative timeout in
+   milliseconds of SleepConditionVariableCS(); ETIMEDOUT on expiry, as POSIX
+   asks. */
+INLINE int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
+                                  const struct timespec *abstime) {
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+    long long ms = (long long)(abstime->tv_sec - now.tv_sec) * 1000LL
+                 + (long long)(abstime->tv_nsec - now.tv_nsec) / 1000000LL;
+    if (ms < 0) ms = 0;
+    if (!SleepConditionVariableCS(cond, mutex, (DWORD)ms))
+        if (GetLastError() == ERROR_TIMEOUT) return ETIMEDOUT;
+    return 0;
+}
 //#include <Windows.h>
 #include <WinBase.h>
 INLINE int pthread_cond_init(pthread_cond_t  RESTRICT * cond,
