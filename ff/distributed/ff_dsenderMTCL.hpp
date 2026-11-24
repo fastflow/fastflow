@@ -155,7 +155,7 @@ class uBuffer {
 	uBuffer(size_t batchingLimit, size_t sizeLimit, ff_dsenderMTCL2 *parent, MTCL::HandleUser &handle, int &counter) : batchingLimit(batchingLimit), sizeLimit(sizeLimit), parent(parent), handle(handle), counter(counter) {}
 
 	int push(message2_t *);
-	int flush(bool = false);
+	int flush();
 };
 
 class ff_dsenderMTCL2 : public ff_minode_t<message2_t> {
@@ -354,6 +354,10 @@ class ff_dsenderMTCL2 : public ff_minode_t<message2_t> {
 	}
 
 	void svc_end() {
+		// complete the pending sends before shutting down the write side
+		for (auto *b : uBufferAllocator::q)
+			MTCL::wait(b->r);
+
 		for (auto &h : MTCL_Handlers)
 			h.close();
 
@@ -398,9 +402,12 @@ inline int uBuffer::push(message2_t *m) {
 	}
 
 	if (batchingLimit == 1 || m->size >= sizeLimit) {
-		// if there is already something in the buffer FLUSH it to preserve the ordering
-		if (actualSize)
-			this->flush(true);
+		// if there is already something in the buffer FLUSH it to preserve the ordering;
+		// the flushed buffer stays in use until its send completes, so take another one
+		if (actualSize) {
+			this->flush();
+			this->buffers = uBufferAllocator::alloc();
+		}
 
 		// direct send
 		sizeDFF_t effectiveSize = m->size;
@@ -458,7 +465,7 @@ inline int uBuffer::push(message2_t *m) {
 	return 0;
 }
 
-inline int uBuffer::flush(bool doNotReleaseBuffer) {
+inline int uBuffer::flush() {
 	// A FLUSH may arrive before this connection has accumulated any batch.
 	if (!this->buffers || actualSize == 0)
 		return 0;
@@ -487,12 +494,9 @@ inline int uBuffer::flush(bool doNotReleaseBuffer) {
 #endif
 	// reset the parameters
 	this->actualSize = 0;
-	if (!doNotReleaseBuffer) {
-		this->mainBuffer_curr_ptr = nullptr;
-		uBufferAllocator::dealloc(this->buffers);
-		this->buffers = nullptr;
-	} else
-		this->mainBuffer_curr_ptr = this->buffers->payloads;
+	this->mainBuffer_curr_ptr = nullptr;
+	uBufferAllocator::dealloc(this->buffers);
+	this->buffers = nullptr;
 
 	return 0;
 }
