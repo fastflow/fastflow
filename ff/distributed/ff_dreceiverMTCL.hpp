@@ -63,7 +63,7 @@ protected:
             return value;
     }
 
-    inline int handleBatch(char*& inputBuffer, size_t size, MTCL::HandleUser& h){
+    inline int handleBatch(char*& inputBuffer, size_t& inputCapacity, size_t size, MTCL::HandleUser& h){
 
 #ifdef DFF_ACK
         if (h.send(&ACK, sizeof(ack_t)) < 0){
@@ -94,8 +94,10 @@ protected:
 			    out->src = src;
                 out->locality = ChannelLocality::REMOTE;
                 ff_send_out(out);
-                if (!inputBuffer)
-                    inputBuffer = (char*)malloc(size); 
+                if (!inputBuffer) {
+                    inputBuffer = (char*)malloc(size);
+                    inputCapacity = size;
+                }
 
                 return 0;
             }
@@ -167,13 +169,11 @@ public:
         std::vector<MTCL::HandleUser> handles;
         char* buffers[2] = {nullptr, nullptr};
         size_t buffSizes[2] = {0, 0};
-        size_t seq_nr = 0;
         struct PendingOp {
             bool active = false;
             MTCL::Request request;
             size_t size = 0;
             size_t handleIdx = 0;
-            long timestamp = 0;
         };
         PendingOp pending[2];
         size_t lastIdxProbed = 0;
@@ -199,6 +199,9 @@ public:
 
                     if (h.isClosed().first) continue; // if the the handle is closed in read (first) just skip this handle
 
+                    // while a receive is pending on this handle, probe may still report the size of that frame
+                    if ((pending[0].active && pending[0].handleIdx == idx) || (pending[1].active && pending[1].handleIdx == idx)) continue;
+
                     // Check if data is available (non-blocking)
                     size_t sz = 0;
                     int probeResult = h.probe(sz, false);
@@ -214,20 +217,6 @@ public:
                     }
                     
                     if (sz == 0) {
-                        
-                        // Cancel any pending operations for this handle
-                        for (int i = 0; i < 2; ++i) {
-                            if (pending[i].active && pending[i].handleIdx == idx) {
-                                
-                                // handle pending incoming batch
-                                MTCL::wait(pending[i].request);
-                                handleBatch(buffers[i], pending[i].size, handles[pending[i].handleIdx]);
-                                
-                                pending[i].active = false;
-                                activeCount--;
-                            }
-                        }
-
                         h.close(); // Close connection
                         continue;
                     }
@@ -256,30 +245,15 @@ public:
                     pending[slot].active = true;
                     pending[slot].size = sz;
                     pending[slot].handleIdx = idx;
-                    pending[slot].timestamp = seq_nr++;
                     activeCount++;
                 }
                 lastIdxProbed = (lastIdxProbed + idx_) % handles.size();
             }
 
             // Check for completed operations
-            if (pending[0].active && pending[1].active && pending[0].handleIdx == pending[1].handleIdx){
-                if (pending[0].timestamp < pending[1].timestamp){
-                    MTCL::wait(pending[0].request);
-                    handleBatch(buffers[0], pending[0].size, handles[pending[0].handleIdx]);
-                    pending[0].active = false;
-                
-                } else {
-                    // processa 1;
-                    MTCL::wait(pending[1].request);
-                    handleBatch(buffers[1], pending[1].size, handles[pending[1].handleIdx]);
-                    pending[1].active = false;
-                    
-                }
-            } else
             for (int i = 0; i < 2; ++i) {
                 if (pending[i].active && MTCL::test(pending[i].request)) {
-                    handleBatch(buffers[i], pending[i].size, handles[pending[i].handleIdx]);
+                    handleBatch(buffers[i], buffSizes[i], pending[i].size, handles[pending[i].handleIdx]);
                     pending[i].active = false;
                 }
             }
